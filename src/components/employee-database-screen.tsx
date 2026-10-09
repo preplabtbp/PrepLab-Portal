@@ -2206,25 +2206,29 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             transition={{ delay: 0.1 }}
             className="flex flex-col lg:flex-row h-full w-full p-3 sm:p-4 lg:p-6 bg-slate-50/70 gap-4 lg:gap-6 overflow-hidden relative"
           >
-            {/* SIDEBAR (Profile Info) - SOLID VIBRANT TEAL 3D CARD (ELEVATED CLEAN PHYSICAL CARD TANPA GRADIEN) */}
-            <div className="lg:w-80 xl:w-92 h-full max-h-full bg-[#127c88] text-white shrink-0 shadow-[0_22px_50px_-12px_rgba(15,118,130,0.5),0_10px_20px_-6px_rgba(0,0,0,0.2)] rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative overflow-hidden border-t-2 border-white/40 border-l border-r border-b border-white/20 ring-1 ring-black/10 transition-all">
-              <div className="flex flex-col items-center text-center mb-3.5 w-full shrink-0">
-                <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-[#0b636d] border-3 border-white overflow-hidden flex items-center justify-center shrink-0 shadow-[0_14px_30px_rgba(0,0,0,0.25)] relative ring-4 ring-black/15 ring-offset-2 ring-offset-[#127c88] group mx-auto">
+            {/* SIDEBAR (Profile Info) - LUXURY EXECUTIVE TEAL CARD */}
+            <div className="lg:w-80 xl:w-92 h-full max-h-full bg-gradient-to-br from-[#0c3942] via-[#0f4450] to-[#145361] text-white shrink-0 shadow-xl shadow-teal-950/20 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative overflow-hidden border border-teal-400/20 ring-1 ring-white/10 transition-all">
+              {/* Decorative Ambient Depth Lights */}
+              <div className="absolute -top-20 -left-20 w-44 h-44 bg-teal-400/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-20 -right-20 w-44 h-44 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex flex-col items-center text-center mb-3.5 w-full shrink-0 relative z-10">
+                <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-[#082a31] border-2 border-white/30 overflow-hidden flex items-center justify-center shrink-0 shadow-xl relative ring-4 ring-white/10 ring-offset-2 ring-offset-[#0f4450] group mx-auto">
                   {selectedEmployee.photo ? (
                     <img 
                       src={formatAvatarUrl(selectedEmployee.photo)} 
                       alt={selectedEmployee.name} 
-                      className="w-full h-full object-cover" 
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
                   ) : (
-                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-white drop-shadow-md" />
+                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-white/80 drop-shadow-md" />
                   )}
                   {isUploadingPhoto && (
-                    <div className="absolute inset-0 bg-[#084850]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
+                    <div className="absolute inset-0 bg-[#082a31]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
                       <RefreshCw className="w-6 h-6 animate-spin text-white mb-1.5" />
                       <span>Mengunggah...</span>
                     </div>
@@ -2245,7 +2249,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         type="button"
                         onClick={() => photoInputRef.current?.click()}
                         disabled={isUploadingPhoto}
-                        className="text-[11px] font-bold px-3.5 py-1.5 rounded-xl bg-[#0e6b76] hover:bg-[#0b565e] active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-sm border border-white/25 cursor-pointer"
+                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-xs border border-white/20 backdrop-blur-md cursor-pointer"
                         title="Perbarui atau unggah foto karyawan di database"
                       >
                         <Camera className="w-3.5 h-3.5 text-white" />
@@ -2260,8 +2264,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           setEditModalTab('job');
                           setIsEditModalOpen(true);
                         }}
-                        className="text-[11px] font-bold px-3.5 py-1.5 rounded-xl bg-[#f09b13] hover:bg-[#d98708] active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-md shadow-amber-950/20 border border-amber-300/50 cursor-pointer"
-                        title="Edit data lengkap profil karyawan ini (Khusus Section Admin Local Host)"
+                        className="text-[11px] font-bold px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-md shadow-amber-950/20 border border-amber-300/40 cursor-pointer"
+                        title="Edit data lengkap profil karyawan ini"
                       >
                         <Pencil className="w-3.5 h-3.5 text-white" />
                         <span>Edit Data</span>
@@ -2270,61 +2274,63 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </>
                 )}
 
-                <h2 className="text-lg lg:text-xl font-black mt-3 mb-1 leading-tight text-white drop-shadow-sm text-center w-full">{selectedEmployee.name}</h2>
+                <h2 className="text-lg lg:text-xl font-black mt-3 mb-1 leading-tight text-white drop-shadow-sm text-center w-full tracking-tight">
+                  {selectedEmployee.name}
+                </h2>
                 <div className="w-full flex justify-center">
-                  <p className="text-white inline-flex items-center bg-[#f09b13] px-3.5 py-1 rounded-full text-[11px] font-black shadow-sm border border-amber-300/40 ring-2 ring-black/10">
-                    <Fingerprint className="w-3.5 h-3.5 mr-1.5" />
+                  <p className="text-white inline-flex items-center bg-black/25 backdrop-blur-md px-3 py-0.5 rounded-full text-[11px] font-black shadow-xs border border-white/15 font-mono tracking-wider">
+                    <Fingerprint className="w-3.5 h-3.5 mr-1.5 text-teal-300" />
                     NIK: {selectedEmployee.nik}
                   </p>
                 </div>
               </div>
 
-              {/* Detail profil disesuaikan agar tidak terpotong & scrollable internal */}
-              <div className="w-full flex-1 overflow-y-auto pr-1 space-y-2 text-white divide-y divide-white/15 custom-scrollbar-teal text-left">
-                <div className="pt-1.5 first:pt-0">
-                  <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-xs">Jabatan</p>
-                  <p className="font-bold text-white text-xs sm:text-sm leading-snug drop-shadow-xs">{selectedEmployee.jabatan || '-'}</p>
+              {/* Detail Profil Sidebar */}
+              <div className="w-full flex-1 overflow-y-auto pr-1 space-y-2 text-white divide-y divide-white/10 custom-scrollbar-teal text-left relative z-10">
+                <div className="pt-2 first:pt-0">
+                  <p className="text-teal-200/90 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Jabatan</p>
+                  <p className="font-bold text-white text-xs sm:text-sm leading-snug">{selectedEmployee.jabatan || '-'}</p>
                 </div>
                 
-                <div className="pt-1.5">
-                  <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-xs">Perusahaan</p>
-                  <p className="font-bold text-white text-xs drop-shadow-xs">{selectedEmployee.pt || '-'}</p>
+                <div className="pt-2">
+                  <p className="text-teal-200/90 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Perusahaan</p>
+                  <p className="font-bold text-white text-xs">{selectedEmployee.pt || '-'}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-1.5">
-                  <div className="bg-[#0b636d] p-2 rounded-xl border border-white/15 shadow-sm">
-                    <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Job Grade</p>
-                    <p className="font-extrabold text-white text-xs drop-shadow-xs">{selectedEmployee.jobGrade || '-'}</p>
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <div className="bg-white/5 hover:bg-white/10 p-2.5 rounded-2xl border border-white/10 transition-colors shadow-2xs backdrop-blur-xs">
+                    <p className="text-teal-200/90 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Job Grade</p>
+                    <p className="font-extrabold text-white text-xs">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
-                  <div className="bg-[#0b636d] p-2 rounded-xl border border-white/15 shadow-sm">
-                    <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Golongan</p>
-                    <p className="font-extrabold text-white text-xs drop-shadow-xs">{selectedEmployee.gol || '-'}</p>
-                  </div>
-                </div>
-
-                <div className="pt-1.5">
-                  <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-xs">Bagian (Section)</p>
-                  <p className="font-bold text-white text-xs drop-shadow-xs">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-1.5">
-                  <div className="bg-[#0b636d] p-2 rounded-xl border border-white/15 shadow-sm">
-                    <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">DOH Awal</p>
-                    <p className="font-bold text-white text-xs font-mono drop-shadow-xs">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
-                  </div>
-                  <div className="bg-[#0b636d] p-2 rounded-xl border border-white/15 shadow-sm">
-                    <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
-                    <p className="font-bold text-white text-xs font-mono drop-shadow-xs">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
+                  <div className="bg-white/5 hover:bg-white/10 p-2.5 rounded-2xl border border-white/10 transition-colors shadow-2xs backdrop-blur-xs">
+                    <p className="text-teal-200/90 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Golongan</p>
+                    <p className="font-extrabold text-white text-xs">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
 
-                {/* SATUKAN MASA KERJA JABATAN DENGAN DROPDOWN LIST (SEKARANG & SEBELUMNYA) */}
-                <div className="pt-2 pb-1 space-y-1.5">
-                  <div className="bg-[#0b636d] hover:bg-[#0a5861] p-2.5 rounded-2xl border border-white/20 transition-all shadow-md">
+                <div className="pt-2">
+                  <p className="text-teal-200/90 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Bagian (Section)</p>
+                  <p className="font-bold text-white text-xs">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <div className="bg-white/5 hover:bg-white/10 p-2.5 rounded-2xl border border-white/10 transition-colors shadow-2xs backdrop-blur-xs">
+                    <p className="text-teal-200/90 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">DOH Awal</p>
+                    <p className="font-bold text-white text-xs font-mono">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
+                  </div>
+                  <div className="bg-white/5 hover:bg-white/10 p-2.5 rounded-2xl border border-white/10 transition-colors shadow-2xs backdrop-blur-xs">
+                    <p className="text-teal-200/90 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
+                    <p className="font-bold text-white text-xs font-mono">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
+                  </div>
+                </div>
+
+                {/* MASA KERJA JABATAN DENGAN DROPDOWN LIST */}
+                <div className="pt-2.5 pb-1 space-y-1.5">
+                  <div className="bg-black/20 hover:bg-black/25 p-3 rounded-2xl border border-white/15 transition-all shadow-inner backdrop-blur-xs">
                     <div className="flex items-center justify-between gap-1 mb-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-teal-100" />
-                        <span className="text-teal-100 text-[10px] font-black uppercase tracking-wider drop-shadow-xs">
+                        <Clock className="w-3.5 h-3.5 text-teal-300" />
+                        <span className="text-teal-200 text-[10px] font-black uppercase tracking-wider">
                           Masa Kerja Jabatan
                         </span>
                       </div>
@@ -2334,33 +2340,33 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         <select
                           value={tenureDropdownPeriod}
                           onChange={(e) => setTenureDropdownPeriod(e.target.value as 'sekarang' | 'sebelumnya')}
-                          className="bg-[#084850] hover:bg-[#06393f] text-white text-[10.5px] font-extrabold pl-2.5 pr-6 py-0.5 rounded-lg border border-teal-300/40 cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-teal-200 appearance-none"
+                          className="bg-black/40 hover:bg-black/50 text-white text-[10.5px] font-extrabold pl-2.5 pr-6 py-0.5 rounded-lg border border-teal-300/30 cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-teal-200 appearance-none"
                           title="Pilih masa kerja jabatan sekarang atau sebelumnya"
                         >
                           <option value="sekarang">Sekarang</option>
                           <option value="sebelumnya">Sebelumnya</option>
                         </select>
-                        <ChevronDown className="w-3 h-3 text-teal-100 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <ChevronDown className="w-3 h-3 text-teal-200 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
                     </div>
 
-                    {/* Nilai Masa Kerja Jabatan Berdasarkan Pilihan Dropdown */}
+                    {/* Nilai Masa Kerja Jabatan */}
                     <div className="flex items-baseline justify-between gap-2">
-                      <p className="font-black text-white text-sm sm:text-base drop-shadow-xs">
+                      <p className="font-black text-white text-sm sm:text-base tracking-tight">
                         {tenureInfo[tenureDropdownPeriod].value}
                       </p>
                       <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-xs ${
                         tenureDropdownPeriod === 'sekarang'
-                          ? 'bg-teal-400/25 text-white border border-teal-200/40'
-                          : 'bg-amber-400/25 text-white border border-amber-300/40'
+                          ? 'bg-teal-400/20 text-teal-200 border border-teal-300/30'
+                          : 'bg-amber-400/20 text-amber-200 border border-amber-300/30'
                       }`}>
                         {tenureDropdownPeriod === 'sekarang' ? 'Jabatan Sekarang' : 'Jabatan Sebelumnya'}
                       </span>
                     </div>
 
-                    {/* Keterangan Sekarang vs Sebelumnya */}
-                    <div className="mt-1.5 text-[9.5px] text-teal-100 leading-tight flex items-start gap-1.5 font-medium bg-[#084850] p-2 rounded-xl border border-white/10 shadow-inner">
-                      <Info className="w-3.5 h-3.5 text-teal-100 shrink-0 mt-0.5" />
+                    {/* Keterangan */}
+                    <div className="mt-2 text-[9.5px] text-teal-100/90 leading-tight flex items-start gap-1.5 font-medium bg-black/30 p-2 rounded-xl border border-white/10">
+                      <Info className="w-3.5 h-3.5 text-teal-300 shrink-0 mt-0.5" />
                       <span>
                         <strong className="text-white mr-1">
                           Keterangan {tenureDropdownPeriod === 'sekarang' ? 'Sekarang:' : 'Sebelumnya:'}
@@ -2370,26 +2376,35 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
 
                     {/* Informasi Total Masa Kerja */}
-                    <div className="mt-2 pt-1.5 border-t border-white/20 flex items-center justify-between text-[10px]">
-                      <span className="text-teal-100 font-medium drop-shadow-xs">Masa Kerja Total (DOH):</span>
-                      <span className="font-extrabold text-white font-mono drop-shadow-xs">{tenureInfo.total.value}</span>
+                    <div className="mt-2 pt-2 border-t border-white/15 flex items-center justify-between text-[10px]">
+                      <span className="text-teal-200 font-medium">Masa Kerja Total (DOH):</span>
+                      <span className="font-extrabold text-white font-mono">{tenureInfo.total.value}</span>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* MAIN CONTENT AREA (CLEAN WHITE CARD - SCROLLABLE KE BAWAH) */}
-            <div className="flex-1 h-full max-h-full p-5 sm:p-6 lg:p-8 overflow-y-auto bg-white rounded-3xl shadow-sm border border-slate-200/80 pb-24 ring-1 ring-slate-900/5 transition-all custom-scrollbar">
+            {/* MAIN CONTENT AREA (CLEAN EXECUTIVE WHITE CANVAS) */}
+            <div className="flex-1 h-full max-h-full p-5 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50/50 rounded-3xl shadow-xs border border-slate-200/80 pb-24 ring-1 ring-slate-900/5 transition-all custom-scrollbar">
               
               {/* HEADER W/ SPONSOR & EDIT BUTTON */}
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">{selectedEmployee.name}</h1>
-                  <p className="text-slate-500 mt-1 font-medium text-sm sm:text-base">{selectedEmployee.jabatan || 'Karyawan'}</p>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="bg-teal-50 text-teal-800 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border border-teal-200">
+                      {selectedEmployee.pt || 'PT TBP'}
+                    </span>
+                    <span className="text-xs text-slate-400">•</span>
+                    <span className="text-xs font-semibold text-slate-500">
+                      {selectedEmployee.section || selectedEmployee.department || 'Preparation & Laboratory'}
+                    </span>
+                  </div>
+                  <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">{selectedEmployee.name}</h1>
+                  <p className="text-slate-600 font-semibold text-sm sm:text-base mt-0.5">{selectedEmployee.jabatan || 'Karyawan'}</p>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   {canManageDatabase && (
                     <>
                       <Button
@@ -2400,7 +2415,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           setIsEditModalOpen(true);
                         }}
                         size="sm"
-                        className="bg-[#22a7b8] hover:bg-[#1b8f9e] text-white flex items-center gap-1.5 rounded-2xl text-xs font-bold px-4 py-2.5 shadow-md shadow-teal-500/20 active:scale-95 transition-all cursor-pointer"
+                        className="bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1.5 rounded-xl text-xs font-bold px-4 py-2.5 shadow-sm shadow-teal-600/20 active:scale-95 transition-all cursor-pointer"
                         title="Edit data karyawan ini"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -2415,7 +2430,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           setIsEditModalOpen(true);
                         }}
                         size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 rounded-2xl text-xs font-bold px-4 py-2.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 rounded-xl text-xs font-bold px-4 py-2.5 shadow-sm shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
                         title="Tambah karyawan baru"
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -2424,63 +2439,71 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </>
                   )}
                   
-                  <Card className="p-3.5 sm:p-4 bg-white shadow-sm border-l-4 border-l-[#f09b13] min-w-[180px] border border-slate-200/80 rounded-2xl">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sponsor</p>
-                    <p className="font-extrabold text-slate-800 text-base sm:text-lg">{selectedEmployee.sponsor || '-'}</p>
-                  </Card>
+                  <div className="p-3.5 bg-gradient-to-br from-amber-50/80 via-orange-50/40 to-white shadow-xs border border-amber-200/80 rounded-2xl flex items-center gap-3 min-w-[200px]">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                      <Award className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-extrabold text-amber-700 uppercase tracking-widest leading-none mb-1">HR Sponsor</p>
+                      <p className="font-black text-slate-800 text-sm leading-tight">{selectedEmployee.sponsor || '-'}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-                {/* STATUS CARDS */}
-                <div className="xl:col-span-1 space-y-6">
-                  <h3 className="text-lg font-bold text-slate-800 flex items-center">
-                    <CheckCircle2 className="w-5 h-5 mr-2 text-[#32AEB8]" />
-                    Status & Kehadiran
+                {/* STATUS & KEHADIRAN CARDS */}
+                <div className="xl:col-span-1 space-y-3">
+                  <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                    <span>Status & Kehadiran</span>
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
                     {/* Status Karyawan */}
-                    <div className="bg-[#1ba3b0] hover:bg-[#1895a2] rounded-2xl p-4 text-white shadow-md shadow-teal-500/20 border border-teal-300/30 transition-all">
-                      <p className="text-[#e0f9fc] text-[11px] uppercase font-extrabold tracking-wider mb-1">Status Karyawan</p>
-                      <p className="font-black text-lg text-white drop-shadow-xs">{selectedEmployee.statusKaryawan || '-'}</p>
+                    <div className="bg-gradient-to-br from-teal-700 to-teal-800 hover:from-teal-600 hover:to-teal-700 rounded-2xl p-4 text-white shadow-sm border border-teal-500/30 transition-all hover:-translate-y-0.5">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-teal-200 text-[10px] uppercase font-extrabold tracking-wider">Status Karyawan</p>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      </div>
+                      <p className="font-black text-xl text-white tracking-tight">{selectedEmployee.statusKaryawan || '-'}</p>
                     </div>
 
                     {/* Status Kontrak */}
-                    <div className="bg-[#f09b13] hover:bg-[#e08e0d] rounded-2xl p-4 text-white shadow-md shadow-amber-500/20 border border-amber-300/30 transition-all">
-                      <p className="text-[#fef6e7] text-[11px] uppercase font-extrabold tracking-wider mb-1">Status Kontrak</p>
-                      <p className="font-black text-lg text-white drop-shadow-xs">{selectedEmployee.statusKontrak || '-'}</p>
+                    <div className="bg-gradient-to-br from-[#ea8f13] to-[#d67b07] hover:from-[#f09b13] hover:to-[#ea8f13] rounded-2xl p-4 text-white shadow-sm border border-amber-300/30 transition-all hover:-translate-y-0.5">
+                      <p className="text-amber-100 text-[10px] uppercase font-extrabold tracking-wider mb-1">Status Kontrak</p>
+                      <p className="font-black text-xl text-white tracking-tight">{selectedEmployee.statusKontrak || '-'}</p>
                     </div>
 
                     {/* Tgl Efektif Tidak Bekerja (Conditional) */}
                     {selectedEmployee.tanggalEfektifTidakBekerja && (
-                      <div className="col-span-2 bg-[#dc2626] hover:bg-[#b91c1c] rounded-2xl p-4 text-white shadow-md shadow-rose-600/20 border border-rose-300/30 flex justify-between items-center transition-all">
+                      <div className="col-span-2 bg-gradient-to-br from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 rounded-2xl p-4 text-white shadow-sm border border-rose-400/30 flex justify-between items-center transition-all hover:-translate-y-0.5">
                         <div>
-                          <p className="text-[#ffe4e6] text-[11px] uppercase font-extrabold tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
-                          <p className="font-black text-base drop-shadow-xs">{formatShortDate(selectedEmployee.tanggalEfektifTidakBekerja)}</p>
+                          <p className="text-rose-100 text-[10px] uppercase font-extrabold tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
+                          <p className="font-black text-base font-mono">{formatShortDate(selectedEmployee.tanggalEfektifTidakBekerja)}</p>
                         </div>
                         <Calendar className="w-6 h-6 text-white/70" />
                       </div>
                     )}
 
                     {/* Sisa Cuti (CT) */}
-                    <div className="bg-[#14838f] hover:bg-[#117681] rounded-2xl p-4 text-white shadow-md shadow-teal-600/20 border border-teal-300/30 transition-all">
-                      <p className="text-[#e0f9fc] text-[11px] uppercase font-extrabold tracking-wider mb-1">Sisa Cuti (CT)</p>
-                      <p className="font-black text-2xl text-white drop-shadow-xs">{selectedEmployee.sisaCt || '-'}</p>
+                    <div className="bg-gradient-to-br from-[#126b75] to-[#0d565e] hover:from-[#157884] hover:to-[#0f606a] rounded-2xl p-4 text-white shadow-sm border border-teal-400/30 transition-all hover:-translate-y-0.5">
+                      <p className="text-teal-100 text-[10px] uppercase font-extrabold tracking-wider mb-1">Sisa Cuti (CT)</p>
+                      <p className="font-black text-2xl text-white tracking-tight">{selectedEmployee.sisaCt || '-'}</p>
                     </div>
 
                     {/* Jatuh Tempo CT */}
-                    <div className="bg-[#0f6e78] hover:bg-[#0d616a] rounded-2xl p-4 text-white shadow-md shadow-teal-700/20 border border-teal-300/30 transition-all">
-                      <p className="text-[#d5f5f7] text-[11px] uppercase font-extrabold tracking-wider mb-1">Jatuh Tempo CT</p>
-                      <p className="font-black text-base text-white drop-shadow-xs">{formatShortDate(selectedEmployee.jatuhTempoCt)}</p>
+                    <div className="bg-gradient-to-br from-[#0c444f] to-[#07323b] hover:from-[#0f515e] hover:to-[#0a3d47] rounded-2xl p-4 text-white shadow-sm border border-teal-400/30 transition-all hover:-translate-y-0.5">
+                      <p className="text-teal-200 text-[10px] uppercase font-extrabold tracking-wider mb-1">Jatuh Tempo CT</p>
+                      <p className="font-black text-sm sm:text-base text-white font-mono tracking-tight">{formatShortDate(selectedEmployee.jatuhTempoCt)}</p>
                     </div>
 
                     {/* Tanggal Permanen */}
-                    <div className="col-span-2 bg-[#2563eb] hover:bg-[#1d4ed8] rounded-2xl p-4 text-white shadow-md shadow-blue-500/20 border border-blue-300/30 flex justify-between items-center transition-all">
+                    <div className="col-span-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-600 rounded-2xl p-4 text-white shadow-sm border border-blue-300/30 flex justify-between items-center transition-all hover:-translate-y-0.5">
                       <div>
-                        <p className="text-[#e0edff] text-[11px] uppercase font-extrabold tracking-wider mb-1">Tanggal Permanen</p>
-                        <p className="font-black text-base drop-shadow-xs">{formatShortDate(selectedEmployee.tanggalPermanent)}</p>
+                        <p className="text-blue-100 text-[10px] uppercase font-extrabold tracking-wider mb-1">Tanggal Permanen</p>
+                        <p className="font-black text-base text-white font-mono">{formatShortDate(selectedEmployee.tanggalPermanent)}</p>
                       </div>
-                      <Calendar className="w-8 h-8 text-white/60" />
+                      <Calendar className="w-7 h-7 text-white/60" />
                     </div>
                   </div>
                 </div>
@@ -2489,44 +2512,47 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 <div className="xl:col-span-2 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* 2026 */}
-                    <Card className="p-5 shadow-sm border-slate-200/60 bg-white">
+                    <Card className="p-5 shadow-xs border border-slate-200/80 bg-white rounded-2xl">
                       <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-bold text-slate-800 flex items-center">
-                          <BarChart3 className="w-4 h-4 mr-2 text-[#22a7b8]" />
+                        <h4 className="font-bold text-slate-800 text-sm flex items-center">
+                          <BarChart3 className="w-4 h-4 mr-2 text-teal-600" />
                           Rekap Absensi 2026
                         </h4>
                         {(selectedEmployee.attendance2026?.sakitSite > 0 || selectedEmployee.attendance2026?.sakitLuar > 0) && (
-                          <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                          <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
                             SS: {selectedEmployee.attendance2026.sakitSite} | SL: {selectedEmployee.attendance2026.sakitLuar}
                           </span>
                         )}
                       </div>
                       <div className="grid grid-cols-4 gap-2">
-                        <div className="text-center p-2.5 rounded-xl bg-[#e6f7f9] border border-[#a2e0e8]">
-                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-[#135e69] mb-1">Izin</p>
+                        <div className="text-center p-2.5 rounded-xl bg-teal-50/70 border border-teal-200/80">
+                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-teal-800 mb-1">Izin</p>
                           <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2026?.izin ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-[#e6f7f9] border border-[#a2e0e8]">
-                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-[#22a7b8] mb-1">I.Khusus</p>
+                        <div className="text-center p-2.5 rounded-xl bg-sky-50/70 border border-sky-200/80">
+                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-sky-800 mb-1">I.Khusus</p>
                           <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2026?.izinKhusus ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-[#fef6e7] border border-[#fad79a]">
-                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-[#f09b13] mb-1">Sakit</p>
+                        <div className="text-center p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80">
+                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-amber-800 mb-1">Sakit</p>
                           <p className="font-black text-lg text-amber-900">{selectedEmployee.attendance2026?.sakit ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-rose-50 border border-rose-200">
-                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-rose-600 mb-1">Alpa</p>
+                        <div className="text-center p-2.5 rounded-xl bg-rose-50/70 border border-rose-200/80">
+                          <p className="text-[10px] md:text-xs uppercase font-extrabold text-rose-700 mb-1">Alpa</p>
                           <p className="font-black text-lg text-rose-700">{selectedEmployee.attendance2026?.alpa ?? 0}</p>
                         </div>
                       </div>
                     </Card>
 
                     {/* 2025 */}
-                    <Card className="p-5 shadow-sm border-slate-200/60 bg-white opacity-90">
-                      <h4 className="font-bold text-slate-600 mb-4 flex items-center">
-                        <BarChart3 className="w-4 h-4 mr-2 text-slate-400" />
-                        Rekap Absensi 2025
-                      </h4>
+                    <Card className="p-5 shadow-xs border border-slate-200/80 bg-white rounded-2xl opacity-90">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-bold text-slate-600 text-sm flex items-center">
+                          <BarChart3 className="w-4 h-4 mr-2 text-slate-400" />
+                          Rekap Absensi 2025
+                        </h4>
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">Arsip</span>
+                      </div>
                       <div className="grid grid-cols-4 gap-2">
                         <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-slate-500 mb-1">Izin</p>
@@ -2540,7 +2566,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           <p className="text-[10px] md:text-xs uppercase font-bold text-slate-500 mb-1">Sakit</p>
                           <p className="font-bold text-base text-slate-700">{selectedEmployee.attendance2025?.sakit ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-rose-50 border border-rose-100">
+                        <div className="text-center p-2.5 rounded-xl bg-rose-50/60 border border-rose-100">
                           <p className="text-[10px] md:text-xs uppercase font-bold text-rose-500 mb-1">Alpa</p>
                           <p className="font-bold text-base text-rose-600">{selectedEmployee.attendance2025?.alpa ?? 0}</p>
                         </div>
@@ -2548,10 +2574,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </Card>
                   </div>
 
-                  {/* CATATAN & LIST ACHIEVEMENTS (MENGISI RUANG KOSONG) */}
+                  {/* CATATAN & LIST ACHIEVEMENTS */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Card 1: Catatan Karyawan (Elegant, Full, No Box-in-Box) */}
-                    <Card className="p-5 shadow-xs border-slate-200/80 bg-white/95 backdrop-blur-md rounded-2xl flex flex-col justify-between min-h-[220px]">
+                    {/* Card 1: Catatan Karyawan */}
+                    <Card className="p-5 shadow-xs border border-slate-200/80 bg-white rounded-2xl flex flex-col justify-between min-h-[220px]">
                       <div className="flex-1 flex flex-col">
                         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                           <div className="flex items-center gap-2">
@@ -2642,8 +2668,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       </div>
                     </Card>
 
-                    {/* Card 2: List Achievements (Bisa di-scroll) */}
-                    <Card className="p-5 shadow-xs border-slate-200/80 bg-white/95 backdrop-blur-md rounded-2xl flex flex-col justify-between min-h-[220px]">
+                    {/* Card 2: List Achievements */}
+                    <Card className="p-5 shadow-xs border border-slate-200/80 bg-white rounded-2xl flex flex-col justify-between min-h-[220px]">
                       <div>
                         <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
                           <div className="flex items-center gap-2">
@@ -2736,18 +2762,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
               {/* DATA DIRI & ALAMAT */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <Card className="p-6 shadow-sm border-slate-200/60">
-                  <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center">
-                    <User className="w-5 h-5 mr-2 text-[#22a7b8]" />
+                <Card className="p-6 shadow-xs border border-slate-200/80 bg-white rounded-2xl">
+                  <h3 className="text-base font-bold text-slate-900 mb-5 flex items-center">
+                    <User className="w-5 h-5 mr-2 text-teal-600" />
                     Data Diri (Umum)
                   </h3>
-                  <div className="space-y-4">
+                  <div className="space-y-3.5">
                     <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
-                      <p className="text-sm font-medium text-slate-500 col-span-1">NIK KTP</p>
-                      <p className="text-sm font-semibold text-slate-800 col-span-2">{selectedEmployee.ktp || '-'}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider col-span-1">NIK KTP</p>
+                      <p className="text-sm font-bold text-slate-900 col-span-2 font-mono">{selectedEmployee.ktp || '-'}</p>
                     </div>
                     <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
-                      <p className="text-sm font-medium text-slate-500 col-span-1">TTL</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider col-span-1">TTL</p>
                       <p className="text-sm font-semibold text-slate-800 col-span-2">
                         {selectedEmployee.tempatLahir && selectedEmployee.tempatLahir !== '-'
                           ? `${selectedEmployee.tempatLahir}, ${formatTtlDate(selectedEmployee.tanggalLahir)}`
@@ -2755,44 +2781,44 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       </p>
                     </div>
                     <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
-                      <p className="text-sm font-medium text-slate-500 col-span-1">Nomor Telp.</p>
-                      <p className="text-sm font-semibold text-slate-800 col-span-2">{selectedEmployee.phone || '-'}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider col-span-1">Nomor Telp.</p>
+                      <p className="text-sm font-bold text-slate-900 col-span-2 font-mono">{selectedEmployee.phone || '-'}</p>
                     </div>
                     <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
-                      <p className="text-sm font-medium text-slate-500 col-span-1">Kel. Kandung</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider col-span-1">Kel. Kandung</p>
                       <p className="text-sm font-semibold text-slate-800 col-span-2">{selectedEmployee.keluargaKandung || '-'}</p>
                     </div>
                     <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
-                      <p className="text-sm font-medium text-slate-500 col-span-1">Telp Kel.</p>
-                      <p className="text-sm font-semibold text-slate-800 col-span-2">{selectedEmployee.phoneKeluarga || '-'}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider col-span-1">Telp Kel.</p>
+                      <p className="text-sm font-bold text-slate-900 col-span-2 font-mono">{selectedEmployee.phoneKeluarga || '-'}</p>
                     </div>
                     <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
-                      <p className="text-sm font-medium text-slate-500 col-span-1">Org Terdekat</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider col-span-1">Org Terdekat</p>
                       <p className="text-sm font-semibold text-slate-800 col-span-2">{selectedEmployee.orangTerdekat || '-'}</p>
                     </div>
                     <div className="grid grid-cols-3 gap-2 pb-1">
-                      <p className="text-sm font-medium text-slate-500 col-span-1">Telp Darurat</p>
-                      <p className="text-sm font-semibold text-slate-800 col-span-2">{selectedEmployee.phoneDarurat || '-'}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider col-span-1">Telp Darurat</p>
+                      <p className="text-sm font-bold text-slate-900 col-span-2 font-mono">{selectedEmployee.phoneDarurat || '-'}</p>
                     </div>
                   </div>
                 </Card>
 
                 <div className="space-y-6">
-                  <Card className="p-6 shadow-sm border-slate-200/60 bg-white h-full flex flex-col">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                      <MapPin className="w-5 h-5 mr-2 text-[#22a7b8]" />
+                  <Card className="p-6 shadow-xs border border-slate-200/80 bg-white rounded-2xl h-full flex flex-col">
+                    <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center">
+                      <MapPin className="w-5 h-5 mr-2 text-teal-600" />
                       Alamat KTP & Domisili
                     </h3>
                     <div className="space-y-4 flex-1">
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Sesuai KTP</p>
-                        <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Sesuai KTP</p>
+                        <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-medium">
                           {selectedEmployee.alamatKtp || 'Tidak ada data alamat KTP.'}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Domisili (Tinggal)</p>
-                        <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Domisili (Tinggal)</p>
+                        <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-medium">
                           {selectedEmployee.alamatDomisili || 'Tidak ada data domisili.'}
                         </p>
                       </div>
