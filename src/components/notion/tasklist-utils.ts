@@ -614,14 +614,14 @@ export function formatColorTagsToHtml(text?: string | null): string {
     const rawKey = colorKey.toLowerCase();
     const key = COLOR_ALIASES[rawKey] || rawKey;
     const hex = NOTION_COLORS[key]?.hex || colorKey;
-    return `<span style="color: ${hex}; font-weight: 600;">${content}</span>`;
+    return `<span data-color="${key}" style="color: ${hex};">${content}</span>`;
   });
 
   // Shorthand tags: [blue]...[/blue], [green]...[/green], [orange]...[/orange], [red]...[/red], etc.
   for (const [key, conf] of Object.entries(NOTION_COLORS)) {
     if (key === 'default') continue;
     const regex = new RegExp(`\\[${key}\\]([\\s\\S]*?)\\[\\/${key}\\]`, 'gi');
-    out = out.replace(regex, `<span style="color: ${conf.hex}; font-weight: 600;">$1</span>`);
+    out = out.replace(regex, `<span data-color="${key}" style="color: ${conf.hex};">$1</span>`);
   }
 
   // Indonesian shorthand aliases: [biru]...[/biru], [merah]...[/merah], etc.
@@ -629,7 +629,7 @@ export function formatColorTagsToHtml(text?: string | null): string {
     const conf = NOTION_COLORS[enKey];
     if (conf) {
       const regex = new RegExp(`\\[${idKey}\\]([\\s\\S]*?)\\[\\/${idKey}\\]`, 'gi');
-      out = out.replace(regex, `<span style="color: ${conf.hex}; font-weight: 600;">$1</span>`);
+      out = out.replace(regex, `<span data-color="${enKey}" style="color: ${conf.hex};">$1</span>`);
     }
   }
 
@@ -820,11 +820,15 @@ export function visualHtmlToMarkdown(html?: string | null): string {
 
     switch (tag) {
       case 'strong':
-      case 'b':
-        return inner.trim() ? `**${inner.trim()}**` : '';
+      case 'b': {
+        const clean = inner.replace(/^\*\*([\s\S]+)\*\*$/, '$1');
+        return clean.trim() ? `**${clean}**` : '';
+      }
       case 'em':
-      case 'i':
-        return inner.trim() ? `*${inner.trim()}*` : '';
+      case 'i': {
+        const clean = inner.replace(/^\*([\s\S]+)\*$/, '$1');
+        return clean.trim() ? `*${clean}*` : '';
+      }
       case 'u':
         return inner.trim() ? `<u>${inner.trim()}</u>` : '';
       case 's':
@@ -837,7 +841,8 @@ export function visualHtmlToMarkdown(html?: string | null): string {
       case 'font': {
         const dataColor = el.getAttribute('data-color');
         if (dataColor && NOTION_COLORS[dataColor] && dataColor !== 'default') {
-          return `[${dataColor}]${inner}[/${dataColor}]`;
+          const cleanInner = stripColorTags(inner);
+          return `[${dataColor}]${cleanInner}[/${dataColor}]`;
         }
 
         const style = el.getAttribute('style') || '';
@@ -863,7 +868,8 @@ export function visualHtmlToMarkdown(html?: string | null): string {
             }
           }
           if (foundKey && foundKey !== 'default') {
-            return `[${foundKey}]${inner}[/${foundKey}]`;
+            const cleanInner = stripColorTags(inner);
+            return `[${foundKey}]${cleanInner}[/${foundKey}]`;
           }
         }
         return inner;

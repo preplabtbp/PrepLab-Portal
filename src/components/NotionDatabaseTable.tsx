@@ -410,7 +410,7 @@ export const isSubItemRow = (row: TableRowData): boolean => {
   if (row.isSubItem === 'true' || (row as any).isSubItem === true) return true;
   if (row.parentId || row.parentRowId) return true;
   const title = (getCellValue(row, 'Jenis kegiatan') || getCellValue(row, 'Jenis Kegiatan') || getCellValue(row, 'Name') || getCellValue(row, 'Judul') || '').trim();
-  if (title.startsWith('↳') || title.startsWith('->') || title.startsWith('↪') || title.startsWith('– ') || title.startsWith('- ')) {
+  if (title.startsWith('↳') || title.startsWith('↪')) {
     return true;
   }
   return false;
@@ -422,13 +422,13 @@ export const isSubItemCompleted = (row: TableRowData): boolean => {
   const statusStr = (getCellValue(row, 'Status') || '').toUpperCase();
   if (statusStr.includes('CLOSE') || statusStr.includes('SELESAI') || statusStr.includes('DONE')) return true;
   const title = (getCellValue(row, 'Jenis kegiatan') || getCellValue(row, 'Jenis Kegiatan') || '').trim();
-  if (title.startsWith('↳ [x]') || title.startsWith('↳ [X]') || title.startsWith('[x]') || title.startsWith('[X]')) return true;
+  if (title.startsWith('↳ [x]') || title.startsWith('↳ [X]') || title.startsWith('↪ [x]') || title.startsWith('↪ [X]')) return true;
   return false;
 };
 
 export const getDisplayTitle = (title: string): string => {
   if (!title) return '';
-  return title.replace(/^[↳↪\->\s–]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
+  return title.replace(/^[↳↪\s]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
 };
 
 // Canonical Notion Table Column definition in exact order
@@ -2351,15 +2351,32 @@ export function NotionDatabaseTable({
   };
 
   // Add Sub-Item Handler (Sub-kegiatan di bawah baris kegiatan induk)
-  const handleAddSubItem = (parentRowIndex: number, subItemTitle: string) => {
+  const handleAddSubItem = (parentRowOrIndex: TableRowData | number, subItemTitle: string) => {
     const cleanTitle = subItemTitle.trim();
     if (!cleanTitle) {
       setCreatingSubItemForParent(null);
       return;
     }
 
-    const parentRow = localRows[parentRowIndex];
+    let parentRow: TableRowData | undefined;
+    let actualParentIdx = -1;
+
+    if (typeof parentRowOrIndex === 'number') {
+      actualParentIdx = parentRowOrIndex;
+      parentRow = localRows[parentRowOrIndex];
+    } else {
+      parentRow = parentRowOrIndex;
+      actualParentIdx = localRows.indexOf(parentRowOrIndex);
+      if (actualParentIdx === -1) {
+        actualParentIdx = localRows.findIndex(r => 
+          (parentRowOrIndex.id && r.id === parentRowOrIndex.id) || 
+          (parentRowOrIndex['Jenis kegiatan'] && r['Jenis kegiatan'] === parentRowOrIndex['Jenis kegiatan'])
+        );
+      }
+    }
+
     if (!parentRow) return;
+    if (actualParentIdx === -1) actualParentIdx = 0;
 
     const parentCat = getRowVal(parentRow, 'Kategori') || section || 'Laboratorium';
     const parentPIC = getRowVal(parentRow, 'PIC') || currentAuthorName || '';
@@ -2369,6 +2386,7 @@ export function NotionDatabaseTable({
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
+    const parentId = parentRow.id || `parent-${actualParentIdx}-${parentRow['Jenis kegiatan'] || ''}`;
     const formattedTitle = `↳ ${cleanTitle}`;
     const newSubRow: TableRowData = {
       number: '',
@@ -2383,11 +2401,11 @@ export function NotionDatabaseTable({
       'Activity (routine/non routine)': parentAct,
       period: parentPeriod,
       isSubItem: 'true',
-      parentId: String(parentRowIndex)
+      parentId: parentId
     };
 
     // Cari posisi sisip: tepat setelah sub-item terakhir dari parent ini
-    let insertIdx = parentRowIndex + 1;
+    let insertIdx = actualParentIdx + 1;
     while (insertIdx < localRows.length && isSubItemRow(localRows[insertIdx])) {
       insertIdx++;
     }
@@ -2403,7 +2421,8 @@ export function NotionDatabaseTable({
     // Pastikan parent dalam keadaan expanded
     setExpandedParents(prev => ({
       ...prev,
-      [parentRowIndex]: true
+      [actualParentIdx]: true,
+      [parentId]: true
     }));
 
     setCreatingSubItemForParent(null);
@@ -2477,25 +2496,7 @@ export function NotionDatabaseTable({
     return { newRows, migratedCount };
   };
 
-  // Auto-migration effect: whenever localRows contains trapped checklists in Keterangan, migrate automatically
-  useEffect(() => {
-    if (!localRows || localRows.length === 0) return;
-    const hasAnyChecklists = localRows.some(r => {
-      if (isSubItemRow(r)) return false;
-      const ket = getRowVal(r, 'Keterangan') || '';
-      const taskProg = parseTasklist(ket);
-      return taskProg.hasTasklist && taskProg.items.length > 0;
-    });
-
-    if (hasAnyChecklists) {
-      const { newRows, migratedCount } = migrateRowsSubtasksInternal(localRows);
-      if (migratedCount > 0) {
-        setLocalRows(newRows);
-        setOriginalRowsBackup(JSON.parse(JSON.stringify(newRows)));
-        saveTableToBackend(newRows);
-      }
-    }
-  }, [localRows]);
+  // Manual migration handler available via button, auto-migration disabled to prevent unintended row mutations
 
   // Migrate existing checklists in Keterangan to hierarchical sub-items
   const handleMigrateChecklistsToSubItems = () => {
@@ -3621,7 +3622,7 @@ export function NotionDatabaseTable({
   };
 
   // Helper to format multiline notes with text color support, bold, italic, code, and bullet formatting
-  // Default font and color match Created Time column (#475569, font-sans, font-normal)
+  // Default font size, font family, and color match Created Time column (#475569, font-sans, font-normal, 13px / 12px)
   const renderFormattedNotes = (text: string) => {
     if (!text || text === '-' || text === '•') return <span className="font-sans text-xs text-slate-400">-</span>;
     // Normalize <br/>, <br>, <br /> to newlines
@@ -3630,11 +3631,12 @@ export function NotionDatabaseTable({
 
     return (
       <div 
-        className={`leading-relaxed whitespace-pre-wrap font-sans font-normal ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
+        className={`leading-normal whitespace-pre-wrap font-sans font-normal ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
         style={{ 
-          fontSize: `${labNoteFontSize}px`,
+          fontSize: fitPageMode ? '12px' : '13px',
           fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-          color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)'
+          color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)',
+          lineHeight: '1.5'
         }}
         dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(cleanText) }}
       />
@@ -5041,6 +5043,19 @@ export function NotionDatabaseTable({
                       {/* Group Rows (Hierarchical Parent & Sub-items) */}
                       {!isCollapsed && (() => {
                         // Susun baris hierarkis: Parent -> SubItems
+                        // Pre-compute map dari sub-item ke parent aslinya di localRows agar relasi stabil
+                        const rowToParentMap = new Map<TableRowData, TableRowData>();
+                        let activeParentRef: TableRowData | null = null;
+                        localRows.forEach(r => {
+                          if (isSubItemRow(r)) {
+                            if (activeParentRef) {
+                              rowToParentMap.set(r, activeParentRef);
+                            }
+                          } else {
+                            activeParentRef = r;
+                          }
+                        });
+
                         const hierarchicalItems: Array<{
                           parentRow: TableRowData;
                           parentIndex: number;
@@ -5057,11 +5072,44 @@ export function NotionDatabaseTable({
                           const actualRowIndex = localRows.indexOf(row) !== -1 ? localRows.indexOf(row) : 0;
                           const isSub = isSubItemRow(row);
 
-                          if (isSub && currentParentItem) {
-                            currentParentItem.subItems.push({
-                              row,
-                              actualIndex: actualRowIndex
-                            });
+                          if (isSub) {
+                            const designatedParent = rowToParentMap.get(row);
+                            const existingParent = designatedParent 
+                              ? hierarchicalItems.find(h => h.parentRow === designatedParent) 
+                              : null;
+
+                            if (existingParent) {
+                              existingParent.subItems.push({
+                                row,
+                                actualIndex: actualRowIndex
+                              });
+                            } else if (currentParentItem && (!designatedParent || designatedParent === currentParentItem.parentRow)) {
+                              currentParentItem.subItems.push({
+                                row,
+                                actualIndex: actualRowIndex
+                              });
+                            } else if (designatedParent) {
+                              const parentIdx = localRows.indexOf(designatedParent);
+                              const newParent = {
+                                parentRow: designatedParent,
+                                parentIndex: parentIdx !== -1 ? parentIdx : 0,
+                                subItems: [{ row, actualIndex: actualRowIndex }]
+                              };
+                              hierarchicalItems.push(newParent);
+                              currentParentItem = newParent;
+                            } else if (currentParentItem) {
+                              currentParentItem.subItems.push({
+                                row,
+                                actualIndex: actualRowIndex
+                              });
+                            } else {
+                              currentParentItem = {
+                                parentRow: row,
+                                parentIndex: actualRowIndex,
+                                subItems: []
+                              };
+                              hierarchicalItems.push(currentParentItem);
+                            }
                           } else {
                             currentParentItem = {
                               parentRow: row,
@@ -5331,7 +5379,7 @@ export function NotionDatabaseTable({
                                       className={`font-sans border-r ${
                                         isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                       } ${
-                                        fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3 max-w-md'
+                                        fitPageMode ? 'px-2 py-2 text-xs overflow-hidden' : 'px-3.5 py-2.5 max-w-md text-[13px]'
                                       }`}
                                     >
                                       {isEditingThis ? (
@@ -5355,7 +5403,7 @@ export function NotionDatabaseTable({
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
                                         >
-                                          <div className={`flex-1 font-sans text-[13px] leading-relaxed ${fitPageMode ? 'break-words' : ''}`}>
+                                          <div className={`flex-1 font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
                                             {renderFormattedNotes(val)}
                                           </div>
                                           <button
@@ -6006,10 +6054,11 @@ export function NotionDatabaseTable({
                         return hierarchicalItems.map((hItem) => {
                           const parentRow = hItem.parentRow;
                           const parentIndex = hItem.parentIndex;
-                          const isParentExpanded = Boolean(expandedParents[parentIndex]); // Default collapsed (tertutup), baru terbuka jika diklik
+                          const parentKey = parentRow.id || `${parentIndex}-${parentRow['Jenis kegiatan'] || ''}`;
+                          const isParentExpanded = Boolean(expandedParents[parentIndex] || expandedParents[parentKey]);
 
                           return (
-                            <React.Fragment key={`parent-${parentIndex}`}>
+                            <React.Fragment key={`parent-${parentKey}`}>
                               {/* Render Parent Row */}
                               {renderRowItem(
                                 parentRow,
@@ -6022,14 +6071,15 @@ export function NotionDatabaseTable({
                                   e.stopPropagation();
                                   setExpandedParents(prev => ({
                                     ...prev,
-                                    [parentIndex]: isParentExpanded ? false : true
+                                    [parentIndex]: !isParentExpanded,
+                                    [parentKey]: !isParentExpanded
                                   }));
                                 }
                               )}
 
                               {/* Render Sub-items if Parent is expanded */}
                               {isParentExpanded && hItem.subItems.map((sub) => (
-                                <React.Fragment key={`sub-${sub.actualIndex}`}>
+                                <React.Fragment key={`sub-${sub.row.id || sub.actualIndex}`}>
                                   {renderRowItem(sub.row, sub.actualIndex, true, false, false, undefined)}
                                 </React.Fragment>
                               ))}
@@ -6037,7 +6087,7 @@ export function NotionDatabaseTable({
                               {/* + New sub-item row if Parent is expanded */}
                               {isParentExpanded && (
                                 <tr
-                                  key={`new-sub-row-${parentIndex}`}
+                                  key={`new-sub-row-${parentKey}`}
                                   className={`transition-colors border-b select-none ${
                                     isNotionLight
                                       ? 'hover:bg-[#fbfbfa]/80 bg-white/40 border-[#e9e9e8]'
@@ -6060,7 +6110,7 @@ export function NotionDatabaseTable({
                                           onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                               e.preventDefault();
-                                              handleAddSubItem(parentIndex, newSubItemTitle);
+                                              handleAddSubItem(parentRow, newSubItemTitle);
                                             } else if (e.key === 'Escape') {
                                               setCreatingSubItemForParent(null);
                                               setNewSubItemTitle('');

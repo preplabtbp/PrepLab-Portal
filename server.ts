@@ -891,7 +891,8 @@ const app = express();
     '/api/presence',
     '/api/pdf',
     '/api/user',
-    '/api/gallery'
+    '/api/gallery',
+    '/api/portal-gallery'
   ];
 
   app.use('/api', (req, res, next) => {

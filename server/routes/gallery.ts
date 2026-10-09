@@ -82,10 +82,14 @@ async function getOrCreateGaleriPortalFolder(): Promise<string> {
 }
 
 /**
- * GET /api/gallery
+ * GET /api/portal-gallery and GET /api/gallery/drive
  * Mengambil daftar gambar yang tersimpan di folder "Galeri Portal" di Google Drive
  */
-galleryRouter.get("/api/gallery", async (req, res) => {
+galleryRouter.get(["/api/portal-gallery", "/api/gallery/drive", "/api/gallery"], async (req, res, next) => {
+  // If request contains week query parameter, pass through to miscRouter
+  if (req.query.week) {
+    return next();
+  }
   try {
     const folderId = await getOrCreateGaleriPortalFolder();
 
@@ -131,10 +135,10 @@ galleryRouter.get("/api/gallery", async (req, res) => {
 });
 
 /**
- * POST /api/gallery/upload
+ * POST /api/gallery/upload and POST /api/portal-gallery/upload
  * Mengunggah gambar baru langsung ke folder "Galeri Portal" di Google Drive
  */
-galleryRouter.post("/api/gallery/upload", async (req, res) => {
+galleryRouter.post(["/api/portal-gallery/upload", "/api/gallery/upload"], async (req, res) => {
   try {
     const { base64Data, mimeType: rawMime, filename: rawFilename } = req.body;
 
@@ -248,10 +252,10 @@ galleryRouter.post("/api/gallery/upload", async (req, res) => {
 });
 
 /**
- * DELETE /api/gallery/:fileId
+ * DELETE /api/gallery/:fileId and DELETE /api/portal-gallery/:fileId
  * Menghapus gambar dari Galeri Portal (ke tempat sampah Drive)
  */
-galleryRouter.delete("/api/gallery/:fileId", async (req, res) => {
+galleryRouter.delete(["/api/portal-gallery/:fileId", "/api/gallery/:fileId"], async (req, res) => {
   try {
     const fileId = req.params.fileId;
     if (!fileId) return res.status(400).json({ success: false, error: "fileId tidak valid" });

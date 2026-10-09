@@ -230,8 +230,8 @@ button[class*="bg-emerald-600"],
 button[class*="bg-blue-600"],
 button[class*="bg-rose-600"],
 button[class*="bg-red-600"],
-button[class*="bg-slate-800"],
-button[class*="bg-slate-900"] {
+button[class*="bg-slate-800"]:not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-transparent"]):not([class*="bg-slate-100"]):not([class*="bg-slate-200"]),
+button[class*="bg-slate-900"]:not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-transparent"]):not([class*="bg-slate-100"]):not([class*="bg-slate-200"]) {
   color: #ffffff;
 }
 

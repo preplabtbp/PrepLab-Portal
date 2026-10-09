@@ -580,26 +580,32 @@ const NotionTasklistInlineEditor: React.FC<{
 
     if (colorKey === 'default') {
       try {
-        const span = document.createElement('span');
         const contents = range.extractContents();
-        span.appendChild(contents);
-        span.removeAttribute('data-color');
-        span.style.color = '';
-        span.style.fontWeight = '';
-        range.insertNode(span);
+        // Remove nested color attributes
+        if (contents.querySelectorAll) {
+          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-color');
+            (el as HTMLElement).style.color = '';
+          });
+        }
+        range.insertNode(contents);
       } catch (e) {
-        document.execCommand('styleWithCSS', false, 'true');
-        document.execCommand('foreColor', false, '#0f172a');
         document.execCommand('removeFormat');
       }
     } else {
       const span = document.createElement('span');
       span.style.color = hex;
-      span.style.fontWeight = '600';
       span.setAttribute('data-color', colorKey);
 
       try {
         const contents = range.extractContents();
+        // Strip any existing color inside to prevent nested tags
+        if (contents.querySelectorAll) {
+          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-color');
+            (el as HTMLElement).style.color = '';
+          });
+        }
         span.appendChild(contents);
         range.insertNode(span);
 
@@ -1105,26 +1111,32 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
 
     if (colorKey === 'default') {
       try {
-        const span = document.createElement('span');
         const contents = range.extractContents();
-        span.appendChild(contents);
-        span.removeAttribute('data-color');
-        span.style.color = '';
-        span.style.fontWeight = '';
-        range.insertNode(span);
+        // Remove nested color attributes
+        if (contents.querySelectorAll) {
+          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-color');
+            (el as HTMLElement).style.color = '';
+          });
+        }
+        range.insertNode(contents);
       } catch (e) {
-        document.execCommand('styleWithCSS', false, 'true');
-        document.execCommand('foreColor', false, '#0f172a');
         document.execCommand('removeFormat');
       }
     } else {
       const span = document.createElement('span');
       span.style.color = hex;
-      span.style.fontWeight = '600';
       span.setAttribute('data-color', colorKey);
 
       try {
         const contents = range.extractContents();
+        // Strip any existing color inside to prevent nested tags
+        if (contents.querySelectorAll) {
+          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-color');
+            (el as HTMLElement).style.color = '';
+          });
+        }
         span.appendChild(contents);
         range.insertNode(span);
 
@@ -1227,11 +1239,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
             <ListTodo className="w-3 h-3" />
             <span>Ubah ke Checklist</span>
           </button>
-        ) : (
-          <span className="text-[10px] text-slate-400 font-sans">
-            Mode Teks
-          </span>
-        )}
+        ) : <div />}
 
         <div className="flex items-center gap-1.5">
           <button
