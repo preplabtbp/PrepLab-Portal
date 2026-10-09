@@ -16,7 +16,9 @@ import {
   RotateCcw,
   CheckCircle2,
   Edit2,
-  Palette
+  Palette,
+  Eye,
+  Sparkles
 } from 'lucide-react';
 import { 
   parseTasklist, 
@@ -32,6 +34,8 @@ import {
   TaskItem,
   NOTION_COLORS,
   formatColorTagsToHtml,
+  markdownToVisualHtml,
+  stripColorTags,
   detectLineColor,
   applyColorToText
 } from './tasklist-utils';
@@ -104,6 +108,14 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
 
   // Supplementary notes (clean text outside checklist)
   const [extraNotes, setExtraNotes] = useState(() => progress.cleanText || '');
+  const [notesViewMode, setNotesViewMode] = useState<'visual' | 'edit'>('visual');
+  const [freeformViewMode, setFreeformViewMode] = useState<'visual' | 'edit'>('visual');
+
+  // Sync state if value prop changes
+  React.useEffect(() => {
+    setExtraNotes(progress.cleanText || '');
+    setFreeformText(value || '');
+  }, [value, progress.cleanText]);
 
   // Color Picker State
   const [selectedNewColor, setSelectedNewColor] = useState<string>('default');
@@ -663,53 +675,179 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
               <label className="text-[10px] font-black uppercase tracking-wider block text-black">
                 Catatan Umum / Instruksi Khusus (Opsional)
               </label>
+              <div className="flex items-center gap-1.5">
+                {extraNotes.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setNotesViewMode(notesViewMode === 'visual' ? 'edit' : 'visual')}
+                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                    title={notesViewMode === 'visual' ? "Buka editor teks" : "Lihat tampilan visual rapi"}
+                  >
+                    {notesViewMode === 'visual' ? <Edit2 className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
+                    <span>{notesViewMode === 'visual' ? 'Edit Teks' : 'Tampilan Rapi'}</span>
+                  </button>
+                )}
+                {extraNotes.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cleaned = stripColorTags(extraNotes).replace(/(\*\*|~~|\*|`)/g, '');
+                      handleExtraNotesChange(cleaned);
+                      toast.success('Format dan tag teks berhasil dibersihkan!');
+                    }}
+                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
+                    title="Hapus semua tag warna / format yang berantakan"
+                  >
+                    <Sparkles className="w-2.5 h-2.5" />
+                    <span>Reset Tag</span>
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="relative">
-              {activeSelection?.field === 'extraNotes' && (
-                <FloatingSelectionToolbar
-                  onFormat={handleApplyFormat}
-                  onClose={() => setActiveSelection(null)}
+
+            {notesViewMode === 'visual' && extraNotes.trim() ? (
+              <div 
+                onClick={() => !isReadOnly && setNotesViewMode('edit')}
+                className="w-full text-xs font-sans font-medium p-3 rounded-xl border-2 border-slate-300 bg-slate-50/90 text-[#37352f] leading-relaxed cursor-pointer hover:border-teal-500 transition-colors shadow-2xs group relative"
+                title="Klik untuk mengedit catatan ini"
+              >
+                <div 
+                  className="space-y-1"
+                  dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(extraNotes)) }}
                 />
-              )}
-              <textarea
-                rows={2}
-                disabled={isReadOnly}
-                value={extraNotes}
-                onChange={(e) => handleExtraNotesChange(e.target.value)}
-                onSelect={(e) => handleSelectText(e, 'extraNotes')}
-                onKeyUp={(e) => handleSelectText(e, 'extraNotes')}
-                onMouseUp={(e) => handleSelectText(e, 'extraNotes')}
-                placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
-                className="w-full text-xs font-sans font-bold p-2.5 rounded-xl border-2 outline-none resize-none focus:border-teal-500 bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
-              />
-            </div>
+                <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>💡 Tampilan visual rapi (Notion)</span>
+                  <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-1">
+                    <Edit2 className="w-2.5 h-2.5" /> Klik untuk edit
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="relative">
+                  {activeSelection?.field === 'extraNotes' && (
+                    <FloatingSelectionToolbar
+                      onFormat={handleApplyFormat}
+                      onClose={() => setActiveSelection(null)}
+                    />
+                  )}
+                  <textarea
+                    rows={2}
+                    disabled={isReadOnly}
+                    value={extraNotes}
+                    onChange={(e) => handleExtraNotesChange(e.target.value)}
+                    onSelect={(e) => handleSelectText(e, 'extraNotes')}
+                    onKeyUp={(e) => handleSelectText(e, 'extraNotes')}
+                    onMouseUp={(e) => handleSelectText(e, 'extraNotes')}
+                    placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
+                    className="w-full text-xs font-sans font-bold p-2.5 rounded-xl border-2 outline-none resize-none focus:border-teal-500 bg-white text-[#37352f] border-slate-400 placeholder:text-slate-500 shadow-2xs"
+                  />
+                </div>
+
+                {/* Live rendered preview directly below editor */}
+                {extraNotes.trim() && (
+                  <div className="p-2.5 rounded-xl border border-teal-200 bg-teal-50/60 text-[#37352f] text-xs">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 block mb-1">
+                      Pratinjau Hasil Format Visual:
+                    </span>
+                    <div 
+                      className="text-xs leading-relaxed font-sans"
+                      dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(extraNotes)) }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ) : (
         /* Mode Freeform Text View */
         <div className="space-y-2">
-          <div className="relative">
-            {activeSelection?.field === 'freeformText' && (
-              <FloatingSelectionToolbar
-                onFormat={handleApplyFormat}
-                onClose={() => setActiveSelection(null)}
-              />
-            )}
-            <textarea
-              rows={5}
-              disabled={isReadOnly}
-              value={freeformText}
-              onChange={(e) => {
-                setFreeformText(e.target.value);
-                onChange(e.target.value);
-              }}
-              onSelect={(e) => handleSelectText(e, 'freeformText')}
-              onKeyUp={(e) => handleSelectText(e, 'freeformText')}
-              onMouseUp={(e) => handleSelectText(e, 'freeformText')}
-              placeholder="Tuliskan keterangan naratif atau laporan detail..."
-              className="w-full text-xs font-sans font-bold p-3 rounded-xl border-2 outline-none resize-y focus:border-teal-500 leading-relaxed bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
-            />
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-600">Laporan / Keterangan Bebas</span>
+            <div className="flex items-center gap-1.5">
+              {freeformText.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setFreeformViewMode(freeformViewMode === 'visual' ? 'edit' : 'visual')}
+                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                >
+                  {freeformViewMode === 'visual' ? <Edit2 className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
+                  <span>{freeformViewMode === 'visual' ? 'Edit Teks' : 'Tampilan Rapi'}</span>
+                </button>
+              )}
+              {freeformText.trim() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cleaned = stripColorTags(freeformText).replace(/(\*\*|~~|\*|`)/g, '');
+                    setFreeformText(cleaned);
+                    onChange(cleaned);
+                    toast.success('Format dan tag teks berhasil dibersihkan!');
+                  }}
+                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
+                >
+                  <Sparkles className="w-2.5 h-2.5" />
+                  <span>Reset Tag</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {freeformViewMode === 'visual' && freeformText.trim() ? (
+            <div 
+              onClick={() => !isReadOnly && setFreeformViewMode('edit')}
+              className="w-full text-xs font-sans font-medium p-3.5 rounded-xl border-2 border-slate-300 bg-slate-50/90 text-[#37352f] leading-relaxed cursor-pointer hover:border-teal-500 transition-colors shadow-2xs group relative"
+            >
+              <div 
+                className="space-y-1.5 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(freeformText)) }}
+              />
+              <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                <span>💡 Tampilan visual rapi (Notion)</span>
+                <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-1">
+                  <Edit2 className="w-2.5 h-2.5" /> Klik untuk edit
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="relative">
+                {activeSelection?.field === 'freeformText' && (
+                  <FloatingSelectionToolbar
+                    onFormat={handleApplyFormat}
+                    onClose={() => setActiveSelection(null)}
+                  />
+                )}
+                <textarea
+                  rows={5}
+                  disabled={isReadOnly}
+                  value={freeformText}
+                  onChange={(e) => {
+                    setFreeformText(e.target.value);
+                    onChange(e.target.value);
+                  }}
+                  onSelect={(e) => handleSelectText(e, 'freeformText')}
+                  onKeyUp={(e) => handleSelectText(e, 'freeformText')}
+                  onMouseUp={(e) => handleSelectText(e, 'freeformText')}
+                  placeholder="Tuliskan keterangan naratif atau laporan detail..."
+                  className="w-full text-xs font-sans font-bold p-3 rounded-xl border-2 outline-none resize-y focus:border-teal-500 leading-relaxed bg-white text-[#37352f] border-slate-400 placeholder:text-slate-500 shadow-2xs"
+                />
+              </div>
+
+              {freeformText.trim() && (
+                <div className="p-2.5 rounded-xl border border-teal-200 bg-teal-50/60 text-[#37352f] text-xs">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 block mb-1">
+                    Pratinjau Hasil Format Visual:
+                  </span>
+                  <div 
+                    className="text-xs leading-relaxed font-sans"
+                    dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(freeformText)) }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
           <p className="text-[11px] font-bold text-slate-500">
             Tip: Sorot / seleksi teks apa saja untuk memunculkan toolbar editing melayang (Warna, Bold, Italic, Strikethrough, Code).
           </p>

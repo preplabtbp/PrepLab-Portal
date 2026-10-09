@@ -789,8 +789,33 @@ export function NotionDatabaseTable({
   }, [initialTopicTitle, localRows]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ACTIVE');
-  const [priorityFilter, setPriorityFilter] = useState('ALL');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['ACTIVE']);
+  const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
+  const [selectedPics, setSelectedPics] = useState<string[]>([]);
+  const [picSearchQuery, setPicSearchQuery] = useState('');
+
+  // Backward-compatibility aliases for statusFilter and priorityFilter
+  const statusFilter = useMemo(() => {
+    if (selectedStatuses.length === 0 || selectedStatuses.includes('ALL')) return 'ALL';
+    if (selectedStatuses.length === 1) return selectedStatuses[0];
+    return selectedStatuses.join(',');
+  }, [selectedStatuses]);
+
+  const priorityFilter = useMemo(() => {
+    if (selectedPriorities.length === 0 || selectedPriorities.includes('ALL')) return 'ALL';
+    if (selectedPriorities.length === 1) return selectedPriorities[0];
+    return selectedPriorities.join(',');
+  }, [selectedPriorities]);
+
+  const setStatusFilter = (val: string) => {
+    if (val === 'ALL') setSelectedStatuses(['ALL']);
+    else setSelectedStatuses([val]);
+  };
+
+  const setPriorityFilter = (val: string) => {
+    if (val === 'ALL') setSelectedPriorities([]);
+    else setSelectedPriorities([val]);
+  };
   const [viewMode, setViewMode] = useState<'table' | 'board' | 'list'>('table');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -1125,14 +1150,15 @@ export function NotionDatabaseTable({
     document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
-      if (!resizeInfoRef.current) return;
+      const info = resizeInfoRef.current;
+      if (!info) return;
       const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
-      const deltaX = currentX - resizeInfoRef.current.startX;
-      const newWidth = Math.max(50, Math.min(1200, Math.round(resizeInfoRef.current.startWidth + deltaX)));
+      const deltaX = currentX - info.startX;
+      const newWidth = Math.max(40, Math.min(1200, Math.round(info.startWidth + deltaX)));
 
       setColumnWidths((prev) => ({
         ...prev,
-        [resizeInfoRef.current!.colHeader]: newWidth
+        [info.colHeader]: newWidth
       }));
     };
 
@@ -1163,18 +1189,22 @@ export function NotionDatabaseTable({
 
   // Helper for applying custom dragged column widths to <th> and <td>
   const getColStyle = (colName: string): React.CSSProperties | undefined => {
-    if (fitPageMode) {
-      return undefined;
-    }
     const customW = columnWidths[colName];
-    if (customW) {
+    if (!customW) return undefined;
+
+    if (fitPageMode) {
+      // In fitPageMode, allow user-defined column width while letting other columns flex and absorb remaining width
       return {
         width: `${customW}px`,
-        minWidth: `${customW}px`,
-        maxWidth: `${customW}px`,
+        minWidth: '40px'
       };
     }
-    return undefined;
+
+    return {
+      width: `${customW}px`,
+      minWidth: `${customW}px`,
+      maxWidth: `${customW}px`,
+    };
   };
 
   // Ensure Progress, Target Selesai, and redundant Kategori columns are never rendered in displayHeaders
@@ -2689,30 +2719,47 @@ export function NotionDatabaseTable({
       });
     }
 
-    // 2. Status Filter
-    if (statusFilter !== 'ALL') {
+    // 2. Status Multi-Select Filter
+    if (selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) {
       result = result.filter((row) => {
         const val = (getRowVal(row, 'Status') || '').toUpperCase().trim();
-        if (statusFilter === 'ACTIVE') return !val.includes('CLOSE') && !val.includes('SELESAI') && !val.includes('DONE') && !val.includes('CANCEL') && !val.includes('BATAL');
-        if (statusFilter === 'ON PROGRESS') return val.includes('PROGRESS') || val.includes('PROSES');
-        if (statusFilter === 'CLOSE') return val.includes('CLOSE') || val.includes('SELESAI') || val.includes('DONE');
-        if (statusFilter === 'OPEN') return val.includes('OPEN') || val.includes('BARU');
-        if (statusFilter === 'CANCELED') return val.includes('CANCEL') || val.includes('BATAL');
-        if (statusFilter === 'PENDING') return val.includes('PENDING') || val.includes('HOLD') || val.includes('DELAY');
-        return val === statusFilter;
+        return selectedStatuses.some((st) => {
+          if (st === 'ACTIVE') return !val.includes('CLOSE') && !val.includes('SELESAI') && !val.includes('DONE') && !val.includes('CANCEL') && !val.includes('BATAL');
+          if (st === 'ON PROGRESS') return val.includes('PROGRESS') || val.includes('PROSES');
+          if (st === 'CLOSE') return val.includes('CLOSE') || val.includes('SELESAI') || val.includes('DONE');
+          if (st === 'OPEN') return val.includes('OPEN') || val.includes('BARU');
+          if (st === 'CANCELED') return val.includes('CANCEL') || val.includes('BATAL');
+          if (st === 'PENDING') return val.includes('PENDING') || val.includes('HOLD') || val.includes('DELAY');
+          return val === st;
+        });
       });
     }
 
-    // 3. Priority Filter
-    if (priorityFilter !== 'ALL') {
+    // 3. Priority Multi-Select Filter
+    if (selectedPriorities.length > 0 && !selectedPriorities.includes('ALL')) {
       result = result.filter((row) => {
         const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
-        if (priorityFilter === 'URGENT') return val.includes('URGENT') || val.includes('KRITIS') || val.includes('CRITICAL');
-        if (priorityFilter === 'HIGH') return (val.includes('HIGH') || val.includes('TINGGI')) && !val.includes('URGENT');
-        if (priorityFilter === 'MEDIUM') return val.includes('MEDIUM') || val.includes('SEDANG');
-        if (priorityFilter === 'NORMAL') return (val.includes('NORMAL') || val.includes('BIASA')) && !val.includes('MEDIUM');
-        if (priorityFilter === 'LOW') return val.includes('LOW') || val.includes('RENDAH');
-        return val.includes(priorityFilter);
+        return selectedPriorities.some((pKey) => {
+          if (pKey === 'URGENT') return val.includes('URGENT') || val.includes('KRITIS') || val.includes('CRITICAL');
+          if (pKey === 'HIGH') return (val.includes('HIGH') || val.includes('TINGGI')) && !val.includes('URGENT');
+          if (pKey === 'MEDIUM') return val.includes('MEDIUM') || val.includes('SEDANG');
+          if (pKey === 'NORMAL') return (val.includes('NORMAL') || val.includes('BIASA')) && !val.includes('MEDIUM');
+          if (pKey === 'LOW') return val.includes('LOW') || val.includes('RENDAH');
+          return val.includes(pKey);
+        });
+      });
+    }
+
+    // 3b. PIC Multi-Select Filter
+    if (selectedPics.length > 0 && !selectedPics.includes('ALL')) {
+      result = result.filter((row) => {
+        const rawPic = (getRowVal(row, 'PIC') || getRowVal(row, 'pic') || '').trim();
+        return selectedPics.some((p) => {
+          if (p === '(Tanpa PIC)') {
+            return !rawPic || rawPic === '-';
+          }
+          return rawPic.toLowerCase() === p.toLowerCase() || rawPic.toLowerCase().includes(p.toLowerCase());
+        });
       });
     }
 
@@ -2752,7 +2799,7 @@ export function NotionDatabaseTable({
     }
 
     return result;
-  }, [localRows, searchQuery, statusFilter, priorityFilter, sortColumn, sortDirection, getRowVal]);
+  }, [localRows, searchQuery, selectedStatuses, selectedPriorities, selectedPics, sortColumn, sortDirection, getRowVal]);
 
   // Grouped rows for Notion Database Sections (e.g. 'Non Routine Lainnya (22)', 'PTK GTS (2)')
   const groupedRowsData = useMemo(() => {
@@ -2768,7 +2815,7 @@ export function NotionDatabaseTable({
     }));
   }, [filteredRows, getRowGroup]);
 
-  // Statistics calculation
+  // Statistics calculation with full Priority counts
   const stats = useMemo(() => {
     let total = 0;
     let onProgress = 0;
@@ -2776,6 +2823,11 @@ export function NotionDatabaseTable({
     let open = 0;
     let canceled = 0;
     let highPriority = 0;
+    let urgent = 0;
+    let high = 0;
+    let medium = 0;
+    let normal = 0;
+    let low = 0;
 
     localRows.forEach((r) => {
       const s = (getRowVal(r, 'Status') || '').toUpperCase();
@@ -2788,11 +2840,36 @@ export function NotionDatabaseTable({
         else if (s.includes('CANCEL') || s.includes('BATAL')) canceled++;
         else if (s.includes('OPEN') || s.includes('BARU')) open++;
 
-        if (p.includes('HIGH') || p.includes('URGENT') || p.includes('TINGGI')) highPriority++;
+        if (p.includes('URGENT') || p.includes('KRITIS') || p.includes('CRITICAL')) {
+          urgent++;
+          highPriority++;
+        } else if (p.includes('HIGH') || p.includes('TINGGI')) {
+          high++;
+          highPriority++;
+        } else if (p.includes('MEDIUM') || p.includes('SEDANG')) {
+          medium++;
+        } else if (p.includes('LOW') || p.includes('RENDAH')) {
+          low++;
+        } else {
+          normal++;
+        }
       }
     });
 
-    return { total, onProgress, closed, open, canceled, highPriority };
+    return { total, onProgress, closed, open, canceled, highPriority, urgent, high, medium, normal, low };
+  }, [localRows, getRowVal]);
+
+  // Dynamic list of available PICs with row counts
+  const availablePics = useMemo(() => {
+    const counts: Record<string, number> = {};
+    localRows.forEach(r => {
+      const pic = (getRowVal(r, 'PIC') || getRowVal(r, 'pic') || '').trim();
+      const key = pic || '(Tanpa PIC)';
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
   }, [localRows, getRowVal]);
 
   // Multiple Row Selection Helpers for Bulk Actions
@@ -3589,7 +3666,7 @@ export function NotionDatabaseTable({
     <div 
       className={`w-full my-0 mb-0 border-b transition-all font-sans antialiased ${
         isNotionLight 
-          ? 'bg-white border-[#e9e9e8] text-slate-900' 
+          ? 'bg-white border-[#e9e9e8] text-[#37352f]' 
           : 'bg-[#181818] border-[#2d2d2d] text-slate-200'
       }`}
       style={{
@@ -3610,7 +3687,7 @@ export function NotionDatabaseTable({
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-base select-none">📋</span>
-              <h3 className={`font-semibold text-sm flex items-center gap-1.5 ${isNotionLight ? 'text-slate-900' : 'text-slate-100'}`}>
+              <h3 className={`font-semibold text-sm flex items-center gap-1.5 ${isNotionLight ? 'text-[#37352f]' : 'text-slate-100'}`}>
                 <span>{title || 'Database Table'}</span>
                 <span 
                   className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono border font-semibold ${
@@ -3749,7 +3826,7 @@ export function NotionDatabaseTable({
 
             {/* 2. FILTER TOOL (Popover with active indicator dot) */}
             <div className="relative notion-filter-popover-container">
-              <NotionTooltip content="Filter Status & Prioritas" position="bottom">
+              <NotionTooltip content="Filter Status, Prioritas & PIC" position="bottom">
                 <button
                   type="button"
                   onClick={() => {
@@ -3758,15 +3835,15 @@ export function NotionDatabaseTable({
                     setIsFullToolsPopoverOpen(false);
                   }}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
-                    statusFilter !== 'ALL' || priorityFilter !== 'ALL'
+                    (selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) || selectedPriorities.length > 0 || selectedPics.length > 0
                       ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50'
                       : isNotionLight
-                      ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]'
+                      ? 'text-[#37352f] hover:bg-[#efefed]'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                   }`}
                 >
                   <Filter className="w-4 h-4" />
-                  {(statusFilter !== 'ALL' || priorityFilter !== 'ALL') && (
+                  {((selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) || selectedPriorities.length > 0 || selectedPics.length > 0) && (
                     <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
                   )}
                 </button>
@@ -3775,22 +3852,27 @@ export function NotionDatabaseTable({
               {/* Filter Popover Content */}
               {isFilterPopoverOpen && (
                 <div 
-                  className={`absolute right-0 top-full mt-1.5 w-72 rounded-xl shadow-2xl border p-3 z-50 transition-all text-left ${
-                    isNotionLight ? 'bg-white border-[#e9e9e8] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
+                  className={`absolute right-0 top-full mt-1.5 w-80 sm:w-96 max-h-[82vh] overflow-y-auto rounded-2xl shadow-2xl border p-3.5 z-50 transition-all text-left space-y-3 ${
+                    isNotionLight ? 'bg-white border-[#e9e9e7] text-[#37352f]' : 'bg-[#202020] border-[#333333] text-slate-100'
                   }`}
+                  style={{
+                    fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
+                  }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-xs font-bold flex items-center gap-1.5">
-                      <Filter className="w-3.5 h-3.5 text-teal-500" />
-                      Filter Kegiatan
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold flex items-center gap-1.5 text-[#37352f] dark:text-slate-100">
+                      <Filter className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                      Filter Kegiatan (Multi-Select)
                     </span>
-                    {(statusFilter !== 'ALL' || priorityFilter !== 'ALL') && (
+                    {((selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) || selectedPriorities.length > 0 || selectedPics.length > 0) && (
                       <button
                         type="button"
                         onClick={() => {
-                          setStatusFilter('ALL');
-                          setPriorityFilter('ALL');
+                          setSelectedStatuses(['ALL']);
+                          setSelectedPriorities([]);
+                          setSelectedPics([]);
+                          setPicSearchQuery('');
                         }}
                         className="text-[10px] text-rose-500 hover:underline font-semibold cursor-pointer"
                       >
@@ -3799,9 +3881,12 @@ export function NotionDatabaseTable({
                     )}
                   </div>
 
-                  {/* Status Options */}
-                  <div className="space-y-1 mb-3">
-                    <label className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status Kegiatan</label>
+                  {/* 1. Status Options (Multi-select) */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">Status Kegiatan</label>
+                      <span className="text-[10px] text-slate-400">Pilih 1 atau lebih</span>
+                    </div>
                     <div className="flex flex-wrap gap-1">
                       {[
                         { key: 'ALL', label: 'Semua', count: stats.total },
@@ -3811,17 +3896,39 @@ export function NotionDatabaseTable({
                         { key: 'CLOSE', label: 'Selesai', count: stats.closed },
                         { key: 'CANCELED', label: 'Batal', count: stats.canceled },
                       ].map((st) => {
-                        const isActive = statusFilter === st.key;
+                        const isSelected = st.key === 'ALL'
+                          ? (selectedStatuses.length === 0 || selectedStatuses.includes('ALL'))
+                          : selectedStatuses.includes(st.key);
                         return (
                           <button
                             key={st.key}
                             type="button"
-                            onClick={() => setStatusFilter(st.key)}
+                            onClick={() => {
+                              if (st.key === 'ALL') {
+                                setSelectedStatuses(['ALL']);
+                                return;
+                              }
+                              if (st.key === 'ACTIVE') {
+                                if (selectedStatuses.includes('ACTIVE')) {
+                                  setSelectedStatuses(['ALL']);
+                                } else {
+                                  setSelectedStatuses(['ACTIVE']);
+                                }
+                                return;
+                              }
+                              const cleaned = selectedStatuses.filter(s => s !== 'ALL' && s !== 'ACTIVE');
+                              if (cleaned.includes(st.key)) {
+                                const next = cleaned.filter(s => s !== st.key);
+                                setSelectedStatuses(next.length === 0 ? ['ALL'] : next);
+                              } else {
+                                setSelectedStatuses([...cleaned, st.key]);
+                              }
+                            }}
                             className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
-                              isActive
-                                ? 'bg-slate-900 text-white border-slate-900 dark:bg-teal-600 dark:border-teal-500'
+                              isSelected
+                                ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
                                 : isNotionLight
-                                ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
                                 : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
                             }`}
                           >
@@ -3833,23 +3940,136 @@ export function NotionDatabaseTable({
                     </div>
                   </div>
 
-                  {/* Priority Options */}
-                  <div className="space-y-1">
-                    <label className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tingkat Prioritas</label>
-                    <select
-                      value={priorityFilter}
-                      onChange={(e) => setPriorityFilter(e.target.value)}
-                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-medium outline-none cursor-pointer ${
-                        isNotionLight ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-[#282828] border-slate-700 text-slate-200'
-                      }`}
-                    >
-                      <option value="ALL">Semua Prioritas</option>
-                      <option value="URGENT">🚨 Urgent / Critical</option>
-                      <option value="HIGH">🔴 High Priority</option>
-                      <option value="MEDIUM">🔵 Medium Priority</option>
-                      <option value="NORMAL">🟢 Normal Priority</option>
-                      <option value="LOW">⚪ Low Priority</option>
-                    </select>
+                  {/* 2. Priority Options (Multi-select) */}
+                  <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">Tingkat Prioritas</label>
+                      <span className="text-[10px] text-slate-400">Pilih 1 atau lebih</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { key: 'ALL', label: 'Semua Prioritas', count: stats.total },
+                        { key: 'URGENT', label: '🚨 Urgent', count: stats.urgent || 0 },
+                        { key: 'HIGH', label: '🔴 High', count: stats.high || 0 },
+                        { key: 'MEDIUM', label: '🔵 Medium', count: stats.medium || 0 },
+                        { key: 'NORMAL', label: '🟢 Normal', count: stats.normal || 0 },
+                        { key: 'LOW', label: '⚪ Low', count: stats.low || 0 },
+                      ].map((p) => {
+                        const isSelected = p.key === 'ALL'
+                          ? selectedPriorities.length === 0
+                          : selectedPriorities.includes(p.key);
+                        return (
+                          <button
+                            key={p.key}
+                            type="button"
+                            onClick={() => {
+                              if (p.key === 'ALL') {
+                                setSelectedPriorities([]);
+                                return;
+                              }
+                              const cleaned = selectedPriorities.filter(x => x !== 'ALL');
+                              if (cleaned.includes(p.key)) {
+                                setSelectedPriorities(cleaned.filter(x => x !== p.key));
+                              } else {
+                                setSelectedPriorities([...cleaned, p.key]);
+                              }
+                            }}
+                            className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
+                              isSelected
+                                ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
+                                : isNotionLight
+                                ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                                : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
+                            }`}
+                          >
+                            <span>{p.label}</span>
+                            <span className="text-[10px] opacity-75 font-mono">({p.count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 3. PIC Filter (Multi-select with Search) */}
+                  <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Pemilihan PIC (Assignee)
+                      </label>
+                      {selectedPics.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPics([])}
+                          className="text-[10px] text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer"
+                        >
+                          Semua PIC
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="relative mb-1">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Cari nama PIC..."
+                        value={picSearchQuery}
+                        onChange={(e) => setPicSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-2.5 py-1 rounded-lg border text-[11px] outline-none focus:border-teal-500 font-sans"
+                        style={{
+                          backgroundColor: isNotionLight ? '#fbfbfa' : '#1a1a1a',
+                          borderColor: isNotionLight ? '#e9e9e7' : '#333333',
+                          color: isNotionLight ? '#37352f' : '#f1f5f9'
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto pr-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPics([])}
+                        className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all border cursor-pointer ${
+                          selectedPics.length === 0
+                            ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
+                            : isNotionLight
+                            ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                            : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        Semua PIC
+                      </button>
+                      {availablePics
+                        .filter((p) => !picSearchQuery.trim() || p.name.toLowerCase().includes(picSearchQuery.toLowerCase()))
+                        .map((p) => {
+                          const isSelected = selectedPics.includes(p.name);
+                          return (
+                            <button
+                              key={p.name}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedPics(selectedPics.filter(x => x !== p.name));
+                                } else {
+                                  setSelectedPics([...selectedPics, p.name]);
+                                }
+                              }}
+                              className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
+                                isSelected
+                                  ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
+                                  : isNotionLight
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                                  : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
+                              }`}
+                            >
+                              <User className="w-2.5 h-2.5 opacity-60" />
+                              <span className="truncate max-w-[130px]">{p.name}</span>
+                              <span className="text-[10px] opacity-75 font-mono">({p.count})</span>
+                            </button>
+                          );
+                        })}
+                      {availablePics.filter((p) => !picSearchQuery.trim() || p.name.toLowerCase().includes(picSearchQuery.toLowerCase())).length === 0 && (
+                        <span className="text-[11px] text-slate-400 py-1 italic">Tidak ada PIC yang cocok</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -4407,6 +4627,8 @@ export function NotionDatabaseTable({
               background: #14b8a6;
               border-radius: 9999px;
               box-shadow: 0 1px 6px rgba(20, 184, 166, 0.5);
+            .notion-font-scope {
+              color: ${isNotionLight ? '#37352f' : '#f1f5f9'};
             }
             .notion-font-scope th,
             .notion-font-scope td,
@@ -4420,7 +4642,8 @@ export function NotionDatabaseTable({
             style={{
               fontSize: `${labNoteFontSize}px`,
               fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-              letterSpacing: '-0.005em'
+              letterSpacing: '-0.005em',
+              color: isNotionLight ? '#37352f' : '#f1f5f9'
             }}
           >
             {/* Table Header */}
@@ -4434,7 +4657,7 @@ export function NotionDatabaseTable({
                 {(isSelectionModeActive || selectedRowIndices.size > 0) && (
                   <th 
                     className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r ${
-                      isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
+                      isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
                     } ${fitPageMode ? 'w-[3%] px-1.5 py-2.5' : 'w-10 px-2 py-3'}`}
                   >
                     <div className="flex items-center justify-center">
@@ -4486,7 +4709,7 @@ export function NotionDatabaseTable({
                       key={colHeader}
                       style={getColStyle(colHeader)}
                       className={`sticky top-0 z-20 shadow-2xs font-semibold hover:opacity-90 transition-opacity group/th relative border-b border-r text-[13px] ${
-                        isNotionLight ? 'bg-[#fbfbfa] text-slate-800 border-[#e9e9e8]' : 'bg-[#202020] text-slate-200 border-[#303030]'
+                        isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-200 border-[#303030]'
                       } ${widthClass}`}
                     >
                       <div className={`flex items-center justify-between gap-1.5 ${isNum ? 'justify-center' : ''}`}>
@@ -4496,7 +4719,7 @@ export function NotionDatabaseTable({
                           title="Klik untuk mengurutkan kolom"
                         >
                           {getNotionColumnIcon(colHeader)}
-                          <span className={`truncate font-semibold ${isNotionLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                          <span className={`truncate font-semibold ${isNotionLight ? 'text-[#37352f]' : 'text-slate-300'}`}>
                             {colLower.includes('tanggal selesai') || colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')
                               ? 'Tanggal Selesai'
                               : colHeader}
@@ -5026,7 +5249,7 @@ export function NotionDatabaseTable({
                                                 isSubCompleted 
                                                   ? 'line-through text-slate-400 dark:text-slate-500 font-normal' 
                                                   : isNotionLight 
-                                                    ? 'text-slate-900 font-semibold' 
+                                                    ? 'text-[#37352f] font-semibold' 
                                                     : 'text-slate-100'
                                               } ${fitPageMode ? 'break-words' : ''}`}
                                             >

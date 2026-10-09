@@ -576,9 +576,10 @@ export function reorderTasklistItems(originalText: string, newItems: TaskItem[])
   return `${parsed.cleanText.trim()}${delimiter}${delimiter}${checklistLines.join(delimiter)}`;
 }
 
-// Notion color definitions for rich text highlighting
+// Notion color definitions for rich text highlighting (authentic Notion palette)
 export const NOTION_COLORS: Record<string, { label: string; textClass: string; hex: string; bgClass: string; borderClass: string }> = {
-  default: { label: 'Hitam (Default)', textClass: 'text-black', hex: '#111827', bgClass: 'bg-slate-100', borderClass: 'border-slate-300' },
+  default: { label: 'Hitam (Default)', textClass: 'text-[#37352f]', hex: '#37352f', bgClass: 'bg-slate-100', borderClass: 'border-slate-300' },
+  black: { label: 'Hitam', textClass: 'text-[#37352f]', hex: '#37352f', bgClass: 'bg-slate-100', borderClass: 'border-slate-300' },
   blue: { label: 'Biru', textClass: 'text-blue-600', hex: '#2563eb', bgClass: 'bg-blue-50', borderClass: 'border-blue-300' },
   green: { label: 'Hijau', textClass: 'text-emerald-600', hex: '#16a34a', bgClass: 'bg-emerald-50', borderClass: 'border-emerald-300' },
   orange: { label: 'Oranye', textClass: 'text-orange-600', hex: '#ea580c', bgClass: 'bg-orange-50', borderClass: 'border-orange-300' },
@@ -586,10 +587,11 @@ export const NOTION_COLORS: Record<string, { label: string; textClass: string; h
   purple: { label: 'Ungu', textClass: 'text-purple-600', hex: '#9333ea', bgClass: 'bg-purple-50', borderClass: 'border-purple-300' },
   amber: { label: 'Kuning / Amber', textClass: 'text-amber-600', hex: '#d97706', bgClass: 'bg-amber-50', borderClass: 'border-amber-300' },
   pink: { label: 'Pink', textClass: 'text-pink-600', hex: '#db2777', bgClass: 'bg-pink-50', borderClass: 'border-pink-300' },
-  gray: { label: 'Abu-abu', textClass: 'text-slate-500', hex: '#64748b', bgClass: 'bg-slate-50', borderClass: 'border-slate-300' }
+  gray: { label: 'Abu-abu', textClass: 'text-slate-500', hex: '#787774', bgClass: 'bg-slate-50', borderClass: 'border-slate-300' }
 };
 
 const COLOR_ALIASES: Record<string, string> = {
+  hitam: 'black',
   biru: 'blue',
   hijau: 'green',
   oranye: 'orange',

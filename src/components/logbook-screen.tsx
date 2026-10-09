@@ -1217,14 +1217,15 @@ export function LogbookScreen({
     document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
-      if (!resizeInfoRef.current) return;
+      const info = resizeInfoRef.current;
+      if (!info) return;
       const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
-      const deltaX = currentX - resizeInfoRef.current.startX;
-      const newWidth = Math.max(50, Math.min(1200, Math.round(resizeInfoRef.current.startWidth + deltaX)));
+      const deltaX = currentX - info.startX;
+      const newWidth = Math.max(50, Math.min(1200, Math.round(info.startWidth + deltaX)));
 
       setColumnWidths((prev) => ({
         ...prev,
-        [resizeInfoRef.current!.colHeader]: newWidth
+        [info.colHeader]: newWidth
       }));
     };
 

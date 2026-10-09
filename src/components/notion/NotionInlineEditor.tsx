@@ -322,9 +322,9 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         style={{ backgroundColor: isNotionLight ? '#e2e8f0' : '#475569' }} 
       />
 
-      {/* Quick Color Swatches directly on bar */}
+      {/* Quick Color Swatches directly on bar (including Black) */}
       <div className="flex items-center gap-1">
-        {['red', 'amber', 'green', 'blue', 'purple'].map((cKey) => {
+        {['default', 'red', 'amber', 'green', 'blue', 'purple'].map((cKey) => {
           const conf = NOTION_COLORS[cKey];
           if (!conf) return null;
           return (
