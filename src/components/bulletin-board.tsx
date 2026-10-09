@@ -331,24 +331,59 @@ export function BulletinBoard({
   // Handle URL deep link (e.g. from notifications /bulletin/TBP?postId=411&topic=...)
   const [deepLinkTopic, setDeepLinkTopic] = useState<string | undefined>(undefined);
 
+  // Handle URL persistence on refresh and deep link (e.g. ?page=123 or ?postId=123)
   useEffect(() => {
     if (posts.length === 0) return;
     try {
       const params = new URLSearchParams(window.location.search);
-      const urlPostId = params.get("postId");
+      const urlPostId = params.get("page") || params.get("postId") || params.get("id");
+      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
+      const targetId = urlPostId || savedPageId;
       const urlTopic = params.get("topic");
       if (urlTopic) {
         setDeepLinkTopic(urlTopic);
       }
-      if (urlPostId) {
-        const target = posts.find((p) => String(p.id) === urlPostId);
+      if (targetId && !selectedPost) {
+        const target = posts.find((p) => String(p.id) === String(targetId));
         if (target) {
           setSelectedPost(target);
           addRecentPost(target.id);
         }
       }
     } catch (e) {}
-  }, [posts, addRecentPost]);
+  }, [posts, addRecentPost, selectedPost]);
+
+  // Real-time synchronization: poll active post every 6 seconds so updates from mobile (HP) reflect on PC
+  useEffect(() => {
+    if (!selectedPost?.id || isEditing) return;
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const res = await fetch(`/api/bulletin/${selectedPost.id}?_t=${Date.now()}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.status === "success" && json.data && isMounted) {
+          const remotePost = json.data;
+          if (
+            remotePost.content !== selectedPost.content ||
+            remotePost.title !== selectedPost.title ||
+            remotePost.coverImage !== selectedPost.coverImage
+          ) {
+            console.log("[Bulletin Auto-Sync] Updated from remote device for post", selectedPost.id);
+            setSelectedPost(remotePost);
+            setPosts((prev) => prev.map((p) => (p.id === remotePost.id ? remotePost : p)));
+          }
+        }
+      } catch (err) {}
+    }, 6000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [selectedPost?.id, selectedPost?.content, selectedPost?.title, selectedPost?.coverImage, isEditing]);
 
   const getPostTitle = (post: any): string => {
     if (!post) return "Untitled";
@@ -522,6 +557,15 @@ export function BulletinBoard({
 
     setSelectedPost(post);
     setIsEditing(false);
+
+    try {
+      const url = new URL(window.location.href);
+      if (post?.id) {
+        url.searchParams.set("page", String(post.id));
+        localStorage.setItem("preplab_active_bulletin_page", String(post.id));
+      }
+      window.history.replaceState({}, "", url.toString());
+    } catch {}
   };
 
   // Go back to previous history or parent
@@ -536,11 +580,26 @@ export function BulletinBoard({
       const previousPost = newHistory[newHistory.length - 1];
       setNavHistory(newHistory);
       setSelectedPost(previousPost);
+      try {
+        const url = new URL(window.location.href);
+        if (previousPost?.id) {
+          url.searchParams.set("page", String(previousPost.id));
+          localStorage.setItem("preplab_active_bulletin_page", String(previousPost.id));
+        }
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
     } else {
       // Go directly back to dashboard
       setNavHistory([]);
       setSelectedPost(null);
       setIsEditing(false);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("page");
+        url.searchParams.delete("postId");
+        localStorage.removeItem("preplab_active_bulletin_page");
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
     }
   };
 
@@ -849,6 +908,23 @@ export function BulletinBoard({
     const content = getRenderableContent(selectedPost);
     return extractMarkdownTable(content);
   }, [selectedPost, isEditing, extractMarkdownTable, getRenderableContent]);
+
+  // Clean beforeText to strip redundant document titles and empty headings
+  const cleanBeforeTableText = useMemo(() => {
+    if (!parsedTableData?.beforeText) return '';
+    const postTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+    const lines = parsedTableData.beforeText.split('\n');
+    const filteredLines = lines.filter(line => {
+      const cleanLine = line.replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+      if (!cleanLine) return false;
+      // If line duplicates document/table title
+      if (cleanLine === postTitle || (cleanLine.length > 3 && (postTitle === cleanLine || postTitle.includes(cleanLine) || cleanLine.includes(postTitle)))) {
+        return false;
+      }
+      return true;
+    });
+    return filteredLines.join('\n').trim();
+  }, [parsedTableData, selectedPost]);
 
   // Compute upcoming meetings from agenda
   const upcomingMeetings = useMemo(() => {
@@ -1889,9 +1965,9 @@ ${aiMeetingNotes
               />
 
               {/* Content Before Table */}
-              {parsedTableData.beforeText.trim() && (
+              {cleanBeforeTableText && (
                 <div 
-                  className="prose max-w-none text-[15px] md:text-base leading-relaxed tracking-normal font-sans"
+                  className="prose max-w-none text-[15px] md:text-base leading-relaxed tracking-normal font-sans mb-3"
                   style={{ color: 'var(--text-main, #0f172a)' }}
                 >
                   <ReactMarkdown 
@@ -1899,16 +1975,14 @@ ${aiMeetingNotes
                       h1: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
+                        const curTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+                        if (clean === curTitle || (curTitle.length > 3 && curTitle.includes(clean))) {
+                          return null;
+                        }
                         const targetPost = posts.find(
-                          (p) =>
-                            p.title &&
-                            (p.title.trim().toLowerCase() === clean ||
-                              p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
-                              (clean.length >= 4 &&
-                                (p.title.toLowerCase().includes(clean) ||
-                                  clean.includes(p.title.toLowerCase().trim()))))
+                          (p) => p.title && p.id !== selectedPost?.id && p.title.trim().toLowerCase() === clean
                         );
-                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
+                        if (targetPost && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1941,16 +2015,14 @@ ${aiMeetingNotes
                       h2: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
+                        const curTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+                        if (clean === curTitle || (curTitle.length > 3 && curTitle.includes(clean))) {
+                          return null;
+                        }
                         const targetPost = posts.find(
-                          (p) =>
-                            p.title &&
-                            (p.title.trim().toLowerCase() === clean ||
-                              p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
-                              (clean.length >= 4 &&
-                                (p.title.toLowerCase().includes(clean) ||
-                                  clean.includes(p.title.toLowerCase().trim()))))
+                          (p) => p.title && p.id !== selectedPost?.id && p.title.trim().toLowerCase() === clean
                         );
-                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
+                        if (targetPost && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -1983,16 +2055,14 @@ ${aiMeetingNotes
                       h3: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children).trim();
                         const clean = text.replace(/^[#\s\-*]+/, "").trim().toLowerCase();
+                        const curTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+                        if (clean === curTitle || (curTitle.length > 3 && curTitle.includes(clean))) {
+                          return null;
+                        }
                         const targetPost = posts.find(
-                          (p) =>
-                            p.title &&
-                            (p.title.trim().toLowerCase() === clean ||
-                              p.title.trim().toLowerCase().replace(/^[#\s\-*]+/, "") === clean ||
-                              (clean.length >= 4 &&
-                                (p.title.toLowerCase().includes(clean) ||
-                                  clean.includes(p.title.toLowerCase().trim()))))
+                          (p) => p.title && p.id !== selectedPost?.id && p.title.trim().toLowerCase() === clean
                         );
-                        if (targetPost && targetPost.id !== selectedPost?.id && text.length > 3) {
+                        if (targetPost && text.length > 3) {
                           return (
                             <div
                               onClick={() => navigateToPost(targetPost)}
@@ -2096,7 +2166,7 @@ ${aiMeetingNotes
                     }}
                     remarkPlugins={[remarkGfm]}
                   >
-                    {parsedTableData.beforeText}
+                    {cleanBeforeTableText}
                   </ReactMarkdown>
                 </div>
               )}

@@ -1163,6 +1163,9 @@ export function NotionDatabaseTable({
 
   // Helper for applying custom dragged column widths to <th> and <td>
   const getColStyle = (colName: string): React.CSSProperties | undefined => {
+    if (fitPageMode) {
+      return undefined;
+    }
     const customW = columnWidths[colName];
     if (customW) {
       return {
@@ -2552,9 +2555,17 @@ export function NotionDatabaseTable({
     try {
       let updatedRows: TableRowData[];
       if (editingRowIndex === null) {
-        // Adding new row
-        updatedRows = [...localRows, cleanedRow];
-        toast.success('Data kegiatan baru berhasil ditambahkan!');
+        // Adding new row -> place at TOP (#1, nomor paling sedikit)
+        let parentCounter = 1;
+        cleanedRow.number = String(parentCounter++);
+
+        const adjustedExisting = localRows.map(r => {
+          if (isSubItemRow(r)) return r;
+          return { ...r, number: String(parentCounter++) };
+        });
+
+        updatedRows = [cleanedRow, ...adjustedExisting];
+        toast.success('Data kegiatan baru berhasil ditambahkan di nomor paling atas (#1)!');
       } else {
         // Editing existing row
         updatedRows = localRows.map((r, i) => i === editingRowIndex ? { ...r, ...cleanedRow } : r);
@@ -2574,6 +2585,57 @@ export function NotionDatabaseTable({
     } finally {
       setIsSavingRow(false);
     }
+  };
+
+  // Insert Blank Row Inline directly into table (starts manual inline editing immediately)
+  const handleInsertBlankRow = (insertAtIndex: number = 0) => {
+    const now = new Date();
+    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const inheritedCadence = currentCadence || 'Non Routine';
+
+    const blankRow: TableRowData = {
+      number: '1',
+      'Jenis kegiatan': '',
+      'Jenis Kegiatan': '',
+      Keterangan: '-',
+      PIC: currentAuthorName || '',
+      Priority: 'Normal',
+      Status: 'Open',
+      'Created Time': createdStr,
+      Kategori: section || 'Laboratorium',
+      'Activity (routine/non routine)': inheritedCadence,
+      period: inheritedCadence
+    };
+
+    displayHeaders.forEach(h => {
+      if (blankRow[h] === undefined) {
+        blankRow[h] = '-';
+      }
+    });
+
+    const nextRows = [...localRows];
+    nextRows.splice(insertAtIndex, 0, blankRow);
+
+    // Renumber parent rows sequentially starting from 1
+    let parentNum = 1;
+    const renumbered = nextRows.map(r => {
+      if (isSubItemRow(r)) return r;
+      return { ...r, number: String(parentNum++) };
+    });
+
+    setLocalRows(renumbered);
+    onRowsChange?.(renumbered);
+    saveTableToBackend(renumbered);
+
+    // Immediately activate inline editor on the new empty cell
+    setActiveInlineEditor({
+      rowIndex: insertAtIndex,
+      colName: 'Jenis kegiatan',
+      initialValue: '',
+      multiline: false
+    });
+
+    toast.success('Baris kosong baru ditambahkan. Silakan ketik langsung nama kegiatan di tabel.');
   };
 
   // Delete Row Handler
@@ -3707,7 +3769,14 @@ export function NotionDatabaseTable({
                 <NotionTooltip content="Cari Data Kegiatan (Search)" position="bottom">
                   <button
                     type="button"
-                    onClick={() => setIsSearchInputOpen(true)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsSearchInputOpen(true);
+                      setTimeout(() => {
+                        const inputEl = document.querySelector('.notion-search-container input') as HTMLInputElement;
+                        if (inputEl) inputEl.focus();
+                      }, 50);
+                    }}
                     className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                       isNotionLight 
                         ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]' 
@@ -4276,9 +4345,7 @@ export function NotionDatabaseTable({
             }
           `}</style>
           <table 
-            className={`w-full min-w-max text-left border-collapse notion-font-scope ${
-              fitPageMode ? 'table-fixed leading-normal' : 'leading-relaxed'
-            }`}
+            className={`w-full ${fitPageMode ? 'table-fixed max-w-full leading-normal' : 'min-w-max table-auto leading-relaxed'} text-left border-collapse notion-font-scope`}
             style={{
               fontSize: `${labNoteFontSize}px`,
               fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
@@ -4326,17 +4393,15 @@ export function NotionDatabaseTable({
                   // Column width classes based on fitPageMode
                   let widthClass = 'whitespace-nowrap px-3.5 py-3';
                   if (fitPageMode) {
-                    if (isNum) widthClass = 'w-[4%] text-center px-1.5 py-2.5';
-                    else if (isJudul) widthClass = 'w-[19%] px-3 py-2.5';
-                    else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[23%] px-3 py-2.5';
-                    else if (colLower.includes('created')) widthClass = 'w-[9%] px-2 py-2.5';
-                    else if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai') widthClass = 'w-[9%] px-2 py-2.5';
-                    else if (colLower.includes('status')) widthClass = 'w-[9%] px-2 py-2.5';
-                    else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[10%] px-2 py-2.5';
-                    else if (colLower.includes('priority') || colLower.includes('prioritas')) widthClass = 'w-[7%] px-2 py-2.5';
-                    else if (colLower.includes('activity') || colLower.includes('aktivitas')) widthClass = 'w-[8%] px-2 py-2.5';
-                    else if (colLower.includes('kategori')) widthClass = 'w-[6%] px-1.5 py-2.5';
-                    else if (colLower.includes('period')) widthClass = 'w-[5%] px-1.5 py-2.5';
+                    if (isNum) widthClass = 'w-[5%] text-center px-1 py-2.5';
+                    else if (isJudul) widthClass = 'w-[25%] px-2.5 py-2.5';
+                    else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[22%] px-2.5 py-2.5';
+                    else if (colLower.includes('created')) widthClass = 'w-[9%] px-1.5 py-2.5';
+                    else if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('tanggal selesai')) widthClass = 'w-[9%] px-1.5 py-2.5';
+                    else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2.5';
+                    else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[11%] px-1.5 py-2.5';
+                    else if (colLower.includes('priority') || colLower.includes('prioritas')) widthClass = 'w-[6%] px-1.5 py-2.5';
+                    else if (colLower.includes('activity') || colLower.includes('aktivitas')) widthClass = 'w-[7%] px-1.5 py-2.5';
                     else widthClass = 'w-[6%] px-1.5 py-2.5';
                   } else {
                     if (isNum) widthClass = 'w-16 text-center px-3.5 py-3 whitespace-nowrap';
@@ -4369,6 +4434,21 @@ export function NotionDatabaseTable({
                             sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
                           )}
                         </div>
+
+                        {/* Quick Add Blank Row at top (#1) on Number Header */}
+                        {isNum && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleInsertBlankRow(0);
+                            }}
+                            className="p-0.5 rounded hover:bg-teal-500/20 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer shrink-0 ml-0.5"
+                            title="Tambah baris kosong baru di nomor paling atas (#1)"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        )}
 
                         {/* Column Reorder (< and >) and Delete (X) Actions */}
                         {!isNum && (
@@ -4776,7 +4856,20 @@ export function NotionDatabaseTable({
                                         fitPageMode ? 'px-1.5 py-2.5 text-xs' : 'px-3 py-3 text-[13px]'
                                       }`}
                                     >
-                                      <div className="flex items-center justify-center gap-1">
+                                      <div className="flex items-center justify-center gap-1 relative group/num">
+                                        {!isSubItem && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleInsertBlankRow(actualRowIndex);
+                                            }}
+                                            className="w-4 h-4 rounded hover:bg-teal-500/20 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 flex items-center justify-center opacity-30 group-hover:opacity-100 hover:opacity-100 transition-opacity cursor-pointer shrink-0 -ml-1"
+                                            title="Sisipkan baris kegiatan kosong di nomor ini"
+                                          >
+                                            <Plus className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
                                         {isDirty && (
                                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="Ada perubahan belum disimpan" />
                                         )}
@@ -5085,10 +5178,66 @@ export function NotionDatabaseTable({
 
                                       {isEditingPic && (
                                         <div 
-                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-64 max-h-60 overflow-y-auto rounded-xl shadow-2xl border p-2 z-50 text-left ${
+                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-72 max-h-72 overflow-y-auto rounded-xl shadow-2xl border p-2.5 z-50 text-left ${
                                             isNotionLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-[#1e293b] border-slate-700 text-slate-100'
                                           }`}
                                         >
+                                          {/* Header & Hapus/Kosongkan PIC Action */}
+                                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 dark:border-slate-700/60">
+                                            <span className="text-[11px] font-semibold tracking-wide text-slate-500 dark:text-slate-400">
+                                              Pengaturan PIC
+                                            </span>
+                                            {val && val !== '-' && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  handleUpdateCellDirect(actualRowIndex, colName, '-');
+                                                  setActiveInlinePicCell(null);
+                                                }}
+                                                className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                                                title="Kosongkan atau hapus PIC ini"
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                                <span>Hapus PIC</span>
+                                              </button>
+                                            )}
+                                          </div>
+
+                                          {/* Current Active PIC Chips with Remove X */}
+                                          {val && val !== '-' && (() => {
+                                            const activePicList = smartSplitPicString(val).filter(p => p && p !== '-');
+                                            if (activePicList.length === 0) return null;
+                                            return (
+                                              <div className="mb-2">
+                                                <div className="text-[10px] text-slate-400 mb-1 font-medium">PIC Terpilih:</div>
+                                                <div className="flex flex-wrap gap-1">
+                                                  {activePicList.map((pName) => (
+                                                    <span 
+                                                      key={pName} 
+                                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20"
+                                                    >
+                                                      <span className="truncate max-w-[120px]">{pName}</span>
+                                                      <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          const rem = activePicList.filter(p => p.trim().toLowerCase() !== pName.trim().toLowerCase());
+                                                          const nextVal = rem.length > 0 ? rem.join(', ') : '-';
+                                                          handleUpdateCellDirect(actualRowIndex, colName, nextVal);
+                                                        }}
+                                                        className="hover:text-rose-500 rounded p-0.5 transition-colors cursor-pointer"
+                                                        title={`Hapus ${pName}`}
+                                                      >
+                                                        <X className="w-3 h-3" />
+                                                      </button>
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+
+                                          {/* Search Box */}
                                           <div className="relative mb-2">
                                             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" />
                                             <input
@@ -5096,25 +5245,62 @@ export function NotionDatabaseTable({
                                               autoFocus
                                               value={inlinePicSearch}
                                               onChange={(e) => setInlinePicSearch(e.target.value)}
-                                              placeholder="Cari nama / NIK..."
+                                              placeholder="Cari nama karyawan / NIK..."
                                               className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
                                             />
                                           </div>
+
+                                          {/* Employee Selection List */}
                                           <div className="space-y-1">
-                                            {filteredEmployees.slice(0, 15).map((emp) => (
-                                              <button
-                                                key={emp.id || emp.nik}
-                                                type="button"
-                                                onClick={() => {
-                                                  handleUpdateCellDirect(actualRowIndex, colName, emp.name || emp.nik);
-                                                  setActiveInlinePicCell(null);
-                                                }}
-                                                className="w-full px-2 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-left flex items-center justify-between transition-colors cursor-pointer"
-                                              >
-                                                <span className="font-medium truncate">{emp.name}</span>
-                                                <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-1">{emp.section || emp.nik}</span>
-                                              </button>
-                                            ))}
+                                            {filteredEmployees.slice(0, 15).map((emp) => {
+                                              const empName = emp.name || emp.nik;
+                                              const isAlreadyPic = val && val !== '-' && smartSplitPicString(val).some(p => p.trim().toLowerCase() === empName.trim().toLowerCase());
+
+                                              return (
+                                                <div
+                                                  key={emp.id || emp.nik}
+                                                  className="flex items-center justify-between rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/80 px-2 py-1.5 transition-colors group/item"
+                                                >
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      // Ganti PIC secara langsung
+                                                      handleUpdateCellDirect(actualRowIndex, colName, empName);
+                                                      setActiveInlinePicCell(null);
+                                                    }}
+                                                    className="flex-1 text-left min-w-0 pr-2 cursor-pointer"
+                                                    title={`Ganti PIC menjadi ${empName}`}
+                                                  >
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className={`font-medium text-xs truncate ${isAlreadyPic ? 'text-teal-600 dark:text-teal-400 font-semibold' : ''}`}>
+                                                        {emp.name}
+                                                      </span>
+                                                      {isAlreadyPic && <Check className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />}
+                                                    </div>
+                                                    <span className="text-[10px] text-slate-400 font-mono block truncate">
+                                                      {emp.section || emp.nik} • Klik untuk ganti
+                                                    </span>
+                                                  </button>
+
+                                                  {/* Tombol Tambah sebagai Co-PIC */}
+                                                  {!isAlreadyPic && val && val !== '-' && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const existing = smartSplitPicString(val).filter(p => p && p !== '-');
+                                                        const nextVal = `${existing.join(', ')}, ${empName}`;
+                                                        handleUpdateCellDirect(actualRowIndex, colName, nextVal);
+                                                      }}
+                                                      className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border border-teal-500/30 text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 transition-colors cursor-pointer"
+                                                      title={`Tambah ${empName} sebagai Co-PIC bersama`}
+                                                    >
+                                                      + Co-PIC
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
                                           </div>
                                         </div>
                                       )}
@@ -6697,8 +6883,8 @@ export function NotionDatabaseTable({
                       color: 'var(--text-main, #f1f5f9)'
                     }}
                   >
-                    <option value="Routine">Routine (Rutin)</option>
-                    <option value="Non Routine">Non Routine (Insidentil)</option>
+                    <option value="Routine">Routine</option>
+                    <option value="Non Routine">Non Routine</option>
                   </select>
                 </div>
 
@@ -6717,7 +6903,7 @@ export function NotionDatabaseTable({
                         color: 'var(--text-muted, #94a3b8)'
                       }}
                     >
-                      Insidentil (Non-Routine)
+                      Non Routine
                     </div>
                   ) : (
                     <select

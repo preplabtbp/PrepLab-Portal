@@ -164,6 +164,31 @@ router.get("/api/bulletin/search", async (req, res) => {
     }
   });
 
+// GET Single Post by ID for direct navigation and real-time device sync
+router.get("/api/bulletin/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ status: "error", message: "Invalid post ID" });
+    }
+
+    const [post] = await db
+      .select()
+      .from(bulletinPosts)
+      .where(eq(bulletinPosts.id, id))
+      .limit(1);
+
+    if (!post) {
+      return res.status(404).json({ status: "error", message: "Post not found" });
+    }
+
+    return res.json({ status: "success", data: post });
+  } catch (error: any) {
+    console.error("[Bulletin API] Failed to fetch post by ID:", error);
+    return res.status(500).json({ status: "error", message: error?.message || "Internal server error" });
+  }
+});
+
 router.post("/api/bulletin", async (req, res) => {
     try {
       const newPostData = req.body;
