@@ -970,8 +970,26 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
   try {
     const rawWeek = (req.query.week as string) || '';
     const selectedWeek = rawWeek ? normalizeWeekQuery(rawWeek) : getISOWeekTag();
-    const allEmployees = await db.select().from(employees);
-    const allRoster = await db.select().from(roster);
+    
+    // Start group report aggregation immediately so it runs concurrently with other queries
+    const groupReportsPromise = fetchAllGroupReports(selectedWeek).catch((e: any) => {
+      console.error('Error in fetchAllGroupReports for rekap:', e);
+      return [] as any[];
+    });
+
+    // Run initial DB queries in parallel
+    const [allEmployees, allRoster] = await Promise.all([
+      db.select().from(employees),
+      db.select().from(roster)
+    ]);
+
+    // Pre-build employee lookup maps for O(1) matching (instead of nested O(n*m) loops)
+    const empByNikLower = new Map<string, typeof allEmployees[0]>();
+    const empByNameLower = new Map<string, typeof allEmployees[0]>();
+    allEmployees.forEach(e => {
+      if (e.nik) empByNikLower.set(e.nik.trim().toLowerCase(), e);
+      if (e.name) empByNameLower.set(e.name.trim().toLowerCase(), e);
+    });
 
     const {
       onCutiSet,
@@ -1005,7 +1023,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
 
     // 1. Scan all aggregated reports (including memory and DB parsed reports)
     try {
-      const allGroupReports = await fetchAllGroupReports(selectedWeek);
+      const allGroupReports = await groupReportsPromise;
       allGroupReports.forEach(msg => {
         const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
         if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
@@ -1042,7 +1060,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
           // Strict match senderName against allEmployees (full name exact match)
           if (msg.senderName) {
             const senderClean = msg.senderName.trim().toLowerCase();
-            const matchedEmp = allEmployees.find(e => e.name && e.name.trim().toLowerCase() === senderClean);
+            const matchedEmp = empByNameLower.get(senderClean);
             if (matchedEmp) {
               registerCompletedUser(matchedEmp.nik, info);
               registerCompletedUser(matchedEmp.name, info);
@@ -1053,6 +1071,50 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     } catch (e) {
       console.error('Error in fetchAllGroupReports for rekap:', e);
     }
+
+    const matchEmployeeAndRegister = (part: string, info: any) => {
+      const partClean = part.trim().toLowerCase();
+      if (!partClean || partClean.length < 2) return;
+      
+      registerCompletedUser(partClean, info);
+      
+      // Try direct NIK match
+      const empByNik = empByNikLower.get(partClean);
+      if (empByNik) {
+        registerCompletedUser(empByNik.nik, info);
+        registerCompletedUser(empByNik.name, info);
+        return;
+      }
+      
+      // Try direct name match
+      const empByName = empByNameLower.get(partClean);
+      if (empByName) {
+        registerCompletedUser(empByName.nik, info);
+        registerCompletedUser(empByName.name, info);
+        return;
+      }
+      
+      // Extract NIK patterns and match
+      const nikMatches: string[] = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
+      nikMatches.forEach((nik: string) => {
+        registerCompletedUser(nik, info);
+        const emp = empByNikLower.get(nik.toLowerCase());
+        if (emp) {
+          registerCompletedUser(emp.nik, info);
+          registerCompletedUser(emp.name, info);
+        }
+      });
+
+      // Partial name match (only if part is long enough to be meaningful)
+      if (partClean.length >= 4) {
+        empByNameLower.forEach((emp, empName) => {
+          if (empName.length >= 4 && partClean.includes(empName)) {
+            registerCompletedUser(emp.nik, info);
+            registerCompletedUser(emp.name, info);
+          }
+        });
+      }
+    };
 
     // 2. Direct deep scan of DB `inspections` table (ordered by ID desc so newest are evaluated first)
     try {
@@ -1133,33 +1195,10 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
           rawInspectors.forEach((rawInsp: string) => {
             const inspText = String(rawInsp).trim();
             if (inspText) {
-              registerCompletedUser(inspText, info);
               const parts = inspText.split(/[,&/|]/).map(p => p.trim()).filter(Boolean);
               parts.forEach(part => {
-                registerCompletedUser(part, info);
                 const cleanName = part.split('|')[0].trim();
-                if (cleanName) registerCompletedUser(cleanName, info);
-
-                const nikMatches: string[] = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
-                nikMatches.forEach((nik: string) => registerCompletedUser(nik, info));
-
-                allEmployees.forEach(e => {
-                  const empName = (e.name || '').trim().toLowerCase();
-                  const empNik = (e.nik || '').trim().toLowerCase();
-                  const partClean = part.toLowerCase().trim();
-                  const cleanNameLower = cleanName.toLowerCase().trim();
-
-                  if (empNik && (partClean === empNik || nikMatches.some(n => n.toLowerCase() === empNik))) {
-                    registerCompletedUser(e.nik, info);
-                    registerCompletedUser(e.name, info);
-                  } else if (empName && (cleanNameLower === empName || partClean === empName)) {
-                    registerCompletedUser(e.nik, info);
-                    registerCompletedUser(e.name, info);
-                  } else if (empName && empName.length >= 4 && partClean.includes(empName)) {
-                    registerCompletedUser(e.nik, info);
-                    registerCompletedUser(e.name, info);
-                  }
-                });
+                if (cleanName) matchEmployeeAndRegister(cleanName, info);
               });
             }
           });

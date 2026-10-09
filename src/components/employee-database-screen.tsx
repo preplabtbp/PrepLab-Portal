@@ -553,6 +553,71 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     return false;
   }, [inspectorNik, developerList, employees, isSectionAdmin]);
 
+  // Penentuan Badge Tanda Peran User di Awal Masuk Modul
+  const userRoleBadge = useMemo(() => {
+    const cleanNik = (inspectorNik || '').trim().toUpperCase();
+    const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+
+    // 1. Cek jika Developer Whitelist
+    if (HARDCODED_DEVS.includes(cleanNik) || developerList.some(d => (d.nik || '').toUpperCase() === cleanNik)) {
+      return { label: 'Developer', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' };
+    }
+
+    let isDev = false;
+    let isAdmin = false;
+    let isMgr = false;
+
+    try {
+      const savedProfile = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        const sec = (p.section || '').toLowerCase();
+        const dept = (p.department || '').toLowerCase();
+        const jab = (p.jabatan || '').toLowerCase();
+        const role = (p.role || '').toLowerCase();
+
+        if (role.includes('developer') || jab.includes('developer')) isDev = true;
+        if (
+          sec.includes('administrasi') || sec.includes('administration') || sec.includes('admin') ||
+          dept.includes('administrasi') || dept.includes('administration') || dept.includes('admin') ||
+          jab.includes('admin') || role.includes('admin')
+        ) isAdmin = true;
+        if (
+          jab.includes('section manager') || jab.includes('manager') || jab.includes('superintendent') || jab.includes('head') || jab.includes('spt')
+        ) isMgr = true;
+      }
+    } catch {}
+
+    const me = employees.find(e => (e.nik || '').toUpperCase() === cleanNik);
+    if (me) {
+      const sec = (me.section || '').toLowerCase();
+      const dept = (me.department || '').toLowerCase();
+      const jab = (me.jabatan || '').toLowerCase();
+
+      if (jab.includes('developer')) isDev = true;
+      if (
+        sec.includes('administrasi') || sec.includes('administration') || sec.includes('admin') ||
+        dept.includes('administrasi') || dept.includes('administration') || dept.includes('admin') ||
+        jab.includes('admin')
+      ) isAdmin = true;
+      if (
+        jab.includes('section manager') || jab.includes('manager') || jab.includes('superintendent') || jab.includes('head') || jab.includes('spt')
+      ) isMgr = true;
+    }
+
+    if (isDev) {
+      return { label: 'Developer', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' };
+    }
+    if (isAdmin) {
+      return { label: 'Admin', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' };
+    }
+    if (isMgr) {
+      return { label: 'Manager', color: 'bg-violet-50 text-violet-700 border-violet-200', dot: 'bg-violet-500' };
+    }
+
+    return { label: 'User', color: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' };
+  }, [inspectorNik, developerList, employees]);
+
   const fetchEmployees = async (silent = false) => {
     if (!silent && employees.length === 0) {
       setLoading(true);
@@ -1263,12 +1328,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             <h1 className="text-lg font-bold text-slate-800 hidden sm:block">
               Database Karyawan
             </h1>
-            {canManageDatabase && (
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Admin
-              </span>
-            )}
+            <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border shadow-2xs ${userRoleBadge.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${userRoleBadge.dot}`}></span>
+              {userRoleBadge.label}
+            </span>
           </div>
         </div>
 
