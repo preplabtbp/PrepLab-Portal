@@ -3621,16 +3621,21 @@ export function NotionDatabaseTable({
   };
 
   // Helper to format multiline notes with text color support, bold, italic, code, and bullet formatting
+  // Default font and color match Created Time column (#475569, font-sans, font-normal)
   const renderFormattedNotes = (text: string) => {
-    if (!text || text === '-' || text === '•') return <span className="font-mono text-xs text-slate-400">-</span>;
+    if (!text || text === '-' || text === '•') return <span className="font-sans text-xs text-slate-400">-</span>;
     // Normalize <br/>, <br>, <br /> to newlines
     const normalized = text.replace(/<br\s*\/?>/gi, '\n');
     const cleanText = normalized.trim();
 
     return (
       <div 
-        className={`leading-relaxed whitespace-pre-wrap font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`}
-        style={{ fontSize: `${labNoteFontSize}px` }}
+        className={`leading-relaxed whitespace-pre-wrap font-sans font-normal ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
+        style={{ 
+          fontSize: `${labNoteFontSize}px`,
+          fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+          color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)'
+        }}
         dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(cleanText) }}
       />
     );
@@ -5322,8 +5327,8 @@ export function NotionDatabaseTable({
                                   return (
                                     <td 
                                       key={colName} 
-                                      style={getColStyle(colName)} 
-                                      className={`border-r ${
+                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} 
+                                      className={`font-sans border-r ${
                                         isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3 max-w-md'
@@ -5344,13 +5349,13 @@ export function NotionDatabaseTable({
                                         />
                                       ) : (
                                         <div 
-                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer"
+                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer font-sans"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
                                         >
-                                          <div className={`flex-1 text-[13px] leading-relaxed ${fitPageMode ? 'break-words' : ''}`}>
+                                          <div className={`flex-1 font-sans text-[13px] leading-relaxed ${fitPageMode ? 'break-words' : ''}`}>
                                             {renderFormattedNotes(val)}
                                           </div>
                                           <button

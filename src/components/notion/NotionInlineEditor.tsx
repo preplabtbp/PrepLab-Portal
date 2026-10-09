@@ -1209,7 +1209,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
         onKeyUp={updateBubblePosition}
         className="outline-none min-h-[44px] max-h-[360px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-sans selection:bg-[#cce2ff] p-1.5"
         style={{
-          color: isNotionLight ? '#0f172a' : '#f8fafc',
+          color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)',
           caretColor: isNotionLight ? '#0f172a' : '#38bdf8',
           lineHeight: '1.6'
         }}
