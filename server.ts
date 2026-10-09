@@ -496,38 +496,6 @@ const app = express();
   }
   const loungeAvatars = new Map<string, LoungeAvatarState>(); // nik -> LoungeAvatarState
 
-  let cachedTodayActiveUsers: any[] = [];
-  let lastTodayUsersFetch = 0;
-
-  async function getTodayActivePortalUsers() {
-    const now = Date.now();
-    if (now - lastTodayUsersFetch < 15000 && cachedTodayActiveUsers.length > 0) {
-      return cachedTodayActiveUsers;
-    }
-    try {
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const rows = await db.select({
-        nik: employees.nik,
-        name: employees.name,
-        section: employees.section,
-        department: employees.department,
-        jabatan: employees.jabatan,
-        avatar: employees.avatar
-      })
-      .from(portalLogins)
-      .innerJoin(employees, sql`UPPER(${employees.nik}) = UPPER(${portalLogins.nik})`)
-      .where(eq(portalLogins.loginDate, todayStr))
-      .orderBy(desc(portalLogins.createdAt))
-      .limit(60);
-
-      cachedTodayActiveUsers = rows;
-      lastTodayUsersFetch = now;
-      return rows;
-    } catch (e) {
-      return cachedTodayActiveUsers;
-    }
-  }
-
   const getUniqueOnlineUsers = () => {
     const userMap = new Map<string, any>();
     for (const u of onlineSockets.values()) {
@@ -1075,34 +1043,11 @@ const app = express();
   // --- PRESENCE ROUTES ---
   app.get('/api/presence/online', async (req, res) => {
     try {
-      const liveSockets = getUniqueOnlineUsers();
-      const liveNiks = new Set(liveSockets.map(u => (u.nik || '').toUpperCase()));
-
-      const todayUsers = await getTodayActivePortalUsers();
-      const combinedUsers = [...liveSockets.map(u => ({ ...u, isLive: true }))];
-
-      // Add personnel who logged in / are on shift today
-      for (const emp of todayUsers) {
-        const cleanNik = (emp.nik || '').toUpperCase();
-        if (!liveNiks.has(cleanNik)) {
-          combinedUsers.push({
-            nik: emp.nik,
-            name: emp.name,
-            department: emp.department || 'Prep-Lab',
-            section: emp.section || emp.department || 'General',
-            avatar: emp.avatar || null,
-            room: null,
-            isLive: false,
-            isDuty: true,
-            lastActive: Date.now() - 300000
-          });
-        }
-      }
-
+      const liveSockets = getUniqueOnlineUsers().map(u => ({ ...u, isLive: true }));
       res.json({
         success: true,
-        onlineUsers: combinedUsers,
-        totalOnline: combinedUsers.length,
+        onlineUsers: liveSockets,
+        totalOnline: liveSockets.length,
         totalLive: liveSockets.length,
         loungeMembers: Array.from(loungeAvatars.values())
       });

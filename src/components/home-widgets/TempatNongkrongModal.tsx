@@ -570,19 +570,19 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     return () => clearInterval(speechCleaner);
   }, [mySpeech]);
 
-  // Synchronize presence data from server (live sockets + today's on-duty personnel)
+  // Synchronize presence data from server (STRICTLY live real-time users)
   const syncOnlinePresence = useCallback((data: any) => {
     if (!data) return;
     const rawOnline = Array.isArray(data.onlineUsers) ? data.onlineUsers : [];
     const rawLounge = Array.isArray(data.loungeMembers) ? data.loungeMembers : [];
 
     setOtherAvatars(prev => {
-      const next = new Map(prev);
+      const next = new Map<string, InRoomAvatar>();
 
       // 1. Process Lounge Members (Real-time live avatars currently inside lounge)
       rawLounge.forEach((lm: any) => {
         if (!lm.nik || lm.nik === userNik) return;
-        const existing = next.get(lm.nik);
+        const existing = prev.get(lm.nik);
         const cleanUname = getCleanUsername(lm.nik, lm.name, lm.username);
         const rankData = getPangkatData(lm.nik, lm.pangkat);
         next.set(lm.nik, {
@@ -600,49 +600,33 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           speechText: lm.speechText || existing?.speechText,
           speechExpiry: lm.speechExpiry || existing?.speechExpiry,
           avatarUrl: lm.avatar || existing?.avatarUrl,
-          isLive: true,
-          isDuty: false
+          isLive: true
         });
       });
 
-      // 2. Process all other active portal / today's shift personnel
-      const others = rawOnline.filter((u: any) => u.nik && u.nik !== userNik);
-      others.forEach((u: any, idx: number) => {
-        if (!next.has(u.nik)) {
-          const spotIdx = (idx + 1) % LOUNGE_SEATS.length;
-          const spot = LOUNGE_SEATS[spotIdx];
-          const loopCount = Math.floor((idx + 1) / LOUNGE_SEATS.length);
-          const jitterX = loopCount > 0 ? ((idx * 5) % 7) - 3 : 0;
-          const jitterY = loopCount > 0 ? ((idx * 3) % 5) - 2 : 0;
-
-          const boundedX = Math.max(12, Math.min(88, spot.x + jitterX));
-          const boundedY = Math.max(54, Math.min(85, spot.y + jitterY));
-
-          const cleanUname = getCleanUsername(u.nik, u.name, u.username);
-          const rankData = getPangkatData(u.nik, u.pangkat, u.role || u.jabatan);
-          next.set(u.nik, {
-            nik: u.nik,
-            name: cleanUname,
-            username: cleanUname,
-            pangkat: rankData.name,
-            pangkatIcon: rankData.icon,
-            section: u.section || u.department || 'Prep-Lab',
-            posX: boundedX,
-            posY: boundedY,
-            facing: spot.facing,
-            actionState: spot.action,
-            walkFrame: 0,
-            avatarUrl: u.avatar,
-            isLive: !!u.isLive,
-            isDuty: !!u.isDuty
-          });
-        } else {
-          // If already exists, update live / duty status without overriding active movement
-          const existing = next.get(u.nik)!;
-          if (u.isLive && !existing.isLive) {
-            next.set(u.nik, { ...existing, isLive: true });
-          }
-        }
+      // 2. Process other live online users in portal (only if currently connected via socket)
+      const liveOthers = rawOnline.filter((u: any) => u.nik && u.nik !== userNik && !next.has(u.nik) && u.isLive !== false);
+      liveOthers.forEach((u: any, idx: number) => {
+        const spotIdx = (idx + 1) % LOUNGE_SEATS.length;
+        const spot = LOUNGE_SEATS[spotIdx];
+        const existing = prev.get(u.nik);
+        const cleanUname = getCleanUsername(u.nik, u.name, u.username);
+        const rankData = getPangkatData(u.nik, u.pangkat, u.role || u.jabatan);
+        next.set(u.nik, {
+          nik: u.nik,
+          name: cleanUname,
+          username: cleanUname,
+          pangkat: rankData.name,
+          pangkatIcon: rankData.icon,
+          section: u.section || u.department || 'Prep-Lab',
+          posX: existing?.posX ?? spot.x,
+          posY: existing?.posY ?? spot.y,
+          facing: existing?.facing ?? spot.facing,
+          actionState: existing?.actionState ?? spot.action,
+          walkFrame: existing?.walkFrame ?? 0,
+          avatarUrl: u.avatar,
+          isLive: true
+        });
       });
 
       return next;
@@ -1131,12 +1115,9 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
                   <span>Tempat Nongkrong &amp; Gazebo Merokok PrepLab</span>
                 </h3>
                 <div className="flex items-center gap-1.5">
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-black text-[11px] shadow-md font-mono flex items-center gap-1.5">
+                  <span className="px-3 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-black text-xs shadow-md font-mono flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
-                    <span>{liveCount} Live Realtime</span>
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 font-bold text-[11px] font-mono shadow-xs">
-                    <span>{allRenderAvatars.length} Personil Hari Ini</span>
+                    <span>{allRenderAvatars.length} Personil Online Realtime</span>
                   </span>
                 </div>
               </div>
@@ -1656,7 +1637,11 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
 
           {/* Quick Tip on Floor */}
           <div className="absolute bottom-2 left-4 pointer-events-none text-[10px] font-mono text-amber-300 bg-slate-950/90 px-3 py-1.5 rounded-xl border border-amber-500/40 shadow-lg">
-            💡 Klik langsung model bangku, kursi, atau sofa untuk duduk &bull; Klik lantai terbuka untuk berjalan bebas!
+            {allRenderAvatars.length === 1 ? (
+              <span>☕ Anda sedang santai sendirian &bull; Rekan shift lain yang online akan otomatis muncul di sini secara realtime!</span>
+            ) : (
+              <span>💡 Klik langsung model bangku, kursi, atau sofa untuk duduk &bull; Klik lantai terbuka untuk berjalan bebas!</span>
+            )}
           </div>
         </div>
 
