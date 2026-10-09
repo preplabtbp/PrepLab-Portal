@@ -56,7 +56,8 @@ import {
   Sun,
   Moon,
   RotateCcw,
-  TableProperties
+  TableProperties,
+  GripVertical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -1017,6 +1018,13 @@ export function NotionDatabaseTable({
 
   // Table Edit Mode State (Toggle to show column reorder and delete tools)
   const [isTableEditMode, setIsTableEditMode] = useState<boolean>(false);
+
+  // Confirmation Modal when checking the last subtask before parent task is closed
+  const [lastSubtaskConfirmModal, setLastSubtaskConfirmModal] = useState<{
+    isOpen: boolean;
+    topicTitle: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Add / Edit Row Modal State
   const [showRowModal, setShowRowModal] = useState(false);
@@ -2207,33 +2215,47 @@ export function NotionDatabaseTable({
     const row = localRows[targetRowIndex];
     if (!row) return;
     const currentVal = getRowVal(row, colName);
-    const updatedVal = toggleTasklistItem(currentVal, taskIndex);
-    handleUpdateCellDirect(targetRowIndex, colName, updatedVal);
-
-    // Auto-check if this toggle completed the routine task (last subtask checked -> 100%)
     const prevProg = parseTasklist(currentVal);
-    const newProg = parseTasklist(updatedVal);
+    const willBeCompleted = prevProg.items[taskIndex] && !prevProg.items[taskIndex].checked && (prevProg.completed + 1 === prevProg.total);
 
-    if (newProg.hasTasklist && newProg.total > 0 && newProg.completed === newProg.total && prevProg.completed < prevProg.total) {
-      const rowAct = getRowVal(row, 'Activity (routine/non routine)') || getRowVal(row, 'period') || '';
-      const rowCad = normalizeCadence(rowAct) || currentCadence;
-      if (rowCad && rowCad !== 'Non-Routine') {
-        const curPeriod = activeSubPeriod || detectRowSubPeriod(row, rowCad) || getDefaultActiveSubPeriod(rowCad);
-        const targetVal = getRowVal(row, 'Target Selesai') || getRowVal(row, 'Deadline') || getRowVal(row, 'Created Time');
-        const schedule = getNextPeriodSchedule(rowCad, curPeriod, targetVal);
-        const resetDesc = resetAllTasklistItems(updatedVal);
+    const executeToggle = () => {
+      const updatedVal = toggleTasklistItem(currentVal, taskIndex);
+      handleUpdateCellDirect(targetRowIndex, colName, updatedVal);
 
-        setRoutineCompletionModal({
-          row,
-          rowIndex: targetRowIndex,
-          colName,
-          currentPeriod: curPeriod,
-          nextPeriod: schedule.nextPeriod,
-          nextStartDate: schedule.nextStartDate,
-          nextTargetDate: schedule.nextTargetDate,
-          resetKeterangan: resetDesc
-        });
+      // Auto-check if this toggle completed the routine task (last subtask checked -> 100%)
+      const newProg = parseTasklist(updatedVal);
+      if (newProg.hasTasklist && newProg.total > 0 && newProg.completed === newProg.total && prevProg.completed < prevProg.total) {
+        const rowAct = getRowVal(row, 'Activity (routine/non routine)') || getRowVal(row, 'period') || '';
+        const rowCad = normalizeCadence(rowAct) || currentCadence;
+        if (rowCad && rowCad !== 'Non-Routine') {
+          const curPeriod = activeSubPeriod || detectRowSubPeriod(row, rowCad) || getDefaultActiveSubPeriod(rowCad);
+          const targetVal = getRowVal(row, 'Target Selesai') || getRowVal(row, 'Deadline') || getRowVal(row, 'Created Time');
+          const schedule = getNextPeriodSchedule(rowCad, curPeriod, targetVal);
+          const resetDesc = resetAllTasklistItems(updatedVal);
+
+          setRoutineCompletionModal({
+            row,
+            rowIndex: targetRowIndex,
+            colName,
+            currentPeriod: curPeriod,
+            nextPeriod: schedule.nextPeriod,
+            nextStartDate: schedule.nextStartDate,
+            nextTargetDate: schedule.nextTargetDate,
+            resetKeterangan: resetDesc
+          });
+        }
       }
+    };
+
+    if (willBeCompleted) {
+      const rowTitle = getDisplayTitle(getRowVal(row, 'Jenis kegiatan') || getRowVal(row, 'Name') || 'Kegiatan');
+      setLastSubtaskConfirmModal({
+        isOpen: true,
+        topicTitle: rowTitle,
+        onConfirm: executeToggle
+      });
+    } else {
+      executeToggle();
     }
   };
 
@@ -2626,16 +2648,102 @@ export function NotionDatabaseTable({
     // Temukan baris kegiatan utama (parent) untuk sub-item ini
     let parentIdx = -1;
     for (let i = subRowIndex - 1; i >= 0; i--) {
-      if (!isSubItemRow(nextRows[i])) {
+      if (!isSubItemRow(localRows[i])) {
         parentIdx = i;
         break;
       }
     }
 
-    if (parentIdx !== -1) {
+    const executeToggle = () => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const updatedRow = { ...subRow };
+      updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
+      updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
+
+      // Also update sub-item title prefix ↳ [x] vs ↳ [ ]
+      const currentTitle = getRowVal(subRow, 'Jenis kegiatan') || getRowVal(subRow, 'Jenis Kegiatan') || '';
+      if (currentTitle) {
+        const cleanTitle = getDisplayTitle(currentTitle);
+        const newTitle = `↳ [${nextCompleted ? 'x' : ' '}] ${cleanTitle}`;
+        if (updatedRow['Jenis kegiatan'] !== undefined) updatedRow['Jenis kegiatan'] = newTitle;
+        if (updatedRow['Jenis Kegiatan'] !== undefined) updatedRow['Jenis Kegiatan'] = newTitle;
+        if (updatedRow['Name'] !== undefined) updatedRow['Name'] = newTitle;
+        if (updatedRow['Judul'] !== undefined) updatedRow['Judul'] = newTitle;
+      }
+      
+      // Sinkronisasi tanggal selesai sub-item jika ada kolomnya
+      displayHeaders.forEach(h => {
+        const hLower = h.toLowerCase().trim();
+        if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
+          updatedRow[h] = nextCompleted ? todayStr : '-';
+        }
+      });
+
+      const nextRows = [...localRows];
+      nextRows[subRowIndex] = updatedRow;
+
+      if (parentIdx !== -1) {
+        const siblingSubIndices: number[] = [];
+        for (let i = parentIdx + 1; i < nextRows.length; i++) {
+          if (isSubItemRow(nextRows[i])) {
+            siblingSubIndices.push(i);
+          } else {
+            break;
+          }
+        }
+
+        const totalSubs = siblingSubIndices.length;
+        const completedSubs = siblingSubIndices.filter(idx => isSubItemCompleted(nextRows[idx])).length;
+
+        const parentRow = { ...nextRows[parentIdx] };
+        const currentParentStatus = (getRowVal(parentRow, 'Status') || '').toUpperCase();
+
+        if (!currentParentStatus.includes('CANCEL')) {
+          if (totalSubs > 0 && completedSubs === totalSubs) {
+            parentRow.Status = 'Closed';
+            displayHeaders.forEach(h => {
+              const hLower = h.toLowerCase().trim();
+              if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
+                parentRow[h] = todayStr;
+              }
+            });
+            toast.success(`Semua subtask selesai! Status kegiatan "${getDisplayTitle(getRowVal(parentRow, 'Jenis kegiatan') || '')}" otomatis diubah menjadi Closed.`);
+          } else if (completedSubs > 0) {
+            parentRow.Status = 'On Progress';
+            displayHeaders.forEach(h => {
+              const hLower = h.toLowerCase().trim();
+              if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
+                parentRow[h] = '-';
+              }
+            });
+          } else {
+            parentRow.Status = 'Open';
+            displayHeaders.forEach(h => {
+              const hLower = h.toLowerCase().trim();
+              if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
+                parentRow[h] = '-';
+              }
+            });
+          }
+          nextRows[parentIdx] = parentRow;
+        }
+      }
+
+      const updatedDirty = new Set(dirtyRowIndices);
+      updatedDirty.add(subRowIndex);
+      if (parentIdx !== -1) updatedDirty.add(parentIdx);
+      setDirtyRowIndices(updatedDirty);
+
+      setLocalRows(nextRows);
+      onRowsChange?.(nextRows);
+      saveTableToBackend(nextRows);
+    };
+
+    // Cek apakah aksi ini akan menyelesaikan subtask TERAKHIR dan otomatis menutup task utama
+    if (nextCompleted && parentIdx !== -1) {
       const siblingSubIndices: number[] = [];
-      for (let i = parentIdx + 1; i < nextRows.length; i++) {
-        if (isSubItemRow(nextRows[i])) {
+      for (let i = parentIdx + 1; i < localRows.length; i++) {
+        if (isSubItemRow(localRows[i])) {
           siblingSubIndices.push(i);
         } else {
           break;
@@ -2643,49 +2751,21 @@ export function NotionDatabaseTable({
       }
 
       const totalSubs = siblingSubIndices.length;
-      const completedSubs = siblingSubIndices.filter(idx => isSubItemCompleted(nextRows[idx])).length;
+      const otherCompletedSubs = siblingSubIndices.filter(idx => idx !== subRowIndex && isSubItemCompleted(localRows[idx])).length;
+      const willBeAllCompleted = totalSubs > 0 && (otherCompletedSubs + 1 === totalSubs);
 
-      const parentRow = { ...nextRows[parentIdx] };
-      const currentParentStatus = (getRowVal(parentRow, 'Status') || '').toUpperCase();
-
-      if (!currentParentStatus.includes('CANCEL')) {
-        if (totalSubs > 0 && completedSubs === totalSubs) {
-          parentRow.Status = 'Closed';
-          displayHeaders.forEach(h => {
-            const hLower = h.toLowerCase().trim();
-            if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
-              parentRow[h] = todayStr;
-            }
-          });
-        } else if (completedSubs > 0) {
-          parentRow.Status = 'On Progress';
-          displayHeaders.forEach(h => {
-            const hLower = h.toLowerCase().trim();
-            if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
-              parentRow[h] = '-';
-            }
-          });
-        } else {
-          parentRow.Status = 'Open';
-          displayHeaders.forEach(h => {
-            const hLower = h.toLowerCase().trim();
-            if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
-              parentRow[h] = '-';
-            }
-          });
-        }
-        nextRows[parentIdx] = parentRow;
+      if (willBeAllCompleted) {
+        const parentTopicTitle = getDisplayTitle(getRowVal(localRows[parentIdx], 'Jenis kegiatan') || getRowVal(localRows[parentIdx], 'Name') || 'Kegiatan');
+        setLastSubtaskConfirmModal({
+          isOpen: true,
+          topicTitle: parentTopicTitle,
+          onConfirm: executeToggle
+        });
+        return;
       }
     }
 
-    const updatedDirty = new Set(dirtyRowIndices);
-    updatedDirty.add(subRowIndex);
-    if (parentIdx !== -1) updatedDirty.add(parentIdx);
-    setDirtyRowIndices(updatedDirty);
-
-    setLocalRows(nextRows);
-    onRowsChange?.(nextRows);
-    saveTableToBackend(nextRows);
+    executeToggle();
   };
 
   // Edit Row Handler
@@ -5013,29 +5093,27 @@ export function NotionDatabaseTable({
                   isNotionLight ? 'border-[#e9e9e8]' : 'border-[#303030]'
                 }`}
               >
-                {/* Select All Checkbox Column - Hanya Muncul Saat Mode Seleksi Aktif */}
-                {(isSelectionModeActive || selectedRowIndices.size > 0) && (
-                  <th 
-                    className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r ${
-                      isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
-                    } ${fitPageMode ? 'w-[3%] px-1.5 py-2.5' : 'w-10 px-2 py-3'}`}
-                  >
-                    <div className="flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        checked={isAllSelected}
-                        ref={(el) => {
-                          if (el) el.indeterminate = isSomeSelected;
-                        }}
-                        onChange={handleToggleSelectAll}
-                        className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
-                          isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
-                        }`}
-                        title={isAllSelected ? "Batalkan pilihan semua" : "Pilih semua baris"}
-                      />
-                    </div>
-                  </th>
-                )}
+                {/* 0. Dedicated Action Gutter (+, ::, [ ]) Column Header ala Notion */}
+                <th 
+                  className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r select-none ${
+                    isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
+                  } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-1 py-2.5' : 'w-16 min-w-[62px] max-w-[62px] px-1.5 py-3'}`}
+                >
+                  <div className="flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeSelected;
+                      }}
+                      onChange={handleToggleSelectAll}
+                      className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 opacity-60 hover:opacity-100 transition-opacity ${
+                        isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
+                      }`}
+                      title={isAllSelected ? "Batalkan pilihan semua" : "Pilih semua baris"}
+                    />
+                  </div>
+                </th>
                 {displayHeaders.map((colHeader) => {
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
@@ -5520,26 +5598,49 @@ export function NotionDatabaseTable({
                                     : 'var(--border-main, #334155)' 
                               }}
                             >
-                              {/* Checkbox Column - Hanya Muncul Saat Mode Seleksi Aktif */}
-                              {(isSelectionModeActive || selectedRowIndices.size > 0) && (
-                                <td 
-                                  className={`text-center border-r ${
-                                    isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                  } ${fitPageMode ? 'px-1.5 py-2.5' : 'px-2 py-3'}`} 
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <div className="flex items-center justify-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
-                                      className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
-                                        isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
-                                      }`}
-                                    />
+                              {/* 0. Dedicated Action Gutter (+, ::, [ ]) Column ala Notion */}
+                              <td 
+                                className={`border-r select-none transition-colors ${
+                                  isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-0.5 py-1' : 'w-16 min-w-[62px] max-w-[62px] px-1 py-1'}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  {/* + Button: Insert new task/row */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleInsertBlankRow(actualRowIndex + 1);
+                                    }}
+                                    className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                                    title="Tambah baris tugas baru di bawah ini"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* :: Grip Vertical Handle */}
+                                  <div 
+                                    className="p-0.5 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing transition-opacity opacity-0 group-hover:opacity-100"
+                                    title="Geser posisi baris"
+                                  >
+                                    <GripVertical className="w-3.5 h-3.5" />
                                   </div>
-                                </td>
-                              )}
+
+                                  {/* [ ] Select Checkbox */}
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
+                                    className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 transition-opacity ${
+                                      isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                    } ${
+                                      isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
+                                    }`}
+                                    title={isSelected ? "Batalkan pilihan" : "Pilih baris ini"}
+                                  />
+                                </div>
+                              </td>
 
                               {displayHeaders.map((colName) => {
                                 const val = getRowVal(row, colName);
@@ -7097,6 +7198,81 @@ export function NotionDatabaseTable({
                     <span>Pindahkan Topik</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: LAST SUBTASK COMPLETED WARNING (CLOSING MAIN TASK)                */}
+      {/* ========================================================================= */}
+      {lastSubtaskConfirmModal && lastSubtaskConfirmModal.isOpen && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 select-none"
+          onClick={() => setLastSubtaskConfirmModal(null)}
+        >
+          <div 
+            className="w-full max-w-md border rounded-2xl shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: isNotionLight ? '#ffffff' : '#1e1e1e',
+              borderColor: isNotionLight ? '#e2e8f0' : '#334155',
+              color: isNotionLight ? '#0f172a' : '#f8fafc'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className={`p-3 rounded-2xl shrink-0 ${
+                isNotionLight 
+                  ? 'bg-amber-50 border border-amber-200 text-amber-600' 
+                  : 'bg-amber-500/15 border border-amber-500/40 text-amber-400'
+              }`}>
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className={`text-base font-bold leading-snug ${
+                  isNotionLight ? 'text-slate-900' : 'text-slate-100'
+                }`}>
+                  Selesaikan Subtask Terakhir?
+                </h3>
+                <p className={`text-xs mt-2 leading-relaxed ${
+                  isNotionLight ? 'text-slate-600' : 'text-slate-300'
+                }`}>
+                  Subtask ini merupakan tugas terakhir untuk topik <strong className="font-semibold text-teal-600 dark:text-teal-400">"{lastSubtaskConfirmModal.topicTitle}"</strong>.
+                </p>
+                <div className={`mt-3 p-3 rounded-xl border text-xs leading-relaxed ${
+                  isNotionLight 
+                    ? 'bg-amber-50/80 border-amber-200/80 text-amber-900' 
+                    : 'bg-amber-950/30 border-amber-800/40 text-amber-200'
+                }`}>
+                  ⚠️ <strong>Perhatian:</strong> Jika subtask ini diceklis, seluruh subtask telah rampung (100%) dan status kegiatan utama otomatis berubah menjadi <strong>Closed</strong>. Topik ini akan <strong>hilang dari filter Pekerjaan Aktif</strong>.
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setLastSubtaskConfirmModal(null)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                  isNotionLight 
+                    ? 'border-slate-200 hover:bg-slate-100 text-slate-700' 
+                    : 'border-slate-700 hover:bg-slate-800 text-slate-300'
+                }`}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const cb = lastSubtaskConfirmModal.onConfirm;
+                  setLastSubtaskConfirmModal(null);
+                  cb();
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white transition-all shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Ya, Selesaikan & Tutup Task</span>
               </button>
             </div>
           </div>

@@ -13,10 +13,12 @@ import { NOTION_COLORS, stripColorTags } from './tasklist-utils';
 export type FormatAction = 
   | 'bold' 
   | 'italic' 
+  | 'underline'
   | 'strike' 
   | 'code' 
   | 'clear' 
-  | { color: string };
+  | { color: string }
+  | { link: string };
 
 /**
  * Pure function to format a substring within a text string based on start and end offsets.
@@ -49,6 +51,12 @@ export function formatSelectedText(
     } else {
       formatted = `*${selected}*`;
     }
+  } else if (action === 'underline') {
+    if (selected.startsWith('<u>') && selected.endsWith('</u>') && selected.length >= 7) {
+      formatted = selected.slice(3, -4);
+    } else {
+      formatted = `<u>${selected}</u>`;
+    }
   } else if (action === 'strike') {
     if (selected.startsWith('~~') && selected.endsWith('~~') && selected.length >= 4) {
       formatted = selected.slice(2, -2);
@@ -65,9 +73,12 @@ export function formatSelectedText(
     formatted = selected
       .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/\*(.*?)\*/g, '$1')
+      .replace(/<u>(.*?)<\/u>/g, '$1')
       .replace(/~~(.*?)~~/g, '$1')
       .replace(/`(.*?)`/g, '$1');
     formatted = stripColorTags(formatted);
+  } else if (typeof action === 'object' && 'link' in action) {
+    formatted = `[${selected}](${action.link})`;
   } else if (typeof action === 'object' && 'color' in action) {
     const cKey = action.color;
     const cleanSelected = stripColorTags(selected);
