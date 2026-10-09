@@ -672,7 +672,7 @@ export function NotionDatabaseTable({
   const [inlinePicSearch, setInlinePicSearch] = useState<string>('');
 
   // Row Action 3-Dots Dropdown Menu State
-  const [activeActionMenuRowIndex, setActiveActionMenuRowIndex] = useState<number | null>(null);
+  const [activeActionMenuRowIndex, setActiveActionMenuRowIndex] = useState<number | string | null>(null);
 
   // Floating Selection Toolbar State for "Edit Data Kegiatan" Modal
   const [activeModalSelection, setActiveModalSelection] = useState<{
@@ -2324,6 +2324,7 @@ export function NotionDatabaseTable({
 
   // Add Row Handler
   const handleOpenAddModal = () => {
+    setSelectedRow(null);
     const nextNum = String(localRows.length + 1);
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -2540,6 +2541,7 @@ export function NotionDatabaseTable({
   // Edit Row Handler
   const handleOpenEditModal = (row: TableRowData, index: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    setSelectedRow(null);
     const data: TableRowData = {};
     displayHeaders.forEach(h => {
       data[h] = getRowVal(row, h);
@@ -3623,11 +3625,34 @@ export function NotionDatabaseTable({
 
   // Helper to format multiline notes with text color support, bold, italic, code, and bullet formatting
   // Default font size, font family, and color match Created Time column (#475569, font-sans, font-normal, 13px / 12px)
-  const renderFormattedNotes = (text: string) => {
+  // When collapsed (!isExpanded), clamped so table row height strictly follows the main task title
+  const renderFormattedNotes = (text: string, isExpanded: boolean = true) => {
     if (!text || text === '-' || text === '•') return <span className="font-sans text-xs text-slate-400">-</span>;
     // Normalize <br/>, <br>, <br /> to newlines
     const normalized = text.replace(/<br\s*\/?>/gi, '\n');
     const cleanText = normalized.trim();
+
+    if (!isExpanded) {
+      return (
+        <div 
+          className={`leading-normal font-sans font-normal overflow-hidden ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
+          style={{ 
+            fontSize: fitPageMode ? '12px' : '13px',
+            fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+            color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)',
+            lineHeight: '1.5',
+            maxHeight: '22px',
+            display: '-webkit-box',
+            WebkitLineClamp: 1,
+            WebkitBoxOrient: 'vertical',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+          title="Klik pada judul kegiatan untuk melihat keterangan lengkap"
+          dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(cleanText) }}
+        />
+      );
+    }
 
     return (
       <div 
@@ -5068,14 +5093,19 @@ export function NotionDatabaseTable({
                           subItems: Array<{ row: TableRowData; actualIndex: number }>;
                         } | null = null;
 
+                        const seenSubItemRows = new Set<TableRowData>();
+
                         groupRows.forEach((row) => {
                           const actualRowIndex = localRows.indexOf(row) !== -1 ? localRows.indexOf(row) : 0;
                           const isSub = isSubItemRow(row);
 
                           if (isSub) {
+                            if (seenSubItemRows.has(row)) return;
+                            seenSubItemRows.add(row);
+
                             const designatedParent = rowToParentMap.get(row);
                             const existingParent = designatedParent 
-                              ? hierarchicalItems.find(h => h.parentRow === designatedParent) 
+                              ? hierarchicalItems.find(h => h.parentRow === designatedParent || (designatedParent.id && h.parentRow.id && h.parentRow.id === designatedParent.id)) 
                               : null;
 
                             if (existingParent) {
@@ -5111,12 +5141,21 @@ export function NotionDatabaseTable({
                               hierarchicalItems.push(currentParentItem);
                             }
                           } else {
-                            currentParentItem = {
-                              parentRow: row,
-                              parentIndex: actualRowIndex,
-                              subItems: []
-                            };
-                            hierarchicalItems.push(currentParentItem);
+                            // Prevent duplicating parent row if already registered by prior sub-items
+                            const existingParent = hierarchicalItems.find(h => 
+                              h.parentRow === row || 
+                              (row.id && h.parentRow.id && h.parentRow.id === row.id)
+                            );
+                            if (existingParent) {
+                              currentParentItem = existingParent;
+                            } else {
+                              currentParentItem = {
+                                parentRow: row,
+                                parentIndex: actualRowIndex,
+                                subItems: []
+                              };
+                              hierarchicalItems.push(currentParentItem);
+                            }
                           }
                         });
 
@@ -5141,7 +5180,7 @@ export function NotionDatabaseTable({
 
                           return (
                             <tr
-                              key={actualRowIndex}
+                              key={isSubItem ? `sub-${actualRowIndex}-${row.id || ''}` : `row-${actualRowIndex}-${row.id || ''}`}
                               className={`transition-all group border-b ${
                                 isSelected 
                                   ? 'bg-teal-500/10 hover:bg-teal-500/15' 
@@ -5240,7 +5279,13 @@ export function NotionDatabaseTable({
                                         isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3'
-                                      }`}
+                                      } ${!isEditingThis && onToggleExpand ? 'cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/20' : ''}`}
+                                      onClick={(e) => {
+                                        if (!isEditingThis && onToggleExpand) {
+                                          onToggleExpand(e);
+                                        }
+                                      }}
+                                      title={!isEditingThis && onToggleExpand ? (isExpanded ? "Klik untuk menutup subtask dan keterangan" : "Klik untuk membuka subtask dan keterangan lengkap") : undefined}
                                     >
                                       {isEditingThis ? (
                                         <NotionInlineEditor
@@ -5404,7 +5449,7 @@ export function NotionDatabaseTable({
                                           }}
                                         >
                                           <div className={`flex-1 font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
-                                            {renderFormattedNotes(val)}
+                                            {renderFormattedNotes(val, isExpanded)}
                                           </div>
                                           <button
                                             type="button"
@@ -5957,20 +6002,23 @@ export function NotionDatabaseTable({
 
                                {/* Row Action Buttons - Menu Titik Tiga */}
                                <td className={`text-center whitespace-nowrap relative notion-row-action-menu-container ${fitPageMode ? 'px-1 py-2' : 'px-2 py-2.5'}`} onClick={(e) => e.stopPropagation()}>
-                                 <div className="relative inline-block">
-                                   <button
-                                     type="button"
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       setActiveActionMenuRowIndex(activeActionMenuRowIndex === actualRowIndex ? null : actualRowIndex);
-                                     }}
-                                     className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-300 text-black dark:text-black hover:text-black transition-colors cursor-pointer"
-                                     title="Pilihan Aksi"
-                                   >
-                                     <MoreVertical className="w-4 h-4 text-black dark:text-black" />
-                                   </button>
+                                 {(() => {
+                                   const rowActionKey = `${actualRowIndex}-${isSubItem ? 'sub' : 'parent'}`;
+                                   return (
+                                     <div className="relative inline-block">
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           setActiveActionMenuRowIndex(activeActionMenuRowIndex === rowActionKey ? null : rowActionKey);
+                                         }}
+                                         className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-300 text-black dark:text-black hover:text-black transition-colors cursor-pointer"
+                                         title="Pilihan Aksi"
+                                       >
+                                         <MoreVertical className="w-4 h-4 text-black dark:text-black" />
+                                       </button>
 
-                                   {activeActionMenuRowIndex === actualRowIndex && (
+                                       {activeActionMenuRowIndex === rowActionKey && (
                                      <div 
                                        className={`absolute right-0 top-full mt-1 w-52 rounded-xl shadow-2xl border p-1 z-50 text-left transition-all ${
                                          isNotionLight ? 'bg-white border-slate-200 text-slate-800 shadow-slate-300/60' : 'bg-[#202020] border-slate-700 text-slate-100 shadow-black/80'
@@ -6046,8 +6094,10 @@ export function NotionDatabaseTable({
                                      </div>
                                    )}
                                  </div>
-                               </td>
-                            </tr>
+                               );
+                             })()}
+                           </td>
+                         </tr>
                           );
                         };
 
@@ -6078,11 +6128,30 @@ export function NotionDatabaseTable({
                               )}
 
                               {/* Render Sub-items if Parent is expanded */}
-                              {isParentExpanded && hItem.subItems.map((sub) => (
-                                <React.Fragment key={`sub-${sub.row.id || sub.actualIndex}`}>
-                                  {renderRowItem(sub.row, sub.actualIndex, true, false, false, undefined)}
-                                </React.Fragment>
-                              ))}
+                              {isParentExpanded && hItem.subItems.map((sub) => {
+                                const subKey = sub.row.id || `${sub.actualIndex}-${sub.row['Jenis kegiatan'] || ''}`;
+                                const isSubExpanded = Boolean(expandedParents[`sub-${sub.actualIndex}`] || expandedParents[`sub-${subKey}`]);
+                                return (
+                                  <React.Fragment key={`sub-${subKey}`}>
+                                    {renderRowItem(
+                                      sub.row, 
+                                      sub.actualIndex, 
+                                      true, 
+                                      false, 
+                                      isSubExpanded, 
+                                      undefined,
+                                      (e) => {
+                                        e.stopPropagation();
+                                        setExpandedParents(prev => ({
+                                          ...prev,
+                                          [`sub-${sub.actualIndex}`]: !isSubExpanded,
+                                          [`sub-${subKey}`]: !isSubExpanded
+                                        }));
+                                      }
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
 
                               {/* + New sub-item row if Parent is expanded */}
                               {isParentExpanded && (
