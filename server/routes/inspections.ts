@@ -42,6 +42,14 @@ export async function compressSignatureBase64(dataUri?: string | null, maxDimens
 
 export const router = Router();
 
+// Bersihkan cache rekap inspeksi setiap kali ada perubahan data inspeksi
+router.use((req, res, next) => {
+  if (req.method !== 'GET' && req.path.startsWith('/api/inspections')) {
+    res.on('finish', () => rekapInspeksiCache.clear());
+  }
+  next();
+});
+
 router.post("/api/inspections/universal", async (req, res) => {
     try {
       const { finalData, ttd1, ttd2, ttd3, fotoTemuanArray, fotoProses } = req.body;
@@ -1885,9 +1893,14 @@ const SCHEDULE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const enrichedScheduleCacheMap = new Map<string, { data: any[]; timestamp: number }>();
 const ENRICHED_CACHE_TTL = 60 * 1000; // 60 seconds
 
+// Cache hasil /api/rekap-inspeksi per minggu (dibersihkan setiap ada perubahan data inspeksi)
+export const rekapInspeksiCache = new Map<string, { data: any; timestamp: number }>();
+export const REKAP_INSPEKSI_CACHE_TTL = 60 * 1000; // 60 seconds
+
 export function invalidateScheduleCache() {
   scheduleCacheMap.clear();
   enrichedScheduleCacheMap.clear();
+  rekapInspeksiCache.clear();
 }
 
 export async function fetchInspectionScheduleFromSheet(forceRefresh = false, sheetName = 'CurrentWeek') {

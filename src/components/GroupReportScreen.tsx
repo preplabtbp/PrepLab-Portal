@@ -554,7 +554,7 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
   useEffect(() => {
     fetchGroupFeed(selectedWeek);
-    fetchRekapData(selectedWeek);
+    fetchRekapData(selectedWeek, false);
     fetchRekapKtaData(selectedWeek);
   }, [selectedWeek]);
 
@@ -573,10 +573,10 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     }
   };
 
-  const fetchRekapData = async (week: string = selectedWeek) => {
+  const fetchRekapData = async (week: string = selectedWeek, refresh: boolean = true) => {
     try {
       setLoadingRekap(true);
-      const res = await fetch(`/api/rekap-inspeksi?week=${week}`);
+      const res = await fetch(`/api/rekap-inspeksi?week=${week}${refresh ? '&refresh=true' : ''}`);
       if (res.ok) {
         const data = await res.json();
         setRekapSummary(data.summary || { total: 0, sudah: 0, belum: 0, percentage: 0, cutiCount: 0 });
@@ -1303,12 +1303,17 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
         'Status Cuti': emp.isCuti ? 'CUTI' : 'TIDAK',
         'Laporan Inspeksi (PDF & SS)': 'BELUM',
         'Tanggal Inspeksi': null as Date | null,
-        'KTA / TTA 1': 'BELUM',
-        'Tanggal KTA 1': null as Date | null,
+        'KTA': '-',
+        'Tanggal KTA': null as Date | null,
+        'TTA 1': '-',
+        'Tanggal TTA 1': null as Date | null,
         'TTA 2': '-',
         'Tanggal TTA 2': null as Date | null,
         'Status Target Mingguan': 'BELUM'
       });
+
+      // Status kelengkapan KTA/TTA per NIK (berdasarkan status resmi dari server)
+      const ktaDoneMap = new Map<string, boolean>();
 
       // 1. Masukkan data Rekap Inspeksi
       filteredRekap.forEach(emp => {
@@ -1336,28 +1341,66 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
       filteredRekapKta.forEach(emp => {
         const entry = mergedDataMap.get(emp.nik) || initEntry(emp);
         const obligation = emp.obligation || getKtaObligation(emp.nik, emp.jabatan, emp.section);
-        const checkDetails = emp.checkDetails || {
-          check1Done: emp.status === 'SUDAH',
-          check2Done: emp.status === 'SUDAH' && obligation.type !== '1_KTA_OR_TTA'
-        };
+        const cd = emp.checkDetails || {};
+        ktaDoneMap.set(emp.nik, emp.status === 'SUDAH');
 
         if (emp.isCuti) {
-           entry['KTA / TTA 1'] = 'CUTI';
-           entry['TTA 2'] = 'CUTI';
-        } else {
-           entry['KTA / TTA 1'] = checkDetails.check1Done ? 'SUDAH' : 'BELUM';
-           const ts1 = checkDetails.check1Timestamp || (checkDetails.check1Done ? emp.completedAt : null);
-           entry['Tanggal KTA 1'] = toDateOnly(ts1);
-           
-           if (obligation.type === '1_KTA_OR_TTA') {
-             entry['TTA 2'] = 'N/A (Tidak Wajib)';
-           } else {
-             entry['TTA 2'] = checkDetails.check2Done ? 'SUDAH' : 'BELUM';
-             const ts2 = checkDetails.check2Timestamp || (checkDetails.check2Done ? emp.completedAt : null);
-             entry['Tanggal TTA 2'] = toDateOnly(ts2);
-           }
+          entry['KTA'] = 'CUTI';
+          entry['TTA 1'] = 'CUTI';
+          entry['TTA 2'] = 'CUTI';
+          mergedDataMap.set(emp.nik, entry);
+          return;
         }
-        
+
+        // Kumpulkan laporan aktual (jenis + waktu), urutkan dari yang paling awal
+        type Sub = { type: 'KTA' | 'TTA'; ts: any };
+        let subs: Sub[] = [];
+        if (Array.isArray(emp.reports) && emp.reports.length > 0) {
+          subs = emp.reports.map((r: any) => ({
+            type: String(r.reportType || 'KTA').toUpperCase().includes('TTA') ? 'TTA' : 'KTA',
+            ts: r.timestamp || r.date || null
+          }));
+        } else {
+          if (cd.check1Done && cd.check1Label) subs.push({ type: String(cd.check1Label).toUpperCase().includes('TTA') ? 'TTA' : 'KTA', ts: cd.check1Timestamp || emp.completedAt });
+          if (cd.check2Done && cd.check2Label) subs.push({ type: String(cd.check2Label).toUpperCase().includes('TTA') ? 'TTA' : 'KTA', ts: cd.check2Timestamp || emp.completedAt });
+        }
+        subs.sort((a, b) => (a.ts ? new Date(a.ts).getTime() : 0) - (b.ts ? new Date(b.ts).getTime() : 0));
+
+        const ktaSub = subs.find(s => s.type === 'KTA');
+        const ttaSubs = subs.filter(s => s.type === 'TTA');
+        const isDone = emp.status === 'SUDAH';
+
+        // Kolom wajib per kategori kewajiban
+        let needKta = false, needTta1 = false, needTta2 = false;
+        if (obligation.type === '1_KTA_AND_1_TTA') {
+          const viaTwoTta = isDone && !ktaSub && ttaSubs.length >= 2; // selesai via 2 TTA, KTA tidak wajib
+          needKta = !viaTwoTta;
+          needTta1 = true;
+          needTta2 = viaTwoTta;
+        } else if (obligation.type === '2_TTA') {
+          needTta1 = true;
+          needTta2 = true;
+        } else {
+          // 1_KTA_OR_TTA: cukup salah satu
+          if (!isDone) { needKta = true; needTta1 = true; }
+          else if (subs.length === 0) { needKta = true; } // override manual tanpa data laporan
+        }
+
+        const fill = (col: 'KTA' | 'TTA 1' | 'TTA 2', dateCol: 'Tanggal KTA' | 'Tanggal TTA 1' | 'Tanggal TTA 2', sub: Sub | undefined, required: boolean) => {
+          if (sub) {
+            entry[col] = 'SUDAH';
+            entry[dateCol] = toDateOnly(sub.ts);
+          } else if (required) {
+            entry[col] = emp.isManualOverride && isDone ? 'SUDAH (Manual)' : 'BELUM';
+          } else {
+            entry[col] = '-';
+          }
+        };
+
+        fill('KTA', 'Tanggal KTA', ktaSub, needKta);
+        fill('TTA 1', 'Tanggal TTA 1', ttaSubs[0], needTta1);
+        fill('TTA 2', 'Tanggal TTA 2', ttaSubs[1], needTta2);
+
         mergedDataMap.set(emp.nik, entry);
       });
 
@@ -1368,11 +1411,11 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
            finalStatus = 'CUTI';
         } else {
            const inspeksiOK = item['Laporan Inspeksi (PDF & SS)'] === 'LENGKAP';
-           const kta1OK = item['KTA / TTA 1'] === 'SUDAH';
-           const tta2OK = item['TTA 2'] === 'SUDAH' || item['TTA 2'] === 'N/A (Tidak Wajib)';
-           if (inspeksiOK && kta1OK && tta2OK) {
+           const ktaTtaOK = ktaDoneMap.get(item['NIK']) === true;
+           const anyKtaTta = [item['KTA'], item['TTA 1'], item['TTA 2']].some(v => typeof v === 'string' && v.startsWith('SUDAH'));
+           if (inspeksiOK && ktaTtaOK) {
              finalStatus = 'LENGKAP (SUDAH)';
-           } else if (inspeksiOK || kta1OK) {
+           } else if (inspeksiOK || anyKtaTta) {
              finalStatus = 'PARSIAL';
            }
         }

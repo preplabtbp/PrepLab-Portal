@@ -16,10 +16,18 @@ import {
   getNotificationTargets, getTableObj, sanitizePayload 
 } from "../utils.js";
 import webpush from 'web-push';
-import { invalidateScheduleCache, fetchInspectionScheduleFromSheet } from "./inspections.js";
+import { invalidateScheduleCache, fetchInspectionScheduleFromSheet, rekapInspeksiCache, REKAP_INSPEKSI_CACHE_TTL } from "./inspections.js";
 import { invalidateGamificationCache } from "./gamification.js";
 
 export const router = Router();
+
+// Bersihkan cache rekap inspeksi setiap kali ada perubahan data terkait (laporan grup, override, KTA, bukti SS)
+router.use((req, res, next) => {
+  if (req.method !== 'GET' && /^\/api\/(group-reports|rekap-inspeksi|rekap-kta|kta-reports|inspection-proofs)/.test(req.path)) {
+    res.on('finish', () => rekapInspeksiCache.clear());
+  }
+  next();
+});
 
 router.get('/api/developers', async (req, res) => {
   try {
@@ -970,12 +978,27 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
   try {
     const rawWeek = (req.query.week as string) || '';
     const selectedWeek = rawWeek ? normalizeWeekQuery(rawWeek) : getISOWeekTag();
+    const forceRefresh = req.query.refresh === 'true';
+
+    const cachedRekap = rekapInspeksiCache.get(selectedWeek);
+    if (!forceRefresh && cachedRekap && (Date.now() - cachedRekap.timestamp < REKAP_INSPEKSI_CACHE_TTL)) {
+      return res.json(cachedRekap.data);
+    }
     
     // Start group report aggregation immediately so it runs concurrently with other queries
     const groupReportsPromise = fetchAllGroupReports(selectedWeek).catch((e: any) => {
       console.error('Error in fetchAllGroupReports for rekap:', e);
       return [] as any[];
     });
+
+    // Start heavy table scans concurrently as well (Promise.resolve forces single execution of the drizzle query)
+    const inspectionsPromise = Promise.resolve(db.select().from(inspections).orderBy(desc(inspections.id)));
+    const proofsPromise = Promise.resolve(selectedWeek === 'ALL'
+      ? db.select().from(inspectionProofs)
+      : db.select().from(inspectionProofs).where(eq(inspectionProofs.week, selectedWeek)));
+    // Prevent unhandled rejection warnings; errors are handled where awaited
+    inspectionsPromise.catch(() => {});
+    proofsPromise.catch(() => {});
 
     // Run initial DB queries in parallel
     const [allEmployees, allRoster] = await Promise.all([
@@ -1072,6 +1095,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       console.error('Error in fetchAllGroupReports for rekap:', e);
     }
 
+    const partialMatchMemo = new Map<string, typeof allEmployees>();
     const matchEmployeeAndRegister = (part: string, info: any) => {
       const partClean = part.trim().toLowerCase();
       if (!partClean || partClean.length < 2) return;
@@ -1105,20 +1129,26 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
         }
       });
 
-      // Partial name match (only if part is long enough to be meaningful)
+      // Partial name match (only if part is long enough to be meaningful) - memoized per string
       if (partClean.length >= 4) {
-        empByNameLower.forEach((emp, empName) => {
-          if (empName.length >= 4 && partClean.includes(empName)) {
-            registerCompletedUser(emp.nik, info);
-            registerCompletedUser(emp.name, info);
-          }
+        let matches = partialMatchMemo.get(partClean);
+        if (!matches) {
+          matches = [];
+          empByNameLower.forEach((emp, empName) => {
+            if (empName.length >= 4 && partClean.includes(empName)) matches!.push(emp);
+          });
+          partialMatchMemo.set(partClean, matches);
+        }
+        matches.forEach(emp => {
+          registerCompletedUser(emp.nik, info);
+          registerCompletedUser(emp.name, info);
         });
       }
     };
 
     // 2. Direct deep scan of DB `inspections` table (ordered by ID desc so newest are evaluated first)
     try {
-      const dbInspections = await db.select().from(inspections).orderBy(desc(inspections.id));
+      const dbInspections = await inspectionsPromise;
       dbInspections.forEach((insp: any) => {
         let dataFObj: any = {};
         let dataFArray: any[] = [];
@@ -1219,9 +1249,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     };
 
     try {
-      const proofsQuery = selectedWeek === 'ALL'
-        ? await db.select().from(inspectionProofs)
-        : await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, selectedWeek));
+      const proofsQuery = await proofsPromise;
 
       proofsQuery.forEach(p => {
         const info = {
@@ -1363,11 +1391,13 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     const belum = total - sudah;
     const percentage = total > 0 ? Math.round((sudah / total) * 100) : 0;
 
-    res.json({
+    const responseData = {
       summary: { total, sudah, belum, percentage, selectedWeek, cutiCount: cutiList.length },
       rekapList,
       cutiList
-    });
+    };
+    rekapInspeksiCache.set(selectedWeek, { data: responseData, timestamp: Date.now() });
+    res.json(responseData);
   } catch (err: any) {
     console.error('Error fetching rekap:', err);
     res.status(500).json({ error: err.message });
@@ -1636,8 +1666,15 @@ router.get('/api/rekap-kta', async (req, res) => {
       return res.json(cached.data);
     }
 
-    const allEmployees = await db.select().from(employees);
-    const allRoster = await db.select().from(roster);
+    // Run independent DB queries concurrently
+    const ktaQueryPromise = Promise.resolve(selectedWeek === 'ALL'
+      ? db.select().from(ktaReports)
+      : db.select().from(ktaReports).where(eq(ktaReports.week, selectedWeek)));
+    ktaQueryPromise.catch(() => {});
+    const [allEmployees, allRoster] = await Promise.all([
+      db.select().from(employees),
+      db.select().from(roster)
+    ]);
 
     const {
       onCutiSet,
@@ -1647,9 +1684,7 @@ router.get('/api/rekap-kta', async (req, res) => {
     } = await getRekapPersonnelClassification(selectedWeek, allEmployees, allRoster, forceRefresh);
 
     // Query KTA reports for selected week
-    const ktaQuery = selectedWeek === 'ALL'
-      ? await db.select().from(ktaReports)
-      : await db.select().from(ktaReports).where(eq(ktaReports.week, selectedWeek));
+    const ktaQuery = await ktaQueryPromise;
 
     // Map completed by NIK & Name - supports multiple reports per person
     const userReportsMap = new Map<string, any[]>();
