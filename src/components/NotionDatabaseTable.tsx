@@ -55,7 +55,8 @@ import {
   MoreHorizontal,
   Sun,
   Moon,
-  RotateCcw
+  RotateCcw,
+  TableProperties
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -1013,6 +1014,9 @@ export function NotionDatabaseTable({
   // Fit to screen / Zoom Mode State
   const [fitPageMode, setFitPageMode] = useState<boolean>(false);
   const [zoomPercent, setZoomPercent] = useState<number>(100);
+
+  // Table Edit Mode State (Toggle to show column reorder and delete tools)
+  const [isTableEditMode, setIsTableEditMode] = useState<boolean>(false);
 
   // Add / Edit Row Modal State
   const [showRowModal, setShowRowModal] = useState(false);
@@ -4506,7 +4510,27 @@ export function NotionDatabaseTable({
               </button>
             </NotionTooltip>
 
-            {/* 5. THE 1 DEDICATED LOGO FOR FULL TOOLS (SlidersHorizontal) */}
+            {/* 5. EDIT TABLE TOGGLE (Icon Only) */}
+            <NotionTooltip content={isTableEditMode ? "Selesai Edit Tabel (Kunci Kolom)" : "Mode Edit Tabel (Atur Posisi & Hapus Kolom)"} position="bottom">
+              <button
+                type="button"
+                onClick={() => setIsTableEditMode(!isTableEditMode)}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
+                  isTableEditMode
+                    ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 ring-1 ring-amber-500/50'
+                    : isNotionLight
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <TableProperties className="w-4 h-4" />
+                {isTableEditMode && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                )}
+              </button>
+            </NotionTooltip>
+
+            {/* 6. THE 1 DEDICATED LOGO FOR FULL TOOLS (SlidersHorizontal) */}
             <div className="relative notion-fulltools-popover-container">
               <NotionTooltip content="Semua Tools & Pengaturan (Full Tools)" position="bottom">
                 <button
@@ -4703,6 +4727,32 @@ export function NotionDatabaseTable({
                       <ChevronRight className="w-3.5 h-3.5" style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }} />
                     </button>
 
+                    {/* Mode Edit Tabel (Atur Kolom) Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setIsTableEditMode(!isTableEditMode)}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-colors cursor-pointer ${
+                        isTableEditMode 
+                          ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400' 
+                          : 'hover:border-teal-500/60'
+                      }`}
+                      style={{
+                        backgroundColor: isTableEditMode ? undefined : (isNotionLight ? '#f8fafc' : '#262626'),
+                        borderColor: isTableEditMode ? undefined : (isNotionLight ? '#e2e8f0' : '#383838'),
+                        color: isTableEditMode ? undefined : (isNotionLight ? '#0f172a' : '#f8fafc')
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <TableProperties className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Mode Edit Tabel (Atur Kolom)</span>
+                      </div>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        isTableEditMode ? 'bg-amber-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {isTableEditMode ? 'Aktif' : 'Nonaktif'}
+                      </span>
+                    </button>
+
                     {/* Theme Switcher Button */}
                     <button
                       type="button"
@@ -4851,6 +4901,25 @@ export function NotionDatabaseTable({
           </div>
         </div>
       </div>
+
+      {/* Banner Mode Edit Tabel Aktif */}
+      {viewMode === 'table' && isTableEditMode && (
+        <div className="mb-2 px-3 py-1.5 rounded-xl text-xs flex items-center justify-between border bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-200 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <TableProperties className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>
+              <strong>Mode Edit Tabel Aktif:</strong> Tombol atur posisi (<span className="px-1 py-0.5 rounded bg-amber-500/20 font-mono font-bold">&lt;</span> <span className="px-1 py-0.5 rounded bg-amber-500/20 font-mono font-bold">&gt;</span>) dan hapus kolom (<span className="px-1 py-0.5 rounded bg-amber-500/20 font-mono font-bold">×</span>) aktif pada header kolom.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsTableEditMode(false)}
+            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium text-[11px] transition-colors cursor-pointer shadow-xs ml-3 shrink-0"
+          >
+            Selesai Edit
+          </button>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 1. TABLE VIEW (Exact Notion Column Hierarchy & Zoom / Fit Page)            */}
@@ -5035,9 +5104,9 @@ export function NotionDatabaseTable({
                           </button>
                         )}
 
-                        {/* Column Reorder (< and >) and Delete (X) Actions */}
-                        {!isNum && (
-                          <div className="opacity-0 group-hover/th:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0">
+                        {/* Column Reorder (< and >) and Delete (X) Actions - HANYA MUNCUL DI MODE EDIT TABEL */}
+                        {!isNum && isTableEditMode && (
+                          <div className="flex items-center gap-0.5 shrink-0 bg-slate-800/80 dark:bg-slate-900/90 rounded px-1 py-0.5 border border-slate-700/50 shadow-xs ml-1">
                             {/* Geser Kiri */}
                             {colIdx > 1 && (
                               <button
@@ -5047,7 +5116,7 @@ export function NotionDatabaseTable({
                                   handleMoveColumn(colHeader, 'left');
                                 }}
                                 title={`Geser kolom "${colHeader}" ke kiri`}
-                                className="p-0.5 rounded hover:bg-slate-700/50 text-slate-400 hover:text-teal-300 transition-all cursor-pointer"
+                                className="p-0.5 rounded hover:bg-slate-700 text-slate-300 hover:text-teal-300 transition-all cursor-pointer"
                               >
                                 <ChevronLeft className="w-3 h-3" />
                               </button>
@@ -5062,7 +5131,7 @@ export function NotionDatabaseTable({
                                   handleMoveColumn(colHeader, 'right');
                                 }}
                                 title={`Geser kolom "${colHeader}" ke kanan`}
-                                className="p-0.5 rounded hover:bg-slate-700/50 text-slate-400 hover:text-teal-300 transition-all cursor-pointer"
+                                className="p-0.5 rounded hover:bg-slate-700 text-slate-300 hover:text-teal-300 transition-all cursor-pointer"
                               >
                                 <ChevronRight className="w-3 h-3" />
                               </button>
@@ -5077,7 +5146,7 @@ export function NotionDatabaseTable({
                                   handleDeleteColumn(colHeader);
                                 }}
                                 title={`Hapus kolom "${colHeader}"`}
-                                className="p-0.5 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all cursor-pointer"
+                                className="p-0.5 rounded hover:bg-rose-500/30 text-rose-300 hover:text-rose-200 transition-all cursor-pointer"
                               >
                                 <X className="w-3 h-3" />
                               </button>
