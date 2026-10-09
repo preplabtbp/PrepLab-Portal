@@ -248,8 +248,8 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
         type="button"
         onClick={handleToggle}
         title="Klik untuk ubah langsung"
-        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-black transition-all group/btn cursor-pointer ${currentOpt.badgeClass} ${
-          compact ? 'text-[10px] px-1.5 py-0.2' : ''
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-semibold leading-normal transition-all group/btn cursor-pointer ${currentOpt.badgeClass} ${
+          compact ? 'text-[11.5px] px-2 py-0.5' : ''
         }`}
       >
         {currentOpt.icon}

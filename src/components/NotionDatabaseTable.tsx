@@ -66,7 +66,7 @@ import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModa
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './notion/FloatingSelectionToolbar';
-import { PicAvatarGroup } from './PicAvatarGroup';
+import { PicAvatarGroup, smartSplitPicString } from './PicAvatarGroup';
 import {
   normalizeCadence,
   isPeriodicCadence,
@@ -3312,12 +3312,27 @@ export function NotionDatabaseTable({
   // Helper for PIC Avatar Badge
   const renderPicBadge = (picStr: string, size: 'xs' | 'sm' | 'md' = 'sm') => {
     if (!picStr || picStr === '-') return <span className="font-mono text-xs text-slate-400">-</span>;
+    const names = smartSplitPicString(picStr);
+    const displayName = names.length > 0 
+      ? names.map(n => n.split(',')[0].trim().split(' ')[0]).join(', ')
+      : picStr;
+
     return (
-      <PicAvatarGroup
-        pics={picStr}
-        employeesList={employeesList}
-        size={size}
-      />
+      <div className="flex items-center gap-1.5 min-w-0">
+        <PicAvatarGroup
+          pics={picStr}
+          employeesList={employeesList}
+          size={size}
+        />
+        <span 
+          className={`truncate font-medium max-w-[130px] ${
+            isNotionLight ? 'text-slate-800' : 'text-slate-200'
+          } ${fitPageMode ? 'text-[11.5px]' : 'text-xs'}`}
+          title={picStr}
+        >
+          {displayName}
+        </span>
+      </div>
     );
   };
 
@@ -3407,24 +3422,27 @@ export function NotionDatabaseTable({
 
   return (
     <div 
-      className={`w-full my-0 mb-0 border-b transition-all ${
+      className={`w-full my-0 mb-0 border-b transition-all font-sans antialiased ${
         isNotionLight 
-          ? 'bg-white border-slate-200 text-slate-900' 
+          ? 'bg-white border-[#e9e9e8] text-slate-900' 
           : 'bg-[#181818] border-[#2d2d2d] text-slate-200'
       }`}
+      style={{
+        fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif'
+      }}
     >
       {/* ========================================================================= */}
       {/* NOTION TOP CONTROLS & HEADER GROUP (Breadcrumbs, Toolbar, Filter)         */}
       {/* ========================================================================= */}
       <div 
         className={`sticky top-0 md:top-12 z-30 transition-all border-b shadow-md backdrop-blur-md ${
-          isNotionLight ? 'bg-white/98 border-slate-200' : 'bg-[#181818]/98 border-[#2d2d2d]'
+          isNotionLight ? 'bg-white/98 border-[#e9e9e8]' : 'bg-[#181818]/98 border-[#2d2d2d]'
         }`}
       >
         {/* Top Header Bar */}
       <div 
         className={`p-3.5 sm:p-4 border-b flex flex-wrap items-center justify-between gap-3 ${
-          isNotionLight ? 'bg-[#fafafa] border-slate-200' : 'bg-[#202020] border-[#2d2d2d]'
+          isNotionLight ? 'bg-[#fafafa] border-[#e9e9e8]' : 'bg-[#202020] border-[#2d2d2d]'
         }`}
       >
         <div className="flex items-center gap-3">
@@ -3764,7 +3782,7 @@ export function NotionDatabaseTable({
         <div 
           ref={tableScrollRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] w-full transition-all notion-table-scroll-freeze rounded-b-xl border-t border-slate-200 dark:border-[#2d2d2d]"
+          className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] w-full transition-all notion-table-scroll-freeze rounded-b-xl border border-[#e9e9e8] dark:border-[#2d2d2d]"
           style={{ zoom: zoomPercent !== 100 ? `${zoomPercent}%` : undefined }}
         >
           <style>{`
@@ -3829,19 +3847,27 @@ export function NotionDatabaseTable({
               box-shadow: 0 0 10px rgba(45, 212, 191, 0.75);
             }
           `}</style>
-          <table className={`w-full min-w-max text-left border-collapse ${
-            fitPageMode ? 'table-fixed text-[11px]' : 'text-xs'
-          }`}>
+          <table 
+            className={`w-full min-w-max text-left border-collapse ${
+              fitPageMode ? 'table-fixed text-[13px] leading-normal' : 'text-sm leading-relaxed'
+            }`}
+            style={{
+              fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+              letterSpacing: '-0.005em'
+            }}
+          >
             {/* Table Header */}
             <thead>
               <tr 
-                className="border-b select-none transition-colors"
+                className={`border-b select-none transition-colors ${
+                  isNotionLight ? 'border-[#e9e9e8]' : 'border-[#303030]'
+                }`}
               >
                 {/* Select All Checkbox Column */}
                 <th 
-                  className={`sticky top-0 z-20 text-center shadow-2xs ${
-                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
-                  } ${fitPageMode ? 'w-[3%] px-1 py-2' : 'w-10 px-2 py-3'}`}
+                  className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r ${
+                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
+                  } ${fitPageMode ? 'w-[3%] px-1.5 py-2.5' : 'w-10 px-2 py-3'}`}
                 >
                   <div className="flex items-center justify-center">
                     <input
@@ -3867,24 +3893,24 @@ export function NotionDatabaseTable({
                   const colIdx = displayHeaders.indexOf(colHeader);
 
                   // Column width classes based on fitPageMode
-                  let widthClass = 'whitespace-nowrap px-3 py-2.5';
+                  let widthClass = 'whitespace-nowrap px-3.5 py-3';
                   if (fitPageMode) {
-                    if (isNum) widthClass = 'w-[4%] text-center px-1 py-2';
-                    else if (isJudul) widthClass = 'w-[19%] px-2.5 py-2';
-                    else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[23%] px-2.5 py-2';
-                    else if (colLower.includes('created')) widthClass = 'w-[9%] px-1.5 py-2';
-                    else if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai') widthClass = 'w-[9%] px-1.5 py-2';
-                    else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2';
-                    else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[10%] px-2 py-2';
-                    else if (colLower.includes('priority') || colLower.includes('prioritas')) widthClass = 'w-[7%] px-1.5 py-2';
-                    else if (colLower.includes('activity') || colLower.includes('aktivitas')) widthClass = 'w-[8%] px-1.5 py-2';
-                    else if (colLower.includes('kategori')) widthClass = 'w-[6%] px-1.5 py-2';
-                    else if (colLower.includes('period')) widthClass = 'w-[5%] px-1.5 py-2';
-                    else widthClass = 'w-[6%] px-1.5 py-2';
+                    if (isNum) widthClass = 'w-[4%] text-center px-1.5 py-2.5';
+                    else if (isJudul) widthClass = 'w-[19%] px-3 py-2.5';
+                    else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[23%] px-3 py-2.5';
+                    else if (colLower.includes('created')) widthClass = 'w-[9%] px-2 py-2.5';
+                    else if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai') widthClass = 'w-[9%] px-2 py-2.5';
+                    else if (colLower.includes('status')) widthClass = 'w-[9%] px-2 py-2.5';
+                    else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[10%] px-2 py-2.5';
+                    else if (colLower.includes('priority') || colLower.includes('prioritas')) widthClass = 'w-[7%] px-2 py-2.5';
+                    else if (colLower.includes('activity') || colLower.includes('aktivitas')) widthClass = 'w-[8%] px-2 py-2.5';
+                    else if (colLower.includes('kategori')) widthClass = 'w-[6%] px-1.5 py-2.5';
+                    else if (colLower.includes('period')) widthClass = 'w-[5%] px-1.5 py-2.5';
+                    else widthClass = 'w-[6%] px-1.5 py-2.5';
                   } else {
                     if (isNum) widthClass = 'w-16 text-center px-3.5 py-3 whitespace-nowrap';
-                    else if (isJudul) widthClass = 'min-w-[240px] px-3.5 py-3 whitespace-nowrap';
-                    else if (colLower.includes('keterangan')) widthClass = 'min-w-[280px] px-3.5 py-3';
+                    else if (isJudul) widthClass = 'min-w-[260px] px-3.5 py-3 whitespace-nowrap';
+                    else if (colLower.includes('keterangan')) widthClass = 'min-w-[300px] px-3.5 py-3';
                     else widthClass = 'px-3.5 py-3 whitespace-nowrap';
                   }
 
@@ -3892,8 +3918,8 @@ export function NotionDatabaseTable({
                     <th
                       key={colHeader}
                       style={getColStyle(colHeader)}
-                      className={`sticky top-0 z-20 shadow-2xs font-bold hover:opacity-90 transition-opacity group/th relative ${
-                        isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-b border-slate-200' : 'bg-[#202020] text-slate-300 border-b border-[#303030]'
+                      className={`sticky top-0 z-20 shadow-2xs font-semibold hover:opacity-90 transition-opacity group/th relative border-b border-r text-[13px] ${
+                        isNotionLight ? 'bg-[#fbfbfa] text-slate-800 border-[#e9e9e8]' : 'bg-[#202020] text-slate-200 border-[#303030]'
                       } ${widthClass}`}
                     >
                       <div className={`flex items-center justify-between gap-1.5 ${isNum ? 'justify-center' : ''}`}>
@@ -3986,8 +4012,8 @@ export function NotionDatabaseTable({
 
                 {/* Add Column Header Button (+) */}
                 <th 
-                  className={`sticky top-0 z-20 w-10 text-center px-1 py-2 relative shadow-2xs ${
-                    isNotionLight ? 'bg-[#fbfbfa] border-b border-slate-200' : 'bg-[#202020] border-b border-[#303030]'
+                  className={`sticky top-0 z-20 w-10 text-center px-1.5 py-2.5 relative shadow-2xs border-b border-r ${
+                    isNotionLight ? 'bg-[#fbfbfa] border-[#e9e9e8]' : 'bg-[#202020] border-[#303030]'
                   }`} 
                   ref={addColumnRef}
                 >
@@ -4114,8 +4140,8 @@ export function NotionDatabaseTable({
                 </th>
 
                 <th 
-                  className={`sticky top-0 z-20 text-center shadow-2xs ${fitPageMode ? 'w-[5%] px-1 py-2' : 'w-24 px-3 py-3'} ${
-                    isNotionLight ? 'bg-[#fbfbfa] text-slate-500 font-semibold border-b border-slate-200' : 'bg-[#202020] text-slate-400 font-bold border-b border-[#303030]'
+                  className={`sticky top-0 z-20 text-center shadow-2xs border-b text-[13px] ${fitPageMode ? 'w-[5%] px-1.5 py-2.5' : 'w-24 px-3 py-3'} ${
+                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 font-semibold border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 font-bold border-[#303030]'
                   }`}
                 >
                   Aksi
@@ -4125,8 +4151,8 @@ export function NotionDatabaseTable({
 
             {/* Table Body */}
             <tbody 
-              className={`divide-y transition-colors ${
-                isNotionLight ? 'bg-white divide-slate-100' : 'bg-[#1c1c1c] divide-[#334155]'
+              className={`transition-colors ${
+                isNotionLight ? 'bg-white' : 'bg-[#1c1c1c]'
               }`}
             >
               {filteredRows.length === 0 ? (
@@ -4164,13 +4190,13 @@ export function NotionDatabaseTable({
                       {/* Notion Group Header Row */}
                       <tr
                         onClick={() => toggleGroup(groupName)}
-                        className={`cursor-pointer select-none transition-colors border-y font-medium text-xs ${
+                        className={`cursor-pointer select-none transition-colors border-b font-medium text-xs ${
                           isNotionLight
-                            ? 'bg-[#fbfbfa] hover:bg-[#f3f3f1] text-slate-700 border-slate-200/90'
-                            : 'bg-[#202020] hover:bg-[#282828] text-slate-300 border-slate-800'
+                            ? 'bg-[#fbfbfa] hover:bg-[#f3f3f1] text-slate-800 border-[#e9e9e8]'
+                            : 'bg-[#202020] hover:bg-[#282828] text-slate-200 border-[#303030]'
                         }`}
                       >
-                        <td colSpan={displayHeaders.length + 3} className="px-3.5 py-2">
+                        <td colSpan={displayHeaders.length + 3} className="px-3.5 py-2.5">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] text-slate-400 select-none">
@@ -4258,16 +4284,18 @@ export function NotionDatabaseTable({
                           return (
                             <tr
                               key={actualRowIndex}
-                              className={`transition-all group ${
+                              className={`transition-all group border-b ${
                                 isSelected 
                                   ? 'bg-teal-500/10 hover:bg-teal-500/15' 
                                   : isDirty 
                                     ? 'bg-amber-500/5 hover:bg-amber-500/10' 
                                     : isSubItem
-                                      ? isNotionLight ? 'hover:bg-slate-50/90 bg-slate-50/40' : 'hover:bg-slate-800/30 bg-[#161616]/40'
+                                      ? isNotionLight ? 'hover:bg-slate-50/90 bg-[#fafafa]/80' : 'hover:bg-slate-800/30 bg-[#161616]/40'
                                       : isNotionLight
                                       ? 'hover:bg-[#fbfbfa] bg-white'
                                       : 'hover:bg-slate-800/40 bg-transparent'
+                              } ${
+                                isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                               }`}
                               style={{ 
                                 borderBottomColor: isSelected 
@@ -4275,12 +4303,17 @@ export function NotionDatabaseTable({
                                   : isDirty 
                                     ? 'rgba(245, 158, 11, 0.4)' 
                                     : isNotionLight
-                                    ? '#f1f5f9'
+                                    ? '#e9e9e8'
                                     : 'var(--border-main, #334155)' 
                               }}
                             >
                               {/* Checkbox Column */}
-                              <td className={`text-center ${fitPageMode ? 'px-1 py-2' : 'px-2 py-2.5'}`} onClick={(e) => e.stopPropagation()}>
+                              <td 
+                                className={`text-center border-r ${
+                                  isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                } ${fitPageMode ? 'px-1.5 py-2.5' : 'px-2 py-3'}`} 
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <div className="flex items-center justify-center">
                                   <input
                                     type="checkbox"
@@ -4301,9 +4334,15 @@ export function NotionDatabaseTable({
                                 // 1. Number Column
                                 if (colLower === 'number' || colLower === 'no') {
                                   return (
-                                    <td key={colName} style={{ ...getColStyle(colName), color: isDirty ? '#f59e0b' : isNotionLight ? '#64748b' : 'var(--text-muted, #64748b)' }} className={`text-center font-mono ${
-                                      fitPageMode ? 'px-1 py-2 text-[10px]' : 'px-3 py-2.5 text-[11px]'
-                                    }`}>
+                                    <td 
+                                      key={colName} 
+                                      style={{ ...getColStyle(colName), color: isDirty ? '#f59e0b' : isNotionLight ? '#64748b' : 'var(--text-muted, #64748b)' }} 
+                                      className={`text-center font-mono border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${
+                                        fitPageMode ? 'px-1.5 py-2.5 text-xs' : 'px-3 py-3 text-[13px]'
+                                      }`}
+                                    >
                                       <div className="flex items-center justify-center gap-1">
                                         {isDirty && (
                                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="Ada perubahan belum disimpan" />
@@ -4321,9 +4360,15 @@ export function NotionDatabaseTable({
                                   const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
 
                                   return (
-                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#1e293b' : 'var(--text-main, #f8fafc)' }} className={`font-semibold transition-colors ${
-                                      fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2'
-                                    }`}>
+                                    <td 
+                                      key={colName} 
+                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#0f172a' : 'var(--text-main, #f8fafc)' }} 
+                                      className={`font-medium transition-colors border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${
+                                        fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3'
+                                      }`}
+                                    >
                                       {isEditingThis ? (
                                         <NotionInlineEditor
                                           initialValue={displayTitle || val}
@@ -4378,13 +4423,13 @@ export function NotionDatabaseTable({
                                             {/* Notion Document Icon */}
                                             <span className="text-slate-400 select-none text-xs shrink-0">📄</span>
 
-                                            <span className={`leading-snug block font-medium transition-all ${
+                                            <span className={`leading-normal block font-semibold transition-all ${
                                               isSubCompleted 
-                                                ? 'line-through text-slate-400 dark:text-slate-500' 
+                                                ? 'line-through text-slate-400 dark:text-slate-500 font-normal' 
                                                 : isNotionLight 
                                                   ? 'text-slate-900 font-semibold' 
                                                   : 'text-slate-100'
-                                            } ${fitPageMode ? 'line-clamp-2 break-words text-[11px]' : 'text-xs'}`}>
+                                            } ${fitPageMode ? 'break-words text-[13px]' : 'text-[13.5px]'}`}>
                                               {displayTitle ? displayTitle : <em style={{ color: 'var(--text-muted, #64748b)' }}>Tanpa Judul</em>}
                                             </span>
                                             
@@ -4452,9 +4497,15 @@ export function NotionDatabaseTable({
                                   const taskProgress = parseTasklist(val);
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`${
-                                      fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2 max-w-md'
-                                    }`}>
+                                    <td 
+                                      key={colName} 
+                                      style={getColStyle(colName)} 
+                                      className={`border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${
+                                        fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3 max-w-md'
+                                      }`}
+                                    >
                                       {isEditingThis ? (
                                         <NotionInlineEditor
                                           initialValue={val}
@@ -4476,7 +4527,7 @@ export function NotionDatabaseTable({
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
                                         >
-                                          <div className={fitPageMode ? 'line-clamp-2 break-words text-[10.5px] flex-1' : 'flex-1'}>
+                                          <div className={`flex-1 text-[13px] leading-relaxed ${fitPageMode ? 'break-words' : ''}`}>
                                             {renderFormattedNotes(val)}
                                           </div>
                                           <button
@@ -4516,8 +4567,10 @@ export function NotionDatabaseTable({
                                   }
 
                                   return (
-                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans ${
-                                      fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[11px]'
+                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${
+                                      fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                     }`}>
                                       {isEditingThis ? (
                                         <NotionInlineEditor
@@ -4534,10 +4587,10 @@ export function NotionDatabaseTable({
                                       ) : displayDate ? (
                                         <span 
                                           onClick={() => setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: displayDate, multiline: false })}
-                                          className="inline-flex items-center gap-1 cursor-pointer hover:underline font-mono"
+                                          className="inline-flex items-center gap-1.5 cursor-pointer hover:underline font-sans font-medium text-slate-700 dark:text-slate-300"
                                           title="Klik untuk mengubah Tanggal Selesai"
                                         >
-                                          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                                           <span>{displayDate}</span>
                                         </span>
                                       ) : (
@@ -4581,7 +4634,9 @@ export function NotionDatabaseTable({
                                     <td 
                                       key={colName} 
                                       style={getColStyle(colName)} 
-                                      className={`relative ${fitPageMode ? 'px-1.5 py-2 overflow-visible' : 'px-3.5 py-2.5 whitespace-nowrap overflow-visible'}`}
+                                      className={`relative border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-2 py-2 overflow-visible' : 'px-3.5 py-2.5 whitespace-nowrap overflow-visible'}`}
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <div 
@@ -4638,14 +4693,18 @@ export function NotionDatabaseTable({
                                 if (colLower.includes('priority') || colLower.includes('prioritas')) {
                                   if (isSubItem) {
                                     return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
-                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
+                                        <span className="text-slate-400 font-mono">-</span>
                                       </td>
                                     );
                                   }
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 overflow-hidden' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
+                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       <NotionDropdownCell
                                         type="priority"
                                         value={val}
@@ -4661,14 +4720,16 @@ export function NotionDatabaseTable({
                                   // Jika baris adalah sub-kegiatan: status disatukan dengan kegiatan utama (tidak memunculkan dropdown status sendiri)
                                   if (isSubItem) {
                                     return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-4 py-2'}`}>
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-4 py-2 text-[13px]'}`}>
                                         {isSubCompleted ? (
-                                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
-                                            <CheckCircle2 className="w-3 h-3" />
+                                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
                                             <span>Selesai</span>
                                           </span>
                                         ) : (
-                                          <span className="text-slate-400 text-xs font-mono">-</span>
+                                          <span className="text-slate-400 font-mono text-xs">-</span>
                                         )}
                                       </td>
                                     );
@@ -4688,7 +4749,9 @@ export function NotionDatabaseTable({
                                   const pctSubs = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-1.5 overflow-hidden' : 'px-4 py-2 whitespace-nowrap'}`}>
+                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}>
                                       <div className="flex flex-col items-start gap-1">
                                         <NotionDropdownCell
                                           type="status"
@@ -4699,7 +4762,7 @@ export function NotionDatabaseTable({
                                         {/* Progress Sub-kegiatan bila ada */}
                                         {hasSubs && (
                                           <div className="w-full min-w-[95px] max-w-[130px] space-y-0.5 pt-0.5" title={`Progres Sub-kegiatan: ${completedSubs} dari ${totalSubs} selesai`}>
-                                            <div className="flex items-center justify-between text-[9px] font-mono leading-none">
+                                            <div className="flex items-center justify-between text-[10px] font-mono leading-none">
                                               <span className={`font-bold ${
                                                 completedSubs === totalSubs && totalSubs > 0
                                                   ? 'text-emerald-500 dark:text-emerald-400'
@@ -4730,19 +4793,19 @@ export function NotionDatabaseTable({
 
                                         {isClosed ? (
                                           <div 
-                                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors shadow-2xs select-none ${
+                                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono font-bold border transition-colors shadow-2xs select-none ${
                                               isNotionLight
                                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300/80 hover:bg-emerald-100'
                                                 : 'bg-emerald-950/70 text-emerald-300 border-emerald-600/50 hover:bg-emerald-900/80'
                                             }`}
                                             title={durationInfo?.detail || `Durasi pengerjaan: ${durationInfo?.label}`}
                                           >
-                                            <Clock className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                            <span className="truncate max-w-[125px]">{durationInfo?.label}</span>
+                                            <Clock className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                            <span className="truncate max-w-[130px]">{durationInfo?.label}</span>
                                           </div>
                                         ) : !hasSubs && taskProgress.hasTasklist ? (
                                           <div className="w-full min-w-[95px] max-w-[125px] space-y-0.5 pt-0.5">
-                                            <div className="flex items-center justify-between text-[9px] font-mono leading-none">
+                                            <div className="flex items-center justify-between text-[10px] font-mono leading-none">
                                               <span className={`font-bold ${
                                                 taskProgress.isAllCompleted
                                                   ? 'text-emerald-500 dark:text-emerald-400'
@@ -4778,12 +4841,14 @@ export function NotionDatabaseTable({
                                 // 8. Created Time Column
                                 if (colLower.includes('created')) {
                                   return (
-                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans ${
-                                      fitPageMode ? 'px-1 py-2 text-[10px] truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[11px]'
+                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${
+                                      fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                     }`}>
                                       {val && val !== '-' ? (
-                                        <span className="inline-flex items-center gap-1">
-                                          <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                        <span className="inline-flex items-center gap-1.5 font-sans">
+                                          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                                           <span>{val}</span>
                                         </span>
                                       ) : (
@@ -4797,17 +4862,21 @@ export function NotionDatabaseTable({
                                 if (colLower.includes('kategori') || colLower.includes('category')) {
                                   if (isSubItem) {
                                     return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
-                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
+                                        <span className="text-slate-400 font-mono">-</span>
                                       </td>
                                     );
                                   }
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
+                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       {val && val !== '-' ? (
                                         <span 
-                                          className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] border truncate ${
+                                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border truncate ${
                                             isNotionLight
                                               ? 'bg-slate-100 border-slate-200 text-slate-700'
                                               : 'bg-[#1e293b] border-[#334155] text-[#cbd5e1]'
@@ -4826,14 +4895,18 @@ export function NotionDatabaseTable({
                                 if (colLower.includes('activity') || colLower.includes('aktivitas')) {
                                   if (isSubItem) {
                                     return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
-                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
+                                        <span className="text-slate-400 font-mono">-</span>
                                       </td>
                                     );
                                   }
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
+                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       <NotionDropdownCell
                                         type="activity"
                                         value={val}
@@ -4851,14 +4924,18 @@ export function NotionDatabaseTable({
                                 if (colLower.includes('period') || colLower.includes('periode')) {
                                   if (isSubItem) {
                                     return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
-                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
+                                        <span className="text-slate-400 font-mono">-</span>
                                       </td>
                                     );
                                   }
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`${fitPageMode ? 'px-1 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
+                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
                                       <NotionDropdownCell
                                         type="period"
                                         value={val}
@@ -4873,15 +4950,19 @@ export function NotionDatabaseTable({
                                 if (colLower.includes('risk') || colLower.includes('resiko') || colLower.includes('assessment')) {
                                   if (isSubItem) {
                                     return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono ${fitPageMode ? 'px-1 py-1.5' : 'px-3.5 py-2'}`}>
-                                        <span className="text-slate-400 text-xs font-mono">-</span>
+                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
+                                        <span className="text-slate-400 font-mono">-</span>
                                       </td>
                                     );
                                   }
 
                                   return (
-                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap ${
-                                      fitPageMode ? 'px-1 py-2 text-[10.5px]' : 'px-3.5 py-2.5 text-xs'
+                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${
+                                      fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
                                     }`}>
                                       {val && val !== '-' ? val : <span className="font-mono text-slate-400">-</span>}
                                     </td>
@@ -4890,8 +4971,10 @@ export function NotionDatabaseTable({
 
                                 // Default custom column
                                 return (
-                                  <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap ${
-                                    fitPageMode ? 'px-1 py-2 text-[10.5px]' : 'px-3.5 py-2.5 text-xs'
+                                  <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap border-r ${
+                                    isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                  } ${
+                                    fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
                                   }`}>
                                     {val && val !== '-' ? val : <span className="font-mono text-slate-400">-</span>}
                                   </td>
@@ -4899,7 +4982,9 @@ export function NotionDatabaseTable({
                               })}
 
                               {/* Spacer cell for Add Column (+) header */}
-                              <td className="w-10 px-1 py-2 text-center" />
+                              <td className={`w-10 px-1 py-2 text-center border-r ${
+                                isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                              }`} />
 
                                {/* Row Action Buttons - Menu Titik Tiga */}
                                <td className={`text-center whitespace-nowrap relative notion-row-action-menu-container ${fitPageMode ? 'px-1 py-2' : 'px-2 py-2.5'}`} onClick={(e) => e.stopPropagation()}>
@@ -5011,13 +5096,13 @@ export function NotionDatabaseTable({
                                   key={`new-sub-row-${parentIndex}`}
                                   className={`transition-colors border-b select-none ${
                                     isNotionLight
-                                      ? 'hover:bg-[#fbfbfa]/80 bg-white/40 border-slate-100'
-                                      : 'hover:bg-slate-800/30 bg-transparent border-slate-800/40'
+                                      ? 'hover:bg-[#fbfbfa]/80 bg-white/40 border-[#e9e9e8]'
+                                      : 'hover:bg-slate-800/30 bg-transparent border-[#2d2d2d]'
                                   }`}
                                 >
-                                  <td className="px-2 py-1 text-center" />
-                                  <td className="px-3 py-1 text-center font-mono text-slate-400 text-xs" />
-                                  <td colSpan={displayHeaders.length + 1} className="px-4 py-1.5">
+                                  <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                  <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                  <td colSpan={displayHeaders.length + 1} className="px-4 py-2">
                                     {creatingSubItemForParent === parentIndex ? (
                                       <div className="flex items-center gap-2 pl-6" onClick={(e) => e.stopPropagation()}>
                                         <span className="text-slate-400 text-xs select-none">📄</span>
@@ -5036,7 +5121,7 @@ export function NotionDatabaseTable({
                                             }
                                           }}
                                           placeholder="Nama sub-kegiatan baru... (Tekan Enter)"
-                                          className={`px-2.5 py-1 text-xs rounded-lg border outline-none font-medium w-64 max-w-sm ${
+                                          className={`px-3 py-1.5 text-[13px] rounded-lg border outline-none font-sans w-72 max-w-sm ${
                                             isNotionLight
                                               ? 'bg-white border-teal-500 text-slate-900 shadow-xs ring-1 ring-teal-500/20'
                                               : 'bg-[#181818] border-teal-500 text-slate-100 shadow-xs ring-1 ring-teal-500/20'
@@ -5045,7 +5130,7 @@ export function NotionDatabaseTable({
                                         <button
                                           type="button"
                                           onClick={() => handleAddSubItem(parentIndex, newSubItemTitle)}
-                                          className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[11px] font-bold shadow-xs cursor-pointer active:scale-95 transition-all"
+                                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer active:scale-95 transition-all"
                                         >
                                           Simpan
                                         </button>
@@ -5055,7 +5140,7 @@ export function NotionDatabaseTable({
                                             setCreatingSubItemForParent(null);
                                             setNewSubItemTitle('');
                                           }}
-                                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-[11px] font-semibold cursor-pointer transition-all"
+                                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-semibold cursor-pointer transition-all"
                                         >
                                           Batal
                                         </button>
@@ -5069,10 +5154,10 @@ export function NotionDatabaseTable({
                                             setCreatingSubItemForParent(parentIndex);
                                             setNewSubItemTitle('');
                                           }}
-                                          className="inline-flex items-center gap-1.5 py-0.5 px-1.5 text-xs text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 font-normal transition-colors cursor-pointer rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 group/subbtn"
+                                          className="inline-flex items-center gap-1.5 py-1 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium transition-colors cursor-pointer rounded hover:bg-slate-100 dark:hover:bg-slate-800/60 group/subbtn"
                                         >
                                           <Plus className="w-3.5 h-3.5 text-slate-400 group-hover/subbtn:text-teal-500 transition-colors" />
-                                          <span className="text-[11.5px]">New sub-item</span>
+                                          <span className="text-xs">New sub-item</span>
                                         </button>
                                       </div>
                                     )}
@@ -5090,14 +5175,14 @@ export function NotionDatabaseTable({
                           onClick={() => handleOpenAddModal()}
                           className={`cursor-pointer transition-colors border-b select-none ${
                             isNotionLight
-                              ? 'hover:bg-[#f7f7f5] text-slate-500 border-slate-100'
-                              : 'hover:bg-slate-800/40 text-slate-400 border-slate-800/60'
+                              ? 'hover:bg-[#f7f7f5] text-slate-600 border-[#e9e9e8]'
+                              : 'hover:bg-slate-800/40 text-slate-400 border-[#2d2d2d]'
                           }`}
                         >
-                          <td colSpan={displayHeaders.length + 3} className="px-3.5 py-2 text-xs">
-                            <div className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity">
-                              <Plus className="w-3.5 h-3.5" />
-                              <span className="font-medium text-[11px]">New page</span>
+                          <td colSpan={displayHeaders.length + 3} className="px-3.5 py-2.5 text-xs">
+                            <div className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity">
+                              <Plus className="w-4 h-4 text-slate-500" />
+                              <span className="font-semibold text-xs tracking-wide">New page</span>
                             </div>
                           </td>
                         </tr>
@@ -5112,7 +5197,7 @@ export function NotionDatabaseTable({
           {/* Bottom Table Add Row Shortcut & Select All (Natural at end of table) */}
           <div 
             className={`p-3 border-t flex items-center justify-between transition-colors ${
-              isNotionLight ? 'bg-[#fafafa] border-slate-200 text-slate-600' : 'bg-[#181818] border-[#2d2d2d] text-slate-400'
+              isNotionLight ? 'bg-[#fafafa] border-[#e9e9e8] text-slate-700' : 'bg-[#181818] border-[#2d2d2d] text-slate-400'
             }`}
           >
             <div className="flex items-center gap-3">

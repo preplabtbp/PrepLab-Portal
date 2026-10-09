@@ -1862,7 +1862,12 @@ ${aiMeetingNotes
               />
             </div>
           ) : parsedTableData ? (
-            <div className="w-full max-w-none animate-in fade-in duration-200">
+            <div 
+              className="w-full max-w-none animate-in fade-in duration-200"
+              style={{
+                fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+              }}
+            >
               {/* Cover Image & Customizer */}
               {selectedPost.coverImage ? (
                 <div 
@@ -1900,8 +1905,8 @@ ${aiMeetingNotes
               {/* Content Before Table */}
               {parsedTableData.beforeText.trim() && (
                 <div 
-                  className="prose max-w-none text-sm md:text-base leading-relaxed"
-                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                  className="prose max-w-none text-[15px] md:text-base leading-relaxed tracking-normal font-sans"
+                  style={{ color: 'var(--text-main, #0f172a)' }}
                 >
                   <ReactMarkdown 
                     components={{
@@ -1945,7 +1950,7 @@ ${aiMeetingNotes
                             </div>
                           );
                         }
-                        return <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>;
+                        return <h1 className="text-2xl font-bold mt-6 mb-3 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h1>;
                       },
                       h2: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children).trim();
@@ -1967,7 +1972,7 @@ ${aiMeetingNotes
                               style={{
                                 backgroundColor: 'var(--card-bg, #242424)',
                                 borderColor: 'var(--border-main, #334155)',
-                                color: 'var(--text-main, #cbd5e1)'
+                                color: 'var(--text-main, currentColor)'
                               }}
                             >
                               <div className="flex items-center gap-3">
@@ -1975,7 +1980,7 @@ ${aiMeetingNotes
                                   <Folder className="w-5 h-5" />
                                 </div>
                                 <div>
-                                  <span className="font-bold block text-sm group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                                  <span className="font-bold block text-sm group-hover:text-teal-400" style={{ color: 'var(--text-main, currentColor)' }}>
                                     {text}
                                   </span>
                                   <span className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
@@ -1987,7 +1992,7 @@ ${aiMeetingNotes
                             </div>
                           );
                         }
-                        return <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>;
+                        return <h2 className="text-xl font-bold mt-5 mb-2 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h2>;
                       },
                       h3: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children).trim();
@@ -2009,14 +2014,14 @@ ${aiMeetingNotes
                               style={{
                                 backgroundColor: 'var(--card-bg, #242424)',
                                 borderColor: 'var(--border-main, #334155)',
-                                color: 'var(--text-main, #cbd5e1)'
+                                color: 'var(--text-main, currentColor)'
                               }}
                             >
                               <div className="flex items-center gap-3">
                                 <div className="p-1.5 rounded-lg text-teal-400" style={{ backgroundColor: 'var(--input-bg, #181818)' }}>
                                   <FileText className="w-4 h-4" />
                                 </div>
-                                <span className="font-semibold text-xs group-hover:text-teal-400" style={{ color: 'var(--text-main, #cbd5e1)' }}>
+                                <span className="font-semibold text-xs group-hover:text-teal-400" style={{ color: 'var(--text-main, currentColor)' }}>
                                   {text}
                                 </span>
                               </div>
@@ -2024,7 +2029,7 @@ ${aiMeetingNotes
                             </div>
                           );
                         }
-                        return <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>;
+                        return <h3 className="text-lg font-bold mt-4 mb-2 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h3>;
                       },
                       blockquote: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children)
@@ -2036,8 +2041,8 @@ ${aiMeetingNotes
                           <blockquote 
                             className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
                             style={{
-                              backgroundColor: 'var(--input-bg, #222)',
-                              color: 'var(--text-main, #cbd5e1)',
+                              backgroundColor: 'var(--input-bg, rgba(0,0,0,0.03))',
+                              color: 'var(--text-main, currentColor)',
                               borderColor: 'var(--primary, #2A9D8F)'
                             }}
                           >
@@ -2051,7 +2056,7 @@ ${aiMeetingNotes
                           .trim()
                           .toLowerCase();
                         if (text.includes("menu info")) return null;
-                        return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
+                        return <p className="mb-3 leading-relaxed text-slate-800 dark:text-slate-200" style={{ color: 'var(--text-main, currentColor)' }}>{children}</p>;
                       },
                       a: ({ href, children }: any) => {
                         const url = href || "";
@@ -2138,14 +2143,14 @@ ${aiMeetingNotes
               {/* Content After Table */}
               {parsedTableData.afterText.trim() && (
                 <div 
-                  className="prose max-w-none text-sm md:text-base leading-relaxed pt-4"
-                  style={{ color: 'var(--text-main, #f8fafc)' }}
+                  className="prose max-w-none text-[15px] md:text-base leading-relaxed tracking-normal font-sans pt-4"
+                  style={{ color: 'var(--text-main, #0f172a)' }}
                 >
                   <ReactMarkdown 
                     components={{
-                      h1: ({ node, children }: any) => <h1 className="text-2xl font-bold mt-6 mb-3" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h1>,
-                      h2: ({ node, children }: any) => <h2 className="text-xl font-bold mt-5 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h2>,
-                      h3: ({ node, children }: any) => <h3 className="text-lg font-bold mt-4 mb-2" style={{ color: 'var(--text-main, #f8fafc)' }}>{children}</h3>,
+                      h1: ({ node, children }: any) => <h1 className="text-2xl font-bold mt-6 mb-3 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h1>,
+                      h2: ({ node, children }: any) => <h2 className="text-xl font-bold mt-5 mb-2 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h2>,
+                      h3: ({ node, children }: any) => <h3 className="text-lg font-bold mt-4 mb-2 text-slate-900 dark:text-slate-100" style={{ color: 'var(--text-main, currentColor)' }}>{children}</h3>,
                       blockquote: ({ node, children }: any) => {
                         const text = extractTextFromReactNode(children)
                           .replace(/["*_]/g, "")
@@ -2156,8 +2161,8 @@ ${aiMeetingNotes
                           <blockquote 
                             className="border-l-4 border-teal-500 px-4 py-2.5 my-3 rounded-r-xl italic shadow-xs"
                             style={{
-                              backgroundColor: 'var(--input-bg, #222)',
-                              color: 'var(--text-main, #cbd5e1)',
+                              backgroundColor: 'var(--input-bg, rgba(0,0,0,0.03))',
+                              color: 'var(--text-main, currentColor)',
                               borderColor: 'var(--primary, #2A9D8F)'
                             }}
                           >
@@ -2171,7 +2176,7 @@ ${aiMeetingNotes
                           .trim()
                           .toLowerCase();
                         if (text.includes("menu info")) return null;
-                        return <p className="mb-3 leading-relaxed" style={{ color: 'var(--text-main, #cbd5e1)' }}>{children}</p>;
+                        return <p className="mb-3 leading-relaxed text-slate-800 dark:text-slate-200" style={{ color: 'var(--text-main, currentColor)' }}>{children}</p>;
                       },
                       a: ({ href, children }: any) => (
                         <a

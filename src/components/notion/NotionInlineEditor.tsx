@@ -115,7 +115,7 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
         ref={singleContainerRef}
         data-notion-inline-editor="true"
         onClick={(e) => e.stopPropagation()}
-        className="w-full rounded border p-1 font-sans text-xs transition-all shadow-xs relative"
+        className="w-full rounded-lg border p-1.5 font-sans text-[13px] leading-normal transition-all shadow-xs relative"
         style={{
           backgroundColor: isNotionLight ? '#ffffff' : '#1e1e1e',
           color: isNotionLight ? '#0f172a' : '#f8fafc',
@@ -812,7 +812,7 @@ const NotionTasklistInlineEditor: React.FC<{
               onMouseUp={updateBubblePosition}
               onKeyUp={updateBubblePosition}
               data-placeholder="Tulis kegiatan to-do..."
-              className={`flex-1 text-xs outline-none bg-transparent min-h-[20px] empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:pointer-events-none ${
+              className={`flex-1 text-[13px] leading-relaxed outline-none bg-transparent min-h-[22px] empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:pointer-events-none ${
                 item.checked
                   ? 'line-through text-slate-400 font-normal'
                   : isNotionLight ? 'text-slate-900 font-medium' : 'text-slate-100 font-medium'
