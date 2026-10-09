@@ -464,6 +464,14 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
   const roomStageRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Decoupled refs to eliminate re-triggering socket subscriptions during movement
+  const myPosRef = useRef(myPos);
+  myPosRef.current = myPos;
+  const myFacingRef = useRef(myFacing);
+  myFacingRef.current = myFacing;
+  const myActionStateRef = useRef(myActionState);
+  myActionStateRef.current = myActionState;
+
   // Audio chimes
   const playChime = (type: 'msg' | 'step' | 'cheer' = 'msg') => {
     if (!soundEnabled) return;
@@ -609,17 +617,23 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
 
   const fetchPresenceOnline = useCallback(async () => {
     try {
-      setIsSyncing(true);
       const res = await fetch('/api/presence/online');
       if (!res.ok) return;
       const data = await res.json();
       syncOnlinePresence(data);
     } catch (err) {
       console.warn('Failed to fetch online presence:', err);
+    }
+  }, [syncOnlinePresence]);
+
+  const handleManualSync = useCallback(async () => {
+    try {
+      setIsSyncing(true);
+      await fetchPresenceOnline();
     } finally {
       setTimeout(() => setIsSyncing(false), 600);
     }
-  }, [syncOnlinePresence]);
+  }, [fetchPresenceOnline]);
 
   // Socket.IO Real-time Synchronization & Presence Listeners
   useEffect(() => {
@@ -641,10 +655,10 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       pangkatIcon: effectivePangkatIcon,
       section: userSection,
       avatar: avatarUrl || null,
-      posX: myPos.x,
-      posY: myPos.y,
-      facing: myFacing,
-      actionState: myActionState
+      posX: myPosRef.current.x,
+      posY: myPosRef.current.y,
+      facing: myFacingRef.current,
+      actionState: myActionStateRef.current
     };
 
     // Join lounge explicitly (emits chat:join & lounge:join)
@@ -807,17 +821,12 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       }
     };
 
-    const handleRoomUsers = () => {
-      fetchPresenceOnline();
-    };
-
     socket.on('lounge:sync_state', handleLoungeSync);
     socket.on('lounge:user_joined', handleUserJoined);
     socket.on('lounge:user_left', handleUserLeft);
     socket.on('lounge:user_moved', handleUserMoved);
     socket.on('lounge:user_action', handleUserAction);
     socket.on('presence:update', handlePresenceUpdate);
-    socket.on('online_users', handleRoomUsers);
     socket.on('new_message', handleNewMessage);
 
     return () => {
@@ -828,11 +837,10 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       socket.off('lounge:user_moved', handleUserMoved);
       socket.off('lounge:user_action', handleUserAction);
       socket.off('presence:update', handlePresenceUpdate);
-      socket.off('online_users', handleRoomUsers);
       socket.off('new_message', handleNewMessage);
       leaveLounge(userNik);
     };
-  }, [isOpen, userNik, effectiveUsername, effectivePangkat, effectivePangkatIcon, userSection, avatarUrl, myPos.x, myPos.y, myFacing, myActionState, fetchPresenceOnline, syncOnlinePresence]);
+  }, [isOpen, userNik, effectiveUsername, effectivePangkat, effectivePangkatIcon, userSection, avatarUrl, fetchPresenceOnline]);
 
   // Click on open floor to walk freely
   const handleFloorClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -1090,7 +1098,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             {/* Manual Sync Button */}
             <button
               type="button"
-              onClick={() => fetchPresenceOnline()}
+              onClick={() => handleManualSync()}
               className="p-2.5 rounded-xl bg-white/10 text-slate-200 hover:text-white hover:bg-white/20 transition-all cursor-pointer shadow-sm flex items-center justify-center"
               title="Sinkronisasi Ulang Presensi Realtime"
             >
@@ -1416,7 +1424,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
                     setSelectedAvatarForInteract(av);
                   }
                 }}
-                className={`absolute -translate-x-1/2 -translate-y-full flex flex-col items-center transition-all duration-75 cursor-pointer group/avatar ${
+                className={`absolute -translate-x-1/2 -translate-y-full flex flex-col items-center transition-[left,top] duration-75 ease-linear cursor-pointer group/avatar ${
                   isMe ? 'z-30' : 'z-20'
                 }`}
                 style={{
