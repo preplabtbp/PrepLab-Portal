@@ -4,6 +4,7 @@ import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
 import { NotionDatabaseTable, TableRowData } from "./NotionDatabaseTable";
 import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
 import { PortalImagePickerModal } from "./PortalImagePickerModal";
+import { BannerCover } from "./BannerCover";
 import { Card, Button, Input } from "./ui";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -1868,39 +1869,24 @@ ${aiMeetingNotes
                 fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
               }}
             >
-              {/* Cover Image & Customizer */}
-              {selectedPost.coverImage ? (
-                <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-3 border border-slate-200/80 shadow-xs relative group"
-                >
-                  <img
-                    src={selectedPost.coverImage}
-                    alt="Cover"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCoverModal(selectedPost.coverImage)}
-                      className="px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xs shadow-md transition-all cursor-pointer"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-lime-400" />
-                      <span>Ganti Cover Banner</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mb-3 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenCoverModal('')}
-                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-teal-600" />
-                    <span>+ Tambah Cover Banner</span>
-                  </button>
-                </div>
-              )}
+              {/* Cover Image & Customizer with Adjustable Position */}
+              <BannerCover
+                coverImage={selectedPost.coverImage}
+                postId={selectedPost.id}
+                alt={selectedPost.title || 'Cover'}
+                onOpenChangeModal={() => handleOpenCoverModal(selectedPost.coverImage)}
+                onSavePosition={(newPos) => {
+                  const cleanUrl = (selectedPost.coverImage || '').replace(/#pos=\d+/, '');
+                  if (cleanUrl) {
+                    const urlWithPos = `${cleanUrl}#pos=${newPos}`;
+                    fetch(`/api/bulletin/${selectedPost.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ coverImage: urlWithPos })
+                    }).catch(() => {});
+                  }
+                }}
+              />
 
               {/* Content Before Table */}
               {parsedTableData.beforeText.trim() && (
@@ -2225,39 +2211,24 @@ ${aiMeetingNotes
                 </div>
               </div>
 
-              {/* Cover Image & Customizer */}
-              {selectedPost.coverImage ? (
-                <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-200/80 shadow-xs relative group"
-                >
-                  <img
-                    src={selectedPost.coverImage}
-                    alt="Cover"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCoverModal(selectedPost.coverImage)}
-                      className="px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xs shadow-md transition-all cursor-pointer"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-lime-400" />
-                      <span>Ganti Cover Banner</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mb-4 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenCoverModal('')}
-                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-teal-600" />
-                    <span>+ Tambah Cover Banner</span>
-                  </button>
-                </div>
-              )}
+              {/* Cover Image & Customizer with Adjustable Position */}
+              <BannerCover
+                coverImage={selectedPost.coverImage}
+                postId={selectedPost.id}
+                alt={selectedPost.title || 'Cover'}
+                onOpenChangeModal={() => handleOpenCoverModal(selectedPost.coverImage)}
+                onSavePosition={(newPos) => {
+                  const cleanUrl = (selectedPost.coverImage || '').replace(/#pos=\d+/, '');
+                  if (cleanUrl) {
+                    const urlWithPos = `${cleanUrl}#pos=${newPos}`;
+                    fetch(`/api/bulletin/${selectedPost.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ coverImage: urlWithPos })
+                    }).catch(() => {});
+                  }
+                }}
+              />
 
               {/* Title & Metadata */}
               <div>

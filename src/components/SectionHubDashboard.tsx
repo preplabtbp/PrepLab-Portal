@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PortalImagePickerModal } from './PortalImagePickerModal';
+import { BannerCover } from './BannerCover';
 
 export const COVER_PRESETS = [
   { id: 'mining_site', name: 'Site Tambang Nikel', url: 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?q=80&w=1600&auto=format&fit=crop' },
@@ -611,33 +612,29 @@ export function SectionHubDashboard({
 
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-300 pb-20 bg-white min-h-screen">
-      {/* 1. Cover Banner Image (Matching Notion Banner Aesthetics - Full Width) */}
-      <div className="w-full h-48 sm:h-60 md:h-72 lg:h-80 overflow-hidden relative group rounded-2xl border border-slate-200/80 shadow-xs bg-slate-100">
-        <img
-          src={currentCover && currentCover.startsWith('http') ? currentCover : (post?.coverImage && post.coverImage.startsWith('http') ? post.coverImage : config.bannerUrl)}
-          alt={sectionTitle}
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).src = config.bannerUrl;
-          }}
-          className="w-full h-full object-cover object-center group-hover:scale-101 transition-transform duration-700"
-        />
-
-        {/* Change Cover Button (Visible on Hover) */}
-        <div className="absolute right-3.5 bottom-3.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-          <button
-            type="button"
-            onClick={() => {
-              setCoverInputUrl(currentCover || post?.coverImage || config.bannerUrl);
-              setShowCoverModal(true);
-            }}
-            className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-950 text-white text-xs font-bold backdrop-blur-md border border-white/20 flex items-center gap-1.5 shadow-xl transition-all active:scale-95 cursor-pointer"
-            title="Ubah cover gambar banner halaman Labnote ini"
-          >
-            <Camera className="w-3.5 h-3.5 text-teal-400" />
-            <span>Ganti Cover Banner</span>
-          </button>
-        </div>
-      </div>
+      {/* 1. Cover Banner Image (Matching Notion Banner Aesthetics - Full Width with Adjustable Position) */}
+      <BannerCover
+        coverImage={currentCover && currentCover.startsWith('http') ? currentCover : (post?.coverImage && post.coverImage.startsWith('http') ? post.coverImage : config.bannerUrl)}
+        postId={post?.id || `section_${post?.category || 'hub'}`}
+        alt={sectionTitle}
+        heightClass="h-48 sm:h-60 md:h-72 lg:h-80 rounded-2xl"
+        onOpenChangeModal={() => {
+          setCoverInputUrl(currentCover || post?.coverImage || config.bannerUrl);
+          setShowCoverModal(true);
+        }}
+        onSavePosition={(newPos) => {
+          const bannerUrl = currentCover || post?.coverImage || config.bannerUrl;
+          const cleanUrl = bannerUrl.replace(/#pos=\d+/, '');
+          if (cleanUrl && post?.id) {
+            const urlWithPos = `${cleanUrl}#pos=${newPos}`;
+            fetch(`/api/bulletin/${post.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...post, coverImage: urlWithPos })
+            }).catch(() => {});
+          }
+        }}
+      />
 
       {/* 2. Header Area: Floating Icon, Metadata Actions, Big Title, Home Button */}
       <div className="px-2 sm:px-4 md:px-6 space-y-2">

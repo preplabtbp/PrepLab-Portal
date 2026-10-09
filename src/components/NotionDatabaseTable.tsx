@@ -789,14 +789,31 @@ export function NotionDatabaseTable({
   }, [initialTopicTitle, localRows]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ACTIVE');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState<'table' | 'board' | 'list'>('table');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedRow, setSelectedRow] = useState<TableRowData | null>(null);
   const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
+  const [isSelectionModeActive, setIsSelectionModeActive] = useState<boolean>(false);
   const [modalTab, setModalTab] = useState<'details' | 'comments'>('details');
+
+  // Font Size Controller State (Hanya mengatur ukuran font keseluruhan modul LabNote)
+  const [labNoteFontSize, setLabNoteFontSize] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('preplab_labnote_font_size');
+      return saved ? Number(saved) : 13;
+    } catch {
+      return 13;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('preplab_labnote_font_size', String(labNoteFontSize));
+    } catch {}
+  }, [labNoteFontSize]);
 
   // Notion Minimalist Header Toolbar Popovers
   const [isSearchInputOpen, setIsSearchInputOpen] = useState(false);
@@ -1230,6 +1247,73 @@ export function NotionDatabaseTable({
       };
     }, [localRows, displayHeaders, zoomPercent, fitPageMode]);
 
+  // Scroll Chaining: Delegate wheel events to outer page scroll container until table top reaches threshold
+  useEffect(() => {
+    const tableEl = tableScrollRef.current;
+    if (!tableEl) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Horizontal scrolling should remain untouched
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+
+      // Find outer scrollable parent
+      let parent = tableEl.parentElement;
+      let scrollParent: HTMLElement | null = null;
+      while (parent) {
+        const style = window.getComputedStyle(parent);
+        const isScrollable = (style.overflowY === 'auto' || style.overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight;
+        if (isScrollable) {
+          scrollParent = parent;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+
+      const outerContainer = scrollParent || (document.scrollingElement as HTMLElement) || document.documentElement;
+      const isWindowScroll = !scrollParent;
+
+      const containerTop = scrollParent ? scrollParent.getBoundingClientRect().top : 0;
+      const tableRect = tableEl.getBoundingClientRect();
+      const topThreshold = containerTop + 65;
+
+      if (e.deltaY > 0) {
+        // Scrolling DOWN:
+        // If table has not yet scrolled to the top of viewport / container and outer container can still scroll down
+        const canOuterScrollDown = isWindowScroll
+          ? (window.scrollY + window.innerHeight < document.documentElement.scrollHeight - 4)
+          : (outerContainer.scrollTop + outerContainer.clientHeight < outerContainer.scrollHeight - 4);
+
+        if (tableRect.top > topThreshold && canOuterScrollDown) {
+          if (isWindowScroll) {
+            window.scrollBy({ top: e.deltaY });
+          } else {
+            outerContainer.scrollTop += e.deltaY;
+          }
+          e.preventDefault();
+        }
+      } else if (e.deltaY < 0) {
+        // Scrolling UP:
+        // If table is at the top of its internal scroll, pass scroll to outer container
+        if (tableEl.scrollTop <= 0) {
+          const canOuterScrollUp = isWindowScroll ? window.scrollY > 0 : outerContainer.scrollTop > 0;
+          if (canOuterScrollUp) {
+            if (isWindowScroll) {
+              window.scrollBy({ top: e.deltaY });
+            } else {
+              outerContainer.scrollTop += e.deltaY;
+            }
+            e.preventDefault();
+          }
+        }
+      }
+    };
+
+    tableEl.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      tableEl.removeEventListener('wheel', handleWheel);
+    };
+  }, [viewMode]);
+
   // Frozen Header & Sticky Controls States (Freeze toolbar, filter bar, and column headers)
   const headerControlRef = useRef<HTMLDivElement>(null);
   const [headerControlHeight, setHeaderControlHeight] = useState(140);
@@ -1280,8 +1364,10 @@ export function NotionDatabaseTable({
     }
 
     setTableHeaders(prev => [...prev, trimmed]);
-    setLocalRows(prev => prev.map(r => ({ ...r, [trimmed]: defaultValue })));
-    setDirtyRowIndices(new Set(Array.from({ length: localRows.length }, (_, i) => i)));
+    const updated = localRows.map(r => ({ ...r, [trimmed]: defaultValue }));
+    setLocalRows(updated);
+    onRowsChange?.(updated);
+    saveTableToBackend(updated);
     setShowAddColumnPopover(false);
     setCustomColumnName('');
     toast.success(`Kolom "${trimmed}" berhasil ditambahkan ke tabel!`);
@@ -1298,9 +1384,15 @@ export function NotionDatabaseTable({
       return;
     }
 
-    setTableHeaders(prev => prev.filter(h => h !== colName));
-    setDirtyRowIndices(new Set(Array.from({ length: localRows.length }, (_, i) => i)));
-    toast.info(`Kolom "${colName}" telah dihapus. Jangan lupa simpan perubahan.`);
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus kolom "${colName}" dari tabel?`)) {
+      return;
+    }
+
+    const updatedHeaders = tableHeaders.filter(h => h !== colName);
+    setTableHeaders(updatedHeaders);
+    onRowsChange?.(localRows);
+    saveTableToBackend(localRows);
+    toast.info(`Kolom "${colName}" telah dihapus.`);
   };
 
   const handleMoveColumn = (colName: string, direction: 'left' | 'right') => {
@@ -1316,17 +1408,20 @@ export function NotionDatabaseTable({
     newHeaders.splice(targetIdx, 0, moved);
 
     setTableHeaders(newHeaders);
-    setDirtyRowIndices(new Set(Array.from({ length: localRows.length }, (_, i) => i)));
+    onRowsChange?.(localRows);
+    saveTableToBackend(localRows);
     toast.success(`Kolom "${colName}" digeser ke ${direction === 'left' ? 'kiri' : 'kanan'}`);
   };
 
   const handleResetColumnOrder = () => {
-    setTableHeaders(prev => normalizeAndOrderHeaders(prev));
+    const normalized = normalizeAndOrderHeaders(tableHeaders);
+    setTableHeaders(normalized);
     setColumnWidths({});
     try {
       localStorage.removeItem(tableStorageKey);
     } catch {}
-    setDirtyRowIndices(new Set(Array.from({ length: localRows.length }, (_, i) => i)));
+    onRowsChange?.(localRows);
+    saveTableToBackend(localRows);
     toast.success('Urutan dan lebar kolom berhasil dirapikan sesuai standar Notion!');
   };
 
@@ -1979,6 +2074,10 @@ export function NotionDatabaseTable({
 
       copy[targetRowIndex] = targetRow;
 
+      // Auto-save perubahan sel langsung ke backend & parent
+      saveTableToBackend(copy);
+      onRowsChange?.(copy);
+
       // Keep Topic Discussion drawer in sync if open
       if (selectedRow) {
         const curSelectedTitle = getRowVal(selectedRow, 'Jenis kegiatan');
@@ -1989,12 +2088,6 @@ export function NotionDatabaseTable({
       }
 
       return copy;
-    });
-
-    setDirtyRowIndices(prev => {
-      const next = new Set(prev);
-      next.add(targetRowIndex);
-      return next;
     });
   };
 
@@ -2406,16 +2499,8 @@ export function NotionDatabaseTable({
     const nextRows = [...localRows];
     nextRows[subRowIndex] = updatedRow;
     setLocalRows(nextRows);
-
-    const updatedDirty = new Set(dirtyRowIndices);
-    updatedDirty.add(subRowIndex);
-    setDirtyRowIndices(updatedDirty);
-
-    if (onRowsChange) onRowsChange(nextRows);
-    if (postId && onPostContentUpdate) {
-      const newMd = serializeMarkdownTable(headers, nextRows, beforeText, afterText);
-      onPostContentUpdate(newMd);
-    }
+    onRowsChange?.(nextRows);
+    saveTableToBackend(nextRows);
   };
 
   // Edit Row Handler
@@ -2673,9 +2758,11 @@ export function NotionDatabaseTable({
           const idx = localRows.indexOf(row);
           if (idx !== -1) next.delete(idx);
         });
+        if (next.size === 0) setIsSelectionModeActive(false);
         return next;
       });
     } else {
+      setIsSelectionModeActive(true);
       setSelectedRowIndices((prev) => {
         const next = new Set(prev);
         filteredRows.forEach((row) => {
@@ -2693,14 +2780,17 @@ export function NotionDatabaseTable({
       const next = new Set(prev);
       if (next.has(actualRowIndex)) {
         next.delete(actualRowIndex);
+        if (next.size === 0) setIsSelectionModeActive(false);
       } else {
         next.add(actualRowIndex);
+        setIsSelectionModeActive(true);
       }
       return next;
     });
   };
 
   const handleSelectAllInPage = () => {
+    setIsSelectionModeActive(true);
     const next = new Set<number>();
     localRows.forEach((_, i) => next.add(i));
     setSelectedRowIndices(next);
@@ -2708,6 +2798,7 @@ export function NotionDatabaseTable({
 
   const handleClearSelection = () => {
     setSelectedRowIndices(new Set());
+    setIsSelectionModeActive(false);
   };
 
   const handleDeleteSelectedRows = async () => {
@@ -2734,6 +2825,7 @@ export function NotionDatabaseTable({
         setSelectedRow(null);
       }
       setSelectedRowIndices(new Set());
+      setIsSelectionModeActive(false);
 
       await saveTableToBackend(reindexed);
       toast.success(isDeletingAll ? 'Semua topik berhasil dibersihkan!' : `${count} topik berhasil dihapus!`);
@@ -3876,21 +3968,7 @@ export function NotionDatabaseTable({
               </button>
             </NotionTooltip>
 
-            {/* 5. DIRECT SAVE BUTTON (Kondisional: Hanya muncul jika ada dirty changes) */}
-            {dirtyRowIndices.size > 0 && (
-              <NotionTooltip content={`Simpan Perubahan (${dirtyRowIndices.size} baris)`} position="bottom">
-                <button
-                  type="button"
-                  onClick={() => setShowSaveConfirmModal(true)}
-                  className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-all cursor-pointer shadow-sm animate-pulse flex items-center gap-1"
-                >
-                  <Save className="w-4 h-4" />
-                  <span className="text-[11px] font-bold font-mono px-1">{dirtyRowIndices.size}</span>
-                </button>
-              </NotionTooltip>
-            )}
-
-            {/* 6. THE 1 DEDICATED LOGO FOR FULL TOOLS (SlidersHorizontal) */}
+            {/* 5. THE 1 DEDICATED LOGO FOR FULL TOOLS (SlidersHorizontal) */}
             <div className="relative notion-fulltools-popover-container">
               <NotionTooltip content="Semua Tools & Pengaturan (Full Tools)" position="bottom">
                 <button
@@ -3965,6 +4043,39 @@ export function NotionDatabaseTable({
                           title="Perbesar"
                         >
                           <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Font Size Controller (Hanya Mengatur Ukuran Huruf Tanpa Mengubah Ukuran UI) */}
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-medium">Ukuran Huruf (Font Size)</span>
+                        <span className="text-[10px] text-slate-400">Hanya teks, tanpa mengubah ukuran UI</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setLabNoteFontSize((prev) => Math.max(10, prev - 1))}
+                          className="px-2 py-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer text-xs font-bold border border-slate-200 dark:border-slate-700"
+                          title="Perkecil Huruf (A-)"
+                        >
+                          A-
+                        </button>
+                        <span 
+                          onClick={() => setLabNoteFontSize(13)}
+                          className="font-mono text-xs font-bold min-w-[38px] text-center cursor-pointer hover:underline text-teal-600 dark:text-teal-400"
+                          title="Klik untuk Reset ke 13px"
+                        >
+                          {labNoteFontSize}px
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setLabNoteFontSize((prev) => Math.min(18, prev + 1))}
+                          className="px-2 py-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer text-xs font-bold border border-slate-200 dark:border-slate-700"
+                          title="Perbesar Huruf (A+)"
+                        >
+                          A+
                         </button>
                       </div>
                     </div>
@@ -4157,16 +4268,19 @@ export function NotionDatabaseTable({
               border-radius: 9999px;
               box-shadow: 0 1px 6px rgba(20, 184, 166, 0.5);
             }
-            .notion-floating-scroll-dark::-webkit-scrollbar-thumb:hover {
-              background: #2dd4bf;
-              box-shadow: 0 0 10px rgba(45, 212, 191, 0.75);
+            .notion-font-scope th,
+            .notion-font-scope td,
+            .notion-font-scope input,
+            .notion-font-scope textarea {
+              font-size: inherit;
             }
           `}</style>
           <table 
-            className={`w-full min-w-max text-left border-collapse ${
-              fitPageMode ? 'table-fixed text-[13px] leading-normal' : 'text-sm leading-relaxed'
+            className={`w-full min-w-max text-left border-collapse notion-font-scope ${
+              fitPageMode ? 'table-fixed leading-normal' : 'leading-relaxed'
             }`}
             style={{
+              fontSize: `${labNoteFontSize}px`,
               fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
               letterSpacing: '-0.005em'
             }}
@@ -4178,27 +4292,29 @@ export function NotionDatabaseTable({
                   isNotionLight ? 'border-[#e9e9e8]' : 'border-[#303030]'
                 }`}
               >
-                {/* Select All Checkbox Column */}
-                <th 
-                  className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r ${
-                    isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
-                  } ${fitPageMode ? 'w-[3%] px-1.5 py-2.5' : 'w-10 px-2 py-3'}`}
-                >
-                  <div className="flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={isAllSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = isSomeSelected;
-                      }}
-                      onChange={handleToggleSelectAll}
-                      className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
-                        isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
-                      }`}
-                      title={isAllSelected ? "Batalkan pilihan semua" : "Pilih semua topik"}
-                    />
-                  </div>
-                </th>
+                {/* Select All Checkbox Column - Hanya Muncul Saat Mode Seleksi Aktif */}
+                {(isSelectionModeActive || selectedRowIndices.size > 0) && (
+                  <th 
+                    className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r ${
+                      isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
+                    } ${fitPageMode ? 'w-[3%] px-1.5 py-2.5' : 'w-10 px-2 py-3'}`}
+                  >
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isSomeSelected;
+                        }}
+                        onChange={handleToggleSelectAll}
+                        className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
+                          isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
+                        }`}
+                        title={isAllSelected ? "Batalkan pilihan semua" : "Pilih semua baris"}
+                      />
+                    </div>
+                  </th>
+                )}
                 {displayHeaders.map((colHeader) => {
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
@@ -4622,24 +4738,26 @@ export function NotionDatabaseTable({
                                     : 'var(--border-main, #334155)' 
                               }}
                             >
-                              {/* Checkbox Column */}
-                              <td 
-                                className={`text-center border-r ${
-                                  isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                } ${fitPageMode ? 'px-1.5 py-2.5' : 'px-2 py-3'}`} 
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <div className="flex items-center justify-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
-                                    className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
-                                      isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
-                                    }`}
-                                  />
-                                </div>
-                              </td>
+                              {/* Checkbox Column - Hanya Muncul Saat Mode Seleksi Aktif */}
+                              {(isSelectionModeActive || selectedRowIndices.size > 0) && (
+                                <td 
+                                  className={`text-center border-r ${
+                                    isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                  } ${fitPageMode ? 'px-1.5 py-2.5' : 'px-2 py-3'}`} 
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
+                                      className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
+                                        isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
+                                      }`}
+                                    />
+                                  </div>
+                                </td>
+                              )}
 
                               {displayHeaders.map((colName) => {
                                 const val = getRowVal(row, colName);
@@ -5344,6 +5462,29 @@ export function NotionDatabaseTable({
                                          type="button"
                                          onClick={(e) => {
                                            e.stopPropagation();
+                                           setIsSelectionModeActive(true);
+                                           setSelectedRowIndices(prev => {
+                                             const next = new Set(prev);
+                                             if (next.has(actualRowIndex)) {
+                                               next.delete(actualRowIndex);
+                                               if (next.size === 0) setIsSelectionModeActive(false);
+                                             } else {
+                                               next.add(actualRowIndex);
+                                             }
+                                             return next;
+                                           });
+                                           setActiveActionMenuRowIndex(null);
+                                         }}
+                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium transition-colors cursor-pointer"
+                                         title="Pilih baris kegiatan ini (Select)"
+                                       >
+                                         <CheckSquare className="w-3.5 h-3.5 shrink-0 text-teal-500" />
+                                         <span>{selectedRowIndices.has(actualRowIndex) ? 'Batal Pilih Baris' : 'Pilih Baris (Select)'}</span>
+                                       </button>
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
                                            handleOpenEditModal(row, actualRowIndex, e);
                                            setActiveActionMenuRowIndex(null);
                                          }}
@@ -5415,7 +5556,9 @@ export function NotionDatabaseTable({
                                       : 'hover:bg-slate-800/30 bg-transparent border-[#2d2d2d]'
                                   }`}
                                 >
-                                  <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                  {(isSelectionModeActive || selectedRowIndices.size > 0) && (
+                                    <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                  )}
                                   <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
                                   <td colSpan={displayHeaders.length + 1} className="px-4 py-2">
                                     {creatingSubItemForParent === parentIndex ? (
@@ -5621,53 +5764,6 @@ export function NotionDatabaseTable({
             </div>
           )}
 
-          {/* Floating Save Action Bar when there are direct unsaved edits */}
-          {dirtyRowIndices.size > 0 && (
-            <div 
-              className="sticky bottom-3 z-40 mx-4 my-2 p-3 px-4 rounded-2xl border shadow-2xl backdrop-blur-md flex items-center justify-between gap-4 animate-in slide-in-from-bottom-2 duration-200"
-              style={{
-                backgroundColor: 'rgba(24, 24, 27, 0.95)',
-                borderColor: '#14b8a6',
-                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5)'
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-                </span>
-                <div>
-                  <p className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-                    <span>Terdapat {dirtyRowIndices.size} baris data diubah langsung di tabel</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-500/20 text-amber-300 font-mono">
-                      Belum Tersimpan
-                    </span>
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    Klik Simpan Perubahan untuk mengupdate isi dokumen Labnote secara permanen.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleDiscardDirectChanges}
-                  className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-rose-300 hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  Batalkan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSaveConfirmModal(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-900/50 active:scale-95 transition-all cursor-pointer"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Simpan Perubahan</span>
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
