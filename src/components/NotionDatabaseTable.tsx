@@ -51,7 +51,10 @@ import {
   ChevronLeft,
   CheckSquare,
   CalendarDays,
-  MoreVertical
+  MoreVertical,
+  MoreHorizontal,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -608,6 +611,32 @@ interface NotionDatabaseTableProps {
   onNavigateToPost?: (post: any) => void;
 }
 
+/**
+ * Compact Notion-style hover tooltip helper
+ */
+function NotionTooltip({ 
+  children, 
+  content, 
+  position = 'top' 
+}: { 
+  children: React.ReactNode; 
+  content: string; 
+  position?: 'top' | 'bottom';
+}) {
+  return (
+    <div className="relative group/tooltip inline-flex items-center justify-center">
+      {children}
+      <div 
+        className={`pointer-events-none absolute ${
+          position === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+        } left-1/2 -translate-x-1/2 z-50 opacity-0 group-hover/tooltip:opacity-100 transition-all duration-150 transform scale-95 group-hover/tooltip:scale-100 px-2 py-1 bg-[#191919] text-white text-[11px] font-medium rounded-md shadow-xl whitespace-nowrap border border-neutral-700/60 backdrop-blur-xs select-none`}
+      >
+        {content}
+      </div>
+    </div>
+  );
+}
+
 export function NotionDatabaseTable({
   postId,
   headers,
@@ -705,29 +734,7 @@ export function NotionDatabaseTable({
     }
   };
 
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.group\\/pic') && !target.closest('.notion-pic-popover')) {
-        setActiveInlinePicCell(null);
-      }
-      if (!target.closest('.notion-row-action-menu-container')) {
-        setActiveActionMenuRowIndex(null);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setActiveActionMenuRowIndex(null);
-        setActiveModalSelection(null);
-      }
-    };
-    window.addEventListener('click', handleOutsideClick);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('click', handleOutsideClick);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
+
 
   useEffect(() => {
     if (rows) {
@@ -790,6 +797,52 @@ export function NotionDatabaseTable({
   const [selectedRow, setSelectedRow] = useState<TableRowData | null>(null);
   const [selectedRowIndices, setSelectedRowIndices] = useState<Set<number>>(new Set());
   const [modalTab, setModalTab] = useState<'details' | 'comments'>('details');
+
+  // Notion Minimalist Header Toolbar Popovers
+  const [isSearchInputOpen, setIsSearchInputOpen] = useState(false);
+  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
+  const [isSortPopoverOpen, setIsSortPopoverOpen] = useState(false);
+  const [isFullToolsPopoverOpen, setIsFullToolsPopoverOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.group\\/pic') && !target.closest('.notion-pic-popover')) {
+        setActiveInlinePicCell(null);
+      }
+      if (!target.closest('.notion-row-action-menu-container')) {
+        setActiveActionMenuRowIndex(null);
+      }
+      if (!target.closest('.notion-filter-popover-container')) {
+        setIsFilterPopoverOpen(false);
+      }
+      if (!target.closest('.notion-sort-popover-container')) {
+        setIsSortPopoverOpen(false);
+      }
+      if (!target.closest('.notion-fulltools-popover-container')) {
+        setIsFullToolsPopoverOpen(false);
+      }
+      if (!target.closest('.notion-search-container') && !searchQuery) {
+        setIsSearchInputOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveActionMenuRowIndex(null);
+        setActiveModalSelection(null);
+        setIsFilterPopoverOpen(false);
+        setIsSortPopoverOpen(false);
+        setIsFullToolsPopoverOpen(false);
+        if (!searchQuery) setIsSearchInputOpen(false);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [searchQuery]);
 
   // Notion Aesthetic Theme Mode (Default to Notion Clean Light per Management Request)
   const [themeMode, setThemeMode] = useState<'notion-light' | 'dark-studio'>('notion-light');
@@ -3432,347 +3485,609 @@ export function NotionDatabaseTable({
       }}
     >
       {/* ========================================================================= */}
-      {/* NOTION TOP CONTROLS & HEADER GROUP (Breadcrumbs, Toolbar, Filter)         */}
+      {/* NOTION MINIMALIST DATABASE HEADER (Icon-First with Smart Hover Tooltips)  */}
       {/* ========================================================================= */}
       <div 
-        className={`sticky top-0 md:top-12 z-30 transition-all border-b shadow-md backdrop-blur-md ${
-          isNotionLight ? 'bg-white/98 border-[#e9e9e8]' : 'bg-[#181818]/98 border-[#2d2d2d]'
+        className={`sticky top-0 md:top-12 z-30 transition-all border-b shadow-xs backdrop-blur-md ${
+          isNotionLight ? 'bg-white/95 border-[#e9e9e8]' : 'bg-[#191919]/95 border-[#2d2d2d]'
         }`}
       >
-        {/* Top Header Bar */}
-      <div 
-        className={`p-3.5 sm:p-4 border-b flex flex-wrap items-center justify-between gap-3 ${
-          isNotionLight ? 'bg-[#fafafa] border-[#e9e9e8]' : 'bg-[#202020] border-[#2d2d2d]'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-xl shadow-xs ${isNotionLight ? 'bg-slate-100 border border-slate-300 text-slate-800' : 'bg-teal-500/15 border border-teal-500/40 text-teal-400'}`}>
-            <ClipboardList className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className={`font-bold text-sm md:text-base flex items-center gap-2 ${isNotionLight ? 'text-slate-900' : 'text-slate-100'}`}>
-              <span>{title || 'Database Table'}</span>
-              <span 
-                className={`text-[10px] px-2 py-0.5 rounded-full font-mono border font-bold ${
-                  isNotionLight ? 'bg-slate-200 border-slate-300 text-slate-700' : 'bg-slate-800 border-slate-700 text-slate-300'
-                }`}
-              >
-                {filteredRows.length} baris
-              </span>
-            </h3>
-            <p className={`text-[11px] ${isNotionLight ? 'text-slate-500 font-medium' : 'text-slate-400'}`}>
-              Urutan kolom sinkron Notion: Number • Jenis kegiatan • Keterangan • Progress • Status • Created Time • PIC • Prioritas
-            </p>
-          </div>
-        </div>
-
-        {/* View Switcher, Add Row Button, Zoom & Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Theme Switcher Toggle (Notion Clean vs Dark Studio) */}
-          <button
-            type="button"
-            onClick={() => setThemeMode(isNotionLight ? 'dark-studio' : 'notion-light')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs ${
-              isNotionLight
-                ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800'
-                : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200'
-            }`}
-            title="Beralih tema tampilan (Notion Minimalis Putih vs Dark Studio)"
-          >
-            {isNotionLight ? <span>⚪ Notion Mode</span> : <span>⚫ Dark Mode</span>}
-          </button>
-
-          {/* Direct Save Button in Header */}
-          {dirtyRowIndices.size > 0 && (
-            <button
-              onClick={() => setShowSaveConfirmModal(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-teal-950/60 animate-pulse active:scale-95 transition-all cursor-pointer"
-              title="Simpan perubahan tabel langsung"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Simpan Perubahan ({dirtyRowIndices.size})</span>
-            </button>
-          )}
-
-          {/* Add Row Button */}
-          <button
-            onClick={handleOpenAddModal}
-            className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Data Kegiatan</span>
-          </button>
-
-          {/* Fit Page Mode Toggle */}
-          <button
-            onClick={() => setFitPageMode(!fitPageMode)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-xs ${
-              fitPageMode
-                ? 'bg-teal-50 border-teal-500 text-teal-800'
-                : isNotionLight
-                ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                : 'bg-[#242424] border-slate-700 text-slate-300'
-            }`}
-            title={fitPageMode ? "Matikan Fit Screen (Mode Scroll Lebar)" : "Aktifkan Fit Screen (Semua Kolom Muat 1 Layar Tanpa Horizontal Scroll)"}
-          >
-            {fitPageMode ? <Minimize2 className="w-3.5 h-3.5 text-teal-600" /> : <Maximize2 className="w-3.5 h-3.5 opacity-70" />}
-            <span className="hidden sm:inline">{fitPageMode ? "Fit Screen: ON" : "Fit Screen"}</span>
-          </button>
-
-          {/* Zoom Out / In Controls */}
-          <div 
-            className={`flex items-center p-0.5 rounded-xl border text-xs ${
-              isNotionLight ? 'bg-white border-slate-300 text-slate-700' : 'bg-[#151515] border-slate-700 text-slate-300'
-            }`}
-          >
-            <button
-              onClick={() => setZoomPercent((prev) => Math.max(70, prev - 10))}
-              className="p-1 px-1.5 opacity-70 hover:opacity-100 rounded-lg transition-opacity cursor-pointer"
-              title="Zoom Out (Perkecil Tampilan)"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span 
-              onClick={() => setZoomPercent(100)}
-              className="px-1.5 font-mono text-[11px] text-teal-600 dark:text-teal-400 font-bold min-w-[38px] text-center cursor-pointer hover:underline"
-              title="Klik untuk Reset ke 100%"
-            >
-              {zoomPercent}%
-            </span>
-            <button
-              onClick={() => setZoomPercent((prev) => Math.min(130, prev + 10))}
-              className="p-1 px-1.5 opacity-70 hover:opacity-100 rounded-lg transition-opacity cursor-pointer"
-              title="Zoom In (Perbesar Tampilan)"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div 
-            className={`flex items-center p-0.5 rounded-xl border transition-colors ${
-              isNotionLight ? 'bg-slate-100 border-slate-300' : 'bg-[#151515] border-[#334155]'
-            }`}
-          >
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                viewMode === 'table'
-                  ? isNotionLight
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'bg-[#282828] text-teal-400 shadow-xs'
-                  : isNotionLight
-                  ? 'text-slate-500 hover:text-slate-800'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Table View"
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Table</span>
-            </button>
-            <button
-              onClick={() => setViewMode('board')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                viewMode === 'board'
-                  ? isNotionLight
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'bg-[#282828] text-teal-400 shadow-xs'
-                  : isNotionLight
-                  ? 'text-slate-500 hover:text-slate-800'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Kanban Board View"
-            >
-              <Kanban className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Board</span>
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                viewMode === 'list'
-                  ? isNotionLight
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'bg-[#282828] text-teal-400 shadow-xs'
-                  : isNotionLight
-                  ? 'text-slate-500 hover:text-slate-800'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="List / Card View"
-            >
-              <LayoutList className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Cards</span>
-            </button>
-          </div>
-
-          <button
-            onClick={handleExportCsv}
-            className={`p-1.5 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer ${
-              isNotionLight
-                ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
-                : 'bg-[#282828] hover:bg-[#333333] border-[#334155] text-slate-200'
-            }`}
-            title="Download CSV"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Export</span>
-          </button>
-
-          <button
-            onClick={handleMigrateChecklistsToSubItems}
-            className={`p-1.5 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer ${
-              isNotionLight
-                ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900'
-                : 'bg-amber-950/40 hover:bg-amber-900/60 border-amber-700/60 text-amber-200'
-            }`}
-            title="Pindahkan checklist di Keterangan ke model sub-kegiatan baru"
-          >
-            <CornerDownRight className="w-3.5 h-3.5 text-amber-600" />
-            <span className="hidden md:inline">Migrasi Subtask</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Filter & Search Bar */}
-      <div 
-        className={`p-3 border-b flex flex-wrap items-center justify-between gap-3 text-xs transition-colors ${
-          isNotionLight ? 'bg-white border-slate-200' : 'bg-[#1e1e1e] border-[#2d2d2d]'
-        }`}
-      >
-        {/* Search Input */}
-        <div 
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border w-full sm:w-72 transition-colors ${
-            isNotionLight ? 'bg-[#fbfbfa] border-slate-200 text-slate-800' : 'bg-[#161616] border-[#334155] text-slate-200'
-          }`}
-        >
-          <Search className="w-3.5 h-3.5 opacity-60 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Cari kegiatan, PIC, keterangan..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={`bg-transparent border-none outline-none text-xs w-full ${
-              isNotionLight ? 'text-slate-800 placeholder-slate-400' : 'text-slate-200 placeholder-slate-500'
-            }`}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="opacity-60 hover:opacity-100 text-slate-400">
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
-
-        {/* Quick Filter Pills & Bulk Selection Actions */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-          {localRows.length > 0 && (
-            <button
-              type="button"
-              onClick={handleToggleSelectAll}
-              className={`px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border cursor-pointer ${
-                isAllSelected
-                  ? isNotionLight
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                    : 'bg-teal-600/20 text-teal-400 border-teal-500/40 shadow-xs'
-                  : isNotionLight
-                  ? 'bg-white hover:bg-slate-100 text-slate-600 border-slate-300'
-                  : 'hover:bg-slate-800 text-slate-300 border-slate-700'
-              }`}
-              title={isAllSelected ? "Batalkan pilihan semua topik" : "Pilih semua topik di tabel ini"}
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-              <span>{isAllSelected ? 'Batal Pilih Semua' : 'Pilih Semua'}</span>
-              {selectedRowIndices.size > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                  isNotionLight ? 'bg-slate-200 text-slate-800' : 'bg-teal-500/30 text-teal-300'
-                }`}>
-                  {selectedRowIndices.size}
+        {/* Main Clean Row: Left (Title & View Tabs) | Right (Essential Icon Tools, Full Tools Logo, + New) */}
+        <div className="px-3 py-2 flex flex-wrap items-center justify-between gap-2.5">
+          {/* Left Anchor: Database Title & View Tabs */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-base select-none">📋</span>
+              <h3 className={`font-semibold text-sm flex items-center gap-1.5 ${isNotionLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                <span>{title || 'Database Table'}</span>
+                <span 
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono border font-semibold ${
+                    isNotionLight ? 'bg-slate-100 border-slate-200 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  {filteredRows.length}
                 </span>
-              )}
-            </button>
-          )}
+              </h3>
+            </div>
 
-          {selectedRowIndices.size > 0 && (
-            <button
-              type="button"
-              onClick={handleDeleteSelectedRows}
-              className="px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border border-red-500/40 bg-red-600/20 hover:bg-red-600/30 text-red-400 dark:text-red-300 cursor-pointer shadow-xs active:scale-95"
-              title="Hapus semua topik yang dipilih"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-red-500" />
-              <span>Hapus Terpilih ({selectedRowIndices.size})</span>
-            </button>
-          )}
+            {/* Notion View Switcher Tabs */}
+            <div className={`flex items-center p-0.5 rounded-lg border transition-colors ${
+              isNotionLight ? 'bg-[#f7f7f5] border-[#e9e9e8]' : 'bg-[#151515] border-[#2d2d2d]'
+            }`}>
+              <NotionTooltip content="Tampilan Tabel" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                    viewMode === 'table'
+                      ? isNotionLight
+                        ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                        : 'bg-[#262626] text-teal-400 shadow-2xs font-semibold'
+                      : isNotionLight
+                      ? 'text-slate-500 hover:text-slate-800'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <TableIcon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Table</span>
+                </button>
+              </NotionTooltip>
 
-          {[
-            { key: 'ALL', label: 'Semua Status', count: stats.total },
-            { key: 'ACTIVE', label: 'Sedang Aktif', count: stats.total - stats.closed - stats.canceled },
-            { key: 'ON PROGRESS', label: 'On Progress', count: stats.onProgress },
-            { key: 'OPEN', label: 'Open', count: stats.open },
-            { key: 'CLOSE', label: 'Closed / Selesai', count: stats.closed },
-            { key: 'CANCELED', label: 'Canceled', count: stats.canceled },
-          ].map((st) => {
-            const isActive = statusFilter === st.key;
-            return (
-              <button
-                key={st.key}
-                onClick={() => setStatusFilter(st.key)}
-                className={`px-3 py-1 rounded-lg font-semibold text-[11px] transition-all flex-shrink-0 flex items-center gap-1.5 border cursor-pointer ${
-                  isActive
-                    ? isNotionLight
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                      : 'bg-teal-500/20 text-teal-300 border-teal-500'
-                    : isNotionLight
-                    ? 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                    : 'bg-[#262626] hover:bg-[#333333] text-slate-400 border-slate-700'
-                }`}
-              >
-                <span>{st.label}</span>
-                {st.count !== undefined && st.count > 0 && (
-                  <span 
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                      isActive
-                        ? isNotionLight ? 'bg-slate-700 text-white' : 'bg-teal-500/30 text-teal-200'
-                        : isNotionLight ? 'bg-slate-100 text-slate-600' : 'bg-[#1e293b] text-slate-400'
+              <NotionTooltip content="Tampilan Kanban Board" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('board')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                    viewMode === 'board'
+                      ? isNotionLight
+                        ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                        : 'bg-[#262626] text-teal-400 shadow-2xs font-semibold'
+                      : isNotionLight
+                      ? 'text-slate-500 hover:text-slate-800'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Kanban className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Board</span>
+                </button>
+              </NotionTooltip>
+
+              <NotionTooltip content="Tampilan Kartu" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                    viewMode === 'list'
+                      ? isNotionLight
+                        ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                        : 'bg-[#262626] text-teal-400 shadow-2xs font-semibold'
+                      : isNotionLight
+                      ? 'text-slate-500 hover:text-slate-800'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <LayoutList className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Cards</span>
+                </button>
+              </NotionTooltip>
+            </div>
+          </div>
+
+          {/* Right Anchor: Essential Tools Icons + Dedicated Full Tools Logo + + New Button */}
+          <div className="flex items-center gap-1 relative">
+            {/* 1. SEARCH TOOL (Expandable inline input or icon button) */}
+            <div className="relative notion-search-container">
+              {isSearchInputOpen || searchQuery ? (
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all w-48 sm:w-60 shadow-2xs ${
+                  isNotionLight ? 'bg-white border-teal-500/60 ring-1 ring-teal-500/20' : 'bg-[#202020] border-teal-500/60 ring-1 ring-teal-500/20'
+                }`}>
+                  <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Cari kegiatan, PIC..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-transparent border-none outline-none text-xs w-full text-slate-800 dark:text-slate-200 placeholder-slate-400"
+                  />
+                  {searchQuery ? (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setIsSearchInputOpen(false);
+                      }} 
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  ) : (
+                    <button 
+                      type="button"
+                      onClick={() => setIsSearchInputOpen(false)} 
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <NotionTooltip content="Cari Data Kegiatan (Search)" position="bottom">
+                  <button
+                    type="button"
+                    onClick={() => setIsSearchInputOpen(true)}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      isNotionLight 
+                        ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]' 
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                     }`}
                   >
-                    {st.count}
-                  </span>
-                )}
+                    <Search className="w-4 h-4" />
+                  </button>
+                </NotionTooltip>
+              )}
+            </div>
+
+            {/* 2. FILTER TOOL (Popover with active indicator dot) */}
+            <div className="relative notion-filter-popover-container">
+              <NotionTooltip content="Filter Status & Prioritas" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFilterPopoverOpen(!isFilterPopoverOpen);
+                    setIsSortPopoverOpen(false);
+                    setIsFullToolsPopoverOpen(false);
+                  }}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
+                    statusFilter !== 'ALL' || priorityFilter !== 'ALL'
+                      ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50'
+                      : isNotionLight
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <Filter className="w-4 h-4" />
+                  {(statusFilter !== 'ALL' || priorityFilter !== 'ALL') && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+                  )}
+                </button>
+              </NotionTooltip>
+
+              {/* Filter Popover Content */}
+              {isFilterPopoverOpen && (
+                <div 
+                  className={`absolute right-0 top-full mt-1.5 w-72 rounded-xl shadow-2xl border p-3 z-50 transition-all text-left ${
+                    isNotionLight ? 'bg-white border-[#e9e9e8] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
+                  }`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold flex items-center gap-1.5">
+                      <Filter className="w-3.5 h-3.5 text-teal-500" />
+                      Filter Kegiatan
+                    </span>
+                    {(statusFilter !== 'ALL' || priorityFilter !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter('ALL');
+                          setPriorityFilter('ALL');
+                        }}
+                        className="text-[10px] text-rose-500 hover:underline font-semibold cursor-pointer"
+                      >
+                        Reset Filter
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Status Options */}
+                  <div className="space-y-1 mb-3">
+                    <label className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status Kegiatan</label>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { key: 'ALL', label: 'Semua', count: stats.total },
+                        { key: 'ACTIVE', label: 'Aktif', count: stats.total - stats.closed - stats.canceled },
+                        { key: 'ON PROGRESS', label: 'On Progress', count: stats.onProgress },
+                        { key: 'OPEN', label: 'Open', count: stats.open },
+                        { key: 'CLOSE', label: 'Selesai', count: stats.closed },
+                        { key: 'CANCELED', label: 'Batal', count: stats.canceled },
+                      ].map((st) => {
+                        const isActive = statusFilter === st.key;
+                        return (
+                          <button
+                            key={st.key}
+                            type="button"
+                            onClick={() => setStatusFilter(st.key)}
+                            className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
+                              isActive
+                                ? 'bg-slate-900 text-white border-slate-900 dark:bg-teal-600 dark:border-teal-500'
+                                : isNotionLight
+                                ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
+                            }`}
+                          >
+                            <span>{st.label}</span>
+                            <span className="text-[10px] opacity-75 font-mono">({st.count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Priority Options */}
+                  <div className="space-y-1">
+                    <label className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tingkat Prioritas</label>
+                    <select
+                      value={priorityFilter}
+                      onChange={(e) => setPriorityFilter(e.target.value)}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-medium outline-none cursor-pointer ${
+                        isNotionLight ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-[#282828] border-slate-700 text-slate-200'
+                      }`}
+                    >
+                      <option value="ALL">Semua Prioritas</option>
+                      <option value="URGENT">🚨 Urgent / Critical</option>
+                      <option value="HIGH">🔴 High Priority</option>
+                      <option value="MEDIUM">🔵 Medium Priority</option>
+                      <option value="NORMAL">🟢 Normal Priority</option>
+                      <option value="LOW">⚪ Low Priority</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. SORT TOOL (Popover with active indicator) */}
+            <div className="relative notion-sort-popover-container">
+              <NotionTooltip content="Urutkan Kolom (Sort)" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSortPopoverOpen(!isSortPopoverOpen);
+                    setIsFilterPopoverOpen(false);
+                    setIsFullToolsPopoverOpen(false);
+                  }}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
+                    sortColumn
+                      ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50'
+                      : isNotionLight
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <ArrowUpDown className="w-4 h-4" />
+                  {sortColumn && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-teal-500" />
+                  )}
+                </button>
+              </NotionTooltip>
+
+              {/* Sort Popover Content */}
+              {isSortPopoverOpen && (
+                <div 
+                  className={`absolute right-0 top-full mt-1.5 w-64 rounded-xl shadow-2xl border p-3 z-50 transition-all text-left ${
+                    isNotionLight ? 'bg-white border-[#e9e9e8] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
+                  }`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold flex items-center gap-1.5">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-teal-500" />
+                      Urutkan Data
+                    </span>
+                    {sortColumn && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSortColumn(null);
+                          setSortDirection('asc');
+                        }}
+                        className="text-[10px] text-rose-500 hover:underline font-semibold cursor-pointer"
+                      >
+                        Reset Sort
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-1 mb-2.5">
+                    <label className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Pilih Kolom</label>
+                    {[
+                      { key: 'Tanggal Selesai', label: '📅 Tanggal Selesai' },
+                      { key: 'Status', label: '⭕ Status' },
+                      { key: 'Priority', label: '⚡ Prioritas' },
+                      { key: 'Jenis kegiatan', label: '📝 Jenis Kegiatan' },
+                      { key: 'Number', label: '# Nomor Baris' },
+                    ].map((col) => {
+                      const isSelected = sortColumn === col.key;
+                      return (
+                        <button
+                          key={col.key}
+                          type="button"
+                          onClick={() => {
+                            if (sortColumn === col.key) {
+                              setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setSortColumn(col.key);
+                              setSortDirection('asc');
+                            }
+                          }}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium text-left flex items-center justify-between transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 font-bold'
+                              : isNotionLight
+                              ? 'hover:bg-slate-100 text-slate-700'
+                              : 'hover:bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          <span>{col.label}</span>
+                          {isSelected && (
+                            <span className="text-[11px] font-mono">
+                              {sortDirection === 'asc' ? '↑ Asc' : '↓ Desc'}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {sortColumn && (
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setSortDirection('asc')}
+                        className={`flex-1 py-1 rounded text-[11px] font-medium border text-center transition-colors cursor-pointer ${
+                          sortDirection === 'asc'
+                            ? 'bg-slate-900 text-white dark:bg-teal-600'
+                            : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        ↑ Naik (A-Z)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSortDirection('desc')}
+                        className={`flex-1 py-1 rounded text-[11px] font-medium border text-center transition-colors cursor-pointer ${
+                          sortDirection === 'desc'
+                            ? 'bg-slate-900 text-white dark:bg-teal-600'
+                            : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        ↓ Turun (Z-A)
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 4. FIT SCREEN TOGGLE (Icon Only) */}
+            <NotionTooltip content={fitPageMode ? "Matikan Fit Screen (Mode Scroll Lebar)" : "Fit Screen (Semua Kolom Muat 1 Layar)"} position="bottom">
+              <button
+                type="button"
+                onClick={() => setFitPageMode(!fitPageMode)}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  fitPageMode
+                    ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50'
+                    : isNotionLight
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                {fitPageMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
-            );
-          })}
+            </NotionTooltip>
 
-          <select
-            value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
-            className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold outline-none cursor-pointer transition-colors ${
-              isNotionLight
-                ? 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'
-                : 'bg-[#262626] border-[#334155] text-[#cbd5e1]'
-            }`}
-          >
-            <option value="ALL">Semua Prioritas</option>
-            <option value="URGENT">🚨 Urgent / Critical</option>
-            <option value="HIGH">🔴 High Priority</option>
-            <option value="MEDIUM">🔵 Medium Priority</option>
-            <option value="NORMAL">🟢 Normal Priority</option>
-            <option value="LOW">⚪ Low Priority</option>
-          </select>
+            {/* 5. DIRECT SAVE BUTTON (Kondisional: Hanya muncul jika ada dirty changes) */}
+            {dirtyRowIndices.size > 0 && (
+              <NotionTooltip content={`Simpan Perubahan (${dirtyRowIndices.size} baris)`} position="bottom">
+                <button
+                  type="button"
+                  onClick={() => setShowSaveConfirmModal(true)}
+                  className="p-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-all cursor-pointer shadow-sm animate-pulse flex items-center gap-1"
+                >
+                  <Save className="w-4 h-4" />
+                  <span className="text-[11px] font-bold font-mono px-1">{dirtyRowIndices.size}</span>
+                </button>
+              </NotionTooltip>
+            )}
 
-          {/* Quick Action: Reset & Organize Column Order to Notion Canonical */}
-          <button
-            type="button"
-            onClick={handleResetColumnOrder}
-            title="Susun ulang kolom ke urutan standar Notion (No, Judul, Keterangan, PIC, Status, dll.)"
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
-              isNotionLight
-                ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700 hover:border-slate-400'
-                : 'bg-[#262626] hover:bg-[#333333] border-[#334155] text-slate-400 hover:text-teal-400 hover:border-teal-500'
-            }`}
-          >
-            <SlidersHorizontal className="w-3 h-3 text-teal-600 dark:text-teal-400" />
-            <span>Rapikan Kolom</span>
-          </button>
+            {/* 6. THE 1 DEDICATED LOGO FOR FULL TOOLS (SlidersHorizontal) */}
+            <div className="relative notion-fulltools-popover-container">
+              <NotionTooltip content="Semua Tools & Pengaturan (Full Tools)" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFullToolsPopoverOpen(!isFullToolsPopoverOpen);
+                    setIsFilterPopoverOpen(false);
+                    setIsSortPopoverOpen(false);
+                  }}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    isFullToolsPopoverOpen
+                      ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50'
+                      : isNotionLight
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                </button>
+              </NotionTooltip>
+
+              {/* Full Tools Menu Popover */}
+              {isFullToolsPopoverOpen && (
+                <div 
+                  className={`absolute right-0 top-full mt-1.5 w-80 rounded-2xl shadow-2xl border p-3.5 z-50 transition-all text-left space-y-3.5 ${
+                    isNotionLight ? 'bg-white border-[#e9e9e8] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
+                  }`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Popover Header */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-teal-500" />
+                      Semua Tools & Pengaturan
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsFullToolsPopoverOpen(false)}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Section 1: Tampilan & Tata Letak */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tampilan & Tata Letak</span>
+                    
+                    {/* Zoom Controller */}
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
+                      <span className="text-xs font-medium">Skala Tampilan (Zoom)</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setZoomPercent((prev) => Math.max(70, prev - 10))}
+                          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                          title="Perkecil"
+                        >
+                          <ZoomOut className="w-3.5 h-3.5" />
+                        </button>
+                        <span 
+                          onClick={() => setZoomPercent(100)}
+                          className="font-mono text-xs font-bold min-w-[40px] text-center cursor-pointer hover:underline text-teal-600 dark:text-teal-400"
+                          title="Klik untuk Reset ke 100%"
+                        >
+                          {zoomPercent}%
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setZoomPercent((prev) => Math.min(130, prev + 10))}
+                          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                          title="Perbesar"
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Rapikan Kolom Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleResetColumnOrder();
+                        setIsFullToolsPopoverOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 hover:border-teal-500/60 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-teal-500" />
+                        <span>Rapikan Kolom ke Standar Notion</span>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
+
+                    {/* Theme Switcher Button */}
+                    <button
+                      type="button"
+                      onClick={() => setThemeMode(isNotionLight ? 'dark-studio' : 'notion-light')}
+                      className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 hover:border-teal-500/60 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        {isNotionLight ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : <Moon className="w-3.5 h-3.5 text-indigo-400" />}
+                        <span>Tema Tampilan</span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        {isNotionLight ? '⚪ Notion Light' : '⚫ Dark Studio'}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Section 2: Data & Aksi Tabel */}
+                  <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Data & Manajemen</span>
+
+                    {/* Export CSV */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleExportCsv();
+                        setIsFullToolsPopoverOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 hover:border-teal-500/60 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Download className="w-3.5 h-3.5 text-teal-500" />
+                        <span>Ekspor Data ke File CSV</span>
+                      </div>
+                      <span className="text-[10.5px] text-slate-400">.csv</span>
+                    </button>
+
+                    {/* Migrasi Subtask */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleMigrateChecklistsToSubItems();
+                        setIsFullToolsPopoverOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between p-2 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/60 hover:border-amber-500 text-xs font-medium text-amber-900 dark:text-amber-200 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CornerDownRight className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Migrasi Checklist Subtask</span>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-amber-500" />
+                    </button>
+
+                    {/* Multiple Selection Actions */}
+                    {localRows.length > 0 && (
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleToggleSelectAll}
+                          className={`flex-1 py-1.5 px-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            isAllSelected
+                              ? 'bg-slate-900 text-white border-slate-900 dark:bg-teal-600'
+                              : isNotionLight
+                              ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                              : 'bg-[#282828] hover:bg-[#333333] border-slate-700 text-slate-300'
+                          }`}
+                        >
+                          <CheckSquare className="w-3.5 h-3.5" />
+                          <span>{isAllSelected ? 'Batal Pilih' : 'Pilih Semua'}</span>
+                        </button>
+
+                        {selectedRowIndices.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleDeleteSelectedRows();
+                              setIsFullToolsPopoverOpen(false);
+                            }}
+                            className="py-1.5 px-2.5 rounded-xl border border-red-500/40 bg-red-600/15 hover:bg-red-600/25 text-red-500 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Hapus ({selectedRowIndices.size})</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 7. PRIMARY "+ New" BUTTON ALA NOTION */}
+            <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New</span>
+              </button>
+            </NotionTooltip>
+          </div>
         </div>
-      </div>
       </div>
 
       {/* ========================================================================= */}
