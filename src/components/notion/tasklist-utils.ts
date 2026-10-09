@@ -49,10 +49,38 @@ export function parseTasklist(text?: string | null): TasklistProgress {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    const match = trimmed.match(/^[-*]?\s*\[([ xX])\]\s*(.+)$/);
-    if (match) {
-      const isChecked = match[1].toLowerCase() === 'x';
-      let rawContent = match[2].trim();
+    // First try standard markdown tasklist: - [x] or - [ ] or [x] or [ ]
+    let match = trimmed.match(/^[-*•]?\s*\[([ xX])\]\s*(.+)$/);
+    let isLegacyMatch = false;
+    let isCheckedLegacy = false;
+    let legacyText = '';
+
+    if (!match) {
+      // Check unicode checkbox: ☑ or ☐
+      const uniMatch = trimmed.match(/^[-*•]?\s*([☑☐])\s*(.+)$/);
+      if (uniMatch) {
+        match = [uniMatch[0], uniMatch[1] === '☑' ? 'x' : ' ', uniMatch[2]];
+      }
+    }
+
+    if (!match) {
+      // Check legacy subtask tags: - Kegiatan **(Done)** or • Kegiatan **(OPEN)** or (Done) / (OP)
+      const legacyDone = trimmed.match(/^[-*•]?\s*(.+?)\s*(?:\*\*\(?|\(?)(Done|Closed|Close|Finish|Selesai|CL)(?:\)?\*\*|\)?)\s*$/i);
+      const legacyOpen = trimmed.match(/^[-*•]?\s*(.+?)\s*(?:\*\*\(?|\(?)(Open|OP|Belum|In Progress|Pending)(?:\)?\*\*|\)?)\s*$/i);
+      if (legacyDone) {
+        isLegacyMatch = true;
+        isCheckedLegacy = true;
+        legacyText = legacyDone[1].replace(/^[-*•]\s*/, '').trim();
+      } else if (legacyOpen) {
+        isLegacyMatch = true;
+        isCheckedLegacy = false;
+        legacyText = legacyOpen[1].replace(/^[-*•]\s*/, '').trim();
+      }
+    }
+
+    if (match || isLegacyMatch) {
+      const isChecked = match ? match[1].toLowerCase() === 'x' : isCheckedLegacy;
+      let rawContent = match ? match[2].trim() : legacyText;
 
       // Extract notes JSON array if present: <!--notes:[...]-->
       let notes: SubtaskNote[] = [];
@@ -140,6 +168,42 @@ export function parseTasklist(text?: string | null): TasklistProgress {
     items,
     cleanText: nonTaskLines.join('\n')
   };
+}
+
+/**
+ * Migrates text containing legacy subtask tags like "- Task **(Done)**" into standard markdown checklists
+ */
+export function migrateLegacySubtaskText(text?: string | null): string {
+  if (!text || typeof text !== 'string') return '';
+  const delimiter = /<br\s*\/?>/i.test(text) ? '<br/>' : '\n';
+  const normalized = text.replace(/<br\s*\/?>/gi, '\n');
+  const lines = normalized.split(/\r?\n|•/);
+
+  const transformed = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+
+    // Check if already markdown checklist
+    if (/^[-*]?\s*\[([ xX])\]/.test(trimmed)) {
+      return trimmed.startsWith('-') ? trimmed : `- ${trimmed}`;
+    }
+
+    const legacyDone = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/i);
+    if (legacyDone) {
+      const itemTitle = legacyDone[1].replace(/^[-*•]\s*/, '').trim();
+      return `- [x] ${itemTitle}`;
+    }
+
+    const legacyOpen = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/i);
+    if (legacyOpen) {
+      const itemTitle = legacyOpen[1].replace(/^[-*•]\s*/, '').trim();
+      return `- [ ] ${itemTitle}`;
+    }
+
+    return trimmed;
+  });
+
+  return transformed.join(delimiter);
 }
 
 /**
@@ -525,6 +589,17 @@ export const NOTION_COLORS: Record<string, { label: string; textClass: string; h
   gray: { label: 'Abu-abu', textClass: 'text-slate-500', hex: '#64748b', bgClass: 'bg-slate-50', borderClass: 'border-slate-300' }
 };
 
+const COLOR_ALIASES: Record<string, string> = {
+  biru: 'blue',
+  hijau: 'green',
+  oranye: 'orange',
+  merah: 'red',
+  ungu: 'purple',
+  kuning: 'amber',
+  'abu-abu': 'gray',
+  abu: 'gray'
+};
+
 /**
  * Replaces Notion color tags like [blue]text[/blue] or [color:blue]text[/color] with styled HTML spans
  */
@@ -533,8 +608,9 @@ export function formatColorTagsToHtml(text?: string | null): string {
   let out = text;
 
   // Generic tag: [color:blue]...[/color] or [color:#hex]...[/color]
-  out = out.replace(/\[color:\s*([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]/gi, (_, colorKey, content) => {
-    const key = colorKey.toLowerCase();
+  out = out.replace(/\[color:\s*([#a-zA-Z0-9_-]+)\]([\s\S]*?)\[\/color\]/gi, (_, colorKey, content) => {
+    const rawKey = colorKey.toLowerCase();
+    const key = COLOR_ALIASES[rawKey] || rawKey;
     const hex = NOTION_COLORS[key]?.hex || colorKey;
     return `<span style="color: ${hex}; font-weight: 600;">${content}</span>`;
   });
@@ -546,6 +622,15 @@ export function formatColorTagsToHtml(text?: string | null): string {
     out = out.replace(regex, `<span style="color: ${conf.hex}; font-weight: 600;">$1</span>`);
   }
 
+  // Indonesian shorthand aliases: [biru]...[/biru], [merah]...[/merah], etc.
+  for (const [idKey, enKey] of Object.entries(COLOR_ALIASES)) {
+    const conf = NOTION_COLORS[enKey];
+    if (conf) {
+      const regex = new RegExp(`\\[${idKey}\\]([\\s\\S]*?)\\[\\/${idKey}\\]`, 'gi');
+      out = out.replace(regex, `<span style="color: ${conf.hex}; font-weight: 600;">$1</span>`);
+    }
+  }
+
   return out;
 }
 
@@ -554,9 +639,13 @@ export function formatColorTagsToHtml(text?: string | null): string {
  */
 export function stripColorTags(text?: string | null): string {
   if (!text || typeof text !== 'string') return '';
-  let out = text.replace(/\[color:\s*([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]/gi, '$2');
+  let out = text.replace(/\[color:\s*([#a-zA-Z0-9_-]+)\]([\s\S]*?)\[\/color\]/gi, '$2');
   for (const key of Object.keys(NOTION_COLORS)) {
     const regex = new RegExp(`\\[${key}\\]([\\s\\S]*?)\\[\\/${key}\\]`, 'gi');
+    out = out.replace(regex, '$1');
+  }
+  for (const idKey of Object.keys(COLOR_ALIASES)) {
+    const regex = new RegExp(`\\[${idKey}\\]([\\s\\S]*?)\\[\\/${idKey}\\]`, 'gi');
     out = out.replace(regex, '$1');
   }
   return out;

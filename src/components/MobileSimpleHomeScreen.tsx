@@ -708,7 +708,12 @@ export function MobileSimpleHomeScreen({
       </div>
 
       {/* ── CUSTOMIZABLE WIDGET DASHBOARD (FULL WIDTH) ── */}
-      <HomeWidgetDashboard userNik={effectiveNik} />
+      <HomeWidgetDashboard 
+        userNik={effectiveNik}
+        userName={effectiveName}
+        userSection={effectiveSection}
+        userRole={effectiveRole}
+      />
 
       {/* Food Report Modal */}
       <FoodReportModal 

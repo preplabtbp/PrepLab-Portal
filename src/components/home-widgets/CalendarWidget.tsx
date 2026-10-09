@@ -131,7 +131,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
           <div className="w-6 h-6 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
             <CalendarIcon className="w-3.5 h-3.5" />
           </div>
-          <span className="text-xs font-bold text-[var(--text-main)]">
+          <span className="text-xs font-black text-black dark:text-black">
             {monthNames[month]} {year}
           </span>
         </div>
@@ -140,23 +140,23 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
           <button
             type="button"
             onClick={handleGoToToday}
-            className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 transition-colors flex items-center gap-1"
+            className="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 hover:bg-indigo-200 text-black border border-indigo-300 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
             title="Kembali ke Hari Ini"
           >
-            <RotateCcw className="w-2.5 h-2.5" />
+            <RotateCcw className="w-2.5 h-2.5 text-indigo-700" />
             <span>Hari Ini</span>
           </button>
           <button
             type="button"
             onClick={handlePrevMonth}
-            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
+            className="p-1 rounded hover:bg-slate-200 text-black transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={handleNextMonth}
-            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
+            className="p-1 rounded hover:bg-slate-200 text-black transition-colors cursor-pointer"
           >
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -168,14 +168,14 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
         {/* Calendar Matrix */}
         <div className={`${size === '2x' ? 'sm:col-span-7' : 'w-full'}`}>
           {/* Days of week header */}
-          <div className="grid grid-cols-7 gap-1 text-center mb-1 text-[10px] font-bold text-[var(--text-muted)]">
-            <span className="text-rose-500">Min</span>
-            <span>Sen</span>
-            <span>Sel</span>
-            <span>Rab</span>
-            <span>Kam</span>
-            <span>Jum</span>
-            <span>Sab</span>
+          <div className="grid grid-cols-7 gap-1 text-center mb-1 text-[10px] font-extrabold text-black dark:text-black">
+            <span className="text-rose-600 font-black">Min</span>
+            <span className="text-black dark:text-black font-extrabold">Sen</span>
+            <span className="text-black dark:text-black font-extrabold">Sel</span>
+            <span className="text-black dark:text-black font-extrabold">Rab</span>
+            <span className="text-black dark:text-black font-extrabold">Kam</span>
+            <span className="text-black dark:text-black font-extrabold">Jum</span>
+            <span className="text-black dark:text-black font-extrabold">Sab</span>
           </div>
 
           {/* Days grid */}
@@ -184,7 +184,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
             {prevMonthDays.map((d, i) => (
               <div
                 key={`prev-${i}`}
-                className="h-6 sm:h-7 flex items-center justify-center text-[10px] text-slate-300 dark:text-slate-600 rounded-md"
+                className="h-6 sm:h-7 flex items-center justify-center text-[10px] text-slate-500 dark:text-slate-400 font-medium rounded-md"
               >
                 {d}
               </div>
@@ -201,12 +201,12 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
                   key={`day-${d}`}
                   type="button"
                   onClick={() => handleSelectDay(d)}
-                  className={`h-6 sm:h-7 relative flex items-center justify-center text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`h-6 sm:h-7 relative flex items-center justify-center text-[11px] font-extrabold rounded-lg transition-all cursor-pointer ${
                     selectedFlag
                       ? 'bg-indigo-600 text-white shadow-xs scale-105 z-10'
                       : todayFlag
-                        ? 'bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/40 font-black'
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-[var(--text-main)]'
+                        ? 'bg-teal-500/20 text-teal-800 dark:text-teal-900 border border-teal-500/50 font-black'
+                        : 'hover:bg-slate-200 dark:hover:bg-slate-200 text-black dark:text-black'
                   }`}
                 >
                   <span>{d}</span>
@@ -226,18 +226,18 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
 
         {/* Side Memo Panel (Always visible in 2x, or bottom preview in 1x) */}
         {size === '2x' ? (
-          <div className="sm:col-span-5 h-full flex flex-col justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850/60 border border-[var(--border-main)]/60 text-xs">
+          <div className="sm:col-span-5 h-full flex flex-col justify-between p-2.5 rounded-xl bg-slate-100/90 border border-slate-300 text-xs">
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold text-[11px] text-[var(--text-main)] flex items-center gap-1">
-                  <BookmarkCheck className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="font-extrabold text-[11px] text-black dark:text-black flex items-center gap-1">
+                  <BookmarkCheck className="w-3.5 h-3.5 text-indigo-600" />
                   <span>{selectedDayFormatted}</span>
                 </span>
                 {notes[selectedKey] && !isEditingNote && (
                   <button
                     type="button"
                     onClick={handleDeleteNote}
-                    className="text-rose-500 hover:text-rose-600 p-0.5 rounded"
+                    className="text-rose-600 hover:text-rose-700 p-0.5 rounded cursor-pointer"
                     title="Hapus Memo"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -252,21 +252,21 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
                     onChange={(e) => setMemoInput(e.target.value)}
                     placeholder="Tulis agenda / catatan tanggal ini..."
                     rows={2}
-                    className="w-full text-xs p-2 rounded-lg bg-white dark:bg-slate-800 border border-[var(--border-main)] focus:outline-hidden focus:ring-1 focus:ring-indigo-500 resize-none text-[var(--text-main)]"
+                    className="w-full text-xs p-2 rounded-lg bg-white border border-slate-300 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 resize-none text-black placeholder:text-slate-500 font-medium"
                     autoFocus
                   />
                   <div className="flex items-center justify-end gap-1">
                     <button
                       type="button"
                       onClick={() => setIsEditingNote(false)}
-                      className="px-2 py-0.5 rounded text-[10px] font-semibold text-[var(--text-muted)] hover:bg-slate-200 dark:hover:bg-slate-700"
+                      className="px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 hover:bg-slate-200 cursor-pointer"
                     >
                       Batal
                     </button>
                     <button
                       type="button"
                       onClick={handleSaveNote}
-                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white flex items-center gap-1 shadow-xs"
+                      className="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-600 text-white flex items-center gap-1 shadow-xs cursor-pointer"
                     >
                       <Check className="w-2.5 h-2.5" />
                       <span>Simpan</span>
@@ -276,15 +276,15 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
               ) : (
                 <div
                   onClick={() => setIsEditingNote(true)}
-                  className="min-h-[52px] p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-dashed border-[var(--border-main)] cursor-pointer hover:border-indigo-400 transition-all flex flex-col justify-center"
+                  className="min-h-[52px] p-2 rounded-lg bg-white border border-dashed border-slate-300 cursor-pointer hover:border-indigo-500 transition-all flex flex-col justify-center"
                 >
                   {notes[selectedKey] ? (
-                    <p className="text-[11px] text-[var(--text-main)] line-clamp-3 leading-relaxed">
+                    <p className="text-[11px] text-black font-semibold line-clamp-3 leading-relaxed">
                       {notes[selectedKey]}
                     </p>
                   ) : (
-                    <div className="text-center text-[10px] text-[var(--text-muted)] flex items-center justify-center gap-1">
-                      <Edit3 className="w-3 h-3 text-indigo-400" />
+                    <div className="text-center text-[10px] text-slate-800 font-bold flex items-center justify-center gap-1">
+                      <Edit3 className="w-3 h-3 text-indigo-600" />
                       <span>Klik untuk tambah catatan</span>
                     </div>
                   )}
@@ -292,17 +292,17 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
               )}
             </div>
 
-            <div className="mt-2 text-[9.5px] text-[var(--text-muted)] flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            <div className="mt-2 text-[9.5px] text-black font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
               <span>Titik biru menandakan tanggal beragenda</span>
             </div>
           </div>
         ) : (
           /* In 1x Size: Compact Bottom Memo Strip */
-          <div className="pt-1.5 border-t border-[var(--border-main)]/50">
+          <div className="pt-1.5 border-t border-slate-200">
             {notes[selectedKey] ? (
-              <div className="text-[10px] p-1.5 rounded-lg bg-indigo-500/10 text-indigo-800 dark:text-indigo-200 border border-indigo-500/20 truncate">
-                <span className="font-bold">{selectedDate.getDate()} {monthNames[selectedDate.getMonth()].slice(0, 3)}:</span> {notes[selectedKey]}
+              <div className="text-[10px] p-1.5 rounded-lg bg-indigo-50 text-black border border-indigo-200 truncate">
+                <span className="font-extrabold text-black">{selectedDate.getDate()} {monthNames[selectedDate.getMonth()].slice(0, 3)}:</span> <span className="font-semibold text-black">{notes[selectedKey]}</span>
               </div>
             ) : (
               <div 
@@ -316,9 +316,9 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
                     localStorage.setItem('preplab_calendar_notes', JSON.stringify(updated));
                   }
                 }}
-                className="text-[9.5px] text-center text-[var(--text-muted)] hover:text-indigo-500 cursor-pointer py-0.5 flex items-center justify-center gap-1"
+                className="text-[9.5px] text-center text-black font-bold hover:text-indigo-700 cursor-pointer py-0.5 flex items-center justify-center gap-1"
               >
-                <Edit3 className="w-2.5 h-2.5" />
+                <Edit3 className="w-2.5 h-2.5 text-indigo-600" />
                 <span>+ Catatan {selectedDate.getDate()} {monthNames[selectedDate.getMonth()].slice(0, 3)}</span>
               </div>
             )}

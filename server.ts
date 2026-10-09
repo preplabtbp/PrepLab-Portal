@@ -70,6 +70,7 @@ import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
 import { userPreferencesRouter } from "./server/routes/userPreferences.js";
+import { galleryRouter } from "./server/routes/gallery.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -94,6 +95,21 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS sisa_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS jatuh_tempo_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_login_complete BOOLEAN DEFAULT false;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya TEXT;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS achievements JSONB;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS catatan TEXT;`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS employee_achievements (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      name TEXT,
+      title TEXT NOT NULL,
+      category TEXT,
+      date TEXT,
+      description TEXT,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_achievements_nik ON employee_achievements(nik);`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_id INTEGER;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_nik TEXT;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_name TEXT;`);
@@ -588,6 +604,17 @@ const app = express();
       }
     });
 
+    // --- REAL-TIME TEMPAT NONGKRONG AVATAR LOUNGE SYNC ---
+    socket.on('lounge:move', (data) => {
+      const room = data?.room || 'lounge';
+      socket.to(room).emit('lounge:user_moved', data);
+    });
+
+    socket.on('lounge:action', (data) => {
+      const room = data?.room || 'lounge';
+      socket.to(room).emit('lounge:user_action', data);
+    });
+
     socket.on('chat:clear', async (data) => {
       try {
         const room = data?.room || 'global';
@@ -652,6 +679,12 @@ const app = express();
         // Emit single canonical message event to room members (no duplicate broadcast)
         io.to(room).emit('new_message', confirmedMsg);
         
+        // PENTING: Chat di Tempat Nongkrong (room === 'lounge') HANYA untuk interaksi visual lokal
+        // di Tempat Nongkrong. JANGAN PERNAH dibuat notifikasi lonceng, push notification, atau mention apapun!
+        if (room === 'lounge') {
+          return;
+        }
+
         // --- PROCESS MENTIONS ---
         const targetMentionNiks = new Set<string>();
         if (Array.isArray(msg.mentionedNiks)) {
@@ -857,7 +890,8 @@ const app = express();
     '/api/chat',
     '/api/presence',
     '/api/pdf',
-    '/api/user'
+    '/api/user',
+    '/api/gallery'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -912,6 +946,7 @@ const app = express();
   app.use(logbookRouter);
   app.use(clinicRouter);
   app.use("/api/user", userPreferencesRouter);
+  app.use(galleryRouter);
 
   // --- PRESENCE ROUTES ---
   app.get('/api/presence/online', (req, res) => {
@@ -1586,6 +1621,7 @@ async function syncBulletinToAgenda(post: any) {
   // Ensure critical DB columns exist
   try {
     await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;');
+    await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya text;');
   } catch (e: any) {
     console.warn('Auto migration note:', e.message);
   }
@@ -1593,8 +1629,8 @@ async function syncBulletinToAgenda(post: any) {
   // Mulai pelayan (server) di port 3000
   initRosterCron();
 
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server backend siap berjalan di http://localhost:${PORT}`);
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server backend siap berjalan di http://localhost:${PORT} (http://127.0.0.1:${PORT})`);
   });
 }
 

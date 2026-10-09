@@ -34,6 +34,11 @@ import {
   formatColorTagsToHtml,
   applyColorToText
 } from './tasklist-utils';
+import { 
+  FloatingSelectionToolbar, 
+  formatSelectedText, 
+  FormatAction 
+} from './FloatingSelectionToolbar';
 
 export interface EnterpriseWysiwygEditorProps {
   value: string;
@@ -110,6 +115,26 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
 
   // Notes draft (non-checklist part)
   const [notes, setNotes] = useState<string>(() => parseValueToNotes(value));
+  const [notesSelection, setNotesSelection] = useState<{ start: number; end: number } | null>(null);
+
+  const handleNotesSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const target = e.currentTarget;
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? 0;
+    if (end > start) {
+      setNotesSelection({ start, end });
+    } else {
+      setNotesSelection(null);
+    }
+  };
+
+  const handleApplyNotesFormat = (action: FormatAction) => {
+    if (!notesSelection) return;
+    const res = formatSelectedText(notes, notesSelection.start, notesSelection.end, action);
+    setNotes(res.newText);
+    emitChecklistChange(subtasks, res.newText);
+    setNotesSelection({ start: res.newStart, end: res.newEnd });
+  };
 
   // Keep internal text state in sync
   const [textContent, setTextContent] = useState<string>(() => (value || '').replace(/<br\s*\/?>/gi, '\n'));
@@ -984,16 +1009,27 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
               >
                 CATATAN UMUM / INSTRUKSI KHUSUS (OPSIONAL)
               </label>
-              <textarea
-                rows={2}
-                value={notes}
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                  emitChecklistChange(subtasks, e.target.value);
-                }}
-                placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
-                className="w-full text-xs font-sans p-2.5 rounded-xl border border-slate-300 bg-white text-black outline-none resize-none focus:border-teal-500 font-medium placeholder:text-slate-400"
-              />
+              <div className="relative">
+                {notesSelection && (
+                  <FloatingSelectionToolbar
+                    onFormat={handleApplyNotesFormat}
+                    onClose={() => setNotesSelection(null)}
+                  />
+                )}
+                <textarea
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => {
+                    setNotes(e.target.value);
+                    emitChecklistChange(subtasks, e.target.value);
+                  }}
+                  onSelect={handleNotesSelect}
+                  onKeyUp={handleNotesSelect}
+                  onMouseUp={handleNotesSelect}
+                  placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
+                  className="w-full text-xs font-sans p-2.5 rounded-xl border border-slate-300 bg-white text-black outline-none resize-none focus:border-teal-500 font-medium placeholder:text-slate-400"
+                />
+              </div>
             </div>
           </div>
         )}

@@ -379,6 +379,20 @@ export function AgendaDashboard({
                  align-items: center !important;
                  width: 100% !important;
                }
+               .fc-daygrid-day-number, 
+               .fc-col-header-cell-cushion, 
+               .fc-toolbar-title,
+               .fc-col-header-cell,
+               .fc-daygrid-day,
+               .fc-list-day-text,
+               .fc-list-day-side-text,
+               .fc-timegrid-slot-label {
+                 color: #000000 !important;
+                 font-weight: 700 !important;
+               }
+               .fc .fc-button-primary {
+                 color: #000000 !important;
+               }
              `}</style>
              <FullCalendar
                ref={calendarRef}
@@ -409,7 +423,7 @@ export function AgendaDashboard({
                      onClick={() => handleDateClick({ dateStr: cellDateStr, date: arg.date })}
                      className="flex flex-col items-center justify-between h-full min-h-[62px] py-1 px-1 relative w-full cursor-pointer group select-none"
                    >
-                     <span className="text-xs font-semibold text-slate-700 group-hover:text-teal-600 transition-colors">
+                     <span className="text-xs font-bold text-black dark:text-black group-hover:text-teal-700 transition-colors">
                        {arg.dayNumberText.replace(/tgl|tanggal/gi, '').trim()}
                      </span>
                      {dayEvts.length > 0 && (

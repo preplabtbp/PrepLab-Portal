@@ -1402,7 +1402,7 @@ export function TbpDashboard({
                   {/* Days of Week Header */}
                   <div className="grid grid-cols-7 gap-1 text-center mb-1.5">
                     {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((dayName, idx) => (
-                      <span key={idx} className="text-xs font-bold uppercase tracking-wider opacity-60" style={{ color: 'var(--text-muted, #64748b)' }}>
+                      <span key={idx} className="text-xs font-black uppercase tracking-wider text-black dark:text-black">
                         {dayName}
                       </span>
                     ))}
@@ -1428,12 +1428,12 @@ export function TbpDashboard({
                               : cell.isToday
                               ? 'bg-teal-500/15 border border-teal-500/50 font-bold text-teal-600 dark:text-teal-400'
                               : cell.isCurrentMonth
-                              ? 'hover:bg-slate-200/70 dark:hover:bg-slate-800/70 text-slate-800 dark:text-slate-200 font-medium'
-                              : 'opacity-25 hover:opacity-50 text-slate-400'
+                              ? 'hover:bg-slate-200/70 dark:hover:bg-slate-800/70 text-black dark:text-black font-extrabold'
+                              : 'opacity-40 hover:opacity-75 text-slate-500 font-semibold'
                           }`}
                           title={`${cell.dateKey} ${cell.hasEvents ? `(${cell.eventCount} agenda)` : ''}`}
                         >
-                          <span className="text-xs leading-none font-semibold">{cell.dayNum}</span>
+                          <span className="text-xs leading-none font-bold text-black dark:text-black">{cell.dayNum}</span>
                           {cell.hasEvents && (
                             <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-amber-300' : 'bg-teal-500'}`} />
                           )}

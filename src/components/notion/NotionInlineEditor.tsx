@@ -19,6 +19,7 @@ import {
   visualHtmlToMarkdown, 
   NOTION_COLORS 
 } from './tasklist-utils';
+import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './FloatingSelectionToolbar';
 
 interface NotionInlineEditorProps {
   initialValue: string;
@@ -43,6 +44,35 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
   const [singleText, setSingleText] = useState(initialValue || '');
   const singleInputRef = useRef<HTMLInputElement>(null);
   const singleContainerRef = useRef<HTMLDivElement>(null);
+
+  // Floating Selection Toolbar State for Single Line Input
+  const [activeSelection, setActiveSelection] = useState<{
+    start: number;
+    end: number;
+    selectedText: string;
+  } | null>(null);
+
+  const handleSelectText = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    const target = e.currentTarget;
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? 0;
+    if (end > start) {
+      setActiveSelection({ start, end, selectedText: target.value.substring(start, end) });
+    } else {
+      setActiveSelection(null);
+    }
+  };
+
+  const handleFormat = (action: FormatAction) => {
+    if (!activeSelection) return;
+    const res = formatSelectedText(singleText, activeSelection.start, activeSelection.end, action);
+    setSingleText(res.newText);
+    setActiveSelection({
+      start: res.newStart,
+      end: res.newEnd,
+      selectedText: res.newText.substring(res.newStart, res.newEnd)
+    });
+  };
 
   // Capture Escape at window level with capture phase to prevent page navigation
   useEffect(() => {
@@ -85,20 +115,33 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
         ref={singleContainerRef}
         data-notion-inline-editor="true"
         onClick={(e) => e.stopPropagation()}
-        className="w-full rounded border p-1 font-sans text-xs transition-all shadow-xs"
+        className="w-full rounded border p-1 font-sans text-xs transition-all shadow-xs relative"
         style={{
           backgroundColor: isNotionLight ? '#ffffff' : '#1e1e1e',
           color: isNotionLight ? '#0f172a' : '#f8fafc',
           borderColor: isNotionLight ? '#cbd5e1' : '#475569',
         }}
       >
+        {activeSelection && (
+          <FloatingSelectionToolbar
+            onFormat={handleFormat}
+            onClose={() => setActiveSelection(null)}
+          />
+        )}
         <input
           ref={singleInputRef}
           type="text"
           value={singleText}
           onChange={(e) => setSingleText(e.target.value)}
+          onSelect={handleSelectText}
+          onKeyUp={handleSelectText}
+          onMouseUp={handleSelectText}
           onKeyDown={handleKeyDownSingle}
-          onBlur={() => onSave(singleText)}
+          onBlur={(e) => {
+            if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) {
+              onSave(singleText);
+            }
+          }}
           placeholder={`Tulis ${fieldLabel.toLowerCase()}...`}
           className="w-full text-xs font-normal px-1 py-0.5 rounded bg-transparent outline-none"
           style={{ 

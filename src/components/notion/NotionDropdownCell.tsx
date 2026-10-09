@@ -46,7 +46,7 @@ export const STATUS_OPTIONS: DropdownOption[] = [
   }
 ];
 
-const ACTIVITY_OPTIONS: DropdownOption[] = [
+export const ROUTINE_CADENCE_OPTIONS: DropdownOption[] = [
   {
     value: 'Daily',
     label: 'Daily (Harian)',
@@ -76,26 +76,15 @@ const ACTIVITY_OPTIONS: DropdownOption[] = [
     value: 'Yearly',
     label: 'Yearly (Tahunan)',
     badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100'
-  },
+  }
+];
+
+const ACTIVITY_OPTIONS: DropdownOption[] = [
+  ...ROUTINE_CADENCE_OPTIONS,
   {
     value: 'Non Routine',
     label: 'Non Routine (Insidentil)',
     badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
-  },
-  {
-    value: 'Routine',
-    label: 'Routine (Umum)',
-    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
-  },
-  {
-    value: 'Periodic',
-    label: 'Periodic (Umum)',
-    badgeClass: 'bg-slate-100 text-slate-800 font-medium border-slate-200 hover:bg-slate-200'
-  },
-  {
-    value: 'Special Task',
-    label: 'Special Task',
-    badgeClass: 'bg-rose-50 text-rose-900 font-medium border-rose-200/80 hover:bg-rose-100'
   }
 ];
 
@@ -156,6 +145,7 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
   optionsOverride
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isRoutineExpanded, setIsRoutineExpanded] = useState(true);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number; openUpwards: boolean } | null>(null);
@@ -292,27 +282,99 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
 
           {/* Options List */}
           <div className="space-y-0.5">
-            {options.map((opt) => {
-              const isSelected = opt.value.toLowerCase() === currentValLower;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={(e) => handleSelect(opt.value, e)}
-                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
-                    isSelected 
-                      ? 'bg-teal-50 text-teal-950 font-black border border-teal-300' 
-                      : 'hover:bg-slate-100 text-black font-bold'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {opt.icon}
-                    <span>{opt.label}</span>
-                  </div>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-teal-700 shrink-0" />}
-                </button>
-              );
-            })}
+            {type === 'activity' ? (
+              <>
+                {/* Choice 1: Routine (with expand/collapse for cadences Daily - Yearly) */}
+                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsRoutineExpanded(!isRoutineExpanded);
+                    }}
+                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left text-xs transition-colors cursor-pointer ${
+                      ROUTINE_CADENCE_OPTIONS.some(o => o.value.toLowerCase() === currentValLower)
+                        ? 'bg-teal-50 text-teal-950 font-black'
+                        : 'hover:bg-slate-100 text-black font-bold'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-teal-500"></span>
+                      <span>Routine (Rutin)</span>
+                    </div>
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isRoutineExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Expanded Cadence Options (Daily s/d Yearly) */}
+                  {isRoutineExpanded && (
+                    <div className="bg-slate-50/80 p-1 space-y-0.5 border-t border-slate-200">
+                      {ROUTINE_CADENCE_OPTIONS.map((opt) => {
+                        const isSelected = opt.value.toLowerCase() === currentValLower;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={(e) => handleSelect(opt.value, e)}
+                            className={`w-full flex items-center justify-between gap-2 pl-4 pr-2 py-1 rounded text-left text-[11px] transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'bg-teal-100 text-teal-950 font-black'
+                                : 'hover:bg-slate-200 text-slate-800 font-semibold'
+                            }`}
+                          >
+                            <span>{opt.label}</span>
+                            {isSelected && <Check className="w-3 h-3 text-teal-700 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Choice 2: Non Routine (Insidentil) */}
+                {(() => {
+                  const isSelected = currentValLower.includes('non');
+                  return (
+                    <button
+                      type="button"
+                      onClick={(e) => handleSelect('Non Routine', e)}
+                      className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer border ${
+                        isSelected
+                          ? 'bg-slate-200 text-slate-900 font-black border-slate-300'
+                          : 'hover:bg-slate-100 text-black font-bold border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                        <span>Non Routine (Insidentil)</span>
+                      </div>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-slate-800 shrink-0" />}
+                    </button>
+                  );
+                })()}
+              </>
+            ) : (
+              options.map((opt) => {
+                const isSelected = opt.value.toLowerCase() === currentValLower;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={(e) => handleSelect(opt.value, e)}
+                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors cursor-pointer ${
+                      isSelected 
+                        ? 'bg-teal-50 text-teal-950 font-black border border-teal-300' 
+                        : 'hover:bg-slate-100 text-black font-bold'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {opt.icon}
+                      <span>{opt.label}</span>
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-teal-700 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>,
         document.body

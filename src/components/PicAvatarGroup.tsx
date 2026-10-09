@@ -36,6 +36,48 @@ function getGradientForName(name: string): string {
   return AVATAR_GRADIENTS[idx];
 }
 
+export const ACADEMIC_TITLES = new Set([
+  'ST', 'S.T', 'S.T.',
+  'STR', 'S.TR', 'S.TR.T',
+  'SSI', 'S.SI', 'S.SI.',
+  'SKOM', 'S.KOM', 'S.KOM.',
+  'SE', 'S.E', 'S.E.',
+  'SH', 'S.H', 'S.H.',
+  'SPD', 'S.PD', 'S.PD.',
+  'SSOS', 'S.SOS', 'S.SOS.',
+  'MT', 'M.T', 'M.T.',
+  'MSI', 'M.SI', 'M.SI.',
+  'MM', 'M.M', 'M.M.',
+  'MBA', 'M.B.A',
+  'PHD', 'PH.D',
+  'DR', 'DR.',
+  'IR', 'IR.',
+  'AMD', 'A.MD', 'A.MD.'
+]);
+
+export function smartSplitPicString(raw: string): string[] {
+  if (!raw) return [];
+  const tokens = raw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+  const result: string[] = [];
+
+  for (const token of tokens) {
+    const norm = token.toUpperCase().replace(/\./g, '');
+    const isDegree = ACADEMIC_TITLES.has(token.toUpperCase()) || ACADEMIC_TITLES.has(norm);
+    if (isDegree) {
+      if (result.length > 0) {
+        result[result.length - 1] += `, ${token}`;
+      }
+    } else {
+      result.push(token);
+    }
+  }
+
+  return result.filter(name => {
+    const norm = name.toUpperCase().replace(/\./g, '').trim();
+    return !ACADEMIC_TITLES.has(norm) && name !== '-' && name !== '•';
+  });
+}
+
 export function PicAvatarGroup({
   pics,
   employeesList = [],
@@ -47,15 +89,16 @@ export function PicAvatarGroup({
   const parsedPics: PicItem[] = useMemo(() => {
     if (!pics) return [];
     if (Array.isArray(pics)) {
-      return pics.filter(p => p && p.name && p.name.trim() !== '' && p.name !== '-');
+      return pics.filter(p => {
+        if (!p || !p.name) return false;
+        const norm = p.name.toUpperCase().replace(/\./g, '').trim();
+        return !ACADEMIC_TITLES.has(norm) && p.name.trim() !== '' && p.name !== '-';
+      });
     }
     if (typeof pics === 'string') {
       const trimmed = pics.trim();
       if (!trimmed || trimmed === '-' || trimmed === '•') return [];
-      return trimmed
-        .split(/[,;\n]+/)
-        .map(s => s.trim())
-        .filter(s => s && s !== '-' && s !== '•')
+      return smartSplitPicString(trimmed)
         .map(raw => {
           // Check if string contains NIK in parenthesis e.g. "Name (12345)"
           const parenMatch = raw.match(/^(.*?)\s*\((\d+)\)$/);
@@ -97,14 +140,40 @@ export function PicAvatarGroup({
     const picNik = (pic.nik || '').trim();
     const picName = (pic.name || '').trim().toLowerCase();
 
-    return employeesList.find(emp => {
-      if (picNik && (emp.nik === picNik || String(emp.nik) === picNik)) return true;
-      const empName = (emp.name || emp.nama || '').trim().toLowerCase();
-      if (empName && (empName === picName || empName.includes(picName) || picName.includes(empName))) {
-        return true;
+    // Priority 1: Match strictly by NIK
+    if (picNik) {
+      const byNik = employeesList.find(emp => emp.nik === picNik || String(emp.nik) === picNik);
+      if (byNik) return byNik;
+    }
+
+    // Priority 2: Match strictly by exact Name
+    if (picName) {
+      const byExact = employeesList.find(emp => {
+        const empName = (emp.name || emp.nama || '').trim().toLowerCase();
+        return empName === picName;
+      });
+      if (byExact) return byExact;
+
+      // Priority 2.5: Match without academic titles (e.g. "Sukarman A. Akil, ST" -> "Sukarman A. Akil")
+      const cleanPicName = picName.replace(/,\s*[a-z\.]+$/i, '').trim();
+      const byClean = employeesList.find(emp => {
+        const empName = (emp.name || emp.nama || '').trim().toLowerCase();
+        return empName === cleanPicName || empName.startsWith(cleanPicName) || cleanPicName.startsWith(empName);
+      });
+      if (byClean) return byClean;
+
+      // Priority 3: Match whole word (e.g. "Gusti" matches "Gusti Nur Firdaus", but NOT partial substring in middle of unrelated word)
+      if (picName.length >= 3) {
+        const byWords = employeesList.find(emp => {
+          const empName = (emp.name || emp.nama || '').trim().toLowerCase();
+          const words = empName.split(/\s+/);
+          return words.includes(picName) || empName.startsWith(picName);
+        });
+        if (byWords) return byWords;
       }
-      return false;
-    });
+    }
+
+    return null;
   };
 
   if (parsedPics.length === 0) {
@@ -125,7 +194,8 @@ export function PicAvatarGroup({
     <div className={`inline-flex items-center -space-x-1.5 hover:space-x-0.5 transition-all duration-200 select-none py-0.5 ${className}`}>
       {visiblePics.map((p, idx) => {
         const emp = getEmployeeData(p);
-        const resolvedName = emp?.name || emp?.nama || p.name;
+        // Prioritize original pic name so custom or exact name is never hijacked
+        const resolvedName = p.name && p.name !== '-' ? p.name : (emp?.name || emp?.nama || 'PIC');
         const initial = resolvedName ? resolvedName.charAt(0).toUpperCase() : '?';
         const photoUrl = emp?.avatar || emp?.photo || (emp?.nik ? `/api/employees/photo/${emp.nik}` : null);
         const imgKey = emp?.nik || p.nik || p.name;

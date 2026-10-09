@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, 
-  FileText, BarChart3, ChevronRight, CheckCircle2, AlertTriangle, Fingerprint, 
+  FileText, BarChart3, ChevronRight, ChevronDown, CheckCircle2, AlertTriangle, Fingerprint, 
   Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, 
   Plus, Edit3, ShieldAlert, Scale, Gavel, Clock, AlertOctagon, Info, ShieldCheck,
-  HeartHandshake, CalendarRange
+  HeartHandshake, CalendarRange, Trophy, Award, Trash2, StickyNote, Check
 } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
@@ -14,6 +14,200 @@ import { AddAttendanceEntryModal } from './AddAttendanceEntryModal';
 import { TimeRangeFetchModal } from './TimeRangeFetchModal';
 import { toast } from 'sonner';
 import { formatAvatarUrl } from '../lib/avatarUtils';
+import { getEmployeeTenureInfo } from '../lib/tenureUtils';
+import { compareEmployeesByJabatan } from '../lib/jabatanHierarchy';
+
+export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
+  if (!empOrStatus) return false;
+  const status = typeof empOrStatus === 'string'
+    ? empOrStatus
+    : (empOrStatus.statusKaryawan || empOrStatus.status_karyawan || empOrStatus.status || empOrStatus['Status Karyawan'] || empOrStatus['Status'] || '');
+  const s = String(status).trim().toUpperCase();
+  if (
+    s.includes('RESIGN') ||
+    s.includes('PHK') ||
+    s.includes('MUTASI') ||
+    s.includes('SPPHK') ||
+    s.includes('KELUAR') ||
+    s.includes('INACTIVE') ||
+    s.includes('NONAKTIF') ||
+    s.includes('NON AKTIF')
+  ) {
+    return true;
+  }
+  const sec = typeof empOrStatus === 'object' ? String(empOrStatus.section || empOrStatus.bagian || '').trim().toUpperCase() : '';
+  if (sec.includes('#N/A')) return true;
+  return false;
+}
+
+const INDO_MONTHS_FULL = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+const INDO_MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+  'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+];
+
+const MONTH_MAP: Record<string, number> = {
+  jan: 1, januari: 1, january: 1,
+  feb: 2, februari: 2, february: 2,
+  mar: 3, maret: 3, march: 3,
+  apr: 4, april: 4,
+  mei: 5, may: 5,
+  jun: 6, juni: 6, june: 6,
+  jul: 7, juli: 7, july: 7,
+  agu: 8, ags: 8, agustus: 8, aug: 8, august: 8,
+  sep: 9, september: 9, sept: 9,
+  okt: 10, oktober: 10, oct: 10, october: 10,
+  nov: 11, november: 11,
+  des: 12, desember: 12, dec: 12, december: 12,
+};
+
+export function formatTtlDate(dateStr?: string | null): string {
+  if (!dateStr || dateStr === '-' || dateStr === '#N/A' || dateStr === '0') return '-';
+  const clean = String(dateStr).trim();
+  if (!clean) return '-';
+
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+
+  // Format: YYYY-MM-DD or YYYY/MM/DD
+  const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10);
+    const d = parseInt(isoMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${pad2(d)} ${INDO_MONTHS_FULL[m - 1]} ${y}`;
+    }
+  }
+
+  // Format: DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmyMatch) {
+    const d = parseInt(dmyMatch[1], 10);
+    const m = parseInt(dmyMatch[2], 10);
+    const y = parseInt(dmyMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${pad2(d)} ${INDO_MONTHS_FULL[m - 1]} ${y}`;
+    }
+  }
+
+  // Format: DD-Month-YY or DD-Month-YYYY (e.g. "21-Aug-80", "21-Agu-1980", "21 Aug 1980")
+  const textMonthMatch = clean.match(/^(\d{1,2})[\s\-_/]+([a-zA-Z]+)[\s\-_/]+(\d{2,4})$/);
+  if (textMonthMatch) {
+    const d = parseInt(textMonthMatch[1], 10);
+    const monthKey = textMonthMatch[2].toLowerCase();
+    let y = parseInt(textMonthMatch[3], 10);
+    if (y < 100) {
+      y = y <= 30 ? 2000 + y : 1900 + y;
+    }
+    const m = MONTH_MAP[monthKey];
+    if (m && d >= 1 && d <= 31) {
+      return `${pad2(d)} ${INDO_MONTHS_FULL[m - 1]} ${y}`;
+    }
+  }
+
+  const parsed = new Date(clean);
+  if (!isNaN(parsed.getTime())) {
+    const d = parsed.getDate();
+    const m = parsed.getMonth();
+    const y = parsed.getFullYear();
+    return `${pad2(d)} ${INDO_MONTHS_FULL[m]} ${y}`;
+  }
+
+  return clean;
+}
+
+export function formatShortDate(val?: any): string {
+  if (val === null || val === undefined) return '-';
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '-';
+    const d = String(val.getDate()).padStart(2, '0');
+    const m = INDO_MONTHS_SHORT[val.getMonth()] || 'Jan';
+    const y = val.getFullYear();
+    return `${d}-${m}-${y}`;
+  }
+
+  const clean = String(val).trim();
+  if (!clean || clean === '-' || clean === '#N/A' || clean === '0' || clean.toLowerCase() === 'null' || clean.toLowerCase() === 'undefined') {
+    return '-';
+  }
+
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+
+  // Excel serial number (e.g. 44562 ~ 2022)
+  if (/^\d{5}$/.test(clean)) {
+    const num = Number(clean);
+    if (num >= 25569 && num <= 60000) {
+      const dObj = new Date(Math.round((num - 25569) * 86400 * 1000));
+      if (!isNaN(dObj.getTime())) {
+        return `${pad2(dObj.getDate())}-${INDO_MONTHS_SHORT[dObj.getMonth()]}-${dObj.getFullYear()}`;
+      }
+    }
+  }
+
+  // Format: YYYY-MM-DD or YYYY/MM/DD (optionally followed by time or T...)
+  const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10);
+    const d = parseInt(isoMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${pad2(d)}-${INDO_MONTHS_SHORT[m - 1]}-${y}`;
+    }
+  }
+
+  // Format: DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const d = parseInt(dmyMatch[1], 10);
+    const m = parseInt(dmyMatch[2], 10);
+    const y = parseInt(dmyMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${pad2(d)}-${INDO_MONTHS_SHORT[m - 1]}-${y}`;
+    }
+  }
+
+  // Format: DD-MM-YY or DD/MM/YY
+  const dmyShortMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2})$/);
+  if (dmyShortMatch) {
+    const d = parseInt(dmyShortMatch[1], 10);
+    const m = parseInt(dmyShortMatch[2], 10);
+    let y = parseInt(dmyShortMatch[3], 10);
+    y = y <= 35 ? 2000 + y : 1900 + y;
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${pad2(d)}-${INDO_MONTHS_SHORT[m - 1]}-${y}`;
+    }
+  }
+
+  // Format: DD-Month-YY or DD-Month-YYYY or DD Month YYYY (e.g. "21-Aug-80", "21-Agu-1980", "21 Aug 1980", "01-Jan-2024")
+  const textMonthMatch = clean.match(/^(\d{1,2})[\s\-_/]+([a-zA-Z]+)[\s\-_/]+(\d{2,4})/);
+  if (textMonthMatch) {
+    const d = parseInt(textMonthMatch[1], 10);
+    const monthKey = textMonthMatch[2].toLowerCase();
+    let y = parseInt(textMonthMatch[3], 10);
+    if (y < 100) {
+      y = y <= 35 ? 2000 + y : 1900 + y;
+    }
+    const m = MONTH_MAP[monthKey];
+    if (m && d >= 1 && d <= 31) {
+      return `${pad2(d)}-${INDO_MONTHS_SHORT[m - 1]}-${y}`;
+    }
+  }
+
+  // Fallback: Native Date Parse
+  const parsed = new Date(clean);
+  if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 1900 && parsed.getFullYear() < 2100) {
+    const d = parsed.getDate();
+    const m = parsed.getMonth();
+    const y = parsed.getFullYear();
+    return `${pad2(d)}-${INDO_MONTHS_SHORT[m]}-${y}`;
+  }
+
+  return clean;
+}
 
 export function normalizeDepartmentOrSection(raw?: string): string {
   const s = (raw || '').toLowerCase().trim();
@@ -61,12 +255,146 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const [isTimeRangeModalOpen, setIsTimeRangeModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editModalTab, setEditModalTab] = useState<'job' | 'personal' | 'attendance' | 'reasons' | 'counseling'>('job');
+  const [editModalMode, setEditModalMode] = useState<'edit' | 'add'>('edit');
+  const [selectedEmployeeForEdit, setSelectedEmployeeForEdit] = useState<any | null>(null);
+  const [tenureDropdownPeriod, setTenureDropdownPeriod] = useState<'sekarang' | 'sebelumnya'>('sekarang');
   const [isAddAttendanceModalOpen, setIsAddAttendanceModalOpen] = useState(false);
   const [selectedAddCategory, setSelectedAddCategory] = useState<string>('tanggalIzin');
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [developerList, setDeveloperList] = useState<any[]>([]);
+
+  // States & handlers untuk Catatan Karyawan & Achievements Dashboard
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [noteContent, setNoteContent] = useState('');
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [isAddAchievementModalOpen, setIsAddAchievementModalOpen] = useState(false);
+  const [newAchievementTitle, setNewAchievementTitle] = useState('');
+  const [newAchievementCategory, setNewAchievementCategory] = useState('Kinerja & Prestasi');
+  const [newAchievementDate, setNewAchievementDate] = useState('');
+  const [newAchievementDesc, setNewAchievementDesc] = useState('');
+  const [newAchievementNotes, setNewAchievementNotes] = useState('');
+  const [isSavingAchievement, setIsSavingAchievement] = useState(false);
+
+  useEffect(() => {
+    if (selectedEmployee) {
+      setNoteContent(selectedEmployee.catatan || '');
+      setIsEditingNotes(false);
+    }
+  }, [selectedEmployee?.nik]);
+
+  const achievementList = useMemo(() => {
+    if (!selectedEmployee?.achievements) return [];
+    const raw = Array.isArray(selectedEmployee.achievements) ? selectedEmployee.achievements : [];
+    return raw.map((item: any, idx: number) => ({
+      id: item.id || `ach_${idx}`,
+      title: item.title || item['Judul Achievement'] || item['judul'] || item['achievement'] || '-',
+      category: item.category || item['Kategori'] || item['kategori'] || 'Prestasi',
+      date: item.date || item['Tanggal Dicapai'] || item['tanggal'] || '',
+      description: item.description || item['Keterangan'] || item['keterangan'] || '',
+      notes: item.notes || item['Catatan'] || item['catatan'] || ''
+    }));
+  }, [selectedEmployee?.achievements]);
+
+  const handleSaveNotes = async () => {
+    if (!selectedEmployee?.nik) return;
+    setIsSavingNotes(true);
+    try {
+      const res = await fetch(`/api/employees/${selectedEmployee.nik}/notes`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-nik': inspectorNik
+        },
+        body: JSON.stringify({
+          catatan: noteContent,
+          editorNik: inspectorNik
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        throw new Error(data.message || 'Gagal menyimpan catatan');
+      }
+      setSelectedEmployee((prev: any) => prev ? ({ ...prev, catatan: noteContent }) : null);
+      setEmployees((prev: any[]) => prev.map(e => e.nik === selectedEmployee.nik ? { ...e, catatan: noteContent } : e));
+      setIsEditingNotes(false);
+      toast.success('Catatan karyawan berhasil disimpan');
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal menyimpan catatan');
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
+
+  const handleAddAchievement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmployee?.nik) return;
+    if (!newAchievementTitle.trim()) {
+      toast.error('Judul achievement wajib diisi');
+      return;
+    }
+    setIsSavingAchievement(true);
+    try {
+      const res = await fetch(`/api/employees/${selectedEmployee.nik}/achievements`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-nik': inspectorNik
+        },
+        body: JSON.stringify({
+          title: newAchievementTitle.trim(),
+          category: newAchievementCategory,
+          date: newAchievementDate.trim(),
+          description: newAchievementDesc.trim(),
+          notes: newAchievementNotes.trim(),
+          editorNik: inspectorNik
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        throw new Error(data.message || 'Gagal menambahkan achievement');
+      }
+      const added = data.achievement;
+      const updatedList = [added, ...(Array.isArray(selectedEmployee.achievements) ? selectedEmployee.achievements : [])];
+      setSelectedEmployee((prev: any) => prev ? ({ ...prev, achievements: updatedList }) : null);
+      setEmployees((prev: any[]) => prev.map(e => e.nik === selectedEmployee.nik ? { ...e, achievements: updatedList } : e));
+      setIsAddAchievementModalOpen(false);
+      setNewAchievementTitle('');
+      setNewAchievementDate('');
+      setNewAchievementDesc('');
+      setNewAchievementNotes('');
+      toast.success('Achievement berhasil ditambahkan');
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal menambahkan achievement');
+    } finally {
+      setIsSavingAchievement(false);
+    }
+  };
+
+  const handleDeleteAchievement = async (achId: any) => {
+    if (!selectedEmployee?.nik) return;
+    if (!confirm('Apakah Anda yakin ingin menghapus achievement ini?')) return;
+    try {
+      const res = await fetch(`/api/employees/${selectedEmployee.nik}/achievements/${achId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-user-nik': inspectorNik
+        }
+      });
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        throw new Error(data.message || 'Gagal menghapus achievement');
+      }
+      const updatedList = (Array.isArray(selectedEmployee.achievements) ? selectedEmployee.achievements : [])
+        .filter((a: any) => String(a.id) !== String(achId) && a.title !== achId);
+      setSelectedEmployee((prev: any) => prev ? ({ ...prev, achievements: updatedList }) : null);
+      setEmployees((prev: any[]) => prev.map(e => e.nik === selectedEmployee.nik ? { ...e, achievements: updatedList } : e));
+      toast.success('Achievement berhasil dihapus');
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal menghapus achievement');
+    }
+  };
 
   useEffect(() => {
     fetch('/api/developers')
@@ -78,8 +406,24 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       .catch(() => {});
   }, []);
 
-  // Hanya Section Administration atau Developer yang boleh mengupdate database karyawan
-  const canManageDatabase = useMemo(() => {
+  // Deteksi lingkungan Local Host (akses lokal komputer pengembang)
+  const isLocalHostEnv = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const h = (window.location.hostname || '').toLowerCase();
+    return (
+      h === 'localhost' ||
+      h === '127.0.0.1' ||
+      h === '::1' ||
+      h.startsWith('192.168.') ||
+      h.startsWith('10.') ||
+      h.startsWith('172.') ||
+      window.location.port === '3000' ||
+      window.location.port === '5173'
+    );
+  }, []);
+
+  // Pengecekan Section Administration atau Developer
+  const isSectionAdmin = useMemo(() => {
     const cleanNik = (inspectorNik || '').trim().toUpperCase();
     const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
     if (HARDCODED_DEVS.includes(cleanNik)) return true;
@@ -92,10 +436,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         const sec = (p.section || '').toLowerCase();
         const dept = (p.department || '').toLowerCase();
         const jab = (p.jabatan || '').toLowerCase();
+        const role = (p.role || '').toLowerCase();
         if (
-          sec.includes('administrasi') || sec.includes('administration') ||
-          dept.includes('administrasi') || dept.includes('administration') ||
-          jab.includes('admin')
+          sec.includes('administrasi') || sec.includes('administration') || sec.includes('admin') ||
+          dept.includes('administrasi') || dept.includes('administration') || dept.includes('admin') ||
+          jab.includes('admin') || role.includes('admin') || role.includes('developer')
         ) {
           return true;
         }
@@ -108,8 +453,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       const dept = (me.department || '').toLowerCase();
       const jab = (me.jabatan || '').toLowerCase();
       if (
-        sec.includes('administrasi') || sec.includes('administration') ||
-        dept.includes('administrasi') || dept.includes('administration') ||
+        sec.includes('administrasi') || sec.includes('administration') || sec.includes('admin') ||
+        dept.includes('administrasi') || dept.includes('administration') || dept.includes('admin') ||
         jab.includes('admin')
       ) {
         return true;
@@ -123,6 +468,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     const nik = (inspectorNik || '').toUpperCase().trim();
     return nik === 'MEETINGROOM' || nik === 'MEETING' || nik.includes('MEETING');
   }, [inspectorNik]);
+
+  // Hak akses Edit & Tambah Data Karyawan:
+  // HANYA jika user adalah Section Admin
+  const canManageDatabase = useMemo(() => {
+    return isSectionAdmin;
+  }, [isSectionAdmin]);
 
   const fetchEmployees = async (silent = false) => {
     if (!silent && employees.length === 0) {
@@ -160,7 +511,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     fetchEmployees(employees.length > 0);
   }, [inspectorNik, isMeetingRoom]);
 
-  const [activeStatDetail, setActiveStatDetail] = useState<'permanent' | 'izin' | 'spdk' | 'active' | null>(null);
+  // Kalkulasi data masa kerja jabatan (Sekarang, Sebelumnya, Total)
+  const tenureInfo = useMemo(() => {
+    return getEmployeeTenureInfo(selectedEmployee);
+  }, [selectedEmployee]);
+
+  useEffect(() => {
+    setTenureDropdownPeriod('sekarang');
+  }, [selectedEmployee?.nik]);
+
+  const [activeStatDetail, setActiveStatDetail] = useState<'permanent' | 'kontrak' | 'izin' | 'spdk' | 'active' | null>(null);
   const [statDetailSearch, setStatDetailSearch] = useState('');
   const [ptFilter, setPtFilter] = useState<'ALL' | 'TBP' | 'GTS'>('ALL');
 
@@ -209,38 +569,59 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   // - Akun GTS hanya bisa diakses oleh Karyawan GTS dan Section Manager TBP (atau Manager/Admin)
   // - Akun TBP hanya bisa diakses oleh Karyawan TBP dan Section Manager GTS (atau Manager/Admin)
   const scopedEmployees = useMemo(() => {
+    let baseList = employees;
     if (isSectionManager) {
-      if (ptFilter === 'GTS') return employees.filter(e => isGtsEmp(e));
-      if (ptFilter === 'TBP') return employees.filter(e => !isGtsEmp(e));
-      return employees;
+      if (ptFilter === 'GTS') baseList = employees.filter(e => isGtsEmp(e));
+      else if (ptFilter === 'TBP') baseList = employees.filter(e => !isGtsEmp(e));
+    } else if (viewerPt === 'GTS') {
+      baseList = employees.filter(e => isGtsEmp(e));
+    } else {
+      baseList = employees.filter(e => !isGtsEmp(e));
     }
-    if (viewerPt === 'GTS') {
-      return employees.filter(e => isGtsEmp(e));
-    }
-    return employees.filter(e => !isGtsEmp(e));
+
+    // Sesuai permintaan Foto 2: Karyawan berstatus Resign / Mutasi GTS / PHK / SPPHK tidak dimasukkan ke dalam daftar
+    return baseList.filter(e => !isResignedOrNonActiveStatus(e));
   }, [employees, isSectionManager, ptFilter, viewerPt]);
 
-  // 1. Data & List Karyawan Aktif (Ambil kolom Status Karyawan = "Active" / "Aktif")
+  // 1. Data & List Karyawan Aktif (Diurutkan sesuai Hirarki Jabatan Resmi)
   const activeEmployeesList = useMemo(() => {
     return scopedEmployees.filter(e => {
+      if (isResignedOrNonActiveStatus(e)) return false;
       const st = String(e.statusKaryawan || e.status_karyawan || e.status || e['Status Karyawan'] || e['Status'] || '').toUpperCase().trim();
       return st === 'ACTIVE' || st === 'AKTIF' || st.startsWith('ACTIVE') || st.startsWith('AKTIF');
-    });
+    }).sort(compareEmployeesByJabatan);
   }, [scopedEmployees]);
   const activeEmployeesCount = activeEmployeesList.length;
 
-  // 2. Data & List Karyawan Permanent / PKWTT
+  // 2. Data & List Karyawan Permanent / PKWTT (Diurutkan sesuai Hirarki Jabatan Resmi)
   const permanentEmployeesList = useMemo(() => {
     return scopedEmployees.filter(e => {
+      if (isResignedOrNonActiveStatus(e)) return false;
       const sk = (e.statusKontrak || '').toLowerCase().trim();
       const skaryawan = (e.statusKaryawan || '').toLowerCase().trim();
       const tp = (e.tanggalPermanent || '').trim();
       return sk.includes('pkwtt') || sk.includes('permanent') || sk.includes('tetap') ||
              skaryawan.includes('pkwtt') || skaryawan.includes('permanent') || skaryawan.includes('tetap') ||
              (tp && tp !== '-' && tp !== '0');
-    });
+    }).sort(compareEmployeesByJabatan);
   }, [scopedEmployees]);
   const permanentEmployeesCount = permanentEmployeesList.length;
+
+  // 3. Data & List Karyawan Kontrak / PKWT (Diurutkan sesuai Hirarki Jabatan Resmi)
+  const contractEmployeesList = useMemo(() => {
+    return scopedEmployees.filter(e => {
+      if (isResignedOrNonActiveStatus(e)) return false;
+      const sk = (e.statusKontrak || '').toLowerCase().trim();
+      const skaryawan = (e.statusKaryawan || '').toLowerCase().trim();
+      const tp = (e.tanggalPermanent || '').trim();
+      const isPerm = sk.includes('pkwtt') || sk.includes('permanent') || sk.includes('tetap') ||
+                     skaryawan.includes('pkwtt') || skaryawan.includes('permanent') || skaryawan.includes('tetap') ||
+                     (Boolean(tp) && tp !== '-' && tp !== '0');
+      if (isPerm) return false;
+      return sk.includes('kontrak') || sk.includes('pkwt') || skaryawan.includes('kontrak') || skaryawan.includes('pkwt') || !isPerm;
+    }).sort(compareEmployeesByJabatan);
+  }, [scopedEmployees]);
+  const contractEmployeesCount = contractEmployeesList.length;
 
   // 3. Data & List Jumlah Izin Karyawan pada Bulan Berjalan (Urut dari terbanyak sampai terkecil)
   const monthlyIzinData = useMemo(() => {
@@ -485,7 +866,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             isExpired = true;
           }
           if (!calculatedMasaBerlaku) {
-            calculatedMasaBerlaku = `Aktif s/d ${expiryDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+            calculatedMasaBerlaku = `Aktif s/d ${formatShortDate(expiryDate)}`;
           }
         }
       }
@@ -533,7 +914,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       result.push({
         employee: emp,
         jenisSanksi,
-        tanggalSanksi: dateStr !== '-' ? dateStr : (c.bulanKonseling || '-'),
+        tanggalSanksi: dateStr !== '-' ? formatShortDate(dateStr) : (c.bulanKonseling || '-'),
         masaBerlaku: calculatedMasaBerlaku || 'Aktif',
         kategori,
         alasan,
@@ -541,6 +922,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         levelColor
       });
     });
+
+    // Urutkan sanksi SPDK berdasarkan hirarki jabatan resmi
+    result.sort((a, b) => compareEmployeesByJabatan(a.employee, b.employee));
 
     return result;
   }, [scopedEmployees]);
@@ -675,7 +1059,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       const jabatan = (e.jabatan || '').toLowerCase();
       const sec = (e.section || e.department || '').toLowerCase();
       return name.includes(term) || nik.includes(term) || jabatan.includes(term) || sec.includes(term);
-    }).slice(0, 30);
+    }).sort(compareEmployeesByJabatan).slice(0, 30);
   }, [scopedEmployees, searchTerm]);
 
   if (loading) {
@@ -801,12 +1185,32 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             <h1 className="text-lg font-bold text-slate-800 hidden sm:block">
               Database Karyawan
             </h1>
+            {canManageDatabase && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Admin
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {!selectedEmployee && canManageDatabase && (
             <>
+              <Button
+                onClick={() => {
+                  setEditModalMode('add');
+                  setSelectedEmployeeForEdit(null);
+                  setEditModalTab('job');
+                  setIsEditModalOpen(true);
+                }}
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 rounded-xl text-xs font-bold px-3 py-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                title="Tambah data karyawan baru ke database (Khusus Section Admin Local Host)"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Tambah Karyawan</span>
+              </Button>
               <Button
                 onClick={() => setIsTimeRangeModalOpen(true)}
                 size="sm"
@@ -980,7 +1384,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4 w-full">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 w-full">
                   {/* Card 1: Total Data */}
                   <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center shadow-xs transition-all">
                     <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Total Data</div>
@@ -1031,6 +1435,30 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                     <div className="text-[10px] text-teal-600/80 font-semibold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'permanent' ? '▲ Tutup Rincian' : '▼ Klik Lihat Nama'}
+                    </div>
+                  </button>
+
+                  {/* Card 4: Karyawan Kontrak */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveStatDetail(prev => prev === 'kontrak' ? null : 'kontrak');
+                      setStatDetailSearch('');
+                    }}
+                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group ${
+                      activeStatDetail === 'kontrak'
+                        ? 'border-sky-500 ring-2 ring-sky-500/30 shadow-md bg-sky-50/40'
+                        : 'border-slate-200/90 hover:border-sky-400 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="text-sky-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">
+                      Karyawan Kontrak
+                    </div>
+                    <div className="text-2xl md:text-3xl font-black text-sky-700">
+                      {contractEmployeesCount}
+                    </div>
+                    <div className="text-[10px] text-sky-600/80 font-semibold mt-0.5 group-hover:underline">
+                      {activeStatDetail === 'kontrak' ? '▲ Tutup Rincian' : '▼ Klik Lihat Nama'}
                     </div>
                   </button>
 
@@ -1102,6 +1530,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 <Briefcase className="w-5 h-5" />
                               </div>
                             )}
+                            {activeStatDetail === 'kontrak' && (
+                              <div className="p-2 rounded-xl bg-sky-100 text-sky-800">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                            )}
                             {activeStatDetail === 'izin' && (
                               <div className="p-2 rounded-xl bg-indigo-100 text-indigo-800">
                                 <Calendar className="w-5 h-5" />
@@ -1121,21 +1554,24 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             <div>
                               <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
                                 {activeStatDetail === 'permanent' && 'Daftar Karyawan Permanent (PKWTT)'}
+                                {activeStatDetail === 'kontrak' && 'Daftar Karyawan Kontrak (PKWT)'}
                                 {activeStatDetail === 'izin' && 'Daftar Karyawan Izin Bulan Berjalan'}
                                 {activeStatDetail === 'spdk' && 'Daftar Karyawan dengan Sanksi & SPDK Aktif'}
                                 {activeStatDetail === 'active' && 'Daftar Seluruh Karyawan Aktif'}
                                 <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
                                   {activeStatDetail === 'permanent' && `${permanentEmployeesCount} Karyawan`}
+                                  {activeStatDetail === 'kontrak' && `${contractEmployeesCount} Karyawan`}
                                   {activeStatDetail === 'izin' && `${monthlyIzinData.list.length} Orang (${monthlyIzinData.grandTotal} Hari)`}
                                   {activeStatDetail === 'spdk' && `${activeSpdkData.length} Kasus Aktif`}
                                   {activeStatDetail === 'active' && `${activeEmployeesCount} Karyawan`}
                                 </span>
                               </h3>
                               <p className="text-xs text-slate-500">
-                                {activeStatDetail === 'permanent' && 'Klik nama atau baris karyawan untuk membuka profil lengkap & histori kontrak.'}
+                                {activeStatDetail === 'permanent' && 'Diurutkan sesuai tingkatan hirarki jabatan resmi. Klik baris untuk profil lengkap.'}
+                                {activeStatDetail === 'kontrak' && 'Diurutkan sesuai tingkatan hirarki jabatan resmi. Klik baris untuk profil lengkap.'}
                                 {activeStatDetail === 'izin' && 'Diurutkan dari frekuensi izin terbanyak ke terkecil pada bulan berjalan.'}
                                 {activeStatDetail === 'spdk' && 'Menampilkan sanksi disiplin dan SPDK yang masih berlaku saat ini.'}
-                                {activeStatDetail === 'active' && 'Karyawan yang berstatus aktif bekerja.'}
+                                {activeStatDetail === 'active' && 'Diurutkan sesuai tingkatan hirarki jabatan resmi.'}
                               </p>
                             </div>
                           </div>
@@ -1218,13 +1654,75 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                     <div className="flex items-center gap-2 shrink-0">
                                       {emp.tanggalPermanent && emp.tanggalPermanent !== '-' && (
                                         <span className="text-[10px] font-mono text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg hidden sm:inline-block">
-                                          SK: {emp.tanggalPermanent}
+                                          SK: {formatShortDate(emp.tanggalPermanent)}
                                         </span>
                                       )}
                                       <span className="text-[10px] font-extrabold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
                                         PKWTT / Tetap
                                       </span>
                                       <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-teal-600 transition-colors" />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+
+                          {/* 2. KARYAWAN KONTRAK (SCROLLABLE LIST) */}
+                          {activeStatDetail === 'kontrak' && (() => {
+                            const filtered = contractEmployeesList.filter(e => {
+                              const q = statDetailSearch.toLowerCase().trim();
+                              if (!q) return true;
+                              return (e.name || '').toLowerCase().includes(q) ||
+                                     (e.nik || '').toLowerCase().includes(q) ||
+                                     (e.jabatan || '').toLowerCase().includes(q) ||
+                                     (e.department || '').toLowerCase().includes(q);
+                            });
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div className="py-8 text-center text-xs text-slate-400">
+                                  Tidak ada data karyawan kontrak yang sesuai pencarian.
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
+                                {filtered.map((emp, idx) => (
+                                  <div
+                                    key={emp.nik || idx}
+                                    onClick={() => setSelectedEmployee(emp)}
+                                    className="p-2.5 rounded-xl hover:bg-sky-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className="w-9 h-9 rounded-xl bg-sky-100/70 border border-sky-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-sky-800 text-xs">
+                                        {emp.photo ? (
+                                          <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                          (emp.name || 'K').charAt(0).toUpperCase()
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <div className="text-xs font-bold text-slate-800 group-hover:text-sky-700 truncate flex items-center gap-1.5">
+                                          <span>{emp.name}</span>
+                                          <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                                            {emp.nik}
+                                          </span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 truncate flex items-center gap-2 mt-0.5">
+                                          <span className="font-semibold text-slate-700">{emp.jabatan || '-'}</span>
+                                          <span>•</span>
+                                          <span>{emp.department || emp.section || '-'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="text-[10px] font-extrabold text-sky-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-lg shadow-2xs">
+                                        PKWT / Kontrak
+                                      </span>
+                                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-sky-600 transition-colors" />
                                     </div>
                                   </div>
                                 ))}
@@ -1381,7 +1879,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                                         <div className="text-right">
                                           <div className="text-[11px] font-bold font-mono text-slate-700">
-                                            Tgl: {item.tanggalSanksi}
+                                            Tgl: {formatShortDate(item.tanggalSanksi)}
                                           </div>
                                           <div className="text-[10px] text-purple-600 font-semibold mt-0.5">
                                             {item.masaBerlaku}
@@ -1464,12 +1962,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             transition={{ delay: 0.1 }}
             className="flex flex-col lg:flex-row h-full w-full p-3 sm:p-4 lg:p-6 bg-slate-50/70 gap-4 lg:gap-6 overflow-hidden relative"
           >
-            {/* SIDEBAR (Profile Info) - PALET #32AEB8 (TIMBUL ELEVATED CARD - TETAP DIAM) */}
-            <div className="lg:w-80 xl:w-92 h-full max-h-full bg-gradient-to-b from-[#1da8b5] via-[#168a96] to-[#106771] text-white shrink-0 shadow-[0_20px_50px_-10px_rgba(16,103,113,0.35),0_10px_20px_-5px_rgba(0,0,0,0.1)] rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center lg:items-start text-center lg:text-left relative overflow-hidden border-2 border-white/40 ring-1 ring-slate-900/5 transition-all">
-              <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
-              
-              <div className="flex flex-col items-center lg:items-start mb-3 w-full shrink-0">
-                <div className="w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-3xl bg-white/20 border-2 border-white/50 overflow-hidden flex items-center justify-center shrink-0 shadow-xl relative backdrop-blur-xs ring-4 ring-black/10 group">
+            {/* SIDEBAR (Profile Info) - SOLID VIBRANT TEAL 3D CARD (ELEVATED CLEAN PHYSICAL CARD TANPA GRADIEN) */}
+            <div className="lg:w-80 xl:w-92 h-full max-h-full bg-[#127c88] text-white shrink-0 shadow-[0_22px_50px_-12px_rgba(15,118,130,0.5),0_10px_20px_-6px_rgba(0,0,0,0.2)] rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative overflow-hidden border-t-2 border-white/40 border-l border-r border-b border-white/20 ring-1 ring-black/10 transition-all">
+              <div className="flex flex-col items-center text-center mb-3.5 w-full shrink-0">
+                <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-[#0b636d] border-3 border-white overflow-hidden flex items-center justify-center shrink-0 shadow-[0_14px_30px_rgba(0,0,0,0.25)] relative ring-4 ring-black/15 ring-offset-2 ring-offset-[#127c88] group mx-auto">
                   {selectedEmployee.photo ? (
                     <img 
                       src={formatAvatarUrl(selectedEmployee.photo)} 
@@ -1481,11 +1977,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       }}
                     />
                   ) : (
-                    <User className="w-12 h-12 lg:w-16 lg:h-16 text-white" />
+                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-white drop-shadow-md" />
                   )}
                   {isUploadingPhoto && (
-                    <div className="absolute inset-0 bg-[#1c7e87]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white">
-                      <RefreshCw className="w-5 h-5 animate-spin text-white mb-1" />
+                    <div className="absolute inset-0 bg-[#084850]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
+                      <RefreshCw className="w-6 h-6 animate-spin text-white mb-1.5" />
                       <span>Mengunggah...</span>
                     </div>
                   )}
@@ -1500,22 +1996,39 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       className="hidden" 
                       onChange={handlePhotoUpload} 
                     />
-                    <button
-                      type="button"
-                      onClick={() => photoInputRef.current?.click()}
-                      disabled={isUploadingPhoto}
-                      className="mt-2.5 text-[11px] font-bold px-3 py-1 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-sm border border-white/30 cursor-pointer backdrop-blur-xs"
-                      title="Perbarui atau unggah foto karyawan di database (Khusus Administration & Developer)"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-white" />
-                      <span>{selectedEmployee.photo ? 'Ganti Foto' : 'Unggah Foto'}</span>
-                    </button>
+                    <div className="flex items-center gap-2 mt-3 flex-wrap justify-center w-full">
+                      <button
+                        type="button"
+                        onClick={() => photoInputRef.current?.click()}
+                        disabled={isUploadingPhoto}
+                        className="text-[11px] font-bold px-3.5 py-1.5 rounded-xl bg-[#0e6b76] hover:bg-[#0b565e] active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-sm border border-white/25 cursor-pointer"
+                        title="Perbarui atau unggah foto karyawan di database"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-white" />
+                        <span>{selectedEmployee.photo ? 'Ganti Foto' : 'Unggah Foto'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditModalMode('edit');
+                          setSelectedEmployeeForEdit(selectedEmployee);
+                          setEditModalTab('job');
+                          setIsEditModalOpen(true);
+                        }}
+                        className="text-[11px] font-bold px-3.5 py-1.5 rounded-xl bg-[#f09b13] hover:bg-[#d98708] active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-md shadow-amber-950/20 border border-amber-300/50 cursor-pointer"
+                        title="Edit data lengkap profil karyawan ini (Khusus Section Admin Local Host)"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-white" />
+                        <span>Edit Data</span>
+                      </button>
+                    </div>
                   </>
                 )}
 
-                <h2 className="text-lg lg:text-xl font-black mt-2.5 mb-1 leading-tight text-white drop-shadow-md text-center lg:text-left w-full">{selectedEmployee.name}</h2>
-                <div className="w-full flex justify-center lg:justify-start">
-                  <p className="text-white flex items-center bg-[#f09b13] px-3 py-1 rounded-full text-[11px] font-black shadow-md ring-2 ring-white/30">
+                <h2 className="text-lg lg:text-xl font-black mt-3 mb-1 leading-tight text-white drop-shadow-sm text-center w-full">{selectedEmployee.name}</h2>
+                <div className="w-full flex justify-center">
+                  <p className="text-white inline-flex items-center bg-[#f09b13] px-3.5 py-1 rounded-full text-[11px] font-black shadow-sm border border-amber-300/40 ring-2 ring-black/10">
                     <Fingerprint className="w-3.5 h-3.5 mr-1.5" />
                     NIK: {selectedEmployee.nik}
                   </p>
@@ -1523,52 +2036,100 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               </div>
 
               {/* Detail profil disesuaikan agar tidak terpotong & scrollable internal */}
-              <div className="w-full flex-1 overflow-y-auto pr-1 space-y-2 text-white divide-y divide-white/20 custom-scrollbar-teal">
+              <div className="w-full flex-1 overflow-y-auto pr-1 space-y-2 text-white divide-y divide-white/15 custom-scrollbar-teal text-left">
                 <div className="pt-1.5 first:pt-0">
-                  <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Jabatan Baru</p>
-                  <p className="font-bold text-white text-xs sm:text-sm leading-snug">{selectedEmployee.jabatan || '-'}</p>
+                  <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-xs">Jabatan</p>
+                  <p className="font-bold text-white text-xs sm:text-sm leading-snug drop-shadow-xs">{selectedEmployee.jabatan || '-'}</p>
                 </div>
                 
                 <div className="pt-1.5">
-                  <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Perusahaan</p>
-                  <p className="font-bold text-white text-xs">{selectedEmployee.pt || '-'}</p>
+                  <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-xs">Perusahaan</p>
+                  <p className="font-bold text-white text-xs drop-shadow-xs">{selectedEmployee.pt || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1.5">
-                  <div>
-                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Job Grade</p>
-                    <p className="font-bold text-white text-xs">{selectedEmployee.jobGrade || '-'}</p>
+                  <div className="bg-[#0b636d] p-2 rounded-xl border border-white/15 shadow-sm">
+                    <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Job Grade</p>
+                    <p className="font-extrabold text-white text-xs drop-shadow-xs">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
-                  <div>
-                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Golongan</p>
-                    <p className="font-bold text-white text-xs">{selectedEmployee.gol || '-'}</p>
+                  <div className="bg-[#0b636d] p-2 rounded-xl border border-white/15 shadow-sm">
+                    <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Golongan</p>
+                    <p className="font-extrabold text-white text-xs drop-shadow-xs">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
 
                 <div className="pt-1.5">
-                  <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Bagian (Section)</p>
-                  <p className="font-bold text-white text-xs">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
+                  <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-xs">Bagian (Section)</p>
+                  <p className="font-bold text-white text-xs drop-shadow-xs">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1.5">
-                  <div>
-                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">DOH Awal</p>
-                    <p className="font-bold text-white text-xs">{selectedEmployee.tanggalAwalBergabung || '-'}</p>
+                  <div className="bg-[#0b636d] p-2 rounded-xl border border-white/15 shadow-sm">
+                    <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">DOH Awal</p>
+                    <p className="font-bold text-white text-xs font-mono drop-shadow-xs">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
                   </div>
-                  <div>
-                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
-                    <p className="font-bold text-white text-xs">{selectedEmployee.tanggalJabatanBaru || '-'}</p>
+                  <div className="bg-[#0b636d] p-2 rounded-xl border border-white/15 shadow-sm">
+                    <p className="text-teal-100 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
+                    <p className="font-bold text-white text-xs font-mono drop-shadow-xs">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-1.5 pb-2">
-                  <div>
-                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Masa Kerja</p>
-                    <p className="font-bold text-white text-xs">{selectedEmployee.masaKerja || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[#e2f9fb] text-[10px] font-bold mb-0.5 uppercase tracking-wider">Masa Kerja Jabatan</p>
-                    <p className="font-bold text-white text-xs">{selectedEmployee.masaKerjaJabatanTerakhir || '-'}</p>
+                {/* SATUKAN MASA KERJA JABATAN DENGAN DROPDOWN LIST (SEKARANG & SEBELUMNYA) */}
+                <div className="pt-2 pb-1 space-y-1.5">
+                  <div className="bg-[#0b636d] hover:bg-[#0a5861] p-2.5 rounded-2xl border border-white/20 transition-all shadow-md">
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-teal-100" />
+                        <span className="text-teal-100 text-[10px] font-black uppercase tracking-wider drop-shadow-xs">
+                          Masa Kerja Jabatan
+                        </span>
+                      </div>
+
+                      {/* Drop Down List: Sekarang vs Sebelumnya */}
+                      <div className="relative">
+                        <select
+                          value={tenureDropdownPeriod}
+                          onChange={(e) => setTenureDropdownPeriod(e.target.value as 'sekarang' | 'sebelumnya')}
+                          className="bg-[#084850] hover:bg-[#06393f] text-white text-[10.5px] font-extrabold pl-2.5 pr-6 py-0.5 rounded-lg border border-teal-300/40 cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-teal-200 appearance-none"
+                          title="Pilih masa kerja jabatan sekarang atau sebelumnya"
+                        >
+                          <option value="sekarang">Sekarang</option>
+                          <option value="sebelumnya">Sebelumnya</option>
+                        </select>
+                        <ChevronDown className="w-3 h-3 text-teal-100 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* Nilai Masa Kerja Jabatan Berdasarkan Pilihan Dropdown */}
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="font-black text-white text-sm sm:text-base drop-shadow-xs">
+                        {tenureInfo[tenureDropdownPeriod].value}
+                      </p>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-xs ${
+                        tenureDropdownPeriod === 'sekarang'
+                          ? 'bg-teal-400/25 text-white border border-teal-200/40'
+                          : 'bg-amber-400/25 text-white border border-amber-300/40'
+                      }`}>
+                        {tenureDropdownPeriod === 'sekarang' ? 'Jabatan Sekarang' : 'Jabatan Sebelumnya'}
+                      </span>
+                    </div>
+
+                    {/* Keterangan Sekarang vs Sebelumnya */}
+                    <div className="mt-1.5 text-[9.5px] text-teal-100 leading-tight flex items-start gap-1.5 font-medium bg-[#084850] p-2 rounded-xl border border-white/10 shadow-inner">
+                      <Info className="w-3.5 h-3.5 text-teal-100 shrink-0 mt-0.5" />
+                      <span>
+                        <strong className="text-white mr-1">
+                          Keterangan {tenureDropdownPeriod === 'sekarang' ? 'Sekarang:' : 'Sebelumnya:'}
+                        </strong>
+                        {tenureInfo[tenureDropdownPeriod].keterangan}
+                      </span>
+                    </div>
+
+                    {/* Informasi Total Masa Kerja */}
+                    <div className="mt-2 pt-1.5 border-t border-white/20 flex items-center justify-between text-[10px]">
+                      <span className="text-teal-100 font-medium drop-shadow-xs">Masa Kerja Total (DOH):</span>
+                      <span className="font-extrabold text-white font-mono drop-shadow-xs">{tenureInfo.total.value}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1586,14 +2147,37 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 
                 <div className="flex items-center gap-3">
                   {canManageDatabase && (
-                    <Button
-                      onClick={() => setIsEditModalOpen(true)}
-                      size="sm"
-                      className="bg-[#22a7b8] hover:bg-[#1b8f9e] text-white flex items-center gap-1.5 rounded-2xl text-xs font-bold px-4 py-2.5 shadow-md shadow-teal-500/20 active:scale-95 transition-all cursor-pointer"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                      <span>Edit Data Karyawan</span>
-                    </Button>
+                    <>
+                      <Button
+                        onClick={() => {
+                          setEditModalMode('edit');
+                          setSelectedEmployeeForEdit(selectedEmployee);
+                          setEditModalTab('job');
+                          setIsEditModalOpen(true);
+                        }}
+                        size="sm"
+                        className="bg-[#22a7b8] hover:bg-[#1b8f9e] text-white flex items-center gap-1.5 rounded-2xl text-xs font-bold px-4 py-2.5 shadow-md shadow-teal-500/20 active:scale-95 transition-all cursor-pointer"
+                        title="Edit data karyawan ini"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Edit Data Karyawan</span>
+                      </Button>
+
+                      <Button
+                        onClick={() => {
+                          setEditModalMode('add');
+                          setSelectedEmployeeForEdit(null);
+                          setEditModalTab('job');
+                          setIsEditModalOpen(true);
+                        }}
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 rounded-2xl text-xs font-bold px-4 py-2.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
+                        title="Tambah karyawan baru"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>+ Tambah Karyawan</span>
+                      </Button>
+                    </>
                   )}
                   
                   <Card className="p-3.5 sm:p-4 bg-white shadow-sm border-l-4 border-l-[#f09b13] min-w-[180px] border border-slate-200/80 rounded-2xl">
@@ -1612,51 +2196,47 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
                     {/* Status Karyawan */}
-                    <div className="bg-gradient-to-br from-[#38AEB8] via-[#2BA1AA] to-[#1C7F88] rounded-2xl p-4 text-white shadow-md shadow-[#2BA1AA]/20 border border-white/25 relative overflow-hidden group hover:shadow-lg transition-all">
-                      <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
-                      <p className="text-[#E2F9FB] text-[11px] uppercase font-extrabold tracking-wider mb-1 relative z-10">Status Karyawan</p>
-                      <p className="font-black text-lg text-white drop-shadow-xs relative z-10">{selectedEmployee.statusKaryawan || '-'}</p>
+                    <div className="bg-[#1ba3b0] hover:bg-[#1895a2] rounded-2xl p-4 text-white shadow-md shadow-teal-500/20 border border-teal-300/30 transition-all">
+                      <p className="text-[#e0f9fc] text-[11px] uppercase font-extrabold tracking-wider mb-1">Status Karyawan</p>
+                      <p className="font-black text-lg text-white drop-shadow-xs">{selectedEmployee.statusKaryawan || '-'}</p>
                     </div>
 
                     {/* Status Kontrak */}
-                    <div className="bg-gradient-to-br from-[#F5A623] via-[#E89516] to-[#C97906] rounded-2xl p-4 text-white shadow-md shadow-[#E89516]/20 border border-white/25 relative overflow-hidden group hover:shadow-lg transition-all">
-                      <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
-                      <p className="text-[#FEF6E7] text-[11px] uppercase font-extrabold tracking-wider mb-1 relative z-10">Status Kontrak</p>
-                      <p className="font-black text-lg text-white drop-shadow-xs relative z-10">{selectedEmployee.statusKontrak || '-'}</p>
+                    <div className="bg-[#f09b13] hover:bg-[#e08e0d] rounded-2xl p-4 text-white shadow-md shadow-amber-500/20 border border-amber-300/30 transition-all">
+                      <p className="text-[#fef6e7] text-[11px] uppercase font-extrabold tracking-wider mb-1">Status Kontrak</p>
+                      <p className="font-black text-lg text-white drop-shadow-xs">{selectedEmployee.statusKontrak || '-'}</p>
                     </div>
 
                     {/* Tgl Efektif Tidak Bekerja (Conditional) */}
                     {selectedEmployee.tanggalEfektifTidakBekerja && (
-                      <div className="col-span-2 bg-gradient-to-br from-[#E13B56] via-[#CB2440] to-[#A8162E] rounded-2xl p-4 text-white shadow-md shadow-[#CB2440]/20 border border-white/25 flex justify-between items-center relative overflow-hidden">
-                        <div className="relative z-10">
-                          <p className="text-[#FDE8EC] text-[11px] uppercase font-extrabold tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
-                          <p className="font-black text-base drop-shadow-xs">{selectedEmployee.tanggalEfektifTidakBekerja}</p>
+                      <div className="col-span-2 bg-[#dc2626] hover:bg-[#b91c1c] rounded-2xl p-4 text-white shadow-md shadow-rose-600/20 border border-rose-300/30 flex justify-between items-center transition-all">
+                        <div>
+                          <p className="text-[#ffe4e6] text-[11px] uppercase font-extrabold tracking-wider mb-1">Tgl Efektif Tidak Bekerja</p>
+                          <p className="font-black text-base drop-shadow-xs">{formatShortDate(selectedEmployee.tanggalEfektifTidakBekerja)}</p>
                         </div>
-                        <Calendar className="w-6 h-6 text-white/60 relative z-10" />
+                        <Calendar className="w-6 h-6 text-white/70" />
                       </div>
                     )}
 
                     {/* Sisa Cuti (CT) */}
-                    <div className="bg-gradient-to-br from-[#32A8B2] via-[#24959E] to-[#18757D] rounded-2xl p-4 text-white shadow-md shadow-[#24959E]/20 border border-white/25 relative overflow-hidden group hover:shadow-lg transition-all">
-                      <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
-                      <p className="text-[#E2F9FB] text-[11px] uppercase font-extrabold tracking-wider mb-1 relative z-10">Sisa Cuti (CT)</p>
-                      <p className="font-black text-2xl text-white drop-shadow-xs relative z-10">{selectedEmployee.sisaCt || '-'}</p>
+                    <div className="bg-[#14838f] hover:bg-[#117681] rounded-2xl p-4 text-white shadow-md shadow-teal-600/20 border border-teal-300/30 transition-all">
+                      <p className="text-[#e0f9fc] text-[11px] uppercase font-extrabold tracking-wider mb-1">Sisa Cuti (CT)</p>
+                      <p className="font-black text-2xl text-white drop-shadow-xs">{selectedEmployee.sisaCt || '-'}</p>
                     </div>
 
                     {/* Jatuh Tempo CT */}
-                    <div className="bg-gradient-to-br from-[#248D96] via-[#1A7780] to-[#125B63] rounded-2xl p-4 text-white shadow-md shadow-[#1A7780]/20 border border-white/25 relative overflow-hidden group hover:shadow-lg transition-all">
-                      <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
-                      <p className="text-[#D4F3F5] text-[11px] uppercase font-extrabold tracking-wider mb-1 relative z-10">Jatuh Tempo CT</p>
-                      <p className="font-black text-base text-white drop-shadow-xs relative z-10">{selectedEmployee.jatuhTempoCt || '-'}</p>
+                    <div className="bg-[#0f6e78] hover:bg-[#0d616a] rounded-2xl p-4 text-white shadow-md shadow-teal-700/20 border border-teal-300/30 transition-all">
+                      <p className="text-[#d5f5f7] text-[11px] uppercase font-extrabold tracking-wider mb-1">Jatuh Tempo CT</p>
+                      <p className="font-black text-base text-white drop-shadow-xs">{formatShortDate(selectedEmployee.jatuhTempoCt)}</p>
                     </div>
 
                     {/* Tanggal Permanen */}
-                    <div className="col-span-2 bg-gradient-to-br from-[#5B95DE] via-[#4680C8] to-[#346AAE] rounded-2xl p-4 text-white shadow-md shadow-[#4680C8]/20 border border-white/25 flex justify-between items-center relative overflow-hidden group hover:shadow-lg transition-all">
-                      <div className="relative z-10">
-                        <p className="text-[#E3EEFF] text-[11px] uppercase font-extrabold tracking-wider mb-1">Tanggal Permanen</p>
-                        <p className="font-black text-base drop-shadow-xs">{selectedEmployee.tanggalPermanent || '-'}</p>
+                    <div className="col-span-2 bg-[#2563eb] hover:bg-[#1d4ed8] rounded-2xl p-4 text-white shadow-md shadow-blue-500/20 border border-blue-300/30 flex justify-between items-center transition-all">
+                      <div>
+                        <p className="text-[#e0edff] text-[11px] uppercase font-extrabold tracking-wider mb-1">Tanggal Permanen</p>
+                        <p className="font-black text-base drop-shadow-xs">{formatShortDate(selectedEmployee.tanggalPermanent)}</p>
                       </div>
-                      <Calendar className="w-8 h-8 text-white/50 relative z-10" />
+                      <Calendar className="w-8 h-8 text-white/60" />
                     </div>
                   </div>
                 </div>
@@ -1723,6 +2303,190 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       </div>
                     </Card>
                   </div>
+
+                  {/* CATATAN & LIST ACHIEVEMENTS (MENGISI RUANG KOSONG) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Card 1: Catatan Karyawan (Elegant, Full, No Box-in-Box) */}
+                    <Card className="p-5 shadow-xs border-slate-200/80 bg-white/95 backdrop-blur-md rounded-2xl flex flex-col justify-between min-h-[220px]">
+                      <div className="flex-1 flex flex-col">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600">
+                              <StickyNote className="w-4 h-4" />
+                            </span>
+                            <h4 className="font-extrabold text-sm text-slate-800 tracking-tight">Catatan Karyawan</h4>
+                          </div>
+                          {canManageDatabase && !isEditingNotes && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNoteContent(selectedEmployee.catatan || '');
+                                setIsEditingNotes(true);
+                              }}
+                              className="text-xs font-bold text-amber-700 hover:text-amber-800 hover:bg-amber-50 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer border border-amber-200"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span>Edit Catatan</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {isEditingNotes ? (
+                          <div className="pt-3 flex-1 flex flex-col space-y-2">
+                            <textarea
+                              value={noteContent}
+                              onChange={(e) => setNoteContent(e.target.value)}
+                              placeholder="Tuliskan catatan di sini..."
+                              className="w-full flex-1 min-h-[120px] p-2 text-[13px] md:text-sm italic font-medium text-slate-800 placeholder:text-slate-400 bg-transparent border-0 border-b-2 border-amber-400 focus:outline-none focus:border-amber-600 resize-none leading-relaxed"
+                              autoFocus
+                            />
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                              <button
+                                type="button"
+                                disabled={isSavingNotes}
+                                onClick={() => {
+                                  setNoteContent(selectedEmployee.catatan || '');
+                                  setIsEditingNotes(false);
+                                }}
+                                className="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 rounded-lg transition-colors cursor-pointer"
+                              >
+                                Batal
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isSavingNotes}
+                                onClick={handleSaveNotes}
+                                className="px-3.5 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg flex items-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                              >
+                                {isSavingNotes ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="w-3.5 h-3.5" />
+                                )}
+                                <span>Simpan</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => {
+                              if (canManageDatabase) {
+                                setNoteContent(selectedEmployee.catatan || '');
+                                setIsEditingNotes(true);
+                              }
+                            }}
+                            className={`py-3 flex-1 flex flex-col justify-center min-h-[140px] max-h-[170px] overflow-y-auto custom-scrollbar ${
+                              canManageDatabase ? 'cursor-pointer group' : ''
+                            }`}
+                            title={canManageDatabase ? 'Klik untuk mengubah catatan' : undefined}
+                          >
+                            {selectedEmployee.catatan ? (
+                              <div className="pl-3.5 border-l-2 border-amber-400">
+                                <p className="italic text-[13px] md:text-sm text-slate-800 font-medium leading-relaxed whitespace-pre-wrap select-text">
+                                  "{selectedEmployee.catatan}"
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center text-center py-6">
+                                <p className="italic text-sm text-slate-400 font-medium">
+                                  {canManageDatabase ? 'Belum ada catatan. Klik di sini untuk menambahkan catatan...' : 'Tidak ada catatan.'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+
+                    {/* Card 2: List Achievements (Bisa di-scroll) */}
+                    <Card className="p-5 shadow-xs border-slate-200/80 bg-white/95 backdrop-blur-md rounded-2xl flex flex-col justify-between min-h-[220px]">
+                      <div>
+                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600">
+                              <Trophy className="w-4 h-4 text-amber-500" />
+                            </span>
+                            <h4 className="font-extrabold text-sm text-slate-800 tracking-tight">List Achievements</h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              {achievementList.length}
+                            </span>
+                          </div>
+                          {canManageDatabase && (
+                            <button
+                              type="button"
+                              onClick={() => setIsAddAchievementModalOpen(true)}
+                              className="text-xs font-bold text-amber-800 hover:text-amber-900 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100/70 hover:bg-amber-100 transition-all cursor-pointer border border-amber-300"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Tambah</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="max-h-[160px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+                          {achievementList.length > 0 ? (
+                            achievementList.map((ach: any, idx: number) => (
+                              <div
+                                key={ach.id || idx}
+                                className="p-3 rounded-xl bg-gradient-to-r from-amber-50/70 via-orange-50/30 to-white border border-amber-200/70 hover:border-amber-300 transition-all group relative"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-start gap-2.5 min-w-0">
+                                    <span className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs shrink-0 mt-0.5">
+                                      <Award className="w-3.5 h-3.5" />
+                                    </span>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h5 className="font-bold text-xs text-slate-900 truncate">{ach.title}</h5>
+                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                                          {ach.category}
+                                        </span>
+                                      </div>
+                                      {ach.description && (
+                                        <p className="text-[11px] text-slate-600 mt-0.5 leading-snug line-clamp-2">
+                                          {ach.description}
+                                        </p>
+                                      )}
+                                      <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
+                                        {ach.date && (
+                                          <span className="font-mono text-slate-500 flex items-center gap-1">
+                                            <Calendar className="w-2.5 h-2.5" /> {formatShortDate(ach.date)}
+                                          </span>
+                                        )}
+                                        {ach.notes && (
+                                          <span className="italic text-slate-500 truncate max-w-[180px]">
+                                            • {ach.notes}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {canManageDatabase && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteAchievement(ach.id)}
+                                      title="Hapus achievement"
+                                      className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shrink-0 cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="h-full min-h-[110px] flex flex-col items-center justify-center text-center text-slate-400">
+                              <Trophy className="w-6 h-6 mb-1 text-slate-300" />
+                              <p className="text-xs font-medium">Belum ada achievement/prestasi tercatat</p>
+                              {canManageDatabase && (
+                                <p className="text-[10px] text-amber-600 mt-0.5">Import sheet Achievements atau klik '+ Tambah'</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
                 </div>
               </div>
 
@@ -1740,7 +2504,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                     <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
                       <p className="text-sm font-medium text-slate-500 col-span-1">TTL</p>
-                      <p className="text-sm font-semibold text-slate-800 col-span-2">{selectedEmployee.tempatLahir || '-'}, {selectedEmployee.tanggalLahir || '-'}</p>
+                      <p className="text-sm font-semibold text-slate-800 col-span-2">
+                        {selectedEmployee.tempatLahir && selectedEmployee.tempatLahir !== '-'
+                          ? `${selectedEmployee.tempatLahir}, ${formatTtlDate(selectedEmployee.tanggalLahir)}`
+                          : formatTtlDate(selectedEmployee.tanggalLahir)}
+                      </p>
                     </div>
                     <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3">
                       <p className="text-sm font-medium text-slate-500 col-span-1">Nomor Telp.</p>
@@ -1794,11 +2562,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 const att26 = selectedEmployee.attendance2026 || selectedEmployee.attendance?.['2026'] || selectedEmployee.attendance?.[2026] || selectedEmployee.attendanceData?.['2026'] || selectedEmployee.attendanceData?.[2026] || {};
                 const parseDateList = (val?: any) => {
                   if (!val) return [];
-                  if (Array.isArray(val)) return val.map(s => String(s).trim()).filter(Boolean);
-                  return String(val)
-                    .split(/[\r\n,;]+/)
-                    .map(s => s.trim())
-                    .filter(s => s && s !== '-' && s !== '#N/A');
+                  const rawList = Array.isArray(val) ? val : String(val).split(/[\r\n,;]+/);
+                  return rawList
+                    .map(s => String(s).trim())
+                    .filter(s => s && s !== '-' && s !== '#N/A' && s !== '0')
+                    .map(s => formatShortDate(s));
                 };
                 const parseReasonList = (val?: any) => {
                   if (!val) return [];
@@ -2417,13 +3185,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     const endDate = new Date(baseDate.getTime());
                     endDate.setMonth(endDate.getMonth() + 6);
 
-                    calculatedMasaBerlaku = `${formatIndoDateStr(baseDate)} s/d ${formatIndoDateStr(endDate)} (6 Bulan)`;
-                    calculatedPemulihan1 = `${formatIndoDateStr(evalDate)} (Evaluasi Disiplin)`;
-                    calculatedPemulihan2 = `${formatIndoDateStr(endDate)} (Pemutihan Status)`;
+                    calculatedMasaBerlaku = `${formatShortDate(baseDate)} s/d ${formatShortDate(endDate)} (6 Bulan)`;
+                    calculatedPemulihan1 = `${formatShortDate(evalDate)} (Evaluasi Disiplin)`;
+                    calculatedPemulihan2 = `${formatShortDate(endDate)} (Pemutihan Status)`;
                   } else {
-                    calculatedMasaBerlaku = `${spMajorDateStr} (Masa Aktif 6 Bulan)`;
-                    calculatedPemulihan1 = `${spMajorDateStr} + 3 Bulan`;
-                    calculatedPemulihan2 = `${spMajorDateStr} + 6 Bulan`;
+                    calculatedMasaBerlaku = `${formatShortDate(spMajorDateStr)} (Masa Aktif 6 Bulan)`;
+                    calculatedPemulihan1 = `${formatShortDate(spMajorDateStr)} + 3 Bulan`;
+                    calculatedPemulihan2 = `${formatShortDate(spMajorDateStr)} + 6 Bulan`;
                   }
                 } else if (hasSt && stDateStr) {
                   const baseDate = parseSanctionDate(stDateStr);
@@ -2433,13 +3201,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     const endDate = new Date(baseDate.getTime());
                     endDate.setMonth(endDate.getMonth() + 3);
 
-                    calculatedMasaBerlaku = `${formatIndoDateStr(baseDate)} s/d ${formatIndoDateStr(endDate)} (3 Bulan)`;
-                    calculatedPemulihan1 = `${formatIndoDateStr(evalDate)} (Evaluasi Disiplin)`;
-                    calculatedPemulihan2 = `${formatIndoDateStr(endDate)} (Pemutihan Status)`;
+                    calculatedMasaBerlaku = `${formatShortDate(baseDate)} s/d ${formatShortDate(endDate)} (3 Bulan)`;
+                    calculatedPemulihan1 = `${formatShortDate(evalDate)} (Evaluasi Disiplin)`;
+                    calculatedPemulihan2 = `${formatShortDate(endDate)} (Pemutihan Status)`;
                   } else {
-                    calculatedMasaBerlaku = `${stDateStr} (Masa Aktif 3 Bulan)`;
-                    calculatedPemulihan1 = `${stDateStr} + 45 Hari`;
-                    calculatedPemulihan2 = `${stDateStr} + 3 Bulan`;
+                    calculatedMasaBerlaku = `${formatShortDate(stDateStr)} (Masa Aktif 3 Bulan)`;
+                    calculatedPemulihan1 = `${formatShortDate(stDateStr)} + 45 Hari`;
+                    calculatedPemulihan2 = `${formatShortDate(stDateStr)} + 3 Bulan`;
                   }
                 } else if (hasCounseling && counselingDateStr) {
                   const baseDate = parseSanctionDate(counselingDateStr);
@@ -2449,13 +3217,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     const endDate = new Date(baseDate.getTime());
                     endDate.setMonth(endDate.getMonth() + 3);
 
-                    calculatedMasaBerlaku = `${formatIndoDateStr(baseDate)} s/d ${formatIndoDateStr(endDate)} (3 Bulan)`;
-                    calculatedPemulihan1 = `${formatIndoDateStr(evalDate)} (Evaluasi Pembinaan)`;
-                    calculatedPemulihan2 = `${formatIndoDateStr(endDate)} (Selesai Pembinaan)`;
+                    calculatedMasaBerlaku = `${formatShortDate(baseDate)} s/d ${formatShortDate(endDate)} (3 Bulan)`;
+                    calculatedPemulihan1 = `${formatShortDate(evalDate)} (Evaluasi Pembinaan)`;
+                    calculatedPemulihan2 = `${formatShortDate(endDate)} (Selesai Pembinaan)`;
                   } else {
-                    calculatedMasaBerlaku = `${counselingDateStr} (Masa Berlaku 3 Bulan)`;
-                    calculatedPemulihan1 = `${counselingDateStr} + 45 Hari`;
-                    calculatedPemulihan2 = `${counselingDateStr} + 3 Bulan`;
+                    calculatedMasaBerlaku = `${formatShortDate(counselingDateStr)} (Masa Berlaku 3 Bulan)`;
+                    calculatedPemulihan1 = `${formatShortDate(counselingDateStr)} + 45 Hari`;
+                    calculatedPemulihan2 = `${formatShortDate(counselingDateStr)} + 3 Bulan`;
                   }
                 }
 
@@ -2676,11 +3444,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     {(() => {
                       const parseSanctionDateList = (val?: any): string[] => {
                         if (!val) return [];
-                        if (Array.isArray(val)) return val.map(s => String(s).trim()).filter(s => s && s !== '-' && s !== '0' && s !== '#N/A');
-                        return String(val)
-                          .split(/[\r\n,;]+/)
-                          .map(s => s.trim())
-                          .filter(s => s && s !== '-' && s !== '0' && s !== '#N/A');
+                        const rawList = Array.isArray(val) ? val : String(val).split(/[\r\n,;]+/);
+                        return rawList
+                          .map(s => String(s).trim())
+                          .filter(s => s && s !== '-' && s !== '0' && s !== '#N/A')
+                          .map(s => formatShortDate(s));
                       };
 
                       const k1Dates = parseSanctionDateList(k1);
@@ -2960,24 +3728,41 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         inspectorNik={inspectorNik}
       />
 
-      {/* Modal Edit Data Karyawan Lengkap (Khusus Administration) */}
+      {/* Modal Edit & Tambah Data Karyawan (Khusus Section Admin Local Host) */}
       <EmployeeEditModal
         isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        employee={selectedEmployee}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedEmployeeForEdit(null);
+        }}
+        employee={editModalMode === 'add' ? (selectedEmployeeForEdit || {}) : selectedEmployee}
+        mode={editModalMode}
         inspectorNik={inspectorNik}
         initialTab={editModalTab}
-        onSuccess={(updated) => {
-          setSelectedEmployee(updated);
-          setEmployees(prev => {
-            const next = prev.map(e => e.nik === updated.nik ? updated : e);
-            try {
-              const cacheStr = JSON.stringify(next);
-              localStorage.setItem(cacheKey, cacheStr);
-              sessionStorage.setItem(cacheKey, cacheStr);
-            } catch {}
-            return next;
-          });
+        onSuccess={(saved) => {
+          if (editModalMode === 'add') {
+            setSelectedEmployee(saved);
+            setEmployees(prev => {
+              const next = [saved, ...prev.filter(e => e.nik !== saved.nik)];
+              try {
+                const cacheStr = JSON.stringify(next);
+                localStorage.setItem(cacheKey, cacheStr);
+                sessionStorage.setItem(cacheKey, cacheStr);
+              } catch {}
+              return next;
+            });
+          } else {
+            setSelectedEmployee(saved);
+            setEmployees(prev => {
+              const next = prev.map(e => e.nik === saved.nik ? saved : e);
+              try {
+                const cacheStr = JSON.stringify(next);
+                localStorage.setItem(cacheKey, cacheStr);
+                sessionStorage.setItem(cacheKey, cacheStr);
+              } catch {}
+              return next;
+            });
+          }
         }}
       />
 
@@ -3013,6 +3798,136 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         }}
         isSectionManager={isSectionManager}
       />
+
+      {/* Modal Tambah Achievement (Khusus Section Admin di Local Host) */}
+      {isAddAchievementModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-white rounded-3xl border border-amber-200 shadow-2xl overflow-hidden flex flex-col text-slate-900"
+          >
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-amber-50 via-orange-50/40 to-white">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 rounded-2xl bg-amber-500 text-white shadow-md">
+                  <Trophy className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    Tambah Achievement Karyawan
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {selectedEmployee?.name} ({selectedEmployee?.nik})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddAchievementModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddAchievement} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Judul Achievement / Prestasi <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newAchievementTitle}
+                  onChange={(e) => setNewAchievementTitle(e.target.value)}
+                  placeholder="Contoh: Best Safety Performance Q1, Inovasi Kaizen Lab"
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Kategori
+                  </label>
+                  <select
+                    value={newAchievementCategory}
+                    onChange={(e) => setNewAchievementCategory(e.target.value)}
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium bg-white"
+                  >
+                    <option value="K3 & Keselamatan">K3 & Keselamatan</option>
+                    <option value="Inovasi & Improvement">Inovasi & Improvement</option>
+                    <option value="Disiplin & Produktivitas">Disiplin & Produktivitas</option>
+                    <option value="Kinerja & Prestasi">Kinerja & Prestasi</option>
+                    <option value="Sertifikasi & Pelatihan">Sertifikasi & Pelatihan</option>
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Tanggal Dicapai
+                  </label>
+                  <input
+                    type="text"
+                    value={newAchievementDate}
+                    onChange={(e) => setNewAchievementDate(e.target.value)}
+                    placeholder="Contoh: 15-Mar-2026 atau 2026-03-15"
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Keterangan / Deskripsi Pencapaian
+                </label>
+                <textarea
+                  rows={2}
+                  value={newAchievementDesc}
+                  onChange={(e) => setNewAchievementDesc(e.target.value)}
+                  placeholder="Contoh: Zero incident dan kepatuhan APD 100% di area preparation..."
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Catatan Tambahan
+                </label>
+                <input
+                  type="text"
+                  value={newAchievementNotes}
+                  onChange={(e) => setNewAchievementNotes(e.target.value)}
+                  placeholder="Contoh: Konsisten dalam implementasi 5S harian"
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsAddAchievementModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingAchievement}
+                  className="px-4 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingAchievement ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5" />
+                  )}
+                  <span>Simpan Achievement</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

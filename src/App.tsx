@@ -1894,7 +1894,7 @@ export default function App() {
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/finance" element={<FinanceScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="/leaderboard" element={<LeaderboardScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} userProfile={userProfile} onBack={() => handleNav('home')} />} />
-  <Route path="/logbook" element={<LogbookScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/logbook" element={<LogbookScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} onSelectBulletinPost={(postId) => navigate(`/bulletin/${userProfile?.pt === 'GTS' ? 'GTS' : 'TBP'}?postId=${postId}`)} />} />
   <Route path="/clinic" element={<ClinicScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} />} />
   <Route path="/kunjungan-klinik" element={<Navigate to="/clinic" replace />} />
   <Route path="*" element={<Navigate to="/" replace />} />

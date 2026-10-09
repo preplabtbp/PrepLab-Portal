@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { TbpDashboard } from "./TbpDashboard";
-import { SectionHubDashboard } from "./SectionHubDashboard";
+import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
 import { NotionDatabaseTable, TableRowData } from "./NotionDatabaseTable";
 import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
+import { PortalImagePickerModal } from "./PortalImagePickerModal";
 import { Card, Button, Input } from "./ui";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -22,6 +23,7 @@ import {
   Edit2,
   Check,
   X,
+  Camera,
   Image as ImageIcon,
   ChevronRight,
   ChevronLeft,
@@ -156,6 +158,41 @@ export function BulletinBoard({
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [notificationsList, setNotificationsList] = useState<any[]>([]);
   const [bulletinNotifTab, setBulletinNotifTab] = useState<'notifications' | 'changelog'>('notifications');
+
+  // Cover Image Customization State
+  const [showCoverModal, setShowCoverModal] = useState(false);
+  const [coverInputUrl, setCoverInputUrl] = useState('');
+  const [isSavingCover, setIsSavingCover] = useState(false);
+
+  const handleOpenCoverModal = (currentCover?: string) => {
+    setCoverInputUrl(currentCover || '');
+    setShowCoverModal(true);
+  };
+
+  const handleSaveCover = async (newUrl?: string) => {
+    if (!selectedPost) return;
+    const finalUrl = typeof newUrl === 'string' ? newUrl : coverInputUrl.trim();
+    setIsSavingCover(true);
+    try {
+      const res = await fetch(`/api/bulletin/${selectedPost.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coverImage: finalUrl || null })
+      });
+      if (res.ok) {
+        setSelectedPost((prev: any) => prev ? { ...prev, coverImage: finalUrl || undefined } : null);
+        toast.success(finalUrl ? 'Cover banner berhasil diperbarui!' : 'Cover banner dihapus');
+        setShowCoverModal(false);
+        fetchPosts();
+      } else {
+        toast.error('Gagal memperbarui cover banner');
+      }
+    } catch {
+      toast.error('Terjadi kesalahan saat menyimpan cover');
+    } finally {
+      setIsSavingCover(false);
+    }
+  };
 
   // AI Meeting Note Form State
   const [aiMeetingTitle, setAiMeetingTitle] = useState("");
@@ -1826,16 +1863,37 @@ ${aiMeetingNotes
             </div>
           ) : parsedTableData ? (
             <div className="w-full max-w-none animate-in fade-in duration-200">
-              {/* Cover Image */}
-              {selectedPost.coverImage && (
+              {/* Cover Image & Customizer */}
+              {selectedPost.coverImage ? (
                 <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-3 border border-slate-200/80 shadow-xs"
+                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-3 border border-slate-200/80 shadow-xs relative group"
                 >
                   <img
                     src={selectedPost.coverImage}
                     alt="Cover"
                     className="w-full h-full object-cover"
                   />
+                  <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCoverModal(selectedPost.coverImage)}
+                      className="px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xs shadow-md transition-all cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-lime-400" />
+                      <span>Ganti Cover Banner</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCoverModal('')}
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-teal-600" />
+                    <span>+ Tambah Cover Banner</span>
+                  </button>
                 </div>
               )}
 
@@ -2162,16 +2220,37 @@ ${aiMeetingNotes
                 </div>
               </div>
 
-              {/* Cover Image */}
-              {selectedPost.coverImage && (
+              {/* Cover Image & Customizer */}
+              {selectedPost.coverImage ? (
                 <div 
-                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-200/80 shadow-xs"
+                  className="w-full h-48 md:h-64 rounded-xl overflow-hidden mb-6 border border-slate-200/80 shadow-xs relative group"
                 >
                   <img
                     src={selectedPost.coverImage}
                     alt="Cover"
                     className="w-full h-full object-cover"
                   />
+                  <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCoverModal(selectedPost.coverImage)}
+                      className="px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xs shadow-md transition-all cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-lime-400" />
+                      <span>Ganti Cover Banner</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCoverModal('')}
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-teal-600" />
+                    <span>+ Tambah Cover Banner</span>
+                  </button>
                 </div>
               )}
 
@@ -2956,6 +3035,18 @@ ${aiMeetingNotes
           </div>
         </div>
       )}
+
+      {/* Universal Google Drive Galeri & Upload Cover Modal */}
+      <PortalImagePickerModal
+        isOpen={showCoverModal}
+        onClose={() => setShowCoverModal(false)}
+        onSelectImage={(url) => handleSaveCover(url)}
+        currentImage={selectedPost?.coverImage || ''}
+        title={`Ubah Cover Halaman - ${selectedPost?.title || 'Dokumen'}`}
+        description="Pilih foto dari Galeri Portal Google Drive, upload foto baru, atau gunakan preset tema resmi."
+        allowClear={true}
+        onClearImage={() => handleSaveCover('')}
+      />
     </div>
   );
 }
