@@ -598,15 +598,7 @@ employeesRouter.get("/:nik", async (req, res) => {
 employeesRouter.post("/", async (req, res) => {
   try {
     const requesterNik = req.body?.editorNik || req.headers['x-user-nik'] || req.body?.nik;
-    
-    // Validasi lingkungan: Hanya diizinkan melalui Local Host
-    const isLocal = isLocalhostRequest(req);
-    if (!isLocal) {
-      return res.status(403).json({
-        status: "error",
-        message: "Akses ditolak: Penambahan karyawan baru hanya dapat dilakukan melalui Section Admin di Local Host."
-      });
-    }
+
 
     // Validasi otorisasi: Khusus Section Admin / Administration / Developer
     const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
@@ -1685,14 +1677,7 @@ employeesRouter.put("/:nik", async (req, res) => {
     const { nik } = req.params;
     const requesterNik = req.body?.editorNik || req.headers['x-user-nik'];
 
-    // Validasi lingkungan: Hanya diizinkan melalui Local Host
-    const isLocal = isLocalhostRequest(req);
-    if (!isLocal) {
-      return res.status(403).json({
-        status: "error",
-        message: "Akses ditolak: Pengeditan data karyawan hanya dapat dilakukan melalui Section Admin di Local Host."
-      });
-    }
+
 
     const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
     if (!isAuth) {

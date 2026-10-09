@@ -470,10 +470,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   }, [inspectorNik]);
 
   // Hak akses Edit & Tambah Data Karyawan:
-  // HANYA jika berada di Local Host DAN user adalah Section Admin
+  // HANYA jika user adalah Section Admin
   const canManageDatabase = useMemo(() => {
-    return isLocalHostEnv && isSectionAdmin;
-  }, [isLocalHostEnv, isSectionAdmin]);
+    return isSectionAdmin;
+  }, [isSectionAdmin]);
 
   const fetchEmployees = async (silent = false) => {
     if (!silent && employees.length === 0) {
