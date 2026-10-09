@@ -2,6 +2,55 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.39] - 2026-10-10
+
+### 🚀 Gutter Aksi Kiri Ala Notion, Mode Edit Tabel & Editor Teks Seamless dengan Bubble Toolbar
+
+- **Gutter Aksi Tabel Sisi Kiri Ala Notion & Kotak Seleksi Baris Terpadu (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Kolom Gutter Aksi Khusus**: Menambahkan kolom aksi permanen di sisi paling kiri baris tabel Notion yang memuat tombol tambah baris cepat di bawah (`+`), pegangan seret & opsi baris (`::` / `GripVertical`), serta kotak centang seleksi baris (`[ ]`).
+  - **Relokasi Fitur Seleksi Baris**: Memindahkan kotak seleksi (checkbox) yang sebelumnya berada di kolom kondisional terpisah ke dalam gutter aksi terpadu, memberikan tata letak tabel yang jauh lebih bersih, rapi, dan konsisten.
+  - **Fitur Select All Responsif**: Menghadirkan kotak centang *Select All* pada header kolom aksi dengan status *indeterminate* dinamis untuk memilih atau membatalkan seluruh baris terpilih dalam satu klik.
+
+- **Mode Edit Tabel & Isolasi Tombol Penataan Kolom (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Pencegahan Teks Judul Kolom Terhimpit**: Menyembunyikan tombol manipulasi kolom (`<` geser kiri, `>` geser kanan, dan `×` hapus kolom) dari header tabel secara default. Judul kolom seperti `Created Time`, `PIC`, dan `Keterangan` kini memiliki ruang yang luas dan tidak terpotong.
+  - **Tombol Dedicated "Mode Edit Tabel"**: Menambahkan tombol `TableProperties` khusus pada bilah toolbar tabel dengan lencana aksen *amber* berkedip (*pulsing badge*) saat aktif, serta opsi sakelar (*toggle*) di dalam menu Full Tools.
+  - **Banner Status & Penguncian 1-Klik**: Menampilkan banner informatif di bagian atas tabel saat Mode Edit aktif yang dilengkapi tombol "Selesai Edit" untuk mengunci kembali struktur tata letak tabel secara instan.
+
+- **Editor Teks Inline Murni & Mulus (Seamless) dengan Notion Floating Bubble Toolbar (`src/components/NotionDatabaseTable.tsx`, `src/components/notion/NotionInlineEditor.tsx`)**:
+  - **Unifikasi UI Editor Jenis Kegiatan & Keterangan**: Menyelaraskan antarmuka pengeditan inline sel "Keterangan" agar 100% identik dengan pengalaman sel "Jenis Kegiatan" yang mulus (*seamless rounded box*), mengeliminasi tombol aksi bawah yang padat dan garis pembatas kaku.
+  - **Floating Bubble Toolbar Berbentuk Pil (Pill-Shaped)**: Menghadirkan bilah alat pemformatan melayang otomatis tepat di atas/bawah teks yang diseleksi, mendukung pemformatan instan: Huruf Tebal (B), Miring (I), Garis Bawah (U), Coret (S), Palet Warna Teks Notion, Tautan Dokumen (Link), dan Blok Kode.
+  - **Pintasan Keyboard Universal (<kbd>Esc</kbd> & <kbd>Ctrl+Enter</kbd>)**: Pengguna kini dapat membatalkan pengeditan dan mengembalikan isi awal dengan menekan tombol <kbd>Escape</kbd>, serta mengonfirmasi dan menyimpan perubahan dengan <kbd>Ctrl</kbd> + <kbd>Enter</kbd> (atau <kbd>Enter</kbd> pada teks baris tunggal) di samping fitur simpan otomatis (*auto-save on blur*).
+
+- **Dialog Peringatan Otomatis Penutupan Subtask Terakhir (`src/components/NotionDatabaseTable.tsx`)**:
+  - **Peringatan Transisi Status Task Aktif**: Menambahkan modal dialog konfirmasi peringatan ketika pengguna menandai atau menceklis subtask terakhir sebelum tugas utama (*main task*) ditutup.
+  - **Pemberitahuan Keluar dari Filter Pekerjaan Aktif**: Menginformasikan secara transparan bahwa menyelesaikan 100% subtask akan mengubah status pekerjaan induk menjadi `Closed` dan secara otomatis mengeluarkannya dari filter tampilan "Pekerjaan Aktif" ke arsip pekerjaan tuntas.
+
+### 🎨 Standarisasi Estetika Notion Pastel Solid, Tampilan Avatar PIC & Preservasi Konten
+
+- **Harmonisasi Palet Warna Status Pastel Solid Notion (`src/components/NotionDatabaseTable.tsx`)**:
+  - Mengadopsi palet warna pastel solid Notion yang modern dan seimbang untuk status pekerjaan dan jenis aktivitas (abu-abu netral, biru muda, hijau mint, kuning mentega, oranye lembut, dan ungu lavender).
+  - Menstandarkan seluruh lencana status aktivitas menggunakan huruf kapital murni (*UPPERCASE*) dengan kontras teks yang nyaman di mata tanpa warna hitam pekat yang kontras tajam.
+
+- **Penyajian Lingkaran Avatar PIC Minimalis dengan Tooltip Detail (`src/components/NotionDatabaseTable.tsx`)**:
+  - Menyederhanakan tampilan penanggung jawab (PIC) di dalam sel tabel menjadi kelompok lingkaran avatar grafis (*circular avatar avatars*) yang ringkas dan estetis.
+  - Menyematkan kartu keterangan mengambang (*hover tooltip card*) yang menampilkan profil lengkap personil (foto/inisial, nama lengkap, NIK, jabatan, dan seksi) secara detail saat kursor diarahkan ke avatar.
+
+- **Format Tanggal Kalender Murni pada Kolom Created Time (`src/components/NotionDatabaseTable.tsx`)**:
+  - Menstandarkan format tanggal pembuatan tugas (*Created Time*) menjadi tanggal kalender ringkas `YYYY-MM-DD`, menghilangkan tampilan jam/menit yang memenuhi lebar kolom sel tabel.
+
+- **Pemotongan Rapi Ellipsis & Preservasi Poin Multiline Keterangan (`src/components/NotionDatabaseTable.tsx`)**:
+  - Menerapkan pemotongan teks (*text clamping*) dengan tanda elipsis (...) yang rapi setinggi baris judul saat sel dalam kondisi normal, mencegah baris tabel melar secara berlebihan.
+  - Mempertahankan format baris baru, indentasi, serta tanda poin/daftar bernomor (*bullet points preservation*) secara utuh dan terstruktur ketika baris atau sel diperluas (*expand*).
+
+### ⚡ Sinkronisasi Subtask Induk, Stabilitas Data & Peningkatan Performa
+
+- **Preservasi & Sinkronisasi Subtask Tuntas Bersama Induk Tugas (`src/components/NotionDatabaseTable.tsx`, `server/routes/logbook.ts`)**:
+  - Memastikan subtask yang telah selesai tetap tersimpan dan terkelompok secara utuh di bawah baris induk tugas tanpa hilang dari riwayat pohon tugas (*task tree*).
+  - Menyinkronkan progres penyelesaian subtask dengan persentase kemajuan (*progress bar*) tugas utama secara dua arah antara Buletin Board dan modul Log Book.
+- **Optimalisasi Render & Eliminasi Duplikasi Komponen**:
+  - Mencegah render ganda pada modal pengeditan dan duplikasi entri tugas baru saat koneksi jaringan berfluktuasi.
+  - Mempercepat inisialisasi tabel dan penanganan input ketikan dengan *debounced local state* yang responsif.
+
 ## [2.9.38] - 2026-10-02
 
 ### 📝 Pengalaman Editor Tabel Buletin Inline Gaya Notion, Sanitasi Tag WYSIWYG & Indikator Durasi Tugas Tuntas
