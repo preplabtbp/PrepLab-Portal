@@ -526,7 +526,7 @@ export const TbpAvatarCharacter: React.FC<TbpAvatarProps> = ({
         <circle cx="71" cy="56" r="3" fill="#F43F5E" opacity="0.25" />
         <circle cx="89" cy="56" r="3" fill="#F43F5E" opacity="0.25" />
 
-        {/* EYES, EYEWEAR & FACIAL EXPRESSIONS */}
+        {/* EYES & EYEWEAR */}
         {eyeId === 'glasses_k3' ? (
           <g id="eyesGlassesK3">
             {/* Friendly Eyes */}
@@ -548,69 +548,18 @@ export const TbpAvatarCharacter: React.FC<TbpAvatarProps> = ({
           <g id="eyesHappy">
             <path d="M 70 52 Q 73 48 76 52" stroke="#0F172A" strokeWidth="1.8" strokeLinecap="round" fill="none" />
             <path d="M 84 52 Q 87 48 90 52" stroke="#0F172A" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-            <path d="M 69 45 Q 73 44 77 46" stroke="#0F172A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
-            <path d="M 83 46 Q 87 44 91 45" stroke="#0F172A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
           </g>
         ) : eyeId === 'wink' ? (
           <g id="eyesWink">
             <circle cx="73" cy="51" r="2.2" fill="#0F172A" />
             <circle cx="73.8" cy="50.2" r="0.8" fill="#FFFFFF" />
             <path d="M 84 52 Q 87 48 90 52" stroke="#0F172A" strokeWidth="2" strokeLinecap="round" fill="none" />
-            <path d="M 69 46 Q 73 45 77 47" stroke="#0F172A" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-            <path d="M 83 47 Q 87 45 91 46" stroke="#0F172A" strokeWidth="1.2" strokeLinecap="round" fill="none" />
           </g>
         ) : eyeId === 'sunglasses' ? (
           <g id="eyesSunglasses">
             <rect x="67" y="47" width="12" height="8" rx="2" fill="#0F172A" />
             <rect x="81" y="47" width="12" height="8" rx="2" fill="#0F172A" />
             <line x1="79" y1="50" x2="81" y2="50" stroke="#0F172A" strokeWidth="1.5" />
-            {/* Gloss reflection line */}
-            <line x1="68" y1="49" x2="74" y2="53" stroke="#FFFFFF" strokeWidth="0.8" opacity="0.6" />
-            <line x1="82" y1="49" x2="88" y2="53" stroke="#FFFFFF" strokeWidth="0.8" opacity="0.6" />
-          </g>
-        ) : eyeId === 'goggles_furnace' ? (
-          <g id="eyesFurnaceGoggles">
-            {/* Orange furnace safety goggles with metallic strap */}
-            <rect x="66" y="46" width="13" height="10" rx="3" fill="#EA580C" stroke="#9A3412" strokeWidth="1.2" />
-            <rect x="81" y="46" width="13" height="10" rx="3" fill="#EA580C" stroke="#9A3412" strokeWidth="1.2" />
-            <rect x="68" y="48" width="9" height="6" rx="1.5" fill="#FED7AA" opacity="0.75" />
-            <rect x="83" y="48" width="9" height="6" rx="1.5" fill="#FED7AA" opacity="0.75" />
-            <line x1="79" y1="51" x2="81" y2="51" stroke="#9A3412" strokeWidth="2" />
-            <line x1="63" y1="51" x2="66" y2="51" stroke="#475569" strokeWidth="1.6" />
-            <line x1="94" y1="51" x2="97" y2="51" stroke="#475569" strokeWidth="1.6" />
-          </g>
-        ) : eyeId === 'focus' ? (
-          <g id="eyesFocus">
-            {/* Focused sharp eyes */}
-            <circle cx="73" cy="51" r="2.2" fill="#0F172A" />
-            <circle cx="73.8" cy="50.2" r="0.8" fill="#FFFFFF" />
-            <circle cx="87" cy="51" r="2.2" fill="#0F172A" />
-            <circle cx="87.8" cy="50.2" r="0.8" fill="#FFFFFF" />
-            {/* Strong determined eyebrows */}
-            <path d="M 68 47 L 78 45" stroke="#0F172A" strokeWidth="1.8" strokeLinecap="round" />
-            <path d="M 82 45 L 92 47" stroke="#0F172A" strokeWidth="1.8" strokeLinecap="round" />
-          </g>
-        ) : eyeId === 'kumis_jenggot' ? (
-          <g id="eyesKumisJenggot">
-            {/* Eyes */}
-            <circle cx="73" cy="51" r="2.2" fill="#0F172A" />
-            <circle cx="73.8" cy="50.2" r="0.8" fill="#FFFFFF" />
-            <circle cx="87" cy="51" r="2.2" fill="#0F172A" />
-            <circle cx="87.8" cy="50.2" r="0.8" fill="#FFFFFF" />
-            <path d="M 69 46 Q 73 45 77 47" stroke="#0F172A" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-            <path d="M 83 47 Q 87 45 91 46" stroke="#0F172A" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-            {/* Neat Mustache */}
-            <path d="M 73 58 Q 80 56 87 58 Q 80 61 73 58 Z" fill="#1E293B" stroke="#0F172A" strokeWidth="0.5" />
-            {/* Neat Goatee / Beard */}
-            <ellipse cx="80" cy="65" rx="3.5" ry="2" fill="#1E293B" opacity="0.85" />
-          </g>
-        ) : eyeId === 'laugh' ? (
-          <g id="eyesLaugh">
-            {/* Squint laughing eyes */}
-            <path d="M 70 51 Q 73 47 76 51" stroke="#0F172A" strokeWidth="2" strokeLinecap="round" fill="none" />
-            <path d="M 84 51 Q 87 47 90 51" stroke="#0F172A" strokeWidth="2" strokeLinecap="round" fill="none" />
-            <path d="M 69 45 Q 73 44 77 46" stroke="#0F172A" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-            <path d="M 83 46 Q 87 44 91 45" stroke="#0F172A" strokeWidth="1.2" strokeLinecap="round" fill="none" />
           </g>
         ) : (
           <g id="eyesNormal">
@@ -623,14 +572,8 @@ export const TbpAvatarCharacter: React.FC<TbpAvatarProps> = ({
           </g>
         )}
 
-        {/* Mouth & Expression */}
-        {eyeId === 'laugh' ? (
-          <path d="M 75 59 Q 80 66 85 59 Z" fill="#991B1B" stroke="#0F172A" strokeWidth="1" />
-        ) : eyeId === 'focus' ? (
-          <line x1="77" y1="61" x2="83" y2="61" stroke={skinShadow} strokeWidth="1.6" strokeLinecap="round" />
-        ) : (
-          <path d="M 76 60 Q 80 63.5 84 60" stroke={skinShadow} strokeWidth="1.5" strokeLinecap="round" fill="none" />
-        )}
+        {/* Friendly Confident Smile */}
+        <path d="M 76 60 Q 80 63.5 84 60" stroke="#8D5524" strokeWidth="1.5" strokeLinecap="round" fill="none" />
 
         {/* Respirator Dust Mask Option */}
         {accessoryId === 'mask_k3' && (

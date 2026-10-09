@@ -42,12 +42,18 @@ export function getGlobalSocket(): Socket {
         }
       }
 
-      // Automatically re-join active chat room on reconnect
+      // Automatically re-join active chat room / lounge on reconnect
       if (currentChatRoom) {
         globalSocket?.emit('chat:join', {
           room: currentChatRoom,
           ...(registeredUser || {})
         });
+        if (currentChatRoom === 'lounge') {
+          globalSocket?.emit('lounge:join', {
+            room: 'lounge',
+            ...(registeredUser || {})
+          });
+        }
       }
     });
 
@@ -108,6 +114,20 @@ export function joinRoom(room: string, user?: any) {
   }
 }
 
+export function joinLounge(userPayload?: any) {
+  currentChatRoom = 'lounge';
+  const socket = getGlobalSocket();
+  const payload = {
+    room: 'lounge',
+    ...(registeredUser || {}),
+    ...(userPayload || {})
+  };
+  if (socket.connected) {
+    socket.emit('chat:join', payload);
+    socket.emit('lounge:join', payload);
+  }
+}
+
 export function leaveRoom() {
   currentChatRoom = null;
   const socket = getGlobalSocket();
@@ -115,3 +135,13 @@ export function leaveRoom() {
     socket.emit('chat:leave');
   }
 }
+
+export function leaveLounge(userNik?: string) {
+  currentChatRoom = null;
+  const socket = getGlobalSocket();
+  if (socket.connected) {
+    socket.emit('lounge:leave', { nik: userNik });
+    socket.emit('chat:leave');
+  }
+}
+

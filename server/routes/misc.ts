@@ -16,10 +16,18 @@ import {
   getNotificationTargets, getTableObj, sanitizePayload 
 } from "../utils.js";
 import webpush from 'web-push';
-import { invalidateScheduleCache, fetchInspectionScheduleFromSheet } from "./inspections.js";
+import { invalidateScheduleCache, fetchInspectionScheduleFromSheet, rekapInspeksiCache, REKAP_INSPEKSI_CACHE_TTL } from "./inspections.js";
 import { invalidateGamificationCache } from "./gamification.js";
 
 export const router = Router();
+
+// Bersihkan cache rekap inspeksi setiap kali ada perubahan data terkait (laporan grup, override, KTA, bukti SS)
+router.use((req, res, next) => {
+  if (req.method !== 'GET' && /^\/api\/(group-reports|rekap-inspeksi|rekap-kta|kta-reports|inspection-proofs)/.test(req.path)) {
+    res.on('finish', () => rekapInspeksiCache.clear());
+  }
+  next();
+});
 
 router.get('/api/developers', async (req, res) => {
   try {
@@ -296,14 +304,17 @@ async function fetchAllGroupReports(filterWeek?: string) {
         const parts = textStr.split(/[,&/|]/).map(p => p.trim()).filter(Boolean);
         parts.forEach(part => {
           const nm = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/i);
-          if (nm) niksSet.add(nm[0].toUpperCase());
-          const cleanPart = part.toLowerCase();
-          allEmps.forEach(e => {
-            const eName = (e.name || '').trim().toLowerCase();
-            if (eName && (cleanPart === eName || cleanPart.includes(eName))) {
-              niksSet.add(e.nik);
-            }
-          });
+          if (nm) {
+            const matchedNik = nm[0].toUpperCase();
+            niksSet.add(matchedNik);
+            const empByNik = empMapByNik.get(matchedNik);
+            if (empByNik) niksSet.add(empByNik.nik);
+          }
+          const cleanPart = part.trim().toLowerCase();
+          const empByName = empMapByName.get(cleanPart);
+          if (empByName) {
+            niksSet.add(empByName.nik);
+          }
         });
       });
 
@@ -970,8 +981,44 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
   try {
     const rawWeek = (req.query.week as string) || '';
     const selectedWeek = rawWeek ? normalizeWeekQuery(rawWeek) : getISOWeekTag();
-    const allEmployees = await db.select().from(employees);
-    const allRoster = await db.select().from(roster);
+    const forceRefresh = req.query.refresh === 'true';
+
+    const cachedRekap = rekapInspeksiCache.get(selectedWeek);
+    if (!forceRefresh && cachedRekap && (Date.now() - cachedRekap.timestamp < REKAP_INSPEKSI_CACHE_TTL)) {
+      return res.json(cachedRekap.data);
+    }
+    
+    // Target week dates for optimal SQL filtering
+    const targetWeekDates = getDateStringsForWeek(selectedWeek);
+
+    // Start heavy table scans concurrently (Promise.resolve forces single execution of the drizzle query)
+    const inspectionsPromise = Promise.resolve(db.select().from(inspections).orderBy(desc(inspections.id)));
+    const proofsPromise = Promise.resolve(selectedWeek === 'ALL'
+      ? db.select().from(inspectionProofs)
+      : db.select().from(inspectionProofs).where(eq(inspectionProofs.week, selectedWeek)));
+    const rosterPromise = Promise.resolve(
+      selectedWeek === 'ALL' || !targetWeekDates || targetWeekDates.length === 0
+        ? db.select().from(roster)
+        : db.select().from(roster).where(inArray(roster.date, targetWeekDates))
+    );
+    // Prevent unhandled rejection warnings; errors are handled where awaited
+    inspectionsPromise.catch(() => {});
+    proofsPromise.catch(() => {});
+    rosterPromise.catch(() => {});
+
+    // Run initial DB queries in parallel
+    const [allEmployees, allRoster] = await Promise.all([
+      db.select().from(employees),
+      rosterPromise
+    ]);
+
+    // Pre-build employee lookup maps for O(1) matching (instead of nested O(n*m) loops)
+    const empByNikLower = new Map<string, typeof allEmployees[0]>();
+    const empByNameLower = new Map<string, typeof allEmployees[0]>();
+    allEmployees.forEach(e => {
+      if (e.nik) empByNikLower.set(e.nik.trim().toLowerCase(), e);
+      if (e.name) empByNameLower.set(e.name.trim().toLowerCase(), e);
+    });
 
     const {
       onCutiSet,
@@ -1003,60 +1050,107 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       }
     };
 
-    // 1. Scan all aggregated reports (including memory and DB parsed reports)
-    try {
-      const allGroupReports = await fetchAllGroupReports(selectedWeek);
-      allGroupReports.forEach(msg => {
-        const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
-        if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
-          let cleanPdfUrl = msg.pdfUrl;
-          let pdfUrlTbp: string | null = null;
-          let pdfUrlGps: string | null = null;
-          if (cleanPdfUrl && typeof cleanPdfUrl === 'string' && cleanPdfUrl.startsWith('{')) {
-            try {
-              const parsed = JSON.parse(cleanPdfUrl);
-              pdfUrlTbp = parsed.tbp || null;
-              pdfUrlGps = parsed.gps || null;
-              cleanPdfUrl = pdfUrlTbp || pdfUrlGps || (Object.values(parsed)[0] as string) || null;
-            } catch (e) {}
-          }
+    // 1. Scan in-memory session reports directly (instant O(1), eliminates redundant full DB scan)
+    groupReportsMemory.forEach(msg => {
+      if (deletedReportIds.has(msg.id)) return;
+      const msgWeek = msg.week || extractWeekTag(msg.pdfTitle, msg.pdfFileName, msg.timestamp);
+      if (selectedWeek === 'ALL' || msgWeek === selectedWeek) {
+        let cleanPdfUrl = msg.pdfUrl;
+        let pdfUrlTbp: string | null = null;
+        let pdfUrlGps: string | null = null;
+        if (cleanPdfUrl && typeof cleanPdfUrl === 'string' && cleanPdfUrl.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(cleanPdfUrl);
+            pdfUrlTbp = parsed.tbp || null;
+            pdfUrlGps = parsed.gps || null;
+            cleanPdfUrl = pdfUrlTbp || pdfUrlGps || (Object.values(parsed)[0] as string) || null;
+          } catch (e) {}
+        }
 
-          const info = {
-            timestamp: msg.timestamp,
-            pdfUrl: cleanPdfUrl,
-            pdfUrlTbp,
-            pdfUrlGps,
-            pdfTitle: msg.pdfTitle || 'Laporan Inspeksi',
-            week: msgWeek
-          };
+        const info = {
+          timestamp: msg.timestamp,
+          pdfUrl: cleanPdfUrl,
+          pdfUrlTbp,
+          pdfUrlGps,
+          pdfTitle: msg.pdfTitle || 'Laporan Inspeksi',
+          week: msgWeek
+        };
 
-          if (msg.senderNik) registerCompletedUser(msg.senderNik, info);
-          if (msg.senderName) registerCompletedUser(msg.senderName, info);
+        if (msg.senderNik) registerCompletedUser(msg.senderNik, info);
+        if (msg.senderName) registerCompletedUser(msg.senderName, info);
 
-          if (Array.isArray(msg.allInspectorNiks)) {
-            msg.allInspectorNiks.forEach((item: string) => {
-              if (item) registerCompletedUser(item, info);
-            });
-          }
+        if (Array.isArray(msg.allInspectorNiks)) {
+          msg.allInspectorNiks.forEach((item: string) => {
+            if (item) registerCompletedUser(item, info);
+          });
+        }
 
-          // Strict match senderName against allEmployees (full name exact match)
-          if (msg.senderName) {
-            const senderClean = msg.senderName.trim().toLowerCase();
-            const matchedEmp = allEmployees.find(e => e.name && e.name.trim().toLowerCase() === senderClean);
-            if (matchedEmp) {
-              registerCompletedUser(matchedEmp.nik, info);
-              registerCompletedUser(matchedEmp.name, info);
-            }
+        // Strict match senderName against allEmployees (full name exact match)
+        if (msg.senderName) {
+          const senderClean = msg.senderName.trim().toLowerCase();
+          const matchedEmp = empByNameLower.get(senderClean);
+          if (matchedEmp) {
+            registerCompletedUser(matchedEmp.nik, info);
+            registerCompletedUser(matchedEmp.name, info);
           }
         }
+      }
+    });
+
+    const partialMatchMemo = new Map<string, typeof allEmployees>();
+    const matchEmployeeAndRegister = (part: string, info: any) => {
+      const partClean = part.trim().toLowerCase();
+      if (!partClean || partClean.length < 2) return;
+      
+      registerCompletedUser(partClean, info);
+      
+      // Try direct NIK match
+      const empByNik = empByNikLower.get(partClean);
+      if (empByNik) {
+        registerCompletedUser(empByNik.nik, info);
+        registerCompletedUser(empByNik.name, info);
+        return;
+      }
+      
+      // Try direct name match
+      const empByName = empByNameLower.get(partClean);
+      if (empByName) {
+        registerCompletedUser(empByName.nik, info);
+        registerCompletedUser(empByName.name, info);
+        return;
+      }
+      
+      // Extract NIK patterns and match
+      const nikMatches: string[] = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
+      nikMatches.forEach((nik: string) => {
+        registerCompletedUser(nik, info);
+        const emp = empByNikLower.get(nik.toLowerCase());
+        if (emp) {
+          registerCompletedUser(emp.nik, info);
+          registerCompletedUser(emp.name, info);
+        }
       });
-    } catch (e) {
-      console.error('Error in fetchAllGroupReports for rekap:', e);
-    }
+
+      // Partial name match (only if part is long enough to be meaningful) - memoized per string
+      if (partClean.length >= 4) {
+        let matches = partialMatchMemo.get(partClean);
+        if (!matches) {
+          matches = [];
+          empByNameLower.forEach((emp, empName) => {
+            if (empName.length >= 4 && partClean.includes(empName)) matches!.push(emp);
+          });
+          partialMatchMemo.set(partClean, matches);
+        }
+        matches.forEach(emp => {
+          registerCompletedUser(emp.nik, info);
+          registerCompletedUser(emp.name, info);
+        });
+      }
+    };
 
     // 2. Direct deep scan of DB `inspections` table (ordered by ID desc so newest are evaluated first)
     try {
-      const dbInspections = await db.select().from(inspections).orderBy(desc(inspections.id));
+      const dbInspections = await inspectionsPromise;
       dbInspections.forEach((insp: any) => {
         let dataFObj: any = {};
         let dataFArray: any[] = [];
@@ -1133,33 +1227,10 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
           rawInspectors.forEach((rawInsp: string) => {
             const inspText = String(rawInsp).trim();
             if (inspText) {
-              registerCompletedUser(inspText, info);
               const parts = inspText.split(/[,&/|]/).map(p => p.trim()).filter(Boolean);
               parts.forEach(part => {
-                registerCompletedUser(part, info);
                 const cleanName = part.split('|')[0].trim();
-                if (cleanName) registerCompletedUser(cleanName, info);
-
-                const nikMatches: string[] = part.match(/(?:M\d{9,10}|\d{2,4}D\d{7,10}|\d{10})/gi) || [];
-                nikMatches.forEach((nik: string) => registerCompletedUser(nik, info));
-
-                allEmployees.forEach(e => {
-                  const empName = (e.name || '').trim().toLowerCase();
-                  const empNik = (e.nik || '').trim().toLowerCase();
-                  const partClean = part.toLowerCase().trim();
-                  const cleanNameLower = cleanName.toLowerCase().trim();
-
-                  if (empNik && (partClean === empNik || nikMatches.some(n => n.toLowerCase() === empNik))) {
-                    registerCompletedUser(e.nik, info);
-                    registerCompletedUser(e.name, info);
-                  } else if (empName && (cleanNameLower === empName || partClean === empName)) {
-                    registerCompletedUser(e.nik, info);
-                    registerCompletedUser(e.name, info);
-                  } else if (empName && empName.length >= 4 && partClean.includes(empName)) {
-                    registerCompletedUser(e.nik, info);
-                    registerCompletedUser(e.name, info);
-                  }
-                });
+                if (cleanName) matchEmployeeAndRegister(cleanName, info);
               });
             }
           });
@@ -1180,9 +1251,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     };
 
     try {
-      const proofsQuery = selectedWeek === 'ALL'
-        ? await db.select().from(inspectionProofs)
-        : await db.select().from(inspectionProofs).where(eq(inspectionProofs.week, selectedWeek));
+      const proofsQuery = await proofsPromise;
 
       proofsQuery.forEach(p => {
         const info = {
@@ -1324,11 +1393,13 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     const belum = total - sudah;
     const percentage = total > 0 ? Math.round((sudah / total) * 100) : 0;
 
-    res.json({
+    const responseData = {
       summary: { total, sudah, belum, percentage, selectedWeek, cutiCount: cutiList.length },
       rekapList,
       cutiList
-    });
+    };
+    rekapInspeksiCache.set(selectedWeek, { data: responseData, timestamp: Date.now() });
+    res.json(responseData);
   } catch (err: any) {
     console.error('Error fetching rekap:', err);
     res.status(500).json({ error: err.message });
@@ -1597,8 +1668,22 @@ router.get('/api/rekap-kta', async (req, res) => {
       return res.json(cached.data);
     }
 
-    const allEmployees = await db.select().from(employees);
-    const allRoster = await db.select().from(roster);
+    // Run independent DB queries concurrently
+    const ktaQueryPromise = Promise.resolve(selectedWeek === 'ALL'
+      ? db.select().from(ktaReports)
+      : db.select().from(ktaReports).where(eq(ktaReports.week, selectedWeek)));
+    const targetWeekDates = getDateStringsForWeek(selectedWeek);
+    const rosterQueryPromise = Promise.resolve(
+      selectedWeek === 'ALL' || !targetWeekDates || targetWeekDates.length === 0
+        ? db.select().from(roster)
+        : db.select().from(roster).where(inArray(roster.date, targetWeekDates))
+    );
+    rosterQueryPromise.catch(() => {});
+
+    const [allEmployees, allRoster] = await Promise.all([
+      db.select().from(employees),
+      rosterQueryPromise
+    ]);
 
     const {
       onCutiSet,
@@ -1608,9 +1693,7 @@ router.get('/api/rekap-kta', async (req, res) => {
     } = await getRekapPersonnelClassification(selectedWeek, allEmployees, allRoster, forceRefresh);
 
     // Query KTA reports for selected week
-    const ktaQuery = selectedWeek === 'ALL'
-      ? await db.select().from(ktaReports)
-      : await db.select().from(ktaReports).where(eq(ktaReports.week, selectedWeek));
+    const ktaQuery = await ktaQueryPromise;
 
     // Map completed by NIK & Name - supports multiple reports per person
     const userReportsMap = new Map<string, any[]>();

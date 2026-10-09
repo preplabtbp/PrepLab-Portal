@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Coffee, Send, Users, X, Sparkles, Smile, RefreshCw, 
   ShieldCheck, Flame, Volume2, VolumeX, MapPin, Footprints,
   Cigarette, Sun, Compass, Armchair, ChevronRight
 } from 'lucide-react';
-import { getGlobalSocket, joinRoom, leaveRoom } from '../../lib/socketClient';
+import { getGlobalSocket, joinLounge, leaveLounge } from '../../lib/socketClient';
 import { getRankByXp } from '../../lib/pointBlankRanks';
 import { TbpAvatarCharacter } from '../avatar/TbpAvatarCharacter';
 import { SKIN_TONES } from './Avatar3DWidget';
@@ -43,6 +43,8 @@ interface InRoomAvatar {
   speechExpiry?: number;
   avatarUrl?: string;
   isMe?: boolean;
+  isLive?: boolean;
+  isDuty?: boolean;
 }
 
 interface LoungeSpot {
@@ -52,7 +54,7 @@ interface LoungeSpot {
   x: number; // Percentage width
   y: number; // Percentage height (exact ground baseline)
   facing: 'left' | 'right';
-  action: 'smoke_sit' | 'sit' | 'coffee' | 'coffee_sit';
+  action: 'smoke_sit' | 'sit' | 'coffee' | 'coffee_sit' | 'smoke' | 'idle' | 'inspect';
   speech: string;
   icon: string;
 }
@@ -120,8 +122,9 @@ const getPangkatData = (nik: string, rawPangkat?: string, rawRole?: string): { n
   };
 };
 
-// EXACT MATCH: Furniture anchors & Avatar sitting spots share the exact same ground coordinates!
+// EXACT MATCH: Comprehensive distributed seating & relaxation spots across the 2.5D Lounge
 const LOUNGE_SEATS: LoungeSpot[] = [
+  // 1-5: Gazebo & Smoking Zone
   {
     id: 'bench_1',
     name: 'Bangku Gazebo 1 (Kiri)',
@@ -131,6 +134,39 @@ const LOUNGE_SEATS: LoungeSpot[] = [
     facing: 'right',
     action: 'smoke_sit',
     speech: '🚬 Menikmati hisapan rokok santai di Gazebo K3...',
+    icon: '🚬'
+  },
+  {
+    id: 'bench_1_b',
+    name: 'Bangku Gazebo 1 (Sisi Kanan)',
+    zoneTitle: 'Area Merokok K3',
+    x: 17,
+    y: 79,
+    facing: 'right',
+    action: 'smoke_sit',
+    speech: '🚬 Ngobrol santai sambil merokok bareng rekan shift...',
+    icon: '🚬'
+  },
+  {
+    id: 'ashtray_stand',
+    name: 'Asbak Berdiri Gazebo',
+    zoneTitle: 'Area Merokok K3',
+    x: 22,
+    y: 83,
+    facing: 'right',
+    action: 'smoke',
+    speech: '🚬 Berdiri santai di asbak stainless buang puntung aman K3.',
+    icon: '🚬'
+  },
+  {
+    id: 'bench_2_b',
+    name: 'Bangku Gazebo 2 (Sisi Kiri)',
+    zoneTitle: 'Area Merokok K3',
+    x: 27,
+    y: 79,
+    facing: 'left',
+    action: 'smoke_sit',
+    speech: '🚬 Rehat sejenak sebelum inspeksi crush & pulverize.',
     icon: '🚬'
   },
   {
@@ -144,6 +180,32 @@ const LOUNGE_SEATS: LoungeSpot[] = [
     speech: '🚬 Duduk merokok santai sambil obrol shift preparasi!',
     icon: '🚬'
   },
+
+  // 6-7: Beverage Station Bar
+  {
+    id: 'bar_refreshment',
+    name: 'Bar Minuman Dispenser',
+    zoneTitle: 'Stasiun Minuman',
+    x: 36,
+    y: 64,
+    facing: 'right',
+    action: 'coffee',
+    speech: '🫖 Seduh kopi & teh hangat di dispenser bar...',
+    icon: '🫖'
+  },
+  {
+    id: 'bar_counter_right',
+    name: 'Sisi Kanan Bar Minuman',
+    zoneTitle: 'Stasiun Minuman',
+    x: 41,
+    y: 64,
+    facing: 'left',
+    action: 'coffee',
+    speech: '☕ Siapin gelas kopi hangat buat rekan-rekan shift.',
+    icon: '☕'
+  },
+
+  // 8-11: Coffee Table & Dining Chairs
   {
     id: 'chair_coffee_1',
     name: 'Kursi Kopi Kiri',
@@ -151,9 +213,31 @@ const LOUNGE_SEATS: LoungeSpot[] = [
     x: 44,
     y: 78,
     facing: 'right',
-    action: 'coffee_sit', // Sit down with coffee mug!
+    action: 'coffee_sit',
     speech: '☕ Duduk santai seruput kopi hangat di meja shift...',
     icon: '☕'
+  },
+  {
+    id: 'table_coffee_back',
+    name: 'Belakang Meja Kopi',
+    zoneTitle: 'Meja Santai Shift',
+    x: 52,
+    y: 72,
+    facing: 'right',
+    action: 'coffee',
+    speech: '☕ Santai sejenak ngopi sambil pantau koordinasi tim.',
+    icon: '☕'
+  },
+  {
+    id: 'table_coffee_front',
+    name: 'Depan Meja Kopi',
+    zoneTitle: 'Meja Santai Shift',
+    x: 52,
+    y: 84,
+    facing: 'left',
+    action: 'coffee_sit',
+    speech: '🥪 Ambil pisang goreng hangat di piring meja.',
+    icon: '🥪'
   },
   {
     id: 'chair_coffee_2',
@@ -162,15 +246,17 @@ const LOUNGE_SEATS: LoungeSpot[] = [
     x: 60,
     y: 78,
     facing: 'left',
-    action: 'coffee_sit', // Sit down with coffee mug!
+    action: 'coffee_sit',
     speech: '☕ Ngopi hangat sambil santai nikmati pisang goreng!',
     icon: '☕'
   },
+
+  // 12-15: Modular Lab Lounge Sofas
   {
     id: 'sofa_left',
     name: 'Sofa Rehat (Kiri)',
     zoneTitle: 'Sofa Rehat Lab',
-    x: 74,
+    x: 73,
     y: 78,
     facing: 'right',
     action: 'sit',
@@ -178,10 +264,10 @@ const LOUNGE_SEATS: LoungeSpot[] = [
     icon: '🛋️'
   },
   {
-    id: 'sofa_right',
-    name: 'Sofa Rehat (Kanan)',
+    id: 'sofa_center',
+    name: 'Sofa Rehat (Tengah)',
     zoneTitle: 'Sofa Rehat Lab',
-    x: 84,
+    x: 79,
     y: 78,
     facing: 'left',
     action: 'sit',
@@ -189,15 +275,85 @@ const LOUNGE_SEATS: LoungeSpot[] = [
     icon: '🛋️'
   },
   {
-    id: 'bar_refreshment',
-    name: 'Bar Minuman',
-    zoneTitle: 'Stasiun Dispenser',
-    x: 38,
-    y: 64,
+    id: 'sofa_right',
+    name: 'Sofa Rehat (Kanan)',
+    zoneTitle: 'Sofa Rehat Lab',
+    x: 85,
+    y: 78,
+    facing: 'left',
+    action: 'sit',
+    speech: '🛋️ Santai selonjoran rehat kaki setelah keliling area.',
+    icon: '🛋️'
+  },
+  {
+    id: 'sofa_front_rug',
+    name: 'Karpet Depan Sofa',
+    zoneTitle: 'Sofa Rehat Lab',
+    x: 77,
+    y: 84,
     facing: 'right',
-    action: 'coffee',
-    speech: '🫖 Seduh kopi & teh hangat di dispenser bar...',
-    icon: '🫖'
+    action: 'coffee_sit',
+    speech: '☕ Duduk santai dekat sofa sambil obrol santai.',
+    icon: '☕'
+  },
+
+  // 16-18: Panorama Window Deck Overlooking Pulau Obi Nickel
+  {
+    id: 'window_terrace_left',
+    name: 'Jendela Kaca Kiri',
+    zoneTitle: 'Panorama Pulau Obi',
+    x: 25,
+    y: 62,
+    facing: 'right',
+    action: 'inspect',
+    speech: '☀️ Memandang bukit nikel Pulau Obi dari teras kaca.',
+    icon: '☀️'
+  },
+  {
+    id: 'window_terrace_center',
+    name: 'Jendela Kaca Tengah',
+    zoneTitle: 'Panorama Pulau Obi',
+    x: 50,
+    y: 62,
+    facing: 'left',
+    action: 'inspect',
+    speech: '🏔️ Udara Obi cerah hari ini, semangat target shift!',
+    icon: '🏔️'
+  },
+  {
+    id: 'window_terrace_right',
+    name: 'Jendela Kaca Kanan',
+    zoneTitle: 'Panorama Pulau Obi',
+    x: 68,
+    y: 62,
+    facing: 'right',
+    action: 'inspect',
+    speech: '🔭 Pantau suasana pit dan crushing plant dari jauh.',
+    icon: '🔭'
+  },
+
+  // 19-20: Terrace Walkways
+  {
+    id: 'terrace_walkway_left',
+    name: 'Selasar Depan Kiri',
+    zoneTitle: 'Selasar Teras',
+    x: 38,
+    y: 85,
+    facing: 'right',
+    action: 'idle',
+    speech: '🚶 Patroli keliling area teras memastikan K3 aman.',
+    icon: '🚶'
+  },
+  {
+    id: 'terrace_walkway_right',
+    name: 'Selasar Depan Kanan',
+    zoneTitle: 'Selasar Teras',
+    x: 88,
+    y: 85,
+    facing: 'left',
+    action: 'idle',
+    speech: '🚶 Santai berdiri dekat pintu teras rehat lab.',
+    icon: '🚶'
   }
 ];
 
@@ -300,12 +456,21 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
 
   // Other In-Room Avatars
   const [otherAvatars, setOtherAvatars] = useState<Map<string, InRoomAvatar>>(new Map());
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Click target beacon ripple on floor
   const [clickBeacon, setClickBeacon] = useState<{ x: number; y: number } | null>(null);
 
   const roomStageRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Decoupled refs to eliminate re-triggering socket subscriptions during movement
+  const myPosRef = useRef(myPos);
+  myPosRef.current = myPos;
+  const myFacingRef = useRef(myFacing);
+  myFacingRef.current = myFacing;
+  const myActionStateRef = useRef(myActionState);
+  myActionStateRef.current = myActionState;
 
   // Audio chimes
   const playChime = (type: 'msg' | 'step' | 'cheer' = 'msg') => {
@@ -413,43 +578,72 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     return () => clearInterval(speechCleaner);
   }, [mySpeech]);
 
-  // Socket.IO Listeners (Live presence & overhead speech balloons only)
+  // Synchronize presence data from server (STRICTLY real-time live users inside lounge)
+  const syncOnlinePresence = useCallback((data: any) => {
+    if (!data) return;
+    const rawLounge = Array.isArray(data.loungeMembers) ? data.loungeMembers : [];
+
+    setOtherAvatars(prev => {
+      const next = new Map<string, InRoomAvatar>();
+
+      // ONLY process Lounge Members (Real-time live avatars currently inside lounge)
+      rawLounge.forEach((lm: any) => {
+        if (!lm.nik || lm.nik === userNik) return;
+        const existing = prev.get(lm.nik);
+        const cleanUname = getCleanUsername(lm.nik, lm.name, lm.username);
+        const rankData = getPangkatData(lm.nik, lm.pangkat);
+        next.set(lm.nik, {
+          nik: lm.nik,
+          name: cleanUname,
+          username: cleanUname,
+          pangkat: lm.pangkat || rankData.name,
+          pangkatIcon: lm.pangkatIcon || rankData.icon,
+          section: lm.section || 'Prep-Lab',
+          posX: typeof lm.posX === 'number' ? lm.posX : (existing?.posX ?? 13),
+          posY: typeof lm.posY === 'number' ? lm.posY : (existing?.posY ?? 79),
+          facing: lm.facing || existing?.facing || 'right',
+          actionState: lm.actionState || existing?.actionState || 'idle',
+          walkFrame: existing?.walkFrame ?? 0,
+          speechText: lm.speechText || existing?.speechText,
+          speechExpiry: lm.speechExpiry || existing?.speechExpiry,
+          avatarUrl: lm.avatar || existing?.avatarUrl,
+          isLive: true
+        });
+      });
+
+      return next;
+    });
+  }, [userNik]);
+
+  const fetchPresenceOnline = useCallback(async () => {
+    try {
+      const res = await fetch('/api/presence/online');
+      if (!res.ok) return;
+      const data = await res.json();
+      syncOnlinePresence(data);
+    } catch (err) {
+      console.warn('Failed to fetch online presence:', err);
+    }
+  }, [syncOnlinePresence]);
+
+  const handleManualSync = useCallback(async () => {
+    try {
+      setIsSyncing(true);
+      await fetchPresenceOnline();
+    } finally {
+      setTimeout(() => setIsSyncing(false), 600);
+    }
+  }, [fetchPresenceOnline]);
+
+  // Socket.IO Real-time Synchronization & Presence Listeners
   useEffect(() => {
     if (!isOpen) return;
 
-    fetch('/api/presence/online')
-      .then(res => res.json())
-      .then(data => {
-        if (data?.onlineUsers && Array.isArray(data.onlineUsers)) {
-          const others = data.onlineUsers.filter((u: any) => u.nik && u.nik !== userNik);
-          setOtherAvatars(prev => {
-            const next = new Map(prev);
-            others.forEach((u: any, idx: number) => {
-              if (!next.has(u.nik)) {
-                const spot = LOUNGE_SEATS[(idx + 1) % LOUNGE_SEATS.length];
-                const cleanUname = getCleanUsername(u.nik, u.name, u.username);
-                const rankData = getPangkatData(u.nik, u.pangkat, u.role || u.jabatan);
-                next.set(u.nik, {
-                  nik: u.nik,
-                  name: cleanUname,
-                  username: cleanUname,
-                  pangkat: rankData.name,
-                  pangkatIcon: rankData.icon,
-                  section: u.section || u.department || 'Prep-Lab',
-                  posX: spot.x,
-                  posY: spot.y,
-                  facing: spot.facing,
-                  actionState: spot.action,
-                  walkFrame: 0,
-                  avatarUrl: u.avatar
-                });
-              }
-            });
-            return next;
-          });
-        }
-      })
-      .catch(() => {});
+    // 1. Initial snapshot fetch
+    fetchPresenceOnline();
+
+    // 2. Periodic background refresh fallback (every 8s) to ensure zero desync
+    const pollingTimer = setInterval(fetchPresenceOnline, 8000);
 
     const socket = getGlobalSocket();
     const userPayload = {
@@ -461,11 +655,85 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       pangkatIcon: effectivePangkatIcon,
       section: userSection,
       avatar: avatarUrl || null,
-      posX: myPos.x,
-      posY: myPos.y
+      posX: myPosRef.current.x,
+      posY: myPosRef.current.y,
+      facing: myFacingRef.current,
+      actionState: myActionStateRef.current
     };
 
-    joinRoom('lounge', userPayload);
+    // Join lounge explicitly (emits chat:join & lounge:join)
+    joinLounge(userPayload);
+
+    // Initial lounge avatar snapshot from server
+    // Initial lounge avatar snapshot from server (authoritative sync)
+    const handleLoungeSync = (avatarList: any[]) => {
+      if (Array.isArray(avatarList)) {
+        setOtherAvatars(() => {
+          const next = new Map<string, InRoomAvatar>();
+          avatarList.forEach((av: any) => {
+            if (!av || !av.nik || av.nik === userNik) return;
+            const cleanUname = getCleanUsername(av.nik, av.name, av.username);
+            const rankData = getPangkatData(av.nik, av.pangkat);
+            next.set(av.nik, {
+              nik: av.nik,
+              name: cleanUname,
+              username: cleanUname,
+              pangkat: av.pangkat || rankData.name,
+              pangkatIcon: av.pangkatIcon || rankData.icon,
+              section: av.section || 'Prep-Lab',
+              posX: typeof av.posX === 'number' ? av.posX : 13,
+              posY: typeof av.posY === 'number' ? av.posY : 79,
+              facing: av.facing || 'right',
+              actionState: av.actionState || 'idle',
+              walkFrame: 0,
+              speechText: av.speechText,
+              speechExpiry: av.speechExpiry,
+              avatarUrl: av.avatar,
+              isLive: true
+            });
+          });
+          return next;
+        });
+      }
+    };
+
+    // Real-time user joined the lounge
+    const handleUserJoined = (data: any) => {
+      if (!data || !data.nik || data.nik === userNik) return;
+      const cleanUname = getCleanUsername(data.nik, data.name, data.username);
+      const rankData = getPangkatData(data.nik, data.pangkat);
+      setOtherAvatars(prev => {
+        const next = new Map(prev);
+        const existing = next.get(data.nik);
+        next.set(data.nik, {
+          nik: data.nik,
+          name: cleanUname,
+          username: cleanUname,
+          pangkat: data.pangkat || rankData.name,
+          pangkatIcon: data.pangkatIcon || rankData.icon,
+          section: data.section || 'Prep-Lab',
+          posX: typeof data.posX === 'number' ? data.posX : (existing?.posX ?? 13),
+          posY: typeof data.posY === 'number' ? data.posY : (existing?.posY ?? 79),
+          facing: data.facing || existing?.facing || 'right',
+          actionState: data.actionState || existing?.actionState || 'idle',
+          walkFrame: 0,
+          avatarUrl: data.avatar || existing?.avatarUrl,
+          isLive: true
+        });
+        return next;
+      });
+      playChime('cheer');
+    };
+
+    // Real-time user left the lounge
+    const handleUserLeft = (data: any) => {
+      if (!data || !data.nik) return;
+      setOtherAvatars(prev => {
+        const next = new Map(prev);
+        next.delete(data.nik);
+        return next;
+      });
+    };
 
     // Incoming Live Overhead Speech
     const handleNewMessage = (msg: any) => {
@@ -475,38 +743,23 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           setMySpeech({ text: msg.text, expiry: Date.now() + 7500 });
         } else {
           setOtherAvatars(prev => {
+            const existing = prev.get(msg.senderNik);
+            if (!existing) {
+              // Sender is not in the lounge - do not spawn a phantom avatar!
+              return prev;
+            }
             const next = new Map(prev);
-            const existing = next.get(msg.senderNik);
             const senderUname = getCleanUsername(msg.senderNik, msg.senderName, msg.senderUsername);
             const senderRank = getPangkatData(msg.senderNik, msg.senderPangkat);
-            if (existing) {
-              next.set(msg.senderNik, {
-                ...existing,
-                username: existing.username || senderUname,
-                pangkat: existing.pangkat || senderRank.name,
-                pangkatIcon: existing.pangkatIcon || msg.senderPangkatIcon || senderRank.icon,
-                speechText: msg.text,
-                speechExpiry: Date.now() + 7500
-              });
-            } else {
-              const spot = LOUNGE_SEATS[next.size % LOUNGE_SEATS.length];
-              next.set(msg.senderNik, {
-                nik: msg.senderNik,
-                name: senderUname,
-                username: senderUname,
-                pangkat: senderRank.name,
-                pangkatIcon: msg.senderPangkatIcon || senderRank.icon,
-                section: msg.senderSection || 'Prep-Lab',
-                posX: spot.x,
-                posY: spot.y,
-                facing: spot.facing,
-                actionState: spot.action,
-                walkFrame: 0,
-                avatarUrl: msg.senderAvatar,
-                speechText: msg.text,
-                speechExpiry: Date.now() + 7500
-              });
-            }
+            next.set(msg.senderNik, {
+              ...existing,
+              username: existing.username || senderUname,
+              pangkat: existing.pangkat || senderRank.name,
+              pangkatIcon: existing.pangkatIcon || msg.senderPangkatIcon || senderRank.icon,
+              speechText: msg.text,
+              speechExpiry: Date.now() + 7500,
+              isLive: true
+            });
             return next;
           });
           playChime('msg');
@@ -517,22 +770,22 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     const handleUserMoved = (data: any) => {
       if (data && data.nik && data.nik !== userNik) {
         setOtherAvatars(prev => {
+          const existing = prev.get(data.nik);
+          if (!existing) return prev;
           const next = new Map(prev);
-          const existing = next.get(data.nik);
           const movedUname = getCleanUsername(data.nik, data.name, data.username);
           const movedRank = getPangkatData(data.nik, data.pangkat);
-          if (existing) {
-            next.set(data.nik, {
-              ...existing,
-              username: data.username || existing.username || movedUname,
-              pangkat: data.pangkat || existing.pangkat || movedRank.name,
-              pangkatIcon: data.pangkatIcon || existing.pangkatIcon || movedRank.icon,
-              posX: data.x,
-              posY: data.y,
-              facing: data.facing || existing.facing,
-              actionState: data.actionState || 'idle'
-            });
-          }
+          next.set(data.nik, {
+            ...existing,
+            username: data.username || existing.username || movedUname,
+            pangkat: data.pangkat || existing.pangkat || movedRank.name,
+            pangkatIcon: data.pangkatIcon || existing.pangkatIcon || movedRank.icon,
+            posX: data.x,
+            posY: data.y,
+            facing: data.facing || existing.facing,
+            actionState: data.actionState || 'idle',
+            isLive: true
+          });
           return next;
         });
       }
@@ -541,38 +794,53 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     const handleUserAction = (data: any) => {
       if (data && data.nik && data.nik !== userNik) {
         setOtherAvatars(prev => {
+          const existing = prev.get(data.nik);
+          if (!existing) return prev;
           const next = new Map(prev);
-          const existing = next.get(data.nik);
           const actionUname = getCleanUsername(data.nik, data.name, data.username);
           const actionRank = getPangkatData(data.nik, data.pangkat);
-          if (existing) {
-            next.set(data.nik, {
-              ...existing,
-              username: data.username || existing.username || actionUname,
-              pangkat: data.pangkat || existing.pangkat || actionRank.name,
-              pangkatIcon: data.pangkatIcon || existing.pangkatIcon || actionRank.icon,
-              actionState: data.actionState || existing.actionState,
-              speechText: data.speechText || existing.speechText,
-              speechExpiry: data.speechText ? Date.now() + 7500 : existing.speechExpiry
-            });
-          }
+          next.set(data.nik, {
+            ...existing,
+            username: data.username || existing.username || actionUname,
+            pangkat: data.pangkat || existing.pangkat || actionRank.name,
+            pangkatIcon: data.pangkatIcon || existing.pangkatIcon || actionRank.icon,
+            actionState: data.actionState || existing.actionState,
+            speechText: data.speechText || existing.speechText,
+            speechExpiry: data.speechText ? Date.now() + 7500 : existing.speechExpiry,
+            isLive: true
+          });
           return next;
         });
         playChime('cheer');
       }
     };
 
-    socket.on('new_message', handleNewMessage);
+    const handlePresenceUpdate = (data: any) => {
+      if (data && Array.isArray(data.loungeMembers)) {
+        syncOnlinePresence({ loungeMembers: data.loungeMembers });
+      }
+    };
+
+    socket.on('lounge:sync_state', handleLoungeSync);
+    socket.on('lounge:user_joined', handleUserJoined);
+    socket.on('lounge:user_left', handleUserLeft);
     socket.on('lounge:user_moved', handleUserMoved);
     socket.on('lounge:user_action', handleUserAction);
+    socket.on('presence:update', handlePresenceUpdate);
+    socket.on('new_message', handleNewMessage);
 
     return () => {
-      socket.off('new_message', handleNewMessage);
+      clearInterval(pollingTimer);
+      socket.off('lounge:sync_state', handleLoungeSync);
+      socket.off('lounge:user_joined', handleUserJoined);
+      socket.off('lounge:user_left', handleUserLeft);
       socket.off('lounge:user_moved', handleUserMoved);
       socket.off('lounge:user_action', handleUserAction);
-      leaveRoom();
+      socket.off('presence:update', handlePresenceUpdate);
+      socket.off('new_message', handleNewMessage);
+      leaveLounge(userNik);
     };
-  }, [isOpen, userNik, effectiveUsername, effectivePangkat, userSection, avatarUrl]);
+  }, [isOpen, userNik, effectiveUsername, effectivePangkat, effectivePangkatIcon, userSection, avatarUrl, fetchPresenceOnline]);
 
   // Click on open floor to walk freely
   const handleFloorClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -738,6 +1006,15 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     return list.sort((a, b) => a.posY - b.posY);
   }, [userNik, effectiveUsername, effectivePangkat, effectivePangkatIcon, userSection, myPos, myFacing, myActionState, myWalkFrame, mySpeech, avatarUrl, otherAvatars]);
 
+  // Real-time live count
+  const liveCount = useMemo(() => {
+    let count = 1; // Current user is live
+    for (const av of otherAvatars.values()) {
+      if (av.isLive) count++;
+    }
+    return count;
+  }, [otherAvatars]);
+
   if (!isOpen) return null;
 
   const isCurrentSitting = myActionState === 'sit' || myActionState === 'smoke_sit' || myActionState === 'coffee_sit';
@@ -786,14 +1063,16 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               🚬
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base sm:text-lg font-black text-white font-display flex items-center gap-2">
                   <span>Tempat Nongkrong &amp; Gazebo Merokok PrepLab</span>
                 </h3>
-                <span className="px-3 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-black text-xs shadow-md font-mono flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
-                  <span>{allRenderAvatars.length} Personil Online</span>
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-3 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-black text-xs shadow-md font-mono flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
+                    <span>{allRenderAvatars.length} Personil di Tempat Nongkrong</span>
+                  </span>
+                </div>
               </div>
               <p className="text-xs text-slate-200 flex items-center gap-2 mt-0.5 font-medium">
                 <span className="text-amber-300 font-bold flex items-center gap-1">
@@ -816,6 +1095,16 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Manual Sync Button */}
+            <button
+              type="button"
+              onClick={() => handleManualSync()}
+              className="p-2.5 rounded-xl bg-white/10 text-slate-200 hover:text-white hover:bg-white/20 transition-all cursor-pointer shadow-sm flex items-center justify-center"
+              title="Sinkronisasi Ulang Presensi Realtime"
+            >
+              <RefreshCw className={`w-4 h-4 text-cyan-300 ${isSyncing ? 'animate-spin' : ''}`} />
+            </button>
+
             {/* Audio Toggle */}
             <button
               type="button"
@@ -955,7 +1244,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             onMouseLeave={() => setHoveredFurniture(null)}
             onClick={(e) => {
               e.stopPropagation();
-              handleSitAtSpot(LOUNGE_SEATS[0]);
+              const spot = LOUNGE_SEATS.find(s => s.id === 'bench_1') || LOUNGE_SEATS[0];
+              handleSitAtSpot(spot);
             }}
           >
             <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/bench1:opacity-100 transition-opacity bg-amber-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
@@ -991,7 +1281,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             onMouseLeave={() => setHoveredFurniture(null)}
             onClick={(e) => {
               e.stopPropagation();
-              handleSitAtSpot(LOUNGE_SEATS[1]);
+              const spot = LOUNGE_SEATS.find(s => s.id === 'bench_2') || LOUNGE_SEATS[4];
+              handleSitAtSpot(spot);
             }}
           >
             <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/bench2:opacity-100 transition-opacity bg-amber-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
@@ -1014,7 +1305,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             onMouseLeave={() => setHoveredFurniture(null)}
             onClick={(e) => {
               e.stopPropagation();
-              handleSitAtSpot(LOUNGE_SEATS[6]);
+              const spot = LOUNGE_SEATS.find(s => s.id === 'bar_refreshment') || LOUNGE_SEATS[5];
+              handleSitAtSpot(spot);
             }}
           >
             <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-purple-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
@@ -1037,7 +1329,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             onMouseLeave={() => setHoveredFurniture(null)}
             onClick={(e) => {
               e.stopPropagation();
-              handleSitAtSpot(LOUNGE_SEATS[2]);
+              const spot = LOUNGE_SEATS.find(s => s.id === 'chair_coffee_1') || LOUNGE_SEATS[7];
+              handleSitAtSpot(spot);
             }}
           >
             <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/chair1:opacity-100 transition-opacity bg-emerald-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
@@ -1073,7 +1366,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             onMouseLeave={() => setHoveredFurniture(null)}
             onClick={(e) => {
               e.stopPropagation();
-              handleSitAtSpot(LOUNGE_SEATS[3]);
+              const spot = LOUNGE_SEATS.find(s => s.id === 'chair_coffee_2') || LOUNGE_SEATS[10];
+              handleSitAtSpot(spot);
             }}
           >
             <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/chair2:opacity-100 transition-opacity bg-emerald-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
@@ -1096,7 +1390,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             onMouseLeave={() => setHoveredFurniture(null)}
             onClick={(e) => {
               e.stopPropagation();
-              handleSitAtSpot(LOUNGE_SEATS[4]);
+              const spot = LOUNGE_SEATS.find(s => s.id === 'sofa_left') || LOUNGE_SEATS[11];
+              handleSitAtSpot(spot);
             }}
           >
             <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/sofa:opacity-100 transition-opacity bg-cyan-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
@@ -1129,7 +1424,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
                     setSelectedAvatarForInteract(av);
                   }
                 }}
-                className={`absolute -translate-x-1/2 -translate-y-full flex flex-col items-center transition-all duration-75 cursor-pointer group/avatar ${
+                className={`absolute -translate-x-1/2 -translate-y-full flex flex-col items-center transition-[left,top] duration-75 ease-linear cursor-pointer group/avatar ${
                   isMe ? 'z-30' : 'z-20'
                 }`}
                 style={{
@@ -1152,7 +1447,15 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
 
                 {/* Overhead Username & Logo Pangkat Badge Pill (Hanya Username & Logo Pangkat Saja) */}
                 <div className="mb-0.5 px-2 py-0.5 rounded-full bg-slate-950/95 backdrop-blur-md text-white text-[9px] font-bold flex items-center gap-1.5 shadow-xl border border-white/20 whitespace-nowrap">
-                  <span className={isMe ? 'text-amber-400 font-black' : 'text-slate-100 font-bold'}>
+                  <span 
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      isMe || av.isLive 
+                        ? 'bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse' 
+                        : 'bg-cyan-400/80 shadow-[0_0_6px_#22d3ee]'
+                    }`} 
+                    title={isMe || av.isLive ? 'Aktif Realtime Saat Ini' : 'Shift Kerja Hari Ini'}
+                  />
+                  <span className={isMe ? 'text-amber-400 font-black' : (av.isLive ? 'text-emerald-200 font-black' : 'text-slate-100 font-bold')}>
                     {av.username}
                   </span>
                   <span 
@@ -1287,7 +1590,11 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
 
           {/* Quick Tip on Floor */}
           <div className="absolute bottom-2 left-4 pointer-events-none text-[10px] font-mono text-amber-300 bg-slate-950/90 px-3 py-1.5 rounded-xl border border-amber-500/40 shadow-lg">
-            💡 Klik langsung model bangku, kursi, atau sofa untuk duduk &bull; Klik lantai terbuka untuk berjalan bebas!
+            {allRenderAvatars.length === 1 ? (
+              <span>☕ Anda sedang santai sendirian &bull; Rekan shift lain yang online akan otomatis muncul di sini secara realtime!</span>
+            ) : (
+              <span>💡 Klik langsung model bangku, kursi, atau sofa untuk duduk &bull; Klik lantai terbuka untuk berjalan bebas!</span>
+            )}
           </div>
         </div>
 
@@ -1311,7 +1618,10 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               <span className="text-[10px] font-bold text-slate-400">Pindah Duduk:</span>
               <button
                 type="button"
-                onClick={() => handleSitAtSpot(LOUNGE_SEATS[0])}
+                onClick={() => {
+                  const s = LOUNGE_SEATS.find(s => s.id === 'bench_1') || LOUNGE_SEATS[0];
+                  handleSitAtSpot(s);
+                }}
                 className={`px-2.5 py-1 rounded-lg font-black text-[10px] transition-all cursor-pointer shadow-sm ${
                   activeSeatId === 'bench_1'
                     ? 'bg-amber-400 text-slate-950 ring-2 ring-white'
@@ -1322,7 +1632,10 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => handleSitAtSpot(LOUNGE_SEATS[1])}
+                onClick={() => {
+                  const s = LOUNGE_SEATS.find(s => s.id === 'bench_2') || LOUNGE_SEATS[4];
+                  handleSitAtSpot(s);
+                }}
                 className={`px-2.5 py-1 rounded-lg font-black text-[10px] transition-all cursor-pointer shadow-sm ${
                   activeSeatId === 'bench_2'
                     ? 'bg-amber-400 text-slate-950 ring-2 ring-white'
@@ -1333,7 +1646,10 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => handleSitAtSpot(LOUNGE_SEATS[2])}
+                onClick={() => {
+                  const s = LOUNGE_SEATS.find(s => s.id === 'chair_coffee_1') || LOUNGE_SEATS[7];
+                  handleSitAtSpot(s);
+                }}
                 className={`px-2.5 py-1 rounded-lg font-black text-[10px] transition-all cursor-pointer shadow-sm ${
                   activeSeatId === 'chair_coffee_1' || activeSeatId === 'chair_coffee_2'
                     ? 'bg-emerald-400 text-slate-950 ring-2 ring-white'
@@ -1344,9 +1660,12 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => handleSitAtSpot(LOUNGE_SEATS[4])}
+                onClick={() => {
+                  const s = LOUNGE_SEATS.find(s => s.id === 'sofa_left') || LOUNGE_SEATS[11];
+                  handleSitAtSpot(s);
+                }}
                 className={`px-2.5 py-1 rounded-lg font-black text-[10px] transition-all cursor-pointer shadow-sm ${
-                  activeSeatId === 'sofa_left' || activeSeatId === 'sofa_right'
+                  activeSeatId === 'sofa_left' || activeSeatId === 'sofa_right' || activeSeatId === 'sofa_center'
                     ? 'bg-cyan-400 text-slate-950 ring-2 ring-white'
                     : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
                 }`}
@@ -1371,7 +1690,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
                   setMyActionState('idle');
                   setActiveSeatId(null);
                 } else {
-                  handleSitAtSpot(LOUNGE_SEATS[0]);
+                  const s = LOUNGE_SEATS.find(s => s.id === 'bench_1') || LOUNGE_SEATS[0];
+                  handleSitAtSpot(s);
                 }
               }}
               className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 ${
