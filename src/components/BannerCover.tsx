@@ -136,21 +136,30 @@ export const BannerCover: React.FC<BannerCoverProps> = ({
       <img
         src={cleanCoverUrl}
         alt={alt}
-        style={{ objectPosition: `center ${displayPos}%` }}
-        className={`w-full h-full object-cover transition-[object-position] ${
-          isRepositioning ? (isDragging ? 'cursor-grabbing duration-0' : 'cursor-grab duration-75') : 'duration-300'
+        draggable={false}
+        style={{ objectPosition: `center ${displayPos}%`, userSelect: 'none' }}
+        className={`w-full h-full object-cover transition-[object-position] select-none pointer-events-none ${
+          isRepositioning ? (isDragging ? 'duration-0' : 'duration-75') : 'duration-300'
         }`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
       />
 
       {/* Repositioning Control Bar Overlay */}
       {isRepositioning ? (
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-xs flex flex-col justify-between p-3 z-30 animate-in fade-in duration-150">
-          {/* Top Instruction & Slider Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/90 border border-white/20 rounded-xl px-4 py-2.5 shadow-2xl backdrop-blur-md">
+        <div 
+          className={`absolute inset-0 bg-black/40 backdrop-blur-xs flex flex-col justify-between p-3 z-30 animate-in fade-in duration-150 select-none ${
+            isDragging ? 'cursor-grabbing' : 'cursor-grab'
+          }`}
+          style={{ touchAction: 'none' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          {/* Top Instruction & Slider Controls (Stop pointer propagation so dragging slider/buttons works properly) */}
+          <div 
+            className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/95 border border-white/20 rounded-xl px-4 py-2.5 shadow-2xl backdrop-blur-md cursor-default"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-2 text-white text-xs font-medium">
               <Move className="w-4 h-4 text-teal-400 animate-pulse" />
               <span>Geser gambar (tahan & geser) atau gunakan slider:</span>

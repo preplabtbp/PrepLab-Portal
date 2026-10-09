@@ -3543,60 +3543,18 @@ export function NotionDatabaseTable({
     );
   };
 
-  // Helper to format multiline notes with text color support
+  // Helper to format multiline notes with text color support, bold, italic, code, and bullet formatting
   const renderFormattedNotes = (text: string) => {
     if (!text || text === '-' || text === '•') return <span className="font-mono text-xs text-slate-400">-</span>;
     // Normalize <br/>, <br>, <br /> to newlines
     const normalized = text.replace(/<br\s*\/?>/gi, '\n');
     const cleanText = normalized.trim();
 
-    if (cleanText.includes('•')) {
-      const items = cleanText
-        .split('•')
-        .map((i) => i.trim())
-        .filter((i) => i.length > 0);
-
-      return (
-        <ul className="space-y-1 my-0.5">
-          {items.map((item, idx) => (
-            <li key={idx} className="flex items-start gap-1.5 text-xs sm:text-[13px] leading-relaxed">
-              <span className={`font-bold leading-none mt-1 shrink-0 ${isNotionLight ? 'text-slate-800' : 'text-slate-400'}`}>•</span>
-              <span 
-                className={`flex-1 whitespace-pre-wrap font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`} 
-                dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(item) }}
-              />
-            </li>
-          ))}
-        </ul>
-      );
-    }
-
-    // Split on newlines if multiple lines exist
-    const lines = cleanText.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length > 1) {
-      return (
-        <div className="space-y-1 my-0.5">
-          {lines.map((line, idx) => {
-            const isBullet = line.startsWith('- ') || line.startsWith('* ');
-            const content = isBullet ? line.substring(2) : line;
-            return (
-              <div key={idx} className="flex items-start gap-1.5 text-xs sm:text-[13px] leading-relaxed">
-                {isBullet && <span className={`font-bold leading-none mt-1 shrink-0 ${isNotionLight ? 'text-slate-800' : 'text-slate-400'}`}>•</span>}
-                <span 
-                  className={`flex-1 whitespace-pre-wrap font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`} 
-                  dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(content) }}
-                />
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-
     return (
-      <p 
-        className={`text-xs sm:text-[13px] leading-relaxed whitespace-pre-line font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`} 
-        dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(cleanText) }}
+      <div 
+        className={`leading-relaxed whitespace-pre-wrap font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`}
+        style={{ fontSize: `${labNoteFontSize}px` }}
+        dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(cleanText) }}
       />
     );
   };
@@ -4062,21 +4020,31 @@ export function NotionDatabaseTable({
               {/* Full Tools Menu Popover */}
               {isFullToolsPopoverOpen && (
                 <div 
-                  className={`absolute right-0 top-full mt-1.5 w-80 rounded-2xl shadow-2xl border p-3.5 z-50 transition-all text-left space-y-3.5 ${
-                    isNotionLight ? 'bg-white border-[#e9e9e8] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
-                  }`}
+                  className="absolute right-0 top-full mt-1.5 w-80 rounded-2xl shadow-2xl border p-3.5 z-50 transition-all text-left space-y-3.5"
+                  style={{
+                    backgroundColor: isNotionLight ? '#ffffff' : '#1e1e1e',
+                    borderColor: isNotionLight ? '#e2e8f0' : '#334155',
+                    color: isNotionLight ? '#0f172a' : '#f8fafc'
+                  }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Popover Header */}
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-xs font-bold flex items-center gap-1.5">
+                  <div 
+                    className="flex items-center justify-between pb-2 border-b"
+                    style={{ borderColor: isNotionLight ? '#f1f5f9' : '#334155' }}
+                  >
+                    <span 
+                      className="text-xs font-bold flex items-center gap-1.5"
+                      style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
+                    >
                       <SlidersHorizontal className="w-3.5 h-3.5 text-teal-500" />
                       Semua Tools & Pengaturan
                     </span>
                     <button
                       type="button"
                       onClick={() => setIsFullToolsPopoverOpen(false)}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }}
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -4084,16 +4052,37 @@ export function NotionDatabaseTable({
 
                   {/* Section 1: Tampilan & Tata Letak */}
                   <div className="space-y-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tampilan & Tata Letak</span>
+                    <span 
+                      className="text-[10px] font-bold uppercase tracking-wider block"
+                      style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }}
+                    >
+                      Tampilan & Tata Letak
+                    </span>
                     
                     {/* Zoom Controller */}
-                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
-                      <span className="text-xs font-medium">Skala Tampilan (Zoom)</span>
+                    <div 
+                      className="flex items-center justify-between p-2 rounded-xl border"
+                      style={{
+                        backgroundColor: isNotionLight ? '#f8fafc' : '#262626',
+                        borderColor: isNotionLight ? '#e2e8f0' : '#383838'
+                      }}
+                    >
+                      <span 
+                        className="text-xs font-medium"
+                        style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
+                      >
+                        Skala Tampilan (Zoom)
+                      </span>
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => setZoomPercent((prev) => Math.max(70, prev - 10))}
-                          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                          className="p-1 rounded cursor-pointer hover:opacity-80 transition-all border"
+                          style={{
+                            backgroundColor: isNotionLight ? '#e2e8f0' : '#383838',
+                            color: isNotionLight ? '#0f172a' : '#f8fafc',
+                            borderColor: isNotionLight ? '#cbd5e1' : '#4f4f4f'
+                          }}
                           title="Perkecil"
                         >
                           <ZoomOut className="w-3.5 h-3.5" />
@@ -4108,7 +4097,12 @@ export function NotionDatabaseTable({
                         <button
                           type="button"
                           onClick={() => setZoomPercent((prev) => Math.min(130, prev + 10))}
-                          className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                          className="p-1 rounded cursor-pointer hover:opacity-80 transition-all border"
+                          style={{
+                            backgroundColor: isNotionLight ? '#e2e8f0' : '#383838',
+                            color: isNotionLight ? '#0f172a' : '#f8fafc',
+                            borderColor: isNotionLight ? '#cbd5e1' : '#4f4f4f'
+                          }}
                           title="Perbesar"
                         >
                           <ZoomIn className="w-3.5 h-3.5" />
@@ -4116,17 +4110,38 @@ export function NotionDatabaseTable({
                       </div>
                     </div>
 
-                    {/* Font Size Controller (Hanya Mengatur Ukuran Huruf Tanpa Mengubah Ukuran UI) */}
-                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
+                    {/* Font Size Controller */}
+                    <div 
+                      className="flex items-center justify-between p-2 rounded-xl border"
+                      style={{
+                        backgroundColor: isNotionLight ? '#f8fafc' : '#262626',
+                        borderColor: isNotionLight ? '#e2e8f0' : '#383838'
+                      }}
+                    >
                       <div className="flex flex-col">
-                        <span className="text-xs font-medium">Ukuran Huruf (Font Size)</span>
-                        <span className="text-[10px] text-slate-400">Hanya teks, tanpa mengubah ukuran UI</span>
+                        <span 
+                          className="text-xs font-medium"
+                          style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
+                        >
+                          Ukuran Huruf (Font Size)
+                        </span>
+                        <span 
+                          className="text-[10px]"
+                          style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }}
+                        >
+                          Hanya teks, tanpa mengubah ukuran UI
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => setLabNoteFontSize((prev) => Math.max(10, prev - 1))}
-                          className="px-2 py-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer text-xs font-bold border border-slate-200 dark:border-slate-700"
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer hover:opacity-80 transition-all shadow-2xs"
+                          style={{
+                            backgroundColor: isNotionLight ? '#e2e8f0' : '#383838',
+                            color: isNotionLight ? '#0f172a' : '#f8fafc',
+                            borderColor: isNotionLight ? '#cbd5e1' : '#4f4f4f'
+                          }}
                           title="Perkecil Huruf (A-)"
                         >
                           A-
@@ -4141,7 +4156,12 @@ export function NotionDatabaseTable({
                         <button
                           type="button"
                           onClick={() => setLabNoteFontSize((prev) => Math.min(18, prev + 1))}
-                          className="px-2 py-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer text-xs font-bold border border-slate-200 dark:border-slate-700"
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer hover:opacity-80 transition-all shadow-2xs"
+                          style={{
+                            backgroundColor: isNotionLight ? '#e2e8f0' : '#383838',
+                            color: isNotionLight ? '#0f172a' : '#f8fafc',
+                            borderColor: isNotionLight ? '#cbd5e1' : '#4f4f4f'
+                          }}
                           title="Perbesar Huruf (A+)"
                         >
                           A+
@@ -4156,34 +4176,59 @@ export function NotionDatabaseTable({
                         handleResetColumnOrder();
                         setIsFullToolsPopoverOpen(false);
                       }}
-                      className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 hover:border-teal-500/60 text-xs font-medium transition-colors cursor-pointer"
+                      className="w-full flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-colors cursor-pointer hover:border-teal-500/60"
+                      style={{
+                        backgroundColor: isNotionLight ? '#f8fafc' : '#262626',
+                        borderColor: isNotionLight ? '#e2e8f0' : '#383838',
+                        color: isNotionLight ? '#0f172a' : '#f8fafc'
+                      }}
                     >
                       <div className="flex items-center gap-2">
                         <SlidersHorizontal className="w-3.5 h-3.5 text-teal-500" />
-                        <span>Rapikan Kolom ke Standar Notion</span>
+                        <span style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}>
+                          Rapikan Kolom ke Standar Notion
+                        </span>
                       </div>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      <ChevronRight className="w-3.5 h-3.5" style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }} />
                     </button>
 
                     {/* Theme Switcher Button */}
                     <button
                       type="button"
                       onClick={() => setThemeMode(isNotionLight ? 'dark-studio' : 'notion-light')}
-                      className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 hover:border-teal-500/60 text-xs font-medium transition-colors cursor-pointer"
+                      className="w-full flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-colors cursor-pointer hover:border-teal-500/60"
+                      style={{
+                        backgroundColor: isNotionLight ? '#f8fafc' : '#262626',
+                        borderColor: isNotionLight ? '#e2e8f0' : '#383838',
+                        color: isNotionLight ? '#0f172a' : '#f8fafc'
+                      }}
                     >
                       <div className="flex items-center gap-2">
                         {isNotionLight ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : <Moon className="w-3.5 h-3.5 text-indigo-400" />}
-                        <span>Tema Tampilan</span>
+                        <span style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}>
+                          Tema Tampilan
+                        </span>
                       </div>
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      <span 
+                        className="text-[11px] font-semibold"
+                        style={{ color: isNotionLight ? '#475569' : '#cbd5e1' }}
+                      >
                         {isNotionLight ? '⚪ Notion Light' : '⚫ Dark Studio'}
                       </span>
                     </button>
                   </div>
 
                   {/* Section 2: Data & Aksi Tabel */}
-                  <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Data & Manajemen</span>
+                  <div 
+                    className="space-y-2 pt-1 border-t"
+                    style={{ borderColor: isNotionLight ? '#f1f5f9' : '#334155' }}
+                  >
+                    <span 
+                      className="text-[10px] font-bold uppercase tracking-wider block"
+                      style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }}
+                    >
+                      Data & Manajemen
+                    </span>
 
                     {/* Export CSV */}
                     <button
@@ -4192,13 +4237,29 @@ export function NotionDatabaseTable({
                         handleExportCsv();
                         setIsFullToolsPopoverOpen(false);
                       }}
-                      className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 hover:border-teal-500/60 text-xs font-medium transition-colors cursor-pointer"
+                      className="w-full flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-colors cursor-pointer hover:border-teal-500/60"
+                      style={{
+                        backgroundColor: isNotionLight ? '#f8fafc' : '#262626',
+                        borderColor: isNotionLight ? '#e2e8f0' : '#383838',
+                        color: isNotionLight ? '#0f172a' : '#f8fafc'
+                      }}
                     >
                       <div className="flex items-center gap-2">
                         <Download className="w-3.5 h-3.5 text-teal-500" />
-                        <span>Ekspor Data ke File CSV</span>
+                        <span style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}>
+                          Ekspor Data ke File CSV
+                        </span>
                       </div>
-                      <span className="text-[10.5px] text-slate-400">.csv</span>
+                      <span 
+                        className="text-[10.5px] font-mono px-1.5 py-0.5 rounded border"
+                        style={{
+                          backgroundColor: isNotionLight ? '#e2e8f0' : '#333333',
+                          borderColor: isNotionLight ? '#cbd5e1' : '#475569',
+                          color: isNotionLight ? '#475569' : '#cbd5e1'
+                        }}
+                      >
+                        .csv
+                      </span>
                     </button>
 
                     {/* Migrasi Subtask */}
@@ -4208,11 +4269,18 @@ export function NotionDatabaseTable({
                         handleMigrateChecklistsToSubItems();
                         setIsFullToolsPopoverOpen(false);
                       }}
-                      className="w-full flex items-center justify-between p-2 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/60 hover:border-amber-500 text-xs font-medium text-amber-900 dark:text-amber-200 transition-colors cursor-pointer"
+                      className="w-full flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-colors cursor-pointer hover:opacity-90"
+                      style={{
+                        backgroundColor: isNotionLight ? '#fef3c7' : '#291800',
+                        borderColor: isNotionLight ? '#fcd34d' : '#78350f',
+                        color: isNotionLight ? '#92400e' : '#fef08a'
+                      }}
                     >
                       <div className="flex items-center gap-2">
                         <CornerDownRight className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Migrasi Checklist Subtask</span>
+                        <span style={{ color: isNotionLight ? '#92400e' : '#fef08a' }}>
+                          Migrasi Checklist Subtask
+                        </span>
                       </div>
                       <ChevronRight className="w-3.5 h-3.5 text-amber-500" />
                     </button>
@@ -4223,13 +4291,16 @@ export function NotionDatabaseTable({
                         <button
                           type="button"
                           onClick={handleToggleSelectAll}
-                          className={`flex-1 py-1.5 px-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                            isAllSelected
-                              ? 'bg-slate-900 text-white border-slate-900 dark:bg-teal-600'
-                              : isNotionLight
-                              ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
-                              : 'bg-[#282828] hover:bg-[#333333] border-slate-700 text-slate-300'
-                          }`}
+                          className="flex-1 py-1.5 px-2 rounded-xl border text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                          style={{
+                            backgroundColor: isAllSelected 
+                              ? (isNotionLight ? '#0f172a' : '#0d9488') 
+                              : (isNotionLight ? '#ffffff' : '#262626'),
+                            borderColor: isNotionLight ? '#cbd5e1' : '#4f4f4f',
+                            color: isAllSelected 
+                              ? '#ffffff' 
+                              : (isNotionLight ? '#0f172a' : '#f8fafc')
+                          }}
                         >
                           <CheckSquare className="w-3.5 h-3.5" />
                           <span>{isAllSelected ? 'Batal Pilih' : 'Pilih Semua'}</span>
@@ -4888,7 +4959,7 @@ export function NotionDatabaseTable({
                                   return (
                                     <td 
                                       key={colName} 
-                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#0f172a' : 'var(--text-main, #f8fafc)' }} 
+                                      style={{ ...getColStyle(colName), fontSize: `${labNoteFontSize}px`, color: isNotionLight ? '#0f172a' : 'var(--text-main, #f8fafc)' }} 
                                       className={`font-medium transition-colors border-r ${
                                         isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                       } ${
@@ -4949,13 +5020,16 @@ export function NotionDatabaseTable({
                                             {/* Notion Document Icon */}
                                             <span className="text-slate-400 select-none text-xs shrink-0">📄</span>
 
-                                            <span className={`leading-normal block font-semibold transition-all ${
-                                              isSubCompleted 
-                                                ? 'line-through text-slate-400 dark:text-slate-500 font-normal' 
-                                                : isNotionLight 
-                                                  ? 'text-slate-900 font-semibold' 
-                                                  : 'text-slate-100'
-                                            } ${fitPageMode ? 'break-words text-[13px]' : 'text-[13.5px]'}`}>
+                                            <span 
+                                              style={{ fontSize: `${labNoteFontSize}px` }}
+                                              className={`leading-normal block font-semibold transition-all ${
+                                                isSubCompleted 
+                                                  ? 'line-through text-slate-400 dark:text-slate-500 font-normal' 
+                                                  : isNotionLight 
+                                                    ? 'text-slate-900 font-semibold' 
+                                                    : 'text-slate-100'
+                                              } ${fitPageMode ? 'break-words' : ''}`}
+                                            >
                                               {displayTitle ? displayTitle : <em style={{ color: 'var(--text-muted, #64748b)' }}>Tanpa Judul</em>}
                                             </span>
                                             

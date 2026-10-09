@@ -694,6 +694,10 @@ export function markdownToVisualHtml(text?: string | null): string {
 
   let html = text.replace(/\r\n/g, '\n');
 
+  // Normalize bullet prefixes missing spaces (e.g. -**text** or •text or *text or _**text**)
+  html = html.replace(/^(\s*[-*•])(?=[^\s])/gm, '$1 ');
+  html = html.replace(/^(\s*_[_*])(?=[^\s])/gm, '- ');
+
   // Convert status badges
   html = html.replace(/\*\*\(Done\)\*\*|\[Done\]|\(Done\)/gi, '<span class="badge-done inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 mr-1 select-none">DONE</span>&nbsp;');
   html = html.replace(/\*\*\(OPEN\)\*\*|\[OPEN\]|\(OPEN\)/gi, '<span class="badge-open inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 mr-1 select-none">OPEN</span>&nbsp;');
@@ -701,9 +705,9 @@ export function markdownToVisualHtml(text?: string | null): string {
   // Convert Color tags like [blue]...[/blue], [green]...[/green], [orange]...[/orange], etc.
   html = formatColorTagsToHtml(html);
 
-  // Convert Bold **text** and __text__
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  // Convert Bold **text** and __text__ (support multiline/embedded HTML spans)
+  html = html.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([\s\S]+?)__/g, '<strong>$1</strong>');
 
   // Convert Italic *text* and _text_ (excluding HTML tags)
   html = html.replace(/(^|[^\*])\*([^\*\n]+)\*([^\*]|$)/g, '$1<em>$2</em>$3');
@@ -722,8 +726,8 @@ export function markdownToVisualHtml(text?: string | null): string {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      const content = trimmed.replace(/^[•\-\*]\s+/, '');
+    if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ') || /^[•\-\*]/.test(trimmed)) {
+      const content = trimmed.replace(/^[•\-\*]\s*/, '');
       if (!inUl) {
         if (inOl) { processedLines.push('</ol>'); inOl = false; }
         processedLines.push('<ul class="list-disc pl-5 space-y-1">');

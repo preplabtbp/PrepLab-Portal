@@ -226,6 +226,7 @@ interface FloatingNotionBubbleToolbarProps {
   onExecCmd: (cmd: string, val?: string) => void;
   onClearFormat: () => void;
   onInsertLink: () => void;
+  isNotionLight?: boolean;
 }
 
 export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarProps> = ({
@@ -236,7 +237,8 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
   onApplyColor,
   onExecCmd,
   onClearFormat,
-  onInsertLink
+  onInsertLink,
+  isNotionLight = false
 }) => {
   if (!bubblePos) return null;
 
@@ -247,10 +249,13 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         // Prevent blur of contentEditable so selection isn't destroyed
         e.preventDefault();
       }}
-      className="fixed z-[99999] p-1.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-2xl text-slate-700 dark:text-slate-200 text-xs animate-in fade-in zoom-in-95 duration-100 select-none font-sans flex items-center gap-1"
+      className="fixed z-[99999] p-1.5 rounded-2xl backdrop-blur-md border shadow-2xl text-xs animate-in fade-in zoom-in-95 duration-100 select-none font-sans flex items-center gap-1"
       style={{
         top: `${bubblePos.top}px`,
-        left: `${bubblePos.left}px`
+        left: `${bubblePos.left}px`,
+        backgroundColor: isNotionLight ? '#ffffff' : '#1e293b',
+        color: isNotionLight ? '#0f172a' : '#f8fafc',
+        borderColor: isNotionLight ? '#cbd5e1' : '#475569'
       }}
     >
       {/* A (Color Dropdown Picker) */}
@@ -259,11 +264,11 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => setIsColorMenuOpen(!isColorMenuOpen)}
-          className={`px-2 py-1 rounded-lg transition-colors cursor-pointer font-bold flex items-center gap-1 ${
-            isColorMenuOpen
-              ? 'bg-teal-500/20 text-teal-600 dark:text-teal-400'
-              : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'
-          }`}
+          className="px-2 py-1 rounded-lg transition-colors cursor-pointer font-bold flex items-center gap-1"
+          style={{
+            backgroundColor: isColorMenuOpen ? (isNotionLight ? '#e0f2fe' : 'rgba(20, 184, 166, 0.2)') : 'transparent',
+            color: isNotionLight ? '#0f172a' : '#f8fafc'
+          }}
           title="Pilih Warna Teks"
         >
           <span className="underline decoration-teal-500 font-extrabold text-xs">A</span>
@@ -273,10 +278,21 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         {/* Notion Color Swatches Menu */}
         {isColorMenuOpen && (
           <div 
-            className="absolute top-full left-0 mt-2 p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl z-[100000] grid grid-cols-3 gap-1.5 min-w-[230px] animate-in fade-in zoom-in-95 duration-100"
+            className="absolute top-full left-0 mt-2 p-2 rounded-2xl border shadow-2xl z-[100000] grid grid-cols-3 gap-1.5 min-w-[230px] animate-in fade-in zoom-in-95 duration-100"
+            style={{
+              backgroundColor: isNotionLight ? '#ffffff' : '#1e293b',
+              borderColor: isNotionLight ? '#cbd5e1' : '#475569',
+              color: isNotionLight ? '#0f172a' : '#f8fafc'
+            }}
             onMouseDown={(e) => e.preventDefault()}
           >
-            <div className="col-span-3 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800 mb-1">
+            <div 
+              className="col-span-3 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider border-b mb-1"
+              style={{
+                color: isNotionLight ? '#64748b' : '#94a3b8',
+                borderColor: isNotionLight ? '#f1f5f9' : '#334155'
+              }}
+            >
               Warna Teks Notion
             </div>
             {Object.entries(NOTION_COLORS).map(([key, conf]) => (
@@ -285,20 +301,26 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onApplyColor(conf.hex, key)}
-                className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[11px] font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer active:scale-95"
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[11px] font-medium transition-colors text-left cursor-pointer active:scale-95"
+                style={{
+                  color: conf.hex
+                }}
               >
                 <span 
-                  className="w-3.5 h-3.5 rounded-full shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs" 
-                  style={{ backgroundColor: conf.hex }} 
+                  className="w-3.5 h-3.5 rounded-full shrink-0 border shadow-2xs" 
+                  style={{ backgroundColor: conf.hex, borderColor: isNotionLight ? '#cbd5e1' : '#475569' }} 
                 />
-                <span className="truncate text-xs font-semibold" style={{ color: conf.hex }}>{conf.label}</span>
+                <span className="truncate text-xs font-semibold">{conf.label}</span>
               </button>
             ))}
           </div>
         )}
       </div>
 
-      <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-700 my-auto mx-0.5" />
+      <div 
+        className="w-[1px] h-4 my-auto mx-0.5" 
+        style={{ backgroundColor: isNotionLight ? '#e2e8f0' : '#475569' }} 
+      />
 
       {/* Quick Color Swatches directly on bar */}
       <div className="flex items-center gap-1">
@@ -312,21 +334,25 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onApplyColor(conf.hex, cKey)}
               title={`Beri warna ${conf.label}`}
-              className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs"
-              style={{ backgroundColor: conf.hex }}
+              className="w-4 h-4 rounded-full border hover:scale-125 transition-transform cursor-pointer shadow-2xs"
+              style={{ backgroundColor: conf.hex, borderColor: isNotionLight ? '#cbd5e1' : '#64748b' }}
             />
           );
         })}
       </div>
 
-      <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-700 my-auto mx-0.5" />
+      <div 
+        className="w-[1px] h-4 my-auto mx-0.5" 
+        style={{ backgroundColor: isNotionLight ? '#e2e8f0' : '#475569' }} 
+      />
 
       {/* B (Bold) */}
       <button
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onExecCmd('bold')}
-        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-xs cursor-pointer text-slate-800 dark:text-slate-100"
+        className="px-2 py-1 rounded-lg font-extrabold text-xs cursor-pointer hover:opacity-80 transition-opacity"
+        style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
         title="Tebal (Ctrl+B)"
       >
         B
@@ -337,7 +363,8 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onExecCmd('italic')}
-        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 italic font-serif text-xs cursor-pointer text-slate-800 dark:text-slate-100"
+        className="px-2 py-1 rounded-lg italic font-serif text-xs cursor-pointer hover:opacity-80 transition-opacity"
+        style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
         title="Miring (Ctrl+I)"
       >
         I
@@ -348,7 +375,8 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onExecCmd('underline')}
-        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 underline text-xs cursor-pointer text-slate-800 dark:text-slate-100"
+        className="px-2 py-1 rounded-lg underline text-xs cursor-pointer hover:opacity-80 transition-opacity"
+        style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
         title="Garis Bawah (Ctrl+U)"
       >
         U
@@ -359,7 +387,8 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onExecCmd('strikeThrough')}
-        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 line-through text-xs cursor-pointer text-slate-800 dark:text-slate-100"
+        className="px-2 py-1 rounded-lg line-through text-xs cursor-pointer hover:opacity-80 transition-opacity"
+        style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
         title="Coret"
       >
         S
@@ -370,20 +399,25 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={onClearFormat}
-        className="px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-[11px] text-slate-400 hover:text-rose-500 cursor-pointer"
+        className="px-2 py-1 rounded-lg font-bold text-[11px] cursor-pointer hover:opacity-80 transition-opacity"
+        style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }}
         title="Hapus Warna & Format"
       >
         Tx
       </button>
 
-      <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-700 my-auto mx-0.5" />
+      <div 
+        className="w-[1px] h-4 my-auto mx-0.5" 
+        style={{ backgroundColor: isNotionLight ? '#e2e8f0' : '#475569' }} 
+      />
 
       {/* Link */}
       <button
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={onInsertLink}
-        className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-600 dark:text-slate-300"
+        className="p-1 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+        style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
         title="Tautan / Link"
       >
         <LinkIcon className="w-3.5 h-3.5" />
@@ -899,6 +933,7 @@ const NotionTasklistInlineEditor: React.FC<{
         onExecCmd={execCmd}
         onClearFormat={handleClearFormat}
         onInsertLink={handleInsertLink}
+        isNotionLight={isNotionLight}
       />
     </div>
   );
@@ -1230,6 +1265,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
         onExecCmd={execCmd}
         onClearFormat={handleClearFormat}
         onInsertLink={handleInsertLink}
+        isNotionLight={isNotionLight}
       />
     </div>
   );
