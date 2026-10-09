@@ -9,6 +9,7 @@ import {
 import { Card, Button, Input, Select } from './ui';
 import { PageHeader } from './PageHeader';
 import { getKtaUrl } from '../sheets-api';
+import * as XLSX from 'xlsx';
 
 interface GroupReportProps {
   inspectorName: string;
@@ -551,11 +552,30 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     setSelectedWeek(currentActiveWeek);
   }, [currentActiveWeek]);
 
+  const loadedFeedWeek = useRef<string | null>(null);
+  const loadedRekapWeek = useRef<string | null>(null);
+  const loadedRekapKtaWeek = useRef<string | null>(null);
+
   useEffect(() => {
-    fetchGroupFeed(selectedWeek);
-    fetchRekapData(selectedWeek);
-    fetchRekapKtaData(selectedWeek);
-  }, [selectedWeek]);
+    if (activeTab === 'feed') {
+      if (loadedFeedWeek.current !== selectedWeek) {
+        loadedFeedWeek.current = selectedWeek;
+        fetchGroupFeed(selectedWeek);
+      }
+    } else if (activeTab === 'rekap') {
+      if (rekapSubTab === 'INSPEKSI') {
+        if (loadedRekapWeek.current !== selectedWeek) {
+          loadedRekapWeek.current = selectedWeek;
+          fetchRekapData(selectedWeek, false);
+        }
+      } else if (rekapSubTab === 'KTA_TTA') {
+        if (loadedRekapKtaWeek.current !== selectedWeek) {
+          loadedRekapKtaWeek.current = selectedWeek;
+          fetchRekapKtaData(selectedWeek);
+        }
+      }
+    }
+  }, [selectedWeek, activeTab, rekapSubTab]);
 
   const fetchGroupFeed = async (week: string = selectedWeek) => {
     try {
@@ -572,10 +592,10 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
     }
   };
 
-  const fetchRekapData = async (week: string = selectedWeek) => {
+  const fetchRekapData = async (week: string = selectedWeek, refresh: boolean = true) => {
     try {
       setLoadingRekap(true);
-      const res = await fetch(`/api/rekap-inspeksi?week=${week}`);
+      const res = await fetch(`/api/rekap-inspeksi?week=${week}${refresh ? '&refresh=true' : ''}`);
       if (res.ok) {
         const data = await res.json();
         setRekapSummary(data.summary || { total: 0, sudah: 0, belum: 0, percentage: 0, cutiCount: 0 });
@@ -1279,6 +1299,170 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
       return (a.name || '').localeCompare(b.name || '');
     });
 
+  const handleDownloadExcel = () => {
+    try {
+      const workbook = XLSX.utils.book_new();
+
+      // Helper: ambil tanggal saja tanpa waktu
+      const toDateOnly = (ts: any): Date | null => {
+        if (!ts) return null;
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return null;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      };
+
+      // Buat pemetaan NIK untuk menggabungkan data Inspeksi dan KTA/TTA
+      const mergedDataMap = new Map();
+
+      const initEntry = (emp: any) => ({
+        'NIK': emp.nik || '-',
+        'Nama Karyawan': emp.name || '-',
+        'Jabatan': emp.jabatan || '-',
+        'Section': emp.section || '-',
+        'Status Cuti': emp.isCuti ? 'CUTI' : 'TIDAK',
+        'Laporan Inspeksi (PDF & SS)': 'BELUM',
+        'Tanggal Inspeksi': null as Date | null,
+        'KTA': '-',
+        'Tanggal KTA': null as Date | null,
+        'TTA 1': '-',
+        'Tanggal TTA 1': null as Date | null,
+        'TTA 2': '-',
+        'Tanggal TTA 2': null as Date | null,
+        'Status Target Mingguan': 'BELUM'
+      });
+
+      // Status kelengkapan KTA/TTA per NIK (berdasarkan status resmi dari server)
+      const ktaDoneMap = new Map<string, boolean>();
+
+      // 1. Masukkan data Rekap Inspeksi
+      filteredRekap.forEach(emp => {
+        const entry = initEntry(emp);
+        const isDone = emp.status === 'SUDAH';
+        const checkDetails = emp.checkDetails || { pdfDone: isDone, ssDone: isDone };
+        
+        if (emp.isCuti) {
+           entry['Laporan Inspeksi (PDF & SS)'] = 'CUTI';
+        } else if (checkDetails.pdfDone && checkDetails.ssDone) {
+           entry['Laporan Inspeksi (PDF & SS)'] = 'LENGKAP';
+        } else if (checkDetails.pdfDone) {
+           entry['Laporan Inspeksi (PDF & SS)'] = 'HANYA PDF';
+        } else if (checkDetails.ssDone) {
+           entry['Laporan Inspeksi (PDF & SS)'] = 'HANYA SS';
+        }
+
+        const latestInspeksiTs = checkDetails.pdfTimestamp || checkDetails.ssTimestamp || emp.completedAt || emp.uploadDate;
+        entry['Tanggal Inspeksi'] = toDateOnly(latestInspeksiTs);
+
+        mergedDataMap.set(emp.nik, entry);
+      });
+
+      // 2. Masukkan data Rekap KTA & TTA (Gabungkan jika NIK sudah ada)
+      filteredRekapKta.forEach(emp => {
+        const entry = mergedDataMap.get(emp.nik) || initEntry(emp);
+        const obligation = emp.obligation || getKtaObligation(emp.nik, emp.jabatan, emp.section);
+        const cd = emp.checkDetails || {};
+        ktaDoneMap.set(emp.nik, emp.status === 'SUDAH');
+
+        if (emp.isCuti) {
+          entry['KTA'] = 'CUTI';
+          entry['TTA 1'] = 'CUTI';
+          entry['TTA 2'] = 'CUTI';
+          mergedDataMap.set(emp.nik, entry);
+          return;
+        }
+
+        // Kumpulkan laporan aktual (jenis + waktu), urutkan dari yang paling awal
+        type Sub = { type: 'KTA' | 'TTA'; ts: any };
+        let subs: Sub[] = [];
+        if (Array.isArray(emp.reports) && emp.reports.length > 0) {
+          subs = emp.reports.map((r: any) => ({
+            type: String(r.reportType || 'KTA').toUpperCase().includes('TTA') ? 'TTA' : 'KTA',
+            ts: r.timestamp || r.date || null
+          }));
+        } else {
+          if (cd.check1Done && cd.check1Label) subs.push({ type: String(cd.check1Label).toUpperCase().includes('TTA') ? 'TTA' : 'KTA', ts: cd.check1Timestamp || emp.completedAt });
+          if (cd.check2Done && cd.check2Label) subs.push({ type: String(cd.check2Label).toUpperCase().includes('TTA') ? 'TTA' : 'KTA', ts: cd.check2Timestamp || emp.completedAt });
+        }
+        subs.sort((a, b) => (a.ts ? new Date(a.ts).getTime() : 0) - (b.ts ? new Date(b.ts).getTime() : 0));
+
+        const ktaSub = subs.find(s => s.type === 'KTA');
+        const ttaSubs = subs.filter(s => s.type === 'TTA');
+        const isDone = emp.status === 'SUDAH';
+
+        // Kolom wajib per kategori kewajiban
+        let needKta = false, needTta1 = false, needTta2 = false;
+        if (obligation.type === '1_KTA_AND_1_TTA') {
+          const viaTwoTta = isDone && !ktaSub && ttaSubs.length >= 2; // selesai via 2 TTA, KTA tidak wajib
+          needKta = !viaTwoTta;
+          needTta1 = true;
+          needTta2 = viaTwoTta;
+        } else if (obligation.type === '2_TTA') {
+          needTta1 = true;
+          needTta2 = true;
+        } else {
+          // 1_KTA_OR_TTA: cukup salah satu
+          if (!isDone) { needKta = true; needTta1 = true; }
+          else if (subs.length === 0) { needKta = true; } // override manual tanpa data laporan
+        }
+
+        const fill = (col: 'KTA' | 'TTA 1' | 'TTA 2', dateCol: 'Tanggal KTA' | 'Tanggal TTA 1' | 'Tanggal TTA 2', sub: Sub | undefined, required: boolean) => {
+          if (sub) {
+            entry[col] = 'SUDAH';
+            entry[dateCol] = toDateOnly(sub.ts);
+          } else if (required) {
+            entry[col] = emp.isManualOverride && isDone ? 'SUDAH (Manual)' : 'BELUM';
+          } else {
+            entry[col] = '-';
+          }
+        };
+
+        fill('KTA', 'Tanggal KTA', ktaSub, needKta);
+        fill('TTA 1', 'Tanggal TTA 1', ttaSubs[0], needTta1);
+        fill('TTA 2', 'Tanggal TTA 2', ttaSubs[1], needTta2);
+
+        mergedDataMap.set(emp.nik, entry);
+      });
+
+      // 3. Evaluasi Status Gabungan Akhir
+      const dataCombined = Array.from(mergedDataMap.values()).map((item, index) => {
+        let finalStatus = 'BELUM';
+        if (item['Status Cuti'] === 'CUTI') {
+           finalStatus = 'CUTI';
+        } else {
+           const inspeksiOK = item['Laporan Inspeksi (PDF & SS)'] === 'LENGKAP';
+           const ktaTtaOK = ktaDoneMap.get(item['NIK']) === true;
+           const anyKtaTta = [item['KTA'], item['TTA 1'], item['TTA 2']].some(v => typeof v === 'string' && v.startsWith('SUDAH'));
+           if (inspeksiOK && ktaTtaOK) {
+             finalStatus = 'LENGKAP (SUDAH)';
+           } else if (inspeksiOK || anyKtaTta) {
+             finalStatus = 'PARSIAL';
+           }
+        }
+        return {
+          'No': index + 1,
+          ...item,
+          'Status Target Mingguan': finalStatus
+        };
+      });
+
+      const wsCombined = XLSX.utils.json_to_sheet(dataCombined, { cellDates: true });
+      // Format semua cell tanggal menjadi dd-mmm-yyyy (tanggal saja, tanpa waktu)
+      for (const cell in wsCombined) {
+        if (wsCombined[cell] && wsCombined[cell].t === 'd') {
+          wsCombined[cell].z = 'dd-mmm-yyyy';
+        }
+      }
+      XLSX.utils.book_append_sheet(workbook, wsCombined, 'Rekap_Kepatuhan_SAP');
+
+      const fileName = `Rekap_Kepatuhan_SAP_${selectedWeek}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      toast.success('File Excel berhasil diunduh');
+    } catch (error) {
+      console.error('Error exporting excel:', error);
+      toast.error('Gagal mengunduh file Excel');
+    }
+  };
+
   return (
     <div className={`flex flex-col text-[var(--text-main)] ${isFloating ? 'h-full' : 'space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full max-w-4xl mx-auto px-2 sm:px-4'}`}>
       
@@ -1301,6 +1485,16 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+            {activeTab === 'rekap' && (
+              <button
+                onClick={handleDownloadExcel}
+                className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-500 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                title="Download Excel"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Excel</span>
+              </button>
+            )}
             <button
               onClick={() => { fetchGroupFeed(); fetchRekapData(selectedWeek); fetchRekapKtaData(selectedWeek); }}
               className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] hover:bg-[var(--bg-main)] text-[var(--text-main)] text-[11px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
@@ -2619,12 +2813,17 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                         toast.info(`Laporan ${checkDetails.check1Label} telah tercatat.`);
                                       }
                                     }}
-                                    className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                    className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs group"
                                     title={`Klik untuk melihat bukti screenshot ${checkDetails.check1Label} ${checkDetails.check1Timestamp ? `(${formatReportDateTime(checkDetails.check1Timestamp)})` : ''}`}
                                   >
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                                    <span>{checkDetails.check1Label || 'Check 1'}</span>
-                                    {checkDetails.check1Proof && <Eye className="w-2.5 h-2.5 opacity-60 ml-0.5" />}
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <div className="flex flex-col items-start leading-[1.15]">
+                                      <span className="text-[10px] font-extrabold">{checkDetails.check1Label || 'Check 1'}</span>
+                                      <span className="text-[7.5px] font-semibold opacity-70 uppercase tracking-wide group-hover:opacity-100 transition-opacity">
+                                        {formatReportDate(checkDetails.check1Timestamp || emp.completedAt)}
+                                      </span>
+                                    </div>
+                                    {checkDetails.check1Proof && <Eye className="w-3 h-3 opacity-50 ml-0.5" />}
                                   </button>
                                 ) : (
                                   <span className="px-2 py-0.5 rounded-lg bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-muted)] font-medium text-[10px] flex items-center gap-1">
@@ -2654,12 +2853,17 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
                                           toast.info(`Laporan ${checkDetails.check2Label} telah tercatat.`);
                                         }
                                       }}
-                                      className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                      className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs group"
                                       title={`Klik untuk melihat bukti screenshot ${checkDetails.check2Label} ${checkDetails.check2Timestamp ? `(${formatReportDateTime(checkDetails.check2Timestamp)})` : ''}`}
                                     >
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                                      <span>{checkDetails.check2Label || 'Check 2'}</span>
-                                      {checkDetails.check2Proof && <Eye className="w-2.5 h-2.5 opacity-60 ml-0.5" />}
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                      <div className="flex flex-col items-start leading-[1.15]">
+                                        <span className="text-[10px] font-extrabold">{checkDetails.check2Label || 'Check 2'}</span>
+                                        <span className="text-[7.5px] font-semibold opacity-70 uppercase tracking-wide group-hover:opacity-100 transition-opacity">
+                                          {formatReportDate(checkDetails.check2Timestamp || emp.completedAt)}
+                                        </span>
+                                      </div>
+                                      {checkDetails.check2Proof && <Eye className="w-3 h-3 opacity-50 ml-0.5" />}
                                     </button>
                                   ) : (
                                     <span className="px-2 py-0.5 rounded-lg bg-[var(--card-bg)] border border-[var(--border-main)] text-[var(--text-muted)] font-medium text-[10px] flex items-center gap-1">

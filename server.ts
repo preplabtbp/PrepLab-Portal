@@ -70,6 +70,7 @@ import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
 import { userPreferencesRouter } from "./server/routes/userPreferences.js";
+import { galleryRouter } from "./server/routes/gallery.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -94,6 +95,21 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS sisa_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS jatuh_tempo_ct TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS first_login_complete BOOLEAN DEFAULT false;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya TEXT;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS achievements JSONB;`);
+    await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS catatan TEXT;`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS employee_achievements (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      name TEXT,
+      title TEXT NOT NULL,
+      category TEXT,
+      date TEXT,
+      description TEXT,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_achievements_nik ON employee_achievements(nik);`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_id INTEGER;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_nik TEXT;`);
     await db.execute(sql`ALTER TABLE bulletin_comments ADD COLUMN IF NOT EXISTS reply_to_name TEXT;`);
@@ -460,6 +476,26 @@ const app = express();
   const onlineSockets = new Map(); // socket.id -> { socketId, nik, name, department, section, avatar, room, isQuiz, node, lastActive }
   const chatMessagesMemory: any[] = [];
 
+  // --- TEMPAT NONGKRONG / LOUNGE REAL-TIME STATE ---
+  interface LoungeAvatarState {
+    socketId: string;
+    nik: string;
+    name: string;
+    username: string;
+    pangkat: string;
+    pangkatIcon?: string;
+    section: string;
+    avatar?: string;
+    posX: number;
+    posY: number;
+    facing: 'left' | 'right';
+    actionState: string;
+    speechText?: string;
+    speechExpiry?: number;
+    lastActive: number;
+  }
+  const loungeAvatars = new Map<string, LoungeAvatarState>(); // nik -> LoungeAvatarState
+
   const getUniqueOnlineUsers = () => {
     const userMap = new Map<string, any>();
     for (const u of onlineSockets.values()) {
@@ -485,10 +521,26 @@ const app = express();
     return Array.from(userMap.values());
   };
 
+  const cleanupStaleLoungeAvatars = () => {
+    const activeSocketIds = new Set(onlineSockets.keys());
+    for (const [nik, avatar] of loungeAvatars.entries()) {
+      if (!activeSocketIds.has(avatar.socketId)) {
+        loungeAvatars.delete(nik);
+        io.to('lounge').emit('lounge:user_left', { nik, name: avatar.name, username: avatar.username });
+      }
+    }
+  };
+
   const broadcastPresence = () => {
+    cleanupStaleLoungeAvatars();
     const onlineUsers = getUniqueOnlineUsers();
     const onlineNiks = onlineUsers.map((u: any) => u.nik);
-    io.emit("presence:update", { onlineNiks, onlineUsers, totalOnline: onlineUsers.length });
+    io.emit("presence:update", { 
+      onlineNiks, 
+      onlineUsers, 
+      totalOnline: onlineUsers.length,
+      loungeMembers: Array.from(loungeAvatars.values())
+    });
   };
 
   const emitRoomUsers = (room: string) => {
@@ -588,6 +640,80 @@ const app = express();
       }
     });
 
+    // --- REAL-TIME TEMPAT NONGKRONG AVATAR LOUNGE SYNC ---
+    socket.on('lounge:join', (data) => {
+      if (!data || !data.nik) return;
+      socket.join('lounge');
+      const avatarState: LoungeAvatarState = {
+        socketId: socket.id,
+        nik: data.nik,
+        name: data.name || data.nik,
+        username: data.username || data.name || data.nik,
+        pangkat: data.pangkat || 'Frontline Trainee',
+        pangkatIcon: data.pangkatIcon || '/assets/ranks/rank_01_trainee.svg',
+        section: data.section || 'Prep-Lab',
+        avatar: data.avatar || null,
+        posX: typeof data.posX === 'number' ? data.posX : 13,
+        posY: typeof data.posY === 'number' ? data.posY : 79,
+        facing: data.facing || 'right',
+        actionState: data.actionState || 'smoke_sit',
+        speechText: data.speechText,
+        speechExpiry: data.speechExpiry,
+        lastActive: Date.now()
+      };
+
+      loungeAvatars.set(data.nik, avatarState);
+
+      // 1. Immediately send current lounge avatar snapshot to joining client
+      socket.emit('lounge:sync_state', Array.from(loungeAvatars.values()));
+
+      // 2. Broadcast to all other lounge members that someone joined
+      socket.to('lounge').emit('lounge:user_joined', avatarState);
+
+      emitRoomUsers('lounge');
+      broadcastPresence();
+    });
+
+    socket.on('lounge:move', (data) => {
+      const room = data?.room || 'lounge';
+      if (data?.nik && loungeAvatars.has(data.nik)) {
+        const current = loungeAvatars.get(data.nik)!;
+        current.posX = data.x;
+        current.posY = data.y;
+        current.facing = data.facing || current.facing;
+        current.actionState = data.actionState || 'walk';
+        current.lastActive = Date.now();
+      }
+      socket.to(room).emit('lounge:user_moved', data);
+    });
+
+    socket.on('lounge:action', (data) => {
+      const room = data?.room || 'lounge';
+      if (data?.nik && loungeAvatars.has(data.nik)) {
+        const current = loungeAvatars.get(data.nik)!;
+        current.actionState = data.actionState;
+        if (data.speechText) {
+          current.speechText = data.speechText;
+          current.speechExpiry = Date.now() + 7500;
+        }
+        current.lastActive = Date.now();
+      }
+      socket.to(room).emit('lounge:user_action', data);
+    });
+
+    socket.on('lounge:leave', (data) => {
+      const nik = data?.nik;
+      for (const [lNik, avatar] of loungeAvatars.entries()) {
+        if ((nik && lNik === nik) || avatar.socketId === socket.id) {
+          loungeAvatars.delete(lNik);
+          socket.leave('lounge');
+          io.to('lounge').emit('lounge:user_left', { nik: lNik, name: avatar.name, username: avatar.username });
+        }
+      }
+      emitRoomUsers('lounge');
+      broadcastPresence();
+    });
+
     socket.on('chat:clear', async (data) => {
       try {
         const room = data?.room || 'global';
@@ -652,6 +778,12 @@ const app = express();
         // Emit single canonical message event to room members (no duplicate broadcast)
         io.to(room).emit('new_message', confirmedMsg);
         
+        // PENTING: Chat di Tempat Nongkrong (room === 'lounge') HANYA untuk interaksi visual lokal
+        // di Tempat Nongkrong. JANGAN PERNAH dibuat notifikasi lonceng, push notification, atau mention apapun!
+        if (room === 'lounge') {
+          return;
+        }
+
         // --- PROCESS MENTIONS ---
         const targetMentionNiks = new Set<string>();
         if (Array.isArray(msg.mentionedNiks)) {
@@ -794,6 +926,15 @@ const app = express();
           io.to('quiz_room').emit('quiz:state', quizPlayers);
         }
       }
+
+      // Clean up from loungeAvatars if matching socketId or user.nik
+      for (const [nik, avatar] of loungeAvatars.entries()) {
+        if (avatar.socketId === socket.id || (user?.nik && nik === user.nik)) {
+          loungeAvatars.delete(nik);
+          io.to('lounge').emit('lounge:user_left', { nik, name: avatar.name, username: avatar.username });
+        }
+      }
+      emitRoomUsers('lounge');
     });
   });
 
@@ -857,7 +998,9 @@ const app = express();
     '/api/chat',
     '/api/presence',
     '/api/pdf',
-    '/api/user'
+    '/api/user',
+    '/api/gallery',
+    '/api/portal-gallery'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -912,15 +1055,19 @@ const app = express();
   app.use(logbookRouter);
   app.use(clinicRouter);
   app.use("/api/user", userPreferencesRouter);
+  app.use(galleryRouter);
 
   // --- PRESENCE ROUTES ---
-  app.get('/api/presence/online', (req, res) => {
+  app.get('/api/presence/online', async (req, res) => {
     try {
-      const onlineUsers = getUniqueOnlineUsers();
+      cleanupStaleLoungeAvatars();
+      const liveSockets = getUniqueOnlineUsers().map(u => ({ ...u, isLive: true }));
       res.json({
         success: true,
-        onlineUsers,
-        totalOnline: onlineUsers.length
+        onlineUsers: liveSockets,
+        totalOnline: liveSockets.length,
+        totalLive: liveSockets.length,
+        loungeMembers: Array.from(loungeAvatars.values())
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -1586,6 +1733,7 @@ async function syncBulletinToAgenda(post: any) {
   // Ensure critical DB columns exist
   try {
     await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;');
+    await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya text;');
   } catch (e: any) {
     console.warn('Auto migration note:', e.message);
   }

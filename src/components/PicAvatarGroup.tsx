@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { User } from 'lucide-react';
 
-import { splitPicNames } from '../utils/picParser';
-
 export interface PicItem {
   nik?: string;
   name: string;
@@ -38,6 +36,48 @@ function getGradientForName(name: string): string {
   return AVATAR_GRADIENTS[idx];
 }
 
+export const ACADEMIC_TITLES = new Set([
+  'ST', 'S.T', 'S.T.',
+  'STR', 'S.TR', 'S.TR.T',
+  'SSI', 'S.SI', 'S.SI.',
+  'SKOM', 'S.KOM', 'S.KOM.',
+  'SE', 'S.E', 'S.E.',
+  'SH', 'S.H', 'S.H.',
+  'SPD', 'S.PD', 'S.PD.',
+  'SSOS', 'S.SOS', 'S.SOS.',
+  'MT', 'M.T', 'M.T.',
+  'MSI', 'M.SI', 'M.SI.',
+  'MM', 'M.M', 'M.M.',
+  'MBA', 'M.B.A',
+  'PHD', 'PH.D',
+  'DR', 'DR.',
+  'IR', 'IR.',
+  'AMD', 'A.MD', 'A.MD.'
+]);
+
+export function smartSplitPicString(raw: string): string[] {
+  if (!raw) return [];
+  const tokens = raw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+  const result: string[] = [];
+
+  for (const token of tokens) {
+    const norm = token.toUpperCase().replace(/\./g, '');
+    const isDegree = ACADEMIC_TITLES.has(token.toUpperCase()) || ACADEMIC_TITLES.has(norm);
+    if (isDegree) {
+      if (result.length > 0) {
+        result[result.length - 1] += `, ${token}`;
+      }
+    } else {
+      result.push(token);
+    }
+  }
+
+  return result.filter(name => {
+    const norm = name.toUpperCase().replace(/\./g, '').trim();
+    return !ACADEMIC_TITLES.has(norm) && name !== '-' && name !== '•';
+  });
+}
+
 export function PicAvatarGroup({
   pics,
   employeesList = [],
@@ -49,13 +89,16 @@ export function PicAvatarGroup({
   const parsedPics: PicItem[] = useMemo(() => {
     if (!pics) return [];
     if (Array.isArray(pics)) {
-      return pics.filter(p => p && p.name && p.name.trim() !== '' && p.name !== '-');
+      return pics.filter(p => {
+        if (!p || !p.name) return false;
+        const norm = p.name.toUpperCase().replace(/\./g, '').trim();
+        return !ACADEMIC_TITLES.has(norm) && p.name.trim() !== '' && p.name !== '-';
+      });
     }
     if (typeof pics === 'string') {
       const trimmed = pics.trim();
       if (!trimmed || trimmed === '-' || trimmed === '•') return [];
-      return splitPicNames(trimmed)
-        .filter(s => s && s !== '-' && s !== '•')
+      return smartSplitPicString(trimmed)
         .map(raw => {
           // Check if string contains NIK in parenthesis e.g. "Name (12345)"
           const parenMatch = raw.match(/^(.*?)\s*\((\d+)\)$/);
@@ -110,6 +153,14 @@ export function PicAvatarGroup({
         return empName === picName;
       });
       if (byExact) return byExact;
+
+      // Priority 2.5: Match without academic titles (e.g. "Sukarman A. Akil, ST" -> "Sukarman A. Akil")
+      const cleanPicName = picName.replace(/,\s*[a-z\.]+$/i, '').trim();
+      const byClean = employeesList.find(emp => {
+        const empName = (emp.name || emp.nama || '').trim().toLowerCase();
+        return empName === cleanPicName || empName.startsWith(cleanPicName) || cleanPicName.startsWith(empName);
+      });
+      if (byClean) return byClean;
 
       // Priority 3: Match whole word (e.g. "Gusti" matches "Gusti Nur Firdaus", but NOT partial substring in middle of unrelated word)
       if (picName.length >= 3) {

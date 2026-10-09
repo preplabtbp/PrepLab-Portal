@@ -109,8 +109,10 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
     yesterdayObj.setDate(yesterdayObj.getDate() - 1);
     const yesterdayDateStr = formatDateStr(yesterdayObj);
 
-    // Build base conditions
-    const conditions: any[] = [];
+    // Build base conditions (strictly exclude subtask child rows starting with ↳)
+    const conditions: any[] = [
+      sql`(${logbookTasks.title} NOT LIKE '↳%' AND ${logbookTasks.title} NOT LIKE '↳ [%')`
+    ];
     if (pt && pt !== 'ALL') {
       if (pt === 'GTS') {
         conditions.push(eq(logbookTasks.pt, 'GTS'));
@@ -337,8 +339,9 @@ logbookRouter.get("/api/logbook/tasks", async (req, res) => {
 
     // 3. Carry Over / Backlog tasks: All active unfinished tasks before targetDateStr, PLUS all active routine backlogs (Monthly, Weekly, etc)
     const carryOverTasks = allMatching.filter(t => {
-      const isUnfinished = t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed' && t.status !== 'Canceled' && t.status !== 'Cancelled';
-      if (!isUnfinished) return false;
+      const s = (t.status || '').toLowerCase().trim();
+      const isClosed = s === 'resolved' || s === 'done' || s === 'closed' || s === 'canceled' || s === 'cancelled';
+      if (isClosed) return false;
       // All past or undated unfinished tasks
       if (!t.taskDate || t.taskDate < targetDateStr) return true;
       // Active routine backlogs that belong to current backlog

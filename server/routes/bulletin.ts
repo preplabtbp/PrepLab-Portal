@@ -164,6 +164,31 @@ router.get("/api/bulletin/search", async (req, res) => {
     }
   });
 
+// GET Single Post by ID for direct navigation and real-time device sync
+router.get("/api/bulletin/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ status: "error", message: "Invalid post ID" });
+    }
+
+    const [post] = await db
+      .select()
+      .from(bulletinPosts)
+      .where(eq(bulletinPosts.id, id))
+      .limit(1);
+
+    if (!post) {
+      return res.status(404).json({ status: "error", message: "Post not found" });
+    }
+
+    return res.json({ status: "success", data: post });
+  } catch (error: any) {
+    console.error("[Bulletin API] Failed to fetch post by ID:", error);
+    return res.status(500).json({ status: "error", message: error?.message || "Internal server error" });
+  }
+});
+
 router.post("/api/bulletin", async (req, res) => {
     try {
       const newPostData = req.body;
@@ -592,67 +617,64 @@ export async function syncBulletinToLogbook(post: any) {
 
     const findEmployee = (query: string) => {
       if (!query || query.trim() === '' || query.trim() === '-') return null;
+      // Strip academic degrees like , ST or , S.T.
+      const cleanQ = query.replace(/,\s*[a-z\.]+$/i, '').trim().toLowerCase();
       const q = query.trim().toLowerCase();
       // Priority 1: Exact NIK match
-      const byNik = allEmployees.find(e => e.nik && e.nik.toLowerCase() === q);
+      const byNik = allEmployees.find(e => e.nik && (e.nik.toLowerCase() === q || e.nik.toLowerCase() === cleanQ));
       if (byNik) return byNik;
       // Priority 2: Exact full name match
-      const byExact = allEmployees.find(e => e.name && e.name.toLowerCase() === q);
+      const byExact = allEmployees.find(e => e.name && (e.name.toLowerCase() === q || e.name.toLowerCase() === cleanQ));
       if (byExact) return byExact;
       // Priority 3: Word boundary / startsWith match
-      if (q.length >= 3) {
+      if (cleanQ.length >= 3) {
         return allEmployees.find(e => {
           const name = (e.name || '').toLowerCase();
           const words = name.split(/\s+/);
-          return words.includes(q) || name.startsWith(q);
+          return words.includes(cleanQ) || name.startsWith(cleanQ) || cleanQ.startsWith(name);
         });
       }
       return null;
     };
 
+    // Clean up any orphaned subtask rows starting with ↳ for this bulletin post
+    try {
+      await db.delete(logbookTasks).where(and(eq(logbookTasks.bulletinPostId, post.id), sql`title LIKE '↳%'`));
+    } catch (e) {}
+
     // Cutoff: Hanya sinkronisasikan data di labnote yang dibuat sejak fitur log book dibuat (2026-09-25)
     const LOGBOOK_FEATURE_START_DATE = '2026-09-25';
 
-    // Group rows hierarchically: Parent Row -> Sub-items
-    interface BulletinTaskGroup {
+    // Group rows into parent activities and their nested sub-items
+    interface GroupedBulletinRow {
       parentRow: Record<string, string>;
-      subItems: Array<{ text: string; checked: boolean; note?: string }>;
+      subRows: Array<Record<string, string>>;
     }
-
-    const taskGroups: BulletinTaskGroup[] = [];
-    let currentTaskGroup: BulletinTaskGroup | null = null;
+    const groupedRows: GroupedBulletinRow[] = [];
+    let currentGroup: GroupedBulletinRow | null = null;
 
     for (const r of parsed.rows) {
       let rTitle = '';
-      let rowDesc = '';
       Object.keys(r).forEach(k => {
         const kl = k.toLowerCase().trim();
         if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
           rTitle = (r[k] || '').trim();
-        } else if (kl.includes('keterangan') || kl.includes('catatan') || kl.includes('deskripsi')) {
-          rowDesc = (r[k] || '').trim();
         }
       });
+      const isSub = rTitle.startsWith('↳') || rTitle.startsWith('->') || rTitle.startsWith('↪') || rTitle.startsWith('– ') || rTitle.startsWith('- ') || r['isSubItem'] === 'true' || (r['isSubItem'] as any) === true || r['parentId'];
 
-      const isSub = r.isSubItem === 'true' || (r as any).isSubItem === true || r.parentId ||
-        rTitle.startsWith('↳') || rTitle.startsWith('->') || rTitle.startsWith('↪') || rTitle.startsWith('– ') || rTitle.startsWith('- ');
-
-      if (isSub) {
-        if (currentTaskGroup) {
-          const isChecked = rTitle.startsWith('↳ [x]') || rTitle.startsWith('↳ [X]') || rTitle.startsWith('[x]') || rTitle.startsWith('[X]') ||
-            (r['Status'] || '').toLowerCase().includes('close') || (r['Status'] || '').toLowerCase().includes('done') || (r['Status'] || '').toLowerCase().includes('selesai');
-          const cleanSubText = rTitle.replace(/^[↳↪\->\s–]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
-          if (cleanSubText) {
-            currentTaskGroup.subItems.push({ text: cleanSubText, checked: isChecked, note: rowDesc });
-          }
-        }
-      } else if (rTitle && rTitle !== '-' && rTitle.length >= 2) {
-        currentTaskGroup = { parentRow: r, subItems: [] };
-        taskGroups.push(currentTaskGroup);
+      if (isSub && currentGroup) {
+        currentGroup.subRows.push(r);
+      } else if (!isSub && rTitle && rTitle !== '-' && rTitle.length >= 2) {
+        currentGroup = {
+          parentRow: r,
+          subRows: []
+        };
+        groupedRows.push(currentGroup);
       }
     }
 
-    for (const group of taskGroups) {
+    for (const group of groupedRows) {
       const r = group.parentRow;
       let rTitle = '';
       let rowDesc = '';
@@ -705,22 +727,49 @@ export async function syncBulletinToLogbook(post: any) {
         continue;
       }
 
-      // Normalize subtasks: prioritize sub-items from child rows, or inline checklists in rowDesc
+      // Normalize legacy subtask tags in rowDesc to canonical markdown checkboxes
       let cleanDesc = rowDesc;
-      if (group.subItems.length > 0) {
-        const subtaskLines = group.subItems.map(item => `- [${item.checked ? 'x' : ' '}] ${item.text}`);
-        const nonChecklistDesc = rowDesc
-          ? rowDesc.split(/<br\s*\/?>|\n/).filter(line => !line.match(/^[-*•]?\s*\[[ xX]\]/i) && !line.includes('**(Done)**') && !line.includes('**(OPEN)**')).join('\n').trim()
-          : '';
-        cleanDesc = nonChecklistDesc ? `${nonChecklistDesc}\n${subtaskLines.join('\n')}` : subtaskLines.join('\n');
-      } else if (cleanDesc) {
-        cleanDesc = cleanDesc.replace(/<br\s*\/?>/gi, '\n');
-        if (cleanDesc.includes('**(Done)**') || cleanDesc.includes('**(OPEN)**') || cleanDesc.includes('**(Closed)**') || cleanDesc.includes('**(OP)**')) {
-          cleanDesc = cleanDesc
-            .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/gim, '- [x] $1')
-            .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/gim, '- [ ] $1');
+      if (cleanDesc && (cleanDesc.includes('**(Done)**') || cleanDesc.includes('**(OPEN)**') || cleanDesc.includes('**(Closed)**') || cleanDesc.includes('**(OP)**'))) {
+        cleanDesc = cleanDesc
+          .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/gim, '- [x] $1')
+          .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/gim, '- [ ] $1');
+      }
+      cleanDesc = cleanDesc.replace(/^[•*]\s*\[([ xX])\]/gm, '- [$1]');
+
+      // Attach nested sub-items as markdown checklist in description
+      if (group.subRows.length > 0) {
+        const subtaskList = group.subRows.map(sr => {
+          let sTitle = '';
+          Object.keys(sr).forEach(k => {
+            const kl = k.toLowerCase().trim();
+            if (kl.includes('jenis kegiatan') || kl === 'task' || kl === 'judul') {
+              sTitle = (sr[k] || '').trim();
+            }
+          });
+          const cleanNoArrow = sTitle.replace(/^↳\s*/, '').trim();
+          const isChecked = cleanNoArrow.startsWith('[x]') || cleanNoArrow.startsWith('[X]') || (sr['Status'] || '').toLowerCase() === 'closed';
+          const cleanText = cleanNoArrow.replace(/^\[[ xX]\]\s*/, '').trim();
+          return `- [${isChecked ? 'x' : ' '}] ${cleanText}`;
+        }).join('\n');
+
+        if (cleanDesc && cleanDesc !== '-') {
+          cleanDesc = `${cleanDesc}\n${subtaskList}`;
+        } else {
+          cleanDesc = subtaskList;
         }
-        cleanDesc = cleanDesc.replace(/^[•*]\s*\[([ xX])\]/gm, '- [$1]');
+
+        // Auto compute status from subtasks
+        const totalSubs = group.subRows.length;
+        const closedSubs = group.subRows.filter(sr => {
+          const sTitle = (sr['Jenis Kegiatan'] || sr['Jenis kegiatan'] || '').trim();
+          return sTitle.includes('[x]') || (sr['Status'] || '').toLowerCase() === 'closed';
+        }).length;
+
+        if (closedSubs === totalSubs && totalSubs > 0) {
+          rowStatus = 'Closed';
+        } else if (closedSubs > 0) {
+          rowStatus = 'On Progress';
+        }
       }
 
       // Determine effective cadence - ALWAYS prioritize Non-Routine if specified
@@ -810,7 +859,7 @@ export async function syncBulletinToLogbook(post: any) {
         try {
           const inserted = await db.insert(logbookTasks).values({
             title: rTitle,
-            description: rowDesc || '',
+            description: cleanDesc || '',
             section: rowSection,
             assigneeNik: targetAssigneeNik,
             assigneeName: targetAssigneeName,

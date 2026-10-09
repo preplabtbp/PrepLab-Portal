@@ -55,11 +55,12 @@ import {
   Moon,
   MoreVertical,
   CornerUpRight,
-  CornerDownRight
+  CornerDownRight,
+  Link2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui';
-import { PicAvatarGroup } from './PicAvatarGroup';
+import { PicAvatarGroup, smartSplitPicString } from './PicAvatarGroup';
 import { 
   parseTasklist, 
   toggleTasklistItem, 
@@ -80,7 +81,6 @@ import {
   resetAllTasklistItems,
   normalizeCadence
 } from './notion/period-utils';
-import { parsePicList, splitPicNames } from '../utils/picParser';
 
 interface LogbookTask {
   id: number;
@@ -202,6 +202,7 @@ interface LogbookScreenProps {
   userPt?: string;
   onNav?: (tab: string) => void;
   onBack?: () => void;
+  onSelectBulletinPost?: (postId: number | string) => void;
 }
 
 const SECTION_OPTIONS = [
@@ -253,6 +254,21 @@ function isTaskOverdue(targetDate?: string | null, targetTime?: string | null, s
   } catch (e) {
     return false;
   }
+}
+// Helper to split comma-separated PICs safely avoiding academic degrees
+function parsePicList(nikStr?: string | null, nameStr?: string | null): Array<{ nik: string; name: string }> {
+  if (!nameStr && !nikStr) return [];
+  const names = smartSplitPicString(nameStr || '');
+  const niks = (nikStr || '').split(',').map(s => s.trim()).filter(Boolean);
+  const len = Math.max(names.length, niks.length);
+  const list: Array<{ nik: string; name: string }> = [];
+  for (let i = 0; i < len; i++) {
+    list.push({
+      nik: niks[i] || '',
+      name: names[i] || niks[i] || 'Personil'
+    });
+  }
+  return list;
 }
 
 // ============================================================================
@@ -769,7 +785,8 @@ export function LogbookScreen({
   inspectorName,
   userPt = 'TBP',
   onNav,
-  onBack
+  onBack,
+  onSelectBulletinPost
 }: LogbookScreenProps) {
   // Current active date (YYYY-MM-DD)
   const getTodayStr = () => {
@@ -861,7 +878,7 @@ export function LogbookScreen({
       return {
         isRoutine: false,
         cadence: 'Non Routine',
-        label: '⚡ Non Routine',
+        label: 'Non Routine',
         color: 'bg-slate-100 text-slate-800 border-slate-200 font-medium',
         windowDesc: 'Harian (Ad-hoc)',
         dDayText: null
@@ -895,32 +912,32 @@ export function LogbookScreen({
     }
 
     const cLower = cadence.toLowerCase();
-    let label = '🔁 Routine';
+    let label = 'Routine';
     let color = 'bg-teal-50 text-teal-900 border-teal-200/80 font-medium';
     let windowDesc = 'Harian';
 
     if (cLower.includes('daily')) {
-      label = '🔁 Daily';
+      label = 'Daily';
       color = 'bg-teal-50 text-teal-900 border-teal-200/80 font-medium';
       windowDesc = 'Muncul Tiap Hari';
     } else if (cLower.includes('weekly')) {
-      label = '📅 Weekly';
+      label = 'Weekly';
       color = 'bg-sky-50 text-sky-900 border-sky-200/80 font-medium';
       windowDesc = 'Muncul Mulai D-3';
     } else if (cLower.includes('monthly')) {
-      label = '🗓️ Monthly';
+      label = 'Monthly';
       color = 'bg-indigo-50 text-indigo-900 border-indigo-200/80 font-medium';
       windowDesc = 'Muncul Mulai D-7';
     } else if (cLower.includes('quarterly')) {
-      label = '📊 Quarterly';
+      label = 'Quarterly';
       color = 'bg-purple-50 text-purple-900 border-purple-200/80 font-medium';
       windowDesc = 'Muncul Mulai M-1';
     } else if (cLower.includes('biannual')) {
-      label = '⏳ Biannual';
+      label = 'Biannual';
       color = 'bg-amber-50 text-amber-900 border-amber-200/80 font-medium';
       windowDesc = 'Muncul Mulai M-2';
     } else if (cLower.includes('yearly')) {
-      label = '🎯 Yearly';
+      label = 'Yearly';
       color = 'bg-rose-50 text-rose-900 border-rose-200/80 font-medium';
       windowDesc = 'Muncul Mulai M-3';
     }
@@ -1103,6 +1120,17 @@ export function LogbookScreen({
     });
   };
 
+  // Multi-Select & Drag-Select State for Bulk Operations (Mark Closed & Delete)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set());
+  const [isMouseDownSelecting, setIsMouseDownSelecting] = useState(false);
+  const [isBulkOperating, setIsBulkOperating] = useState(false);
+
+  useEffect(() => {
+    const handleMouseUp = () => setIsMouseDownSelecting(false);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, []);
+
   // Delete confirmation modal state
   const [taskToDelete, setTaskToDelete] = useState<LogbookTask | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1189,14 +1217,15 @@ export function LogbookScreen({
     document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
-      if (!resizeInfoRef.current) return;
+      const info = resizeInfoRef.current;
+      if (!info) return;
       const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
-      const deltaX = currentX - resizeInfoRef.current.startX;
-      const newWidth = Math.max(50, Math.min(1200, Math.round(resizeInfoRef.current.startWidth + deltaX)));
+      const deltaX = currentX - info.startX;
+      const newWidth = Math.max(50, Math.min(1200, Math.round(info.startWidth + deltaX)));
 
       setColumnWidths((prev) => ({
         ...prev,
-        [resizeInfoRef.current!.colHeader]: newWidth
+        [info.colHeader]: newWidth
       }));
     };
 
@@ -1303,7 +1332,7 @@ export function LogbookScreen({
     setSelectedBulletinPostId(task.bulletinPostId ? String(task.bulletinPostId) : '');
     if (task.assigneeNik) {
       const niks = task.assigneeNik.split(',').map(s => s.trim()).filter(Boolean);
-      const names = splitPicNames(task.assigneeName);
+      const names = smartSplitPicString(task.assigneeName || '');
       setNewAssigneeNiks(niks);
       setNewAssigneeNames(names);
     } else {
@@ -1775,9 +1804,10 @@ export function LogbookScreen({
       const res = await fetch(`/api/logbook/tasks?${queryParams.toString()}`);
       const json = await res.json();
       if (json.status === 'success' && json.data) {
-        setTodayTasks(json.data.todayTasks || []);
-        setYesterdayTasks(json.data.yesterdayTasks || []);
-        setCarryOverTasks(json.data.carryOverTasks || []);
+        const filterSub = (t: LogbookTask) => !t.title.trim().startsWith('↳');
+        setTodayTasks((json.data.todayTasks || []).filter(filterSub));
+        setYesterdayTasks((json.data.yesterdayTasks || []).filter(filterSub));
+        setCarryOverTasks((json.data.carryOverTasks || []).filter(filterSub));
         setSummaryData(json.data.summary || null);
       }
     } catch (e) {
@@ -1984,7 +2014,10 @@ export function LogbookScreen({
     // Optimistic Update
     setTodayTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
     setYesterdayTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
-    setCarryOverTasks(prev => prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t));
+    setCarryOverTasks(prev => {
+      if (isClosing) return prev.filter(t => String(t.id) !== String(taskId));
+      return prev.map(t => String(t.id) === String(taskId) ? { ...t, status: newStatus, ...(compDateVal !== undefined ? { actualCompletedDate: compDateVal } : {}) } : t);
+    });
 
     try {
       const res = await fetch(`/api/logbook/tasks/${taskId}`, {
@@ -2090,6 +2123,89 @@ export function LogbookScreen({
       toast.error(err.message || 'Gagal menghapus kegiatan', { id: 'delete-task' });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Multi-Select & Drag-Select Helpers
+  const toggleSelectTask = (taskId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedTaskIds(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  };
+
+  const handleRowMouseDown = (taskId: number, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    setIsMouseDownSelecting(true);
+    toggleSelectTask(taskId, e);
+  };
+
+  const handleRowMouseEnter = (taskId: number) => {
+    if (isMouseDownSelecting) {
+      setSelectedTaskIds(prev => {
+        const next = new Set(prev);
+        next.add(taskId);
+        return next;
+      });
+    }
+  };
+
+  const handleBulkMarkClosed = async () => {
+    if (selectedTaskIds.size === 0) return;
+    setIsBulkOperating(true);
+    const ids = Array.from(selectedTaskIds);
+    toast.loading(`Mengubah ${ids.length} kegiatan menjadi Closed...`, { id: 'bulk-closed' });
+    try {
+      setTodayTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, status: 'Closed', actualCompletedDate: selectedDate } : t));
+      setYesterdayTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, status: 'Closed', actualCompletedDate: selectedDate } : t));
+      setCarryOverTasks(prev => prev.filter(t => !ids.includes(t.id)));
+
+      await Promise.all(
+        ids.map(id => fetch(`/api/logbook/tasks/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'Closed',
+            selectedDate,
+            actualCompletedDate: selectedDate,
+            updaterNik: inspectorNik
+          })
+        }))
+      );
+      toast.success(`Berhasil mengubah ${ids.length} kegiatan menjadi Closed!`, { id: 'bulk-closed' });
+      setSelectedTaskIds(new Set());
+    } catch (err: any) {
+      toast.error('Gagal memperbarui beberapa kegiatan', { id: 'bulk-closed' });
+    } finally {
+      setIsBulkOperating(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedTaskIds.size === 0) return;
+    const count = selectedTaskIds.size;
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus ${count} kegiatan terpilih dari Log Book?`)) return;
+
+    setIsBulkOperating(true);
+    const ids = Array.from(selectedTaskIds);
+    toast.loading(`Menghapus ${ids.length} kegiatan dari Log Book...`, { id: 'bulk-delete' });
+    try {
+      setTodayTasks(prev => prev.filter(t => !ids.includes(t.id)));
+      setYesterdayTasks(prev => prev.filter(t => !ids.includes(t.id)));
+      setCarryOverTasks(prev => prev.filter(t => !ids.includes(t.id)));
+
+      await Promise.all(
+        ids.map(id => fetch(`/api/logbook/tasks/${id}`, { method: 'DELETE' }))
+      );
+      toast.success(`Berhasil menghapus ${ids.length} kegiatan dari Log Book!`, { id: 'bulk-delete' });
+      setSelectedTaskIds(new Set());
+    } catch (err: any) {
+      toast.error('Gagal menghapus beberapa kegiatan', { id: 'bulk-delete' });
+    } finally {
+      setIsBulkOperating(false);
     }
   };
 
@@ -2434,25 +2550,25 @@ export function LogbookScreen({
   // Count across today + active pending/carry-over tasks in the log book
   const routineCount = useMemo(() => {
     const taskMap = new Map<number, LogbookTask>();
-    todayTasks.filter(t => isTaskRoutine(t)).forEach(t => taskMap.set(t.id, t));
-    carryOverTasks.filter(t => isTaskRoutine(t) && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').forEach(t => taskMap.set(t.id, t));
-    yesterdayTasks.filter(t => isTaskRoutine(t) && (t.isPending || t.status === 'Pending' || (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed'))).forEach(t => taskMap.set(t.id, t));
+    todayTasks.filter(t => isTaskRoutine(t) && !t.title.trim().startsWith('↳')).forEach(t => taskMap.set(t.id, t));
+    carryOverTasks.filter(t => isTaskRoutine(t) && !t.title.trim().startsWith('↳') && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').forEach(t => taskMap.set(t.id, t));
+    yesterdayTasks.filter(t => isTaskRoutine(t) && !t.title.trim().startsWith('↳') && (t.isPending || t.status === 'Pending' || (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed'))).forEach(t => taskMap.set(t.id, t));
     return taskMap.size;
   }, [todayTasks, carryOverTasks, yesterdayTasks]);
 
   const nonRoutineCount = useMemo(() => {
     const taskMap = new Map<number, LogbookTask>();
-    todayTasks.filter(t => !isTaskRoutine(t)).forEach(t => taskMap.set(t.id, t));
-    carryOverTasks.filter(t => !isTaskRoutine(t) && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').forEach(t => taskMap.set(t.id, t));
-    yesterdayTasks.filter(t => !isTaskRoutine(t) && (t.isPending || t.status === 'Pending' || (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed'))).forEach(t => taskMap.set(t.id, t));
+    todayTasks.filter(t => !isTaskRoutine(t) && !t.title.trim().startsWith('↳')).forEach(t => taskMap.set(t.id, t));
+    carryOverTasks.filter(t => !isTaskRoutine(t) && !t.title.trim().startsWith('↳') && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').forEach(t => taskMap.set(t.id, t));
+    yesterdayTasks.filter(t => !isTaskRoutine(t) && !t.title.trim().startsWith('↳') && (t.isPending || t.status === 'Pending' || (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed'))).forEach(t => taskMap.set(t.id, t));
     return taskMap.size;
   }, [todayTasks, carryOverTasks, yesterdayTasks]);
 
   const allTasksCount = useMemo(() => {
     const taskMap = new Map<number, LogbookTask>();
-    todayTasks.forEach(t => taskMap.set(t.id, t));
-    carryOverTasks.filter(t => t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').forEach(t => taskMap.set(t.id, t));
-    yesterdayTasks.filter(t => t.isPending || t.status === 'Pending' || (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed')).forEach(t => taskMap.set(t.id, t));
+    todayTasks.filter(t => !t.title.trim().startsWith('↳')).forEach(t => taskMap.set(t.id, t));
+    carryOverTasks.filter(t => !t.title.trim().startsWith('↳') && t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed').forEach(t => taskMap.set(t.id, t));
+    yesterdayTasks.filter(t => !t.title.trim().startsWith('↳') && (t.isPending || t.status === 'Pending' || (t.status !== 'Resolved' && t.status !== 'Done' && t.status !== 'Closed'))).forEach(t => taskMap.set(t.id, t));
     return taskMap.size;
   }, [todayTasks, carryOverTasks, yesterdayTasks]);
 
@@ -2460,6 +2576,9 @@ export function LogbookScreen({
   const filteredToday = useMemo(() => {
     return todayTasks
       .filter(t => {
+        // Strictly exclude child subtask rows (they belong inside parent task accordion)
+        if (t.title.trim().startsWith('↳')) return false;
+
         // Enforce: tasks in today's column must strictly be planned for selectedDate
         const isPlanned = t.taskDate === selectedDate || Boolean(t.plannedDate && t.plannedDate.split(',').map((d: string) => d.trim()).includes(selectedDate));
         if (!isPlanned) {
@@ -2489,6 +2608,16 @@ export function LogbookScreen({
   const filteredYesterday = useMemo(() => {
     return evalSourceTasks
       .filter(t => {
+        // Strictly exclude child subtask rows (they belong inside parent task accordion)
+        if (t.title.trim().startsWith('↳')) return false;
+
+        // In backlog mode (all_carryover), strictly exclude tasks that are closed/resolved/done/canceled
+        if (evalScope === 'all_carryover') {
+          const s = (t.status || '').toLowerCase().trim();
+          const isDone = s === 'resolved' || s === 'done' || s === 'closed' || s === 'canceled' || s === 'cancelled';
+          if (isDone) return false;
+        }
+
         const matchSearch = !searchQuery || 
           t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
           t.assigneeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -2768,7 +2897,7 @@ export function LogbookScreen({
         : [
             {
               value: autoStatus,
-              label: `${autoStatus} (Auto Checklist: ${parsed.completed}/${parsed.total})`,
+              label: autoStatus,
               badgeClass: autoStatus === 'Closed' ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : autoStatus === 'On Progress' ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold' : 'bg-blue-100 text-blue-950 border-blue-400 font-bold',
               icon: autoStatus === 'Closed' ? <CheckCircle2 className="w-2.5 h-2.5 text-emerald-800" /> : autoStatus === 'On Progress' ? <RotateCcw className="w-2.5 h-2.5 text-amber-800" /> : <Clock className="w-2.5 h-2.5 text-blue-800" />
             },
@@ -2997,10 +3126,18 @@ export function LogbookScreen({
               </span>
 
               {task.bulletinPostId ? (
-                <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-900 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg shadow-2xs">
-                  <FileText className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Labnote #{task.bulletinPostId}</span>
-                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onSelectBulletinPost) onSelectBulletinPost(task.bulletinPostId);
+                  }}
+                  title={`Terkoneksi ke Labnote: ${task.bulletinTopicTitle || `Dokumen #${task.bulletinPostId}`}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                >
+                  <Link2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                  <span className="truncate max-w-[220px]">{task.bulletinTopicTitle || `Dokumen #${task.bulletinPostId}`}</span>
+                </button>
               ) : (
                 <button
                   type="button"
@@ -4085,10 +4222,28 @@ export function LogbookScreen({
                   }`}
                 >
                   <th 
-                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 text-center ${fitPageMode ? 'w-[3%] px-1 py-2.5' : 'w-10 px-2 py-3'}`} 
+                    className={`sticky top-0 z-20 bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-300 dark:border-slate-700 text-center ${fitPageMode ? 'w-[3.5%] px-1 py-2.5' : 'w-12 px-2 py-3'}`} 
                     style={getColStyle('drag')}
                   >
-                    <GripVertical className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400 mx-auto" />
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={
+                          (tableTodayTasks.length > 0 || displayedYesterdayTasks.length > 0) &&
+                          [...tableTodayTasks, ...displayedYesterdayTasks].every(t => selectedTaskIds.has(t.id))
+                        }
+                        onChange={(e) => {
+                          const allTasks = [...tableTodayTasks, ...displayedYesterdayTasks];
+                          if (e.target.checked) {
+                            setSelectedTaskIds(new Set(allTasks.map(t => t.id)));
+                          } else {
+                            setSelectedTaskIds(new Set());
+                          }
+                        }}
+                        className="w-3.5 h-3.5 rounded border-slate-400 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                        title="Pilih semua kegiatan untuk aksi massal (Closed / Hapus)"
+                      />
+                    </div>
                   </th>
 
                   <th 
@@ -4376,7 +4531,7 @@ export function LogbookScreen({
                           : [
                               {
                                 value: autoStatus,
-                                label: `${autoStatus} (Auto Checklist: ${parsed.completed}/${parsed.total})`,
+                                label: autoStatus,
                                 badgeClass: autoStatus === 'Closed' ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : autoStatus === 'On Progress' ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold' : 'bg-blue-100 text-blue-950 border-blue-400 font-bold',
                                 icon: autoStatus === 'Closed' ? <CheckCircle2 className="w-2.5 h-2.5 text-emerald-800" /> : autoStatus === 'On Progress' ? <RotateCcw className="w-2.5 h-2.5 text-amber-800" /> : <Clock className="w-2.5 h-2.5 text-blue-800" />
                               },
@@ -4404,8 +4559,11 @@ export function LogbookScreen({
                               setIsDragOverToday(false);
                               setIsDragOverYesterday(false);
                             }}
+                            onMouseEnter={() => handleRowMouseEnter(task.id)}
                             className={`transition-colors group ${
                               draggedLogbookTaskId === task.id ? 'opacity-40 bg-teal-50/50' : ''
+                            } ${
+                              selectedTaskIds.has(task.id) ? 'bg-teal-50/80 dark:bg-teal-950/40 ring-1 ring-teal-500/50' : ''
                             } ${
                               isDone 
                                 ? isNotionLight ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'bg-emerald-950/10 hover:bg-emerald-950/20'
@@ -4416,9 +4574,24 @@ export function LogbookScreen({
                                 : 'bg-[#191919] hover:bg-[#202020]'
                             }`}
                           >
-                            {/* Drag Handle */}
-                            <td className="text-center px-1 py-2 cursor-grab active:cursor-grabbing text-slate-400 hover:text-teal-600">
-                              <GripVertical className="w-3.5 h-3.5 mx-auto" />
+                            {/* Drag Handle & Checkbox */}
+                            <td 
+                              className="text-center px-1.5 py-2 select-none"
+                              onMouseDown={(e) => handleRowMouseDown(task.id, e)}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTaskIds.has(task.id)}
+                                  onChange={() => toggleSelectTask(task.id)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="w-3.5 h-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                  title="Pilih tugas ini"
+                                />
+                                <div className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-teal-600 hidden sm:block">
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                </div>
+                              </div>
                             </td>
 
                             {/* No */}
@@ -4429,19 +4602,23 @@ export function LogbookScreen({
                             {/* Kegiatan / Arahan Tugas */}
                             <td className="px-3.5 py-2.5">
                               <div className="flex items-start gap-2">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleExpand(task.id);
-                                  }}
-                                  className={`p-0.5 rounded transition-transform mt-0.5 cursor-pointer ${
-                                    isExpanded ? 'rotate-90 text-teal-600' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
-                                  }`}
-                                  title={isExpanded ? 'Tutup subtask checklist' : 'Buka subtask checklist'}
-                                >
-                                  <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
+                                {hasSubtasks ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleExpand(task.id);
+                                    }}
+                                    className="p-0.5 -ml-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer select-none shrink-0 mt-0.5"
+                                    title={isExpanded ? 'Tutup sub-kegiatan' : 'Buka sub-kegiatan'}
+                                  >
+                                    <span className="text-[10px] inline-block select-none leading-none font-bold">
+                                      {isExpanded ? '▼' : '▶'}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <span className="w-3 shrink-0" />
+                                )}
 
                                 <div className="min-w-0 flex-1">
                                   <div 
@@ -4456,9 +4633,17 @@ export function LogbookScreen({
                                       </span>
                                     )}
                                     {task.bulletinPostId && (
-                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 font-bold shrink-0">
-                                        Labnote #{task.bulletinPostId}
-                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (onSelectBulletinPost) onSelectBulletinPost(task.bulletinPostId);
+                                        }}
+                                        title={`Terkoneksi ke Labnote: ${task.bulletinTopicTitle || `Dokumen #${task.bulletinPostId}`}`}
+                                        className="inline-flex items-center justify-center p-1 rounded-md bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 dark:text-teal-300 border border-teal-300 dark:border-teal-700 shadow-2xs transition-all shrink-0 cursor-pointer"
+                                      >
+                                        <Link2 className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                                      </button>
                                     )}
                                   </div>
                                 </div>
@@ -4678,119 +4863,125 @@ export function LogbookScreen({
                             </td>
                           </tr>
 
-                          {/* Nested Subtask Checklist Dropdown Row */}
-                          {isExpanded && (
-                            <tr className={`${isNotionLight ? 'bg-slate-50/70' : 'bg-black/30'}`}>
-                              <td colSpan={10} className="px-6 py-3 border-b border-slate-200 dark:border-slate-800">
-                                <div className="space-y-2 max-w-4xl">
-                                  <div className="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-700">
-                                    <span className="font-bold text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                      <CheckSquare className="w-3.5 h-3.5 text-teal-600" />
-                                      <span>Rincian Subtask ({parsed.completed}/{parsed.total})</span>
-                                    </span>
+                          {/* Subtask Accordion Rows Matching Labnote Exactly */}
+                          {isExpanded && parsed.items && parsed.items.map((item, itmIdx) => {
+                            const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                              ? item.notes
+                              : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+                            const noteCount = rawNotes.length;
+
+                            return (
+                              <tr
+                                key={`${task.id}-sub-${item.index}`}
+                                className={`border-b transition-colors select-none ${
+                                  item.checked
+                                    ? isNotionLight ? 'bg-slate-50/70 text-slate-500' : 'bg-slate-900/40 text-slate-500'
+                                    : isNotionLight ? 'bg-white hover:bg-slate-50' : 'bg-[#1a1a1a] hover:bg-[#222222]'
+                                }`}
+                              >
+                                {/* Col 0: Drag handle */}
+                                <td className="text-center px-1.5 py-2 text-slate-300 dark:text-slate-600">
+                                  <GripVertical className="w-3.5 h-3.5 mx-auto opacity-30 hover:opacity-100 cursor-grab" />
+                                </td>
+
+                                {/* Col 1: Connector */}
+                                <td className="text-center px-1 py-2">
+                                  <CornerDownRight className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 mx-auto" />
+                                </td>
+
+                                {/* Col 2: Subtask Checkbox & Title */}
+                                <td className="px-3.5 py-2 pl-4">
+                                  <div className="flex items-center gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => setSelectedTaskDetail(task)}
-                                      className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
+                                      onClick={() => handleToggleSubtask(task, item.index)}
+                                      className={`w-4 h-4 rounded border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                                        item.checked
+                                          ? 'bg-teal-600 border-teal-600 text-white shadow-2xs'
+                                          : isNotionLight
+                                          ? 'border-slate-400 hover:border-teal-500 bg-white'
+                                          : 'border-slate-500 hover:border-teal-400 bg-slate-800'
+                                      }`}
+                                      title={item.checked ? "Tandai subtask belum selesai" : "Tandai subtask selesai (Checklist)"}
                                     >
-                                      <span>Buka Panel Detail Notion</span>
-                                      <ExternalLink className="w-3 h-3" />
+                                      {item.checked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                    </button>
+
+                                    <span className={`text-xs break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
+                                      {item.text}
+                                    </span>
+
+                                    {item.checkedDate && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 shrink-0">
+                                        {item.checkedDate}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Col 3: Frekuensi / Cadence */}
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 italic">
+                                    Subtask
+                                  </span>
+                                </td>
+
+                                {/* Col 4: Status */}
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                                    item.checked
+                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                                      : 'bg-blue-50 text-blue-900 border-blue-200'
+                                  }`}>
+                                    {item.checked ? 'Closed' : 'Open'}
+                                  </span>
+                                </td>
+
+                                {/* Col 5: Prioritas */}
+                                <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-400">
+                                  -
+                                </td>
+
+                                {/* Col 6: PIC Pelaksana */}
+                                <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500 truncate max-w-[150px]">
+                                  {task.assigneeName ? task.assigneeName.split(',')[0] : '-'}
+                                </td>
+
+                                {/* Col 7: Mulai & Durasi */}
+                                <td className="px-3 py-2 whitespace-nowrap text-[11px] font-mono text-slate-500">
+                                  {item.checkedDate || '-'}
+                                </td>
+
+                                {/* Col 8: Progress */}
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400">
+                                    {item.checked ? '100%' : '0%'}
+                                  </span>
+                                </td>
+
+                                {/* Col 9: Aksi */}
+                                <td className="px-3 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => openSubtaskNoteModal(task, item.index, item.text, rawNotes, false)}
+                                      className={`relative p-1 rounded-md transition-colors cursor-pointer ${
+                                        noteCount > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                      }`}
+                                      title={noteCount > 0 ? `${noteCount} Catatan Subtask` : 'Tambah Catatan Subtask'}
+                                    >
+                                      <AlertCircle className="w-3.5 h-3.5" />
+                                      {noteCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-rose-600 text-white font-mono text-[8px] font-black flex items-center justify-center">
+                                          {noteCount}
+                                        </span>
+                                      )}
                                     </button>
                                   </div>
-
-                                  {parsed.items && parsed.items.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                      {parsed.items.map((item, itmIdx) => {
-                                        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
-                                          ? item.notes
-                                          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
-                                        const noteCount = rawNotes.length;
-
-                                        return (
-                                          <div
-                                            key={item.index}
-                                            draggable={true}
-                                            onDragStart={(e) => {
-                                              e.dataTransfer.setData('text/plain', String(itmIdx));
-                                              setCardDragIdx({ taskId: task.id, itemIdx: itmIdx });
-                                            }}
-                                            onDragOver={(e) => {
-                                              e.preventDefault();
-                                              e.dataTransfer.dropEffect = 'move';
-                                              if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx !== itmIdx) {
-                                                setCardDragOverIdx({ taskId: task.id, itemIdx: itmIdx });
-                                              }
-                                            }}
-                                            onDragLeave={() => {
-                                              if (cardDragOverIdx?.taskId === task.id && cardDragOverIdx?.itemIdx === itmIdx) {
-                                                setCardDragOverIdx(null);
-                                              }
-                                            }}
-                                            onDrop={(e) => {
-                                              e.preventDefault();
-                                              handleDropCardSubtask(task, itmIdx);
-                                            }}
-                                            onDragEnd={() => {
-                                              setCardDragIdx(null);
-                                              setCardDragOverIdx(null);
-                                            }}
-                                            className={`flex items-center gap-2 p-1.5 px-2.5 rounded-lg border text-xs transition-all ${
-                                              cardDragIdx?.taskId === task.id && cardDragIdx?.itemIdx === itmIdx
-                                                ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50/50'
-                                                : item.checked
-                                                ? 'bg-slate-100/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
-                                                : isNotionLight
-                                                ? 'bg-white border-slate-300 hover:border-teal-500'
-                                                : 'bg-[#202020] border-slate-700 hover:border-teal-500'
-                                            }`}
-                                          >
-                                            <div className="cursor-grab active:cursor-grabbing p-0.5 text-slate-400 hover:text-teal-600">
-                                              <GripVertical className="w-3.5 h-3.5" />
-                                            </div>
-
-                                            <input
-                                              type="checkbox"
-                                              checked={item.checked}
-                                              onChange={() => handleToggleSubtask(task, item.index)}
-                                              className="w-3.5 h-3.5 rounded border-slate-400 text-teal-600 focus:ring-teal-500 cursor-pointer"
-                                            />
-
-                                            <span className={`flex-1 break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
-                                              {item.text}
-                                            </span>
-
-                                            {item.checkedDate && (
-                                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                                                {item.checkedDate}
-                                              </span>
-                                            )}
-
-                                            <button
-                                              type="button"
-                                              onClick={() => openSubtaskNoteModal(task, item.index, item.text, rawNotes, false)}
-                                              className={`relative p-1 rounded-md transition-colors cursor-pointer ${
-                                                noteCount > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                              }`}
-                                              title={noteCount > 0 ? `${noteCount} Catatan Subtask` : 'Tambah Catatan Subtask'}
-                                            >
-                                              <AlertCircle className="w-3.5 h-3.5" />
-                                              {noteCount > 0 && (
-                                                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-rose-600 text-white font-mono text-[8px] font-black flex items-center justify-center">
-                                                  {noteCount}
-                                                </span>
-                                              )}
-                                            </button>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-slate-500 italic">Tidak ada checklist terdaftar pada tugas ini.</p>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </React.Fragment>
                       );
                     })
@@ -4939,8 +5130,11 @@ export function LogbookScreen({
                               setIsDragOverToday(false);
                               setIsDragOverYesterday(false);
                             }}
+                            onMouseEnter={() => handleRowMouseEnter(task.id)}
                             className={`transition-colors group ${
                               draggedLogbookTaskId === task.id ? 'opacity-40 bg-amber-50/50' : ''
+                            } ${
+                              selectedTaskIds.has(task.id) ? 'bg-teal-50/80 dark:bg-teal-950/40 ring-1 ring-teal-500/50' : ''
                             } ${
                               isDone 
                                 ? isNotionLight ? 'bg-emerald-50/20 hover:bg-emerald-50/40' : 'bg-emerald-950/10 hover:bg-emerald-950/20'
@@ -4951,9 +5145,24 @@ export function LogbookScreen({
                                 : 'bg-[#191919] hover:bg-[#202020]'
                             }`}
                           >
-                            {/* Drag Handle */}
-                            <td className="text-center px-1 py-2 cursor-grab active:cursor-grabbing text-slate-400 hover:text-amber-600">
-                              <GripVertical className="w-3.5 h-3.5 mx-auto" />
+                            {/* Drag Handle & Checkbox */}
+                            <td 
+                              className="text-center px-1.5 py-2 select-none"
+                              onMouseDown={(e) => handleRowMouseDown(task.id, e)}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTaskIds.has(task.id)}
+                                  onChange={() => toggleSelectTask(task.id)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="w-3.5 h-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                  title="Pilih tugas ini"
+                                />
+                                <div className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-amber-600 hidden sm:block">
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                </div>
+                              </div>
                             </td>
 
                             {/* No */}
@@ -4991,9 +5200,17 @@ export function LogbookScreen({
                                       </span>
                                     )}
                                     {task.bulletinPostId && (
-                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-600 shrink-0">
-                                        Labnote #{task.bulletinPostId}
-                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (onSelectBulletinPost) onSelectBulletinPost(task.bulletinPostId);
+                                        }}
+                                        title={`Terkoneksi ke Labnote: ${task.bulletinTopicTitle || `Dokumen #${task.bulletinPostId}`}`}
+                                        className="inline-flex items-center justify-center p-1 rounded-md bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 dark:text-teal-300 border border-teal-300 dark:border-teal-700 shadow-2xs transition-all shrink-0 cursor-pointer"
+                                      >
+                                        <Link2 className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                                      </button>
                                     )}
                                   </div>
                                 </div>
@@ -5212,78 +5429,125 @@ export function LogbookScreen({
                             </td>
                           </tr>
 
-                          {/* Nested Subtask Checklist Dropdown Row */}
-                          {isExpanded && (
-                            <tr className={`${isNotionLight ? 'bg-slate-50/70' : 'bg-black/30'}`}>
-                              <td colSpan={10} className="px-6 py-3 border-b border-slate-200 dark:border-slate-800">
-                                <div className="space-y-2 max-w-4xl">
-                                  <div className="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-700">
-                                    <span className="font-bold text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                      <CheckSquare className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>Rincian Subtask ({parsed.completed}/{parsed.total})</span>
-                                    </span>
+                          {/* Subtask Accordion Rows Matching Labnote Exactly */}
+                          {isExpanded && parsed.items && parsed.items.map((item) => {
+                            const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
+                              ? item.notes
+                              : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
+                            const noteCount = rawNotes.length;
+
+                            return (
+                              <tr
+                                key={`${task.id}-sub-${item.index}`}
+                                className={`border-b transition-colors select-none ${
+                                  item.checked
+                                    ? isNotionLight ? 'bg-slate-50/70 text-slate-500' : 'bg-slate-900/40 text-slate-500'
+                                    : isNotionLight ? 'bg-white hover:bg-slate-50' : 'bg-[#1a1a1a] hover:bg-[#222222]'
+                                }`}
+                              >
+                                {/* Col 0: Drag handle */}
+                                <td className="text-center px-1.5 py-2 text-slate-300 dark:text-slate-600">
+                                  <GripVertical className="w-3.5 h-3.5 mx-auto opacity-30 hover:opacity-100 cursor-grab" />
+                                </td>
+
+                                {/* Col 1: Connector */}
+                                <td className="text-center px-1 py-2">
+                                  <CornerDownRight className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 mx-auto" />
+                                </td>
+
+                                {/* Col 2: Subtask Checkbox & Title */}
+                                <td className="px-3.5 py-2 pl-4">
+                                  <div className="flex items-center gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => setSelectedTaskDetail(task)}
-                                      className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                                      onClick={() => handleToggleSubtask(task, item.index)}
+                                      className={`w-4 h-4 rounded border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                                        item.checked
+                                          ? 'bg-amber-600 border-amber-600 text-white shadow-2xs'
+                                          : isNotionLight
+                                          ? 'border-slate-400 hover:border-amber-500 bg-white'
+                                          : 'border-slate-500 hover:border-amber-400 bg-slate-800'
+                                      }`}
+                                      title={item.checked ? "Tandai subtask belum selesai" : "Tandai subtask selesai (Checklist)"}
                                     >
-                                      <span>Buka Panel Detail Notion</span>
-                                      <ExternalLink className="w-3 h-3" />
+                                      {item.checked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                    </button>
+
+                                    <span className={`text-xs break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
+                                      {item.text}
+                                    </span>
+
+                                    {item.checkedDate && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 shrink-0">
+                                        {item.checkedDate}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Col 3: Frekuensi / Cadence */}
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 italic">
+                                    Subtask
+                                  </span>
+                                </td>
+
+                                {/* Col 4: Status */}
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                                    item.checked
+                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                                      : 'bg-amber-50 text-amber-900 border-amber-200'
+                                  }`}>
+                                    {item.checked ? 'Closed' : 'Open'}
+                                  </span>
+                                </td>
+
+                                {/* Col 5: Prioritas */}
+                                <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-400">
+                                  -
+                                </td>
+
+                                {/* Col 6: PIC Pelaksana */}
+                                <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500 truncate max-w-[150px]">
+                                  {task.assigneeName ? task.assigneeName.split(',')[0] : '-'}
+                                </td>
+
+                                {/* Col 7: Mulai & Durasi */}
+                                <td className="px-3 py-2 whitespace-nowrap text-[11px] font-mono text-slate-500">
+                                  {item.checkedDate || '-'}
+                                </td>
+
+                                {/* Col 8: Progress */}
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400">
+                                    {item.checked ? '100%' : '0%'}
+                                  </span>
+                                </td>
+
+                                {/* Col 9: Aksi */}
+                                <td className="px-3 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => openSubtaskNoteModal(task, item.index, item.text, rawNotes, false)}
+                                      className={`relative p-1 rounded-md transition-colors cursor-pointer ${
+                                        noteCount > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                      }`}
+                                      title={noteCount > 0 ? `${noteCount} Catatan Subtask` : 'Tambah Catatan Subtask'}
+                                    >
+                                      <AlertCircle className="w-3.5 h-3.5" />
+                                      {noteCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-rose-600 text-white font-mono text-[8px] font-black flex items-center justify-center">
+                                          {noteCount}
+                                        </span>
+                                      )}
                                     </button>
                                   </div>
-
-                                  {parsed.items && parsed.items.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                      {parsed.items.map((item) => {
-                                        const rawNotes: SubtaskNote[] = (item.notes && item.notes.length > 0)
-                                          ? item.notes
-                                          : (item.note ? [{ id: 'legacy-1', text: item.note, date: item.noteDate || '', time: '', author: '' }] : []);
-                                        const noteCount = rawNotes.length;
-
-                                        return (
-                                          <div
-                                            key={item.index}
-                                            className={`flex items-center gap-2 p-1.5 px-2.5 rounded-lg border text-xs ${
-                                              item.checked
-                                                ? 'bg-slate-100/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
-                                                : isNotionLight
-                                                ? 'bg-white border-slate-300'
-                                                : 'bg-[#202020] border-slate-700'
-                                            }`}
-                                          >
-                                            <input
-                                              type="checkbox"
-                                              checked={item.checked}
-                                              disabled={true}
-                                              className="w-3.5 h-3.5 rounded border-slate-400 text-teal-600 cursor-not-allowed opacity-75"
-                                            />
-
-                                            <span className={`flex-1 break-words ${item.checked ? 'line-through text-slate-400' : 'font-semibold text-slate-800 dark:text-slate-200'}`}>
-                                              {item.text}
-                                            </span>
-
-                                            {item.checkedDate && (
-                                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                                                {item.checkedDate}
-                                              </span>
-                                            )}
-
-                                            {noteCount > 0 && (
-                                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                                {noteCount} Catatan
-                                              </span>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-slate-500 italic">Tidak ada checklist terdaftar pada tugas ini.</p>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </React.Fragment>
                       );
                     })
@@ -5606,9 +5870,17 @@ export function LogbookScreen({
                     </span>
                     <div className="col-span-2">
                       {selectedTaskDetail.bulletinPostId ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-teal-700 bg-teal-50 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-700 px-2 py-0.5 rounded-lg">
-                          Labnote #{selectedTaskDetail.bulletinPostId}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onSelectBulletinPost) onSelectBulletinPost(selectedTaskDetail.bulletinPostId);
+                          }}
+                          title={`Terkoneksi ke Labnote: ${selectedTaskDetail.bulletinTopicTitle || `Dokumen #${selectedTaskDetail.bulletinPostId}`}`}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/60 border border-teal-300 dark:border-teal-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Link2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                          <span>{selectedTaskDetail.bulletinTopicTitle || `Dokumen #${selectedTaskDetail.bulletinPostId}`}</span>
+                        </button>
                       ) : (
                         <span className="text-slate-400 text-xs italic">Belum terhubung ke dokumen Labnote</span>
                       )}
@@ -6303,7 +6575,7 @@ export function LogbookScreen({
               {(editingTask.assignedByNik === inspectorNik || isSupervisor) ? (
                 <SearchableMultiPicSelect
                   selectedNiks={String(editAssigneeNik || '').split(',').map(s => s.trim()).filter(Boolean)}
-                  selectedNames={splitPicNames(editAssigneeName)}
+                  selectedNames={smartSplitPicString(String(editAssigneeName || ''))}
                   onChange={(niks, names) => {
                     setEditAssigneeNik(niks.join(', '));
                     setEditAssigneeName(names.join(', '));
@@ -7078,6 +7350,50 @@ export function LogbookScreen({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Bulk Action Bar for Drag-Select / Multi-Select */}
+      {selectedTaskIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl bg-slate-900/95 text-white shadow-2xl backdrop-blur-md border border-slate-700 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-2 pr-3 border-r border-slate-700">
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse" />
+            <span className="text-xs font-black font-mono">
+              {selectedTaskIds.size} Kegiatan Terpilih
+            </span>
+          </div>
+
+          {/* Button: Mark as Closed */}
+          <button
+            type="button"
+            disabled={isBulkOperating}
+            onClick={handleBulkMarkClosed}
+            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Ganti jadi Closed</span>
+          </button>
+
+          {/* Button: Delete Tasks */}
+          <button
+            type="button"
+            disabled={isBulkOperating}
+            onClick={handleBulkDelete}
+            className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Hapus dari Log Book</span>
+          </button>
+
+          {/* Clear selection */}
+          <button
+            type="button"
+            onClick={() => setSelectedTaskIds(new Set())}
+            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer ml-1"
+            title="Batalkan pilihan"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

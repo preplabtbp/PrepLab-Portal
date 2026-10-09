@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../../src/db/index.js";
-import { employees, developerUsers, employeeAttendance, employeeCounseling } from "../../src/db/schema.js";
+import { employees, developerUsers, employeeAttendance, employeeCounseling, employeeAchievements } from "../../src/db/schema.js";
 import { toPublicEmployee } from "../middleware/auth.js";
 import { drive } from "../../google-services.js";
 import { Readable } from "stream";
@@ -177,7 +177,9 @@ function attachAttendanceToEmployee(e: any, attMap: Record<string, any>, counsel
     attendance: attForEmp,
     attendance2026: formatAtt(rawAtt26),
     attendance2025: formatAtt(rawAtt25),
-    counselingSpdk: counsel
+    counselingSpdk: counsel,
+    achievements: publicEmp.achievements || [],
+    catatan: publicEmp.catatan || ''
   };
 }
 
@@ -217,6 +219,79 @@ export async function isAuthorizedDatabaseEditor(editorNik?: string): Promise<bo
   } catch (e) {}
 
   return false;
+}
+
+export async function isAuthorizedNotesEditor(editorNik?: string): Promise<boolean> {
+  if (!editorNik) return false;
+  const nik = String(editorNik).trim().toUpperCase();
+  if (!nik) return false;
+
+  // Superadmins / Developer accounts
+  if (['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'].includes(nik)) return true;
+
+  try {
+    const dev = await db.select().from(developerUsers).where(eq(developerUsers.nik, nik)).limit(1);
+    if (dev.length > 0) return true;
+  } catch (e) {}
+
+  // Check Employees table for Developer, Section Manager, Superintendent, or Admin
+  try {
+    const emp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    if (emp.length > 0) {
+      const e = emp[0];
+      const sec = (e.section || '').toLowerCase();
+      const dep = (e.department || '').toLowerCase();
+      const jab = (e.jabatan || '').toLowerCase();
+
+      // Developer
+      if (jab.includes('developer')) return true;
+
+      // Section Manager & Superintendent
+      if (
+        jab.includes('section manager') ||
+        jab.includes('manager') ||
+        jab.includes('superintendent') ||
+        jab.includes('spt') ||
+        jab.includes('head')
+      ) {
+        return true;
+      }
+
+      // Admin / Administrasi
+      if (
+        sec.includes('admin') ||
+        sec.includes('administrasi') ||
+        dep.includes('admin') ||
+        dep.includes('administrasi') ||
+        jab.includes('admin') ||
+        jab.includes('administrasi')
+      ) {
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+export function isLocalhostRequest(req: any): boolean {
+  if (!req) return false;
+  const host = req.get ? (req.get('host') || '') : (req.headers?.host || '');
+  const hostname = host.split(':')[0].toLowerCase();
+  const ip = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || '';
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    hostname.startsWith('192.168.') ||
+    hostname.startsWith('10.') ||
+    hostname.startsWith('172.') ||
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip === '::ffff:127.0.0.1' ||
+    ip.startsWith('192.168.') ||
+    process.env.NODE_ENV !== 'production'
+  );
 }
 
 async function uploadEmployeePhotoToDrive(nik: string, name: string, base64OrUrl: string): Promise<string> {
@@ -353,23 +428,21 @@ employeesRouter.get("/", async (req, res) => {
         data = data.filter(e => {
           const ptStr = (e.pt || '').toString().trim().toUpperCase();
           const nikStr = (e.nik || '').toString().trim().toUpperCase();
-          return ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
+          const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
+          return isGts && !isResignedOrNonActiveStatus(e);
         });
       } else {
-        // TBP & GPS -> Strictly exclude GTS employees (check pt AND NIK prefix 03/M03) and resigned personnel
+        // TBP & GPS -> Strictly exclude GTS employees (check pt AND NIK prefix 03/M03) and resigned/non-active personnel
         data = data.filter(e => {
           const ptStr = (e.pt || '').toString().trim().toUpperCase();
           const nikStr = (e.nik || '').toString().trim().toUpperCase();
           const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
-          const stStr = (e.statusKaryawan || '').toString().trim().toUpperCase();
-          const secStr = (e.section || '').toString().trim().toUpperCase();
-          const isResigned = stStr.includes('RESIGN') || stStr.includes('PHK') || secStr.includes('#N/A') || [
-            '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
-            'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419'
-          ].includes(nikStr);
-          return !isGts && !isResigned;
+          return !isGts && !isResignedOrNonActiveStatus(e);
         });
       }
+    } else {
+      // Exclude resigned / non-active personnel even when all=true
+      data = data.filter(e => !isResignedOrNonActiveStatus(e));
     }
 
     const attMap = await getAttendanceMap();
@@ -380,6 +453,29 @@ employeesRouter.get("/", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch employees" });
   }
 });
+
+export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
+  if (!empOrStatus) return false;
+  const status = typeof empOrStatus === 'string'
+    ? empOrStatus
+    : (empOrStatus.statusKaryawan || empOrStatus.status_karyawan || empOrStatus.status || empOrStatus['Status Karyawan'] || empOrStatus['Status'] || '');
+  const s = String(status).trim().toUpperCase();
+  if (
+    s.includes('RESIGN') ||
+    s.includes('PHK') ||
+    s.includes('MUTASI') ||
+    s.includes('SPPHK') ||
+    s.includes('KELUAR') ||
+    s.includes('INACTIVE') ||
+    s.includes('NONAKTIF') ||
+    s.includes('NON AKTIF')
+  ) {
+    return true;
+  }
+  const sec = typeof empOrStatus === 'object' ? String(empOrStatus.section || '').trim().toUpperCase() : '';
+  if (sec.includes('#N/A')) return true;
+  return false;
+}
 
 export function isSectionManagerOrAdmin(emp: any): boolean {
   if (!emp) return false;
@@ -448,10 +544,11 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     const isUserMgr = isSectionManagerOrAdmin(user);
     const isUserGts = isGtsEmployee(user);
 
-    // Section Manager / Admin / QA dapat mengakses seluruh karyawan (TBP & GTS)
+    // Section Manager / Admin / QA dapat mengakses seluruh karyawan aktif (TBP & GTS)
     if (isUserMgr) {
       const allData = await db.select().from(employees);
-      const formatted = allData.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
+      const activeData = allData.filter(e => !isResignedOrNonActiveStatus(e));
+      const formatted = activeData.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
       cachedHierarchy.set(nik, { data: formatted, timestamp: now });
       return res.json({ status: "success", data: formatted });
     }
@@ -474,6 +571,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     // Fetch all employees and strictly enforce company universe (GTS only for GTS, TBP only for TBP)
     const allEmployees = await db.select().from(employees);
     const subordinates = allEmployees.filter(e => {
+      if (isResignedOrNonActiveStatus(e)) return false;
       const eIsGts = isGtsEmployee(e);
       if (isUserGts && !eIsGts) return false; // Karyawan GTS hanya bisa akses data GTS
       if (!isUserGts && eIsGts) return false; // Karyawan TBP hanya bisa akses data TBP
@@ -552,11 +650,101 @@ employeesRouter.get("/:nik", async (req, res) => {
 
 employeesRouter.post("/", async (req, res) => {
   try {
-    const result = await db.insert(employees).values(req.body).returning();
-    res.status(201).json(toPublicEmployee(result[0]));
-  } catch (error) {
+    const requesterNik = req.body?.editorNik || req.headers['x-user-nik'] || req.body?.nik;
+
+
+    // Validasi otorisasi: Khusus Section Admin / Administration / Developer
+    const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
+    if (!isAuth) {
+      return res.status(403).json({
+        status: "error",
+        message: "Akses ditolak: Penambahan karyawan baru hanya dapat dilakukan oleh Section Admin (Administration atau Developer)."
+      });
+    }
+
+    const body = req.body || {};
+    const nik = (body.nik || '').trim().toUpperCase();
+    const name = (body.name || '').trim();
+
+    if (!nik || !name) {
+      return res.status(400).json({ status: "error", message: "NIK dan Nama karyawan wajib diisi." });
+    }
+
+    // Cek duplikasi NIK
+    const existing = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    if (existing.length > 0) {
+      return res.status(400).json({
+        status: "error",
+        message: `NIK ${nik} sudah terdaftar di database atas nama ${existing[0].name}.`
+      });
+    }
+
+    // Mapping semua kolom karyawan dari master data / data.csv
+    const newEmpData: Record<string, any> = {
+      nik,
+      name,
+      ktp: body.ktp?.trim() || null,
+      pt: body.pt?.trim() || 'TBP',
+      poh: body.poh?.trim() || null,
+      sponsor: body.sponsor?.trim() || null,
+      statusKaryawan: body.statusKaryawan?.trim() || 'Active',
+      statusKontrak: body.statusKontrak?.trim() || 'Permanent',
+      tanggalEfektifTidakBekerja: body.tanggalEfektifTidakBekerja?.trim() || null,
+      tanggalAwalBergabung: body.tanggalAwalBergabung?.trim() || null,
+      tanggalJabatanBaru: body.tanggalJabatanBaru?.trim() || null,
+      masaKerja: body.masaKerja?.trim() || null,
+      masaKerjaJabatanTerakhir: body.masaKerjaJabatanTerakhir?.trim() || null,
+      masaKerjaJabatanSebelumnya: body.masaKerjaJabatanSebelumnya?.trim() || null,
+      department: body.department?.trim() || 'Preparation & Laboratory',
+      section: body.section?.trim() || null,
+      jobGrade: body.jobGrade?.trim() || null,
+      gol: body.gol?.trim() || null,
+      jabatan: body.jabatan?.trim() || null,
+      tanggalPermanent: body.tanggalPermanent?.trim() || null,
+      tempatLahir: body.tempatLahir?.trim() || null,
+      tanggalLahir: body.tanggalLahir?.trim() || null,
+      phone: body.phone?.trim() || null,
+      keluargaKandung: body.keluargaKandung?.trim() || null,
+      phoneKeluarga: body.phoneKeluarga?.trim() || null,
+      orangTerdekat: body.orangTerdekat?.trim() || null,
+      phoneDarurat: body.phoneDarurat?.trim() || null,
+      alamatKtp: body.alamatKtp?.trim() || null,
+      alamatDomisili: body.alamatDomisili?.trim() || null,
+      sisaCt: body.sisaCt !== undefined && body.sisaCt !== null ? String(body.sisaCt) : '0',
+      jatuhTempoCt: body.jatuhTempoCt?.trim() || null,
+      photo: body.photo?.trim() || null,
+      avatar: body.avatar?.trim() || null,
+    };
+
+    const inserted = await db.insert(employees).values(newEmpData as any).returning();
+
+    // Inisialisasi default rekap absensi 2026
+    try {
+      await db.insert(employeeAttendance).values({
+        nik,
+        name,
+        year: 2026,
+        izin: 0,
+        izinKhusus: 0,
+        sakit: 0,
+        sakitSiteCount: 0,
+        sakitLuarCount: 0,
+        alpa: 0,
+      }).onConflictDoNothing();
+    } catch (attErr) {
+      console.warn("Auto attendance init note:", attErr);
+    }
+
+    clearEmployeeCache();
+
+    res.status(201).json({
+      status: "success",
+      message: `Karyawan ${name} (${nik}) berhasil ditambahkan ke database!`,
+      data: toPublicEmployee(inserted[0])
+    });
+  } catch (error: any) {
     console.error("Error creating employee:", error);
-    res.status(500).json({ error: "Failed to create employee" });
+    res.status(500).json({ status: "error", message: error.message || "Gagal menambahkan karyawan" });
   }
 });
 
@@ -588,7 +776,7 @@ function parseCount(val: any): number {
 
 employeesRouter.post("/import", async (req, res) => {
   try {
-    const { rows, attendanceRows, counselingRows, editorNik } = req.body;
+    const { rows, attendanceRows, counselingRows, achievementRows, editorNik } = req.body;
     const requesterNik = editorNik || req.headers['x-user-nik'] || req.body?.requesterNik;
     const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
     if (!isAuth) {
@@ -601,8 +789,9 @@ employeesRouter.post("/import", async (req, res) => {
     const hasRows = Array.isArray(rows) && rows.length > 0;
     const hasAttRows = Array.isArray(attendanceRows) && attendanceRows.length > 0;
     const hasCounselRows = Array.isArray(counselingRows) && counselingRows.length > 0;
+    const hasAchRows = Array.isArray(achievementRows) && achievementRows.length > 0;
 
-    if (!hasRows && !hasAttRows && !hasCounselRows) {
+    if (!hasRows && !hasAttRows && !hasCounselRows && !hasAchRows) {
       return res.status(400).json({ status: "error", message: "Tidak ada data baris yang dikirim untuk diimport." });
     }
 
@@ -611,6 +800,7 @@ employeesRouter.post("/import", async (req, res) => {
     let errorCount = 0;
     let attUpdatedCount = 0;
     let counselUpdatedCount = 0;
+    let achUpdatedCount = 0;
     const errors: string[] = [];
 
     // 1. Process Master Employee Rows (Sheet 1)
@@ -635,6 +825,12 @@ employeesRouter.post("/import", async (req, res) => {
 
         const name = normalized['nama'] || normalized['name'] || '';
         if (!name || name === '#N/A') {
+          continue;
+        }
+
+        const statusKaryawanVal = normalized['statuskaryawan'] || normalized['status'] || raw['Status Karyawan'] || raw['Status'] || '';
+        if (isResignedOrNonActiveStatus(statusKaryawanVal)) {
+          // Sesuai permintaan: Karyawan berstatus Resign / Mutasi GTS / PHK / SPPHK tidak dimasukkan ke dalam daftar
           continue;
         }
 
@@ -1201,15 +1397,112 @@ employeesRouter.post("/import", async (req, res) => {
       }
     }
 
+    // 4. Process Achievements Rows (Sheet 4: "Achievements")
+    if (hasAchRows) {
+      const allCurrentEmployees = await db.select().from(employees);
+      const nameToEmpMap = new Map<string, any>();
+      const nikToEmpMap = new Map<string, any>();
+
+      for (const emp of allCurrentEmployees) {
+        if (emp.nik) nikToEmpMap.set(emp.nik.toUpperCase().trim(), emp);
+        if (emp.name) {
+          const normKey = normalizeNameKey(emp.name);
+          if (normKey) nameToEmpMap.set(normKey, emp);
+        }
+      }
+
+      for (let m = 0; m < achievementRows.length; m++) {
+        const aRaw = achievementRows[m];
+        if (!aRaw || typeof aRaw !== 'object') continue;
+
+        const aNorm: Record<string, string> = {};
+        for (const [k, v] of Object.entries(aRaw)) {
+          const cleanK = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (cleanK) {
+            aNorm[cleanK] = v !== undefined && v !== null ? String(v).trim() : '';
+          }
+        }
+
+        const rawName = aRaw['Nama Karyawan'] || aRaw['Nama'] || aRaw['Name'] || aNorm['namakaryawan'] || aNorm['nama'] || aNorm['name'] || '';
+        const rawNik = aRaw['NIK'] || aRaw['nik'] || aNorm['nik'] || aNorm['id'] || aNorm['noid'] || '';
+
+        let matchedEmp = rawNik ? nikToEmpMap.get(rawNik.toUpperCase().trim()) : null;
+        if (!matchedEmp && rawName) {
+          const normN = normalizeNameKey(rawName);
+          matchedEmp = nameToEmpMap.get(normN);
+          if (!matchedEmp) {
+            for (const [key, emp] of nameToEmpMap.entries()) {
+              if (key && normN && (key.includes(normN) || normN.includes(key))) {
+                matchedEmp = emp;
+                break;
+              }
+            }
+          }
+        }
+
+        const targetNik = matchedEmp ? matchedEmp.nik : rawNik;
+        const targetName = matchedEmp ? matchedEmp.name : (rawName || 'Karyawan');
+        if (!targetNik) continue;
+
+        const title = String(aRaw['Judul Achievement'] || aRaw['Achievement'] || aRaw['Nama Achievement'] || aRaw['Pencapaian'] || aRaw['Prestasi'] || aRaw['Title'] || aNorm['judulachievement'] || aNorm['achievement'] || aNorm['pencapaian'] || aNorm['prestasi'] || aNorm['title'] || '').trim();
+        const category = String(aRaw['Kategori'] || aRaw['Bidang'] || aNorm['kategori'] || aNorm['bidang'] || 'Kinerja & Prestasi').trim();
+        const date = String(aRaw['Tanggal Dicapai'] || aRaw['Tanggal'] || aRaw['Tahun'] || aNorm['tanggaldicapai'] || aNorm['tanggal'] || aNorm['tahun'] || '').trim();
+        const description = String(aRaw['Keterangan'] || aRaw['Deskripsi'] || aNorm['keterangan'] || aNorm['deskripsi'] || '').trim();
+        const notes = String(aRaw['Catatan'] || aRaw['Notes'] || aNorm['catatan'] || aNorm['notes'] || '').trim();
+
+        if (title) {
+          try {
+            await db.insert(employeeAchievements).values({
+              nik: targetNik,
+              name: targetName,
+              title,
+              category,
+              date,
+              description,
+              notes
+            });
+
+            // Update JSON achievements on employee
+            if (matchedEmp) {
+              const currentAchs = Array.isArray(matchedEmp.achievements) ? matchedEmp.achievements : [];
+              const updatedAchs = [...currentAchs, {
+                id: Date.now() + m,
+                title,
+                category,
+                date,
+                description,
+                notes
+              }];
+              const updatePayload: Record<string, any> = { achievements: updatedAchs };
+              if (notes && !matchedEmp.catatan) {
+                updatePayload.catatan = notes;
+              }
+              await db.update(employees).set(updatePayload).where(eq(employees.nik, targetNik));
+            }
+
+            achUpdatedCount++;
+          } catch (achErr: any) {
+            console.warn(`Error inserting achievement for ${targetNik}:`, achErr.message);
+          }
+        } else if (notes && matchedEmp) {
+          try {
+            await db.update(employees).set({ catatan: notes }).where(eq(employees.nik, targetNik));
+            achUpdatedCount++;
+          } catch (e) {}
+        }
+      }
+    }
+
     res.json({
       status: "success",
-      message: `Import berhasil selesai! ${updatedCount} data master diperbarui, ${insertedCount} ditambahkan, ${attUpdatedCount} absensi & ${counselUpdatedCount} data konseling/SPDK disinkronkan.`,
+      message: `Import berhasil selesai! ${updatedCount} data master diperbarui, ${insertedCount} ditambahkan, ${attUpdatedCount} absensi, ${counselUpdatedCount} konseling/SPDK & ${achUpdatedCount} data achievements disinkronkan.`,
       stats: {
-        total: (rows?.length || 0) + (attendanceRows?.length || 0) + (counselingRows?.length || 0),
+        total: (rows?.length || 0) + (attendanceRows?.length || 0) + (counselingRows?.length || 0) + (achievementRows?.length || 0),
         updated: updatedCount,
         inserted: insertedCount,
         attendanceUpdated: attUpdatedCount,
         counselingUpdated: counselUpdatedCount,
+        achievementsUpdated: achUpdatedCount,
         errors: errorCount,
         errorList: errors.slice(0, 10)
       }
@@ -1219,6 +1512,124 @@ employeesRouter.post("/import", async (req, res) => {
     res.status(500).json({ status: "error", message: error.message || "Gagal mengimport data karyawan." });
   } finally {
     clearEmployeeCache();
+  }
+});
+
+// Update Catatan Karyawan
+employeesRouter.put("/:nik/notes", async (req, res) => {
+  try {
+    const { nik } = req.params;
+    const { catatan, editorNik } = req.body;
+    const requesterNik = editorNik || req.headers['x-user-nik'];
+    const isAuth = await isAuthorizedNotesEditor(String(requesterNik || ''));
+    if (!isAuth) {
+      return res.status(403).json({ status: "error", message: "Akses ditolak: Hanya Developer, Section Manager, Superintendent, atau Admin yang dapat mengubah catatan karyawan." });
+    }
+
+    const updated = await db.update(employees)
+      .set({ catatan: catatan || '' })
+      .where(eq(employees.nik, nik))
+      .returning();
+
+    clearEmployeeCache();
+    return res.json({ status: "success", message: "Catatan karyawan berhasil diperbarui", employee: toPublicEmployee(updated[0]) });
+  } catch (err: any) {
+    return res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+// Tambah Achievement Karyawan
+employeesRouter.post("/:nik/achievements", async (req, res) => {
+  try {
+    const { nik } = req.params;
+    const { title, category, date, description, notes, editorNik } = req.body;
+    const requesterNik = editorNik || req.headers['x-user-nik'];
+    const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
+    if (!isAuth) {
+      return res.status(403).json({ status: "error", message: "Akses ditolak: Hanya Section Administration yang dapat menambah achievement." });
+    }
+
+    if (!title) {
+      return res.status(400).json({ status: "error", message: "Judul achievement wajib diisi." });
+    }
+
+    const empRes = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    const emp = empRes[0];
+    if (!emp) {
+      return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan." });
+    }
+
+    const insertedAch = await db.insert(employeeAchievements).values({
+      nik,
+      name: emp.name,
+      title,
+      category: category || 'Kinerja & Prestasi',
+      date: date || '',
+      description: description || '',
+      notes: notes || ''
+    }).returning();
+
+    const currentAchs = Array.isArray(emp.achievements) ? emp.achievements : [];
+    const newAch = {
+      id: insertedAch[0]?.id || Date.now(),
+      title,
+      category: category || 'Kinerja & Prestasi',
+      date: date || '',
+      description: description || '',
+      notes: notes || ''
+    };
+    const updatedAchs = [newAch, ...currentAchs];
+
+    const updatePayload: Record<string, any> = { achievements: updatedAchs };
+    if (notes && !emp.catatan) {
+      updatePayload.catatan = notes;
+    }
+
+    const updated = await db.update(employees)
+      .set(updatePayload)
+      .where(eq(employees.nik, nik))
+      .returning();
+
+    clearEmployeeCache();
+    return res.json({ 
+      status: "success", 
+      message: "Achievement berhasil ditambahkan", 
+      achievement: newAch,
+      employee: toPublicEmployee(updated[0]) 
+    });
+  } catch (err: any) {
+    return res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+// Hapus Achievement Karyawan
+employeesRouter.delete("/:nik/achievements/:id", async (req, res) => {
+  try {
+    const { nik, id } = req.params;
+    const requesterNik = req.headers['x-user-nik'];
+    const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
+    if (!isAuth) {
+      return res.status(403).json({ status: "error", message: "Akses ditolak." });
+    }
+
+    const empRes = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    const emp = empRes[0];
+    if (emp) {
+      const currentAchs = Array.isArray(emp.achievements) ? emp.achievements : [];
+      const updatedAchs = currentAchs.filter((a: any) => String(a.id) !== String(id) && a.title !== id);
+      await db.update(employees).set({ achievements: updatedAchs }).where(eq(employees.nik, nik));
+    }
+
+    try {
+      if (!isNaN(Number(id))) {
+        await db.delete(employeeAchievements).where(eq(employeeAchievements.id, Number(id)));
+      }
+    } catch (e) {}
+
+    clearEmployeeCache();
+    return res.json({ status: "success", message: "Achievement berhasil dihapus" });
+  } catch (err: any) {
+    return res.status(500).json({ status: "error", message: err.message });
   }
 });
 
@@ -1318,6 +1729,9 @@ employeesRouter.put("/:nik", async (req, res) => {
   try {
     const { nik } = req.params;
     const requesterNik = req.body?.editorNik || req.headers['x-user-nik'];
+
+
+
     const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
     if (!isAuth) {
       return res.status(403).json({
@@ -1341,7 +1755,7 @@ employeesRouter.put("/:nik", async (req, res) => {
     const stringFields = [
       'name', 'ktp', 'pt', 'poh', 'sponsor', 'statusKaryawan', 'statusKontrak',
       'tanggalEfektifTidakBekerja', 'tanggalAwalBergabung', 'tanggalJabatanBaru',
-      'masaKerja', 'masaKerjaJabatanTerakhir', 'department', 'section',
+      'masaKerja', 'masaKerjaJabatanTerakhir', 'masaKerjaJabatanSebelumnya', 'department', 'section',
       'jobGrade', 'gol', 'jabatan', 'tanggalPermanent', 'tempatLahir',
       'tanggalLahir', 'phone', 'keluargaKandung', 'phoneKeluarga',
       'orangTerdekat', 'phoneDarurat', 'alamatKtp', 'alamatDomisili',

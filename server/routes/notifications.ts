@@ -32,8 +32,13 @@ router.get("/api/notifications", async (req, res) => {
           isDev = devUser.length > 0;
         }
 
+        // Lounge chats must NEVER appear in notifications
+        const loungeFilter = sql`(${notifications.role} IS NULL OR LOWER(${notifications.role}) != 'lounge') AND (${notifications.title} IS NULL OR LOWER(${notifications.title}) NOT LIKE '%lounge%')`;
+
         if (isDev) {
-          data = await db.select().from(notifications).orderBy(desc(notifications.createdAt));
+          data = await db.select().from(notifications)
+            .where(loungeFilter)
+            .orderBy(desc(notifications.createdAt));
           return res.json(data);
         }
 
@@ -89,8 +94,9 @@ router.get("/api/notifications", async (req, res) => {
         // Direct personal notifications for this user OR broadcast notifications (where userId IS NULL)
         // Ensure non-dev users NEVER receive notifications with role 'Developer' or category 'dev'
         const devFilter = and(
-          sql`(${notifications.role} IS NULL OR LOWER(${notifications.role}) NOT IN ('developer', 'dev'))`,
-          sql`(${notifications.category} IS NULL OR LOWER(${notifications.category}) NOT IN ('dev', 'developer'))`
+          sql`(${notifications.role} IS NULL OR LOWER(${notifications.role}) NOT IN ('developer', 'dev', 'lounge'))`,
+          sql`(${notifications.category} IS NULL OR LOWER(${notifications.category}) NOT IN ('dev', 'developer', 'lounge'))`,
+          loungeFilter
         );
 
         const userCondition = eq(notifications.userId, userId);
@@ -99,10 +105,12 @@ router.get("/api/notifications", async (req, res) => {
           : and(isNull(notifications.userId), devFilter);
 
         data = await db.select().from(notifications)
-             .where(or(userCondition, broadcastCondition))
+             .where(and(or(userCondition, broadcastCondition), loungeFilter))
              .orderBy(desc(notifications.createdAt));
       } else {
-        data = await db.select().from(notifications).orderBy(desc(notifications.createdAt));
+        data = await db.select().from(notifications)
+          .where(sql`(${notifications.role} IS NULL OR LOWER(${notifications.role}) != 'lounge') AND (${notifications.title} IS NULL OR LOWER(${notifications.title}) NOT LIKE '%lounge%')`)
+          .orderBy(desc(notifications.createdAt));
       }
       
       res.json(data);

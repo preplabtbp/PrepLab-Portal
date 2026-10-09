@@ -230,8 +230,8 @@ button[class*="bg-emerald-600"],
 button[class*="bg-blue-600"],
 button[class*="bg-rose-600"],
 button[class*="bg-red-600"],
-button[class*="bg-slate-800"],
-button[class*="bg-slate-900"] {
+button[class*="bg-slate-800"]:not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-transparent"]):not([class*="bg-slate-100"]):not([class*="bg-slate-200"]),
+button[class*="bg-slate-900"]:not([class*="bg-white"]):not([class*="bg-slate-50"]):not([class*="bg-transparent"]):not([class*="bg-slate-100"]):not([class*="bg-slate-200"]) {
   color: #ffffff;
 }
 
@@ -433,6 +433,21 @@ h1, h2, h3, h4, .font-display {
 }
 .custom-scrollbar-teal::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.6);
+}
+
+.custom-scrollbar-pastel::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar-pastel::-webkit-scrollbar-track {
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: 9999px;
+}
+.custom-scrollbar-pastel::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.3);
+  border-radius: 9999px;
+}
+.custom-scrollbar-pastel::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.55);
 }
 
 /* Print Optimization */

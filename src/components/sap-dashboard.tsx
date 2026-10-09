@@ -192,24 +192,12 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
         setLoading(true);
       }
       
-      // Parallel fetch all data sources for ultra-fast loading
-      const [ticketsResult, reportsResult, rekapResult, employeesResult] = await Promise.allSettled([
+      // Parallel fetch essential data sources for ultra-fast loading
+      const [ticketsResult, employeesResult] = await Promise.allSettled([
         getTickets('ALL').catch(e => {
           console.warn("Tickets fetch warning:", e);
           return [];
         }),
-        fetch('/api/group-reports?week=ALL')
-          .then(r => r.ok ? r.json() : [])
-          .catch(e => {
-            console.warn("Group reports fetch warning:", e);
-            return [];
-          }),
-        fetch(`/api/rekap-inspeksi?week=${targetWeekTag}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(e => {
-            console.warn("Rekap fetch warning:", e);
-            return null;
-          }),
         fetch('/api/employees')
           .then(r => r.ok ? r.json() : [])
           .catch(e => {
@@ -246,36 +234,6 @@ export function SapDashboard({ onBack, inspectorNik, inspectorName }: SapDashboa
           }
         }
         setAllTickets(Object.values(dedupeMap));
-      }
-
-      if (reportsResult.status === 'fulfilled' && Array.isArray(reportsResult.value) && reportsResult.value.length > 0) {
-        setAllGroupReports(reportsResult.value);
-      }
-
-      if (rekapResult.status === 'fulfilled' && rekapResult.value) {
-        if (rekapResult.value.summary) {
-          setRekapSummary(rekapResult.value.summary);
-        }
-        if (Array.isArray(rekapResult.value.rekapList)) {
-          setRekapList(rekapResult.value.rekapList);
-          
-          const cleanNik = (inspectorNik || '').toLowerCase().trim();
-          const cleanName = (inspectorName || '').toLowerCase().trim();
-          
-          const found = rekapResult.value.rekapList.find((emp: any) => {
-            const empNik = (emp.nik || '').toLowerCase().trim();
-            const empName = (emp.name || '').toLowerCase().trim();
-            return (cleanNik && empNik === cleanNik) || 
-                   (cleanName && (empName === cleanName || empName.includes(cleanName) || cleanName.includes(empName)));
-          });
-
-          if (found && found.status === 'BELUM' && !found.isCuti) {
-            setUserInspectionItem(found);
-          } else {
-            setUserInspectionItem(null);
-            setShowInspectionReminder(false);
-          }
-        }
       }
 
       if (employeesResult.status === 'fulfilled' && Array.isArray(employeesResult.value) && employeesResult.value.length > 0) {

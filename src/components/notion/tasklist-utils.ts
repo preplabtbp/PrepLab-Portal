@@ -49,16 +49,24 @@ export function parseTasklist(text?: string | null): TasklistProgress {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    // First try standard markdown tasklist: - [x] or - [ ]
-    let match = trimmed.match(/^[-*]?\s*\[([ xX])\]\s*(.+)$/);
+    // First try standard markdown tasklist: - [x] or - [ ] or [x] or [ ]
+    let match = trimmed.match(/^[-*•]?\s*\[([ xX])\]\s*(.+)$/);
     let isLegacyMatch = false;
     let isCheckedLegacy = false;
     let legacyText = '';
 
     if (!match) {
-      // Check legacy subtask tags: - Kegiatan **(Done)** or • Kegiatan **(OPEN)**
-      const legacyDone = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/i);
-      const legacyOpen = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/i);
+      // Check unicode checkbox: ☑ or ☐
+      const uniMatch = trimmed.match(/^[-*•]?\s*([☑☐])\s*(.+)$/);
+      if (uniMatch) {
+        match = [uniMatch[0], uniMatch[1] === '☑' ? 'x' : ' ', uniMatch[2]];
+      }
+    }
+
+    if (!match) {
+      // Check legacy subtask tags: - Kegiatan **(Done)** or • Kegiatan **(OPEN)** or (Done) / (OP)
+      const legacyDone = trimmed.match(/^[-*•]?\s*(.+?)\s*(?:\*\*\(?|\(?)(Done|Closed|Close|Finish|Selesai|CL)(?:\)?\*\*|\)?)\s*$/i);
+      const legacyOpen = trimmed.match(/^[-*•]?\s*(.+?)\s*(?:\*\*\(?|\(?)(Open|OP|Belum|In Progress|Pending)(?:\)?\*\*|\)?)\s*$/i);
       if (legacyDone) {
         isLegacyMatch = true;
         isCheckedLegacy = true;
@@ -568,9 +576,10 @@ export function reorderTasklistItems(originalText: string, newItems: TaskItem[])
   return `${parsed.cleanText.trim()}${delimiter}${delimiter}${checklistLines.join(delimiter)}`;
 }
 
-// Notion color definitions for rich text highlighting
+// Notion color definitions for rich text highlighting (authentic Notion palette)
 export const NOTION_COLORS: Record<string, { label: string; textClass: string; hex: string; bgClass: string; borderClass: string }> = {
-  default: { label: 'Hitam (Default)', textClass: 'text-black', hex: '#111827', bgClass: 'bg-slate-100', borderClass: 'border-slate-300' },
+  default: { label: 'Hitam (Default)', textClass: 'text-[#37352f]', hex: '#37352f', bgClass: 'bg-slate-100', borderClass: 'border-slate-300' },
+  black: { label: 'Hitam', textClass: 'text-[#37352f]', hex: '#37352f', bgClass: 'bg-slate-100', borderClass: 'border-slate-300' },
   blue: { label: 'Biru', textClass: 'text-blue-600', hex: '#2563eb', bgClass: 'bg-blue-50', borderClass: 'border-blue-300' },
   green: { label: 'Hijau', textClass: 'text-emerald-600', hex: '#16a34a', bgClass: 'bg-emerald-50', borderClass: 'border-emerald-300' },
   orange: { label: 'Oranye', textClass: 'text-orange-600', hex: '#ea580c', bgClass: 'bg-orange-50', borderClass: 'border-orange-300' },
@@ -578,10 +587,11 @@ export const NOTION_COLORS: Record<string, { label: string; textClass: string; h
   purple: { label: 'Ungu', textClass: 'text-purple-600', hex: '#9333ea', bgClass: 'bg-purple-50', borderClass: 'border-purple-300' },
   amber: { label: 'Kuning / Amber', textClass: 'text-amber-600', hex: '#d97706', bgClass: 'bg-amber-50', borderClass: 'border-amber-300' },
   pink: { label: 'Pink', textClass: 'text-pink-600', hex: '#db2777', bgClass: 'bg-pink-50', borderClass: 'border-pink-300' },
-  gray: { label: 'Abu-abu', textClass: 'text-slate-500', hex: '#64748b', bgClass: 'bg-slate-50', borderClass: 'border-slate-300' }
+  gray: { label: 'Abu-abu', textClass: 'text-slate-500', hex: '#787774', bgClass: 'bg-slate-50', borderClass: 'border-slate-300' }
 };
 
 const COLOR_ALIASES: Record<string, string> = {
+  hitam: 'black',
   biru: 'blue',
   hijau: 'green',
   oranye: 'orange',
@@ -604,14 +614,14 @@ export function formatColorTagsToHtml(text?: string | null): string {
     const rawKey = colorKey.toLowerCase();
     const key = COLOR_ALIASES[rawKey] || rawKey;
     const hex = NOTION_COLORS[key]?.hex || colorKey;
-    return `<span style="color: ${hex}; font-weight: 600;">${content}</span>`;
+    return `<span data-color="${key}" style="color: ${hex};">${content}</span>`;
   });
 
   // Shorthand tags: [blue]...[/blue], [green]...[/green], [orange]...[/orange], [red]...[/red], etc.
   for (const [key, conf] of Object.entries(NOTION_COLORS)) {
     if (key === 'default') continue;
     const regex = new RegExp(`\\[${key}\\]([\\s\\S]*?)\\[\\/${key}\\]`, 'gi');
-    out = out.replace(regex, `<span style="color: ${conf.hex}; font-weight: 600;">$1</span>`);
+    out = out.replace(regex, `<span data-color="${key}" style="color: ${conf.hex};">$1</span>`);
   }
 
   // Indonesian shorthand aliases: [biru]...[/biru], [merah]...[/merah], etc.
@@ -619,7 +629,7 @@ export function formatColorTagsToHtml(text?: string | null): string {
     const conf = NOTION_COLORS[enKey];
     if (conf) {
       const regex = new RegExp(`\\[${idKey}\\]([\\s\\S]*?)\\[\\/${idKey}\\]`, 'gi');
-      out = out.replace(regex, `<span style="color: ${conf.hex}; font-weight: 600;">$1</span>`);
+      out = out.replace(regex, `<span data-color="${enKey}" style="color: ${conf.hex};">$1</span>`);
     }
   }
 
@@ -686,6 +696,10 @@ export function markdownToVisualHtml(text?: string | null): string {
 
   let html = text.replace(/\r\n/g, '\n');
 
+  // Normalize bullet prefixes missing spaces (e.g. -**text** or •text or *text or _**text**)
+  html = html.replace(/^(\s*[-*•])(?=[^\s])/gm, '$1 ');
+  html = html.replace(/^(\s*_[_*])(?=[^\s])/gm, '- ');
+
   // Convert status badges
   html = html.replace(/\*\*\(Done\)\*\*|\[Done\]|\(Done\)/gi, '<span class="badge-done inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 mr-1 select-none">DONE</span>&nbsp;');
   html = html.replace(/\*\*\(OPEN\)\*\*|\[OPEN\]|\(OPEN\)/gi, '<span class="badge-open inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 mr-1 select-none">OPEN</span>&nbsp;');
@@ -693,9 +707,9 @@ export function markdownToVisualHtml(text?: string | null): string {
   // Convert Color tags like [blue]...[/blue], [green]...[/green], [orange]...[/orange], etc.
   html = formatColorTagsToHtml(html);
 
-  // Convert Bold **text** and __text__
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  // Convert Bold **text** and __text__ (support multiline/embedded HTML spans)
+  html = html.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([\s\S]+?)__/g, '<strong>$1</strong>');
 
   // Convert Italic *text* and _text_ (excluding HTML tags)
   html = html.replace(/(^|[^\*])\*([^\*\n]+)\*([^\*]|$)/g, '$1<em>$2</em>$3');
@@ -714,8 +728,8 @@ export function markdownToVisualHtml(text?: string | null): string {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      const content = trimmed.replace(/^[•\-\*]\s+/, '');
+    if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ') || /^[•\-\*]/.test(trimmed)) {
+      const content = trimmed.replace(/^[•\-\*]\s*/, '');
       if (!inUl) {
         if (inOl) { processedLines.push('</ol>'); inOl = false; }
         processedLines.push('<ul class="list-disc pl-5 space-y-1">');
@@ -806,11 +820,15 @@ export function visualHtmlToMarkdown(html?: string | null): string {
 
     switch (tag) {
       case 'strong':
-      case 'b':
-        return inner.trim() ? `**${inner.trim()}**` : '';
+      case 'b': {
+        const clean = inner.replace(/^\*\*([\s\S]+)\*\*$/, '$1');
+        return clean.trim() ? `**${clean}**` : '';
+      }
       case 'em':
-      case 'i':
-        return inner.trim() ? `*${inner.trim()}*` : '';
+      case 'i': {
+        const clean = inner.replace(/^\*([\s\S]+)\*$/, '$1');
+        return clean.trim() ? `*${clean}*` : '';
+      }
       case 'u':
         return inner.trim() ? `<u>${inner.trim()}</u>` : '';
       case 's':
@@ -823,7 +841,8 @@ export function visualHtmlToMarkdown(html?: string | null): string {
       case 'font': {
         const dataColor = el.getAttribute('data-color');
         if (dataColor && NOTION_COLORS[dataColor] && dataColor !== 'default') {
-          return `[${dataColor}]${inner}[/${dataColor}]`;
+          const cleanInner = stripColorTags(inner);
+          return `[${dataColor}]${cleanInner}[/${dataColor}]`;
         }
 
         const style = el.getAttribute('style') || '';
@@ -849,7 +868,8 @@ export function visualHtmlToMarkdown(html?: string | null): string {
             }
           }
           if (foundKey && foundKey !== 'default') {
-            return `[${foundKey}]${inner}[/${foundKey}]`;
+            const cleanInner = stripColorTags(inner);
+            return `[${foundKey}]${cleanInner}[/${foundKey}]`;
           }
         }
         return inner;
