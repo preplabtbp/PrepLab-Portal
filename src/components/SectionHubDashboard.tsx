@@ -10,8 +10,24 @@ import {
   MessageSquare,
   CalendarDays,
   Clock,
-  MapPin
+  MapPin,
+  Camera,
+  Image as ImageIcon,
+  Sparkles,
+  X,
+  Check
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { PortalImagePickerModal } from './PortalImagePickerModal';
+
+export const COVER_PRESETS = [
+  { id: 'mining_site', name: 'Site Tambang Nikel', url: 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?q=80&w=1600&auto=format&fit=crop' },
+  { id: 'lab_modern', name: 'Laboratorium Kimia Modern', url: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=1600&auto=format&fit=crop' },
+  { id: 'metallurgy', name: 'Analisis Spektrum XRF', url: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=1600&auto=format&fit=crop' },
+  { id: 'industrial', name: 'Industrial & Crusher Plant', url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?q=80&w=1600&auto=format&fit=crop' },
+  { id: 'mineral_rock', name: 'Geologi Ore & Mineral', url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1600&auto=format&fit=crop' },
+  { id: 'teal_gradient', name: 'Minimalist Teal Glow', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1600&auto=format&fit=crop' }
+];
 
 interface SectionHubDashboardProps {
   post: any;
@@ -47,6 +63,40 @@ export function SectionHubDashboard({
     const pUniverse = p.pt === 'GTS' ? 'GTS' : 'TBP';
     return pUniverse === currentUniverse;
   });
+
+  // Cover Image Customization State
+  const [currentCover, setCurrentCover] = useState<string>(post?.coverImage || '');
+  const [showCoverModal, setShowCoverModal] = useState<boolean>(false);
+  const [coverInputUrl, setCoverInputUrl] = useState<string>('');
+  const [isSavingCover, setIsSavingCover] = useState<boolean>(false);
+
+  const handleSaveCover = async (urlToSave: string) => {
+    if (!post?.id) return;
+    setIsSavingCover(true);
+    try {
+      const res = await fetch(`/api/bulletin/${post.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...post,
+          coverImage: urlToSave
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        setCurrentCover(urlToSave);
+        if (post) post.coverImage = urlToSave;
+        setShowCoverModal(false);
+        toast.success('Cover gambar Labnote berhasil disimpan!');
+      } else {
+        toast.error(json.message || 'Gagal menyimpan cover gambar');
+      }
+    } catch {
+      toast.error('Gagal memperbarui cover gambar');
+    } finally {
+      setIsSavingCover(false);
+    }
+  };
 
   // Calendar State for Section Agenda
   const [currentCalDate, setCurrentCalDate] = useState(() => new Date());
@@ -564,13 +614,29 @@ export function SectionHubDashboard({
       {/* 1. Cover Banner Image (Matching Notion Banner Aesthetics - Full Width) */}
       <div className="w-full h-48 sm:h-60 md:h-72 lg:h-80 overflow-hidden relative group rounded-2xl border border-slate-200/80 shadow-xs bg-slate-100">
         <img
-          src={post.coverImage && post.coverImage.startsWith('http') ? post.coverImage : config.bannerUrl}
+          src={currentCover && currentCover.startsWith('http') ? currentCover : (post?.coverImage && post.coverImage.startsWith('http') ? post.coverImage : config.bannerUrl)}
           alt={sectionTitle}
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).src = config.bannerUrl;
           }}
           className="w-full h-full object-cover object-center group-hover:scale-101 transition-transform duration-700"
         />
+
+        {/* Change Cover Button (Visible on Hover) */}
+        <div className="absolute right-3.5 bottom-3.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+          <button
+            type="button"
+            onClick={() => {
+              setCoverInputUrl(currentCover || post?.coverImage || config.bannerUrl);
+              setShowCoverModal(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-950 text-white text-xs font-bold backdrop-blur-md border border-white/20 flex items-center gap-1.5 shadow-xl transition-all active:scale-95 cursor-pointer"
+            title="Ubah cover gambar banner halaman Labnote ini"
+          >
+            <Camera className="w-3.5 h-3.5 text-teal-400" />
+            <span>Ganti Cover Banner</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. Header Area: Floating Icon, Metadata Actions, Big Title, Home Button */}
@@ -950,6 +1016,18 @@ export function SectionHubDashboard({
           </div>
         </div>
       )}
+
+      {/* 6. Universal Google Drive Galeri & Upload Cover Modal */}
+      <PortalImagePickerModal
+        isOpen={showCoverModal}
+        onClose={() => setShowCoverModal(false)}
+        onSelectImage={(url) => handleSaveCover(url)}
+        currentImage={currentCover || post?.coverImage || config.bannerUrl}
+        title={`Ubah Banner Cover - ${sectionTitle}`}
+        description="Pilih foto dari Galeri Portal Google Drive, upload foto baru, atau gunakan preset tema resmi."
+        allowClear={true}
+        onClearImage={() => handleSaveCover(config.bannerUrl)}
+      />
     </div>
   );
 }

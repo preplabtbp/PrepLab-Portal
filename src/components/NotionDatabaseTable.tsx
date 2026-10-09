@@ -2239,13 +2239,13 @@ export function NotionDatabaseTable({
     toast.success(`Sub-kegiatan "${cleanTitle}" berhasil ditambahkan`);
   };
 
-  // Migrate existing checklists in Keterangan to hierarchical sub-items
-  const handleMigrateChecklistsToSubItems = () => {
+  // Helper to migrate existing checklists in Keterangan to hierarchical sub-items
+  const migrateRowsSubtasksInternal = (inputRows: TableRowData[]) => {
     let migratedCount = 0;
     const newRows: TableRowData[] = [];
 
-    for (let i = 0; i < localRows.length; i++) {
-      const row = { ...localRows[i] };
+    for (let i = 0; i < inputRows.length; i++) {
+      const row = { ...inputRows[i] };
       const isSub = isSubItemRow(row);
 
       if (isSub) {
@@ -2258,7 +2258,7 @@ export function NotionDatabaseTable({
 
       if (taskProg.hasTasklist && taskProg.items.length > 0) {
         // Strip tasklist lines from parent row's Keterangan, keep non-checklist text
-        row['Keterangan'] = taskProg.cleanText || '';
+        row['Keterangan'] = taskProg.cleanText || '-';
         newRows.push(row);
 
         const parentIndex = newRows.length - 1;
@@ -2276,7 +2276,7 @@ export function NotionDatabaseTable({
             number: '',
             'Jenis kegiatan': subTitle,
             'Jenis Kegiatan': subTitle,
-            Keterangan: item.note || '',
+            Keterangan: item.note || '-',
             PIC: parentPIC,
             Priority: 'Normal',
             Status: item.checked ? 'Closed' : 'Open',
@@ -2294,6 +2294,33 @@ export function NotionDatabaseTable({
         newRows.push(row);
       }
     }
+
+    return { newRows, migratedCount };
+  };
+
+  // Auto-migration effect: whenever localRows contains trapped checklists in Keterangan, migrate automatically
+  useEffect(() => {
+    if (!localRows || localRows.length === 0) return;
+    const hasAnyChecklists = localRows.some(r => {
+      if (isSubItemRow(r)) return false;
+      const ket = getRowVal(r, 'Keterangan') || '';
+      const taskProg = parseTasklist(ket);
+      return taskProg.hasTasklist && taskProg.items.length > 0;
+    });
+
+    if (hasAnyChecklists) {
+      const { newRows, migratedCount } = migrateRowsSubtasksInternal(localRows);
+      if (migratedCount > 0) {
+        setLocalRows(newRows);
+        setOriginalRowsBackup(JSON.parse(JSON.stringify(newRows)));
+        saveTableToBackend(newRows);
+      }
+    }
+  }, [localRows]);
+
+  // Migrate existing checklists in Keterangan to hierarchical sub-items
+  const handleMigrateChecklistsToSubItems = () => {
+    const { newRows, migratedCount } = migrateRowsSubtasksInternal(localRows);
 
     if (migratedCount > 0) {
       setLocalRows(newRows);
@@ -4431,44 +4458,16 @@ export function NotionDatabaseTable({
                                       {isEditingThis ? (
                                         <NotionInlineEditor
                                           initialValue={val}
-                                          fieldLabel={isSubItem ? "Keterangan" : "Keterangan & Tasklist"}
+                                          fieldLabel="Keterangan"
                                           multiline={true}
                                           isNotionLight={isNotionLight}
-                                          allowTasklistMode={!isSubItem}
+                                          allowTasklistMode={false}
                                           onSave={(newVal) => {
                                             handleUpdateCellDirect(actualRowIndex, colName, newVal);
                                             setActiveInlineEditor(null);
                                           }}
                                           onCancel={() => setActiveInlineEditor(null)}
                                         />
-                                      ) : (!isSubItem && taskProgress.hasTasklist) ? (
-                                        <div 
-                                          className="relative group/cell cursor-pointer"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
-                                          }}
-                                        >
-                                          <div className="flex items-start justify-between gap-1">
-                                            <NotionTasklistView
-                                              progress={taskProgress}
-                                              onToggleTask={(taskIdx) => handleToggleTasklistDirect(actualRowIndex, colName, taskIdx)}
-                                              compact={fitPageMode}
-                                              hideProgressBar={true}
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
-                                              }}
-                                              title="Edit keterangan & tasklist langsung"
-                                              className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
-                                            >
-                                              <Edit2 className="w-3 h-3" />
-                                            </button>
-                                          </div>
-                                        </div>
                                       ) : (
                                         <div 
                                           className="relative group/cell flex items-start justify-between gap-1 cursor-pointer"

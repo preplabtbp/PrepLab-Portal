@@ -70,6 +70,7 @@ import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
 import { userPreferencesRouter } from "./server/routes/userPreferences.js";
+import { galleryRouter } from "./server/routes/gallery.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -663,6 +664,12 @@ const app = express();
         // Emit single canonical message event to room members (no duplicate broadcast)
         io.to(room).emit('new_message', confirmedMsg);
         
+        // PENTING: Chat di Tempat Nongkrong (room === 'lounge') HANYA untuk interaksi visual lokal
+        // di Tempat Nongkrong. JANGAN PERNAH dibuat notifikasi lonceng, push notification, atau mention apapun!
+        if (room === 'lounge') {
+          return;
+        }
+
         // --- PROCESS MENTIONS ---
         const targetMentionNiks = new Set<string>();
         if (Array.isArray(msg.mentionedNiks)) {
@@ -868,7 +875,8 @@ const app = express();
     '/api/chat',
     '/api/presence',
     '/api/pdf',
-    '/api/user'
+    '/api/user',
+    '/api/gallery'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -923,6 +931,7 @@ const app = express();
   app.use(logbookRouter);
   app.use(clinicRouter);
   app.use("/api/user", userPreferencesRouter);
+  app.use(galleryRouter);
 
   // --- PRESENCE ROUTES ---
   app.get('/api/presence/online', (req, res) => {

@@ -49,16 +49,24 @@ export function parseTasklist(text?: string | null): TasklistProgress {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    // First try standard markdown tasklist: - [x] or - [ ]
-    let match = trimmed.match(/^[-*]?\s*\[([ xX])\]\s*(.+)$/);
+    // First try standard markdown tasklist: - [x] or - [ ] or [x] or [ ]
+    let match = trimmed.match(/^[-*•]?\s*\[([ xX])\]\s*(.+)$/);
     let isLegacyMatch = false;
     let isCheckedLegacy = false;
     let legacyText = '';
 
     if (!match) {
-      // Check legacy subtask tags: - Kegiatan **(Done)** or • Kegiatan **(OPEN)**
-      const legacyDone = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/i);
-      const legacyOpen = trimmed.match(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/i);
+      // Check unicode checkbox: ☑ or ☐
+      const uniMatch = trimmed.match(/^[-*•]?\s*([☑☐])\s*(.+)$/);
+      if (uniMatch) {
+        match = [uniMatch[0], uniMatch[1] === '☑' ? 'x' : ' ', uniMatch[2]];
+      }
+    }
+
+    if (!match) {
+      // Check legacy subtask tags: - Kegiatan **(Done)** or • Kegiatan **(OPEN)** or (Done) / (OP)
+      const legacyDone = trimmed.match(/^[-*•]?\s*(.+?)\s*(?:\*\*\(?|\(?)(Done|Closed|Close|Finish|Selesai|CL)(?:\)?\*\*|\)?)\s*$/i);
+      const legacyOpen = trimmed.match(/^[-*•]?\s*(.+?)\s*(?:\*\*\(?|\(?)(Open|OP|Belum|In Progress|Pending)(?:\)?\*\*|\)?)\s*$/i);
       if (legacyDone) {
         isLegacyMatch = true;
         isCheckedLegacy = true;

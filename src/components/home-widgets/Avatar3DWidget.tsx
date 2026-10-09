@@ -57,13 +57,16 @@ export const OUTFIT_ITEMS: AvatarItem[] = [
 ];
 
 export const EYE_ITEMS: AvatarItem[] = [
-  // 4 Starters
+  // Starters
   { id: 'glasses_k3', name: 'Kacamata K3 Bening Anti-Debu', isUnlockedDefault: true, unlockReq: 'Starter Gratis', hex: '#0284C7' },
-  { id: 'normal', name: 'Mata Ramah', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
-  { id: 'happy', name: 'Mata Senyum Happy (^ ^)', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
-  { id: 'wink', name: 'Kedip Mata Ceria ;)', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
+  { id: 'normal', name: 'Wajah Ramah Senyum', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
+  { id: 'happy', name: 'Mata Senyum Bahagia (^ ^)', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
+  { id: 'wink', name: 'Kedip Percaya Diri ;)', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
+  { id: 'focus', name: 'Fokus & Serius (Analis Lab)', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
+  { id: 'kumis_jenggot', name: 'Kumis & Janggut Rapi Tambang', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
+  { id: 'laugh', name: 'Tertawa Ceria Lebar :D', isUnlockedDefault: true, unlockReq: 'Starter Gratis' },
   // Unlockables
-  { id: 'sunglasses', name: 'Kacamata Hitam Cool', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#0F172A' },
+  { id: 'sunglasses', name: 'Kacamata Hitam Cool Lapangan', isUnlockedDefault: false, unlockReq: 'Buka di Level 2 (100 XP)', hex: '#0F172A' },
   { id: 'goggles_furnace', name: 'Goggles Furnace 1050°C', isUnlockedDefault: false, unlockReq: 'Buka di Level 3 (250 XP)', hex: '#EA580C' }
 ];
 
@@ -88,11 +91,14 @@ export const BOOTS_ITEMS: AvatarItem[] = [
 ];
 
 export const SKIN_TONES = [
-  { id: 'tan', name: 'Sawo Matang', skin: '#E0AC69', skinShadow: '#8D5524' },
-  { id: 'fair', name: 'Kuning Langsat', skin: '#F1C27D', skinShadow: '#C68642' },
-  { id: 'light', name: 'Putih Cerah', skin: '#FFDBAC', skinShadow: '#E0AC69' },
-  { id: 'bronze', name: 'Tan Bronze', skin: '#C68642', skinShadow: '#5C3A21' },
-  { id: 'dark', name: 'Eksotis Gelap', skin: '#8D5524', skinShadow: '#3A2010' }
+  { id: 'tan', name: 'Sawo Matang Alami', skin: '#E0AC69', skinShadow: '#8D5524' },
+  { id: 'tan_warm', name: 'Sawo Matang Hangat', skin: '#D29758', skinShadow: '#7B4318' },
+  { id: 'fair', name: 'Kuning Langsat Khas Nusantara', skin: '#F1C27D', skinShadow: '#C68642' },
+  { id: 'fair_bright', name: 'Kuning Langsat Cerah', skin: '#FCE0B6', skinShadow: '#DF9B52' },
+  { id: 'light', name: 'Putih Gading / Cerah', skin: '#FFE5C8', skinShadow: '#E0AC69' },
+  { id: 'bronze', name: 'Tan Bronze Lapangan', skin: '#C68642', skinShadow: '#5C3A21' },
+  { id: 'dark', name: 'Eksotis Gelap Manis', skin: '#8D5524', skinShadow: '#3A2010' },
+  { id: 'deep_bronze', name: 'Deep Bronze Elegan', skin: '#6F3E1B', skinShadow: '#2C1405' }
 ];
 
 // -------------------------------------------------------------
@@ -520,6 +526,20 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
             {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-lime-600" /> : <VolumeX className="w-3.5 h-3.5 opacity-40" />}
           </button>
 
+          {/* Direct Button: Wajah & Kulit */}
+          <button
+            type="button"
+            onClick={() => {
+              setWardrobeTab('eyes');
+              setShowWardrobe(true);
+            }}
+            className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-rose-100 hover:bg-rose-200 text-black border border-rose-300 flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+            title="Kustomisasi Wajah, Ekspresi, & Skin Tone Avatar"
+          >
+            <Smile className="w-3 h-3 text-rose-700" />
+            <span className="text-black">Wajah &amp; Kulit</span>
+          </button>
+
           {/* MASUK TEMPAT NONGKRONG BUTTON */}
           <button
             type="button"
@@ -829,12 +849,12 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
               {/* Navigation Tabs */}
               <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-[var(--border-main)] text-xs font-bold">
                 {[
+                  { id: 'eyes', label: 'Wajah & Ekspresi', count: EYE_ITEMS.length },
+                  { id: 'skin', label: 'Warna Kulit', count: SKIN_TONES.length },
                   { id: 'head', label: 'Pelindung / Helm', count: HEADWEAR_ITEMS.length },
                   { id: 'outfit', label: 'Seragam / APD', count: OUTFIT_ITEMS.length },
-                  { id: 'eyes', label: 'Mata / Kacamata', count: EYE_ITEMS.length },
                   { id: 'acc', label: 'Aksesoris K3', count: ACCESSORY_ITEMS.length },
                   { id: 'boots', label: 'Safety Boots', count: BOOTS_ITEMS.length },
-                  { id: 'skin', label: 'Warna Kulit', count: SKIN_TONES.length },
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -1182,29 +1202,63 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
 
                 {/* 6. SKIN TONE */}
                 {wardrobeTab === 'skin' && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    {SKIN_TONES.map(s => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          setSkin(s);
-                          saveAppearance({ skinId: s.id });
-                          playRetroSound('beep');
-                        }}
-                        className={`p-3 rounded-2xl border flex items-center gap-2.5 transition-all text-left ${
-                          skin.id === s.id 
-                            ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-950/30 ring-1 ring-lime-500' 
-                            : 'border-[var(--border-main)] hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        <div 
-                          className="w-5 h-5 rounded-full border border-black/20 shadow-xs flex-shrink-0"
-                          style={{ backgroundColor: s.skin }}
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-[var(--text-main)]">Palet Warna Kulit Khas Personil</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">Pilih warna kulit bawaan atau sesuaikan sendiri dengan color picker.</div>
+                      </div>
+                      {/* Custom color picker */}
+                      <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 shadow-xs cursor-pointer hover:border-lime-500 transition-all">
+                        <span className="text-[10px] font-bold text-[var(--text-main)]">Pilih Bebas:</span>
+                        <input
+                          type="color"
+                          value={skin.skin}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            // Generate darker shade for shadow
+                            const r = Math.max(0, parseInt(val.slice(1, 3), 16) - 70);
+                            const g = Math.max(0, parseInt(val.slice(3, 5), 16) - 70);
+                            const b = Math.max(0, parseInt(val.slice(5, 7), 16) - 70);
+                            const shadowHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+                            const customSkin = {
+                              id: 'custom',
+                              name: 'Kustom Pilihan Sendiri',
+                              skin: val,
+                              skinShadow: shadowHex
+                            };
+                            setSkin(customSkin);
+                            saveAppearance({ skinId: 'custom', customSkinColor: val, customSkinShadow: shadowHex });
+                          }}
+                          className="w-6 h-6 rounded-md border-0 p-0 cursor-pointer"
                         />
-                        <span className="text-xs font-semibold text-[var(--text-main)]">{s.name}</span>
-                      </button>
-                    ))}
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {SKIN_TONES.map(s => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setSkin(s);
+                            saveAppearance({ skinId: s.id });
+                            playRetroSound('beep');
+                          }}
+                          className={`p-3 rounded-2xl border flex items-center gap-2.5 transition-all text-left ${
+                            skin.id === s.id 
+                              ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-950/30 ring-1 ring-lime-500' 
+                              : 'border-[var(--border-main)] hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <div 
+                            className="w-5 h-5 rounded-full border border-black/20 shadow-xs flex-shrink-0"
+                            style={{ backgroundColor: s.skin }}
+                          />
+                          <span className="text-xs font-semibold text-[var(--text-main)] truncate">{s.name}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

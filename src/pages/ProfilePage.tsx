@@ -5,7 +5,7 @@ import {
   Users, UserCircle2, ArrowLeft, Plane, Info, X, Camera, 
   Trash2, Image as ImageIcon, Calendar, Sparkles, Check, Upload, RefreshCw,
   Trophy, Award, Shield, ChevronRight, Zap, Star, Medal, Crown, BarChart3,
-  MoveVertical, Sliders
+  MoveVertical, Sliders, FolderHeart
 } from 'lucide-react';
 import { getRankByXp } from '../lib/pointBlankRanks';
 import { getRosterData } from '../sheets-api';
@@ -13,6 +13,7 @@ import { motion, useDragControls } from 'motion/react';
 import { toast } from 'sonner';
 import { UsernamePromptModal } from '../components/UsernamePromptModal';
 import { PixelAvatarModal } from '../components/PixelAvatarModal';
+import { PortalImagePickerModal } from '../components/PortalImagePickerModal';
 import { 
   getFrameById, 
   TIERED_ACHIEVEMENTS, 
@@ -123,6 +124,7 @@ export function ProfilePage({
     return 50;
   });
   const [showPositionControl, setShowPositionControl] = useState(false);
+  const [showPortalGalleryPicker, setShowPortalGalleryPicker] = useState(false);
 
   const handleSaveCoverPosition = (newPos: number) => {
     setCoverPosition(newPos);
@@ -1719,25 +1721,39 @@ export function ProfilePage({
                 )}
               </div>
 
-              {/* Action 1: Upload Custom Photo */}
+              {/* Action 1: Upload Custom Photo & Galeri Portal */}
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider block" style={{ color: 'var(--text-muted)' }}>
-                  Unggah Foto Sendiri
+                  Galeri Portal (Google Drive) &amp; Unggah Foto
                 </label>
-                <button
-                  type="button"
-                  onClick={() => coverFileInputRef.current?.click()}
-                  disabled={isUploadingCover}
-                  className="w-full py-3 px-4 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2.5 font-semibold text-xs sm:text-sm transition-all active:scale-98 cursor-pointer hover:border-teal-500"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #F8FAFC)',
-                    borderColor: 'var(--border-main, #CBD5E1)',
-                    color: 'var(--primary, #0D9488)'
-                  }}
-                >
-                  <Upload className="w-4 h-4 animate-bounce" />
-                  <span>{isUploadingCover ? 'Mengompresi Gambar...' : 'Pilih Foto Wallpaper dari Galeri / Kamera'}</span>
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCoverModal(false);
+                      setShowPortalGalleryPicker(true);
+                    }}
+                    className="py-3 px-3.5 rounded-2xl border-2 flex items-center justify-center gap-2 font-bold text-xs transition-all active:scale-98 cursor-pointer border-teal-500 bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 hover:bg-teal-100/60 shadow-xs"
+                  >
+                    <FolderHeart className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <span>Pilih dari Galeri Portal (Drive)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => coverFileInputRef.current?.click()}
+                    disabled={isUploadingCover}
+                    className="py-3 px-3.5 rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 font-semibold text-xs transition-all active:scale-98 cursor-pointer hover:border-teal-500"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #F8FAFC)',
+                      borderColor: 'var(--border-main, #CBD5E1)',
+                      color: 'var(--primary, #0D9488)'
+                    }}
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>{isUploadingCover ? 'Mengompresi...' : 'Upload dari Perangkat'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Action 2: Preset Wallpapers */}
@@ -1836,6 +1852,20 @@ export function ProfilePage({
         leaderboardList={profileLeaderboard}
         initialTargetNik={inspectorNik}
         userGamification={gamificationData}
+      />
+
+      <PortalImagePickerModal
+        isOpen={showPortalGalleryPicker}
+        onClose={() => setShowPortalGalleryPicker(false)}
+        onSelectImage={(url) => {
+          handleSetPresetCover(url);
+          setShowPortalGalleryPicker(false);
+        }}
+        currentImage={cover || ''}
+        title="Pilih Wallpaper Profil dari Galeri Portal"
+        description="Pilih foto dari Galeri Portal Google Drive atau unggah baru untuk wallpaper profil Anda."
+        allowClear={true}
+        onClearImage={handleRemoveCover}
       />
     </>
   );

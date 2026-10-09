@@ -7,6 +7,7 @@ import {
 import { getGlobalSocket, joinRoom, leaveRoom } from '../../lib/socketClient';
 import { getRankByXp } from '../../lib/pointBlankRanks';
 import { TbpAvatarCharacter } from '../avatar/TbpAvatarCharacter';
+import { SKIN_TONES } from './Avatar3DWidget';
 import { 
   TeakParkBench, 
   StandingAshtray, 
@@ -213,6 +214,15 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [selectedAvatarForInteract, setSelectedAvatarForInteract] = useState<InRoomAvatar | null>(null);
   const [hoveredFurniture, setHoveredFurniture] = useState<string | null>(null);
+
+  // Load user's saved avatar customization (skin tone, face expression, clothes)
+  const myCustomCfg = useMemo(() => {
+    try {
+      const saved = localStorage.getItem(`preplab_pixel_fullbody_cfg_${userNik}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  }, [userNik, isOpen]);
 
   // Resolve Username & Pangkat for current user (NEVER display full name, NEVER Game Master)
   const { effectiveUsername, effectivePangkat, effectivePangkatIcon } = useMemo(() => {
@@ -1171,15 +1181,30 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
 
                 {/* CRISP HIGH-DEFINITION TBP UNIFORM AVATAR */}
                 <div className="relative group/sprite hover:scale-105 transition-transform">
-                  <TbpAvatarCharacter
-                    actionState={av.actionState}
-                    walkFrame={av.walkFrame}
-                    facing={av.facing}
-                    userName={av.username}
-                    userNik={av.nik}
-                    width={84}
-                    height={116}
-                  />
+                  {(() => {
+                    const skinToneObj = myCustomCfg?.skinId === 'custom' 
+                      ? { skin: myCustomCfg.customSkinColor, skinShadow: myCustomCfg.customSkinShadow }
+                      : (SKIN_TONES.find(s => s.id === myCustomCfg?.skinId) || null);
+
+                    return (
+                      <TbpAvatarCharacter
+                        actionState={av.actionState}
+                        walkFrame={av.walkFrame}
+                        facing={av.facing}
+                        skinColor={isMe && skinToneObj ? skinToneObj.skin : undefined}
+                        skinShadow={isMe && skinToneObj ? skinToneObj.skinShadow : undefined}
+                        eyeId={isMe && myCustomCfg?.eyesId ? myCustomCfg.eyesId : undefined}
+                        headwearId={isMe && myCustomCfg?.headwearId ? myCustomCfg.headwearId : undefined}
+                        outfitId={isMe && myCustomCfg?.outfitId ? myCustomCfg.outfitId : undefined}
+                        accessoryId={isMe && myCustomCfg?.accessoryId ? myCustomCfg.accessoryId : undefined}
+                        bootsId={isMe && myCustomCfg?.bootsId ? myCustomCfg.bootsId : undefined}
+                        userName={av.username}
+                        userNik={av.nik}
+                        width={84}
+                        height={116}
+                      />
+                    );
+                  })()}
 
                   {!isMe && (
                     <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 opacity-0 group-hover/sprite:opacity-100 transition-opacity px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black whitespace-nowrap shadow-xl">

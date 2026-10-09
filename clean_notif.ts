@@ -13,7 +13,11 @@ async function run() {
       GROUP BY title, message, user_id, role
     );
   `);
-  console.log("Cleaned.");
+  const delLounge = await db.execute(sql`
+    DELETE FROM notifications
+    WHERE LOWER(role) = 'lounge' OR LOWER(title) LIKE '%lounge%' OR link LIKE '%lounge%'
+  `);
+  console.log("Cleaned duplicates and lounge notifications.");
   process.exit(0);
 }
 run();
