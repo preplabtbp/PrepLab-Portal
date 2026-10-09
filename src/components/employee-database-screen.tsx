@@ -299,6 +299,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
   const handleSaveNotes = async () => {
     if (!selectedEmployee?.nik) return;
+    if (!canEditCatatan) {
+      toast.error('Hanya Developer, Section Manager, Superintendent, dan Admin yang dapat mengedit catatan.');
+      return;
+    }
     setIsSavingNotes(true);
     try {
       const res = await fetch(`/api/employees/${selectedEmployee.nik}/notes`, {
@@ -474,6 +478,80 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   const canManageDatabase = useMemo(() => {
     return isSectionAdmin;
   }, [isSectionAdmin]);
+
+  // Hak akses Edit Catatan Karyawan di Dashboard:
+  // HANYA Developer, Section Manager, Superintendent, dan Admin
+  const canEditCatatan = useMemo(() => {
+    const cleanNik = (inspectorNik || '').trim().toUpperCase();
+    const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+
+    // 1. Cek Developer Whitelist & Developer Table
+    if (HARDCODED_DEVS.includes(cleanNik)) return true;
+    if (developerList.some(d => (d.nik || '').toUpperCase() === cleanNik)) return true;
+
+    // 2. Cek Profile LocalStorage
+    try {
+      const savedProfile = localStorage.getItem('p2h_inspector_profile');
+      if (savedProfile) {
+        const p = JSON.parse(savedProfile);
+        const jab = (p.jabatan || '').toLowerCase();
+        const role = (p.role || '').toLowerCase();
+        const sec = (p.section || '').toLowerCase();
+        const dept = (p.department || '').toLowerCase();
+
+        // Developer
+        if (role.includes('developer') || jab.includes('developer')) return true;
+
+        // Section Manager & Superintendent
+        if (
+          jab.includes('section manager') ||
+          jab.includes('manager') ||
+          jab.includes('superintendent') ||
+          jab.includes('spt') ||
+          jab.includes('head')
+        ) return true;
+
+        // Admin
+        if (
+          sec.includes('administrasi') || sec.includes('administration') || sec.includes('admin') ||
+          dept.includes('administrasi') || dept.includes('administration') || dept.includes('admin') ||
+          jab.includes('admin') || role.includes('admin')
+        ) return true;
+      }
+    } catch {}
+
+    // 3. Cek Data Karyawan
+    const me = employees.find(e => (e.nik || '').toUpperCase() === cleanNik);
+    if (me) {
+      const jab = (me.jabatan || '').toLowerCase();
+      const sec = (me.section || '').toLowerCase();
+      const dept = (me.department || '').toLowerCase();
+
+      // Developer
+      if (jab.includes('developer')) return true;
+
+      // Section Manager & Superintendent
+      if (
+        jab.includes('section manager') ||
+        jab.includes('manager') ||
+        jab.includes('superintendent') ||
+        jab.includes('spt') ||
+        jab.includes('head')
+      ) return true;
+
+      // Admin
+      if (
+        sec.includes('administrasi') || sec.includes('administration') || sec.includes('admin') ||
+        dept.includes('administrasi') || dept.includes('administration') || dept.includes('admin') ||
+        jab.includes('admin')
+      ) return true;
+    }
+
+    // 4. Fallback jika user adalah Section Admin
+    if (isSectionAdmin) return true;
+
+    return false;
+  }, [inspectorNik, developerList, employees, isSectionAdmin]);
 
   const fetchEmployees = async (silent = false) => {
     if (!silent && employees.length === 0) {
@@ -1622,13 +1700,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                             // Group by jabatan level
                             const jabatanLevels = [
-                              { key: 'manager', label: 'Manager', icon: '👔', color: 'bg-violet-100 text-violet-800 border-violet-200' },
-                              { key: 'superintendent', label: 'Superintendent', icon: '🏅', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-                              { key: 'supervisor', label: 'Supervisor', icon: '📋', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
-                              { key: 'foreman', label: 'Foreman', icon: '🔧', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-                              { key: 'admin', label: 'Admin / Staff', icon: '💼', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-                              { key: 'crew', label: 'Crew / Operator', icon: '⛑️', color: 'bg-slate-100 text-slate-700 border-slate-200' },
-                              { key: 'other', label: 'Lainnya', icon: '👤', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+                              { key: 'manager', label: 'Manager', color: 'bg-violet-100 text-violet-800 border-violet-200' },
+                              { key: 'superintendent', label: 'Superintendent', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+                              { key: 'supervisor', label: 'Supervisor', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+                              { key: 'foreman', label: 'Foreman', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+                              { key: 'admin', label: 'Admin / Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+                              { key: 'crew', label: 'Crew / Operator', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+                              { key: 'other', label: 'Lainnya', color: 'bg-gray-100 text-gray-700 border-gray-200' },
                             ];
 
                             const getJabatanGroup = (jabatan: string) => {
@@ -1656,7 +1734,6 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   return (
                                     <details key={lv.key} open className="group/jab">
                                       <summary className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer select-none border ${lv.color} hover:shadow-sm transition-all`}>
-                                        <span className="text-base">{lv.icon}</span>
                                         <span className="text-xs font-extrabold flex-1">{lv.label}</span>
                                         <span className="text-[11px] font-black bg-white/60 px-2 py-0.5 rounded-lg border border-black/5">{members.length} Orang</span>
                                         <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/jab:rotate-180" />
@@ -1718,13 +1795,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             }
 
                             const jabatanLevels = [
-                              { key: 'manager', label: 'Manager', icon: '👔', color: 'bg-violet-100 text-violet-800 border-violet-200' },
-                              { key: 'superintendent', label: 'Superintendent', icon: '🏅', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-                              { key: 'supervisor', label: 'Supervisor', icon: '📋', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
-                              { key: 'foreman', label: 'Foreman', icon: '🔧', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-                              { key: 'admin', label: 'Admin / Staff', icon: '💼', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-                              { key: 'crew', label: 'Crew / Operator', icon: '⛑️', color: 'bg-slate-100 text-slate-700 border-slate-200' },
-                              { key: 'other', label: 'Lainnya', icon: '👤', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+                              { key: 'manager', label: 'Manager', color: 'bg-violet-100 text-violet-800 border-violet-200' },
+                              { key: 'superintendent', label: 'Superintendent', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+                              { key: 'supervisor', label: 'Supervisor', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+                              { key: 'foreman', label: 'Foreman', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+                              { key: 'admin', label: 'Admin / Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+                              { key: 'crew', label: 'Crew / Operator', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+                              { key: 'other', label: 'Lainnya', color: 'bg-gray-100 text-gray-700 border-gray-200' },
                             ];
 
                             const getJabatanGroup = (jabatan: string) => {
@@ -1752,7 +1829,6 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   return (
                                     <details key={lv.key} open className="group/jab">
                                       <summary className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer select-none border ${lv.color} hover:shadow-sm transition-all`}>
-                                        <span className="text-base">{lv.icon}</span>
                                         <span className="text-xs font-extrabold flex-1">{lv.label}</span>
                                         <span className="text-[11px] font-black bg-white/60 px-2 py-0.5 rounded-lg border border-black/5">{members.length} Orang</span>
                                         <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/jab:rotate-180" />
@@ -1969,13 +2045,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             });
 
                             const jabatanLevels = [
-                              { key: 'manager', label: 'Manager', icon: '👔', color: 'bg-violet-100 text-violet-800 border-violet-200' },
-                              { key: 'superintendent', label: 'Superintendent', icon: '🏅', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-                              { key: 'supervisor', label: 'Supervisor', icon: '📋', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
-                              { key: 'foreman', label: 'Foreman', icon: '🔧', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-                              { key: 'admin', label: 'Admin / Staff', icon: '💼', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-                              { key: 'crew', label: 'Crew / Operator', icon: '⛑️', color: 'bg-slate-100 text-slate-700 border-slate-200' },
-                              { key: 'other', label: 'Lainnya', icon: '👤', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+                              { key: 'manager', label: 'Manager', color: 'bg-violet-100 text-violet-800 border-violet-200' },
+                              { key: 'superintendent', label: 'Superintendent', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+                              { key: 'supervisor', label: 'Supervisor', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+                              { key: 'foreman', label: 'Foreman', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+                              { key: 'admin', label: 'Admin / Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+                              { key: 'crew', label: 'Crew / Operator', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+                              { key: 'other', label: 'Lainnya', color: 'bg-gray-100 text-gray-700 border-gray-200' },
                             ];
 
                             const getJabatanGroup = (jabatan: string) => {
@@ -2011,7 +2087,6 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   return (
                                     <details key={lv.key} open className="group/jab">
                                       <summary className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer select-none border ${lv.color} hover:shadow-sm transition-all`}>
-                                        <span className="text-base">{lv.icon}</span>
                                         <span className="text-xs font-extrabold flex-1">{lv.label}</span>
                                         <span className="text-[11px] font-black bg-white/60 px-2 py-0.5 rounded-lg border border-black/5">{members.length} Orang</span>
                                         <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/jab:rotate-180" />
@@ -2422,7 +2497,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             </span>
                             <h4 className="font-extrabold text-sm text-slate-800 tracking-tight">Catatan Karyawan</h4>
                           </div>
-                          {canManageDatabase && !isEditingNotes && (
+                          {canEditCatatan && !isEditingNotes && (
                             <button
                               type="button"
                               onClick={() => {
@@ -2476,15 +2551,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         ) : (
                           <div
                             onClick={() => {
-                              if (canManageDatabase) {
+                              if (canEditCatatan) {
                                 setNoteContent(selectedEmployee.catatan || '');
                                 setIsEditingNotes(true);
                               }
                             }}
                             className={`py-3 flex-1 flex flex-col justify-center min-h-[140px] max-h-[170px] overflow-y-auto custom-scrollbar ${
-                              canManageDatabase ? 'cursor-pointer group' : ''
+                              canEditCatatan ? 'cursor-pointer group' : ''
                             }`}
-                            title={canManageDatabase ? 'Klik untuk mengubah catatan' : undefined}
+                            title={canEditCatatan ? 'Klik untuk mengubah catatan' : undefined}
                           >
                             {selectedEmployee.catatan ? (
                               <div className="pl-3.5 border-l-2 border-amber-400">
@@ -2495,7 +2570,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             ) : (
                               <div className="flex flex-col items-center justify-center text-center py-6">
                                 <p className="italic text-sm text-slate-400 font-medium">
-                                  {canManageDatabase ? 'Belum ada catatan. Klik di sini untuk menambahkan catatan...' : 'Tidak ada catatan.'}
+                                  {canEditCatatan ? 'Belum ada catatan. Klik di sini untuk menambahkan catatan...' : 'Tidak ada catatan.'}
                                 </p>
                               </div>
                             )}

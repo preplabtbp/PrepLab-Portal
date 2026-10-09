@@ -221,6 +221,59 @@ export async function isAuthorizedDatabaseEditor(editorNik?: string): Promise<bo
   return false;
 }
 
+export async function isAuthorizedNotesEditor(editorNik?: string): Promise<boolean> {
+  if (!editorNik) return false;
+  const nik = String(editorNik).trim().toUpperCase();
+  if (!nik) return false;
+
+  // Superadmins / Developer accounts
+  if (['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'].includes(nik)) return true;
+
+  try {
+    const dev = await db.select().from(developerUsers).where(eq(developerUsers.nik, nik)).limit(1);
+    if (dev.length > 0) return true;
+  } catch (e) {}
+
+  // Check Employees table for Developer, Section Manager, Superintendent, or Admin
+  try {
+    const emp = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+    if (emp.length > 0) {
+      const e = emp[0];
+      const sec = (e.section || '').toLowerCase();
+      const dep = (e.department || '').toLowerCase();
+      const jab = (e.jabatan || '').toLowerCase();
+
+      // Developer
+      if (jab.includes('developer')) return true;
+
+      // Section Manager & Superintendent
+      if (
+        jab.includes('section manager') ||
+        jab.includes('manager') ||
+        jab.includes('superintendent') ||
+        jab.includes('spt') ||
+        jab.includes('head')
+      ) {
+        return true;
+      }
+
+      // Admin / Administrasi
+      if (
+        sec.includes('admin') ||
+        sec.includes('administrasi') ||
+        dep.includes('admin') ||
+        dep.includes('administrasi') ||
+        jab.includes('admin') ||
+        jab.includes('administrasi')
+      ) {
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
 export function isLocalhostRequest(req: any): boolean {
   if (!req) return false;
   const host = req.get ? (req.get('host') || '') : (req.headers?.host || '');
@@ -1468,9 +1521,9 @@ employeesRouter.put("/:nik/notes", async (req, res) => {
     const { nik } = req.params;
     const { catatan, editorNik } = req.body;
     const requesterNik = editorNik || req.headers['x-user-nik'];
-    const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
+    const isAuth = await isAuthorizedNotesEditor(String(requesterNik || ''));
     if (!isAuth) {
-      return res.status(403).json({ status: "error", message: "Akses ditolak: Hanya Section Administration yang dapat mengubah catatan karyawan." });
+      return res.status(403).json({ status: "error", message: "Akses ditolak: Hanya Developer, Section Manager, Superintendent, atau Admin yang dapat mengubah catatan karyawan." });
     }
 
     const updated = await db.update(employees)
