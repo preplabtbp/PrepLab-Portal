@@ -1410,7 +1410,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         </div>
       )}
 
-      <div className={`flex-1 ${selectedEmployee ? 'overflow-hidden h-[calc(100vh-64px)]' : 'overflow-y-auto'}`}>
+      <div className={`flex-1 ${selectedEmployee ? 'overflow-y-auto lg:overflow-hidden min-h-0 h-auto lg:h-[calc(100vh-64px)]' : 'overflow-y-auto'}`}>
         {!selectedEmployee ? (
           /* SEARCH MODE - ENTERPRISE HERO (CLEAN WHITE) */
           <div className="w-full min-h-full flex flex-col relative overflow-hidden bg-white">
@@ -2204,10 +2204,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             initial={{ opacity: 0, y: 15 }} 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="flex flex-col lg:flex-row h-full w-full p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-[#f4faf5] via-[#edf6f0] to-[#e6f3eb] gap-4 lg:gap-6 overflow-hidden relative"
+            className="flex flex-col lg:flex-row h-auto lg:h-full w-full min-h-full p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-[#f4faf5] via-[#edf6f0] to-[#e6f3eb] gap-4 lg:gap-6 overflow-visible lg:overflow-hidden relative pb-32 lg:pb-6"
           >
             {/* SIDEBAR (Profile Info) - LUXURY EXECUTIVE PASTEL GREEN CARD */}
-            <div className="lg:w-80 xl:w-92 h-full max-h-full bg-gradient-to-br from-[#eaf6ee] via-[#dff2e5] to-[#cfead7] text-slate-800 shrink-0 shadow-xl shadow-emerald-950/5 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative overflow-hidden border border-emerald-300/60 ring-1 ring-emerald-500/10 transition-all">
+            <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-gradient-to-br from-[#eaf6ee] via-[#dff2e5] to-[#cfead7] text-slate-800 shrink-0 shadow-xl shadow-emerald-950/5 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-emerald-300/60 ring-1 ring-emerald-500/10 transition-all">
               {/* Decorative Ambient Depth Lights */}
               <div className="absolute -top-20 -left-20 w-44 h-44 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute -bottom-20 -right-20 w-44 h-44 bg-teal-300/25 rounded-full blur-3xl pointer-events-none" />
@@ -2286,7 +2286,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               </div>
 
               {/* Detail Profil Sidebar */}
-              <div className="w-full flex-1 overflow-y-auto pr-1 space-y-2 text-slate-800 divide-y divide-emerald-200/60 custom-scrollbar-pastel text-left relative z-10">
+              <div className="w-full flex-1 overflow-visible lg:overflow-y-auto pr-0 lg:pr-1 space-y-2 text-slate-800 divide-y divide-emerald-200/60 custom-scrollbar-pastel text-left relative z-10">
                 <div className="pt-2 first:pt-0">
                   <p className="text-emerald-700 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Jabatan</p>
                   <p className="font-bold text-slate-900 text-xs sm:text-sm leading-snug">{selectedEmployee.jabatan || '-'}</p>
@@ -2386,7 +2386,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             </div>
 
             {/* MAIN CONTENT AREA (CLEAN EXECUTIVE WHITE CANVAS ON PASTEL GREEN BACKDROP) */}
-            <div className="flex-1 h-full max-h-full p-5 sm:p-6 lg:p-8 overflow-y-auto bg-white/70 backdrop-blur-xs rounded-3xl shadow-xs border border-emerald-200/60 pb-24 ring-1 ring-emerald-500/5 transition-all custom-scrollbar">
+            <div className="w-full flex-1 h-auto lg:h-full lg:max-h-full p-4 sm:p-6 lg:p-8 overflow-visible lg:overflow-y-auto bg-white/70 backdrop-blur-xs rounded-3xl shadow-xs border border-emerald-200/60 pb-28 lg:pb-24 ring-1 ring-emerald-500/5 transition-all custom-scrollbar">
               
               {/* HEADER W/ SPONSOR & EDIT BUTTON */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
