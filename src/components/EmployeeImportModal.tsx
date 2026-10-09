@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { 
   X, UploadCloud, FileSpreadsheet, Download, CheckCircle2, 
-  AlertTriangle, RefreshCw, FileText, ArrowRight, Check, Eye, Image as ImageIcon
+  AlertTriangle, RefreshCw, FileText, ArrowRight, Check, Eye, Image as ImageIcon,
+  Trophy
 } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -203,7 +204,7 @@ export const MASTER_EMPLOYEE_COLUMNS = [
   "Bagian",
   "Job Grade",
   "Gol",
-  "Jabatan Baru",
+  "Jabatan",
   "Status Kontrak",
   "Tanggal Permanent",
   "Tempat Lahir",
@@ -215,8 +216,30 @@ export const MASTER_EMPLOYEE_COLUMNS = [
   "No.Telephone darurat Orang Terdekat",
   "Alamat Sesuai KTP",
   "Alamat Domisili",
-  "Foto"
 ];
+
+export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
+  if (!empOrStatus) return false;
+  const status = typeof empOrStatus === 'string'
+    ? empOrStatus
+    : (empOrStatus['Status Karyawan'] || empOrStatus['Status'] || empOrStatus['statuskaryawan'] || empOrStatus['status'] || empOrStatus.statusKaryawan || empOrStatus.status || '');
+  const s = String(status).trim().toUpperCase();
+  if (
+    s.includes('RESIGN') ||
+    s.includes('PHK') ||
+    s.includes('MUTASI') ||
+    s.includes('SPPHK') ||
+    s.includes('KELUAR') ||
+    s.includes('INACTIVE') ||
+    s.includes('NONAKTIF') ||
+    s.includes('NON AKTIF')
+  ) {
+    return true;
+  }
+  const sec = typeof empOrStatus === 'object' ? String(empOrStatus['Bagian'] || empOrStatus['Section'] || empOrStatus.section || '').trim().toUpperCase() : '';
+  if (sec.includes('#N/A')) return true;
+  return false;
+}
 
 export const ABSENSI_EMPLOYEE_COLUMNS = [
   "NO",
@@ -266,6 +289,17 @@ export const KONSELING_SPDK_COLUMNS = [
   "Tindakan Disiplin SPDK"
 ];
 
+export const ACHIEVEMENTS_COLUMNS = [
+  "NO",
+  "NIK",
+  "Nama Karyawan",
+  "Judul Achievement",
+  "Kategori",
+  "Tanggal Dicapai",
+  "Keterangan",
+  "Catatan"
+];
+
 interface EmployeeImportModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -278,11 +312,13 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [parsedAttendanceRows, setParsedAttendanceRows] = useState<any[]>([]);
   const [parsedCounselingRows, setParsedCounselingRows] = useState<any[]>([]);
+  const [parsedAchievementRows, setParsedAchievementRows] = useState<any[]>([]);
   const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
   const [detectedAttendanceHeaders, setDetectedAttendanceHeaders] = useState<string[]>([]);
   const [detectedCounselingHeaders, setDetectedCounselingHeaders] = useState<string[]>([]);
+  const [detectedAchievementHeaders, setDetectedAchievementHeaders] = useState<string[]>([]);
   const [detectedSheets, setDetectedSheets] = useState<string[]>([]);
-  const [activePreviewTab, setActivePreviewTab] = useState<'master' | 'absensi' | 'konseling'>('master');
+  const [activePreviewTab, setActivePreviewTab] = useState<'master' | 'absensi' | 'konseling' | 'achievements'>('master');
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number; percent: number; message: string } | null>(null);
@@ -296,6 +332,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
       inserted: number;
       attendanceUpdated?: number;
       counselingUpdated?: number;
+      achievementsUpdated?: number;
       errors: number;
       errorList?: string[];
     };
@@ -324,7 +361,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
       "Bagian": "Preparation",
       "Job Grade": "M2.8",
       "Gol": "II",
-      "Jabatan Baru": "Preparation Foreman",
+      "Jabatan": "Preparation Foreman",
       "Status Kontrak": "Permanent",
       "Tanggal Permanent": "26-May-19",
       "Tempat Lahir": "Desa LoLeo",
@@ -495,6 +532,20 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
       ]
     ];
 
+    // Sheet 4: Achievements
+    const achievementsData = [
+      ACHIEVEMENTS_COLUMNS,
+      [
+        "1", "02D25000001", "Deni Nugraha Perdana", "Best Safety Performance Q1", "K3 & Keselamatan", "15-Mar-2026", "Zero incident dan kepatuhan APD 100% di area preparation", "Konsisten dalam implementasi 5S harian"
+      ],
+      [
+        "2", "02D24000012", "Arif Maulana Leway", "Inovasi Kaizen Lab Efisiensi Reagen", "Inovasi & Improvement", "10-Jun-2026", "Mengurangi pemborosan reagen analisa kadar nikel hingga 15%", "Direkomendasikan untuk implementasi skala section"
+      ],
+      [
+        "3", "02D23000045", "Donald Febri Andriano Taweli", "Karyawan Teladan Bulanan", "Disiplin & Produktivitas", "01-Mei-2026", "Pencapaian throughput preparasi sampel tertinggi", "Disiplin kehadiran sempurna selama bulan evaluasi"
+      ]
+    ];
+
     const wb = XLSX.utils.book_new();
 
     const ws1 = XLSX.utils.aoa_to_sheet(masterData);
@@ -506,7 +557,10 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
     const ws3 = XLSX.utils.aoa_to_sheet(konselingData);
     XLSX.utils.book_append_sheet(wb, ws3, "Konseling & SPDK");
 
-    XLSX.writeFile(wb, "template_database_karyawan_absensi_konseling_preplab.xlsx");
+    const ws4 = XLSX.utils.aoa_to_sheet(achievementsData);
+    XLSX.utils.book_append_sheet(wb, ws4, "Achievements");
+
+    XLSX.writeFile(wb, "template_database_karyawan_absensi_konseling_achievements_preplab.xlsx");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -662,6 +716,90 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
     }
 
     return { rows, headers: KONSELING_SPDK_COLUMNS };
+  };
+
+  const parseAchievementsWorksheet = (worksheet: XLSX.WorkSheet) => {
+    if (!worksheet || !worksheet['!ref']) return { rows: [], headers: ACHIEVEMENTS_COLUMNS };
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+
+    // Find header row (check row 0, 1, 2, 3, 4)
+    let headerRowIdx = 0;
+    for (let r = 0; r <= Math.min(4, range.e.r); r++) {
+      let rowCells: string[] = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = worksheet[XLSX.utils.encode_cell({ r, c })];
+        if (cell && cell.v !== undefined) {
+          rowCells.push(String(cell.v).toLowerCase().trim());
+        }
+      }
+      const rowText = rowCells.join(' ');
+      if (
+        rowText.includes('achievement') || rowText.includes('prestasi') ||
+        rowText.includes('penghargaan') || (rowText.includes('judul') && rowText.includes('kategori')) ||
+        (rowText.includes('nik') && (rowText.includes('achievement') || rowText.includes('prestasi') || rowText.includes('judul')))
+      ) {
+        headerRowIdx = r;
+        break;
+      }
+    }
+
+    const headers: { colIdx: number; name: string; clean: string }[] = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = worksheet[XLSX.utils.encode_cell({ r: headerRowIdx, c })];
+      let headerName = cell && cell.v !== undefined ? String(cell.v).trim() : '';
+
+      if (!headerName && c < ACHIEVEMENTS_COLUMNS.length) {
+        headerName = ACHIEVEMENTS_COLUMNS[c];
+      } else if (!headerName) {
+        headerName = `Col_${XLSX.utils.encode_col(c)}`;
+      }
+
+      const clean = headerName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      headers.push({ colIdx: c, name: headerName, clean });
+    }
+
+    const rows: any[] = [];
+    for (let r = headerRowIdx + 1; r <= range.e.r; r++) {
+      const rowObj: Record<string, any> = {};
+      let hasAnyData = false;
+
+      for (const h of headers) {
+        const cellAddr = XLSX.utils.encode_cell({ r, c: h.colIdx });
+        const cell = worksheet[cellAddr];
+        let val: any = '';
+
+        if (cell) {
+          const isDateCol = h.clean.includes('tanggal') || h.clean.includes('tgl') || h.clean.includes('date');
+          if (isDateCol) {
+            val = formatExcelDate(cell.v !== undefined ? cell.v : cell.w);
+          } else {
+            val = cell.w !== undefined ? String(cell.w).trim() : cell.v !== undefined ? String(cell.v).trim() : '';
+          }
+        }
+
+        if (val !== undefined && val !== null && val !== '') {
+          hasAnyData = true;
+        }
+
+        rowObj[h.name] = val;
+        if (h.clean === 'nik' || h.clean === 'id' || h.clean === 'noid') rowObj['NIK'] = val;
+        if (h.clean === 'namakaryawan' || h.clean === 'nama' || h.clean === 'name' || h.clean === 'employeename') rowObj['Nama Karyawan'] = val;
+        if (h.clean === 'judulachievement' || h.clean === 'judul' || h.clean === 'prestasi' || h.clean === 'achievement' || h.clean === 'penghargaan' || h.clean === 'title') {
+          rowObj['Judul Achievement'] = val;
+        }
+        if (h.clean === 'kategori' || h.clean === 'category' || h.clean === 'jenis') rowObj['Kategori'] = val;
+        if (h.clean === 'tanggaldicapai' || h.clean === 'tanggal' || h.clean === 'tgl' || h.clean === 'date') rowObj['Tanggal Dicapai'] = val;
+        if (h.clean === 'keterangan' || h.clean === 'deskripsi' || h.clean === 'uraian' || h.clean === 'description') rowObj['Keterangan'] = val;
+        if (h.clean === 'catatan' || h.clean === 'notes' || h.clean === 'note') rowObj['Catatan'] = val;
+      }
+
+      const hasIdentifier = rowObj['NIK'] || rowObj['Nama Karyawan'] || rowObj['Judul Achievement'];
+      if (hasAnyData && hasIdentifier && String(rowObj['NIK'] || '').toUpperCase() !== 'NIK') {
+        rows.push(rowObj);
+      }
+    }
+
+    return { rows, headers: ACHIEVEMENTS_COLUMNS };
   };
 
   const parseAttendanceWorksheet = (worksheet: XLSX.WorkSheet) => {
@@ -916,9 +1054,11 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
     setParsedRows([]);
     setParsedAttendanceRows([]);
     setParsedCounselingRows([]);
+    setParsedAchievementRows([]);
     setDetectedHeaders([]);
     setDetectedAttendanceHeaders([]);
     setDetectedCounselingHeaders([]);
+    setDetectedAchievementHeaders([]);
     setDetectedSheets([]);
 
     const fileName = selectedFile.name.toLowerCase();
@@ -932,6 +1072,11 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
           if (results.data && results.data.length > 0) {
             const rawFields = results.meta?.fields || Object.keys(results.data[0] || {});
             const cleanFields = rawFields.map(f => String(f).toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+            const isAchievement = cleanFields.some(f => 
+              f.includes('achievement') || f.includes('prestasi') || f.includes('penghargaan') ||
+              (f.includes('judul') && f.includes('kategori'))
+            );
 
             const isCounseling = cleanFields.some(f => 
               f.includes('konseling') || f.includes('spdk') || f.includes('totalsp') || 
@@ -953,7 +1098,30 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
               f.includes('alamatsesuaiktp') || f.includes('alamatdomisili') || f === 'foto'
             );
 
-            if (isCounseling && !isMaster) {
+            if (isAchievement && !isMaster && !isCounseling) {
+              const mappedAchievements = results.data.map((r: any) => {
+                const rowObj: Record<string, any> = { ...r };
+                for (const [k, v] of Object.entries(r)) {
+                  const clean = String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+                  if (clean === 'nik' || clean === 'id' || clean === 'noid') rowObj['NIK'] = v;
+                  if (clean === 'namakaryawan' || clean === 'nama' || clean === 'name' || clean === 'employeename') rowObj['Nama Karyawan'] = v;
+                  if (clean === 'judulachievement' || clean === 'judul' || clean === 'prestasi' || clean === 'achievement' || clean === 'penghargaan' || clean === 'title') {
+                    rowObj['Judul Achievement'] = v;
+                  }
+                  if (clean === 'kategori' || clean === 'category' || clean === 'jenis') rowObj['Kategori'] = v;
+                  if (clean === 'tanggaldicapai' || clean === 'tanggal' || clean === 'tgl' || clean === 'date') rowObj['Tanggal Dicapai'] = v;
+                  if (clean === 'keterangan' || clean === 'deskripsi' || clean === 'uraian' || clean === 'description') rowObj['Keterangan'] = v;
+                  if (clean === 'catatan' || clean === 'notes' || clean === 'note') rowObj['Catatan'] = v;
+                }
+                return rowObj;
+              });
+              setParsedAchievementRows(mappedAchievements);
+              setDetectedAchievementHeaders(rawFields);
+              setParsedRows([]);
+              setParsedAttendanceRows([]);
+              setParsedCounselingRows([]);
+              setActivePreviewTab('achievements');
+            } else if (isCounseling && !isMaster) {
               const mappedCounseling = results.data.map((r: any) => {
                 const rowObj: Record<string, any> = { ...r };
                 for (const [k, v] of Object.entries(r)) {
@@ -1021,7 +1189,8 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
               setParsedCounselingRows([]);
               setActivePreviewTab('absensi');
             } else {
-              setParsedRows(results.data);
+              const activeRows = (results.data || []).filter((r: any) => !isResignedOrNonActiveStatus(r));
+              setParsedRows(activeRows);
               setDetectedHeaders(rawFields);
               if (isCounseling) {
                 setParsedCounselingRows(results.data);
@@ -1071,13 +1240,16 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         let masterSheetName: string | undefined;
         let attendanceSheetName: string | undefined;
         let counselingSheetName: string | undefined;
+        let achievementSheetName: string | undefined;
 
         for (const sName of sheetNames) {
           const l = sName.toLowerCase();
           const ws = workbook.Sheets[sName];
           if (!ws || !ws['!ref']) continue;
 
-          if (l.includes('konseling') || l.includes('spdk') || l.includes('sanksi') || l.includes('disiplin')) {
+          if (l.includes('achievement') || l.includes('prestasi') || l.includes('penghargaan') || l.includes('award') || l.includes('sertifikat')) {
+            achievementSheetName = sName;
+          } else if (l.includes('konseling') || l.includes('spdk') || l.includes('sanksi') || l.includes('disiplin')) {
             counselingSheetName = sName;
           } else if (l.includes('absen') || l.includes('absensi') || l.includes('attendance') || l.includes('kehadiran')) {
             attendanceSheetName = sName;
@@ -1103,7 +1275,9 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
             }
           }
 
-          if (sampleText.includes('konseling') || sampleText.includes('spdk') || sampleText.includes('total sp') || sampleText.includes('sanksi')) {
+          if (sampleText.includes('achievement') || sampleText.includes('prestasi') || sampleText.includes('penghargaan')) {
+            achievementSheetName = sheetNames[0];
+          } else if (sampleText.includes('konseling') || sampleText.includes('spdk') || sampleText.includes('total sp') || sampleText.includes('sanksi')) {
             counselingSheetName = sheetNames[0];
           } else if (sampleText.includes('izin') || sampleText.includes('sakit site') || sampleText.includes('sakit luar') || sampleText.includes('alpa')) {
             attendanceSheetName = sheetNames[0];
@@ -1113,10 +1287,13 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         } else {
           if (!masterSheetName) masterSheetName = sheetNames[0];
           if (!attendanceSheetName && sheetNames.length > 1) {
-            attendanceSheetName = sheetNames.find(s => s !== masterSheetName && s !== counselingSheetName);
+            attendanceSheetName = sheetNames.find(s => s !== masterSheetName && s !== counselingSheetName && s !== achievementSheetName);
           }
           if (!counselingSheetName && sheetNames.length > 2) {
-            counselingSheetName = sheetNames.find(s => s !== masterSheetName && s !== attendanceSheetName);
+            counselingSheetName = sheetNames.find(s => s !== masterSheetName && s !== attendanceSheetName && s !== achievementSheetName);
+          }
+          if (!achievementSheetName && sheetNames.length > 3) {
+            achievementSheetName = sheetNames.find(s => s !== masterSheetName && s !== attendanceSheetName && s !== counselingSheetName);
           }
         }
 
@@ -1126,6 +1303,8 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         let attHeaders: string[] = [];
         let counselRows: any[] = [];
         let counselHeaders: string[] = [];
+        let achRows: any[] = [];
+        let achHeaders: string[] = [];
 
         // Parse Master Sheet
         if (masterSheetName && workbook.Sheets[masterSheetName]) {
@@ -1246,6 +1425,11 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
 
               const hasNikOrName = rowObj['NIK'] || rowObj['Nama'] || (headers[1] && rowObj[headers[1].name]);
               if (hasAnyData && hasNikOrName && String(rowObj['NIK'] || '').toUpperCase() !== 'NIK') {
+                const statusKaryawanVal = String(rowObj['Status Karyawan'] || rowObj['Status'] || rowObj['statuskaryawan'] || '').trim();
+                if (isResignedOrNonActiveStatus(statusKaryawanVal)) {
+                  // Sesuai permintaan: Karyawan berstatus Resign / Mutasi GTS / PHK / SPPHK tidak dimasukkan ke dalam daftar
+                  continue;
+                }
                 masterRows.push(rowObj);
                 rowCounter++;
               }
@@ -1269,16 +1453,26 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
           counselHeaders = counselParsed.headers;
         }
 
+        // Parse Achievements Sheet if present
+        if (achievementSheetName && achievementSheetName !== masterSheetName && workbook.Sheets[achievementSheetName]) {
+          const wsAch = workbook.Sheets[achievementSheetName];
+          const achParsed = parseAchievementsWorksheet(wsAch);
+          achRows = achParsed.rows;
+          achHeaders = achParsed.headers;
+        }
+
         setParsedRows(masterRows);
         setDetectedHeaders(masterHeaders);
         setParsedAttendanceRows(attRows);
         setDetectedAttendanceHeaders(attHeaders);
         setParsedCounselingRows(counselRows);
         setDetectedCounselingHeaders(counselHeaders);
+        setParsedAchievementRows(achRows);
+        setDetectedAchievementHeaders(achHeaders);
         setIsParsing(false);
 
-        if (masterRows.length === 0 && attRows.length === 0 && counselRows.length === 0) {
-          setErrorMsg("Tidak ada data karyawan, data absensi, atau data konseling/SPDK yang valid ditemukan di file Excel.");
+        if (masterRows.length === 0 && attRows.length === 0 && counselRows.length === 0 && achRows.length === 0) {
+          setErrorMsg("Tidak ada data karyawan, data absensi, data konseling/SPDK, atau data achievements yang valid ditemukan di file Excel.");
         }
       } catch (err: any) {
         setIsParsing(false);
@@ -1291,7 +1485,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
   };
 
   const handleExecuteImport = async () => {
-    if (parsedRows.length === 0 && parsedAttendanceRows.length === 0 && parsedCounselingRows.length === 0) return;
+    if (parsedRows.length === 0 && parsedAttendanceRows.length === 0 && parsedCounselingRows.length === 0 && parsedAchievementRows.length === 0) return;
     setIsImporting(true);
     setErrorMsg(null);
     setImportResult(null);
@@ -1302,6 +1496,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
     let totalUpdated = 0;
     let totalAttUpdated = 0;
     let totalCounselUpdated = 0;
+    let totalAchUpdated = 0;
     let totalErrors = 0;
     const allErrors: string[] = [];
 
@@ -1335,7 +1530,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
             })
           );
 
-          // On the first batch, also pass attendanceRows and counselingRows to sync all in one shot!
+          // On the first batch, also pass attendanceRows, counselingRows & achievementRows to sync all in one shot!
           const isFirstBatch = i === 0;
           const res = await fetch('/api/employees/import', {
             method: 'POST',
@@ -1347,6 +1542,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
               rows: processedBatch,
               attendanceRows: isFirstBatch ? parsedAttendanceRows : undefined,
               counselingRows: isFirstBatch ? parsedCounselingRows : undefined,
+              achievementRows: isFirstBatch ? parsedAchievementRows : undefined,
               editorNik: inspectorNik
             })
           });
@@ -1367,18 +1563,22 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
             if (data.stats.counselingUpdated) {
               totalCounselUpdated += data.stats.counselingUpdated;
             }
+            if (data.stats.achievementsUpdated) {
+              totalAchUpdated += data.stats.achievementsUpdated;
+            }
             if (Array.isArray(data.stats.errorList)) {
               allErrors.push(...data.stats.errorList);
             }
           }
         }
       } else {
-        // Only attendance or counseling rows
+        // Only attendance, counseling, or achievement rows
+        const otherTotal = parsedAttendanceRows.length + parsedCounselingRows.length + parsedAchievementRows.length;
         setImportProgress({
-          current: parsedAttendanceRows.length + parsedCounselingRows.length,
-          total: parsedAttendanceRows.length + parsedCounselingRows.length,
+          current: otherTotal,
+          total: otherTotal,
           percent: 100,
-          message: `Menyinkronkan rekap absensi & konseling/SPDK...`
+          message: `Menyinkronkan rekap absensi, konseling/SPDK & achievements...`
         });
 
         const res = await fetch('/api/employees/import', {
@@ -1390,6 +1590,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
           body: JSON.stringify({
             attendanceRows: parsedAttendanceRows.length > 0 ? parsedAttendanceRows : undefined,
             counselingRows: parsedCounselingRows.length > 0 ? parsedCounselingRows : undefined,
+            achievementRows: parsedAchievementRows.length > 0 ? parsedAchievementRows : undefined,
             editorNik: inspectorNik
           })
         });
@@ -1403,19 +1604,21 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
         if (data.stats) {
           totalAttUpdated += data.stats.attendanceUpdated || 0;
           totalCounselUpdated += data.stats.counselingUpdated || 0;
+          totalAchUpdated += data.stats.achievementsUpdated || 0;
           totalErrors += data.stats.errors || 0;
         }
       }
 
       setImportResult({
         status: 'success',
-        message: `Import & Sinkronisasi berhasil selesai! ${totalUpdated} master diperbarui, ${totalInserted} ditambah, ${totalAttUpdated || parsedAttendanceRows.length} absensi & ${totalCounselUpdated || parsedCounselingRows.length} data konseling/SPDK disinkronkan.`,
+        message: `Import & Sinkronisasi berhasil selesai! ${totalUpdated} master diperbarui, ${totalInserted} ditambah, ${totalAttUpdated || parsedAttendanceRows.length} absensi, ${totalCounselUpdated || parsedCounselingRows.length} konseling/SPDK & ${totalAchUpdated || parsedAchievementRows.length} achievements disinkronkan.`,
         stats: {
-          total: totalMasterRows + parsedAttendanceRows.length + parsedCounselingRows.length,
+          total: totalMasterRows + parsedAttendanceRows.length + parsedCounselingRows.length + parsedAchievementRows.length,
           updated: totalUpdated,
           inserted: totalInserted,
           attendanceUpdated: totalAttUpdated || parsedAttendanceRows.length,
           counselingUpdated: totalCounselUpdated || parsedCounselingRows.length,
+          achievementsUpdated: totalAchUpdated || parsedAchievementRows.length,
           errors: totalErrors,
           errorList: allErrors.slice(0, 10)
         }
@@ -1456,13 +1659,13 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
             </span>
             <div>
               <h3 className="font-extrabold text-lg text-slate-900 flex items-center gap-2 flex-wrap">
-                <span>Import &amp; Update Database, Absensi &amp; Konseling SPDK</span>
+                <span>Import &amp; Update Database, Absensi, Konseling SPDK &amp; Achievements</span>
                 <span className="text-[10px] px-2.5 py-0.5 rounded-full font-mono font-bold bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
                   Multi-Sheet Excel
                 </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Mendukung 1 workbook berisi Sheet <strong>DataBase Karyawan</strong>, Sheet <strong>Absensi karyawan</strong> &amp; Sheet <strong>Konseling &amp; SPDK</strong>.
+                Mendukung 1 workbook berisi Sheet <strong>DataBase Karyawan</strong>, Sheet <strong>Absensi karyawan</strong>, Sheet <strong>Konseling &amp; SPDK</strong> &amp; Sheet <strong>Achievements</strong>.
               </p>
             </div>
           </div>
@@ -1482,10 +1685,10 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
             <div>
               <h4 className="text-xs font-bold text-[#135e69] flex items-center gap-1.5">
                 <Download className="w-4 h-4 text-[#22a7b8]" />
-                Template Excel Multi-Sheet (Master, Absensi, Konseling &amp; SPDK)
+                Template Excel Multi-Sheet (Master, Absensi, Konseling &amp; SPDK, Achievements)
               </h4>
               <p className="text-[11px] text-[#18535a] mt-0.5">
-                Template ini mencakup <strong>Sheet 1: DataBase Karyawan</strong>, <strong>Sheet 2: Absensi karyawan</strong> &amp; <strong>Sheet 3: Konseling &amp; SPDK</strong>.
+                Template ini mencakup <strong>Sheet 1: DataBase Karyawan</strong>, <strong>Sheet 2: Absensi karyawan</strong>, <strong>Sheet 3: Konseling &amp; SPDK</strong> &amp; <strong>Sheet 4: Achievements</strong>.
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
@@ -1557,7 +1760,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                     Klik atau Seret file Excel (.xlsx / .xls) ke sini
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    Mendukung 1 file dengan <strong>Sheet Database Karyawan</strong>, <strong>Sheet Absensi karyawan</strong> &amp; <strong>Sheet Konseling &amp; SPDK</strong>
+                    Mendukung 1 file dengan <strong>Sheet Database Karyawan</strong>, <strong>Sheet Absensi karyawan</strong>, <strong>Sheet Konseling &amp; SPDK</strong> &amp; <strong>Sheet Achievements</strong>
                   </p>
                 </div>
               )}
@@ -1596,7 +1799,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                 <span>{importResult.message}</span>
               </div>
               {importResult.stats && (
-                <div className="mt-2 grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-emerald-200/60 font-semibold">
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-6 gap-2 pt-2 border-t border-emerald-200/60 font-semibold">
                   <div className="p-2 rounded-xl bg-white/80 border border-emerald-200/60 text-center">
                     <p className="text-[10px] uppercase text-slate-500">Total Baris</p>
                     <p className="text-sm font-extrabold text-slate-800">{importResult.stats.total}</p>
@@ -1614,6 +1817,10 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                     <p className="text-sm font-extrabold text-purple-700">{importResult.stats.counselingUpdated || 0}</p>
                   </div>
                   <div className="p-2 rounded-xl bg-white/80 border border-emerald-200/60 text-center">
+                    <p className="text-[10px] uppercase text-amber-600">Achievements</p>
+                    <p className="text-sm font-extrabold text-amber-700">{importResult.stats.achievementsUpdated || 0}</p>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white/80 border border-emerald-200/60 text-center">
                     <p className="text-[10px] uppercase text-rose-600">Gagal / Skip</p>
                     <p className="text-sm font-extrabold text-rose-700">{importResult.stats.errors}</p>
                   </div>
@@ -1623,7 +1830,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
           )}
 
           {/* Parsed Preview Section */}
-          {(parsedRows.length > 0 || parsedAttendanceRows.length > 0 || parsedCounselingRows.length > 0) && (
+          {(parsedRows.length > 0 || parsedAttendanceRows.length > 0 || parsedCounselingRows.length > 0 || parsedAchievementRows.length > 0) && (
             <div className="space-y-3">
               {/* Tab Selector for Multi-Sheet Preview */}
               <div className="flex items-center justify-between border-b border-slate-200 pb-2 flex-wrap gap-2">
@@ -1670,6 +1877,20 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                       <span>Sheet Konseling &amp; SPDK ({parsedCounselingRows.length})</span>
                     </button>
                   )}
+                  {parsedAchievementRows.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActivePreviewTab('achievements')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        activePreviewTab === 'achievements'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <Trophy className="w-3.5 h-3.5" />
+                      <span>Sheet Achievements ({parsedAchievementRows.length})</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
@@ -1686,6 +1907,11 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                   {parsedCounselingRows.length > 0 && (
                     <span className="px-2 py-0.5 rounded-full font-bold bg-purple-50 text-purple-700 border border-purple-200">
                       ✓ {parsedCounselingRows.length} Konseling/SPDK
+                    </span>
+                  )}
+                  {parsedAchievementRows.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      ✓ {parsedAchievementRows.length} Achievements
                     </span>
                   )}
                 </div>
@@ -1891,6 +2117,57 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
                 </div>
               )}
 
+              {/* Achievements Sheet Preview Table */}
+              {(activePreviewTab === 'achievements' || (parsedRows.length === 0 && parsedAttendanceRows.length === 0 && parsedCounselingRows.length === 0 && parsedAchievementRows.length > 0)) && (
+                <div className="rounded-2xl border border-amber-200 overflow-hidden bg-white shadow-xs max-h-60 overflow-x-auto overflow-y-auto text-xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-amber-50 text-amber-900 font-bold border-b border-amber-200 sticky top-0 z-10 text-[11px]">
+                      <tr>
+                        <th className="p-2.5 whitespace-nowrap">No</th>
+                        <th className="p-2.5 whitespace-nowrap">NIK</th>
+                        <th className="p-2.5 whitespace-nowrap">Nama Karyawan</th>
+                        <th className="p-2.5 whitespace-nowrap">Judul Achievement</th>
+                        <th className="p-2.5 whitespace-nowrap">Kategori</th>
+                        <th className="p-2.5 whitespace-nowrap">Tanggal Dicapai</th>
+                        <th className="p-2.5 whitespace-nowrap">Keterangan</th>
+                        <th className="p-2.5 whitespace-nowrap">Catatan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-100 font-medium text-slate-800">
+                      {parsedAchievementRows.slice(0, 5).map((row, idx) => {
+                        const nik = row['NIK'] || row['nik'] || '-';
+                        const name = row['Nama Karyawan'] || row['Nama'] || row['nama'] || '-';
+                        const title = row['Judul Achievement'] || row['Judul'] || row['title'] || '-';
+                        const cat = row['Kategori'] || row['category'] || '-';
+                        const date = row['Tanggal Dicapai'] || row['Tanggal'] || row['date'] || '-';
+                        const desc = row['Keterangan'] || row['description'] || '-';
+                        const note = row['Catatan'] || row['notes'] || '-';
+
+                        return (
+                          <tr key={idx} className="hover:bg-amber-50/50 transition-colors">
+                            <td className="p-2.5 text-slate-400 font-mono">{idx + 1}</td>
+                            <td className="p-2.5 font-extrabold font-mono text-[#135e69]">{nik}</td>
+                            <td className="p-2.5 font-bold text-slate-900">{name}</td>
+                            <td className="p-2.5 font-bold text-amber-800 flex items-center gap-1.5">
+                              <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                              <span>{title}</span>
+                            </td>
+                            <td className="p-2.5">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                {cat}
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-slate-600 font-mono text-[11px]">{date}</td>
+                            <td className="p-2.5 text-slate-600 text-[11px] max-w-[160px] truncate" title={desc}>{desc}</td>
+                            <td className="p-2.5 text-slate-600 text-[11px] max-w-[160px] truncate" title={note}>{note}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               <p className="text-[11px] text-slate-500 text-right">
                 Menampilkan 5 baris pertama dari sheet yang dipilih.
               </p>
@@ -1932,7 +2209,7 @@ export function EmployeeImportModal({ isOpen, onClose, onSuccess, inspectorNik }
 
             <button
               type="button"
-              disabled={(parsedRows.length === 0 && parsedAttendanceRows.length === 0 && parsedCounselingRows.length === 0) || isImporting || isParsing}
+              disabled={(parsedRows.length === 0 && parsedAttendanceRows.length === 0 && parsedCounselingRows.length === 0 && parsedAchievementRows.length === 0) || isImporting || isParsing}
               onClick={handleExecuteImport}
               className="px-5 py-2.5 rounded-xl bg-[#22a7b8] hover:bg-[#1b8f9e] text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-2"
             >
