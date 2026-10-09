@@ -794,7 +794,7 @@ export function ProfilePage({
         }}
         className="fixed inset-x-0 bottom-0 top-8 md:top-0 md:left-auto md:right-0 z-[60] w-full sm:w-[650px] md:w-[780px] lg:w-[960px] xl:w-[1100px] 2xl:w-[1240px] h-[calc(100dvh-2rem)] md:h-full rounded-t-[32px] md:rounded-l-3xl md:rounded-r-none shadow-2xl md:border-l flex flex-col overflow-hidden transition-colors"
         style={{
-          backgroundColor: 'var(--bg-main, #F8FAFC)',
+          backgroundColor: 'var(--card-bg, #FFFFFF)',
           borderColor: 'var(--border-main, #E2E8F0)',
           color: 'var(--text-main, #1E293B)'
         }}
@@ -814,7 +814,7 @@ export function ProfilePage({
         <div 
           className="sticky top-0 z-20 backdrop-blur-md px-4 sm:px-6 py-4 flex items-center justify-between border-b shrink-0 select-none transition-colors"
           style={{
-            backgroundColor: 'var(--bg-main, #F8FAFC)',
+            backgroundColor: 'var(--card-bg, #FFFFFF)',
             borderColor: 'var(--border-main, #E2E8F0)'
           }}
           onPointerDown={(e) => {
