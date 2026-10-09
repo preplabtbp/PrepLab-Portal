@@ -2452,7 +2452,7 @@ export function NotionDatabaseTable({
   };
 
   // Add Sub-Item Handler (Sub-kegiatan di bawah baris kegiatan induk)
-  const handleAddSubItem = (parentRowOrIndex: TableRowData | number, subItemTitle: string) => {
+  const handleAddSubItem = async (parentRowOrIndex: TableRowData | number, subItemTitle: string) => {
     const cleanTitle = subItemTitle.trim();
     if (!cleanTitle) {
       setCreatingSubItemForParent(null);
@@ -2529,11 +2529,8 @@ export function NotionDatabaseTable({
     setCreatingSubItemForParent(null);
     setNewSubItemTitle('');
 
-    if (onRowsChange) onRowsChange(nextRows);
-    if (postId && onPostContentUpdate) {
-      const newMd = serializeMarkdownTable(headers, nextRows, beforeText, afterText);
-      onPostContentUpdate(newMd);
-    }
+    onRowsChange?.(nextRows);
+    await saveTableToBackend(nextRows);
 
     toast.success(`Sub-kegiatan "${cleanTitle}" berhasil ditambahkan`);
   };
@@ -2618,33 +2615,6 @@ export function NotionDatabaseTable({
     const subRow = localRows[subRowIndex];
     if (!subRow) return;
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const updatedRow = { ...subRow };
-    updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
-    updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
-
-    // Also update sub-item title prefix ↳ [x] vs ↳ [ ]
-    const currentTitle = getRowVal(subRow, 'Jenis kegiatan') || getRowVal(subRow, 'Jenis Kegiatan') || '';
-    if (currentTitle) {
-      const cleanTitle = getDisplayTitle(currentTitle);
-      const newTitle = `↳ [${nextCompleted ? 'x' : ' '}] ${cleanTitle}`;
-      if (updatedRow['Jenis kegiatan'] !== undefined) updatedRow['Jenis kegiatan'] = newTitle;
-      if (updatedRow['Jenis Kegiatan'] !== undefined) updatedRow['Jenis Kegiatan'] = newTitle;
-      if (updatedRow['Name'] !== undefined) updatedRow['Name'] = newTitle;
-      if (updatedRow['Judul'] !== undefined) updatedRow['Judul'] = newTitle;
-    }
-    
-    // Sinkronisasi tanggal selesai sub-item jika ada kolomnya
-    displayHeaders.forEach(h => {
-      const hLower = h.toLowerCase().trim();
-      if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
-        updatedRow[h] = nextCompleted ? todayStr : '-';
-      }
-    });
-
-    const nextRows = [...localRows];
-    nextRows[subRowIndex] = updatedRow;
-
     // Temukan baris kegiatan utama (parent) untuk sub-item ini
     let parentIdx = -1;
     for (let i = subRowIndex - 1; i >= 0; i--) {
@@ -2654,7 +2624,27 @@ export function NotionDatabaseTable({
       }
     }
 
-    const executeToggle = () => {
+    // Helper untuk sinkronisasi tanggal selesai ke semua variasi alias kolom tanggal selesai
+    const setRowCompletedDate = (targetRow: TableRowData, dateVal: string) => {
+      let matched = false;
+      for (const k of Object.keys(targetRow)) {
+        const kl = k.toLowerCase().trim();
+        if (kl.includes('tanggal selesai') || kl.includes('completed') || kl.includes('aktual selesai') || kl === 'selesai' || kl.includes('waktu selesai')) {
+          targetRow[k] = dateVal;
+          matched = true;
+        }
+      }
+      displayHeaders.forEach(h => {
+        const hl = h.toLowerCase().trim();
+        if (hl.includes('tanggal selesai') || hl.includes('completed') || hl.includes('aktual selesai') || hl === 'selesai' || hl.includes('waktu selesai')) {
+          targetRow[h] = dateVal;
+          matched = true;
+        }
+      });
+      targetRow['Tanggal Selesai'] = dateVal;
+    };
+
+    const executeToggle = async () => {
       const todayStr = new Date().toISOString().slice(0, 10);
       const updatedRow = { ...subRow };
       updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
@@ -2671,13 +2661,8 @@ export function NotionDatabaseTable({
         if (updatedRow['Judul'] !== undefined) updatedRow['Judul'] = newTitle;
       }
       
-      // Sinkronisasi tanggal selesai sub-item jika ada kolomnya
-      displayHeaders.forEach(h => {
-        const hLower = h.toLowerCase().trim();
-        if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
-          updatedRow[h] = nextCompleted ? todayStr : '-';
-        }
-      });
+      // 1. Masukan tanggal selesai di baris subtask jika subtask diceklis, atau reset '-' jika batal diceklis
+      setRowCompletedDate(updatedRow, nextCompleted ? todayStr : '-');
 
       const nextRows = [...localRows];
       nextRows[subRowIndex] = updatedRow;
@@ -2701,29 +2686,17 @@ export function NotionDatabaseTable({
         if (!currentParentStatus.includes('CANCEL')) {
           if (totalSubs > 0 && completedSubs === totalSubs) {
             parentRow.Status = 'Closed';
-            displayHeaders.forEach(h => {
-              const hLower = h.toLowerCase().trim();
-              if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
-                parentRow[h] = todayStr;
-              }
-            });
+            // 2. Masukan tanggal selesai di baris tugas utama jika SEMUA subtask diceklis
+            setRowCompletedDate(parentRow, todayStr);
             toast.success(`Semua subtask selesai! Status kegiatan "${getDisplayTitle(getRowVal(parentRow, 'Jenis kegiatan') || '')}" otomatis diubah menjadi Closed.`);
           } else if (completedSubs > 0) {
             parentRow.Status = 'On Progress';
-            displayHeaders.forEach(h => {
-              const hLower = h.toLowerCase().trim();
-              if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
-                parentRow[h] = '-';
-              }
-            });
+            // Reset tanggal selesai tugas utama jika belum semua subtask diceklis
+            setRowCompletedDate(parentRow, '-');
           } else {
             parentRow.Status = 'Open';
-            displayHeaders.forEach(h => {
-              const hLower = h.toLowerCase().trim();
-              if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
-                parentRow[h] = '-';
-              }
-            });
+            // Reset tanggal selesai tugas utama jika belum ada subtask diceklis
+            setRowCompletedDate(parentRow, '-');
           }
           nextRows[parentIdx] = parentRow;
         }
@@ -2736,7 +2709,7 @@ export function NotionDatabaseTable({
 
       setLocalRows(nextRows);
       onRowsChange?.(nextRows);
-      saveTableToBackend(nextRows);
+      await saveTableToBackend(nextRows);
     };
 
     // Cek apakah aksi ini akan menyelesaikan subtask TERAKHIR dan otomatis menutup task utama
@@ -5660,19 +5633,6 @@ export function NotionDatabaseTable({
                                       }`}
                                     >
                                       <div className="flex items-center justify-center gap-1 relative group/num">
-                                        {!isSubItem && (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleInsertBlankRow(actualRowIndex);
-                                            }}
-                                            className="w-4 h-4 rounded hover:bg-teal-500/20 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 flex items-center justify-center opacity-30 group-hover:opacity-100 hover:opacity-100 transition-opacity cursor-pointer shrink-0 -ml-1"
-                                            title="Sisipkan baris kegiatan kosong di nomor ini"
-                                          >
-                                            <Plus className="w-3.5 h-3.5" />
-                                          </button>
-                                        )}
                                         {isDirty && (
                                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="Ada perubahan belum disimpan" />
                                         )}
@@ -5848,7 +5808,7 @@ export function NotionDatabaseTable({
                                         <NotionInlineEditor
                                           initialValue={val}
                                           fieldLabel="Keterangan"
-                                          multiline={false}
+                                          multiline={true}
                                           isNotionLight={isNotionLight}
                                           allowTasklistMode={false}
                                           onSave={(newVal) => {
@@ -5862,7 +5822,7 @@ export function NotionDatabaseTable({
                                           className="relative group/cell flex items-start justify-between gap-1 cursor-pointer font-sans w-full min-w-0 overflow-hidden"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: false });
+                                            setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
                                         >
                                           <div className={`flex-1 min-w-0 overflow-hidden font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
@@ -5872,7 +5832,7 @@ export function NotionDatabaseTable({
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: false });
+                                              setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                             }}
                                             title="Edit keterangan langsung"
                                             className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"

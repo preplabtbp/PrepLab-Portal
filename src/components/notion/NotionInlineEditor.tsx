@@ -701,7 +701,7 @@ const NotionTasklistInlineEditor: React.FC<{
       const target = e.target as Node;
       if (
         containerRef.current && !containerRef.current.contains(target) &&
-        bubbleRef.current && !bubbleRef.current.contains(target)
+        (!bubbleRef.current || !bubbleRef.current.contains(target))
       ) {
         const md = serializeToMarkdown();
         onSave(md);
@@ -1096,7 +1096,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       const target = e.target as Node;
       if (
         containerRef.current && !containerRef.current.contains(target) &&
-        bubbleRef.current && !bubbleRef.current.contains(target)
+        (!bubbleRef.current || !bubbleRef.current.contains(target))
       ) {
         const finalMd = getCleanMarkdown();
         onSave(finalMd);
@@ -1215,6 +1215,46 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       e.preventDefault();
       onSave(getCleanMarkdown());
       return;
+    }
+
+    // Shift + Enter: otomatis ke baris 2 secara normal (tanpa bullet)
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      document.execCommand('insertLineBreak');
+      return;
+    }
+
+    // Enter biasa: otomatis ubah keterangan jadi mode bullet dan langsung pindah ke bullet kedua di baris 2
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      let insideLi: HTMLElement | null = null;
+      const sel = window.getSelection();
+      if (sel && sel.anchorNode) {
+        let node: Node | null = sel.anchorNode;
+        while (node && node !== editorRef.current) {
+          if (node.nodeName === 'LI') {
+            insideLi = node as HTMLElement;
+            break;
+          }
+          node = node.parentNode;
+        }
+      }
+
+      if (!insideLi) {
+        // Belum mode bullet -> jadikan text saat ini sebagai bullet pertama, lalu buat bullet kedua di baris 2
+        e.preventDefault();
+        document.execCommand('insertUnorderedList');
+        document.execCommand('insertParagraph');
+        return;
+      } else {
+        // Sudah di dalam bullet list -> jika bullet saat ini kosong, tekan enter untuk keluar dari mode bullet
+        const textContent = (insideLi.textContent || '').trim();
+        if (!textContent) {
+          e.preventDefault();
+          document.execCommand('insertUnorderedList');
+          return;
+        }
+        // Jika ada isi, biarkan enter normal membuat bullet berikutnya
+      }
     }
   };
 
