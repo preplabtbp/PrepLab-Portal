@@ -641,8 +641,37 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       }
       if (!res.ok) throw new Error("Gagal mengambil data karyawan");
       const data = await res.json();
-      const list = data.status === 'success' ? (data.data || []) : (Array.isArray(data) ? data : []);
+      let list = data.status === 'success' ? (data.data || []) : (Array.isArray(data) ? data : []);
       if (list.length > 0) {
+        // Deduplikasi otomatis berdasarkan nama agar tidak pernah ada data karyawan ganda
+        const seenNames = new Map<string, any>();
+        const deduplicatedList: any[] = [];
+        for (const emp of list) {
+          const normKey = (emp.name || '')
+            .toLowerCase()
+            .replace(/\b(st|s\.t|s\.sos|s\.pi|s\.e|a\.md|s\.kom|s\.pd|dr|drs|ir|m\.t|m\.si)\b/gi, '')
+            .replace(/[^a-z0-9]/g, '')
+            .trim();
+          if (!normKey) {
+            deduplicatedList.push(emp);
+            continue;
+          }
+          if (seenNames.has(normKey)) {
+            const existing = seenNames.get(normKey);
+            const existingScore = (existing.ktp ? 3 : 0) + (existing.phone ? 2 : 0) + (existing.jobGrade ? 1 : 0) + (String(existing.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
+            const currentScore = (emp.ktp ? 3 : 0) + (emp.phone ? 2 : 0) + (emp.jobGrade ? 1 : 0) + (String(emp.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
+            if (currentScore > existingScore) {
+              const idx = deduplicatedList.indexOf(existing);
+              if (idx !== -1) deduplicatedList[idx] = emp;
+              seenNames.set(normKey, emp);
+            }
+          } else {
+            seenNames.set(normKey, emp);
+            deduplicatedList.push(emp);
+          }
+        }
+        list = deduplicatedList;
+
         setEmployees(list);
         try {
           const cacheStr = JSON.stringify(list);
@@ -733,8 +762,40 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       baseList = employees.filter(e => !isGtsEmp(e));
     }
 
-    // Sesuai permintaan Foto 2: Karyawan berstatus Resign / Mutasi GTS / PHK / SPPHK tidak dimasukkan ke dalam daftar
-    return baseList.filter(e => !isResignedOrNonActiveStatus(e));
+    // Sesuai permintaan: Karyawan berstatus Resign / Mutasi GTS / PHK / SPPHK tidak dimasukkan ke dalam daftar
+    const activeList = baseList.filter(e => !isResignedOrNonActiveStatus(e));
+
+    // Deduplikasi otomatis berdasarkan nama karyawan agar tidak ada data ganda (misal NIK lama M04 vs NIK baru M05)
+    const seenNames = new Map<string, any>();
+    const deduplicated: any[] = [];
+    for (const emp of activeList) {
+      const normKey = (emp.name || '')
+        .toLowerCase()
+        .replace(/\b(st|s\.t|s\.sos|s\.pi|s\.e|a\.md|s\.kom|s\.pd|dr|drs|ir|m\.t|m\.si)\b/gi, '')
+        .replace(/[^a-z0-9]/g, '')
+        .trim();
+
+      if (!normKey) {
+        deduplicated.push(emp);
+        continue;
+      }
+
+      if (seenNames.has(normKey)) {
+        const existing = seenNames.get(normKey);
+        const existingScore = (existing.ktp ? 3 : 0) + (existing.phone ? 2 : 0) + (existing.jobGrade ? 1 : 0) + (String(existing.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
+        const currentScore = (emp.ktp ? 3 : 0) + (emp.phone ? 2 : 0) + (emp.jobGrade ? 1 : 0) + (String(emp.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
+        if (currentScore > existingScore) {
+          const idx = deduplicated.indexOf(existing);
+          if (idx !== -1) deduplicated[idx] = emp;
+          seenNames.set(normKey, emp);
+        }
+      } else {
+        seenNames.set(normKey, emp);
+        deduplicated.push(emp);
+      }
+    }
+
+    return deduplicated;
   }, [employees, isSectionManager, ptFilter, viewerPt]);
 
   // 1. Data & List Karyawan Aktif (Diurutkan sesuai Hirarki Jabatan Resmi)

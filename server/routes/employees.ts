@@ -400,10 +400,52 @@ employeesRouter.get("/photo/:fileId", async (req, res) => {
   }
 });
 
+// Helper untuk membersihkan dan menghapus data karyawan duplikat lama secara otomatis di database
+export async function cleanupDuplicateEmployees() {
+  try {
+    const all = await db.select().from(employees);
+    const map = new Map<string, any[]>();
+    for (const e of all) {
+      const k = normalizeNameKey(e.name || '');
+      if (!k) continue;
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(e);
+    }
+    for (const [nameKey, list] of map.entries()) {
+      if (list.length > 1) {
+        // Prioritaskan record dengan NIK terupdate (M05 vs M04), KTP, phone, atau ID tertinggi
+        list.sort((a, b) => {
+          const scoreA = (a.ktp ? 3 : 0) + (a.phone ? 2 : 0) + (a.jobGrade ? 1 : 0) + (String(a.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (a.id || 0);
+          const scoreB = (b.ktp ? 3 : 0) + (b.phone ? 2 : 0) + (b.jobGrade ? 1 : 0) + (String(b.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (b.id || 0);
+          return scoreB - scoreA;
+        });
+        const keep = list[0];
+        for (let i = 1; i < list.length; i++) {
+          const obsolete = list[i];
+          console.log(`[Deduplicate] Menghapus data duplikat lama: NIK ${obsolete.nik} - ${obsolete.name} (Mempertahankan ${keep.nik})`);
+          if (obsolete.nik && keep.nik) {
+            try {
+              await db.update(employeeAttendance).set({ nik: keep.nik }).where(eq(employeeAttendance.nik, obsolete.nik));
+              await db.update(employeeCounseling).set({ nik: keep.nik }).where(eq(employeeCounseling.nik, obsolete.nik));
+              await db.update(employeeAchievements).set({ nik: keep.nik }).where(eq(employeeAchievements.nik, obsolete.nik));
+            } catch {}
+          }
+          await db.delete(employees).where(eq(employees.id, obsolete.id));
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error in cleanupDuplicateEmployees:', err);
+  }
+}
 
 employeesRouter.get("/", async (req, res) => {
   try {
     const { pt, all } = req.query;
+    
+    // Jalankan pembersihan duplikat di database jika ada
+    await cleanupDuplicateEmployees();
+
     let data = await db.select().from(employees);
 
     // Strictly exclude demo, staging, admin and broken spreadsheet accounts
@@ -444,6 +486,31 @@ employeesRouter.get("/", async (req, res) => {
       // Exclude resigned / non-active personnel even when all=true
       data = data.filter(e => !isResignedOrNonActiveStatus(e));
     }
+
+    // Deduplikasi otomatis berdasarkan nama agar tidak pernah ada baris ganda
+    const seenNames = new Map<string, any>();
+    const deduplicatedData: any[] = [];
+    for (const e of data) {
+      const normName = normalizeNameKey(e.name || '');
+      if (!normName) {
+        deduplicatedData.push(e);
+        continue;
+      }
+      if (seenNames.has(normName)) {
+        const prev = seenNames.get(normName);
+        const prevScore = (prev.ktp ? 3 : 0) + (prev.phone ? 2 : 0) + (prev.jobGrade ? 1 : 0) + (String(prev.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (prev.id || 0);
+        const currScore = (e.ktp ? 3 : 0) + (e.phone ? 2 : 0) + (e.jobGrade ? 1 : 0) + (String(e.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (e.id || 0);
+        if (currScore > prevScore) {
+          const idx = deduplicatedData.indexOf(prev);
+          if (idx !== -1) deduplicatedData[idx] = e;
+          seenNames.set(normName, e);
+        }
+      } else {
+        seenNames.set(normName, e);
+        deduplicatedData.push(e);
+      }
+    }
+    data = deduplicatedData;
 
     const attMap = await getAttendanceMap();
     const counselMap = await getCounselingMap();
@@ -805,6 +872,8 @@ employeesRouter.post("/import", async (req, res) => {
 
     // 1. Process Master Employee Rows (Sheet 1)
     if (hasRows) {
+      const allExistingDbEmployees = await db.select().from(employees);
+
       for (let i = 0; i < rows.length; i++) {
         const raw = rows[i];
         if (!raw || typeof raw !== 'object') continue;
@@ -880,10 +949,53 @@ employeesRouter.post("/import", async (req, res) => {
         }
 
         try {
-          const existing = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
+          // 1. Cek apakah ada record yang memiliki NIK sama persis
+          let existing = allExistingDbEmployees.filter(e => e.nik && e.nik.toUpperCase().trim() === nik.toUpperCase().trim());
+
+          // 2. Jika tidak ada NIK sama persis, cari apakah ada karyawan yang memiliki Nama sama (atau KTP sama)
+          if (existing.length === 0) {
+            const inputNormName = normalizeNameKey(name);
+            const inputKtp = cleanEmpData.ktp ? String(cleanEmpData.ktp).trim() : '';
+
+            existing = allExistingDbEmployees.filter(e => {
+              if (inputKtp && e.ktp && String(e.ktp).trim() === inputKtp) return true;
+              if (e.name && normalizeNameKey(e.name) === inputNormName) return true;
+              const eDigits = (e.nik || '').replace(/^[^0-9]+/, '');
+              const inputDigits = nik.replace(/^[^0-9]+/, '');
+              if (eDigits.length >= 6 && eDigits === inputDigits && normalizeNameKey(e.name || '') === inputNormName) {
+                return true;
+              }
+              return false;
+            });
+          }
+
           if (existing.length > 0) {
-            await db.update(employees).set(cleanEmpData).where(eq(employees.nik, nik));
+            const target = existing[0];
+            const oldNik = target.nik;
+
+            // Update data karyawan yang sudah ada ke data terbaru
+            await db.update(employees).set({ ...cleanEmpData, nik }).where(eq(employees.id, target.id));
             updatedCount++;
+
+            // Jika NIK berubah (misal perpanjangan kontrak M0406260356 -> M0506260356), cascade ke tabel relasi
+            if (oldNik && oldNik.toUpperCase().trim() !== nik.toUpperCase().trim()) {
+              try {
+                await db.update(employeeAttendance).set({ nik }).where(eq(employeeAttendance.nik, oldNik));
+                await db.update(employeeCounseling).set({ nik }).where(eq(employeeCounseling.nik, oldNik));
+                await db.update(employeeAchievements).set({ nik }).where(eq(employeeAchievements.nik, oldNik));
+                await db.update(developerUsers).set({ nik }).where(eq(developerUsers.nik, oldNik));
+              } catch {}
+            }
+
+            // Jika sebelumnya ada record duplikat lain untuk orang yang sama, hapus record lama yang duplikat
+            if (existing.length > 1) {
+              for (let d = 1; d < existing.length; d++) {
+                const dupEmp = existing[d];
+                try {
+                  await db.delete(employees).where(eq(employees.id, dupEmp.id));
+                } catch {}
+              }
+            }
           } else {
             await db.insert(employees).values(empData as any);
             insertedCount++;
@@ -893,6 +1005,9 @@ employeesRouter.post("/import", async (req, res) => {
           errors.push(`Row ${i + 1} (${nik} - ${name}): ${err.message}`);
         }
       }
+
+      // Bersihkan dan hapus jika masih ada duplikat nama di database
+      await cleanupDuplicateEmployees();
     }
 
     // 2. Process Attendance Rows (Sheet 2: "Absensi karyawan")
