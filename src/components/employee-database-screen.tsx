@@ -2981,20 +2981,22 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           setIsEditModalOpen(true);
                         }
                       }}
-                      className={`bg-gradient-to-br from-[#eaf7ee] via-[#def2e3] to-[#d2ebd9] rounded-2xl p-4 text-emerald-950 shadow-2xs border border-emerald-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm ${canManageDatabase ? 'cursor-pointer group' : ''}`}
+                      className={`bg-gradient-to-br from-[#eaf7ee] via-[#def2e3] to-[#d2ebd9] rounded-2xl p-4 text-emerald-950 shadow-2xs border border-emerald-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm flex flex-col justify-between ${canManageDatabase ? 'cursor-pointer group' : ''}`}
                       title={canManageDatabase ? "Klik untuk mengedit Status & Kehadiran" : undefined}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-emerald-800 text-[10px] uppercase font-black tracking-wider">Status Karyawan</p>
-                        <div className="flex items-center gap-1.5">
-                          {canManageDatabase && <Pencil className="w-3 h-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-emerald-800 text-[10px] uppercase font-black tracking-wider">Status Karyawan</p>
+                          <div className="flex items-center gap-1.5">
+                            {canManageDatabase && <Pencil className="w-3 h-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          </div>
                         </div>
+                        <p className="font-black text-xl text-emerald-950 tracking-tight">{selectedEmployee.statusKaryawan || '-'}</p>
                       </div>
-                      <p className="font-black text-xl text-emerald-950 tracking-tight">{selectedEmployee.statusKaryawan || '-'}</p>
                     </div>
 
-                    {/* Status Kontrak */}
+                    {/* Status Kontrak & Tanggal Permanen (Disatukan) */}
                     <div 
                       onClick={() => {
                         if (canManageDatabase) {
@@ -3004,14 +3006,24 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           setIsEditModalOpen(true);
                         }
                       }}
-                      className={`bg-gradient-to-br from-[#fef7ee] via-[#fdefdf] to-[#fce3cc] rounded-2xl p-4 text-amber-950 shadow-2xs border border-amber-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm ${canManageDatabase ? 'cursor-pointer group' : ''}`}
+                      className={`bg-gradient-to-br from-[#fef7ee] via-[#fdefdf] to-[#fce3cc] rounded-2xl p-4 text-amber-950 shadow-2xs border border-amber-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm flex flex-col justify-between ${canManageDatabase ? 'cursor-pointer group' : ''}`}
                       title={canManageDatabase ? "Klik untuk mengedit Status & Kehadiran" : undefined}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-amber-800 text-[10px] uppercase font-black tracking-wider">Status Kontrak</p>
-                        {canManageDatabase && <Pencil className="w-3 h-3 text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-amber-800 text-[10px] uppercase font-black tracking-wider">Status Kontrak</p>
+                          {canManageDatabase && <Pencil className="w-3 h-3 text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </div>
+                        <p className="font-black text-xl text-amber-950 tracking-tight">{selectedEmployee.statusKontrak || '-'}</p>
                       </div>
-                      <p className="font-black text-xl text-amber-950 tracking-tight">{selectedEmployee.statusKontrak || '-'}</p>
+
+                      {Boolean(selectedEmployee.tanggalPermanent && selectedEmployee.tanggalPermanent !== '-' && selectedEmployee.tanggalPermanent !== '0') && (
+                        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-amber-200/80 text-[11px] text-amber-900">
+                          <Calendar className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <span className="text-[10px] uppercase tracking-wider font-bold text-amber-800/80">Permanen:</span>
+                          <span className="font-mono font-bold text-amber-950">{formatShortDate(selectedEmployee.tanggalPermanent)}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Tgl Efektif Tidak Bekerja (Conditional) */}
@@ -3077,29 +3089,6 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         {canManageDatabase && <Pencil className="w-3 h-3 text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
                       </div>
                       <p className="font-black text-sm sm:text-base text-indigo-950 font-mono tracking-tight">{formatShortDate(selectedEmployee.jatuhTempoCt)}</p>
-                    </div>
-
-                    {/* Tanggal Permanen */}
-                    <div 
-                      onClick={() => {
-                        if (canManageDatabase) {
-                          setEditModalMode('edit');
-                          setSelectedEmployeeForEdit(selectedEmployee);
-                          setEditModalTab('job');
-                          setIsEditModalOpen(true);
-                        }
-                      }}
-                      className={`col-span-2 bg-gradient-to-br from-[#f0f7ff] via-[#e5f0fe] to-[#d6e7fd] rounded-2xl p-4 text-blue-950 shadow-2xs border border-blue-300/70 flex justify-between items-center transition-all hover:-translate-y-0.5 hover:shadow-sm ${canManageDatabase ? 'cursor-pointer group' : ''}`}
-                      title={canManageDatabase ? "Klik untuk mengedit Status & Kehadiran" : undefined}
-                    >
-                      <div>
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <p className="text-blue-800 text-[10px] uppercase font-black tracking-wider">Tanggal Permanen</p>
-                          {canManageDatabase && <Pencil className="w-3 h-3 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                        </div>
-                        <p className="font-black text-base text-blue-950 font-mono">{formatShortDate(selectedEmployee.tanggalPermanent)}</p>
-                      </div>
-                      <Calendar className="w-7 h-7 text-blue-400" />
                     </div>
                   </div>
                 </div>
