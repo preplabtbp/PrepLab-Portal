@@ -1,6 +1,10 @@
-.git
-node_modules
-dist
+.git/
+node_modules/
+dist/
+public/uploads/
+uploads/
+.antigravity/
+.gemini/
 *.xlsx
 *.xls
 *.csv
@@ -8,6 +12,10 @@ dist
 *.backup.ts
 *.log
 *.zip
+*.sql
+*.pptx
+*.pdf
+*.pbtxt
 sheet.html
 scratch_prompt.txt
 db_backups/
