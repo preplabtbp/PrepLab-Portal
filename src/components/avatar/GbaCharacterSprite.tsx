@@ -38,8 +38,8 @@ export const GbaCharacterSprite: React.FC<GbaCharacterSpriteProps> = ({
   const isCoffee = actionState === 'coffee';
   const isSmoking = actionState === 'smoke';
 
-  // Sitting avatars MUST ALWAYS face forward towards camera ('down')
-  const effectiveDirection = isSitting ? 'down' : direction;
+  // Allow sitting avatars to face down, left, or right as specified
+  const effectiveDirection = direction;
 
   // Walk bobbing (0 = standing, 1 = left step, 2 = right step)
   const step = isWalking ? (walkFrame % 3) : 0;
@@ -312,8 +312,16 @@ export const GbaCharacterSprite: React.FC<GbaCharacterSpriteProps> = ({
         )}
         <rect x={step === 1 ? 1 : step === 2 ? 7 : 4} y="11" width="2" height="2" fill={skin} />
 
-        {/* Legs Profile Walking Stride */}
-        {step === 1 ? (
+        {/* Legs Profile */}
+        {isSitting ? (
+          /* Sitting Profile: Thigh extends forward towards face direction, shin drops down */
+          <g>
+            <rect x="2" y="13" width="6" height="3" fill={pants} />
+            <rect x="2" y="14" width="6" height="1" fill={pantsShade} />
+            <rect x="2" y="16" width="3" height="2" fill={shoes} />
+            <rect x="2" y="17" width="3" height="1" fill={shoesShade} />
+          </g>
+        ) : step === 1 ? (
           /* Stride forward */
           <g>
             <rect x="2" y="13" width="3" height="3" fill={pants} />

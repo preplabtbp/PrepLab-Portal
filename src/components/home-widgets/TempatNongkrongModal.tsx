@@ -1170,9 +1170,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               nik: av.nik,
               x: Math.max(1.2, Math.min(10.5, (av.posX / 100) * 12)),
               y: Math.max(3.8, Math.min(6.2, (av.posY / 100) * 8)),
-              facing: (av.actionState === 'sit' || av.actionState === 'smoke_sit' || av.actionState === 'coffee_sit')
-                ? 'down'
-                : (av.facing === 'left' ? 'left' : 'right'),
+              facing: av.facing || 'down',
               actionState: (av.actionState === 'smoke_sit' || av.actionState === 'coffee_sit') ? 'sit' : ((av.actionState as any) || 'idle'),
               pangkatName: av.pangkat,
               pangkatIcon: av.pangkatIcon,

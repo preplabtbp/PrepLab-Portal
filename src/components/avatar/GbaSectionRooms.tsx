@@ -992,72 +992,58 @@ export const GbaGazeboTable: React.FC<{ x: number; y: number }> = ({ x, y }) => 
 
 /**
  * Gazebo Teak Wood Slatted 'n'-Shaped Continuous Long Bench
- * Surrounds the Center Table with 3 distinct sides (Left, Top, Right),
- * each side accommodating up to 3 personnel neatly spaced without overlapping.
+ * Exact compact dimensions matching user specifications, surrounding the center table
+ * with 3 seating panels per side (Left, Top, Right).
  */
 export const GbaGazeboNBench: React.FC<{ x: number; y: number }> = ({ x, y }) => (
   <g transform={`translate(${x * 16}, ${y * 16})`}>
     {/* Ground Shadows under Left & Right Wings */}
-    <ellipse cx="16" cy="57" rx="12" ry="2.5" fill="#000000" opacity="0.35" />
-    <ellipse cx="110" cy="57" rx="12" ry="2.5" fill="#000000" opacity="0.35" />
+    <ellipse cx="7" cy="49" rx="6" ry="1.5" fill="#000000" opacity="0.3" />
+    <ellipse cx="69" cy="49" rx="6" ry="1.5" fill="#000000" opacity="0.3" />
 
-    {/* Cast-Iron Legs */}
-    <rect x="7" y="53" width="3" height="5" fill="#111827" />
-    <rect x="21" y="53" width="3" height="5" fill="#111827" />
-    <rect x="102" y="53" width="3" height="5" fill="#111827" />
-    <rect x="116" y="53" width="3" height="5" fill="#111827" />
+    {/* Bottom Cast-Iron Legs */}
+    <rect x="0" y="46" width="2.5" height="4" fill="#111827" />
+    <rect x="11.5" y="46" width="2.5" height="4" fill="#111827" />
+    <rect x="62" y="46" width="2.5" height="4" fill="#111827" />
+    <rect x="73.5" y="46" width="2.5" height="4" fill="#111827" />
 
-    {/* Backrest Structure (Continuous 'n'-Shaped Outer Rim) */}
-    {/* Top Backrest */}
-    <rect x="4" y="1" width="118" height="6" fill="#181820" rx="1" />
-    <rect x="5" y="2" width="116" height="4" fill="#92400E" />
-    <rect x="5" y="2" width="116" height="1.5" fill="#D97706" />
+    {/* Outer Black Metal Rails */}
+    <rect x="0" y="0" width="76" height="2.5" fill="#181820" />
+    <rect x="0" y="0" width="2.5" height="46" fill="#181820" />
+    <rect x="73.5" y="0" width="2.5" height="46" fill="#181820" />
 
-    {/* Left Backrest */}
-    <rect x="2" y="1" width="6" height="54" fill="#181820" rx="1" />
-    <rect x="3" y="2" width="4" height="52" fill="#92400E" />
-    <rect x="3" y="2" width="1.5" height="52" fill="#D97706" />
+    {/* Small green inspection/K3 tag on left rail */}
+    <rect x="-1" y="27" width="2" height="4" rx="0.5" fill="#15803D" />
 
-    {/* Right Backrest */}
-    <rect x="118" y="1" width="6" height="54" fill="#181820" rx="1" />
-    <rect x="119" y="2" width="4" height="52" fill="#92400E" />
-    <rect x="119" y="2" width="1.5" height="52" fill="#D97706" />
+    {/* Top-Left & Top-Right Metal Corner Caps with Golden Rivets */}
+    <rect x="0" y="0" width="7" height="6" fill="#181820" />
+    <circle cx="2.5" cy="2.5" r="0.8" fill="#FBBF24" />
+    <rect x="69" y="0" width="7" height="6" fill="#181820" />
+    <circle cx="73.5" cy="2.5" r="0.8" fill="#FBBF24" />
 
-    {/* Corner Reinforcements */}
-    <rect x="2" y="1" width="6" height="6" fill="#111827" />
-    <rect x="118" y="1" width="6" height="6" fill="#111827" />
+    {/* --- TOP WING PLANKS (3 Horizontal Panels Side-by-Side) --- */}
+    <rect x="2.5" y="2.5" width="71" height="9.5" fill="#C26818" />
+    <rect x="2.5" y="2.5" width="71" height="1" fill="#F59E0B" opacity="0.6" />
+    {/* Dividers between the 3 top seats */}
+    <rect x="25.5" y="2.5" width="1" height="9.5" fill="#5A2906" />
+    <rect x="49.5" y="2.5" width="1" height="9.5" fill="#5A2906" />
+    <rect x="14" y="11" width="48" height="1" fill="#5A2906" />
 
-    {/* --- SEAT PLANKS & CUSHION PADS --- */}
-    {/* Top Wing Seat Planks (Fits 3 Personnel) */}
-    <rect x="8" y="6" width="110" height="11" fill="#181820" />
-    <rect x="9" y="7" width="108" height="8.5" fill="#B45309" />
-    <rect x="9" y="7" width="108" height="2" fill="#F59E0B" />
-    {/* Seat divider grooves for the 3 slots */}
-    <rect x="45" y="7" width="1" height="8.5" fill="#451A03" />
-    <rect x="81" y="7" width="1" height="8.5" fill="#451A03" />
-    <rect x="8" y="15.5" width="110" height="1.5" fill="#78350F" />
+    {/* --- LEFT WING PLANKS (3 Vertical Panels Stacked) --- */}
+    <rect x="2.5" y="12" width="11.5" height="34" fill="#C26818" />
+    <rect x="13" y="12" width="1" height="34" fill="#5A2906" />
+    <rect x="2.5" y="12" width="1" height="34" fill="#F59E0B" opacity="0.4" />
+    {/* Dividers between the 3 left seats */}
+    <rect x="2.5" y="23" width="11.5" height="1" fill="#5A2906" />
+    <rect x="2.5" y="34" width="11.5" height="1" fill="#5A2906" />
 
-    {/* Left Wing Seat Planks (Fits 3 Personnel) */}
-    <rect x="8" y="16" width="16" height="38" fill="#181820" />
-    <rect x="9" y="16" width="13.5" height="36.5" fill="#B45309" />
-    <rect x="9" y="16" width="2" height="36.5" fill="#F59E0B" />
-    {/* Dividers for the 3 left slots */}
-    <rect x="9" y="28" width="13.5" height="1" fill="#451A03" />
-    <rect x="9" y="41" width="13.5" height="1" fill="#451A03" />
-    <rect x="22.5" y="16" width="1.5" height="38" fill="#78350F" />
-
-    {/* Right Wing Seat Planks (Fits 3 Personnel) */}
-    <rect x="102" y="16" width="16" height="38" fill="#181820" />
-    <rect x="103.5" y="16" width="13.5" height="36.5" fill="#B45309" />
-    <rect x="115" y="16" width="2" height="36.5" fill="#F59E0B" />
-    {/* Dividers for the 3 right slots */}
-    <rect x="103.5" y="28" width="13.5" height="1" fill="#451A03" />
-    <rect x="103.5" y="41" width="13.5" height="1" fill="#451A03" />
-    <rect x="102" y="16" width="1.5" height="38" fill="#78350F" />
-
-    {/* Brass Fastener Rivets on Corners */}
-    <circle cx="5" cy="4" r="0.8" fill="#F59E0B" />
-    <circle cx="121" cy="4" r="0.8" fill="#F59E0B" />
+    {/* --- RIGHT WING PLANKS (3 Vertical Panels Stacked) --- */}
+    <rect x="62" y="12" width="11.5" height="34" fill="#C26818" />
+    <rect x="62" y="12" width="1" height="34" fill="#5A2906" />
+    <rect x="72.5" y="12" width="1" height="34" fill="#F59E0B" opacity="0.4" />
+    {/* Dividers between the 3 right seats */}
+    <rect x="62" y="23" width="11.5" height="1" fill="#5A2906" />
+    <rect x="62" y="34" width="11.5" height="1" fill="#5A2906" />
   </g>
 );
 

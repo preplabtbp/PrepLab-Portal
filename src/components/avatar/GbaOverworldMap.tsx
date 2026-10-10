@@ -12,7 +12,7 @@ import {
   GbaWorkshopBench, GbaLotoStation, GbaWarehouseRack, GbaQaWorkstation, GbaIsoPlaque,
   GbaMineVistaPanorama, GbaMineVistaTile, GbaGazeboPillarTile, GbaGazeboTerraceTile, 
   GbaGazeboNBench, GbaGazeboBench, GbaGazeboLowBench,
-  GbaPrepLabBanner, GbaGazeboTable, GbaWaterCooler, GbaShiftBoard, GbaAcousticGuitar,
+  GbaPrepLabBanner, GbaGazeboTable, GbaWaterCooler, GbaShiftBoard,
   GbaNickelAshtray, GbaCoffeeUrn, GBA_GAZEBO_PAVING_BASE64
 } from './GbaSectionRooms';
 import { GbaCharacterSprite } from './GbaCharacterSprite';
@@ -300,6 +300,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     walkDistance: number;
     pendingAction: 'idle' | 'sit' | 'smoke' | 'coffee' | null;
     pendingSpeech: string | null;
+    pendingFacing: 'down' | 'up' | 'left' | 'right' | null;
   }>({
     currentX: isLounge ? 3 : 5,
     currentY: isLounge ? 4.8 : 4.5,
@@ -308,7 +309,8 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     facing: 'down',
     walkDistance: 0,
     pendingAction: null,
-    pendingSpeech: null
+    pendingSpeech: null,
+    pendingFacing: null
   });
 
   // Keep ref synchronized with position
@@ -345,10 +347,12 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
           if (state.pendingAction) {
             setActionState(state.pendingAction);
             if (state.pendingAction === 'sit') {
-              state.facing = 'down';
-              setFacing('down');
+              const seatFacing = state.pendingFacing || 'down';
+              state.facing = seatFacing;
+              setFacing(seatFacing);
             }
             state.pendingAction = null;
+            state.pendingFacing = null;
           } else {
             setActionState('idle');
           }
@@ -404,6 +408,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
   const startMoveTo = useCallback((targetTileX: number, targetTileY: number, onArrival?: {
     action?: 'idle' | 'sit' | 'smoke' | 'coffee';
     speech?: string;
+    facing?: 'down' | 'up' | 'left' | 'right';
   }) => {
     // Clamp inside walkable floor boundaries
     const minX = isLounge ? 0.8 : 1.2;
@@ -422,6 +427,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     movementRef.current.targetY = clampY;
     movementRef.current.pendingAction = onArrival?.action || null;
     movementRef.current.pendingSpeech = onArrival?.speech || null;
+    movementRef.current.pendingFacing = onArrival?.facing || null;
 
     playSfx('beep');
   }, [isLounge, MAP_COLS, MAP_ROWS, playSfx]);
@@ -452,18 +458,18 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
 
     // 2. Specific Objects per Room
     if (isLounge) {
-      // 1. Communal Snack & Coffee Table in Center: (x: 4.4..7.6, y: 4.5..5.8)
-      if (tx >= 4.4 && tx <= 7.6 && ty >= 4.5 && ty <= 5.8) {
+      // 1. Communal Snack & Coffee Table in Center: (x: 4.5..7.5, y: 4.4..5.8)
+      if (tx >= 4.5 && tx <= 7.5 && ty >= 4.4 && ty <= 5.8) {
         startMoveTo(6.0, 5.8, { action: 'coffee', speech: '☕ Mencicipi pisang goreng hangat & ngopi bareng rekan di meja tengah!' });
         return;
       }
 
-      // 2. Bangku Panjang Berbentuk 'n' - SISI KIRI (Kapasitas Maksimal 3 Orang): (x: 1.6..3.8, y: 3.4..7.2)
-      if (tx >= 1.6 && tx <= 3.8 && ty >= 3.4 && ty <= 7.2) {
+      // 2. Bangku Panjang Berbentuk 'n' - SISI KIRI (Kapasitas Maksimal 3 Orang, Menghadap ke KANAN): (x: 2.6..4.4, y: 3.4..6.5)
+      if (tx >= 2.6 && tx <= 4.4 && ty >= 3.4 && ty <= 6.5) {
         const leftSlots = [
-          { x: 2.8, y: 4.1 },
-          { x: 2.8, y: 5.2 },
-          { x: 2.8, y: 6.3 }
+          { x: 3.6, y: 4.1 },
+          { x: 3.6, y: 4.85 },
+          { x: 3.6, y: 5.6 }
         ];
         // Pilih slot terdekat yang masih kosong
         const sortedSlots = [...leftSlots].sort((a, b) => 
@@ -474,7 +480,8 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         if (availableSlot) {
           startMoveTo(availableSlot.x, availableSlot.y, { 
             action: 'sit', 
-            speech: '🪑 Duduk santai di bangku sisi kiri meja tengah' 
+            facing: 'right',
+            speech: '🪑 Duduk di sisi kiri menghadap ke rekan-rekan di meja tengah' 
           });
           return;
         } else {
@@ -485,12 +492,12 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         }
       }
 
-      // 3. Bangku Panjang Berbentuk 'n' - SISI ATAS (Kapasitas Maksimal 3 Orang): (x: 3.8..8.4, y: 3.0..4.4)
-      if (tx >= 3.8 && tx <= 8.4 && ty >= 3.0 && ty <= 4.4) {
+      // 3. Bangku Panjang Berbentuk 'n' - SISI ATAS (Kapasitas Maksimal 3 Orang, Menghadap ke BAWAH): (x: 4.4..7.6, y: 2.9..4.3)
+      if (tx >= 4.4 && tx <= 7.6 && ty >= 2.9 && ty <= 4.3) {
         const topSlots = [
-          { x: 4.3, y: 3.7 },
-          { x: 6.0, y: 3.7 },
-          { x: 7.7, y: 3.7 }
+          { x: 4.9, y: 3.5 },
+          { x: 6.0, y: 3.5 },
+          { x: 7.1, y: 3.5 }
         ];
         // Pilih slot terdekat yang masih kosong
         const sortedSlots = [...topSlots].sort((a, b) => 
@@ -501,7 +508,8 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         if (availableSlot) {
           startMoveTo(availableSlot.x, availableSlot.y, { 
             action: 'sit', 
-            speech: '🪑 Duduk santai di bangku sisi atas meja tengah' 
+            facing: 'down',
+            speech: '🪑 Duduk di sisi atas menghadap ke meja tengah' 
           });
           return;
         } else {
@@ -512,12 +520,12 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         }
       }
 
-      // 4. Bangku Panjang Berbentuk 'n' - SISI KANAN (Kapasitas Maksimal 3 Orang): (x: 8.4..10.4, y: 3.4..7.2)
-      if (tx >= 8.4 && tx <= 10.4 && ty >= 3.4 && ty <= 7.2) {
+      // 4. Bangku Panjang Berbentuk 'n' - SISI KANAN (Kapasitas Maksimal 3 Orang, Menghadap ke KIRI): (x: 7.6..9.4, y: 3.4..6.5)
+      if (tx >= 7.6 && tx <= 9.4 && ty >= 3.4 && ty <= 6.5) {
         const rightSlots = [
-          { x: 8.8, y: 4.1 },
-          { x: 8.8, y: 5.2 },
-          { x: 8.8, y: 6.3 }
+          { x: 8.0, y: 4.1 },
+          { x: 8.0, y: 4.85 },
+          { x: 8.0, y: 5.6 }
         ];
         // Pilih slot terdekat yang masih kosong
         const sortedSlots = [...rightSlots].sort((a, b) => 
@@ -528,7 +536,8 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         if (availableSlot) {
           startMoveTo(availableSlot.x, availableSlot.y, { 
             action: 'sit', 
-            speech: '🪑 Duduk santai di bangku sisi kanan meja tengah' 
+            facing: 'left',
+            speech: '🪑 Duduk di sisi kanan menghadap ke rekan-rekan di meja tengah' 
           });
           return;
         } else {
@@ -544,14 +553,9 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         startMoveTo(5.8, 3.8, { speech: '🏆 Gazebo K3 Departemen PREPARATION & LABORATORY' });
         return;
       }
-      // K3 Safety Notice & Shift Schedule Board: (x: 0.4..1.8, y: 2.8..4.2)
-      if (tx >= 0.4 && tx <= 1.8 && ty >= 2.8 && ty <= 4.2) {
-        startMoveTo(1.5, 3.8, { speech: '📋 Target K3 Shift: Zero Accident & Safety First!' });
-        return;
-      }
-      // Acoustic Guitar: (x: 0.8..2.0, y: 5.2..6.6)
-      if (tx >= 0.8 && tx <= 2.0 && ty >= 5.2 && ty <= 6.6) {
-        startMoveTo(1.8, 5.8, { speech: '🎸 Memetik gitar santai melepas penat shift' });
+      // K3 Safety Notice & Shift Schedule Board (Menempel di Dinding/Pagar Pilar Kiri): (x: 0.0..1.4, y: 1.8..3.6)
+      if (tx >= 0.0 && tx <= 1.4 && ty >= 1.8 && ty <= 3.6) {
+        startMoveTo(1.2, 3.6, { speech: '📋 Target K3 Shift: Zero Accident & Safety First!' });
         return;
       }
       // K3 Drinking Water Gallon Dispenser: (x: 10.0..11.6, y: 3.5..5.0)
@@ -559,9 +563,9 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         startMoveTo(9.8, 4.6, { speech: '💧 Isi tumbler air minum dingin segar K3' });
         return;
       }
-      // Stainless Steel Ashtray: (x: 9.8..11.2, y: 5.2..6.6)
-      if (tx >= 9.8 && tx <= 11.2 && ty >= 5.2 && ty <= 6.6) {
-        startMoveTo(9.5, 5.8, { action: 'smoke', speech: '🚬 Santai sejenak merokok di Gazebo K3' });
+      // Stainless Steel Ashtray: (x: 9.8..11.4, y: 5.2..6.6)
+      if (tx >= 9.8 && tx <= 11.4 && ty >= 5.2 && ty <= 6.6) {
+        startMoveTo(9.8, 5.8, { action: 'smoke', speech: '🚬 Santai sejenak merokok di Gazebo K3' });
         return;
       }
       // Sample Ore Drum: (x: 0.2..1.5, y: 4.2..5.2)
@@ -1129,14 +1133,13 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
                 fill="url(#gba-gazebo-paving-pattern)"
               />
 
-              {/* 5. Left Pillar Corner: K3 Notice Board & Sample Drums */}
-              <GbaShiftBoard x={0.6} y={3.2} />
+              {/* 5. Left Pillar Corner: K3 Notice Board mounted to wall/fence & Sample Drums */}
+              <GbaShiftBoard x={0.08} y={2.4} />
               <GbaNickelDrumTile x={0.4} y={4.5} type="limonite" />
-              <GbaAcousticGuitar x={1.2} y={5.8} />
 
-              {/* 6. Communal 'n'-Shaped Continuous Long Bench (Max 3 people per side) surrounding Center Table */}
-              <GbaGazeboNBench x={2.0} y={3.2} />
-              <GbaGazeboTable x={4.9} y={4.8} />
+              {/* 6. Communal 'n'-Shaped Continuous Long Bench (Exact Compact Scale) surrounding Center Table */}
+              <GbaGazeboNBench x={3.625} y={3.4} />
+              <GbaGazeboTable x={4.875} y={4.6} />
 
               {/* 7. Right Pillar Corner: K3 Water Cooler & Proportional Stainless Ashtray */}
               <GbaWaterCooler x={10.4} y={4.2} />
