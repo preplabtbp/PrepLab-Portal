@@ -3042,13 +3042,14 @@ export function NotionDatabaseTable({
     }
   };
 
-  // Insert Blank Row Inline directly into table (starts manual inline editing immediately)
-  const handleInsertBlankRow = (insertAtIndex: number = 0) => {
+  // Insert Blank Row Inline directly into table (starts manual inline editing immediately at row #1)
+  const handleInsertBlankRow = (_insertAtIndex: number = 0) => {
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const inheritedCadence = currentCadence || 'Non Routine';
 
     const blankRow: TableRowData = {
+      id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       number: '1',
       'Jenis kegiatan': '',
       'Jenis Kegiatan': '',
@@ -3068,8 +3069,8 @@ export function NotionDatabaseTable({
       }
     });
 
-    const nextRows = [...localRows];
-    nextRows.splice(insertAtIndex, 0, blankRow);
+    // Selalu sisipkan di posisi paling atas (#1) dan geser urutan yang lain ke bawah
+    const nextRows = [blankRow, ...localRows];
 
     // Renumber parent rows sequentially starting from 1
     let parentNum = 1;
@@ -3082,15 +3083,15 @@ export function NotionDatabaseTable({
     onRowsChange?.(renumbered);
     saveTableToBackend(renumbered);
 
-    // Immediately activate inline editor on the new empty cell
+    // Immediately activate inline editor on the new empty cell at row 0
     setActiveInlineEditor({
-      rowIndex: insertAtIndex,
+      rowIndex: 0,
       colName: 'Jenis kegiatan',
       initialValue: '',
       multiline: false
     });
 
-    toast.success('Baris kosong baru ditambahkan. Silakan ketik langsung nama kegiatan di tabel.');
+    toast.success('Baris kosong baru (#1) ditambahkan di urutan pertama. Silakan ketik nama kegiatan.');
   };
 
   // Delete Row Handler
@@ -3134,11 +3135,16 @@ export function NotionDatabaseTable({
           map.set(r, activeParentRef);
         }
       } else {
-        activeParentRef = r;
+        // HANYA jadikan row sebagai activeParentRef jika row tersebut memiliki judul kegiatan nyata
+        // Baris kosong baru (tanpa judul) TIDAK PERNAH boleh mengadopsi subtask dari task lain
+        const title = (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || getRowVal(r, 'Judul') || r['Jenis kegiatan'] || r['Jenis Kegiatan'] || '').trim();
+        if (title.length > 0) {
+          activeParentRef = r;
+        }
       }
     });
     return map;
-  }, [localRows]);
+  }, [localRows, getRowVal]);
 
   // Filter and sort rows
   const filteredRows = useMemo(() => {
@@ -4344,6 +4350,18 @@ export function NotionDatabaseTable({
                 </button>
               </NotionTooltip>
             </div>
+
+            {/* Tombol hijau "+ New" dipindahkan ke sebelah kanan tombol Cards */}
+            <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="ml-1 sm:ml-2 px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New</span>
+              </button>
+            </NotionTooltip>
           </div>
 
           {/* Right Anchor: Essential Tools Icons + Dedicated Full Tools Logo + + New Button */}
@@ -5188,18 +5206,6 @@ export function NotionDatabaseTable({
                 </div>
               )}
             </div>
-
-            {/* 7. PRIMARY "+ New" BUTTON ALA NOTION */}
-            <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
-              <button
-                type="button"
-                onClick={handleOpenAddModal}
-                className="px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>New</span>
-              </button>
-            </NotionTooltip>
           </div>
         </div>
       </div>
@@ -5676,19 +5682,6 @@ export function NotionDatabaseTable({
                                 {groupRows.length}
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenAddModal();
-                              }}
-                              className={`p-1 rounded transition-colors ${
-                                isNotionLight ? 'hover:bg-slate-200 text-slate-500' : 'hover:bg-slate-700 text-slate-400'
-                              }`}
-                              title={`Tambah kegiatan baru di ${groupName}`}
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -5724,12 +5717,16 @@ export function NotionDatabaseTable({
                               ? hierarchicalItems.find(h => h.parentRow === designatedParent || (designatedParent.id && h.parentRow.id && h.parentRow.id === designatedParent.id)) 
                               : null;
 
+                            const isCurrentParentValid = currentParentItem && (
+                              (getRowVal(currentParentItem.parentRow, 'Jenis kegiatan') || '').trim().length > 0
+                            );
+
                             if (existingParent) {
                               existingParent.subItems.push({
                                 row,
                                 actualIndex: actualRowIndex
                               });
-                            } else if (currentParentItem && (!designatedParent || designatedParent === currentParentItem.parentRow)) {
+                            } else if (isCurrentParentValid && (!designatedParent || designatedParent === currentParentItem.parentRow)) {
                               currentParentItem.subItems.push({
                                 row,
                                 actualIndex: actualRowIndex
@@ -5743,7 +5740,7 @@ export function NotionDatabaseTable({
                               };
                               hierarchicalItems.push(newParent);
                               currentParentItem = newParent;
-                            } else if (currentParentItem) {
+                            } else if (isCurrentParentValid) {
                               currentParentItem.subItems.push({
                                 row,
                                 actualIndex: actualRowIndex
@@ -5837,15 +5834,15 @@ export function NotionDatabaseTable({
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-center gap-1.5">
-                                  {/* + Button: Insert new task/row */}
+                                  {/* + Button: Insert new task/row at top (#1) */}
                                   <button
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleInsertBlankRow(actualRowIndex + 1);
+                                      handleInsertBlankRow(0);
                                     }}
                                     className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
-                                    title="Tambah baris tugas baru di bawah ini"
+                                    title="Tambah baris tugas baru (#1) di posisi paling atas"
                                   >
                                     <Plus className="w-3.5 h-3.5" />
                                   </button>
@@ -6935,24 +6932,6 @@ export function NotionDatabaseTable({
                         });
                       })()}
 
-                      {/* + New page button at bottom of group */}
-                      {!isCollapsed && (
-                        <tr
-                          onClick={() => handleOpenAddModal()}
-                          className={`cursor-pointer transition-colors border-b select-none ${
-                            isNotionLight
-                              ? 'hover:bg-[#f7f7f5] text-slate-600 border-[#e9e9e8]'
-                              : 'hover:bg-slate-800/40 text-slate-400 border-[#2d2d2d]'
-                          }`}
-                        >
-                          <td colSpan={displayHeaders.length + 3} className="px-3.5 py-2.5 text-xs">
-                            <div className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity">
-                              <Plus className="w-4 h-4 text-slate-500" />
-                              <span className="font-semibold text-xs tracking-wide">New page</span>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </React.Fragment>
                   );
                 })
@@ -6967,15 +6946,6 @@ export function NotionDatabaseTable({
             }`}
           >
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleOpenAddModal}
-                className={`text-xs font-semibold flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
-                  isNotionLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' : 'text-slate-400 hover:text-teal-400 hover:bg-slate-800'
-                }`}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Tambah Baris Kegiatan Baru</span>
-              </button>
               {localRows.length > 0 && (
                 <button
                   type="button"
