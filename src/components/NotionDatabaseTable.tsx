@@ -73,6 +73,7 @@ import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModa
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import { syncLogbookRowBackToOrigin, formatToDDMMYYYY, getTodayDDMMYYYY } from './notion/logbook-section-utils';
+import { LogbookTaskRecommendationModal } from './notion/LogbookTaskRecommendationModal';
 import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './notion/FloatingSelectionToolbar';
 import { PicAvatarGroup, smartSplitPicString } from './PicAvatarGroup';
 import {
@@ -736,6 +737,14 @@ export function NotionDatabaseTable({
     initialValue: string;
     multiline: boolean;
   } | null>(null);
+
+  // Logbook Smart Task Recommendation Modal State
+  const [showLogbookRecModal, setShowLogbookRecModal] = useState<boolean>(false);
+  const isLogbookTable = useMemo(() => {
+    const t = (title || '').toLowerCase();
+    const s = (section || '').toLowerCase();
+    return t.startsWith('logbook') || t.startsWith('log book') || s.includes('logbook');
+  }, [title, section]);
 
   // Direct Inline Click-to-Edit for PIC Column
   const [activeInlinePicCell, setActiveInlinePicCell] = useState<{ rowIndex: number; colName: string } | null>(null);
@@ -2723,6 +2732,28 @@ export function NotionDatabaseTable({
     toast.success(`Sub-kegiatan "${cleanTitle}" berhasil ditambahkan`);
   };
 
+  // Handler for adding selected tasks from LogbookTaskRecommendationModal
+  const handleAddRecommendedTasks = async (tasksToAdd: TableRowData[]) => {
+    try {
+      const { rows: migratedTasks } = migrateChecklistsInRows(tasksToAdd, section);
+      const nextRows = [...localRows, ...migratedTasks];
+      let mainNum = 1;
+      nextRows.forEach(r => {
+        if (!isSubItemRow(r)) {
+          r.number = String(mainNum++);
+        }
+      });
+      setLocalRows(nextRows);
+      onRowsChange?.(nextRows);
+      await saveTableToBackend(nextRows);
+      toast.success(`🎉 Berhasil menambahkan ${tasksToAdd.length} rencana tugas ke logbook!`);
+      setShowLogbookRecModal(false);
+    } catch (err: any) {
+      console.error('Error adding recommended tasks:', err);
+      toast.error('Gagal menambahkan rencana tugas: ' + (err?.message || 'Error'));
+    }
+  };
+
   // Helper to migrate existing checklists in Keterangan to hierarchical sub-items
   const migrateRowsSubtasksInternal = (inputRows: TableRowData[]) => {
     let migratedCount = 0;
@@ -4317,6 +4348,19 @@ export function NotionDatabaseTable({
 
           {/* Right Anchor: Essential Tools Icons + Dedicated Full Tools Logo + + New Button */}
           <div className="flex items-center gap-1 relative">
+            {/* Logbook Smart Task Recommendations Button */}
+            {isLogbookTable && (
+              <button
+                type="button"
+                onClick={() => setShowLogbookRecModal(true)}
+                className="h-7 px-2.5 rounded-lg bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-teal-400/30 mr-1"
+                title="Buka Rekomendasi Rencana Tugas Hari Ini (Routine & Non-Routine yang Aktif)"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                <span className="hidden sm:inline">Rekomendasi Rencana</span>
+                <span className="sm:hidden">Rekomendasi</span>
+              </button>
+            )}
             {/* 1. SEARCH TOOL (Expandable inline input or icon button) */}
             <div className="relative notion-search-container">
               {isSearchInputOpen || searchQuery ? (
@@ -9600,6 +9644,19 @@ export function NotionDatabaseTable({
           title={previewImage.title}
           driveViewUrl={previewImage.driveViewUrl}
           driveDownloadUrl={previewImage.driveDownloadUrl}
+        />
+      )}
+
+      {/* Logbook Task Recommendation Modal */}
+      {isLogbookTable && (
+        <LogbookTaskRecommendationModal
+          isOpen={showLogbookRecModal}
+          onClose={() => setShowLogbookRecModal(false)}
+          sectionName={section || 'Preparasi'}
+          allPosts={allPosts || []}
+          targetUniverse={pt === 'GTS' ? 'GTS' : 'TBP'}
+          existingRows={localRows}
+          onAddSelectedTasks={handleAddRecommendedTasks}
         />
       )}
 

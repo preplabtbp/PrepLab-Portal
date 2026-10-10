@@ -1,4 +1,5 @@
-import { TableRowData } from '../NotionDatabaseTable';
+import type { TableRowData } from '../NotionDatabaseTable';
+export type { TableRowData };
 
 /**
  * Formats any date string or Date object into DD-MM-YYYY format.
