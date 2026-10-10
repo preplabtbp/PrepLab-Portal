@@ -689,9 +689,38 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     }
   };
 
+  const [rosterData, setRosterData] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('preplab_roster_cache') || localStorage.getItem('preplab_roster_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  const fetchRoster = async () => {
+    try {
+      const res = await fetch('/api/roster');
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.roster || []);
+      if (list.length > 0) {
+        setRosterData(list);
+        try {
+          sessionStorage.setItem('preplab_roster_cache', JSON.stringify(list));
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('Failed to fetch roster for employee stats:', e);
+    }
+  };
+
   useEffect(() => {
     // Jalankan revalidasi data di background secara instan
     fetchEmployees(employees.length > 0);
+    fetchRoster();
   }, [inspectorNik, isMeetingRoom]);
 
   // Kalkulasi data masa kerja jabatan (Sekarang, Sebelumnya, Total)
@@ -703,7 +732,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     setTenureDropdownPeriod('sekarang');
   }, [selectedEmployee?.nik]);
 
-  const [activeStatDetail, setActiveStatDetail] = useState<'permanent' | 'kontrak' | 'izin' | 'spdk' | 'active' | null>(null);
+  const [activeStatDetail, setActiveStatDetail] = useState<'permanent' | 'kontrak' | 'izin' | 'spdk' | 'active' | 'onsite' | 'counseling' | null>(null);
   const [statDetailSearch, setStatDetailSearch] = useState('');
   const [ptFilter, setPtFilter] = useState<'ALL' | 'TBP' | 'GTS'>('ALL');
 
@@ -1144,7 +1173,174 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     return result;
   }, [scopedEmployees]);
 
+  // 5. Tanggal Hari Ini untuk Pencocokan Roster
+  const todayDateKeys = useMemo(() => {
+    const today = new Date();
+    const day = today.getDate();
+    const monthsShortEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthsShortId = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const yr = String(today.getFullYear()).slice(-2);
+    const enKey = `${day} ${monthsShortEn[today.getMonth()]} ${yr}`;
+    const idKey = `${day} ${monthsShortId[today.getMonth()]} ${yr}`;
+    return { enKey, idKey, day, month: today.getMonth(), year: today.getFullYear() };
+  }, []);
 
+  // Map Jadwal Roster per NIK
+  const rosterByNikMap = useMemo(() => {
+    const map = new Map<string, Record<string, string>>();
+    for (const r of rosterData) {
+      if (r.nik && r.fullSchedule) {
+        map.set(String(r.nik).toUpperCase().trim(), r.fullSchedule);
+      }
+    }
+    return map;
+  }, [rosterData]);
+
+  // 6. Data & List Karyawan Onsite pada Hari Ini
+  // Sesuai aturan: Ambil data keterangan OFF, D, N, LS, CS, dan I.
+  // Pengecualian khusus: Tidak termasuk I yang dimana pada tanggal/hari sebelumnya ada C, CT, CE sebelum ditutup oleh TRV atau pada hari ini sudah OFF, D, N, LS
+  const onsiteEmployeesList = useMemo(() => {
+    const idToEnMonths: Record<string, string> = {
+      'mei': 'May', 'agu': 'Aug', 'ags': 'Aug', 'okt': 'Oct', 'des': 'Dec'
+    };
+    const parseDateKeyTs = (dStr: string): number => {
+      let s = String(dStr).trim();
+      for (const [idm, enm] of Object.entries(idToEnMonths)) {
+        s = s.replace(new RegExp(`\\b${idm}\\b`, 'gi'), enm);
+      }
+      const t = new Date(s).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+
+    const todayTs = new Date(todayDateKeys.year, todayDateKeys.month, todayDateKeys.day).getTime();
+    const list: Array<{ employee: any; shiftCode: string }> = [];
+
+    scopedEmployees.forEach(emp => {
+      if (isResignedOrNonActiveStatus(emp)) return;
+      const sched = rosterByNikMap.get(String(emp.nik || '').toUpperCase().trim());
+      if (!sched) return;
+
+      const todayStatus = (sched[todayDateKeys.enKey] || sched[todayDateKeys.idKey] || '-').trim().toUpperCase();
+
+      // Keterangan yang dihitung Onsite: OFF, D, N, LS, CS, dan I
+      if (['OFF', 'D', 'N', 'LS', 'CS'].includes(todayStatus)) {
+        list.push({ employee: emp, shiftCode: todayStatus });
+      } else if (todayStatus === 'I') {
+        // Pengecualian khusus kode I:
+        // Cek hari-hari sebelumnya secara berurutan mundur
+        const sortedPrevDates = Object.keys(sched)
+          .map(d => ({ key: d, ts: parseDateKeyTs(d) }))
+          .filter(d => d.ts > 0 && d.ts < todayTs)
+          .sort((a, b) => b.ts - a.ts);
+
+        let isExcludedI = false;
+        for (const prev of sortedPrevDates) {
+          const prevStatus = (sched[prev.key] || '-').trim().toUpperCase();
+          // Jika sudah ditutup oleh TRV atau sudah bekerja/onsite (OFF, D, N, LS, CS)
+          if (['TRV', 'TV', 'OFF', 'D', 'N', 'LS', 'CS'].includes(prevStatus)) {
+            isExcludedI = false;
+            break;
+          }
+          // Jika ada cuti (C, CT, CE) sebelum ditutup TRV/bekerja
+          if (['C', 'CT', 'CE'].includes(prevStatus) || prevStatus.startsWith('CT') || prevStatus.startsWith('CE') || prevStatus.startsWith('C')) {
+            isExcludedI = true;
+            break;
+          }
+        }
+
+        if (!isExcludedI) {
+          list.push({ employee: emp, shiftCode: 'I' });
+        }
+      }
+    });
+
+    return list.sort((a, b) => compareEmployeesByJabatan(a.employee, b.employee));
+  }, [scopedEmployees, rosterByNikMap, todayDateKeys]);
+
+  // Persentase Karyawan Onsite terhadap Karyawan Aktif
+  const onsitePercentage = useMemo(() => {
+    const activeTotal = activeEmployeesCount > 0 ? activeEmployeesCount : scopedEmployees.length;
+    if (activeTotal === 0) return '0';
+    const val = (onsiteEmployeesList.length / activeTotal) * 100;
+    return val % 1 === 0 ? val.toFixed(0) : val.toFixed(1);
+  }, [onsiteEmployeesList.length, activeEmployeesCount, scopedEmployees.length]);
+
+  // 7. Data & List Karyawan dengan Konseling Aktif (Konseling I, II, III aktif)
+  const activeCounselingList = useMemo(() => {
+    const list: Array<{
+      employee: any;
+      statusSanksi: string;
+      levelBadgeBg: string;
+      levelColor: string;
+      tanggal: string;
+      alasan: string;
+    }> = [];
+
+    scopedEmployees.forEach(emp => {
+      if (isResignedOrNonActiveStatus(emp)) return;
+      const c = emp.counselingSpdk || emp.counseling || {};
+      const st = String(c.statusSanksi || c.status_sanksi || '').trim();
+      const stLower = st.toLowerCase();
+
+      // Sanksi yang selesai / aman / pemutihan dilewati
+      if (
+        stLower.includes('selesai') ||
+        stLower.includes('pemutihan') ||
+        stLower.includes('kadaluarsa') ||
+        stLower.includes('expired') ||
+        stLower === 'aman'
+      ) {
+        return;
+      }
+
+      const k1 = String(c.konseling1 || c.konseling_1 || '').trim();
+      const k2 = String(c.konseling2 || c.konseling_2 || '').trim();
+      const k3 = String(c.konseling3 || c.konseling_3 || '').trim();
+      const hasK = (k1 && k1 !== '-' && k1 !== '0') ||
+                   (k2 && k2 !== '-' && k2 !== '0') ||
+                   (k3 && k3 !== '-' && k3 !== '0');
+
+      const isCounselingStatus = stLower.includes('konseling') || (hasK && !stLower.includes('sp') && !stLower.includes('st') && !stLower.includes('phk'));
+
+      if (!isCounselingStatus) return;
+
+      let displayStatus = 'Konseling I';
+      let levelBadgeBg = 'bg-amber-500';
+      let levelColor = 'text-amber-800 bg-amber-50 border-amber-300';
+
+      if (stLower.includes('iii') || (k3 && k3 !== '-' && k3 !== '0')) {
+        displayStatus = 'Konseling III';
+        levelBadgeBg = 'bg-rose-500';
+        levelColor = 'text-rose-800 bg-rose-50 border-rose-300';
+      } else if (stLower.includes('ii') || (k2 && k2 !== '-' && k2 !== '0')) {
+        displayStatus = 'Konseling II';
+        levelBadgeBg = 'bg-orange-500';
+        levelColor = 'text-orange-800 bg-orange-50 border-orange-300';
+      } else if (stLower.includes('i') || (k1 && k1 !== '-' && k1 !== '0')) {
+        displayStatus = 'Konseling I';
+        levelBadgeBg = 'bg-amber-500';
+        levelColor = 'text-amber-800 bg-amber-50 border-amber-300';
+      } else if (st) {
+        displayStatus = st;
+      }
+
+      const tgl = [k3, k2, k1, c.bulanKonseling, c.bulan_konseling, c.tanggalSp, c.tanggal_sp]
+        .find(s => s && s !== '-' && s !== '0' && (s.includes('-') || s.includes('/') || /[a-zA-Z]{3,}/.test(s))) || '-';
+
+      const alasan = c.alasanKonseling || c.alasan_konseling || c.alasan || c.keterangan || '-';
+
+      list.push({
+        employee: emp,
+        statusSanksi: displayStatus,
+        levelBadgeBg,
+        levelColor,
+        tanggal: tgl,
+        alasan
+      });
+    });
+
+    return list.sort((a, b) => compareEmployeesByJabatan(a.employee, b.employee));
+  }, [scopedEmployees]);
 
   const handleManualSync = async () => {
     if (!canManageDatabase) {
@@ -1166,6 +1362,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       if (data.success) {
         setSyncFeedback({ type: 'success', message: data.message || 'Sinkronisasi database berhasil!' });
         await fetchEmployees();
+        fetchRoster();
       } else {
         setSyncFeedback({ type: 'error', message: data.message || 'Gagal sinkronisasi data dari Google Sheets' });
       }
@@ -1597,7 +1794,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 w-full">
+                <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 md:gap-4 w-full">
                   {/* Card 1: Total Data */}
                   <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center shadow-xs transition-all">
                     <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Total Data</div>
@@ -1627,7 +1824,54 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                   </button>
 
-                  {/* Card 3: Karyawan Permanent */}
+                  {/* Card 3: Karyawan Onsite (Hari Ini) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveStatDetail(prev => prev === 'onsite' ? null : 'onsite');
+                      setStatDetailSearch('');
+                    }}
+                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group text-left sm:text-center ${
+                      activeStatDetail === 'onsite'
+                        ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-md bg-emerald-50/40'
+                        : 'border-slate-200/90 hover:border-emerald-400 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="text-emerald-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 flex items-center justify-center gap-1 flex-wrap">
+                      <span>Onsite Hari Ini</span>
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        {onsitePercentage}%
+                      </span>
+                    </div>
+                    <div className="text-2xl md:text-3xl font-black text-emerald-800">{onsiteEmployeesList.length}</div>
+                    <div className="text-[10px] text-emerald-600/80 font-semibold mt-0.5 group-hover:underline">
+                      {activeStatDetail === 'onsite' ? '▲ Tutup Rincian' : '▼ Klik Lihat Shift'}
+                    </div>
+                  </button>
+
+                  {/* Card 4: Konseling Aktif */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveStatDetail(prev => prev === 'counseling' ? null : 'counseling');
+                      setStatDetailSearch('');
+                    }}
+                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group text-left sm:text-center ${
+                      activeStatDetail === 'counseling'
+                        ? 'border-rose-500 ring-2 ring-rose-500/30 shadow-md bg-rose-50/40'
+                        : 'border-slate-200/90 hover:border-rose-400 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="text-rose-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 flex items-center justify-center gap-1">
+                      <span>Konseling Aktif</span>
+                    </div>
+                    <div className="text-2xl md:text-3xl font-black text-rose-800">{activeCounselingList.length}</div>
+                    <div className="text-[10px] text-rose-600/80 font-semibold mt-0.5 group-hover:underline">
+                      {activeStatDetail === 'counseling' ? '▲ Tutup Rincian' : '▼ Klik Lihat Kasus'}
+                    </div>
+                  </button>
+
+                  {/* Card 5: Karyawan Permanent */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1651,7 +1895,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                   </button>
 
-                  {/* Card 4: Karyawan Kontrak */}
+                  {/* Card 6: Karyawan Kontrak */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1675,7 +1919,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                   </button>
 
-                  {/* Card 4: Jumlah Izin Karyawan */}
+                  {/* Card 7: Jumlah Izin Karyawan */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1699,14 +1943,14 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                   </button>
 
-                  {/* Card 5: SPDK & Sanksi (Aktif) */}
+                  {/* Card 8: SPDK & Sanksi (Aktif) */}
                   <button
                     type="button"
                     onClick={() => {
                       setActiveStatDetail(prev => prev === 'spdk' ? null : 'spdk');
                       setStatDetailSearch('');
                     }}
-                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group col-span-2 sm:col-span-1 ${
+                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group ${
                       activeStatDetail === 'spdk'
                         ? 'border-purple-600 ring-2 ring-purple-500/30 shadow-md bg-purple-50/40'
                         : 'border-purple-200 hover:border-purple-400 hover:shadow-md'
@@ -1763,6 +2007,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 <Users className="w-5 h-5" />
                               </div>
                             )}
+                            {activeStatDetail === 'onsite' && (
+                              <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
+                                <MapPin className="w-5 h-5" />
+                              </div>
+                            )}
+                            {activeStatDetail === 'counseling' && (
+                              <div className="p-2 rounded-xl bg-rose-100 text-rose-800">
+                                <HeartHandshake className="w-5 h-5" />
+                              </div>
+                            )}
 
                             <div>
                               <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
@@ -1771,12 +2025,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 {activeStatDetail === 'izin' && 'Daftar Karyawan Izin Bulan Berjalan'}
                                 {activeStatDetail === 'spdk' && 'Daftar Karyawan dengan Sanksi & SPDK Aktif'}
                                 {activeStatDetail === 'active' && 'Daftar Seluruh Karyawan Aktif'}
+                                {activeStatDetail === 'onsite' && 'Daftar Karyawan Onsite Hari Ini'}
+                                {activeStatDetail === 'counseling' && 'Daftar Karyawan Konseling Aktif'}
                                 <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
                                   {activeStatDetail === 'permanent' && `${permanentEmployeesCount} Karyawan`}
                                   {activeStatDetail === 'kontrak' && `${contractEmployeesCount} Karyawan`}
                                   {activeStatDetail === 'izin' && `${monthlyIzinData.list.length} Orang (${monthlyIzinData.grandTotal} Hari)`}
                                   {activeStatDetail === 'spdk' && `${activeSpdkData.length} Kasus Aktif`}
                                   {activeStatDetail === 'active' && `${activeEmployeesCount} Karyawan`}
+                                  {activeStatDetail === 'onsite' && `${onsiteEmployeesList.length} Orang (${onsitePercentage}% dari Karyawan Aktif)`}
+                                  {activeStatDetail === 'counseling' && `${activeCounselingList.length} Karyawan`}
                                 </span>
                               </h3>
                               <p className="text-xs text-slate-500">
@@ -1785,6 +2043,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 {activeStatDetail === 'izin' && 'Diurutkan dari frekuensi izin terbanyak ke terkecil pada bulan berjalan.'}
                                 {activeStatDetail === 'spdk' && 'Menampilkan sanksi disiplin dan SPDK yang masih berlaku saat ini.'}
                                 {activeStatDetail === 'active' && 'Diurutkan sesuai tingkatan hirarki jabatan resmi.'}
+                                {activeStatDetail === 'onsite' && `Menampilkan karyawan dengan status shift onsite hari ini (${todayDateKeys.enKey}). Klik baris untuk profil lengkap.`}
+                                {activeStatDetail === 'counseling' && 'Menampilkan karyawan dengan status pembinaan dan Konseling I, II, III aktif.'}
                               </p>
                             </div>
                           </div>
@@ -2257,6 +2517,167 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                         ))}
                                       </div>
                                     </details>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+
+                          {/* 5. KARYAWAN ONSITE HARI INI */}
+                          {activeStatDetail === 'onsite' && (() => {
+                            const filtered = onsiteEmployeesList.filter(item => {
+                              const q = statDetailSearch.toLowerCase().trim();
+                              if (!q) return true;
+                              return (item.employee.name || '').toLowerCase().includes(q) ||
+                                     (item.employee.nik || '').toLowerCase().includes(q) ||
+                                     (item.employee.jabatan || '').toLowerCase().includes(q) ||
+                                     (item.employee.department || item.employee.section || '').toLowerCase().includes(q) ||
+                                     item.shiftCode.toLowerCase().includes(q);
+                            });
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div className="py-8 text-center text-xs text-slate-400">
+                                  Tidak ada karyawan onsite yang sesuai pencarian.
+                                </div>
+                              );
+                            }
+
+                            const shiftLabels: Record<string, { label: string; badge: string }> = {
+                              'D': { label: 'Shift Siang', badge: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+                              'N': { label: 'Shift Malam', badge: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+                              'OFF': { label: 'Site OFF', badge: 'bg-amber-100 text-amber-800 border-amber-300' },
+                              'LS': { label: 'Long Shift', badge: 'bg-blue-100 text-blue-800 border-blue-300' },
+                              'CS': { label: 'Change Shift', badge: 'bg-teal-100 text-teal-800 border-teal-300' },
+                              'I': { label: 'Izin Onsite', badge: 'bg-violet-100 text-violet-800 border-violet-300' },
+                            };
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
+                                {filtered.map((item, idx) => {
+                                  const emp = item.employee;
+                                  const shiftInfo = shiftLabels[item.shiftCode] || {
+                                    label: `Shift ${item.shiftCode}`,
+                                    badge: 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                  };
+
+                                  return (
+                                    <div
+                                      key={emp.nik || idx}
+                                      onClick={() => setSelectedEmployee(emp)}
+                                      className="p-2.5 rounded-xl hover:bg-emerald-50/60 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 cursor-pointer group"
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="w-8 h-8 rounded-lg bg-emerald-100/70 border border-emerald-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-emerald-800 text-[10px]">
+                                          {emp.photo ? (
+                                            <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                          ) : (
+                                            (emp.name || 'O').charAt(0).toUpperCase()
+                                          )}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="text-xs font-bold text-slate-800 group-hover:text-emerald-700 truncate flex items-center gap-1.5">
+                                            <span>{emp.name}</span>
+                                            <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">{emp.nik}</span>
+                                          </div>
+                                          <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                                            <span>{emp.jabatan || '-'}</span>
+                                            <span>•</span>
+                                            <span>{emp.department || emp.section || '-'}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl border shadow-2xs ${shiftInfo.badge}`}>
+                                          {shiftInfo.label} ({item.shiftCode})
+                                        </span>
+                                        <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-600 transition-colors" />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+
+                          {/* 6. KARYAWAN KONSELING AKTIF */}
+                          {activeStatDetail === 'counseling' && (() => {
+                            const filtered = activeCounselingList.filter(item => {
+                              const q = statDetailSearch.toLowerCase().trim();
+                              if (!q) return true;
+                              return (item.employee.name || '').toLowerCase().includes(q) ||
+                                     (item.employee.nik || '').toLowerCase().includes(q) ||
+                                     (item.employee.jabatan || '').toLowerCase().includes(q) ||
+                                     (item.employee.department || item.employee.section || '').toLowerCase().includes(q) ||
+                                     item.statusSanksi.toLowerCase().includes(q) ||
+                                     item.alasan.toLowerCase().includes(q);
+                            });
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div className="py-8 text-center text-xs text-slate-400">
+                                  Tidak ada data karyawan konseling aktif yang sesuai pencarian.
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
+                                {filtered.map((item, idx) => {
+                                  const emp = item.employee;
+                                  return (
+                                    <div
+                                      key={emp.nik || idx}
+                                      onClick={() => setSelectedEmployee(emp)}
+                                      className="p-3 rounded-xl hover:bg-rose-50/60 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer group"
+                                    >
+                                      <div className="flex items-start gap-3 min-w-0">
+                                        <div className="w-9 h-9 rounded-xl bg-rose-100/80 border border-rose-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-rose-800 text-xs mt-0.5">
+                                          {emp.photo ? (
+                                            <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                          ) : (
+                                            (emp.name || 'K').charAt(0).toUpperCase()
+                                          )}
+                                        </div>
+
+                                        <div className="min-w-0">
+                                          <div className="text-xs font-bold text-slate-800 group-hover:text-rose-700 truncate flex items-center gap-1.5 flex-wrap">
+                                            <span>{emp.name}</span>
+                                            <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                                              {emp.nik}
+                                            </span>
+                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border shadow-2xs ${item.levelColor}`}>
+                                              {item.statusSanksi}
+                                            </span>
+                                          </div>
+                                          <div className="text-[11px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                                            <span>{emp.jabatan || '-'}</span>
+                                            <span>•</span>
+                                            <span>{emp.department || emp.section || '-'}</span>
+                                          </div>
+                                          {item.alasan && item.alasan !== '-' && (
+                                            <div className="text-[11px] text-amber-900/90 font-medium bg-amber-50/70 border border-amber-200/80 rounded-lg p-1.5 mt-1.5 max-w-xl">
+                                              <span className="font-bold">Alasan / Pembinaan:</span> {item.alasan}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                                        {item.tanggal && item.tanggal !== '-' && (
+                                          <div className="text-right">
+                                            <div className="text-[11px] font-bold font-mono text-slate-700">
+                                              Tgl: {formatShortDate(item.tanggal)}
+                                            </div>
+                                            <div className="text-[10px] text-rose-600 font-semibold mt-0.5">
+                                              Masa Berlaku 3 Bulan
+                                            </div>
+                                          </div>
+                                        )}
+                                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-rose-600 transition-colors" />
+                                      </div>
+                                    </div>
                                   );
                                 })}
                               </div>
