@@ -12,6 +12,7 @@
 - Type Check / Lint: `npm run lint` (Menjalankan `tsc --noEmit`)
 - Build Production: `npm run build`
 - Run Tests: `npm test`
+- ⚠️ **Peringatan Hosting Cloud Run**: Akun hosting GCP telah berpindah. Dilarang mendeploy ke project lama `project-054e3351-b8d1-42f7-9c8` (*My First Project*). Selalu pastikan gcloud menargetkan project ID akun baru sebelum menjalankan script deploy.
 
 ## 3. Critical Domain Rules & Conventions
 1. **Pemisahan Tiket Temuan vs WO Permintaan**:

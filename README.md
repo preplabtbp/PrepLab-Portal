@@ -1,5 +1,12 @@
 # Prep & Lab All in One Portal
 
+> [!WARNING]
+> **PEMBERITAHUAN MIGRASI AKUN HOSTING GCP:**
+> Akun hosting Google Cloud telah berganti. **Project lama (`project-054e3351-b8d1-42f7-9c8` / "My First Project") sudah tidak aktif/ditinggalkan.**
+> - Push ke branch `main` tidak memicu build di project lama karena webhook trigger tidak terpasang dan akun telah berpindah.
+> - Dilarang keras menjalankan deployment ke project ID lama tersebut.
+> - Pastikan seluruh konfigurasi gcloud dan deployment menargetkan project Google Cloud akun yang baru.
+
 ## Migrasi ke Google Cloud Run
 
 Aplikasi ini menggunakan database PostgreSQL (Cloud SQL) yang dikelola oleh AI Studio selama tahap pengembangan. Ketika Anda mengekspor (Download ZIP) aplikasi ini untuk di-deploy ke project Google Cloud Run Anda sendiri, **database tidak ikut diekspor**.
