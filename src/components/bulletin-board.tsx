@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
 import { NotionDatabaseTable, TableRowData } from "./NotionDatabaseTable";
-import { isLogbookPost, getSectionFromPost, aggregateSectionActiveTasks, KNOWN_SECTIONS } from "./notion/logbook-section-utils";
+import { isLogbookPost, getSectionFromPost, getLogbookTableData, aggregateSectionActiveTasks, KNOWN_SECTIONS } from "./notion/logbook-section-utils";
 import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
 import { PortalImagePickerModal } from "./PortalImagePickerModal";
 import { BannerCover } from "./BannerCover";
@@ -995,9 +995,7 @@ export function BulletinBoard({
 
     if (isLogbookPost(selectedPost)) {
       const secName = getSectionFromPost(selectedPost);
-      const targetUniverse = selectedPtFilter !== 'ALL' ? selectedPtFilter : (selectedPost.pt || userUniverse);
-      const aggregated = aggregateSectionActiveTasks(secName, posts, targetUniverse, selectedPost);
-      return aggregated;
+      return getLogbookTableData(selectedPost, secName);
     }
 
     const content = getRenderableContent(selectedPost);

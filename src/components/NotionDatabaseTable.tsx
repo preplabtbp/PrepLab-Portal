@@ -72,8 +72,20 @@ import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
-import { syncLogbookRowBackToOrigin, formatToDDMMYYYY, getTodayDDMMYYYY } from './notion/logbook-section-utils';
+import { 
+  syncLogbookRowBackToOrigin, 
+  formatToDDMMYYYY, 
+  getTodayDDMMYYYY,
+  getYesterdayDDMMYYYY,
+  getYesterdayDateWithData,
+  getRowDateDDMMYYYY,
+  extractLogbookMeta,
+  injectLogbookMeta,
+  LogbookMeta 
+} from './notion/logbook-section-utils';
 import { LogbookTaskRecommendationModal } from './notion/LogbookTaskRecommendationModal';
+import { LogbookChangelogCard } from './notion/LogbookChangelogCard';
+import { LogbookDailyNotesCard } from './notion/LogbookDailyNotesCard';
 import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './notion/FloatingSelectionToolbar';
 import { PicAvatarGroup, smartSplitPicString } from './PicAvatarGroup';
 import {
@@ -745,6 +757,16 @@ export function NotionDatabaseTable({
     const s = (section || '').toLowerCase();
     return t.startsWith('logbook') || t.startsWith('log book') || s.includes('logbook');
   }, [title, section]);
+
+  // Logbook Dynamic Meta & Date View Filter State
+  const [logbookDateFilter, setLogbookDateFilter] = useState<'today' | 'yesterday' | 'all'>('today');
+  const [logbookMeta, setLogbookMeta] = useState<LogbookMeta>(() => extractLogbookMeta(beforeText || '').meta);
+
+  useEffect(() => {
+    if (beforeText) {
+      setLogbookMeta(extractLogbookMeta(beforeText).meta);
+    }
+  }, [beforeText]);
 
   // Direct Inline Click-to-Edit for PIC Column
   const [activeInlinePicCell, setActiveInlinePicCell] = useState<{ rowIndex: number; colName: string } | null>(null);
@@ -2753,6 +2775,90 @@ export function NotionDatabaseTable({
       toast.error('Gagal menambahkan rencana tugas: ' + (err?.message || 'Error'));
     }
   };
+
+  // Carry over an unfinished task from yesterday/previous date into today's planning
+  const handleCarryOverTask = async (task: TableRowData) => {
+    try {
+      const todayStr = getTodayDDMMYYYY();
+      const newParentId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const carriedTask: TableRowData = {
+        ...task,
+        id: newParentId,
+        _id: newParentId,
+        'Created Time': todayStr,
+        createdTime: todayStr,
+        Status: 'In Progress',
+        status: 'In Progress',
+        'Tanggal Selesai': '-',
+        'Tanggal selesai': '-',
+        completed: '-',
+        'Aktual Selesai': '-',
+      };
+
+      // Also carry over its subtasks if any
+      const relatedSubtasks = localRows.filter(r => isSubItemRow(r) && r.parentRowId === (task.id || task._id));
+      const carriedSubtasks: TableRowData[] = relatedSubtasks.map(sub => ({
+        ...sub,
+        id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        parentRowId: newParentId,
+        'Created Time': todayStr,
+        createdTime: todayStr,
+        isCompleted: 'false',
+        'Tanggal Selesai': '-',
+        'Tanggal selesai': '-',
+        completed: '-',
+      }));
+
+      const nextRows = [...localRows, carriedTask, ...carriedSubtasks];
+      let mainNum = 1;
+      nextRows.forEach(r => {
+        if (!isSubItemRow(r)) {
+          r.number = String(mainNum++);
+        }
+      });
+      setLocalRows(nextRows);
+      onRowsChange?.(nextRows);
+      await saveTableToBackend(nextRows);
+      toast.success(`Tugas "${carriedTask['Jenis kegiatan'] || carriedTask['Jenis Kegiatan'] || 'Tugas'}" berhasil dilanjutkan ke hari ini!`);
+      setLogbookDateFilter('today');
+    } catch (err: any) {
+      console.error('Error carry over task:', err);
+      toast.error('Gagal melanjutkan tugas: ' + (err?.message || 'Error'));
+    }
+  };
+
+  // Save daily notes (General notes / Kejadian Khusus)
+  const handleSaveDailyNotes = async (dateStr: string, notes: string) => {
+    try {
+      const updatedMeta: LogbookMeta = {
+        ...logbookMeta,
+        generalNotes: {
+          ...logbookMeta.generalNotes,
+          [dateStr]: notes
+        }
+      };
+      setLogbookMeta(updatedMeta);
+
+      // Inject into beforeText and save post
+      const nextBeforeText = injectLogbookMeta(beforeText || '', updatedMeta);
+      const targetHeaders = displayHeaders;
+      const updatedMarkdown = serializeMarkdownTable(targetHeaders, localRows, nextBeforeText, afterText);
+
+      if (typeof postId === 'number' || (typeof postId === 'string' && /^\d+$/.test(postId))) {
+        await fetch(`/api/bulletin/${postId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: updatedMarkdown })
+        });
+      }
+      onPostContentUpdate?.(updatedMarkdown);
+      toast.success('Catatan harian logbook berhasil disimpan!');
+    } catch (err: any) {
+      console.error('Error saving daily notes:', err);
+      toast.error('Gagal menyimpan catatan harian: ' + (err?.message || 'Error'));
+    }
+  };
+
 
   // Helper to migrate existing checklists in Keterangan to hierarchical sub-items
   const migrateRowsSubtasksInternal = (inputRows: TableRowData[]) => {

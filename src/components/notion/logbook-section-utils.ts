@@ -772,3 +772,322 @@ export function serializeSectionLogbookContent(
     formatTable(todayRows, `Planning Kerja Hari Ini (${planDate})`) +
     formatTable(yesterdayRows, `Progress yang Dikerjakan Kemarin (${yesterdayDate})`);
 }
+
+/**
+ * Metadata stored in HTML comment block for Section Logbook.
+ */
+export interface LogbookMeta {
+  generalNotes: Record<string, string>; // dateStr ('DD-MM-YYYY') -> notes
+}
+
+export function extractLogbookMeta(content: string): { meta: LogbookMeta; cleanContent: string } {
+  if (!content) return { meta: { generalNotes: {} }, cleanContent: '' };
+  const match = content.match(/<!--\s*LOGBOOK_META:\s*([\s\S]*?)\s*-->/);
+  if (match) {
+    try {
+      const meta = JSON.parse(match[1]);
+      const cleanContent = content.replace(/<!--\s*LOGBOOK_META:\s*[\s\S]*?\s*-->/, '').trim();
+      return { meta: { generalNotes: meta?.generalNotes || {} }, cleanContent };
+    } catch {
+      // fallback
+    }
+  }
+  return { meta: { generalNotes: {} }, cleanContent: content };
+}
+
+export function injectLogbookMeta(content: string, meta: LogbookMeta): string {
+  const clean = content.replace(/<!--\s*LOGBOOK_META:\s*[\s\S]*?\s*-->/, '').trim();
+  const metaStr = `<!-- LOGBOOK_META:\n${JSON.stringify(meta, null, 2)}\n-->`;
+  return `${metaStr}\n\n${clean}`;
+}
+
+/**
+ * Normalizes date from row into DD-MM-YYYY format.
+ */
+export function getRowDateDDMMYYYY(row: TableRowData): string {
+  if (!row) return '';
+  const d = String(
+    row['Created Time'] ||
+    row['Created time'] ||
+    row['Tanggal Kerja'] ||
+    row['Tanggal kerja'] ||
+    row['Tanggal'] ||
+    row.date ||
+    ''
+  ).trim();
+  if (!d) return '';
+  return formatToDDMMYYYY(d);
+}
+
+/**
+ * Returns the most recent date before today that has recorded rows.
+ */
+export function getYesterdayDateWithData(allRows: TableRowData[], todayStr: string = getTodayDDMMYYYY()): string {
+  const dates = new Set<string>();
+  allRows.forEach(r => {
+    const d = getRowDateDDMMYYYY(r);
+    if (d && d !== todayStr) {
+      dates.add(d);
+    }
+  });
+
+  if (dates.size === 0) {
+    return getYesterdayDDMMYYYY();
+  }
+
+  // Parse and sort dates descending
+  const sortedDates = Array.from(dates).sort((a, b) => {
+    const parse = (s: string) => {
+      const parts = s.split('-').map(Number);
+      if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+      return 0;
+    };
+    return parse(b) - parse(a);
+  });
+
+  return sortedDates[0] || getYesterdayDDMMYYYY();
+}
+
+export interface ChangelogItem {
+  id: string;
+  title: string;
+  pic: string;
+  priority: string;
+  status: string;
+  notes: string;
+  isClosed: boolean;
+  progressPercent: number;
+  totalSubtasks: number;
+  completedSubtasks: number;
+  subtasks: Array<{ title: string; completed: boolean }>;
+  rawRow: TableRowData;
+}
+
+/**
+ * Builds the Changelog report dataset from rows for a specific date (usually yesterday).
+ */
+export function buildLogbookChangelogData(
+  allRows: TableRowData[],
+  targetDateStr?: string
+): {
+  dateStr: string;
+  totalTasks: number;
+  completedCount: number;
+  inProgressCount: number;
+  completionRate: number;
+  closedTasks: ChangelogItem[];
+  inProgressTasks: ChangelogItem[];
+} {
+  const todayStr = getTodayDDMMYYYY();
+  const dateStr = targetDateStr || getYesterdayDateWithData(allRows, todayStr);
+
+  // Filter rows belonging to target date
+  const dateRows = allRows.filter(r => {
+    const rowDate = getRowDateDDMMYYYY(r);
+    // If target date is found, match it. If row date is empty, fallback to today
+    return rowDate === dateStr;
+  });
+
+  // Extract main rows and subtasks
+  const mainItems: ChangelogItem[] = [];
+
+  // Helper to check if row is a subtask
+  const isSubtaskRow = (r: TableRowData): boolean => {
+    const num = String(r.number || '').trim();
+    return num.includes('.') || Boolean(r._parentRowIndex || r.parentNumber);
+  };
+
+  // Group subtasks with parents
+  dateRows.forEach((row, idx) => {
+    if (isSubtaskRow(row)) return;
+
+    const titleKey = Object.keys(row).find(k => k.toLowerCase().includes('kegiatan') || k.toLowerCase() === 'title');
+    const title = titleKey ? String(row[titleKey] || '').trim() : '';
+    if (!title) return;
+
+    const pic = String(row.PIC || row.pic || '').trim();
+    const priority = String(row.Priority || row.priority || 'Normal').trim();
+    const status = String(row.Status || row.status || 'Open').trim();
+    const statusLower = status.toLowerCase();
+
+    // Parse subtasks from Keterangan checklist or adjacent rows
+    const rawKeterangan = String(row.Keterangan || row.keterangan || '').trim();
+    const subtasks: Array<{ title: string; completed: boolean }> = [];
+    const notesLines: string[] = [];
+
+    // Split markdown lines in Keterangan
+    rawKeterangan.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      const checklistMatch = trimmed.match(/^-\s*\[([ xX])\]\s*(.*)$/);
+      if (checklistMatch) {
+        subtasks.push({
+          completed: checklistMatch[1].toLowerCase() === 'x',
+          title: checklistMatch[2].trim()
+        });
+      } else if (trimmed) {
+        notesLines.push(trimmed);
+      }
+    });
+
+    const totalSubtasks = subtasks.length;
+    const completedSubtasks = subtasks.filter(s => s.completed).length;
+
+    // Check if task is closed
+    const hasSubtasks = totalSubtasks > 0;
+    const isClosed = statusLower === 'closed' || statusLower === 'selesai' || 
+      (hasSubtasks && completedSubtasks === totalSubtasks);
+
+    let progressPercent = 0;
+    if (isClosed) {
+      progressPercent = 100;
+    } else if (hasSubtasks) {
+      progressPercent = Math.round((completedSubtasks / totalSubtasks) * 100);
+    } else if (statusLower === 'in progress' || statusLower === 'on progress') {
+      progressPercent = 50;
+    }
+
+    const cleanNotes = notesLines.join('\n');
+
+    mainItems.push({
+      id: String(row.id || idx),
+      title,
+      pic,
+      priority,
+      status: isClosed ? 'Closed' : (status || 'Open'),
+      notes: cleanNotes,
+      isClosed,
+      progressPercent,
+      totalSubtasks,
+      completedSubtasks,
+      subtasks,
+      rawRow: row
+    });
+  });
+
+  const closedTasks = mainItems.filter(i => i.isClosed);
+  const inProgressTasks = mainItems.filter(i => !i.isClosed);
+  const totalTasks = mainItems.length;
+  const completedCount = closedTasks.length;
+  const inProgressCount = inProgressTasks.length;
+  const completionRate = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
+
+  return {
+    dateStr,
+    totalTasks,
+    completedCount,
+    inProgressCount,
+    completionRate,
+    closedTasks,
+    inProgressTasks
+  };
+}
+
+/**
+ * Generates formatted WhatsApp text for executive changelog sharing.
+ */
+export function generateLogbookChangelogWhatsappText({
+  sectionName,
+  dateStr,
+  generalNote,
+  closedTasks,
+  inProgressTasks,
+  metrics
+}: {
+  sectionName: string;
+  dateStr: string;
+  generalNote?: string;
+  closedTasks: ChangelogItem[];
+  inProgressTasks: ChangelogItem[];
+  metrics: { total: number; closed: number; inProgress: number; percentage: number };
+}): string {
+  let text = `📋 *[REPORT PROGRESS KEMARIN] - Seksi ${sectionName}*\n`;
+  text += `📅 Tanggal: ${dateStr}\n`;
+  text += `📊 Ringkasan: ${metrics.total} Rencana • ${metrics.closed} Selesai • ${metrics.inProgress} Berlanjut (${metrics.percentage}% Capaian)\n\n`;
+
+  if (generalNote && generalNote.trim()) {
+    text += `*📢 CATATAN UMUM & KEJADIAN KHUSUS:*\n`;
+    generalNote.split('\n').forEach(line => {
+      const clean = line.trim();
+      if (clean) text += `• _${clean}_\n`;
+    });
+    text += `\n`;
+  }
+
+  text += `*✅ CLOSED (SELESAI):*\n`;
+  if (closedTasks.length === 0) {
+    text += `_(Tidak ada task yang closed)_\n`;
+  } else {
+    closedTasks.forEach(task => {
+      text += `• *${task.title}*`;
+      if (task.pic) text += ` — _(PIC: ${task.pic})_`;
+      text += `\n`;
+
+      if (task.subtasks.length > 0) {
+        text += `  - Subtask: ${task.completedSubtasks}/${task.totalSubtasks} Selesai [100%]\n`;
+      }
+
+      if (task.notes && task.notes.trim()) {
+        text += `  📝 _Catatan:_ ${task.notes.replace(/\n/g, ' ')}\n`;
+      }
+    });
+  }
+  text += `\n`;
+
+  text += `*🔄 IN PROGRESS (SEDANG BERJALAN):*\n`;
+  if (inProgressTasks.length === 0) {
+    text += `_(Seluruh task berhasil dituntaskan 100%)_\n`;
+  } else {
+    inProgressTasks.forEach(task => {
+      text += `• *${task.title}*`;
+      if (task.pic) text += ` — _(PIC: ${task.pic})_`;
+      text += ` [Progres: ${task.progressPercent}%]\n`;
+
+      if (task.subtasks.length > 0) {
+        text += `  - Subtask: ${task.completedSubtasks}/${task.totalSubtasks} Selesai\n`;
+      }
+
+      if (task.notes && task.notes.trim()) {
+        text += `  📝 _Catatan:_ ${task.notes.replace(/\n/g, ' ')}\n`;
+      }
+    });
+  }
+
+  return text;
+}
+
+/**
+ * Extracts pure logbook table data directly from post content.
+ * Does NOT scrape or force external posts, ensuring a clean initial state.
+ */
+export function getLogbookTableData(
+  logbookPost: any,
+  sectionName: string
+): {
+  headers: string[];
+  rows: TableRowData[];
+  beforeText: string;
+  afterText: string;
+  rawTable: string;
+} {
+  const content = logbookPost?.content || '';
+  const { cleanContent } = extractLogbookMeta(content);
+  const parsed = parseTableFromMarkdown(cleanContent);
+  if (parsed && parsed.rows && parsed.rows.length > 0) {
+    return {
+      headers: parsed.headers.length > 0 ? parsed.headers : LOGBOOK_CANONICAL_HEADERS,
+      rows: parsed.rows,
+      beforeText: `> 📔 **Logbook Terpadu Seksi ${sectionName}**`,
+      afterText: '',
+      rawTable: ''
+    };
+  }
+
+  return {
+    headers: LOGBOOK_CANONICAL_HEADERS,
+    rows: [],
+    beforeText: `> 📔 **Logbook Terpadu Seksi ${sectionName}**`,
+    afterText: '',
+    rawTable: ''
+  };
+}
+
