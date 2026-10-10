@@ -102,8 +102,35 @@ export function BulletinBoard({
   const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  // Restore selected post immediately on initial render from sessionStorage to prevent flash of dashboard on refresh
+  const [selectedPost, setSelectedPost] = useState<any | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlPostId = params.get("page") || params.get("postId") || params.get("id");
+      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
+      const targetId = urlPostId || savedPageId;
+      const cached = sessionStorage.getItem("preplab_cached_selected_post");
+      if (cached && targetId) {
+        const parsed = JSON.parse(cached);
+        if (parsed && String(parsed.id) === String(targetId)) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  });
   const [navHistory, setNavHistory] = useState<any[]>([]);
+
+  // Keep sessionStorage in sync with selectedPost
+  useEffect(() => {
+    try {
+      if (selectedPost?.id) {
+        sessionStorage.setItem("preplab_cached_selected_post", JSON.stringify(selectedPost));
+      } else if (selectedPost === null) {
+        sessionStorage.removeItem("preplab_cached_selected_post");
+      }
+    } catch {}
+  }, [selectedPost]);
 
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -512,6 +539,14 @@ export function BulletinBoard({
       setNavHistory([]);
       setSelectedPost(null);
       setIsEditing(false);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("page");
+        url.searchParams.delete("postId");
+        localStorage.removeItem("preplab_active_bulletin_page");
+        sessionStorage.removeItem("preplab_cached_selected_post");
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
       return;
     }
 
@@ -641,6 +676,7 @@ export function BulletinBoard({
         url.searchParams.delete("page");
         url.searchParams.delete("postId");
         localStorage.removeItem("preplab_active_bulletin_page");
+        sessionStorage.removeItem("preplab_cached_selected_post");
         window.history.replaceState({}, "", url.toString());
       } catch {}
     }
@@ -1810,17 +1846,38 @@ ${aiMeetingNotes
         {/* Content Body */}
         <div className={`flex-1 w-full ${isSectionHubPost(selectedPost) ? 'p-2 sm:p-4 md:p-6 pb-32' : parsedTableData ? 'p-0 sm:px-2 md:px-3 pt-0 pb-0' : 'p-4 md:p-6 lg:p-8 pb-32'}`}>
           {!selectedPost && !isEditing ? (
-            <TbpDashboard
-              posts={selectedPtFilter !== "ALL" ? posts.filter((p) => {
-                const pPt = (p.pt || 'TBP').toUpperCase();
-                if (selectedPtFilter === 'GTS') return pPt === 'GTS';
-                return pPt === 'TBP' || pPt === 'GPS' || pPt === 'TBP_GPS';
-              }) : posts}
-              onSelectPost={(post) => navigateToPost(post)}
-              agendaEvents={agendaEventsList}
-              onOpenFullAgenda={() => setShowFullAgendaModal(true)}
-              activeUniverse={selectedPtFilter}
-            />
+            (() => {
+              const params = new URLSearchParams(window.location.search);
+              const hasTargetId = Boolean(
+                params.get("page") || params.get("postId") || params.get("id") ||
+                params.get("logbook") || params.get("sectionLogbook") ||
+                localStorage.getItem("preplab_active_bulletin_page")
+              );
+
+              // Jika sedang memuat data dan URL/localStorage menunjukkan target post tertentu, jangan flash dashboard utama
+              if (hasTargetId && (loading || posts.length === 0)) {
+                return (
+                  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 animate-in fade-in duration-200">
+                    <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-medium text-slate-400">Memuat halaman dokumen...</span>
+                  </div>
+                );
+              }
+
+              return (
+                <TbpDashboard
+                  posts={selectedPtFilter !== "ALL" ? posts.filter((p) => {
+                    const pPt = (p.pt || 'TBP').toUpperCase();
+                    if (selectedPtFilter === 'GTS') return pPt === 'GTS';
+                    return pPt === 'TBP' || pPt === 'GPS' || pPt === 'TBP_GPS';
+                  }) : posts}
+                  onSelectPost={(post) => navigateToPost(post)}
+                  agendaEvents={agendaEventsList}
+                  onOpenFullAgenda={() => setShowFullAgendaModal(true)}
+                  activeUniverse={selectedPtFilter}
+                />
+              );
+            })()
           ) : isEditing ? (
             <div className="space-y-6 max-w-4xl mx-auto">
               {/* Editor Mode */}

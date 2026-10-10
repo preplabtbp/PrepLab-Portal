@@ -1071,10 +1071,10 @@ export function NotionDatabaseTable({
   // Helper untuk mengecek apakah baris di-pin
   const isRowPinned = useCallback((row: TableRowData): boolean => {
     if (!row) return false;
-    if (String(row.isPinned) === 'true' || (row as any).isPinned === true || (row as any)._pinned === true) return true;
-    const ket = (row['Keterangan'] || '');
+    if (String(row.isPinned) === 'true' || (row as any).isPinned === true || String((row as any)._pinned) === 'true' || (row as any)._pinned === true) return true;
+    const ket = typeof row['Keterangan'] === 'string' ? row['Keterangan'] : String(row['Keterangan'] || '');
     if (ket.includes('<!--pin-->') || ket.includes('<!--pinned-->')) return true;
-    const jk = (row['Jenis kegiatan'] || '');
+    const jk = typeof row['Jenis kegiatan'] === 'string' ? row['Jenis kegiatan'] : String(row['Jenis kegiatan'] || '');
     if (jk.includes('<!--pin-->') || jk.includes('<!--pinned-->')) return true;
     const rowId = row.id ? String(row.id) : '';
     if (rowId && pinnedRowKeys.has(rowId)) return true;
@@ -1158,7 +1158,7 @@ export function NotionDatabaseTable({
     const nextRows = [...localRows];
     const updatedRow = { ...targetRow };
     updatedRow.isPinned = newPinnedState ? 'true' : 'false';
-    (updatedRow as any)._pinned = newPinnedState;
+    (updatedRow as any)._pinned = newPinnedState ? 'true' : 'false';
 
     // Simpan penanda <!--pin--> di kolom Keterangan agar terpersistensi ke backend markdown
     let ket = updatedRow['Keterangan'] || '';
@@ -3146,7 +3146,7 @@ export function NotionDatabaseTable({
 
     // Filter out completely empty separator or blank rows
     result = result.filter((row) => {
-      const vals = Object.values(row).map((v) => (v || '').trim());
+      const vals = Object.values(row).map((v) => (typeof v === 'string' ? v.trim() : String(v ?? '').trim()));
       return vals.some((v) => v !== '' && v !== '-' && v !== '---');
     });
 
@@ -3171,7 +3171,7 @@ export function NotionDatabaseTable({
           return;
         }
         const matches = Object.values(row).some((val) => 
-          (val || '').toLowerCase().includes(q)
+          (typeof val === 'string' ? val : String(val ?? '')).toLowerCase().includes(q)
         );
         if (matches) {
           matchingRows.add(row);
@@ -3361,7 +3361,7 @@ export function NotionDatabaseTable({
     localRows.forEach((r) => {
       const s = (getRowVal(r, 'Status') || '').toUpperCase();
       const p = (getRowVal(r, 'Priority') || '').toUpperCase();
-      const vals = Object.values(r).map((v) => (v || '').trim());
+      const vals = Object.values(r).map((v) => (typeof v === 'string' ? v.trim() : String(v ?? '').trim()));
       if (vals.some((v) => v !== '' && v !== '-')) {
         total++;
         if (s.includes('PROGRESS') || s.includes('PROSES')) onProgress++;
