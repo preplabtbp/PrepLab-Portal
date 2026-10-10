@@ -991,6 +991,77 @@ export const GbaGazeboTable: React.FC<{ x: number; y: number }> = ({ x, y }) => 
 );
 
 /**
+ * Gazebo Teak Wood Slatted 'n'-Shaped Continuous Long Bench
+ * Surrounds the Center Table with 3 distinct sides (Left, Top, Right),
+ * each side accommodating up to 3 personnel neatly spaced without overlapping.
+ */
+export const GbaGazeboNBench: React.FC<{ x: number; y: number }> = ({ x, y }) => (
+  <g transform={`translate(${x * 16}, ${y * 16})`}>
+    {/* Ground Shadows under Left & Right Wings */}
+    <ellipse cx="16" cy="57" rx="12" ry="2.5" fill="#000000" opacity="0.35" />
+    <ellipse cx="110" cy="57" rx="12" ry="2.5" fill="#000000" opacity="0.35" />
+
+    {/* Cast-Iron Legs */}
+    <rect x="7" y="53" width="3" height="5" fill="#111827" />
+    <rect x="21" y="53" width="3" height="5" fill="#111827" />
+    <rect x="102" y="53" width="3" height="5" fill="#111827" />
+    <rect x="116" y="53" width="3" height="5" fill="#111827" />
+
+    {/* Backrest Structure (Continuous 'n'-Shaped Outer Rim) */}
+    {/* Top Backrest */}
+    <rect x="4" y="1" width="118" height="6" fill="#181820" rx="1" />
+    <rect x="5" y="2" width="116" height="4" fill="#92400E" />
+    <rect x="5" y="2" width="116" height="1.5" fill="#D97706" />
+
+    {/* Left Backrest */}
+    <rect x="2" y="1" width="6" height="54" fill="#181820" rx="1" />
+    <rect x="3" y="2" width="4" height="52" fill="#92400E" />
+    <rect x="3" y="2" width="1.5" height="52" fill="#D97706" />
+
+    {/* Right Backrest */}
+    <rect x="118" y="1" width="6" height="54" fill="#181820" rx="1" />
+    <rect x="119" y="2" width="4" height="52" fill="#92400E" />
+    <rect x="119" y="2" width="1.5" height="52" fill="#D97706" />
+
+    {/* Corner Reinforcements */}
+    <rect x="2" y="1" width="6" height="6" fill="#111827" />
+    <rect x="118" y="1" width="6" height="6" fill="#111827" />
+
+    {/* --- SEAT PLANKS & CUSHION PADS --- */}
+    {/* Top Wing Seat Planks (Fits 3 Personnel) */}
+    <rect x="8" y="6" width="110" height="11" fill="#181820" />
+    <rect x="9" y="7" width="108" height="8.5" fill="#B45309" />
+    <rect x="9" y="7" width="108" height="2" fill="#F59E0B" />
+    {/* Seat divider grooves for the 3 slots */}
+    <rect x="45" y="7" width="1" height="8.5" fill="#451A03" />
+    <rect x="81" y="7" width="1" height="8.5" fill="#451A03" />
+    <rect x="8" y="15.5" width="110" height="1.5" fill="#78350F" />
+
+    {/* Left Wing Seat Planks (Fits 3 Personnel) */}
+    <rect x="8" y="16" width="16" height="38" fill="#181820" />
+    <rect x="9" y="16" width="13.5" height="36.5" fill="#B45309" />
+    <rect x="9" y="16" width="2" height="36.5" fill="#F59E0B" />
+    {/* Dividers for the 3 left slots */}
+    <rect x="9" y="28" width="13.5" height="1" fill="#451A03" />
+    <rect x="9" y="41" width="13.5" height="1" fill="#451A03" />
+    <rect x="22.5" y="16" width="1.5" height="38" fill="#78350F" />
+
+    {/* Right Wing Seat Planks (Fits 3 Personnel) */}
+    <rect x="102" y="16" width="16" height="38" fill="#181820" />
+    <rect x="103.5" y="16" width="13.5" height="36.5" fill="#B45309" />
+    <rect x="115" y="16" width="2" height="36.5" fill="#F59E0B" />
+    {/* Dividers for the 3 right slots */}
+    <rect x="103.5" y="28" width="13.5" height="1" fill="#451A03" />
+    <rect x="103.5" y="41" width="13.5" height="1" fill="#451A03" />
+    <rect x="102" y="16" width="1.5" height="38" fill="#78350F" />
+
+    {/* Brass Fastener Rivets on Corners */}
+    <circle cx="5" cy="4" r="0.8" fill="#F59E0B" />
+    <circle cx="121" cy="4" r="0.8" fill="#F59E0B" />
+  </g>
+);
+
+/**
  * Gazebo Teak Wood Slatted Bench (32x16 - 2 Tiles)
  * Fits 2-3 personnel sitting side-by-side
  */
@@ -1106,33 +1177,36 @@ export const GbaAcousticGuitar: React.FC<{ x: number; y: number }> = ({ x, y }) 
 );
 
 /**
- * Stainless Steel Ashtray with Animated Smoke Embers (16x24)
+ * Stainless Steel Ashtray with Animated Smoke Embers (16x16)
+ * Proportional standing ashtray reaching waist level (approx 9-10px high)
  */
 export const GbaNickelAshtray: React.FC<{ x: number; y: number }> = ({ x, y }) => (
-  <g transform={`translate(${x * 16}, ${y * 16 - 8})`}>
-    <rect x="4" y="21" width="8" height="3" fill="#0F172A" opacity="0.3" />
+  <g transform={`translate(${x * 16}, ${y * 16})`}>
+    {/* Ground Shadow */}
+    <ellipse cx="8" cy="15" rx="5" ry="1.5" fill="#0F172A" opacity="0.3" />
 
-    {/* Ashtray Standing Pedestal Base */}
-    <rect x="5" y="19" width="6" height="3" fill="#1E293B" />
-    <rect x="6" y="19" width="4" height="2" fill="#64748B" />
+    {/* Stainless Base Pedestal */}
+    <rect x="5" y="13.5" width="6" height="2" fill="#1E293B" rx="0.5" />
+    <rect x="5.5" y="14" width="5" height="1" fill="#64748B" />
 
-    {/* Stainless Steel Column Pipe */}
-    <rect x="7" y="9" width="2" height="10" fill="#334155" />
-    <rect x="7" y="9" width="1" height="10" fill="#E2E8F0" />
+    {/* Stainless Column Stand (Slender waist-height post) */}
+    <rect x="7" y="7.5" width="2" height="6.5" fill="#334155" />
+    <rect x="7" y="7.5" width="1" height="6.5" fill="#E2E8F0" />
 
-    {/* Top Stainless Water Basin Bowl */}
-    <rect x="3" y="5" width="10" height="4" fill="#0F172A" />
-    <rect x="4" y="6" width="8" height="2" fill="#CBD5E1" />
-    <rect x="5" y="6" width="6" height="1" fill="#475569" />
+    {/* Top Cigarette Ash Basin / Bowl */}
+    <rect x="4.5" y="5.5" width="7" height="2.5" fill="#0F172A" rx="0.5" />
+    <rect x="5" y="5.8" width="6" height="1.6" fill="#94A3B8" />
+    {/* Dark mesh center with sand */}
+    <rect x="5.5" y="6" width="5" height="1" fill="#334155" />
 
-    {/* Burning Ember (Red/Orange Pixel) */}
-    <rect x="7" y="5" width="1" height="1" fill="#EF4444" />
-    <rect x="8" y="5" width="1" height="1" fill="#F97316" />
+    {/* Tiny glowing cigarette ember */}
+    <rect x="7.5" y="5.5" width="1" height="0.8" fill="#EF4444" />
+    <rect x="8" y="5.5" width="0.8" height="0.8" fill="#F97316" />
 
-    {/* Drifting Pixel Smoke Particles */}
-    <rect x="7" y="3" width="1" height="1" fill="#E2E8F0" opacity="0.8" />
-    <rect x="6" y="1" width="1" height="1" fill="#CBD5E1" opacity="0.6" />
-    <rect x="8" y="0" width="1" height="1" fill="#94A3B8" opacity="0.4" />
+    {/* Subtle rising pixel smoke puffs */}
+    <circle cx="8" cy="3.8" r="0.8" fill="#E2E8F0" opacity="0.75" />
+    <circle cx="7.2" cy="2.2" r="1.0" fill="#CBD5E1" opacity="0.5" />
+    <circle cx="8.5" cy="0.8" r="1.1" fill="#94A3B8" opacity="0.3" />
   </g>
 );
 

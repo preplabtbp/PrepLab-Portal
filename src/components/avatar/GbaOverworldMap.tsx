@@ -10,7 +10,8 @@ import {
   GbaXrfSpectrometer, GbaFusionFurnace, GbaAnalyticalBalance, GbaFumeHood,
   GbaJawCrusher, GbaPulverizerMill, GbaDryingOven, GbaJonesSplitter,
   GbaWorkshopBench, GbaLotoStation, GbaWarehouseRack, GbaQaWorkstation, GbaIsoPlaque,
-  GbaMineVistaPanorama, GbaMineVistaTile, GbaGazeboPillarTile, GbaGazeboTerraceTile, GbaGazeboBench, GbaGazeboLowBench,
+  GbaMineVistaPanorama, GbaMineVistaTile, GbaGazeboPillarTile, GbaGazeboTerraceTile, 
+  GbaGazeboNBench, GbaGazeboBench, GbaGazeboLowBench,
   GbaPrepLabBanner, GbaGazeboTable, GbaWaterCooler, GbaShiftBoard, GbaAcousticGuitar,
   GbaNickelAshtray, GbaCoffeeUrn, GBA_GAZEBO_PAVING_BASE64
 } from './GbaSectionRooms';
@@ -451,101 +452,89 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
 
     // 2. Specific Objects per Room
     if (isLounge) {
-      // Communal Snack & Coffee Table in Center: (x: 4.2..6.8, y: 4.2..5.6)
-      if (tx >= 4.2 && tx <= 6.8 && ty >= 4.2 && ty <= 5.6) {
-        startMoveTo(5.5, 5.0, { action: 'coffee', speech: '☕ Mencicipi pisang goreng hangat & ngopi bareng rekan!' });
+      // 1. Communal Snack & Coffee Table in Center: (x: 4.4..7.6, y: 4.5..5.8)
+      if (tx >= 4.4 && tx <= 7.6 && ty >= 4.5 && ty <= 5.8) {
+        startMoveTo(6.0, 5.8, { action: 'coffee', speech: '☕ Mencicipi pisang goreng hangat & ngopi bareng rekan di meja tengah!' });
         return;
       }
 
-      // Left Teak Bench (Fits 2 personnel side-by-side): (x: 1.6..4.2, y: 4.0..5.6)
-      if (tx >= 1.6 && tx <= 4.2 && ty >= 4.0 && ty <= 5.6) {
-        const slotA = { x: 2.3, y: 4.8 };
-        const slotB = { x: 3.5, y: 4.8 };
-        const prefA = tx < 2.9;
-        const firstSlot = prefA ? slotA : slotB;
-        const secondSlot = prefA ? slotB : slotA;
+      // 2. Bangku Panjang Berbentuk 'n' - SISI KIRI (Kapasitas Maksimal 3 Orang): (x: 1.6..3.8, y: 3.4..7.2)
+      if (tx >= 1.6 && tx <= 3.8 && ty >= 3.4 && ty <= 7.2) {
+        const leftSlots = [
+          { x: 2.8, y: 4.1 },
+          { x: 2.8, y: 5.2 },
+          { x: 2.8, y: 6.3 }
+        ];
+        // Pilih slot terdekat yang masih kosong
+        const sortedSlots = [...leftSlots].sort((a, b) => 
+          Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty)
+        );
+        const availableSlot = sortedSlots.find(s => !isSeatSlotOccupied(s.x, s.y));
 
-        const firstOccupied = isSeatSlotOccupied(firstSlot.x, firstSlot.y);
-        const secondOccupied = isSeatSlotOccupied(secondSlot.x, secondSlot.y);
-
-        if (!firstOccupied) {
-          startMoveTo(firstSlot.x, firstSlot.y, { 
+        if (availableSlot) {
+          startMoveTo(availableSlot.x, availableSlot.y, { 
             action: 'sit', 
-            speech: secondOccupied ? '🪑 Duduk bersama rekan di bangku kiri' : '🪑 Duduk di bangku kiri gazebo' 
-          });
-          return;
-        } else if (!secondOccupied) {
-          startMoveTo(secondSlot.x, secondSlot.y, { 
-            action: 'sit', 
-            speech: '🪑 Duduk bersama rekan di bangku kiri' 
+            speech: '🪑 Duduk santai di bangku sisi kiri meja tengah' 
           });
           return;
         } else {
-          // Bangku penuh (kapasitas 2 orang sudah terisi semua!)
+          // Bangku sisi kiri penuh (kapasitas 3 orang sudah terisi semua!)
           playSfx('beep');
-          triggerOverheadSpeech('⚠️ Bangku kiri sudah penuh terisi (2 orang)! Silakan pilih bangku lain.');
+          triggerOverheadSpeech('⚠️ Bangku sisi kiri sudah penuh (maksimal 3 orang)! Silakan pilih sisi lain.');
           return;
         }
       }
 
-      // Right Teak Bench (Fits 2 personnel side-by-side): (x: 7.2..9.8, y: 4.0..5.6)
-      if (tx >= 7.2 && tx <= 9.8 && ty >= 4.0 && ty <= 5.6) {
-        const slotA = { x: 7.8, y: 4.8 };
-        const slotB = { x: 9.0, y: 4.8 };
-        const prefA = tx < 8.4;
-        const firstSlot = prefA ? slotA : slotB;
-        const secondSlot = prefA ? slotB : slotA;
+      // 3. Bangku Panjang Berbentuk 'n' - SISI ATAS (Kapasitas Maksimal 3 Orang): (x: 3.8..8.4, y: 3.0..4.4)
+      if (tx >= 3.8 && tx <= 8.4 && ty >= 3.0 && ty <= 4.4) {
+        const topSlots = [
+          { x: 4.3, y: 3.7 },
+          { x: 6.0, y: 3.7 },
+          { x: 7.7, y: 3.7 }
+        ];
+        // Pilih slot terdekat yang masih kosong
+        const sortedSlots = [...topSlots].sort((a, b) => 
+          Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty)
+        );
+        const availableSlot = sortedSlots.find(s => !isSeatSlotOccupied(s.x, s.y));
 
-        const firstOccupied = isSeatSlotOccupied(firstSlot.x, firstSlot.y);
-        const secondOccupied = isSeatSlotOccupied(secondSlot.x, secondSlot.y);
-
-        if (!firstOccupied) {
-          startMoveTo(firstSlot.x, firstSlot.y, { 
+        if (availableSlot) {
+          startMoveTo(availableSlot.x, availableSlot.y, { 
             action: 'sit', 
-            speech: secondOccupied ? '🪑 Duduk bersama rekan di bangku kanan' : '🪑 Duduk di bangku kanan gazebo' 
-          });
-          return;
-        } else if (!secondOccupied) {
-          startMoveTo(secondSlot.x, secondSlot.y, { 
-            action: 'sit', 
-            speech: '🪑 Duduk bersama rekan di bangku kanan' 
+            speech: '🪑 Duduk santai di bangku sisi atas meja tengah' 
           });
           return;
         } else {
-          // Bangku penuh (kapasitas 2 orang sudah terisi semua!)
+          // Bangku sisi atas penuh (kapasitas 3 orang sudah terisi semua!)
           playSfx('beep');
-          triggerOverheadSpeech('⚠️ Bangku kanan sudah penuh terisi (2 orang)! Silakan pilih bangku lain.');
+          triggerOverheadSpeech('⚠️ Bangku sisi atas sudah penuh (maksimal 3 orang)! Silakan pilih sisi lain.');
           return;
         }
       }
 
-      // Front Low Bench (Fits 2 personnel side-by-side): (x: 4.0..6.8, y: 5.8..7.1)
-      if (tx >= 4.0 && tx <= 6.8 && ty >= 5.8 && ty <= 7.1) {
-        const slotA = { x: 4.7, y: 6.2 };
-        const slotB = { x: 5.9, y: 6.2 };
-        const prefA = tx < 5.3;
-        const firstSlot = prefA ? slotA : slotB;
-        const secondSlot = prefA ? slotB : slotA;
+      // 4. Bangku Panjang Berbentuk 'n' - SISI KANAN (Kapasitas Maksimal 3 Orang): (x: 8.4..10.4, y: 3.4..7.2)
+      if (tx >= 8.4 && tx <= 10.4 && ty >= 3.4 && ty <= 7.2) {
+        const rightSlots = [
+          { x: 8.8, y: 4.1 },
+          { x: 8.8, y: 5.2 },
+          { x: 8.8, y: 6.3 }
+        ];
+        // Pilih slot terdekat yang masih kosong
+        const sortedSlots = [...rightSlots].sort((a, b) => 
+          Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty)
+        );
+        const availableSlot = sortedSlots.find(s => !isSeatSlotOccupied(s.x, s.y));
 
-        const firstOccupied = isSeatSlotOccupied(firstSlot.x, firstSlot.y);
-        const secondOccupied = isSeatSlotOccupied(secondSlot.x, secondSlot.y);
-
-        if (!firstOccupied) {
-          startMoveTo(firstSlot.x, firstSlot.y, { 
+        if (availableSlot) {
+          startMoveTo(availableSlot.x, availableSlot.y, { 
             action: 'sit', 
-            speech: secondOccupied ? '🪑 Duduk bersama rekan di bangku depan' : '🪑 Duduk bersama di meja tengah' 
-          });
-          return;
-        } else if (!secondOccupied) {
-          startMoveTo(secondSlot.x, secondSlot.y, { 
-            action: 'sit', 
-            speech: '🪑 Duduk bersama rekan di bangku depan' 
+            speech: '🪑 Duduk santai di bangku sisi kanan meja tengah' 
           });
           return;
         } else {
-          // Bangku penuh (kapasitas 2 orang sudah terisi semua!)
+          // Bangku sisi kanan penuh (kapasitas 3 orang sudah terisi semua!)
           playSfx('beep');
-          triggerOverheadSpeech('⚠️ Bangku depan sudah penuh terisi (2 orang)! Silakan pilih bangku lain.');
+          triggerOverheadSpeech('⚠️ Bangku sisi kanan sudah penuh (maksimal 3 orang)! Silakan pilih sisi lain.');
           return;
         }
       }
@@ -707,6 +696,77 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
 
   const headerInfo = getRoomHeader();
   const activeDisplaySpeech = localSpeech || playerMessage || null;
+
+  // Dynamic Nametag pill: snug fit to name + rank logo, centered over 16px avatar (center = 8)
+  const renderNametag = (nameStr: string, rankIcon?: string, isMainPlayer = true) => {
+    const shortName = (nameStr || 'User').trim().split(/\s+/)[0];
+    const charCount = shortName.length;
+    // In font-size 2.8 monospace, each char is ~1.85px wide
+    const textWidth = Math.max(6, charCount * 1.85);
+    const hasIcon = Boolean(rankIcon);
+    const iconSize = 3;
+    const gap = 1;
+    const padX = 2.2;
+    
+    const contentWidth = (hasIcon ? iconSize + gap : 0) + textWidth;
+    const innerW = Math.max(12, Math.round(contentWidth + padX * 2));
+    const outerW = innerW + 1.6;
+    const barHeight = 5.2;
+    const outerX = 8 - outerW / 2;
+    const innerX = outerX + 0.8;
+    const barY = -7;
+    
+    const iconX = innerX + padX;
+    const iconY = barY + 1.1;
+    const textX = hasIcon ? (iconX + iconSize + gap + textWidth / 2) : (innerX + innerW / 2);
+    const textY = barY + 3.7;
+
+    return (
+      <g pointerEvents="none">
+        {/* Outer border */}
+        <rect 
+          x={outerX} 
+          y={barY - 0.4} 
+          width={outerW} 
+          height={barHeight + 0.8} 
+          fill="#10141C" 
+          rx="1" 
+        />
+        {/* Inner fill */}
+        <rect 
+          x={innerX} 
+          y={barY} 
+          width={innerW} 
+          height={barHeight} 
+          fill={isMainPlayer ? "#15803D" : "#334155"} 
+          rx="0.5" 
+        />
+        {/* Rank Icon if available */}
+        {hasIcon && (
+          <image 
+            href={rankIcon} 
+            x={iconX} 
+            y={iconY} 
+            width={iconSize} 
+            height={iconSize} 
+            preserveAspectRatio="xMidYMid meet"
+          />
+        )}
+        {/* Short Name Text */}
+        <text 
+          x={textX} 
+          y={textY} 
+          textAnchor="middle" 
+          fontSize="2.8" 
+          fontFamily="monospace" 
+          fontWeight="900" 
+          fill="#FFFFFF"
+        >
+          {shortName}
+        </text>
+      </g>
+    );
+  };
 
   return (
     <div className={`relative w-full h-full flex flex-col select-none overflow-hidden bg-[#181820] font-sans ${className}`}>
@@ -1074,22 +1134,13 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
               <GbaNickelDrumTile x={0.4} y={4.5} type="limonite" />
               <GbaAcousticGuitar x={1.2} y={5.8} />
 
-              {/* 6. Communal Multi-Seat Layout for Sitting Together */}
-              {/* Left Teak Bench (Fits 2 personnel side-by-side) */}
-              <GbaGazeboBench x={2} y={4.5} />
+              {/* 6. Communal 'n'-Shaped Continuous Long Bench (Max 3 people per side) surrounding Center Table */}
+              <GbaGazeboNBench x={2.0} y={3.2} />
+              <GbaGazeboTable x={4.9} y={4.8} />
 
-              {/* Center Communal Coffee & Snack Table (With Fried Bananas, Snacks & Steaming Coffee) */}
-              <GbaGazeboTable x={4.5} y={4.5} />
-
-              {/* Right Teak Bench (Fits 2 personnel side-by-side) */}
-              <GbaGazeboBench x={7.5} y={4.5} />
-
-              {/* Front Low Bench for Circular Group Chat */}
-              <GbaGazeboLowBench x={4.5} y={6.2} />
-
-              {/* 7. Right Pillar Corner: K3 Water Cooler & Stainless Ashtray */}
+              {/* 7. Right Pillar Corner: K3 Water Cooler & Proportional Stainless Ashtray */}
               <GbaWaterCooler x={10.4} y={4.2} />
-              <GbaNickelAshtray x={10.2} y={5.8} />
+              <GbaNickelAshtray x={10.4} y={5.8} />
             </g>
           )}
 
@@ -1119,14 +1170,9 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
           {/* ========================================================= */}
           {otherPlayers.map((other) => (
             <g key={other.id} transform={`translate(${other.x * 16}, ${other.y * 16 - 5})`}>
-              <rect x="-10" y="-7" width="36" height="6" fill="#181820" rx="1" />
-              <rect x="-9" y="-6" width="34" height="4" fill="#334155" />
-              {other.pangkatIcon && (
-                <image href={other.pangkatIcon} x="-8" y="-5.5" width="3" height="3" />
-              )}
-              <text x={other.pangkatIcon ? 9 : 8} y="-3" textAnchor="middle" fontSize="3" fontFamily="monospace" fontWeight="900" fill="#FFFFFF">
-                {other.name.split(' ')[0]}
-              </text>
+              {/* Dynamic Compact Nametag Pill with Exact Rank Icon Beside Name */}
+              {renderNametag(other.name, other.pangkatIcon, false)}
+
               <GbaCharacterSprite
                 direction={other.facing}
                 actionState={other.actionState}
@@ -1149,15 +1195,8 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
           {/* MAIN PLAYER AVATAR CHARACTER                              */}
           {/* ========================================================= */}
           <g transform={`translate(${posX * 16}, ${posY * 16 - 5})`}>
-            {/* Nametag Pill with Exact Rank Icon Right Beside Name */}
-            <rect x="-10" y="-7" width="36" height="6" fill="#181820" rx="1" />
-            <rect x="-9" y="-6" width="34" height="4" fill="#15803D" />
-            {playerRankIcon && (
-              <image href={playerRankIcon} x="-8" y="-5.5" width="3" height="3" />
-            )}
-            <text x={playerRankIcon ? 9 : 8} y="-3" textAnchor="middle" fontSize="3" fontFamily="monospace" fontWeight="900" fill="#FFFFFF">
-              {playerName.split(' ')[0]}
-            </text>
+            {/* Dynamic Compact Nametag Pill with Exact Rank Icon Beside Name */}
+            {renderNametag(playerName, playerRankIcon, true)}
 
             <GbaCharacterSprite
               direction={facing}
