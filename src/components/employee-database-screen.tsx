@@ -1692,7 +1692,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f09b13]/10 rounded-full blur-3xl translate-y-1/2"></div>
             </div>
 
-            <div className="relative z-10 max-w-4xl mx-auto w-full pt-10 md:pt-28 px-4 pb-20 flex-1 flex flex-col items-center">
+            <div className="relative z-10 max-w-7xl 2xl:max-w-[1600px] mx-auto w-full pt-10 md:pt-20 px-4 pb-20 flex-1 flex flex-col items-center">
               <motion.div 
                 initial={{ opacity: 0, y: 20 }} 
                 animate={{ opacity: 1, y: 0 }}
@@ -1736,7 +1736,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 initial={{ opacity: 0, y: 20 }} 
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="w-full max-w-4xl px-2 space-y-4"
+                className="w-full max-w-7xl 2xl:max-w-[1600px] px-2 sm:px-4 space-y-4"
               >
                 {/* PT Universe Switcher for Section Manager & Admin */}
                 {isSectionManager && (
@@ -1794,12 +1794,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 md:gap-4 w-full">
+                <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 md:gap-3.5 2xl:gap-4 w-full">
                   {/* Card 1: Total Data */}
-                  <div className="bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border border-slate-200/90 text-center shadow-xs transition-all">
-                    <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">Total Data</div>
-                    <div className="text-2xl md:text-3xl font-black text-[#104b50]">{scopedEmployees.length}</div>
-                    <div className="text-[10px] text-slate-400 font-medium mt-0.5">Master Database</div>
+                  <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border border-slate-200/90 text-center shadow-xs transition-all flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px]">
+                    <div className="text-slate-500 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1">Total Data</div>
+                    <div className="text-2xl sm:text-3xl font-black text-[#104b50] tracking-tight">{scopedEmployees.length}</div>
+                    <div className="text-[10px] sm:text-[11px] text-slate-400 font-semibold mt-0.5">Master Database</div>
                   </div>
 
                   {/* Card 2: Karyawan Aktif */}
@@ -1809,17 +1809,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       setActiveStatDetail(prev => prev === 'active' ? null : 'active');
                       setStatDetailSearch('');
                     }}
-                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group text-left sm:text-center ${
+                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
                       activeStatDetail === 'active'
                         ? 'border-[#f09b13] ring-2 ring-[#f09b13]/30 shadow-md bg-amber-50/40'
                         : 'border-slate-200/90 hover:border-[#f09b13]/60 hover:shadow-md'
                     }`}
                   >
-                    <div className="text-[#c77d07] text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 flex items-center justify-center gap-1">
+                    <div className="text-[#c77d07] text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 flex items-center justify-center gap-1">
                       <span>Karyawan Aktif</span>
                     </div>
-                    <div className="text-2xl md:text-3xl font-black text-slate-800">{activeEmployeesCount}</div>
-                    <div className="text-[10px] text-amber-600/80 font-semibold mt-0.5 group-hover:underline">
+                    <div className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">{activeEmployeesCount}</div>
+                    <div className="text-[10px] sm:text-[11px] text-amber-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'active' ? '▲ Tutup Rincian' : '▼ Klik Lihat Daftar'}
                     </div>
                   </button>
@@ -1831,20 +1831,20 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       setActiveStatDetail(prev => prev === 'onsite' ? null : 'onsite');
                       setStatDetailSearch('');
                     }}
-                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group text-left sm:text-center ${
+                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
                       activeStatDetail === 'onsite'
                         ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-md bg-emerald-50/40'
                         : 'border-slate-200/90 hover:border-emerald-400 hover:shadow-md'
                     }`}
                   >
-                    <div className="text-emerald-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 flex items-center justify-center gap-1 flex-wrap">
+                    <div className="text-emerald-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 flex items-center justify-center gap-1.5 flex-wrap">
                       <span>Onsite Hari Ini</span>
                       <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
                         {onsitePercentage}%
                       </span>
                     </div>
-                    <div className="text-2xl md:text-3xl font-black text-emerald-800">{onsiteEmployeesList.length}</div>
-                    <div className="text-[10px] text-emerald-600/80 font-semibold mt-0.5 group-hover:underline">
+                    <div className="text-2xl sm:text-3xl font-black text-emerald-800 tracking-tight">{onsiteEmployeesList.length}</div>
+                    <div className="text-[10px] sm:text-[11px] text-emerald-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'onsite' ? '▲ Tutup Rincian' : '▼ Klik Lihat Shift'}
                     </div>
                   </button>
@@ -1856,17 +1856,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       setActiveStatDetail(prev => prev === 'counseling' ? null : 'counseling');
                       setStatDetailSearch('');
                     }}
-                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group text-left sm:text-center ${
+                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
                       activeStatDetail === 'counseling'
                         ? 'border-rose-500 ring-2 ring-rose-500/30 shadow-md bg-rose-50/40'
                         : 'border-slate-200/90 hover:border-rose-400 hover:shadow-md'
                     }`}
                   >
-                    <div className="text-rose-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1 flex items-center justify-center gap-1">
+                    <div className="text-rose-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 flex items-center justify-center gap-1">
                       <span>Konseling Aktif</span>
                     </div>
-                    <div className="text-2xl md:text-3xl font-black text-rose-800">{activeCounselingList.length}</div>
-                    <div className="text-[10px] text-rose-600/80 font-semibold mt-0.5 group-hover:underline">
+                    <div className="text-2xl sm:text-3xl font-black text-rose-800 tracking-tight">{activeCounselingList.length}</div>
+                    <div className="text-[10px] sm:text-[11px] text-rose-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'counseling' ? '▲ Tutup Rincian' : '▼ Klik Lihat Kasus'}
                     </div>
                   </button>
@@ -1878,19 +1878,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       setActiveStatDetail(prev => prev === 'permanent' ? null : 'permanent');
                       setStatDetailSearch('');
                     }}
-                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group ${
+                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
                       activeStatDetail === 'permanent'
                         ? 'border-teal-500 ring-2 ring-teal-500/30 shadow-md bg-teal-50/40'
                         : 'border-slate-200/90 hover:border-teal-400 hover:shadow-md'
                     }`}
                   >
-                    <div className="text-teal-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">
+                    <div className="text-teal-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 leading-snug">
                       Karyawan Permanent
                     </div>
-                    <div className="text-2xl md:text-3xl font-black text-teal-700">
+                    <div className="text-2xl sm:text-3xl font-black text-teal-700 tracking-tight">
                       {permanentEmployeesCount}
                     </div>
-                    <div className="text-[10px] text-teal-600/80 font-semibold mt-0.5 group-hover:underline">
+                    <div className="text-[10px] sm:text-[11px] text-teal-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'permanent' ? '▲ Tutup Rincian' : '▼ Klik Lihat Nama'}
                     </div>
                   </button>
@@ -1902,19 +1902,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       setActiveStatDetail(prev => prev === 'kontrak' ? null : 'kontrak');
                       setStatDetailSearch('');
                     }}
-                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group ${
+                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
                       activeStatDetail === 'kontrak'
                         ? 'border-sky-500 ring-2 ring-sky-500/30 shadow-md bg-sky-50/40'
                         : 'border-slate-200/90 hover:border-sky-400 hover:shadow-md'
                     }`}
                   >
-                    <div className="text-sky-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">
+                    <div className="text-sky-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 leading-snug">
                       Karyawan Kontrak
                     </div>
-                    <div className="text-2xl md:text-3xl font-black text-sky-700">
+                    <div className="text-2xl sm:text-3xl font-black text-sky-700 tracking-tight">
                       {contractEmployeesCount}
                     </div>
-                    <div className="text-[10px] text-sky-600/80 font-semibold mt-0.5 group-hover:underline">
+                    <div className="text-[10px] sm:text-[11px] text-sky-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'kontrak' ? '▲ Tutup Rincian' : '▼ Klik Lihat Nama'}
                     </div>
                   </button>
@@ -1926,19 +1926,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       setActiveStatDetail(prev => prev === 'izin' ? null : 'izin');
                       setStatDetailSearch('');
                     }}
-                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group ${
+                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
                       activeStatDetail === 'izin'
                         ? 'border-indigo-500 ring-2 ring-indigo-500/30 shadow-md bg-indigo-50/40'
                         : 'border-slate-200/90 hover:border-indigo-400 hover:shadow-md'
                     }`}
                   >
-                    <div className="text-indigo-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">
+                    <div className="text-indigo-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 leading-snug">
                       Jumlah Izin
                     </div>
-                    <div className="text-2xl md:text-3xl font-black text-indigo-800">
+                    <div className="text-2xl sm:text-3xl font-black text-indigo-800 tracking-tight">
                       {monthlyIzinData.grandTotal}
                     </div>
-                    <div className="text-[10px] text-indigo-600/80 font-semibold mt-0.5 group-hover:underline">
+                    <div className="text-[10px] sm:text-[11px] text-indigo-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'izin' ? '▲ Tutup Rincian' : '▼ Bulan Ini (Urut)'}
                     </div>
                   </button>
@@ -1950,19 +1950,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       setActiveStatDetail(prev => prev === 'spdk' ? null : 'spdk');
                       setStatDetailSearch('');
                     }}
-                    className={`bg-white/95 backdrop-blur-md rounded-xl md:rounded-2xl p-3.5 md:p-4 border text-center transition-all shadow-xs cursor-pointer group ${
+                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
                       activeStatDetail === 'spdk'
                         ? 'border-purple-600 ring-2 ring-purple-500/30 shadow-md bg-purple-50/40'
                         : 'border-purple-200 hover:border-purple-400 hover:shadow-md'
                     }`}
                   >
-                    <div className="text-purple-700 text-[10px] md:text-xs uppercase font-bold tracking-wider mb-1">
+                    <div className="text-purple-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 leading-snug">
                       SPDK &amp; Sanksi (Aktif)
                     </div>
-                    <div className="text-2xl md:text-3xl font-black text-purple-800">
+                    <div className="text-2xl sm:text-3xl font-black text-purple-800 tracking-tight">
                       {activeSpdkData.length}
                     </div>
-                    <div className="text-[10px] text-purple-600/80 font-semibold mt-0.5 group-hover:underline">
+                    <div className="text-[10px] sm:text-[11px] text-purple-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'spdk' ? '▲ Tutup Rincian' : '▼ Klik Lihat Detail'}
                     </div>
                   </button>
