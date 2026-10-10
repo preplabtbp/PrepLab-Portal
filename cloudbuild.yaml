@@ -1,7 +1,7 @@
 # NOTE: File ini digunakan ketika Cloud Build Trigger aktif di Google Cloud Console.
-# PERINGATAN: Akun hosting GCP telah berpindah. JANGAN deploy ke project lama (project-054e3351-b8d1-42f7-9c8).
-# Pastikan target $PROJECT_ID mengarah ke Google Cloud Project akun baru.
-# Untuk deploy manual via CLI, gunakan: npm run deploy:main
+# DEFAULT PROJECT TARGET: project-1bcc4549-c8d6-4962-958 (Akun Baru)
+# JANGAN deploy ke project lama (project-054e3351-b8d1-42f7-9c8).
+# Untuk deploy manual via CLI, gunakan: npm run deploy:main (otomatis target project baru)
 steps:
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'

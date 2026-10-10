@@ -12,8 +12,9 @@
     "lint": "tsc --noEmit",
     "test:auth": "tsx test/auth-guard.test.ts",
     "test": "npm run test:auth",
-    "deploy:staging": "npm run build && gcloud run deploy preplab-portal-staging --source . --region asia-southeast2 --update-secrets JWT_SECRET=JWT_SECRET:latest",
-    "deploy:main": "npm run build && gcloud run deploy preplab-portal --source . --region asia-southeast2 --update-secrets JWT_SECRET=JWT_SECRET:latest"
+    "deploy:staging": "npm run build && gcloud run deploy preplab-portal-staging --project project-1bcc4549-c8d6-4962-958 --source . --region asia-southeast2 --update-secrets JWT_SECRET=JWT_SECRET:latest",
+    "deploy:main": "npm run build && gcloud run deploy preplab-portal --project project-1bcc4549-c8d6-4962-958 --source . --region asia-southeast2 --update-secrets JWT_SECRET=JWT_SECRET:latest",
+    "deploy:build": "gcloud builds submit --project project-1bcc4549-c8d6-4962-958 --config cloudbuild.yaml ."
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",

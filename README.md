@@ -2,10 +2,11 @@
 
 > [!WARNING]
 > **PEMBERITAHUAN MIGRASI AKUN HOSTING GCP:**
-> Akun hosting Google Cloud telah berganti. **Project lama (`project-054e3351-b8d1-42f7-9c8` / "My First Project") sudah tidak aktif/ditinggalkan.**
-> - Push ke branch `main` tidak memicu build di project lama karena webhook trigger tidak terpasang dan akun telah berpindah.
-> - Dilarang keras menjalankan deployment ke project ID lama tersebut.
-> - Pastikan seluruh konfigurasi gcloud dan deployment menargetkan project Google Cloud akun yang baru.
+> Akun hosting Google Cloud telah berganti ke project resmi: **`project-1bcc4549-c8d6-4962-958`**.
+> - **Project lama (`project-054e3351-b8d1-42f7-9c8` / "My First Project") sudah tidak aktif/ditinggalkan.**
+> - Skrip `npm run deploy:main` dan `npm run deploy:staging` di `package.json` sudah dikunci secara default ke `project-1bcc4549-c8d6-4962-958`.
+> - Untuk mengaktifkan build otomatis saat push `main`, hubungkan trigger di Google Cloud Console:
+>   `https://console.cloud.google.com/cloud-build/triggers?project=project-1bcc4549-c8d6-4962-958`
 
 ## Migrasi ke Google Cloud Run
 

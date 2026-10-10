@@ -18,13 +18,13 @@
    - Dilarang menjalankan deployment cloud (seperti `gcloud run deploy`, `cloudbuild`, atau pipeline rilis produksi) tanpa konfirmasi dan instruksi langsung dari user.
 
 5. **⚠️ PEMBERITAHUAN MIGRASI AKUN HOSTING GCP (PENTING UNTUK SEMUA BRANCH & TIM):**
-   - **Project Lama Ditinggalkan**: Project Google Cloud lama dengan ID `project-054e3351-b8d1-42f7-9c8` (*"My First Project"*) sudah tidak lagi digunakan karena akun hosting telah berganti.
-   - **Penyebab Tidak Ada di Cloud Build History**:
-     1. Push ke branch GitHub (`main`, dll) **tidak otomatis memicu build** di project lama karena tidak ada GitHub trigger webhook yang terhubung (seluruh build historis sebelumnya dipicu manual via CLI / `--`).
-     2. Akun hosting aktif telah berpindah ke akun Google Cloud yang baru.
-   - **Larangan Keras**:
-     - **JANGAN PERNAH** menjalankan command build atau deploy (`gcloud run deploy`, `gcloud builds submit`, dsb.) yang menargetkan project lama `project-054e3351-b8d1-42f7-9c8`.
+   - **Default Project Target Resmi**: **`project-1bcc4549-c8d6-4962-958`**.
+   - **Skrip Deploy Default Terkunci**: Script `npm run deploy:main` dan `npm run deploy:staging` di `package.json` telah dikonfigurasi secara eksplisit dengan flag `--project project-1bcc4549-c8d6-4962-958` agar tidak ada lagi kesalahan sasaran project dari branch manapun.
+   - **Project Lama Ditinggalkan**: Project Google Cloud lama dengan ID `project-054e3351-b8d1-42f7-9c8` (*"My First Project"*) sudah tidak lagi digunakan. Dilarang keras menargetkan project lama ini.
+   - **Mengaktifkan Build Otomatis Saat Push Main**:
+     - Jika ingin setiap push ke branch `main` otomatis memicu Cloud Build, hubungkan repository GitHub di Cloud Build Triggers project baru melalui:
+       `https://console.cloud.google.com/cloud-build/triggers?project=project-1bcc4549-c8d6-4962-958`
    - **Aturan Verifikasi Akun Baru Sebelum Deploy**:
-     - Sebelum menjalankan build atau deploy apapun, selalu verifikasi project aktif dengan menjalankan `gcloud config get-value project` dan pastikan mengarah ke akun / project Google Cloud yang baru.
-     - Pastikan trigger Cloud Build (jika ingin otomatis saat push `main`) sudah dihubungkan ke repository GitHub di console project baru.
+     - Sebelum menjalankan build atau deploy manual via gcloud CLI, selalu verifikasi project aktif dengan:
+       `gcloud config set project project-1bcc4549-c8d6-4962-958`
 
