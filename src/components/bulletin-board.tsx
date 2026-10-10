@@ -603,7 +603,7 @@ export function BulletinBoard({
     }
   };
 
-  // Keyboard shortcut for Back (Escape or Alt+ArrowLeft)
+  // Keyboard shortcut: Escape cancels active editing (NEVER navigates back to homepage)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -616,8 +616,16 @@ export function BulletinBoard({
       ) {
         return;
       }
-      if (e.key === "Escape" || (e.altKey && e.key === "ArrowLeft")) {
-        if (selectedPost || isEditing) {
+      if (e.key === "Escape") {
+        if (isEditing) {
+          e.preventDefault();
+          setIsEditing(false); // Batalkan mode edit, tetap di halaman
+        }
+        // Escape default adalah cancel editing, BUKAN kembali ke homepage
+        return;
+      }
+      if (e.altKey && e.key === "ArrowLeft") {
+        if (selectedPost) {
           e.preventDefault();
           goBack();
         }

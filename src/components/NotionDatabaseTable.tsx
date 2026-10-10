@@ -951,6 +951,15 @@ export function NotionDatabaseTable({
         setIsFilterPopoverOpen(false);
         setIsSortPopoverOpen(false);
         setIsFullToolsPopoverOpen(false);
+        setShowAddColumnPopover(false);
+        setActiveInlineEditor(null);
+        setCreatingSubItemForParent(null);
+        setNewSubItemTitle('');
+        setShowRowModal(false);
+        setEditingRowIndex(null);
+        setShowSaveConfirmModal(false);
+        setLastSubtaskConfirmModal(null);
+        setIsPicDropdownOpen(false);
         if (!searchQuery) setIsSearchInputOpen(false);
       }
     };
@@ -1032,6 +1041,139 @@ export function NotionDatabaseTable({
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
   const [rowFormData, setRowFormData] = useState<TableRowData>({});
   const [isSavingRow, setIsSavingRow] = useState(false);
+
+  // ── PIN TASK TOOLS (Maksimal 5 task per halaman / tidak terpengaruh filter) ──
+  const tablePinStorageKey = useMemo(() => {
+    return `preplab_pinned_tasks_${postId || section || title || 'default'}`;
+  }, [postId, section, title]);
+
+  const [pinnedRowKeys, setPinnedRowKeys] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(`preplab_pinned_tasks_${postId || section || title || 'default'}`);
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch {}
+    return new Set<string>();
+  });
+
+  // Helper untuk mengecek apakah baris di-pin
+  const isRowPinned = useCallback((row: TableRowData): boolean => {
+    if (!row) return false;
+    if (String(row.isPinned) === 'true' || (row as any).isPinned === true || (row as any)._pinned === true) return true;
+    const ket = (row['Keterangan'] || '');
+    if (ket.includes('<!--pin-->') || ket.includes('<!--pinned-->')) return true;
+    const jk = (row['Jenis kegiatan'] || '');
+    if (jk.includes('<!--pin-->') || jk.includes('<!--pinned-->')) return true;
+    const rowId = row.id ? String(row.id) : '';
+    if (rowId && pinnedRowKeys.has(rowId)) return true;
+    const cleanTitle = jk.replace(/^↳\s*/, '').trim();
+    if (cleanTitle && pinnedRowKeys.has(cleanTitle)) return true;
+    return false;
+  }, [pinnedRowKeys]);
+
+  // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys
+  useEffect(() => {
+    const newlyFoundPinned = new Set(pinnedRowKeys);
+    let changed = false;
+    localRows.forEach(r => {
+      if (!isSubItemRow(r)) {
+        const ket = r['Keterangan'] || '';
+        const jk = r['Jenis kegiatan'] || '';
+        const isPinTag = ket.includes('<!--pin-->') || ket.includes('<!--pinned-->') || jk.includes('<!--pin-->') || r.isPinned === 'true';
+        if (isPinTag) {
+          const key = r.id ? String(r.id) : jk.replace(/^↳\s*/, '').trim();
+          if (key && !newlyFoundPinned.has(key)) {
+            newlyFoundPinned.add(key);
+            changed = true;
+          }
+        }
+      }
+    });
+    if (changed) {
+      setPinnedRowKeys(newlyFoundPinned);
+      try {
+        localStorage.setItem(tablePinStorageKey, JSON.stringify(Array.from(newlyFoundPinned)));
+      } catch {}
+    }
+  }, [localRows, tablePinStorageKey]);
+
+  // Handler toggle pin / unpin baris task
+  const handleTogglePinRow = async (rowIndex: number) => {
+    let targetRow = localRows[rowIndex];
+    if (!targetRow) return;
+
+    // Jika yang diklik adalah subtask, pin parent task utamanya
+    if (isSubItemRow(targetRow)) {
+      const p = rowToParentMap.get(targetRow);
+      if (p) {
+        const pIdx = localRows.indexOf(p);
+        if (pIdx !== -1) {
+          targetRow = p;
+          rowIndex = pIdx;
+        }
+      }
+    }
+
+    const currentlyPinned = isRowPinned(targetRow);
+
+    if (!currentlyPinned) {
+      // Validasi: Maksimal 5 task yang dapat di-pin per halaman
+      const currentPinnedCount = localRows.filter(r => !isSubItemRow(r) && isRowPinned(r)).length;
+      if (currentPinnedCount >= 5) {
+        toast.warning('Maksimal 5 task yang dapat di-pin per halaman', {
+          description: 'Lepas pin (unpin) salah satu task terlebih dahulu untuk menyematkan task ini.'
+        });
+        return;
+      }
+    }
+
+    const newPinnedState = !currentlyPinned;
+    const targetKey = targetRow.id ? String(targetRow.id) : (targetRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
+
+    // Update state pinnedRowKeys
+    const nextPinnedKeys = new Set(pinnedRowKeys);
+    if (newPinnedState) {
+      if (targetKey) nextPinnedKeys.add(targetKey);
+    } else {
+      if (targetKey) nextPinnedKeys.delete(targetKey);
+    }
+    setPinnedRowKeys(nextPinnedKeys);
+    try {
+      localStorage.setItem(tablePinStorageKey, JSON.stringify(Array.from(nextPinnedKeys)));
+    } catch {}
+
+    // Update data baris lokal
+    const nextRows = [...localRows];
+    const updatedRow = { ...targetRow };
+    updatedRow.isPinned = newPinnedState ? 'true' : 'false';
+    (updatedRow as any)._pinned = newPinnedState;
+
+    // Simpan penanda <!--pin--> di kolom Keterangan agar terpersistensi ke backend markdown
+    let ket = updatedRow['Keterangan'] || '';
+    if (newPinnedState) {
+      if (!ket.includes('<!--pin-->')) {
+        ket = `${ket} <!--pin-->`.trim();
+      }
+    } else {
+      ket = ket.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
+    }
+    updatedRow['Keterangan'] = ket;
+
+    nextRows[rowIndex] = updatedRow;
+    setLocalRows(nextRows);
+    onRowsChange?.(nextRows);
+    await saveTableToBackend(nextRows);
+
+    if (newPinnedState) {
+      toast.success('Task berhasil disematkan (pinned) ke posisi teratas!', {
+        description: 'Task ini tidak akan terpengaruh oleh filter status atau pencarian.'
+      });
+    } else {
+      toast.info('Sematkan (pin) task telah dilepas.');
+    }
+  };
 
   // Employees List for PIC Dropdown & Search
   const [employeesList, setEmployeesList] = useState<any[]>([]);
@@ -2973,12 +3115,26 @@ export function NotionDatabaseTable({
       return vals.some((v) => v !== '' && v !== '-' && v !== '---');
     });
 
+    // Helper: Cek apakah baris ini atau parent-nya di-pin (bebas dari semua filter)
+    const isPinnedOrChildOfPinned = (row: TableRowData) => {
+      if (isRowPinned(row)) return true;
+      if (isSubItemRow(row)) {
+        const p = rowToParentMap.get(row);
+        return p ? isRowPinned(p) : false;
+      }
+      return false;
+    };
+
     // 1. Search Query Filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       // Simpan parent atau subtask yang cocok
       const matchingRows = new Set<TableRowData>();
       result.forEach((row) => {
+        if (isPinnedOrChildOfPinned(row)) {
+          matchingRows.add(row);
+          return;
+        }
         const matches = Object.values(row).some((val) => 
           (val || '').toLowerCase().includes(q)
         );
@@ -2991,6 +3147,7 @@ export function NotionDatabaseTable({
         }
       });
       result = result.filter((row) => {
+        if (isPinnedOrChildOfPinned(row)) return true;
         if (matchingRows.has(row)) return true;
         if (isSubItemRow(row)) {
           const p = rowToParentMap.get(row);
@@ -3000,10 +3157,14 @@ export function NotionDatabaseTable({
       });
     }
 
-    // 2. Status Multi-Select Filter (Subtask tak terpisahkan dari parent-nya)
+    // 2. Status Multi-Select Filter (Subtask tak terpisahkan dari parent-nya, Pinned task bebas filter)
     if (selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) {
       const passingParentRows = new Set<TableRowData>();
       localRows.forEach((row) => {
+        if (isPinnedOrChildOfPinned(row)) {
+          passingParentRows.add(row);
+          return;
+        }
         if (!isSubItemRow(row)) {
           const val = (getRowVal(row, 'Status') || '').toUpperCase().trim();
           const matches = selectedStatuses.some((st) => {
@@ -3020,19 +3181,23 @@ export function NotionDatabaseTable({
       });
 
       result = result.filter((row) => {
+        if (isPinnedOrChildOfPinned(row)) return true;
         if (!isSubItemRow(row)) {
           return passingParentRows.has(row);
         }
-        // Sub-item selalu mengikuti parent-nya agar tidak terpisah/hilang saat diceklis
         const parent = rowToParentMap.get(row);
         return parent ? passingParentRows.has(parent) : true;
       });
     }
 
-    // 3. Priority Multi-Select Filter
+    // 3. Priority Multi-Select Filter (Pinned task bebas filter)
     if (selectedPriorities.length > 0 && !selectedPriorities.includes('ALL')) {
       const passingParentRows = new Set<TableRowData>();
       localRows.forEach((row) => {
+        if (isPinnedOrChildOfPinned(row)) {
+          passingParentRows.add(row);
+          return;
+        }
         if (!isSubItemRow(row)) {
           const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
           const matches = selectedPriorities.some((pKey) => {
@@ -3048,6 +3213,7 @@ export function NotionDatabaseTable({
       });
 
       result = result.filter((row) => {
+        if (isPinnedOrChildOfPinned(row)) return true;
         if (!isSubItemRow(row)) {
           return passingParentRows.has(row);
         }
@@ -3056,10 +3222,14 @@ export function NotionDatabaseTable({
       });
     }
 
-    // 3b. PIC Multi-Select Filter
+    // 3b. PIC Multi-Select Filter (Pinned task bebas filter)
     if (selectedPics.length > 0 && !selectedPics.includes('ALL')) {
       const passingParentRows = new Set<TableRowData>();
       localRows.forEach((row) => {
+        if (isPinnedOrChildOfPinned(row)) {
+          passingParentRows.add(row);
+          return;
+        }
         if (!isSubItemRow(row)) {
           const rawPic = (getRowVal(row, 'PIC') || getRowVal(row, 'pic') || '').trim();
           const matches = selectedPics.some((p) => {
@@ -3073,6 +3243,7 @@ export function NotionDatabaseTable({
       });
 
       result = result.filter((row) => {
+        if (isPinnedOrChildOfPinned(row)) return true;
         if (!isSubItemRow(row)) {
           return passingParentRows.has(row);
         }
@@ -3081,9 +3252,14 @@ export function NotionDatabaseTable({
       });
     }
 
-    // 4. Sort
-    if (sortColumn) {
-      result.sort((a, b) => {
+    // 4. Sort (Pinned row selalu berada di posisi paling atas terlepas dari sort kolom)
+    result.sort((a, b) => {
+      const aPin = isPinnedOrChildOfPinned(a);
+      const bPin = isPinnedOrChildOfPinned(b);
+      if (aPin && !bPin) return -1;
+      if (!aPin && bPin) return 1;
+
+      if (sortColumn) {
         const rawA = (getRowVal(a, sortColumn) || '').trim();
         const rawB = (getRowVal(b, sortColumn) || '').trim();
 
@@ -3112,12 +3288,12 @@ export function NotionDatabaseTable({
         const valB = rawB.toLowerCase();
         if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
         if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
+      }
+      return 0;
+    });
 
     return result;
-  }, [localRows, searchQuery, selectedStatuses, selectedPriorities, selectedPics, sortColumn, sortDirection, getRowVal]);
+  }, [localRows, searchQuery, selectedStatuses, selectedPriorities, selectedPics, sortColumn, sortDirection, getRowVal, isRowPinned, rowToParentMap]);
 
   // Grouped rows for Notion Database Sections (e.g. 'Non Routine Lainnya (22)', 'PTK GTS (2)')
   const groupedRowsData = useMemo(() => {
@@ -5551,6 +5727,15 @@ export function NotionDatabaseTable({
                           }
                         });
 
+                        // Prioritaskan baris yang di-pin agar selalu berada di posisi paling atas tabel
+                        hierarchicalItems.sort((a, b) => {
+                          const aPin = isRowPinned(a.parentRow);
+                          const bPin = isRowPinned(b.parentRow);
+                          if (aPin && !bPin) return -1;
+                          if (!aPin && bPin) return 1;
+                          return 0;
+                        });
+
                         // Helper render item baris (parent atau sub-item)
                         const renderRowItem = (
                           row: TableRowData,
@@ -5604,6 +5789,25 @@ export function NotionDatabaseTable({
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-center gap-1">
+                                  {/* Pin Button for Parent Tasks */}
+                                  {!isSubItem && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTogglePinRow(actualRowIndex);
+                                      }}
+                                      className={`p-0.5 rounded transition-all cursor-pointer ${
+                                        isRowPinned(row)
+                                          ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
+                                          : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                      }`}
+                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 5 task)'}
+                                    >
+                                      <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45' : ''}`} />
+                                    </button>
+                                  )}
+
                                   {/* + Button: Insert new task/row */}
                                   <button
                                     type="button"
@@ -5755,6 +5959,17 @@ export function NotionDatabaseTable({
                                             >
                                               {displayTitle ? displayTitle : <em style={{ color: 'var(--text-muted, #64748b)' }}>Tanpa Judul</em>}
                                             </span>
+
+                                            {/* Pinned Badge */}
+                                            {isRowPinned(row) && !isSubItem && (
+                                              <span 
+                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 select-none shrink-0 shadow-2xs"
+                                                title="Task disematkan (pinned) ke posisi teratas dan tidak terpengaruh filter"
+                                              >
+                                                <Pin className="w-2.5 h-2.5 fill-amber-500 text-amber-600 dark:text-amber-400 rotate-45" />
+                                                <span>PINNED</span>
+                                              </span>
+                                            )}
                                             
                                             {/* Open Badge / Button */}
                                             <button
@@ -6442,6 +6657,25 @@ export function NotionDatabaseTable({
                                        }`}
                                        onClick={(e) => e.stopPropagation()}
                                      >
+                                       {!isSubItem && (
+                                         <button
+                                           type="button"
+                                           onClick={(e) => {
+                                             e.stopPropagation();
+                                             handleTogglePinRow(actualRowIndex);
+                                             setActiveActionMenuRowIndex(null);
+                                           }}
+                                           className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
+                                             isRowPinned(row)
+                                               ? 'hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold'
+                                               : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                           }`}
+                                           title={isRowPinned(row) ? "Lepas sematan (unpin) task ini" : "Sematkan task ini ke posisi teratas (Maks. 5 task)"}
+                                         >
+                                           <Pin className={`w-3.5 h-3.5 shrink-0 ${isRowPinned(row) ? 'text-amber-500 fill-amber-500 rotate-45' : 'text-slate-400'}`} />
+                                           <span>{isRowPinned(row) ? 'Lepas Pin (Unpin Task)' : 'Pin Task ke Atas (Maks 5)'}</span>
+                                         </button>
+                                       )}
                                        {!isSubItem && (
                                          <button
                                            type="button"
