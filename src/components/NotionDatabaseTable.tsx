@@ -5792,26 +5792,7 @@ export function NotionDatabaseTable({
                                 } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-0.5 py-1' : 'w-16 min-w-[62px] max-w-[62px] px-1 py-1'}`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex items-center justify-center gap-1">
-                                  {/* Pin Button for Parent Tasks */}
-                                  {!isSubItem && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleTogglePinRow(actualRowIndex);
-                                      }}
-                                      className={`p-0.5 rounded transition-all cursor-pointer ${
-                                        isRowPinned(row)
-                                          ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
-                                          : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                      }`}
-                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 5 task)'}
-                                    >
-                                      <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45' : ''}`} />
-                                    </button>
-                                  )}
-
+                                <div className="flex items-center justify-center gap-1.5">
                                   {/* + Button: Insert new task/row */}
                                   <button
                                     type="button"
@@ -5825,13 +5806,26 @@ export function NotionDatabaseTable({
                                     <Plus className="w-3.5 h-3.5" />
                                   </button>
 
-                                  {/* :: Grip Vertical Handle */}
-                                  <div 
-                                    className="p-0.5 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing transition-opacity opacity-0 group-hover:opacity-100"
-                                    title="Geser posisi baris"
-                                  >
-                                    <GripVertical className="w-3.5 h-3.5" />
-                                  </div>
+                                  {/* Pin Button: Menggantikan logo drag handle GripVertical */}
+                                  {!isSubItem ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTogglePinRow(actualRowIndex);
+                                      }}
+                                      className={`p-0.5 rounded transition-all cursor-pointer ${
+                                        isRowPinned(row)
+                                          ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
+                                          : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                      }`}
+                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 5 task)'}
+                                    >
+                                      <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45 text-amber-500' : ''}`} />
+                                    </button>
+                                  ) : (
+                                    <div className="w-3.5 h-3.5" />
+                                  )}
 
                                   {/* [ ] Select Checkbox */}
                                   <input
