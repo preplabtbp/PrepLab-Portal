@@ -5836,26 +5836,7 @@ export function NotionDatabaseTable({
                                 } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-0.5 py-1' : 'w-16 min-w-[62px] max-w-[62px] px-1 py-1'}`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex items-center justify-center gap-1">
-                                  {/* Pin Button for Parent Tasks */}
-                                  {!isSubItem && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleTogglePinRow(actualRowIndex);
-                                      }}
-                                      className={`p-0.5 rounded transition-all cursor-pointer ${
-                                        isRowPinned(row)
-                                          ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
-                                          : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                      }`}
-                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 5 task)'}
-                                    >
-                                      <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45' : ''}`} />
-                                    </button>
-                                  )}
-
+                                <div className="flex items-center justify-center gap-1.5">
                                   {/* + Button: Insert new task/row */}
                                   <button
                                     type="button"
@@ -5869,13 +5850,26 @@ export function NotionDatabaseTable({
                                     <Plus className="w-3.5 h-3.5" />
                                   </button>
 
-                                  {/* :: Grip Vertical Handle */}
-                                  <div 
-                                    className="p-0.5 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing transition-opacity opacity-0 group-hover:opacity-100"
-                                    title="Geser posisi baris"
-                                  >
-                                    <GripVertical className="w-3.5 h-3.5" />
-                                  </div>
+                                  {/* Pin Button: Menggantikan logo drag handle GripVertical */}
+                                  {!isSubItem ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTogglePinRow(actualRowIndex);
+                                      }}
+                                      className={`p-0.5 rounded transition-all cursor-pointer ${
+                                        isRowPinned(row)
+                                          ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
+                                          : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                      }`}
+                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 5 task)'}
+                                    >
+                                      <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45 text-amber-500' : ''}`} />
+                                    </button>
+                                  ) : (
+                                    <div className="w-3.5 h-3.5" />
+                                  )}
 
                                   {/* [ ] Select Checkbox */}
                                   <input
@@ -6228,25 +6222,29 @@ export function NotionDatabaseTable({
                                     <td 
                                       key={colName} 
                                       style={getColStyle(colName)} 
-                                      className={`relative border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                      } ${fitPageMode ? 'px-2 py-2 overflow-visible' : 'px-3.5 py-2.5 whitespace-nowrap overflow-visible'}`}
-                                      onClick={(e) => e.stopPropagation()}
+                                      className={`relative border-r cursor-pointer select-none transition-colors ${
+                                        isNotionLight ? 'border-[#e9e9e8] hover:bg-slate-100/60' : 'border-[#2d2d2d] hover:bg-slate-800/40'
+                                      } ${fitPageMode ? 'px-2 py-1.5 overflow-visible' : 'px-3.5 py-2 whitespace-nowrap overflow-visible'}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if ((e.target as HTMLElement).closest('.notion-pic-popover')) {
+                                          return;
+                                        }
+                                        setActiveInlinePicCell(isEditingPic ? null : { rowIndex: actualRowIndex, colName });
+                                        setInlinePicSearch('');
+                                      }}
+                                      title={picTooltip}
                                     >
-                                      <div 
-                                        onClick={() => {
-                                          setActiveInlinePicCell(isEditingPic ? null : { rowIndex: actualRowIndex, colName });
-                                          setInlinePicSearch('');
-                                        }}
-                                        className="cursor-pointer inline-block group/pic transition-transform hover:scale-105"
-                                        title={picTooltip}
-                                      >
-                                        {renderPicBadge(val, 'sm', false)}
+                                      <div className="w-full h-full min-h-[26px] flex items-center group/pic">
+                                        <div className="transition-transform group-hover/pic:scale-105 inline-flex items-center">
+                                          {renderPicBadge(val, 'sm', false)}
+                                        </div>
                                       </div>
 
                                       {isEditingPic && (
                                         <div 
-                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-72 max-h-72 overflow-y-auto rounded-xl shadow-2xl border p-2.5 z-50 text-left ${
+                                          onClick={(e) => e.stopPropagation()}
+                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-72 max-h-72 overflow-y-auto rounded-xl shadow-2xl border p-2.5 z-50 text-left cursor-default select-text ${
                                             isNotionLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-[#1e293b] border-slate-700 text-slate-100'
                                           }`}
                                         >

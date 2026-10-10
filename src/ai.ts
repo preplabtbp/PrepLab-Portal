@@ -7,7 +7,7 @@ dotenv.config();
 // Inisialisasi SDK dengan mode Vertex AI (Memotong Kredit Gratis GCP $300)
 export const ai = new GoogleGenAI({
   vertexai: true,
-  project: process.env.GCP_PROJECT_ID || 'project-1bcc4549-c8d6-4962-958',
+  project: process.env.GCP_PROJECT_ID || 'project-054e3351-b8d1-42f7-9c8',
   location: process.env.GCP_LOCATION || 'us-central1',
 });
 
