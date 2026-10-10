@@ -2994,6 +2994,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         </div>
                         <p className="font-black text-xl text-emerald-950 tracking-tight">{selectedEmployee.statusKaryawan || '-'}</p>
                       </div>
+
+                      <div className="mt-2.5 pt-2 border-t border-emerald-300/60 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-emerald-200/70 border border-emerald-300/80 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-800" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-800/80 leading-tight">Status Kerja</p>
+                          <p className="font-bold text-xs text-emerald-950 leading-tight whitespace-nowrap">
+                            {String(selectedEmployee.statusKaryawan || '').toUpperCase() === 'ACTIVE' ? 'Aktif Bekerja' : (selectedEmployee.statusKaryawan || 'Aktif')}
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Status Kontrak & Tanggal Permanen (Disatukan) */}
@@ -3017,13 +3029,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         <p className="font-black text-xl text-amber-950 tracking-tight">{selectedEmployee.statusKontrak || '-'}</p>
                       </div>
 
-                      {Boolean(selectedEmployee.tanggalPermanent && selectedEmployee.tanggalPermanent !== '-' && selectedEmployee.tanggalPermanent !== '0') && (
-                        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-amber-200/80 text-[11px] text-amber-900">
-                          <Calendar className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                          <span className="text-[10px] uppercase tracking-wider font-bold text-amber-800/80">Permanen:</span>
-                          <span className="font-mono font-bold text-amber-950">{formatShortDate(selectedEmployee.tanggalPermanent)}</span>
+                      <div className="mt-2.5 pt-2 border-t border-amber-300/60 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-amber-200/70 border border-amber-300/80 flex items-center justify-center shrink-0">
+                          <Calendar className="w-3.5 h-3.5 text-amber-800" />
                         </div>
-                      )}
+                        <div className="min-w-0">
+                          <p className="text-[9px] uppercase tracking-wider font-extrabold text-amber-800/80 leading-tight">Tgl Permanen</p>
+                          <p className="font-mono font-black text-xs text-amber-950 leading-tight whitespace-nowrap">
+                            {selectedEmployee.tanggalPermanent && selectedEmployee.tanggalPermanent !== '-' && selectedEmployee.tanggalPermanent !== '0'
+                              ? formatShortDate(selectedEmployee.tanggalPermanent)
+                              : 'Belum Permanen'}
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Tgl Efektif Tidak Bekerja (Conditional) */}
