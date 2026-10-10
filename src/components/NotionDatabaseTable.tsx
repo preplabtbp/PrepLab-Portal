@@ -72,7 +72,7 @@ import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
-import { syncLogbookRowBackToOrigin } from './notion/logbook-section-utils';
+import { syncLogbookRowBackToOrigin, formatToDDMMYYYY, getTodayDDMMYYYY } from './notion/logbook-section-utils';
 import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './notion/FloatingSelectionToolbar';
 import { PicAvatarGroup, smartSplitPicString } from './PicAvatarGroup';
 import {
@@ -2328,7 +2328,7 @@ export function NotionDatabaseTable({
 
           if (autoStatus === 'Closed') {
             const dates = taskProg.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
-            targetRow[compKey] = dates.length > 0 ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10);
+            targetRow[compKey] = dates.length > 0 ? formatToDDMMYYYY(dates[dates.length - 1]) : getTodayDDMMYYYY();
           } else if (autoStatus === 'Open' || autoStatus === 'On Progress') {
             targetRow[compKey] = '-';
           }
@@ -2350,7 +2350,7 @@ export function NotionDatabaseTable({
         if (stUpper.includes('CLOSE') || stUpper.includes('SELESAI') || stUpper.includes('DONE')) {
           const curVal = targetRow[compKey];
           if (!curVal || curVal === '-') {
-            targetRow[compKey] = new Date().toISOString().slice(0, 10);
+            targetRow[compKey] = getTodayDDMMYYYY();
           }
 
           // Trigger routine task rollover for routine tasks when closed directly
@@ -2833,7 +2833,7 @@ export function NotionDatabaseTable({
     };
 
     const executeToggle = async () => {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = getTodayDDMMYYYY();
       const updatedRow = { ...subRow };
       updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
       updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
@@ -6102,9 +6102,13 @@ export function NotionDatabaseTable({
                                       if (taskProg.items.length > 0) {
                                         const dates = taskProg.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
                                         if (dates.length > 0) {
-                                          displayDate = dates[dates.length - 1];
+                                          displayDate = formatToDDMMYYYY(dates[dates.length - 1]);
                                         }
                                       }
+                                    }
+
+                                    if (displayDate) {
+                                      displayDate = formatToDDMMYYYY(displayDate);
                                     }
                                   }
 
@@ -6138,7 +6142,7 @@ export function NotionDatabaseTable({
                                       ) : (
                                         <span 
                                           onClick={() => {
-                                            const todayStr = new Date().toISOString().slice(0, 10);
+                                            const todayStr = getTodayDDMMYYYY();
                                             handleUpdateCellDirect(actualRowIndex, colName, todayStr);
                                           }}
                                           className="font-mono text-slate-400 hover:text-emerald-500 cursor-pointer text-xs transition-colors"

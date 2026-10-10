@@ -1,7 +1,65 @@
-// Utilities for Unified Section Logbooks in LabNote
-// Combines active Routine and Non-Routine tasks into a seamless NotionDatabaseTable view.
-
 import { TableRowData } from '../NotionDatabaseTable';
+
+/**
+ * Formats any date string or Date object into DD-MM-YYYY format.
+ * Examples: '2026-10-10' -> '10-10-2026', '2026-10-10 08:30' -> '10-10-2026 08:30'
+ */
+export function formatToDDMMYYYY(val: string | number | Date | null | undefined): string {
+  if (!val) return '';
+  const str = String(val).trim();
+  if (str === '-' || str === '') return str;
+  // If already DD-MM-YYYY or DD-MM-YYYY HH:mm
+  if (/^\d{2}-\d{2}-\d{4}/.test(str)) {
+    return str;
+  }
+  // If YYYY-MM-DD or YYYY-MM-DD HH:mm...
+  const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(.*)/);
+  if (isoMatch) {
+    const [, y, m, d, rest] = isoMatch;
+    return `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}${rest || ''}`;
+  }
+  // Try Date parse
+  const dt = new Date(str);
+  if (!isNaN(dt.getTime())) {
+    const d = String(dt.getDate()).padStart(2, '0');
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const y = dt.getFullYear();
+    return `${d}-${m}-${y}`;
+  }
+  return str;
+}
+
+export function getTodayDDMMYYYY(): string {
+  const dt = new Date();
+  const d = String(dt.getDate()).padStart(2, '0');
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const y = dt.getFullYear();
+  return `${d}-${m}-${y}`;
+}
+
+export function getYesterdayDDMMYYYY(): string {
+  const dt = new Date();
+  dt.setDate(dt.getDate() - 1);
+  const d = String(dt.getDate()).padStart(2, '0');
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const y = dt.getFullYear();
+  return `${d}-${m}-${y}`;
+}
+
+export interface TaskRecommendation {
+  id: string;
+  title: string;
+  description: string;
+  pic: string;
+  priority: string;
+  type: 'Routine' | 'Non-Routine';
+  cadence: string; // 'Daily' | 'Weekly' | 'Monthly' | etc.
+  originPostId: number;
+  originPostTitle: string;
+  originRowIndex: number;
+  rawRow: TableRowData;
+  isAlreadyPlanned?: boolean;
+}
 
 export const KNOWN_SECTIONS = [
   'Preparasi',
@@ -465,4 +523,251 @@ export async function syncLogbookRowBackToOrigin(
   }
 
   return false;
+}
+
+/**
+ * Scans all section posts to produce smart recommendations for today's planning:
+ * - Routine jobs (Daily that haven't been completed today, Weekly that haven't been completed this week, etc.)
+ * - Non-routine jobs (Status is not closed)
+ */
+export function getSectionActiveRecommendations(
+  sectionName: string,
+  allPosts: any[],
+  targetUniverse: string = 'TBP',
+  alreadyPlannedTitles: string[] = []
+): TaskRecommendation[] {
+  const matchingPosts = findSectionTaskPosts(sectionName, allPosts, targetUniverse);
+  const recommendations: TaskRecommendation[] = [];
+  const plannedSet = new Set(alreadyPlannedTitles.map(t => t.toLowerCase().trim()));
+  const seenKeys = new Set<string>();
+  const todayStr = getTodayDDMMYYYY();
+
+  matchingPosts.forEach(post => {
+    const postTitle = post.title || '';
+    const isNonRoutine = postTitle.toLowerCase().includes('non routine') || postTitle.toLowerCase().includes('non-routine');
+    let defaultCadence = 'Daily';
+    const ptLow = postTitle.toLowerCase();
+    if (ptLow.includes('daily')) defaultCadence = 'Daily';
+    else if (ptLow.includes('weekly')) defaultCadence = 'Weekly';
+    else if (ptLow.includes('monthly')) defaultCadence = 'Monthly';
+    else if (ptLow.includes('quarterly')) defaultCadence = 'Quarterly';
+    else if (ptLow.includes('biannual')) defaultCadence = 'Biannual';
+    else if (ptLow.includes('yearly')) defaultCadence = 'Yearly';
+    else if (isNonRoutine) defaultCadence = 'Non-Routine';
+
+    const parsed = parseTableFromMarkdown(post.content || '');
+    if (!parsed || !parsed.rows) return;
+
+    parsed.rows.forEach((row, idx) => {
+      // Must be active (not closed or completed in origin)
+      if (!isRowActive(row)) return;
+
+      const titleKey = Object.keys(row).find(k => k.toLowerCase().includes('kegiatan') || k.toLowerCase() === 'title');
+      const title = titleKey ? String(row[titleKey] || '').trim() : '';
+      if (!title) return;
+
+      // Check if already completed today
+      const dateKey = Object.keys(row).find(k => k.toLowerCase().includes('selesai') || k.toLowerCase() === 'completed');
+      const dateVal = dateKey ? formatToDDMMYYYY(row[dateKey]) : '';
+      if (dateVal === todayStr) {
+        // Already completed today, skip from today's recommendation
+        return;
+      }
+
+      const dedupKey = `${title.toLowerCase()}_${String(row.PIC || row.pic || '').toLowerCase()}`;
+      if (seenKeys.has(dedupKey)) return;
+      seenKeys.add(dedupKey);
+
+      const isPlanned = plannedSet.has(title.toLowerCase());
+      const recId = `rec_${post.id}_${idx}_${title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+
+      recommendations.push({
+        id: recId,
+        title,
+        description: String(row.Keterangan || row.keterangan || row.uraian || ''),
+        pic: String(row.PIC || row.pic || ''),
+        priority: String(row.Priority || row.priority || 'Normal'),
+        type: isNonRoutine ? 'Non-Routine' : 'Routine',
+        cadence: defaultCadence,
+        originPostId: post.id,
+        originPostTitle: postTitle,
+        originRowIndex: idx,
+        rawRow: row,
+        isAlreadyPlanned: isPlanned
+      });
+    });
+  });
+
+  return recommendations;
+}
+
+/**
+ * Parses today's planning and yesterday's progress from a Section Logbook post.
+ * Rule: Today's plan is automatically blank / clean unless saved for today's date!
+ */
+export function parseSectionLogbookData(
+  postContent: string,
+  sectionName: string,
+  allPosts: any[] = [],
+  targetUniverse: string = 'TBP'
+): {
+  planDate: string;
+  todayRows: TableRowData[];
+  yesterdayRows: TableRowData[];
+  isTodayFresh: boolean;
+} {
+  const todayStr = getTodayDDMMYYYY();
+  const yesterdayStr = getYesterdayDDMMYYYY();
+
+  let planDate = '';
+  const dateMatch = (postContent || '').match(/<!--\s*PLANNING_DATE:\s*([^\s>]+)\s*-->/i);
+  if (dateMatch) {
+    planDate = dateMatch[1].trim();
+  }
+
+  // Check if saved planning is from today
+  const isTodayFresh = planDate === todayStr;
+
+  let todayRows: TableRowData[] = [];
+  let yesterdayRows: TableRowData[] = [];
+
+  if (postContent && postContent.includes('|')) {
+    // Split sections if multi-table markdown exists
+    const parts = postContent.split(/(?=###\s+)/i);
+    for (const part of parts) {
+      const partLower = part.toLowerCase();
+      const parsed = parseTableFromMarkdown(part);
+      if (!parsed || parsed.rows.length === 0) continue;
+
+      if (partLower.includes('planning') || partLower.includes('hari ini')) {
+        if (isTodayFresh) {
+          todayRows = parsed.rows;
+        }
+      } else if (partLower.includes('kemarin') || partLower.includes('progress kemarin')) {
+        yesterdayRows = parsed.rows;
+      }
+    }
+
+    // Fallback: If only 1 table exists and planDate is today
+    if (todayRows.length === 0 && isTodayFresh) {
+      const parsed = parseTableFromMarkdown(postContent);
+      if (parsed) todayRows = parsed.rows;
+    }
+  }
+
+  // If yesterdayRows is empty, automatically build yesterday's progress recap!
+  if (yesterdayRows.length === 0 && allPosts.length > 0) {
+    yesterdayRows = aggregateYesterdayProgress(sectionName, allPosts, targetUniverse);
+  }
+
+  // Format all dates in rows to DD-MM-YYYY
+  [...todayRows, ...yesterdayRows].forEach(r => {
+    Object.keys(r).forEach(k => {
+      const kl = k.toLowerCase();
+      if (kl.includes('tanggal') || kl.includes('created') || kl.includes('selesai') || kl.includes('date')) {
+        r[k] = formatToDDMMYYYY(r[k]);
+      }
+    });
+  });
+
+  return {
+    planDate: isTodayFresh ? planDate : todayStr,
+    todayRows,
+    yesterdayRows,
+    isTodayFresh
+  };
+}
+
+/**
+ * Aggregates yesterday's progress from origin section posts.
+ */
+export function aggregateYesterdayProgress(
+  sectionName: string,
+  allPosts: any[],
+  targetUniverse: string = 'TBP'
+): TableRowData[] {
+  const matchingPosts = findSectionTaskPosts(sectionName, allPosts, targetUniverse);
+  const yesterdayTasks: TableRowData[] = [];
+  const yesterdayStr = getYesterdayDDMMYYYY();
+  const seenKeys = new Set<string>();
+
+  matchingPosts.forEach(post => {
+    const parsed = parseTableFromMarkdown(post.content || '');
+    if (!parsed || !parsed.rows) return;
+
+    parsed.rows.forEach((row, idx) => {
+      const titleKey = Object.keys(row).find(k => k.toLowerCase().includes('kegiatan') || k.toLowerCase() === 'title');
+      const title = titleKey ? String(row[titleKey] || '').trim() : '';
+      if (!title) return;
+
+      const dateKey = Object.keys(row).find(k => k.toLowerCase().includes('selesai') || k.toLowerCase() === 'completed');
+      const dateVal = dateKey ? formatToDDMMYYYY(row[dateKey]) : '';
+
+      // Check if finished yesterday OR had recent activity
+      const isFinishedYesterday = dateVal === yesterdayStr;
+      const wasActive = isRowActive(row);
+
+      if (isFinishedYesterday || wasActive) {
+        const dedupKey = `${title.toLowerCase()}_${String(row.PIC || '').toLowerCase()}`;
+        if (seenKeys.has(dedupKey)) return;
+        seenKeys.add(dedupKey);
+
+        const normalized: TableRowData = {
+          number: String(yesterdayTasks.length + 1),
+          'Jenis kegiatan': title,
+          Keterangan: String(row.Keterangan || row.keterangan || ''),
+          'Created Time': formatToDDMMYYYY(row['Created Time'] || row['Created time'] || yesterdayStr),
+          'Tanggal Selesai': dateVal || (isFinishedYesterday ? yesterdayStr : '-'),
+          Status: isFinishedYesterday ? 'Closed' : (row.Status || 'Open'),
+          PIC: String(row.PIC || row.pic || ''),
+          Priority: String(row.Priority || 'Normal'),
+          'Activity (routine/non routine)': String(row['Activity (routine/non routine)'] || 'Routine'),
+          period: String(row.period || 'Daily'),
+          'Asal Halaman': post.title || sectionName,
+          _originPostId: String(post.id),
+          _originRowIndex: String(idx)
+        };
+        yesterdayTasks.push(normalized);
+      }
+    });
+  });
+
+  return yesterdayTasks;
+}
+
+/**
+ * Serializes today's planning and yesterday's progress into logbook markdown content.
+ */
+export function serializeSectionLogbookContent(
+  todayRows: TableRowData[],
+  yesterdayRows: TableRowData[],
+  sectionName: string,
+  planDate: string = getTodayDDMMYYYY()
+): string {
+  const formatTable = (rows: TableRowData[], title: string) => {
+    let md = `### ${title}\n\n`;
+    if (rows.length === 0) {
+      md += `*Nihil kegiatan terdaftar.*\n\n`;
+      return md;
+    }
+    const headers = LOGBOOK_CANONICAL_HEADERS;
+    md += `| ${headers.join(' | ')} |\n`;
+    md += `| ${headers.map(() => '---').join(' | ')} |\n`;
+    rows.forEach((r, idx) => {
+      const cells = headers.map(h => {
+        if (h === 'number') return String(idx + 1);
+        let val = r[h] !== undefined ? String(r[h]) : '';
+        val = val.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br/>');
+        return val;
+      });
+      md += `| ${cells.join(' | ')} |\n`;
+    });
+    md += '\n';
+    return md;
+  };
+
+  const yesterdayDate = getYesterdayDDMMYYYY();
+  return `# Logbook ${sectionName}\n\n<!-- PLANNING_DATE: ${planDate} -->\n*Logbook Terpadu Seksi ${sectionName} terbagi atas Planning Kerja Hari Ini dan Evaluasi Progress Kemarin.*\n\n` +
+    formatTable(todayRows, `Planning Kerja Hari Ini (${planDate})`) +
+    formatTable(yesterdayRows, `Progress yang Dikerjakan Kemarin (${yesterdayDate})`);
 }
