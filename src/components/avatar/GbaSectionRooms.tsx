@@ -1045,48 +1045,65 @@ export const GbaGazeboNBench: React.FC<{ x: number; y: number }> = ({ x, y }) =>
     {/* Dark Base / Slotted Frame Bed */}
     <rect x="2.5" y="2.5" width="71" height="9.5" fill="#381808" />
 
-    {/* Top Wooden Planks: 3 Distinct Seats with Teak Wood Grain & Highlights */}
-    {/* Seat Top 1 (Left): x: 3..25 */}
+    {/* Top-Left Corner Junction Wood: x: 2.5..14 */}
     <g>
-      <rect x="3" y="3" width="21.5" height="8.5" fill="#78350F" />
-      <rect x="3" y="3" width="21.5" height="2.5" fill="#9A4515" />
-      <rect x="3" y="3" width="21.5" height="0.8" fill="#D97706" />
-      <rect x="3" y="6" width="21.5" height="2.5" fill="#9A4515" />
-      <rect x="3" y="6" width="21.5" height="0.6" fill="#D97706" />
-      <rect x="3" y="9" width="21.5" height="2.5" fill="#78350F" />
-      <rect x="3" y="11" width="21.5" height="0.5" fill="#381808" />
+      <rect x="2.5" y="3" width="11.5" height="8.5" fill="#78350F" />
+      <rect x="2.5" y="3" width="11.5" height="2.5" fill="#9A4515" />
+      <rect x="2.5" y="3" width="11.5" height="0.8" fill="#D97706" />
+      <rect x="2.5" y="6" width="11.5" height="2.5" fill="#9A4515" />
+      <rect x="2.5" y="9" width="11.5" height="2.5" fill="#78350F" />
     </g>
 
-    {/* Seat Top 2 (Middle): x: 26..49 */}
+    {/* Seat Top 1 (Left): x: 14..29.5 (Center at x=22) */}
     <g>
-      <rect x="26" y="3" width="23" height="8.5" fill="#78350F" />
-      <rect x="26" y="3" width="23" height="2.5" fill="#9A4515" />
-      <rect x="26" y="3" width="23" height="0.8" fill="#D97706" />
-      <rect x="26" y="6" width="23" height="2.5" fill="#9A4515" />
-      <rect x="26" y="6" width="23" height="0.6" fill="#D97706" />
-      <rect x="26" y="9" width="23" height="2.5" fill="#78350F" />
-      <rect x="26" y="11" width="23" height="0.5" fill="#381808" />
+      <rect x="14" y="3" width="15.5" height="8.5" fill="#78350F" />
+      <rect x="14" y="3" width="15.5" height="2.5" fill="#9A4515" />
+      <rect x="14" y="3" width="15.5" height="0.8" fill="#D97706" />
+      <rect x="14" y="6" width="15.5" height="2.5" fill="#9A4515" />
+      <rect x="14" y="6" width="15.5" height="0.6" fill="#D97706" />
+      <rect x="14" y="9" width="15.5" height="2.5" fill="#78350F" />
+      <rect x="14" y="11" width="15.5" height="0.5" fill="#381808" />
     </g>
 
-    {/* Seat Top 3 (Right): x: 50.5..73 */}
+    {/* Seat Top 2 (Middle): x: 30.5..45.5 (Center at x=38) */}
     <g>
-      <rect x="50.5" y="3" width="22.5" height="8.5" fill="#78350F" />
-      <rect x="50.5" y="3" width="22.5" height="2.5" fill="#9A4515" />
-      <rect x="50.5" y="3" width="22.5" height="0.8" fill="#D97706" />
-      <rect x="50.5" y="6" width="22.5" height="2.5" fill="#9A4515" />
-      <rect x="50.5" y="6" width="22.5" height="0.6" fill="#D97706" />
-      <rect x="50.5" y="9" width="22.5" height="2.5" fill="#78350F" />
-      <rect x="50.5" y="11" width="22.5" height="0.5" fill="#381808" />
+      <rect x="30.5" y="3" width="15" height="8.5" fill="#78350F" />
+      <rect x="30.5" y="3" width="15" height="2.5" fill="#9A4515" />
+      <rect x="30.5" y="3" width="15" height="0.8" fill="#D97706" />
+      <rect x="30.5" y="6" width="15" height="2.5" fill="#9A4515" />
+      <rect x="30.5" y="6" width="15" height="0.6" fill="#D97706" />
+      <rect x="30.5" y="9" width="15" height="2.5" fill="#78350F" />
+      <rect x="30.5" y="11" width="15" height="0.5" fill="#381808" />
+    </g>
+
+    {/* Seat Top 3 (Right): x: 46.5..62 (Center at x=54) */}
+    <g>
+      <rect x="46.5" y="3" width="15.5" height="8.5" fill="#78350F" />
+      <rect x="46.5" y="3" width="15.5" height="2.5" fill="#9A4515" />
+      <rect x="46.5" y="3" width="15.5" height="0.8" fill="#D97706" />
+      <rect x="46.5" y="6" width="15.5" height="2.5" fill="#9A4515" />
+      <rect x="46.5" y="6" width="15.5" height="0.6" fill="#D97706" />
+      <rect x="46.5" y="9" width="15.5" height="2.5" fill="#78350F" />
+      <rect x="46.5" y="11" width="15.5" height="0.5" fill="#381808" />
+    </g>
+
+    {/* Top-Right Corner Junction Wood: x: 62..73.5 */}
+    <g>
+      <rect x="62" y="3" width="11.5" height="8.5" fill="#78350F" />
+      <rect x="62" y="3" width="11.5" height="2.5" fill="#9A4515" />
+      <rect x="62" y="3" width="11.5" height="0.8" fill="#D97706" />
+      <rect x="62" y="6" width="11.5" height="2.5" fill="#9A4515" />
+      <rect x="62" y="9" width="11.5" height="2.5" fill="#78350F" />
     </g>
 
     {/* Heavy Cast-Iron Brackets dividing the 3 Top Seats */}
-    <rect x="24.5" y="2.5" width="1.5" height="9.5" fill="#181820" />
-    <rect x="24.5" y="2.5" width="0.5" height="9.5" fill="#3E4754" />
-    <circle cx="25.2" cy="7" r="0.5" fill="#F59E0B" />
+    <rect x="29.5" y="2.5" width="1.5" height="9.5" fill="#181820" />
+    <rect x="29.5" y="2.5" width="0.5" height="9.5" fill="#3E4754" />
+    <circle cx="30.2" cy="7" r="0.5" fill="#F59E0B" />
 
-    <rect x="49" y="2.5" width="1.5" height="9.5" fill="#181820" />
-    <rect x="49" y="2.5" width="0.5" height="9.5" fill="#3E4754" />
-    <circle cx="49.7" cy="7" r="0.5" fill="#F59E0B" />
+    <rect x="45.5" y="2.5" width="1.5" height="9.5" fill="#181820" />
+    <rect x="45.5" y="2.5" width="0.5" height="9.5" fill="#3E4754" />
+    <circle cx="46.2" cy="7" r="0.5" fill="#F59E0B" />
 
     {/* Inside Beveled Front Rim along Top Wing */}
     <rect x="14" y="11" width="48" height="1" fill="#381808" />

@@ -491,12 +491,12 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         }
       }
 
-      // 3. Bangku Panjang Berbentuk 'n' - SISI ATAS (Kapasitas Maksimal 3 Orang, Menghadap ke BAWAH): (x: 4.4..7.6, y: 2.9..4.3)
-      if (tx >= 4.4 && tx <= 7.6 && ty >= 2.9 && ty <= 4.3) {
+      // 3. Bangku Panjang Berbentuk 'n' - SISI ATAS (Kapasitas Maksimal 3 Orang, Menghadap ke BAWAH): (x: 4.0..7.2, y: 2.9..4.3)
+      if (tx >= 4.0 && tx <= 7.2 && ty >= 2.9 && ty <= 4.3) {
         const topSlots = [
-          { x: 4.75, y: 3.45 },
-          { x: 6.0, y: 3.45 },
-          { x: 7.25, y: 3.45 }
+          { x: 4.5, y: 3.45 },
+          { x: 5.5, y: 3.45 },
+          { x: 6.5, y: 3.45 }
         ];
         // Pilih slot terdekat yang masih kosong
         const sortedSlots = [...topSlots].sort((a, b) => 
