@@ -2206,14 +2206,14 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             transition={{ delay: 0.1 }}
             className="flex flex-col lg:flex-row h-auto lg:h-full w-full min-h-full p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-[#f4faf5] via-[#edf6f0] to-[#e6f3eb] gap-4 lg:gap-6 overflow-visible lg:overflow-hidden relative pb-32 lg:pb-6"
           >
-            {/* SIDEBAR (Profile Info) - PROFESSIONAL EXECUTIVE HIJAU TOSCA CARD */}
-            <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-gradient-to-br from-[#0d4a50] via-[#12585f] to-[#093a3e] text-white shrink-0 shadow-2xl shadow-teal-950/25 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-teal-400/30 ring-1 ring-white/10 transition-all">
+            {/* SIDEBAR (Profile Info) - HIJAU TOSCA PROFESIONAL & ESTETIK */}
+            <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-gradient-to-br from-[#14b8a6] via-[#0d9488] to-[#0f766e] text-white shrink-0 shadow-2xl shadow-teal-900/25 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-teal-300/40 ring-1 ring-white/20 transition-all">
               {/* Decorative Ambient Depth Lights */}
-              <div className="absolute -top-20 -left-20 w-48 h-48 bg-teal-400/15 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-20 -right-20 w-48 h-48 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -top-20 -left-20 w-48 h-48 bg-teal-200/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-20 -right-20 w-48 h-48 bg-emerald-200/20 rounded-full blur-3xl pointer-events-none" />
 
               <div className="flex flex-col items-center text-center mb-3.5 w-full shrink-0 relative z-10">
-                <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-[#093539] border-2 border-teal-300/40 overflow-hidden flex items-center justify-center shrink-0 shadow-xl relative ring-4 ring-teal-400/20 ring-offset-2 ring-offset-[#12585f] group mx-auto">
+                <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-teal-800/40 border-2 border-white/40 overflow-hidden flex items-center justify-center shrink-0 shadow-xl relative ring-4 ring-teal-200/30 ring-offset-2 ring-offset-teal-600 group mx-auto">
                   {selectedEmployee.photo ? (
                     <img 
                       src={formatAvatarUrl(selectedEmployee.photo)} 
@@ -2225,10 +2225,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       }}
                     />
                   ) : (
-                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-teal-200/70 drop-shadow-md" />
+                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-teal-100 drop-shadow-md" />
                   )}
                   {isUploadingPhoto && (
-                    <div className="absolute inset-0 bg-[#093539]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
+                    <div className="absolute inset-0 bg-teal-900/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
                       <RefreshCw className="w-6 h-6 animate-spin text-white mb-1.5" />
                       <span>Mengunggah...</span>
                     </div>
@@ -2249,10 +2249,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         type="button"
                         onClick={() => photoInputRef.current?.click()}
                         disabled={isUploadingPhoto}
-                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-teal-50 flex items-center gap-1.5 transition-all shadow-xs border border-white/20 backdrop-blur-md cursor-pointer"
+                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-xs border border-white/30 backdrop-blur-md cursor-pointer"
                         title="Perbarui atau unggah foto karyawan di database"
                       >
-                        <Camera className="w-3.5 h-3.5 text-teal-200" />
+                        <Camera className="w-3.5 h-3.5 text-teal-100" />
                         <span>{selectedEmployee.photo ? 'Ganti Foto' : 'Unggah Foto'}</span>
                       </button>
 
@@ -2278,59 +2278,59 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   {selectedEmployee.name}
                 </h2>
                 <div className="w-full flex justify-center">
-                  <p className="text-teal-100 inline-flex items-center bg-black/25 backdrop-blur-md px-3 py-0.5 rounded-full text-[11px] font-black shadow-xs border border-teal-300/20 font-mono tracking-wider">
-                    <Fingerprint className="w-3.5 h-3.5 mr-1.5 text-teal-300" />
+                  <p className="text-teal-50 inline-flex items-center bg-teal-900/35 backdrop-blur-md px-3 py-0.5 rounded-full text-[11px] font-black shadow-xs border border-white/20 font-mono tracking-wider">
+                    <Fingerprint className="w-3.5 h-3.5 mr-1.5 text-teal-200" />
                     NIK: {selectedEmployee.nik}
                   </p>
                 </div>
               </div>
 
               {/* Detail Profil Sidebar */}
-              <div className="w-full flex-1 overflow-visible lg:overflow-y-auto pr-0 lg:pr-1 space-y-2 text-white divide-y divide-white/10 custom-scrollbar-teal text-left relative z-10">
+              <div className="w-full flex-1 overflow-visible lg:overflow-y-auto pr-0 lg:pr-1 space-y-2 text-white divide-y divide-white/15 custom-scrollbar-teal text-left relative z-10">
                 <div className="pt-2 first:pt-0">
-                  <p className="text-teal-200 text-[10px] font-black mb-0.5 uppercase tracking-wider">Jabatan</p>
+                  <p className="text-teal-100 text-[10px] font-black mb-0.5 uppercase tracking-wider">Jabatan</p>
                   <p className="font-bold text-white text-xs sm:text-sm leading-snug">{selectedEmployee.jabatan || '-'}</p>
                 </div>
                 
                 <div className="pt-2">
-                  <p className="text-teal-200 text-[10px] font-black mb-0.5 uppercase tracking-wider">Perusahaan</p>
+                  <p className="text-teal-100 text-[10px] font-black mb-0.5 uppercase tracking-wider">Perusahaan</p>
                   <p className="font-bold text-white text-xs">{selectedEmployee.pt || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-white/10 hover:bg-white/15 p-2.5 rounded-2xl border border-white/15 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-teal-200 text-[10px] font-black mb-0.5 uppercase tracking-wider">Job Grade</p>
+                  <div className="bg-white/15 hover:bg-white/20 p-2.5 rounded-2xl border border-white/25 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-teal-100 text-[10px] font-black mb-0.5 uppercase tracking-wider">Job Grade</p>
                     <p className="font-extrabold text-white text-xs">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
-                  <div className="bg-white/10 hover:bg-white/15 p-2.5 rounded-2xl border border-white/15 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-teal-200 text-[10px] font-black mb-0.5 uppercase tracking-wider">Golongan</p>
+                  <div className="bg-white/15 hover:bg-white/20 p-2.5 rounded-2xl border border-white/25 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-teal-100 text-[10px] font-black mb-0.5 uppercase tracking-wider">Golongan</p>
                     <p className="font-extrabold text-white text-xs">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
 
                 <div className="pt-2">
-                  <p className="text-teal-200 text-[10px] font-black mb-0.5 uppercase tracking-wider">Bagian (Section)</p>
+                  <p className="text-teal-100 text-[10px] font-black mb-0.5 uppercase tracking-wider">Bagian (Section)</p>
                   <p className="font-bold text-white text-xs">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-white/10 hover:bg-white/15 p-2.5 rounded-2xl border border-white/15 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-teal-200 text-[10px] font-black mb-0.5 uppercase tracking-wider">DOH Awal</p>
+                  <div className="bg-white/15 hover:bg-white/20 p-2.5 rounded-2xl border border-white/25 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-teal-100 text-[10px] font-black mb-0.5 uppercase tracking-wider">DOH Awal</p>
                     <p className="font-bold text-white text-xs font-mono">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
                   </div>
-                  <div className="bg-white/10 hover:bg-white/15 p-2.5 rounded-2xl border border-white/15 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-teal-200 text-[10px] font-black mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
+                  <div className="bg-white/15 hover:bg-white/20 p-2.5 rounded-2xl border border-white/25 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-teal-100 text-[10px] font-black mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
                     <p className="font-bold text-white text-xs font-mono">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
                   </div>
                 </div>
 
                 {/* MASA KERJA JABATAN DENGAN DROPDOWN LIST */}
                 <div className="pt-2.5 pb-1 space-y-1.5">
-                  <div className="bg-black/25 hover:bg-black/30 p-3 rounded-2xl border border-white/15 transition-all shadow-inner backdrop-blur-md">
+                  <div className="bg-teal-900/35 hover:bg-teal-900/45 p-3 rounded-2xl border border-white/20 transition-all shadow-xs backdrop-blur-md">
                     <div className="flex items-center justify-between gap-1 mb-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-teal-300" />
-                        <span className="text-teal-200 text-[10px] font-black uppercase tracking-wider">
+                        <Clock className="w-3.5 h-3.5 text-teal-200" />
+                        <span className="text-teal-100 text-[10px] font-black uppercase tracking-wider">
                           Masa Kerja Jabatan
                         </span>
                       </div>
@@ -2340,11 +2340,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         <select
                           value={tenureDropdownPeriod}
                           onChange={(e) => setTenureDropdownPeriod(e.target.value as 'sekarang' | 'sebelumnya')}
-                          className="bg-black/40 hover:bg-black/50 text-white text-[10.5px] font-bold pl-2.5 pr-6 py-0.5 rounded-lg border border-teal-300/30 cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-teal-300 appearance-none"
+                          className="bg-teal-950/50 hover:bg-teal-950/70 text-white text-[10.5px] font-bold pl-2.5 pr-6 py-0.5 rounded-lg border border-white/25 cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-teal-200 appearance-none"
                           title="Pilih masa kerja jabatan sekarang atau sebelumnya"
                         >
-                          <option value="sekarang">Sekarang</option>
-                          <option value="sebelumnya">Sebelumnya</option>
+                          <option value="sekarang" className="bg-teal-900 text-white">Sekarang</option>
+                          <option value="sebelumnya" className="bg-teal-900 text-white">Sebelumnya</option>
                         </select>
                         <ChevronDown className="w-3 h-3 text-teal-200 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
@@ -2357,16 +2357,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       </p>
                       <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-xs ${
                         tenureDropdownPeriod === 'sekarang'
-                          ? 'bg-teal-400/20 text-teal-200 border border-teal-300/30'
-                          : 'bg-amber-400/20 text-amber-200 border border-amber-300/30'
+                          ? 'bg-teal-300/25 text-white border border-white/25'
+                          : 'bg-amber-400/25 text-amber-100 border border-amber-300/30'
                       }`}>
                         {tenureDropdownPeriod === 'sekarang' ? 'Jabatan Sekarang' : 'Jabatan Sebelumnya'}
                       </span>
                     </div>
 
                     {/* Keterangan */}
-                    <div className="mt-2 text-[9.5px] text-teal-100/90 leading-tight flex items-start gap-1.5 font-medium bg-black/30 p-2 rounded-xl border border-white/10">
-                      <Info className="w-3.5 h-3.5 text-teal-300 shrink-0 mt-0.5" />
+                    <div className="mt-2 text-[9.5px] text-teal-50 leading-tight flex items-start gap-1.5 font-medium bg-teal-950/40 p-2 rounded-xl border border-white/15">
+                      <Info className="w-3.5 h-3.5 text-teal-200 shrink-0 mt-0.5" />
                       <span>
                         <strong className="text-white mr-1">
                           Keterangan {tenureDropdownPeriod === 'sekarang' ? 'Sekarang:' : 'Sebelumnya:'}
@@ -2377,7 +2377,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                     {/* Informasi Total Masa Kerja */}
                     <div className="mt-2 pt-2 border-t border-white/15 flex items-center justify-between text-[10px]">
-                      <span className="text-teal-200 font-medium">Masa Kerja Total (DOH):</span>
+                      <span className="text-teal-100 font-medium">Masa Kerja Total (DOH):</span>
                       <span className="font-extrabold text-white font-mono">{tenureInfo.total.value}</span>
                     </div>
                   </div>
