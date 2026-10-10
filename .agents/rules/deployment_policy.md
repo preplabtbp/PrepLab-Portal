@@ -3,11 +3,12 @@
 ## 🚨 ATURAN MUTLAK GIT PUSH KE MAIN (STRICT INVIOLABLE RULE)
 1. **DILARANG KERAS PUSH KE `main` ATAU `staging` TANPA PERMINTAAN EKSPLISIT:**
    - **JANGAN PERNAH** menjalankan `git push origin main` atau melakukan push ke branch `main` dalam kondisi apapun, KECUALI user secara eksplisit dan tegas meminta kata demi kata: *"push ke main"*.
-   - Jika user hanya mengatakan *"push"*, *"sinkronkan"*, atau tugas selesai, tujuan push **HANYA** ke branch **`PC-Aldy`** (`git push origin PC-Aldy`).
+   - Jika user hanya mengatakan *"push"*, *"sinkronkan"*, atau tugas selesai, tujuan push **HANYA** ke branch **`PC-Alvin`** (`git push origin PC-Alvin`).
 
-2. **Branch Khusus Device Ini: `PC-Aldy`**
-   - Seluruh pekerjaan, pembaruan, dan push rutin harian dilakukan pada branch **`PC-Aldy`** (`git push origin PC-Aldy`).
-   - Setiap update lokal di device ini hanya di-push ke branch **`PC-Aldy`**.
+2. **Branch Khusus Device Ini: `PC-Alvin`**
+   - Seluruh pekerjaan, pembaruan, dan push rutin harian dilakukan pada branch **`PC-Alvin`** (`git push origin PC-Alvin`).
+   - Setiap update lokal di device ini hanya di-push ke branch **`PC-Alvin`**.
+   - Selalu pastikan branch lokal aktif adalah `PC-Alvin` dan tersinkronisasi dengan remote `origin/PC-Alvin`.
 
 3. **Pengujian & Verifikasi Lokal (Local-First):**
    - Selalu buat, uji (`tsc --noEmit`), dan pastikan seluruh perubahan berjalan sempurna di environment lokal terlebih dahulu.
