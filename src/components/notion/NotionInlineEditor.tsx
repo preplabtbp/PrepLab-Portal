@@ -51,6 +51,9 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
     end: number;
     selectedText: string;
   } | null>(null);
+  const [bubblePos, setBubblePos] = useState<{ top: number; left: number } | null>(null);
+  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
+  const bubbleRef = useRef<HTMLDivElement>(null);
 
   const handleSelectText = (e: React.SyntheticEvent<HTMLInputElement>) => {
     const target = e.currentTarget;
@@ -58,8 +61,18 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
     const end = target.selectionEnd ?? 0;
     if (end > start) {
       setActiveSelection({ start, end, selectedText: target.value.substring(start, end) });
+      const rect = singleContainerRef.current?.getBoundingClientRect();
+      if (rect) {
+        setBubblePos({
+          top: Math.max(10, rect.top - 50),
+          left: Math.max(10, rect.left + 8)
+        });
+      }
     } else {
-      setActiveSelection(null);
+      if (!isColorMenuOpen) {
+        setActiveSelection(null);
+        setBubblePos(null);
+      }
     }
   };
 
@@ -122,10 +135,26 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
           borderColor: isNotionLight ? '#cbd5e1' : '#475569',
         }}
       >
-        {activeSelection && (
-          <FloatingSelectionToolbar
-            onFormat={handleFormat}
-            onClose={() => setActiveSelection(null)}
+        {bubblePos && activeSelection && (
+          <FloatingNotionBubbleToolbar
+            bubblePos={bubblePos}
+            bubbleRef={bubbleRef}
+            isColorMenuOpen={isColorMenuOpen}
+            setIsColorMenuOpen={setIsColorMenuOpen}
+            onApplyColor={(_hex, colorKey) => handleFormat({ color: colorKey })}
+            onExecCmd={(cmd) => {
+              if (cmd === 'bold') handleFormat('bold');
+              else if (cmd === 'italic') handleFormat('italic');
+              else if (cmd === 'underline') handleFormat('underline');
+              else if (cmd === 'strikeThrough') handleFormat('strike');
+              else if (cmd === 'code') handleFormat('code');
+            }}
+            onClearFormat={() => handleFormat('clear')}
+            onInsertLink={() => {
+              const url = prompt('Masukkan tautan URL (contoh: https://...):');
+              if (url) handleFormat({ link: url });
+            }}
+            isNotionLight={isNotionLight}
           />
         )}
         <input
@@ -138,7 +167,7 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
           onMouseUp={handleSelectText}
           onKeyDown={handleKeyDownSingle}
           onBlur={(e) => {
-            if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) {
+            if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node) && !isColorMenuOpen) {
               onSave(singleText);
             }
           }}
@@ -249,7 +278,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         // Prevent blur of contentEditable so selection isn't destroyed
         e.preventDefault();
       }}
-      className="fixed z-[99999] p-1.5 rounded-2xl backdrop-blur-md border shadow-2xl text-xs animate-in fade-in zoom-in-95 duration-100 select-none font-sans flex items-center gap-1"
+      className="fixed z-[99999] px-2.5 py-1 rounded-full backdrop-blur-md border shadow-2xl text-xs animate-in fade-in zoom-in-95 duration-100 select-none font-sans flex items-center gap-1"
       style={{
         top: `${bubblePos.top}px`,
         left: `${bubblePos.left}px`,
@@ -322,9 +351,9 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         style={{ backgroundColor: isNotionLight ? '#e2e8f0' : '#475569' }} 
       />
 
-      {/* Quick Color Swatches directly on bar */}
+      {/* Quick Color Swatches directly on bar (including Black) */}
       <div className="flex items-center gap-1">
-        {['red', 'amber', 'green', 'blue', 'purple'].map((cKey) => {
+        {['default', 'red', 'amber', 'green', 'blue', 'purple'].map((cKey) => {
           const conf = NOTION_COLORS[cKey];
           if (!conf) return null;
           return (
@@ -580,26 +609,32 @@ const NotionTasklistInlineEditor: React.FC<{
 
     if (colorKey === 'default') {
       try {
-        const span = document.createElement('span');
         const contents = range.extractContents();
-        span.appendChild(contents);
-        span.removeAttribute('data-color');
-        span.style.color = '';
-        span.style.fontWeight = '';
-        range.insertNode(span);
+        // Remove nested color attributes
+        if (contents.querySelectorAll) {
+          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-color');
+            (el as HTMLElement).style.color = '';
+          });
+        }
+        range.insertNode(contents);
       } catch (e) {
-        document.execCommand('styleWithCSS', false, 'true');
-        document.execCommand('foreColor', false, '#0f172a');
         document.execCommand('removeFormat');
       }
     } else {
       const span = document.createElement('span');
       span.style.color = hex;
-      span.style.fontWeight = '600';
       span.setAttribute('data-color', colorKey);
 
       try {
         const contents = range.extractContents();
+        // Strip any existing color inside to prevent nested tags
+        if (contents.querySelectorAll) {
+          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-color');
+            (el as HTMLElement).style.color = '';
+          });
+        }
         span.appendChild(contents);
         range.insertNode(span);
 
@@ -666,7 +701,7 @@ const NotionTasklistInlineEditor: React.FC<{
       const target = e.target as Node;
       if (
         containerRef.current && !containerRef.current.contains(target) &&
-        bubbleRef.current && !bubbleRef.current.contains(target)
+        (!bubbleRef.current || !bubbleRef.current.contains(target))
       ) {
         const md = serializeToMarkdown();
         onSave(md);
@@ -1061,7 +1096,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       const target = e.target as Node;
       if (
         containerRef.current && !containerRef.current.contains(target) &&
-        bubbleRef.current && !bubbleRef.current.contains(target)
+        (!bubbleRef.current || !bubbleRef.current.contains(target))
       ) {
         const finalMd = getCleanMarkdown();
         onSave(finalMd);
@@ -1105,26 +1140,32 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
 
     if (colorKey === 'default') {
       try {
-        const span = document.createElement('span');
         const contents = range.extractContents();
-        span.appendChild(contents);
-        span.removeAttribute('data-color');
-        span.style.color = '';
-        span.style.fontWeight = '';
-        range.insertNode(span);
+        // Remove nested color attributes
+        if (contents.querySelectorAll) {
+          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-color');
+            (el as HTMLElement).style.color = '';
+          });
+        }
+        range.insertNode(contents);
       } catch (e) {
-        document.execCommand('styleWithCSS', false, 'true');
-        document.execCommand('foreColor', false, '#0f172a');
         document.execCommand('removeFormat');
       }
     } else {
       const span = document.createElement('span');
       span.style.color = hex;
-      span.style.fontWeight = '600';
       span.setAttribute('data-color', colorKey);
 
       try {
         const contents = range.extractContents();
+        // Strip any existing color inside to prevent nested tags
+        if (contents.querySelectorAll) {
+          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-color');
+            (el as HTMLElement).style.color = '';
+          });
+        }
         span.appendChild(contents);
         range.insertNode(span);
 
@@ -1175,6 +1216,50 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       onSave(getCleanMarkdown());
       return;
     }
+
+    // Shift + Enter: otomatis ke baris 2 secara normal (tanpa bullet)
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      document.execCommand('insertLineBreak');
+      return;
+    }
+
+    // Enter biasa: otomatis ubah keterangan jadi mode bullet dan langsung pindah ke bullet kedua di baris 2
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      let insideLi: HTMLElement | null = null;
+      const sel = window.getSelection();
+      if (sel && sel.anchorNode) {
+        let node: Node | null = sel.anchorNode;
+        while (node && node !== editorRef.current) {
+          if (node.nodeName === 'LI') {
+            insideLi = node as HTMLElement;
+            break;
+          }
+          node = node.parentNode;
+        }
+      }
+
+      // Cek apakah kursor sudah berada di dalam daftar bullet
+      const isAlreadyList = Boolean(insideLi) || document.queryCommandState('insertUnorderedList');
+
+      if (!isAlreadyList) {
+        // Belum mode bullet: jadikan baris saat ini sebagai bullet pertama, lalu buat bullet kedua di baris 2
+        e.preventDefault();
+        document.execCommand('insertUnorderedList');
+        document.execCommand('insertParagraph');
+        return;
+      } else {
+        // Sudah di dalam bullet list:
+        const currentText = (insideLi?.textContent || sel?.anchorNode?.textContent || '').replace(/^[•\-\*]\s*/, '').trim();
+        if (!currentText) {
+          // Bullet saat ini kosong -> tekan enter untuk keluar dari mode bullet
+          e.preventDefault();
+          document.execCommand('insertUnorderedList');
+          return;
+        }
+        // Jika bullet memiliki teks, Enter biasa secara native akan membuat bullet berikutnya
+      }
+    }
   };
 
   // Convert current freeform text to checklist format
@@ -1206,54 +1291,18 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
         suppressContentEditableWarning
         onKeyDown={handleKeyDown}
         onMouseUp={updateBubblePosition}
-        onKeyUp={updateBubblePosition}
-        className="outline-none min-h-[44px] max-h-[360px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-sans selection:bg-[#cce2ff] p-1.5"
+        onBlur={(e) => {
+          if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node) && !isColorMenuOpen) {
+            onSave(getCleanMarkdown());
+          }
+        }}
+        className="outline-none min-h-[36px] max-h-[360px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-sans selection:bg-[#cce2ff] p-1.5"
         style={{
           color: isNotionLight ? '#0f172a' : '#f8fafc',
           caretColor: isNotionLight ? '#0f172a' : '#38bdf8',
           lineHeight: '1.6'
         }}
       />
-
-      {/* Mini Bottom Toolbar */}
-      <div className="mt-1 pt-1 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px] select-none px-1">
-        {allowTasklistMode ? (
-          <button
-            type="button"
-            onClick={handleConvertToTasklist}
-            className="inline-flex items-center gap-1 font-medium text-teal-600 hover:text-teal-700 transition-colors cursor-pointer py-0.5 px-1 rounded hover:bg-teal-50"
-            title="Ubah teks ini menjadi daftar checklist"
-          >
-            <ListTodo className="w-3 h-3" />
-            <span>Ubah ke Checklist</span>
-          </button>
-        ) : (
-          <span className="text-[10px] text-slate-400 font-sans">
-            Mode Teks
-          </span>
-        )}
-
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-2 py-0.5 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer font-medium"
-            title="Batal edit (Esc)"
-          >
-            Batal
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onSave(getCleanMarkdown())}
-            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-teal-600 hover:bg-teal-500 text-white font-semibold transition-all cursor-pointer shadow-xs active:scale-95"
-            title="Simpan perubahan (Ctrl+Enter)"
-          >
-            <Check className="w-3 h-3" />
-            <span>Simpan</span>
-          </button>
-        </div>
-      </div>
 
       {/* Floating Notion Bubble Toolbar in Freeform Mode */}
       <FloatingNotionBubbleToolbar

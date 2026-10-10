@@ -54,7 +54,11 @@ import {
   MoreVertical,
   MoreHorizontal,
   Sun,
-  Moon
+  Moon,
+  RotateCcw,
+  TableProperties,
+  GripVertical,
+  Pin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -68,6 +72,20 @@ import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
+import { 
+  syncLogbookRowBackToOrigin, 
+  formatToDDMMYYYY, 
+  getTodayDDMMYYYY,
+  getYesterdayDDMMYYYY,
+  getYesterdayDateWithData,
+  getRowDateDDMMYYYY,
+  extractLogbookMeta,
+  injectLogbookMeta,
+  LogbookMeta 
+} from './notion/logbook-section-utils';
+import { LogbookTaskRecommendationModal } from './notion/LogbookTaskRecommendationModal';
+import { LogbookChangelogCard } from './notion/LogbookChangelogCard';
+import { LogbookDailyNotesCard } from './notion/LogbookDailyNotesCard';
 import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './notion/FloatingSelectionToolbar';
 import { PicAvatarGroup, smartSplitPicString } from './PicAvatarGroup';
 import {
@@ -410,7 +428,7 @@ export const isSubItemRow = (row: TableRowData): boolean => {
   if (row.isSubItem === 'true' || (row as any).isSubItem === true) return true;
   if (row.parentId || row.parentRowId) return true;
   const title = (getCellValue(row, 'Jenis kegiatan') || getCellValue(row, 'Jenis Kegiatan') || getCellValue(row, 'Name') || getCellValue(row, 'Judul') || '').trim();
-  if (title.startsWith('↳') || title.startsWith('->') || title.startsWith('↪') || title.startsWith('– ') || title.startsWith('- ')) {
+  if (title.startsWith('↳') || title.startsWith('↪')) {
     return true;
   }
   return false;
@@ -422,13 +440,13 @@ export const isSubItemCompleted = (row: TableRowData): boolean => {
   const statusStr = (getCellValue(row, 'Status') || '').toUpperCase();
   if (statusStr.includes('CLOSE') || statusStr.includes('SELESAI') || statusStr.includes('DONE')) return true;
   const title = (getCellValue(row, 'Jenis kegiatan') || getCellValue(row, 'Jenis Kegiatan') || '').trim();
-  if (title.startsWith('↳ [x]') || title.startsWith('↳ [X]') || title.startsWith('[x]') || title.startsWith('[X]')) return true;
+  if (title.startsWith('↳ [x]') || title.startsWith('↳ [X]') || title.startsWith('↪ [x]') || title.startsWith('↪ [X]')) return true;
   return false;
 };
 
 export const getDisplayTitle = (title: string): string => {
   if (!title) return '';
-  return title.replace(/^[↳↪\->\s–]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
+  return title.replace(/^[↳↪\s]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
 };
 
 // Canonical Notion Table Column definition in exact order
@@ -536,6 +554,67 @@ export function serializeMarkdownTable(
   parts.push(tableMarkdown);
   if (afterText?.trim()) parts.push(afterText.trim());
   return parts.join('\n\n');
+}
+
+export function migrateChecklistsInRows(
+  inputRows: TableRowData[],
+  defaultSection?: string
+): { migratedCount: number; rows: TableRowData[] } {
+  let migratedCount = 0;
+  const newRows: TableRowData[] = [];
+
+  for (let i = 0; i < inputRows.length; i++) {
+    const row = { ...inputRows[i] };
+    const isSub = isSubItemRow(row);
+
+    if (isSub) {
+      newRows.push(row);
+      continue;
+    }
+
+    const ketVal = getCellValue(row, 'Keterangan') || '';
+    const taskProg = parseTasklist(ketVal);
+
+    if (taskProg.hasTasklist && taskProg.items.length > 0) {
+      // Strip tasklist lines from parent row's Keterangan, keep non-checklist text
+      row['Keterangan'] = taskProg.cleanText || '';
+      newRows.push(row);
+
+      const parentIndex = newRows.length - 1;
+      const parentCat = getCellValue(row, 'Kategori') || defaultSection || 'Laboratorium';
+      const parentPIC = getCellValue(row, 'PIC') || '';
+      const parentAct = getCellValue(row, 'Activity (routine/non routine)') || 'Monthly';
+      const parentPeriod = getCellValue(row, 'period') || 'Monthly';
+      const now = new Date();
+      const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      // Create a sub-item row for each checklist item
+      taskProg.items.forEach(item => {
+        const subTitle = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
+        const subRow: TableRowData = {
+          number: '',
+          'Jenis kegiatan': subTitle,
+          'Jenis Kegiatan': subTitle,
+          Keterangan: item.note || '',
+          PIC: parentPIC,
+          Priority: 'Normal',
+          Status: item.checked ? 'Closed' : 'Open',
+          'Created Time': createdStr,
+          Kategori: parentCat,
+          'Activity (routine/non routine)': parentAct,
+          period: parentPeriod,
+          isSubItem: 'true',
+          parentId: String(parentIndex)
+        };
+        newRows.push(subRow);
+        migratedCount++;
+      });
+    } else {
+      newRows.push(row);
+    }
+  }
+
+  return { migratedCount, rows: newRows };
 }
 
 export function splitMarkdownRow(line: string): string[] {
@@ -655,7 +734,11 @@ export function NotionDatabaseTable({
   onNavigateToPost
 }: NotionDatabaseTableProps) {
   // Local table rows for responsive instant CRUD
-  const [localRows, setLocalRows] = useState<TableRowData[]>(() => rows || []);
+  const [localRows, setLocalRows] = useState<TableRowData[]>(() => {
+    if (!rows || rows.length === 0) return [];
+    const { rows: prepped } = migrateChecklistsInRows(rows, section);
+    return prepped;
+  });
   const [dirtyRowIndices, setDirtyRowIndices] = useState<Set<number>>(new Set());
   const [originalRowsBackup, setOriginalRowsBackup] = useState<TableRowData[]>(() => rows ? JSON.parse(JSON.stringify(rows)) : []);
   const [showSaveConfirmModal, setShowSaveConfirmModal] = useState<boolean>(false);
@@ -667,12 +750,30 @@ export function NotionDatabaseTable({
     multiline: boolean;
   } | null>(null);
 
+  // Logbook Smart Task Recommendation Modal State
+  const [showLogbookRecModal, setShowLogbookRecModal] = useState<boolean>(false);
+  const isLogbookTable = useMemo(() => {
+    const t = (title || '').toLowerCase();
+    const s = (section || '').toLowerCase();
+    return t.startsWith('logbook') || t.startsWith('log book') || s.includes('logbook');
+  }, [title, section]);
+
+  // Logbook Dynamic Meta & Date View Filter State
+  const [logbookDateFilter, setLogbookDateFilter] = useState<'today' | 'yesterday' | 'all'>('today');
+  const [logbookMeta, setLogbookMeta] = useState<LogbookMeta>(() => extractLogbookMeta(beforeText || '').meta);
+
+  useEffect(() => {
+    if (beforeText) {
+      setLogbookMeta(extractLogbookMeta(beforeText).meta);
+    }
+  }, [beforeText]);
+
   // Direct Inline Click-to-Edit for PIC Column
   const [activeInlinePicCell, setActiveInlinePicCell] = useState<{ rowIndex: number; colName: string } | null>(null);
   const [inlinePicSearch, setInlinePicSearch] = useState<string>('');
 
   // Row Action 3-Dots Dropdown Menu State
-  const [activeActionMenuRowIndex, setActiveActionMenuRowIndex] = useState<number | null>(null);
+  const [activeActionMenuRowIndex, setActiveActionMenuRowIndex] = useState<number | string | null>(null);
 
   // Floating Selection Toolbar State for "Edit Data Kegiatan" Modal
   const [activeModalSelection, setActiveModalSelection] = useState<{
@@ -738,8 +839,15 @@ export function NotionDatabaseTable({
 
   useEffect(() => {
     if (rows) {
-      setLocalRows(rows);
-      setOriginalRowsBackup(JSON.parse(JSON.stringify(rows)));
+      const { migratedCount, rows: prepped } = migrateChecklistsInRows(rows, section);
+      if (migratedCount > 0) {
+        setLocalRows(prepped);
+        setOriginalRowsBackup(JSON.parse(JSON.stringify(prepped)));
+        saveTableToBackend(prepped);
+      } else {
+        setLocalRows(rows);
+        setOriginalRowsBackup(JSON.parse(JSON.stringify(rows)));
+      }
       setDirtyRowIndices(new Set());
     }
   }, [rows]);
@@ -789,8 +897,33 @@ export function NotionDatabaseTable({
   }, [initialTopicTitle, localRows]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ACTIVE');
-  const [priorityFilter, setPriorityFilter] = useState('ALL');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['ACTIVE']);
+  const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
+  const [selectedPics, setSelectedPics] = useState<string[]>([]);
+  const [picSearchQuery, setPicSearchQuery] = useState('');
+
+  // Backward-compatibility aliases for statusFilter and priorityFilter
+  const statusFilter = useMemo(() => {
+    if (selectedStatuses.length === 0 || selectedStatuses.includes('ALL')) return 'ALL';
+    if (selectedStatuses.length === 1) return selectedStatuses[0];
+    return selectedStatuses.join(',');
+  }, [selectedStatuses]);
+
+  const priorityFilter = useMemo(() => {
+    if (selectedPriorities.length === 0 || selectedPriorities.includes('ALL')) return 'ALL';
+    if (selectedPriorities.length === 1) return selectedPriorities[0];
+    return selectedPriorities.join(',');
+  }, [selectedPriorities]);
+
+  const setStatusFilter = (val: string) => {
+    if (val === 'ALL') setSelectedStatuses(['ALL']);
+    else setSelectedStatuses([val]);
+  };
+
+  const setPriorityFilter = (val: string) => {
+    if (val === 'ALL') setSelectedPriorities([]);
+    else setSelectedPriorities([val]);
+  };
   const [viewMode, setViewMode] = useState<'table' | 'board' | 'list'>('table');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -850,6 +983,15 @@ export function NotionDatabaseTable({
         setIsFilterPopoverOpen(false);
         setIsSortPopoverOpen(false);
         setIsFullToolsPopoverOpen(false);
+        setShowAddColumnPopover(false);
+        setActiveInlineEditor(null);
+        setCreatingSubItemForParent(null);
+        setNewSubItemTitle('');
+        setShowRowModal(false);
+        setEditingRowIndex(null);
+        setShowSaveConfirmModal(false);
+        setLastSubtaskConfirmModal(null);
+        setIsPicDropdownOpen(false);
         if (!searchQuery) setIsSearchInputOpen(false);
       }
     };
@@ -916,11 +1058,154 @@ export function NotionDatabaseTable({
   const [fitPageMode, setFitPageMode] = useState<boolean>(false);
   const [zoomPercent, setZoomPercent] = useState<number>(100);
 
+  // Table Edit Mode State (Toggle to show column reorder and delete tools)
+  const [isTableEditMode, setIsTableEditMode] = useState<boolean>(false);
+
+  // Confirmation Modal when checking the last subtask before parent task is closed
+  const [lastSubtaskConfirmModal, setLastSubtaskConfirmModal] = useState<{
+    isOpen: boolean;
+    topicTitle: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   // Add / Edit Row Modal State
   const [showRowModal, setShowRowModal] = useState(false);
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
   const [rowFormData, setRowFormData] = useState<TableRowData>({});
   const [isSavingRow, setIsSavingRow] = useState(false);
+
+  // ── PIN TASK TOOLS (Maksimal 5 task per halaman / tidak terpengaruh filter) ──
+  const tablePinStorageKey = useMemo(() => {
+    return `preplab_pinned_tasks_${postId || section || title || 'default'}`;
+  }, [postId, section, title]);
+
+  const [pinnedRowKeys, setPinnedRowKeys] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(`preplab_pinned_tasks_${postId || section || title || 'default'}`);
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch {}
+    return new Set<string>();
+  });
+
+  // Helper untuk mengecek apakah baris di-pin
+  const isRowPinned = useCallback((row: TableRowData): boolean => {
+    if (!row) return false;
+    if (String(row.isPinned) === 'true' || (row as any).isPinned === true || String((row as any)._pinned) === 'true' || (row as any)._pinned === true) return true;
+    const ket = typeof row['Keterangan'] === 'string' ? row['Keterangan'] : String(row['Keterangan'] || '');
+    if (ket.includes('<!--pin-->') || ket.includes('<!--pinned-->')) return true;
+    const jk = typeof row['Jenis kegiatan'] === 'string' ? row['Jenis kegiatan'] : String(row['Jenis kegiatan'] || '');
+    if (jk.includes('<!--pin-->') || jk.includes('<!--pinned-->')) return true;
+    const rowId = row.id ? String(row.id) : '';
+    if (rowId && pinnedRowKeys.has(rowId)) return true;
+    const cleanTitle = jk.replace(/^↳\s*/, '').trim();
+    if (cleanTitle && pinnedRowKeys.has(cleanTitle)) return true;
+    return false;
+  }, [pinnedRowKeys]);
+
+  // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys
+  useEffect(() => {
+    const newlyFoundPinned = new Set(pinnedRowKeys);
+    let changed = false;
+    localRows.forEach(r => {
+      if (!isSubItemRow(r)) {
+        const ket = r['Keterangan'] || '';
+        const jk = r['Jenis kegiatan'] || '';
+        const isPinTag = ket.includes('<!--pin-->') || ket.includes('<!--pinned-->') || jk.includes('<!--pin-->') || r.isPinned === 'true';
+        if (isPinTag) {
+          const key = r.id ? String(r.id) : jk.replace(/^↳\s*/, '').trim();
+          if (key && !newlyFoundPinned.has(key)) {
+            newlyFoundPinned.add(key);
+            changed = true;
+          }
+        }
+      }
+    });
+    if (changed) {
+      setPinnedRowKeys(newlyFoundPinned);
+      try {
+        localStorage.setItem(tablePinStorageKey, JSON.stringify(Array.from(newlyFoundPinned)));
+      } catch {}
+    }
+  }, [localRows, tablePinStorageKey]);
+
+  // Handler toggle pin / unpin baris task
+  const handleTogglePinRow = async (rowIndex: number) => {
+    let targetRow = localRows[rowIndex];
+    if (!targetRow) return;
+
+    // Jika yang diklik adalah subtask, pin parent task utamanya
+    if (isSubItemRow(targetRow)) {
+      const p = rowToParentMap.get(targetRow);
+      if (p) {
+        const pIdx = localRows.indexOf(p);
+        if (pIdx !== -1) {
+          targetRow = p;
+          rowIndex = pIdx;
+        }
+      }
+    }
+
+    const currentlyPinned = isRowPinned(targetRow);
+
+    if (!currentlyPinned) {
+      // Validasi: Maksimal 5 task yang dapat di-pin per halaman
+      const currentPinnedCount = localRows.filter(r => !isSubItemRow(r) && isRowPinned(r)).length;
+      if (currentPinnedCount >= 5) {
+        toast.warning('Maksimal 5 task yang dapat di-pin per halaman', {
+          description: 'Lepas pin (unpin) salah satu task terlebih dahulu untuk menyematkan task ini.'
+        });
+        return;
+      }
+    }
+
+    const newPinnedState = !currentlyPinned;
+    const targetKey = targetRow.id ? String(targetRow.id) : (targetRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
+
+    // Update state pinnedRowKeys
+    const nextPinnedKeys = new Set(pinnedRowKeys);
+    if (newPinnedState) {
+      if (targetKey) nextPinnedKeys.add(targetKey);
+    } else {
+      if (targetKey) nextPinnedKeys.delete(targetKey);
+    }
+    setPinnedRowKeys(nextPinnedKeys);
+    try {
+      localStorage.setItem(tablePinStorageKey, JSON.stringify(Array.from(nextPinnedKeys)));
+    } catch {}
+
+    // Update data baris lokal
+    const nextRows = [...localRows];
+    const updatedRow = { ...targetRow };
+    updatedRow.isPinned = newPinnedState ? 'true' : 'false';
+    (updatedRow as any)._pinned = newPinnedState ? 'true' : 'false';
+
+    // Simpan penanda <!--pin--> di kolom Keterangan agar terpersistensi ke backend markdown
+    let ket = updatedRow['Keterangan'] || '';
+    if (newPinnedState) {
+      if (!ket.includes('<!--pin-->')) {
+        ket = `${ket} <!--pin-->`.trim();
+      }
+    } else {
+      ket = ket.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
+    }
+    updatedRow['Keterangan'] = ket;
+
+    nextRows[rowIndex] = updatedRow;
+    setLocalRows(nextRows);
+    onRowsChange?.(nextRows);
+    await saveTableToBackend(nextRows);
+
+    if (newPinnedState) {
+      toast.success('Task berhasil disematkan (pinned) ke posisi teratas!', {
+        description: 'Task ini tidak akan terpengaruh oleh filter status atau pencarian.'
+      });
+    } else {
+      toast.info('Sematkan (pin) task telah dilepas.');
+    }
+  };
 
   // Employees List for PIC Dropdown & Search
   const [employeesList, setEmployeesList] = useState<any[]>([]);
@@ -1008,8 +1293,24 @@ export function NotionDatabaseTable({
     { name: 'Estimasi Biaya', icon: '💰', defaultValue: '-', desc: 'Anggaran atau estimasi biaya (opsional)' },
   ];
 
-  // Helper to establish logical Notion canonical order for database columns:
-  // number -> jenis kegiatan -> keterangan -> Created Time -> Completed Time -> Status -> PIC -> Priority -> Aktivitas
+  // Canonical order weight for explicitly resetting column order via 'Rapikan Urutan Kolom'
+  const getColOrder = (colName: string): number => {
+    const l = colName.toLowerCase().trim();
+    if (l === 'number' || l === 'no' || l === 'no.' || l === '#') return 0;
+    if (l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
+    if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian') || l.includes('notes')) return 2;
+    if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 3;
+    if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
+    if (l.includes('status')) return 5;
+    if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 6;
+    if (l.includes('priority') || l.includes('prioritas')) return 7;
+    if (l.includes('activity') || l.includes('aktivitas')) return 8;
+    if (l.includes('period') || l.includes('periode')) return 9;
+    if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 10;
+    return 20; // other custom columns
+  };
+
+  // Helper to normalize headers while preserving user-defined column order
   const normalizeAndOrderHeaders = useCallback((inputHeaders: string[]): string[] => {
     // 1. Remove redundant 'Progress' / 'progres' and 'Target Selesai' / 'target' column
     const filtered = (inputHeaders || []).filter(h => {
@@ -1039,7 +1340,7 @@ export function NotionDatabaseTable({
       ];
     }
 
-    // Ensure 'number' exists
+    // Ensure 'Number' exists at the beginning
     const hasNumber = filtered.some(h => {
       const l = h.toLowerCase().trim();
       return l === 'number' || l === 'no' || l === 'no.' || l === '#';
@@ -1055,33 +1356,8 @@ export function NotionDatabaseTable({
 
     const headersWithMeta = hasCompleted ? headersWithNumber : [...headersWithNumber, 'Tanggal Selesai'];
 
-    // Priority ordering weight:
-    // 0: Number
-    // 1: Jenis Kegiatan
-    // 2: Keterangan
-    // 3: Created Time
-    // 4: Tanggal Selesai
-    // 5: Status
-    // 6: PIC
-    // 7: Priority
-    // 8: Aktivitas
-    const getColOrder = (colName: string): number => {
-      const l = colName.toLowerCase().trim();
-      if (l === 'number' || l === 'no' || l === 'no.' || l === '#') return 0;
-      if (l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
-      if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian') || l.includes('notes')) return 2;
-      if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 3;
-      if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
-      if (l.includes('status')) return 5;
-      if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 6;
-      if (l.includes('priority') || l.includes('prioritas')) return 7;
-      if (l.includes('activity') || l.includes('aktivitas')) return 8;
-      if (l.includes('period') || l.includes('periode')) return 9;
-      if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 10;
-      return 20; // other custom columns
-    };
-
-    return [...headersWithMeta].sort((a, b) => getColOrder(a) - getColOrder(b));
+    // Jaga urutan custom/manual pengguna, jangan dipaksa disortir otomatis ulang
+    return headersWithMeta;
   }, []);
 
   // Dynamic Table Headers State (Allows Adding, Deleting, and Reordering Columns)
@@ -1091,7 +1367,14 @@ export function NotionDatabaseTable({
 
   useEffect(() => {
     if (headers && headers.length > 0) {
-      setTableHeaders(normalizeAndOrderHeaders(headers));
+      const normalized = normalizeAndOrderHeaders(headers);
+      setTableHeaders(prev => {
+        // Jangan timpa urutan jika jumlah dan nama kolom sama
+        if (prev.length === normalized.length && prev.every(p => normalized.includes(p))) {
+          return prev;
+        }
+        return normalized;
+      });
     }
   }, [headers, normalizeAndOrderHeaders]);
 
@@ -1125,14 +1408,15 @@ export function NotionDatabaseTable({
     document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
-      if (!resizeInfoRef.current) return;
+      const info = resizeInfoRef.current;
+      if (!info) return;
       const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
-      const deltaX = currentX - resizeInfoRef.current.startX;
-      const newWidth = Math.max(50, Math.min(1200, Math.round(resizeInfoRef.current.startWidth + deltaX)));
+      const deltaX = currentX - info.startX;
+      const newWidth = Math.max(40, Math.min(1200, Math.round(info.startWidth + deltaX)));
 
       setColumnWidths((prev) => ({
         ...prev,
-        [resizeInfoRef.current!.colHeader]: newWidth
+        [info.colHeader]: newWidth
       }));
     };
 
@@ -1163,18 +1447,22 @@ export function NotionDatabaseTable({
 
   // Helper for applying custom dragged column widths to <th> and <td>
   const getColStyle = (colName: string): React.CSSProperties | undefined => {
-    if (fitPageMode) {
-      return undefined;
-    }
     const customW = columnWidths[colName];
-    if (customW) {
+    if (!customW) return undefined;
+
+    if (fitPageMode) {
+      // In fitPageMode, allow user-defined column width while letting other columns flex and absorb remaining width
       return {
         width: `${customW}px`,
-        minWidth: `${customW}px`,
-        maxWidth: `${customW}px`,
+        minWidth: '40px'
       };
     }
-    return undefined;
+
+    return {
+      width: `${customW}px`,
+      minWidth: `${customW}px`,
+      maxWidth: `${customW}px`,
+    };
   };
 
   // Ensure Progress, Target Selesai, and redundant Kategori columns are never rendered in displayHeaders
@@ -1366,17 +1654,26 @@ export function NotionDatabaseTable({
       return;
     }
 
-    setTableHeaders(prev => [...prev, trimmed]);
+    const updatedHeaders = [...tableHeaders, trimmed];
+    setTableHeaders(updatedHeaders);
     const updated = localRows.map(r => ({ ...r, [trimmed]: defaultValue }));
     setLocalRows(updated);
+
+    const updatedDisplayHeaders = updatedHeaders.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
+    });
+
     onRowsChange?.(updated);
-    saveTableToBackend(updated);
+    saveTableToBackend(updated, updatedDisplayHeaders);
     setShowAddColumnPopover(false);
     setCustomColumnName('');
     toast.success(`Kolom "${trimmed}" berhasil ditambahkan ke tabel!`);
   };
 
-  const handleDeleteColumn = (colName: string) => {
+  const handleDeleteColumn = async (colName: string) => {
     const colLower = colName.toLowerCase();
     if (colLower === 'number' || colLower === 'no') {
       toast.error('Kolom Nomor (#) tidak dapat dihapus');
@@ -1393,12 +1690,28 @@ export function NotionDatabaseTable({
 
     const updatedHeaders = tableHeaders.filter(h => h !== colName);
     setTableHeaders(updatedHeaders);
-    onRowsChange?.(localRows);
-    saveTableToBackend(localRows);
+
+    // Hapus juga kunci kolom ini dari setiap baris di localRows
+    const updatedRows = localRows.map(r => {
+      const copy = { ...r };
+      delete copy[colName];
+      return copy;
+    });
+    setLocalRows(updatedRows);
+
+    const updatedDisplayHeaders = updatedHeaders.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
+    });
+
+    onRowsChange?.(updatedRows);
+    await saveTableToBackend(updatedRows, updatedDisplayHeaders);
     toast.info(`Kolom "${colName}" telah dihapus.`);
   };
 
-  const handleMoveColumn = (colName: string, direction: 'left' | 'right') => {
+  const handleMoveColumn = async (colName: string, direction: 'left' | 'right') => {
     const idx = tableHeaders.indexOf(colName);
     if (idx === -1) return;
 
@@ -1411,20 +1724,37 @@ export function NotionDatabaseTable({
     newHeaders.splice(targetIdx, 0, moved);
 
     setTableHeaders(newHeaders);
+
+    const newDisplayHeaders = newHeaders.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
+    });
+
     onRowsChange?.(localRows);
-    saveTableToBackend(localRows);
+    await saveTableToBackend(localRows, newDisplayHeaders);
     toast.success(`Kolom "${colName}" digeser ke ${direction === 'left' ? 'kiri' : 'kanan'}`);
   };
 
-  const handleResetColumnOrder = () => {
-    const normalized = normalizeAndOrderHeaders(tableHeaders);
+  const handleResetColumnOrder = async () => {
+    // Terapkan standard Notion order hanya ketika tombol ini ditekan secara eksplisit
+    const normalized = [...tableHeaders].sort((a, b) => getColOrder(a) - getColOrder(b));
     setTableHeaders(normalized);
     setColumnWidths({});
     try {
       localStorage.removeItem(tableStorageKey);
     } catch {}
+
+    const newDisplayHeaders = normalized.filter(h => {
+      const l = h.toLowerCase().trim();
+      return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
+             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
+             !l.includes('kategori') && !l.includes('category');
+    });
+
     onRowsChange?.(localRows);
-    saveTableToBackend(localRows);
+    await saveTableToBackend(localRows, newDisplayHeaders);
     toast.success('Urutan dan lebar kolom berhasil dirapikan sesuai standar Notion!');
   };
 
@@ -1931,11 +2261,12 @@ export function NotionDatabaseTable({
   };
 
   // Save changes to database
-  const saveTableToBackend = async (newRows: TableRowData[]): Promise<boolean> => {
+  const saveTableToBackend = async (newRows: TableRowData[], headersToSave?: string[]): Promise<boolean> => {
     if (!postId) return false;
     try {
+      const { rows: preppedRows } = migrateChecklistsInRows(newRows, section);
       // Normalize any legacy format subtask tags in Keterangan to canonical markdown checklists
-      const normalizedRows = newRows.map(r => {
+      const normalizedRows = preppedRows.map(r => {
         const ket = getRowVal(r, 'Keterangan');
         if (ket && (ket.includes('**(Done)**') || ket.includes('**(OPEN)**') || ket.includes('**(Closed)**') || ket.includes('**(OP)**'))) {
           return {
@@ -1946,27 +2277,31 @@ export function NotionDatabaseTable({
         return r;
       });
 
-      const updatedMarkdown = serializeMarkdownTable(displayHeaders, normalizedRows, beforeText, afterText);
-      const res = await fetch(`/api/bulletin/${postId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: updatedMarkdown })
-      });
-      if (res.ok) {
-        onPostContentUpdate?.(updatedMarkdown);
+      // Two-way live sync for any rows aggregated from origin posts (Logbook Unified View)
+      const rowsWithOrigin = normalizedRows.filter(r => r._originPostId);
+      if (rowsWithOrigin.length > 0 && allPosts && allPosts.length > 0) {
+        Promise.all(rowsWithOrigin.map(r => syncLogbookRowBackToOrigin(r, allPosts))).catch(err => {
+          console.warn('[Logbook Sync] Error syncing back to origin posts:', err);
+        });
+      }
 
-        // Instant background sync directly to logbook to guarantee zero delay
-        fetch('/api/logbook/sync-from-bulletin', {
-          method: 'POST',
+      const targetHeaders = headersToSave || displayHeaders;
+      const updatedMarkdown = serializeMarkdownTable(targetHeaders, normalizedRows, beforeText, afterText);
+
+      // If postId is a real numeric post ID (or numeric string), persist to backend API
+      if (typeof postId === 'number' || (typeof postId === 'string' && /^\d+$/.test(postId))) {
+        const res = await fetch(`/api/bulletin/${postId}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bulletinPostId: postId,
-            section: section || '',
-            userNik: currentAuthorNik || '',
-            userName: currentAuthorName || ''
-          })
-        }).catch(err => console.warn('Instant logbook sync non-fatal:', err));
-
+          body: JSON.stringify({ content: updatedMarkdown })
+        });
+        if (res.ok) {
+          onPostContentUpdate?.(updatedMarkdown);
+          return true;
+        }
+      } else {
+        // Synthetic / virtual post ID (e.g. logbook-preparasi), notify parent state
+        onPostContentUpdate?.(updatedMarkdown);
         return true;
       }
       return false;
@@ -2024,7 +2359,7 @@ export function NotionDatabaseTable({
 
           if (autoStatus === 'Closed') {
             const dates = taskProg.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
-            targetRow[compKey] = dates.length > 0 ? dates[dates.length - 1] : new Date().toISOString().slice(0, 10);
+            targetRow[compKey] = dates.length > 0 ? formatToDDMMYYYY(dates[dates.length - 1]) : getTodayDDMMYYYY();
           } else if (autoStatus === 'Open' || autoStatus === 'On Progress') {
             targetRow[compKey] = '-';
           }
@@ -2046,7 +2381,7 @@ export function NotionDatabaseTable({
         if (stUpper.includes('CLOSE') || stUpper.includes('SELESAI') || stUpper.includes('DONE')) {
           const curVal = targetRow[compKey];
           if (!curVal || curVal === '-') {
-            targetRow[compKey] = new Date().toISOString().slice(0, 10);
+            targetRow[compKey] = getTodayDDMMYYYY();
           }
 
           // Trigger routine task rollover for routine tasks when closed directly
@@ -2099,33 +2434,47 @@ export function NotionDatabaseTable({
     const row = localRows[targetRowIndex];
     if (!row) return;
     const currentVal = getRowVal(row, colName);
-    const updatedVal = toggleTasklistItem(currentVal, taskIndex);
-    handleUpdateCellDirect(targetRowIndex, colName, updatedVal);
-
-    // Auto-check if this toggle completed the routine task (last subtask checked -> 100%)
     const prevProg = parseTasklist(currentVal);
-    const newProg = parseTasklist(updatedVal);
+    const willBeCompleted = prevProg.items[taskIndex] && !prevProg.items[taskIndex].checked && (prevProg.completed + 1 === prevProg.total);
 
-    if (newProg.hasTasklist && newProg.total > 0 && newProg.completed === newProg.total && prevProg.completed < prevProg.total) {
-      const rowAct = getRowVal(row, 'Activity (routine/non routine)') || getRowVal(row, 'period') || '';
-      const rowCad = normalizeCadence(rowAct) || currentCadence;
-      if (rowCad && rowCad !== 'Non-Routine') {
-        const curPeriod = activeSubPeriod || detectRowSubPeriod(row, rowCad) || getDefaultActiveSubPeriod(rowCad);
-        const targetVal = getRowVal(row, 'Target Selesai') || getRowVal(row, 'Deadline') || getRowVal(row, 'Created Time');
-        const schedule = getNextPeriodSchedule(rowCad, curPeriod, targetVal);
-        const resetDesc = resetAllTasklistItems(updatedVal);
+    const executeToggle = () => {
+      const updatedVal = toggleTasklistItem(currentVal, taskIndex);
+      handleUpdateCellDirect(targetRowIndex, colName, updatedVal);
 
-        setRoutineCompletionModal({
-          row,
-          rowIndex: targetRowIndex,
-          colName,
-          currentPeriod: curPeriod,
-          nextPeriod: schedule.nextPeriod,
-          nextStartDate: schedule.nextStartDate,
-          nextTargetDate: schedule.nextTargetDate,
-          resetKeterangan: resetDesc
-        });
+      // Auto-check if this toggle completed the routine task (last subtask checked -> 100%)
+      const newProg = parseTasklist(updatedVal);
+      if (newProg.hasTasklist && newProg.total > 0 && newProg.completed === newProg.total && prevProg.completed < prevProg.total) {
+        const rowAct = getRowVal(row, 'Activity (routine/non routine)') || getRowVal(row, 'period') || '';
+        const rowCad = normalizeCadence(rowAct) || currentCadence;
+        if (rowCad && rowCad !== 'Non-Routine') {
+          const curPeriod = activeSubPeriod || detectRowSubPeriod(row, rowCad) || getDefaultActiveSubPeriod(rowCad);
+          const targetVal = getRowVal(row, 'Target Selesai') || getRowVal(row, 'Deadline') || getRowVal(row, 'Created Time');
+          const schedule = getNextPeriodSchedule(rowCad, curPeriod, targetVal);
+          const resetDesc = resetAllTasklistItems(updatedVal);
+
+          setRoutineCompletionModal({
+            row,
+            rowIndex: targetRowIndex,
+            colName,
+            currentPeriod: curPeriod,
+            nextPeriod: schedule.nextPeriod,
+            nextStartDate: schedule.nextStartDate,
+            nextTargetDate: schedule.nextTargetDate,
+            resetKeterangan: resetDesc
+          });
+        }
       }
+    };
+
+    if (willBeCompleted) {
+      const rowTitle = getDisplayTitle(getRowVal(row, 'Jenis kegiatan') || getRowVal(row, 'Name') || 'Kegiatan');
+      setLastSubtaskConfirmModal({
+        isOpen: true,
+        topicTitle: rowTitle,
+        onConfirm: executeToggle
+      });
+    } else {
+      executeToggle();
     }
   };
 
@@ -2294,9 +2643,10 @@ export function NotionDatabaseTable({
 
   // Add Row Handler
   const handleOpenAddModal = () => {
+    setSelectedRow(null);
     const nextNum = String(localRows.length + 1);
     const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     const inheritedCadence = currentCadence || normalizeCadence(title) || 'Monthly';
     const inheritedPeriod = (inheritedCadence && inheritedCadence !== 'Non-Routine')
@@ -2321,15 +2671,32 @@ export function NotionDatabaseTable({
   };
 
   // Add Sub-Item Handler (Sub-kegiatan di bawah baris kegiatan induk)
-  const handleAddSubItem = (parentRowIndex: number, subItemTitle: string) => {
+  const handleAddSubItem = async (parentRowOrIndex: TableRowData | number, subItemTitle: string) => {
     const cleanTitle = subItemTitle.trim();
     if (!cleanTitle) {
       setCreatingSubItemForParent(null);
       return;
     }
 
-    const parentRow = localRows[parentRowIndex];
+    let parentRow: TableRowData | undefined;
+    let actualParentIdx = -1;
+
+    if (typeof parentRowOrIndex === 'number') {
+      actualParentIdx = parentRowOrIndex;
+      parentRow = localRows[parentRowOrIndex];
+    } else {
+      parentRow = parentRowOrIndex;
+      actualParentIdx = localRows.indexOf(parentRowOrIndex);
+      if (actualParentIdx === -1) {
+        actualParentIdx = localRows.findIndex(r => 
+          (parentRowOrIndex.id && r.id === parentRowOrIndex.id) || 
+          (parentRowOrIndex['Jenis kegiatan'] && r['Jenis kegiatan'] === parentRowOrIndex['Jenis kegiatan'])
+        );
+      }
+    }
+
     if (!parentRow) return;
+    if (actualParentIdx === -1) actualParentIdx = 0;
 
     const parentCat = getRowVal(parentRow, 'Kategori') || section || 'Laboratorium';
     const parentPIC = getRowVal(parentRow, 'PIC') || currentAuthorName || '';
@@ -2337,8 +2704,9 @@ export function NotionDatabaseTable({
     const parentPeriod = getRowVal(parentRow, 'period') || 'Monthly';
     
     const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
+    const parentId = parentRow.id || `parent-${actualParentIdx}-${parentRow['Jenis kegiatan'] || ''}`;
     const formattedTitle = `↳ ${cleanTitle}`;
     const newSubRow: TableRowData = {
       number: '',
@@ -2353,11 +2721,11 @@ export function NotionDatabaseTable({
       'Activity (routine/non routine)': parentAct,
       period: parentPeriod,
       isSubItem: 'true',
-      parentId: String(parentRowIndex)
+      parentId: parentId
     };
 
     // Cari posisi sisip: tepat setelah sub-item terakhir dari parent ini
-    let insertIdx = parentRowIndex + 1;
+    let insertIdx = actualParentIdx + 1;
     while (insertIdx < localRows.length && isSubItemRow(localRows[insertIdx])) {
       insertIdx++;
     }
@@ -2373,20 +2741,124 @@ export function NotionDatabaseTable({
     // Pastikan parent dalam keadaan expanded
     setExpandedParents(prev => ({
       ...prev,
-      [parentRowIndex]: true
+      [actualParentIdx]: true,
+      [parentId]: true
     }));
 
     setCreatingSubItemForParent(null);
     setNewSubItemTitle('');
 
-    if (onRowsChange) onRowsChange(nextRows);
-    if (postId && onPostContentUpdate) {
-      const newMd = serializeMarkdownTable(headers, nextRows, beforeText, afterText);
-      onPostContentUpdate(newMd);
-    }
+    onRowsChange?.(nextRows);
+    await saveTableToBackend(nextRows);
 
     toast.success(`Sub-kegiatan "${cleanTitle}" berhasil ditambahkan`);
   };
+
+  // Handler for adding selected tasks from LogbookTaskRecommendationModal
+  const handleAddRecommendedTasks = async (tasksToAdd: TableRowData[]) => {
+    try {
+      const { rows: migratedTasks } = migrateChecklistsInRows(tasksToAdd, section);
+      const nextRows = [...localRows, ...migratedTasks];
+      let mainNum = 1;
+      nextRows.forEach(r => {
+        if (!isSubItemRow(r)) {
+          r.number = String(mainNum++);
+        }
+      });
+      setLocalRows(nextRows);
+      onRowsChange?.(nextRows);
+      await saveTableToBackend(nextRows);
+      toast.success(`🎉 Berhasil menambahkan ${tasksToAdd.length} rencana tugas ke logbook!`);
+      setShowLogbookRecModal(false);
+    } catch (err: any) {
+      console.error('Error adding recommended tasks:', err);
+      toast.error('Gagal menambahkan rencana tugas: ' + (err?.message || 'Error'));
+    }
+  };
+
+  // Carry over an unfinished task from yesterday/previous date into today's planning
+  const handleCarryOverTask = async (task: TableRowData) => {
+    try {
+      const todayStr = getTodayDDMMYYYY();
+      const newParentId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const carriedTask: TableRowData = {
+        ...task,
+        id: newParentId,
+        _id: newParentId,
+        'Created Time': todayStr,
+        createdTime: todayStr,
+        Status: 'In Progress',
+        status: 'In Progress',
+        'Tanggal Selesai': '-',
+        'Tanggal selesai': '-',
+        completed: '-',
+        'Aktual Selesai': '-',
+      };
+
+      // Also carry over its subtasks if any
+      const relatedSubtasks = localRows.filter(r => isSubItemRow(r) && r.parentRowId === (task.id || task._id));
+      const carriedSubtasks: TableRowData[] = relatedSubtasks.map(sub => ({
+        ...sub,
+        id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        parentRowId: newParentId,
+        'Created Time': todayStr,
+        createdTime: todayStr,
+        isCompleted: 'false',
+        'Tanggal Selesai': '-',
+        'Tanggal selesai': '-',
+        completed: '-',
+      }));
+
+      const nextRows = [...localRows, carriedTask, ...carriedSubtasks];
+      let mainNum = 1;
+      nextRows.forEach(r => {
+        if (!isSubItemRow(r)) {
+          r.number = String(mainNum++);
+        }
+      });
+      setLocalRows(nextRows);
+      onRowsChange?.(nextRows);
+      await saveTableToBackend(nextRows);
+      toast.success(`Tugas "${carriedTask['Jenis kegiatan'] || carriedTask['Jenis Kegiatan'] || 'Tugas'}" berhasil dilanjutkan ke hari ini!`);
+      setLogbookDateFilter('today');
+    } catch (err: any) {
+      console.error('Error carry over task:', err);
+      toast.error('Gagal melanjutkan tugas: ' + (err?.message || 'Error'));
+    }
+  };
+
+  // Save daily notes (General notes / Kejadian Khusus)
+  const handleSaveDailyNotes = async (dateStr: string, notes: string) => {
+    try {
+      const updatedMeta: LogbookMeta = {
+        ...logbookMeta,
+        generalNotes: {
+          ...logbookMeta.generalNotes,
+          [dateStr]: notes
+        }
+      };
+      setLogbookMeta(updatedMeta);
+
+      // Inject into beforeText and save post
+      const nextBeforeText = injectLogbookMeta(beforeText || '', updatedMeta);
+      const targetHeaders = displayHeaders;
+      const updatedMarkdown = serializeMarkdownTable(targetHeaders, localRows, nextBeforeText, afterText);
+
+      if (typeof postId === 'number' || (typeof postId === 'string' && /^\d+$/.test(postId))) {
+        await fetch(`/api/bulletin/${postId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: updatedMarkdown })
+        });
+      }
+      onPostContentUpdate?.(updatedMarkdown);
+      toast.success('Catatan harian logbook berhasil disimpan!');
+    } catch (err: any) {
+      console.error('Error saving daily notes:', err);
+      toast.error('Gagal menyimpan catatan harian: ' + (err?.message || 'Error'));
+    }
+  };
+
 
   // Helper to migrate existing checklists in Keterangan to hierarchical sub-items
   const migrateRowsSubtasksInternal = (inputRows: TableRowData[]) => {
@@ -2416,7 +2888,7 @@ export function NotionDatabaseTable({
         const parentAct = getRowVal(row, 'Activity (routine/non routine)') || 'Monthly';
         const parentPeriod = getRowVal(row, 'period') || 'Monthly';
         const now = new Date();
-        const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
         // Create a sub-item row for each checklist item
         taskProg.items.forEach(item => {
@@ -2447,25 +2919,7 @@ export function NotionDatabaseTable({
     return { newRows, migratedCount };
   };
 
-  // Auto-migration effect: whenever localRows contains trapped checklists in Keterangan, migrate automatically
-  useEffect(() => {
-    if (!localRows || localRows.length === 0) return;
-    const hasAnyChecklists = localRows.some(r => {
-      if (isSubItemRow(r)) return false;
-      const ket = getRowVal(r, 'Keterangan') || '';
-      const taskProg = parseTasklist(ket);
-      return taskProg.hasTasklist && taskProg.items.length > 0;
-    });
-
-    if (hasAnyChecklists) {
-      const { newRows, migratedCount } = migrateRowsSubtasksInternal(localRows);
-      if (migratedCount > 0) {
-        setLocalRows(newRows);
-        setOriginalRowsBackup(JSON.parse(JSON.stringify(newRows)));
-        saveTableToBackend(newRows);
-      }
-    }
-  }, [localRows]);
+  // Manual migration handler available via button, auto-migration disabled to prevent unintended row mutations
 
   // Migrate existing checklists in Keterangan to hierarchical sub-items
   const handleMigrateChecklistsToSubItems = () => {
@@ -2480,35 +2934,142 @@ export function NotionDatabaseTable({
     }
   };
 
-  // Toggle Checklist Sub-Item Completed Status
+  // Toggle Checklist Sub-Item Completed Status & Sinkronkan Progres Task Utama
   const handleToggleSubItemCompleted = (subRowIndex: number, currentCompleted: boolean) => {
     const nextCompleted = !currentCompleted;
     const subRow = localRows[subRowIndex];
     if (!subRow) return;
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const updatedRow = { ...subRow };
-    updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
-    updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
-    
-    // Sinkronisasi tanggal selesai jika ada kolomnya
-    displayHeaders.forEach(h => {
-      const hLower = h.toLowerCase().trim();
-      if (hLower.includes('completed') || hLower.includes('aktual selesai') || hLower === 'selesai' || hLower.includes('waktu selesai') || hLower.includes('tanggal selesai')) {
-        updatedRow[h] = nextCompleted ? todayStr : '-';
+    // Temukan baris kegiatan utama (parent) untuk sub-item ini
+    let parentIdx = -1;
+    for (let i = subRowIndex - 1; i >= 0; i--) {
+      if (!isSubItemRow(localRows[i])) {
+        parentIdx = i;
+        break;
       }
-    });
+    }
 
-    const nextRows = [...localRows];
-    nextRows[subRowIndex] = updatedRow;
-    setLocalRows(nextRows);
-    onRowsChange?.(nextRows);
-    saveTableToBackend(nextRows);
+    // Helper untuk sinkronisasi tanggal selesai ke semua variasi alias kolom tanggal selesai
+    const setRowCompletedDate = (targetRow: TableRowData, dateVal: string) => {
+      let matched = false;
+      for (const k of Object.keys(targetRow)) {
+        const kl = k.toLowerCase().trim();
+        if (kl.includes('tanggal selesai') || kl.includes('completed') || kl.includes('aktual selesai') || kl === 'selesai' || kl.includes('waktu selesai')) {
+          targetRow[k] = dateVal;
+          matched = true;
+        }
+      }
+      displayHeaders.forEach(h => {
+        const hl = h.toLowerCase().trim();
+        if (hl.includes('tanggal selesai') || hl.includes('completed') || hl.includes('aktual selesai') || hl === 'selesai' || hl.includes('waktu selesai')) {
+          targetRow[h] = dateVal;
+          matched = true;
+        }
+      });
+      targetRow['Tanggal Selesai'] = dateVal;
+    };
+
+    const executeToggle = async () => {
+      const todayStr = getTodayDDMMYYYY();
+      const updatedRow = { ...subRow };
+      updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
+      updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
+
+      // Also update sub-item title prefix ↳ [x] vs ↳ [ ]
+      const currentTitle = getRowVal(subRow, 'Jenis kegiatan') || getRowVal(subRow, 'Jenis Kegiatan') || '';
+      if (currentTitle) {
+        const cleanTitle = getDisplayTitle(currentTitle);
+        const newTitle = `↳ [${nextCompleted ? 'x' : ' '}] ${cleanTitle}`;
+        if (updatedRow['Jenis kegiatan'] !== undefined) updatedRow['Jenis kegiatan'] = newTitle;
+        if (updatedRow['Jenis Kegiatan'] !== undefined) updatedRow['Jenis Kegiatan'] = newTitle;
+        if (updatedRow['Name'] !== undefined) updatedRow['Name'] = newTitle;
+        if (updatedRow['Judul'] !== undefined) updatedRow['Judul'] = newTitle;
+      }
+      
+      // 1. Masukan tanggal selesai di baris subtask jika subtask diceklis, atau reset '-' jika batal diceklis
+      setRowCompletedDate(updatedRow, nextCompleted ? todayStr : '-');
+
+      const nextRows = [...localRows];
+      nextRows[subRowIndex] = updatedRow;
+
+      if (parentIdx !== -1) {
+        const siblingSubIndices: number[] = [];
+        for (let i = parentIdx + 1; i < nextRows.length; i++) {
+          if (isSubItemRow(nextRows[i])) {
+            siblingSubIndices.push(i);
+          } else {
+            break;
+          }
+        }
+
+        const totalSubs = siblingSubIndices.length;
+        const completedSubs = siblingSubIndices.filter(idx => isSubItemCompleted(nextRows[idx])).length;
+
+        const parentRow = { ...nextRows[parentIdx] };
+        const currentParentStatus = (getRowVal(parentRow, 'Status') || '').toUpperCase();
+
+        if (!currentParentStatus.includes('CANCEL')) {
+          if (totalSubs > 0 && completedSubs === totalSubs) {
+            parentRow.Status = 'Closed';
+            // 2. Masukan tanggal selesai di baris tugas utama jika SEMUA subtask diceklis
+            setRowCompletedDate(parentRow, todayStr);
+            toast.success(`Semua subtask selesai! Status kegiatan "${getDisplayTitle(getRowVal(parentRow, 'Jenis kegiatan') || '')}" otomatis diubah menjadi Closed.`);
+          } else if (completedSubs > 0) {
+            parentRow.Status = 'On Progress';
+            // Reset tanggal selesai tugas utama jika belum semua subtask diceklis
+            setRowCompletedDate(parentRow, '-');
+          } else {
+            parentRow.Status = 'Open';
+            // Reset tanggal selesai tugas utama jika belum ada subtask diceklis
+            setRowCompletedDate(parentRow, '-');
+          }
+          nextRows[parentIdx] = parentRow;
+        }
+      }
+
+      const updatedDirty = new Set(dirtyRowIndices);
+      updatedDirty.add(subRowIndex);
+      if (parentIdx !== -1) updatedDirty.add(parentIdx);
+      setDirtyRowIndices(updatedDirty);
+
+      setLocalRows(nextRows);
+      onRowsChange?.(nextRows);
+      await saveTableToBackend(nextRows);
+    };
+
+    // Cek apakah aksi ini akan menyelesaikan subtask TERAKHIR dan otomatis menutup task utama
+    if (nextCompleted && parentIdx !== -1) {
+      const siblingSubIndices: number[] = [];
+      for (let i = parentIdx + 1; i < localRows.length; i++) {
+        if (isSubItemRow(localRows[i])) {
+          siblingSubIndices.push(i);
+        } else {
+          break;
+        }
+      }
+
+      const totalSubs = siblingSubIndices.length;
+      const otherCompletedSubs = siblingSubIndices.filter(idx => idx !== subRowIndex && isSubItemCompleted(localRows[idx])).length;
+      const willBeAllCompleted = totalSubs > 0 && (otherCompletedSubs + 1 === totalSubs);
+
+      if (willBeAllCompleted) {
+        const parentTopicTitle = getDisplayTitle(getRowVal(localRows[parentIdx], 'Jenis kegiatan') || getRowVal(localRows[parentIdx], 'Name') || 'Kegiatan');
+        setLastSubtaskConfirmModal({
+          isOpen: true,
+          topicTitle: parentTopicTitle,
+          onConfirm: executeToggle
+        });
+        return;
+      }
+    }
+
+    executeToggle();
   };
 
   // Edit Row Handler
   const handleOpenEditModal = (row: TableRowData, index: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    setSelectedRow(null);
     const data: TableRowData = {};
     displayHeaders.forEach(h => {
       data[h] = getRowVal(row, h);
@@ -2587,13 +3148,14 @@ export function NotionDatabaseTable({
     }
   };
 
-  // Insert Blank Row Inline directly into table (starts manual inline editing immediately)
-  const handleInsertBlankRow = (insertAtIndex: number = 0) => {
+  // Insert Blank Row Inline directly into table (starts manual inline editing immediately at row #1)
+  const handleInsertBlankRow = (_insertAtIndex: number = 0) => {
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const inheritedCadence = currentCadence || 'Non Routine';
 
     const blankRow: TableRowData = {
+      id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       number: '1',
       'Jenis kegiatan': '',
       'Jenis Kegiatan': '',
@@ -2613,8 +3175,8 @@ export function NotionDatabaseTable({
       }
     });
 
-    const nextRows = [...localRows];
-    nextRows.splice(insertAtIndex, 0, blankRow);
+    // Selalu sisipkan di posisi paling atas (#1) dan geser urutan yang lain ke bawah
+    const nextRows = [blankRow, ...localRows];
 
     // Renumber parent rows sequentially starting from 1
     let parentNum = 1;
@@ -2627,15 +3189,15 @@ export function NotionDatabaseTable({
     onRowsChange?.(renumbered);
     saveTableToBackend(renumbered);
 
-    // Immediately activate inline editor on the new empty cell
+    // Immediately activate inline editor on the new empty cell at row 0
     setActiveInlineEditor({
-      rowIndex: insertAtIndex,
+      rowIndex: 0,
       colName: 'Jenis kegiatan',
       initialValue: '',
       multiline: false
     });
 
-    toast.success('Baris kosong baru ditambahkan. Silakan ketik langsung nama kegiatan di tabel.');
+    toast.success('Baris kosong baru (#1) ditambahkan di urutan pertama. Silakan ketik nama kegiatan.');
   };
 
   // Delete Row Handler
@@ -2669,56 +3231,182 @@ export function NotionDatabaseTable({
     }
   };
 
+  // Map setiap baris sub-item ke baris parent-nya di localRows
+  const rowToParentMap = useMemo(() => {
+    const map = new Map<TableRowData, TableRowData>();
+    let activeParentRef: TableRowData | null = null;
+    localRows.forEach(r => {
+      if (isSubItemRow(r)) {
+        if (activeParentRef) {
+          map.set(r, activeParentRef);
+        }
+      } else {
+        // HANYA jadikan row sebagai activeParentRef jika row tersebut memiliki judul kegiatan nyata
+        // Baris kosong baru (tanpa judul) TIDAK PERNAH boleh mengadopsi subtask dari task lain
+        const title = (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || getRowVal(r, 'Judul') || r['Jenis kegiatan'] || r['Jenis Kegiatan'] || '').trim();
+        if (title.length > 0) {
+          activeParentRef = r;
+        }
+      }
+    });
+    return map;
+  }, [localRows, getRowVal]);
+
   // Filter and sort rows
   const filteredRows = useMemo(() => {
     let result = [...localRows];
 
     // Filter out completely empty separator or blank rows
     result = result.filter((row) => {
-      const vals = Object.values(row).map((v) => (v || '').trim());
+      const vals = Object.values(row).map((v) => (typeof v === 'string' ? v.trim() : String(v ?? '').trim()));
       return vals.some((v) => v !== '' && v !== '-' && v !== '---');
     });
+
+    // Helper: Cek apakah baris ini atau parent-nya di-pin (bebas dari semua filter)
+    const isPinnedOrChildOfPinned = (row: TableRowData) => {
+      if (isRowPinned(row)) return true;
+      if (isSubItemRow(row)) {
+        const p = rowToParentMap.get(row);
+        return p ? isRowPinned(p) : false;
+      }
+      return false;
+    };
 
     // 1. Search Query Filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      result = result.filter((row) => {
-        return Object.values(row).some((val) => 
-          (val || '').toLowerCase().includes(q)
+      // Simpan parent atau subtask yang cocok
+      const matchingRows = new Set<TableRowData>();
+      result.forEach((row) => {
+        if (isPinnedOrChildOfPinned(row)) {
+          matchingRows.add(row);
+          return;
+        }
+        const matches = Object.values(row).some((val) => 
+          (typeof val === 'string' ? val : String(val ?? '')).toLowerCase().includes(q)
         );
+        if (matches) {
+          matchingRows.add(row);
+          if (isSubItemRow(row)) {
+            const p = rowToParentMap.get(row);
+            if (p) matchingRows.add(p);
+          }
+        }
       });
-    }
-
-    // 2. Status Filter
-    if (statusFilter !== 'ALL') {
       result = result.filter((row) => {
-        const val = (getRowVal(row, 'Status') || '').toUpperCase().trim();
-        if (statusFilter === 'ACTIVE') return !val.includes('CLOSE') && !val.includes('SELESAI') && !val.includes('DONE') && !val.includes('CANCEL') && !val.includes('BATAL');
-        if (statusFilter === 'ON PROGRESS') return val.includes('PROGRESS') || val.includes('PROSES');
-        if (statusFilter === 'CLOSE') return val.includes('CLOSE') || val.includes('SELESAI') || val.includes('DONE');
-        if (statusFilter === 'OPEN') return val.includes('OPEN') || val.includes('BARU');
-        if (statusFilter === 'CANCELED') return val.includes('CANCEL') || val.includes('BATAL');
-        if (statusFilter === 'PENDING') return val.includes('PENDING') || val.includes('HOLD') || val.includes('DELAY');
-        return val === statusFilter;
+        if (isPinnedOrChildOfPinned(row)) return true;
+        if (matchingRows.has(row)) return true;
+        if (isSubItemRow(row)) {
+          const p = rowToParentMap.get(row);
+          return p ? matchingRows.has(p) : false;
+        }
+        return false;
       });
     }
 
-    // 3. Priority Filter
-    if (priorityFilter !== 'ALL') {
+    // 2. Status Multi-Select Filter (Subtask tak terpisahkan dari parent-nya, Pinned task bebas filter)
+    if (selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) {
+      const passingParentRows = new Set<TableRowData>();
+      localRows.forEach((row) => {
+        if (isPinnedOrChildOfPinned(row)) {
+          passingParentRows.add(row);
+          return;
+        }
+        if (!isSubItemRow(row)) {
+          const val = (getRowVal(row, 'Status') || '').toUpperCase().trim();
+          const matches = selectedStatuses.some((st) => {
+            if (st === 'ACTIVE') return !val.includes('CLOSE') && !val.includes('SELESAI') && !val.includes('DONE') && !val.includes('CANCEL') && !val.includes('BATAL');
+            if (st === 'ON PROGRESS') return val.includes('PROGRESS') || val.includes('PROSES');
+            if (st === 'CLOSE') return val.includes('CLOSE') || val.includes('SELESAI') || val.includes('DONE');
+            if (st === 'OPEN') return val.includes('OPEN') || val.includes('BARU');
+            if (st === 'CANCELED') return val.includes('CANCEL') || val.includes('BATAL');
+            if (st === 'PENDING') return val.includes('PENDING') || val.includes('HOLD') || val.includes('DELAY');
+            return val === st;
+          });
+          if (matches) passingParentRows.add(row);
+        }
+      });
+
       result = result.filter((row) => {
-        const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
-        if (priorityFilter === 'URGENT') return val.includes('URGENT') || val.includes('KRITIS') || val.includes('CRITICAL');
-        if (priorityFilter === 'HIGH') return (val.includes('HIGH') || val.includes('TINGGI')) && !val.includes('URGENT');
-        if (priorityFilter === 'MEDIUM') return val.includes('MEDIUM') || val.includes('SEDANG');
-        if (priorityFilter === 'NORMAL') return (val.includes('NORMAL') || val.includes('BIASA')) && !val.includes('MEDIUM');
-        if (priorityFilter === 'LOW') return val.includes('LOW') || val.includes('RENDAH');
-        return val.includes(priorityFilter);
+        if (isPinnedOrChildOfPinned(row)) return true;
+        if (!isSubItemRow(row)) {
+          return passingParentRows.has(row);
+        }
+        const parent = rowToParentMap.get(row);
+        return parent ? passingParentRows.has(parent) : true;
       });
     }
 
-    // 4. Sort
-    if (sortColumn) {
-      result.sort((a, b) => {
+    // 3. Priority Multi-Select Filter (Pinned task bebas filter)
+    if (selectedPriorities.length > 0 && !selectedPriorities.includes('ALL')) {
+      const passingParentRows = new Set<TableRowData>();
+      localRows.forEach((row) => {
+        if (isPinnedOrChildOfPinned(row)) {
+          passingParentRows.add(row);
+          return;
+        }
+        if (!isSubItemRow(row)) {
+          const val = (getRowVal(row, 'Priority') || '').toUpperCase().trim();
+          const matches = selectedPriorities.some((pKey) => {
+            if (pKey === 'URGENT') return val.includes('URGENT') || val.includes('KRITIS') || val.includes('CRITICAL');
+            if (pKey === 'HIGH') return (val.includes('HIGH') || val.includes('TINGGI')) && !val.includes('URGENT');
+            if (pKey === 'MEDIUM') return val.includes('MEDIUM') || val.includes('SEDANG');
+            if (pKey === 'NORMAL') return (val.includes('NORMAL') || val.includes('BIASA')) && !val.includes('MEDIUM');
+            if (pKey === 'LOW') return val.includes('LOW') || val.includes('RENDAH');
+            return val.includes(pKey);
+          });
+          if (matches) passingParentRows.add(row);
+        }
+      });
+
+      result = result.filter((row) => {
+        if (isPinnedOrChildOfPinned(row)) return true;
+        if (!isSubItemRow(row)) {
+          return passingParentRows.has(row);
+        }
+        const parent = rowToParentMap.get(row);
+        return parent ? passingParentRows.has(parent) : true;
+      });
+    }
+
+    // 3b. PIC Multi-Select Filter (Pinned task bebas filter)
+    if (selectedPics.length > 0 && !selectedPics.includes('ALL')) {
+      const passingParentRows = new Set<TableRowData>();
+      localRows.forEach((row) => {
+        if (isPinnedOrChildOfPinned(row)) {
+          passingParentRows.add(row);
+          return;
+        }
+        if (!isSubItemRow(row)) {
+          const rawPic = (getRowVal(row, 'PIC') || getRowVal(row, 'pic') || '').trim();
+          const matches = selectedPics.some((p) => {
+            if (p === '(Tanpa PIC)') {
+              return !rawPic || rawPic === '-';
+            }
+            return rawPic.toLowerCase() === p.toLowerCase() || rawPic.toLowerCase().includes(p.toLowerCase());
+          });
+          if (matches) passingParentRows.add(row);
+        }
+      });
+
+      result = result.filter((row) => {
+        if (isPinnedOrChildOfPinned(row)) return true;
+        if (!isSubItemRow(row)) {
+          return passingParentRows.has(row);
+        }
+        const parent = rowToParentMap.get(row);
+        return parent ? passingParentRows.has(parent) : true;
+      });
+    }
+
+    // 4. Sort (Pinned row selalu berada di posisi paling atas terlepas dari sort kolom)
+    result.sort((a, b) => {
+      const aPin = isPinnedOrChildOfPinned(a);
+      const bPin = isPinnedOrChildOfPinned(b);
+      if (aPin && !bPin) return -1;
+      if (!aPin && bPin) return 1;
+
+      if (sortColumn) {
         const rawA = (getRowVal(a, sortColumn) || '').trim();
         const rawB = (getRowVal(b, sortColumn) || '').trim();
 
@@ -2747,12 +3435,12 @@ export function NotionDatabaseTable({
         const valB = rawB.toLowerCase();
         if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
         if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
+      }
+      return 0;
+    });
 
     return result;
-  }, [localRows, searchQuery, statusFilter, priorityFilter, sortColumn, sortDirection, getRowVal]);
+  }, [localRows, searchQuery, selectedStatuses, selectedPriorities, selectedPics, sortColumn, sortDirection, getRowVal, isRowPinned, rowToParentMap]);
 
   // Grouped rows for Notion Database Sections (e.g. 'Non Routine Lainnya (22)', 'PTK GTS (2)')
   const groupedRowsData = useMemo(() => {
@@ -2768,7 +3456,7 @@ export function NotionDatabaseTable({
     }));
   }, [filteredRows, getRowGroup]);
 
-  // Statistics calculation
+  // Statistics calculation with full Priority counts
   const stats = useMemo(() => {
     let total = 0;
     let onProgress = 0;
@@ -2776,11 +3464,16 @@ export function NotionDatabaseTable({
     let open = 0;
     let canceled = 0;
     let highPriority = 0;
+    let urgent = 0;
+    let high = 0;
+    let medium = 0;
+    let normal = 0;
+    let low = 0;
 
     localRows.forEach((r) => {
       const s = (getRowVal(r, 'Status') || '').toUpperCase();
       const p = (getRowVal(r, 'Priority') || '').toUpperCase();
-      const vals = Object.values(r).map((v) => (v || '').trim());
+      const vals = Object.values(r).map((v) => (typeof v === 'string' ? v.trim() : String(v ?? '').trim()));
       if (vals.some((v) => v !== '' && v !== '-')) {
         total++;
         if (s.includes('PROGRESS') || s.includes('PROSES')) onProgress++;
@@ -2788,11 +3481,36 @@ export function NotionDatabaseTable({
         else if (s.includes('CANCEL') || s.includes('BATAL')) canceled++;
         else if (s.includes('OPEN') || s.includes('BARU')) open++;
 
-        if (p.includes('HIGH') || p.includes('URGENT') || p.includes('TINGGI')) highPriority++;
+        if (p.includes('URGENT') || p.includes('KRITIS') || p.includes('CRITICAL')) {
+          urgent++;
+          highPriority++;
+        } else if (p.includes('HIGH') || p.includes('TINGGI')) {
+          high++;
+          highPriority++;
+        } else if (p.includes('MEDIUM') || p.includes('SEDANG')) {
+          medium++;
+        } else if (p.includes('LOW') || p.includes('RENDAH')) {
+          low++;
+        } else {
+          normal++;
+        }
       }
     });
 
-    return { total, onProgress, closed, open, canceled, highPriority };
+    return { total, onProgress, closed, open, canceled, highPriority, urgent, high, medium, normal, low };
+  }, [localRows, getRowVal]);
+
+  // Dynamic list of available PICs with row counts
+  const availablePics = useMemo(() => {
+    const counts: Record<string, number> = {};
+    localRows.forEach(r => {
+      const pic = (getRowVal(r, 'PIC') || getRowVal(r, 'pic') || '').trim();
+      const key = pic || '(Tanpa PIC)';
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
   }, [localRows, getRowVal]);
 
   // Multiple Row Selection Helpers for Bulk Actions
@@ -3322,60 +4040,98 @@ export function NotionDatabaseTable({
 
     if (s.includes('PROGRESS') || s.includes('PROSES')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-950/70 text-amber-300 border border-amber-600/50 shadow-xs">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#FDECC8', color: '#8F6B12' }}
+        >
+          <RotateCcw className="w-2.5 h-2.5 shrink-0" style={{ color: '#8F6B12' }} />
           ON PROGRESS
         </span>
       );
     }
-    if (s.includes('CLOSE') || s.includes('SELESAI') || s.includes('DONE') || s.includes('RESOLVED')) {
+    if (s.includes('CLOSE') || s.includes('SELESAI') || s.includes('RESOLVED')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-950/70 text-emerald-300 border border-emerald-600/50 shadow-xs">
-          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-          CLOSED
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#D3E5EF', color: '#235A80' }}
+        >
+          <CheckCircle2 className="w-2.5 h-2.5 shrink-0" style={{ color: '#235A80' }} />
+          CLOSE
+        </span>
+      );
+    }
+    if (s.includes('DONE')) {
+      return (
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#DBEDDB', color: '#286641' }}
+        >
+          <Check className="w-2.5 h-2.5 shrink-0" style={{ color: '#286641' }} />
+          DONE
         </span>
       );
     }
     if (s.includes('CANCEL') || s.includes('BATAL')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-950/70 text-rose-300 border border-rose-600/50 shadow-xs">
-          <AlertCircle className="w-3 h-3 text-rose-400" />
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#FFE2DD', color: '#9B3E37' }}
+        >
+          <AlertCircle className="w-2.5 h-2.5 shrink-0" style={{ color: '#9B3E37' }} />
           CANCELED
         </span>
       );
     }
     if (s.includes('OPEN') || s.includes('BARU')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-950/70 text-blue-300 border border-blue-600/50 shadow-xs">
-          <Clock className="w-3 h-3 text-blue-400" />
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#E3E2E0', color: '#5A5A58' }}
+        >
+          <Clock className="w-2.5 h-2.5 shrink-0" style={{ color: '#5A5A58' }} />
           OPEN
         </span>
       );
     }
     if (s.includes('PENDING') || s.includes('HOLD') || s.includes('DELAY')) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-purple-950/70 text-purple-300 border border-purple-600/50 shadow-xs">
-          <AlertCircle className="w-3 h-3 text-purple-400" />
+        <span 
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
+          style={{ backgroundColor: '#E8DEEE', color: '#6940A5' }}
+        >
+          <AlertCircle className="w-2.5 h-2.5 shrink-0" style={{ color: '#6940A5' }} />
           PENDING
         </span>
       );
     }
     return (
       <span 
-        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border"
+        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold tracking-wide uppercase select-none shadow-2xs"
         style={{
-          backgroundColor: 'var(--input-bg, #334155)',
-          borderColor: 'var(--border-main, #475569)',
-          color: 'var(--text-main, #cbd5e1)'
+          backgroundColor: '#E3E2E0',
+          color: '#5A5A58'
         }}
       >
-        {statusStr}
+        {s}
       </span>
     );
   };
 
   // Helper to calculate duration for closed/completed tasks in Notion Table
   const getRowDurationInfo = (row: TableRowData, taskProgress?: TasklistProgress) => {
+    // 1. Data hasil migrasi dari Notion tidak perlu dikalkulasi waktu selesainya
+    const isMigratedFromNotion = 
+      row.isMigrated === 'true' || 
+      row.isNotionMigration === 'true' || 
+      row.source === 'notion' || 
+      (getRowVal(row, 'Keterangan') || '').includes('<!--notion-migrated-->') ||
+      (getRowVal(row, 'Source') || '').toLowerCase().includes('notion') ||
+      (row.id && String(row.id).startsWith('notion-'));
+
+    if (isMigratedFromNotion) {
+      return null;
+    }
+
     const createdStr = getRowVal(row, 'Created Time') || getRowVal(row, 'Tanggal Dibuat') || getRowVal(row, 'Waktu Dibuat') || getRowVal(row, 'Created') || getRowVal(row, 'Tanggal') || '';
     let completedStr = getRowVal(row, 'Tanggal Selesai') || getRowVal(row, 'Completed Time') || getRowVal(row, 'Aktual Selesai') || getRowVal(row, 'Waktu Selesai') || getRowVal(row, 'Selesai') || getRowVal(row, 'Completed') || '';
 
@@ -3403,6 +4159,9 @@ export function NotionDatabaseTable({
     const dStart = parseDateVal(createdStr);
     const dEnd = parseDateVal(completedStr) || new Date();
 
+    // Akumulasi pending freeze (hari)
+    const pendingDays = parseFloat(getRowVal(row, 'Pending Days') || (row as any).pendingDays || '0') || 0;
+
     if (dStart && dEnd) {
       const diffMs = dEnd.getTime() - dStart.getTime();
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -3413,21 +4172,22 @@ export function NotionDatabaseTable({
           return {
             label: `${diffHours} Jam`,
             short: `${diffHours} Jam`,
-            detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+            detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}${pendingDays > 0 ? ` • Freeze: ${pendingDays} Hari` : ''}`
           };
         }
         return {
           label: '1 Hari',
           short: '1 Hari',
-          detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+          detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}${pendingDays > 0 ? ` • Freeze: ${pendingDays} Hari` : ''}`
         };
       }
 
       const totalDays = diffDays + 1;
+      const workingDays = Math.max(1, Math.round(totalDays - pendingDays));
       return {
-        label: `${totalDays} Hari`,
-        short: `${totalDays} Hari`,
-        detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}`
+        label: pendingDays > 0 ? `${workingDays} Hari (Freeze: ${pendingDays}h)` : `${totalDays} Hari`,
+        short: `${workingDays} Hari`,
+        detail: `Mulai: ${createdStr} • Selesai: ${completedStr || 'Hari ini'}${pendingDays > 0 ? ` • Freeze Pending: ${pendingDays} Hari` : ''}`
       };
     }
 
@@ -3516,8 +4276,8 @@ export function NotionDatabaseTable({
     return <span className="text-slate-400 mr-1 text-xs">≡</span>;
   };
 
-  // Helper for PIC Avatar Badge
-  const renderPicBadge = (picStr: string, size: 'xs' | 'sm' | 'md' = 'sm') => {
+  // Helper for PIC Avatar Badge (Hanya menampilkan avatar lingkaran di dalam cell, nama muncul saat hover)
+  const renderPicBadge = (picStr: string, size: 'xs' | 'sm' | 'md' = 'sm', showNameText: boolean = false) => {
     if (!picStr || picStr === '-') return <span className="font-mono text-xs text-slate-400">-</span>;
     const names = smartSplitPicString(picStr);
     const displayName = names.length > 0 
@@ -3525,36 +4285,49 @@ export function NotionDatabaseTable({
       : picStr;
 
     return (
-      <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0" title={picStr}>
         <PicAvatarGroup
           pics={picStr}
           employeesList={employeesList}
           size={size}
         />
-        <span 
-          className={`truncate font-medium max-w-[130px] ${
-            isNotionLight ? 'text-slate-800' : 'text-slate-200'
-          } ${fitPageMode ? 'text-[11.5px]' : 'text-xs'}`}
-          title={picStr}
-        >
-          {displayName}
-        </span>
+        {showNameText && (
+          <span 
+            className={`truncate font-medium max-w-[130px] ${
+              isNotionLight ? 'text-slate-800' : 'text-slate-200'
+            } ${fitPageMode ? 'text-[11.5px]' : 'text-xs'}`}
+            title={picStr}
+          >
+            {displayName}
+          </span>
+        )}
       </div>
     );
   };
 
   // Helper to format multiline notes with text color support, bold, italic, code, and bullet formatting
-  const renderFormattedNotes = (text: string) => {
-    if (!text || text === '-' || text === '•') return <span className="font-mono text-xs text-slate-400">-</span>;
+  // Default font size, font family, and color match Created Time column (#475569, font-sans, font-normal, 13px / 12px)
+  // When collapsed (!isExpanded), clamped strictly with ellipsis (...) right at cell boundary
+  // When expanded, preserves bullet points and lines separated by enter as distinct points
+  const renderFormattedNotes = (text: string, isExpanded: boolean = true) => {
+    if (!text || text === '-' || text === '•') return <span className="font-sans text-xs text-slate-400">-</span>;
     // Normalize <br/>, <br>, <br /> to newlines
     const normalized = text.replace(/<br\s*\/?>/gi, '\n');
     const cleanText = normalized.trim();
 
     return (
       <div 
-        className={`leading-relaxed whitespace-pre-wrap font-medium ${isNotionLight ? 'text-slate-950' : 'text-slate-100'}`}
-        style={{ fontSize: `${labNoteFontSize}px` }}
+        className={`leading-relaxed font-sans font-normal block w-full transition-all ${
+          !isExpanded ? 'max-h-[36px] overflow-hidden line-clamp-1' : 'space-y-1'
+        } ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
+        style={{ 
+          fontSize: fitPageMode ? '12px' : '13px',
+          fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+          color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)',
+          lineHeight: '1.6'
+        }}
         dangerouslySetInnerHTML={{ __html: markdownToVisualHtml(cleanText) }}
+        title={cleanText}
       />
     );
   };
@@ -3589,7 +4362,7 @@ export function NotionDatabaseTable({
     <div 
       className={`w-full my-0 mb-0 border-b transition-all font-sans antialiased ${
         isNotionLight 
-          ? 'bg-white border-[#e9e9e8] text-slate-900' 
+          ? 'bg-white border-[#e9e9e8] text-[#37352f]' 
           : 'bg-[#181818] border-[#2d2d2d] text-slate-200'
       }`}
       style={{
@@ -3610,7 +4383,7 @@ export function NotionDatabaseTable({
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-base select-none">📋</span>
-              <h3 className={`font-semibold text-sm flex items-center gap-1.5 ${isNotionLight ? 'text-slate-900' : 'text-slate-100'}`}>
+              <h3 className={`font-semibold text-sm flex items-center gap-1.5 ${isNotionLight ? 'text-[#37352f]' : 'text-slate-100'}`}>
                 <span>{title || 'Database Table'}</span>
                 <span 
                   className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono border font-semibold ${
@@ -3683,10 +4456,35 @@ export function NotionDatabaseTable({
                 </button>
               </NotionTooltip>
             </div>
+
+            {/* Tombol hijau "+ New" dipindahkan ke sebelah kanan tombol Cards */}
+            <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="ml-1 sm:ml-2 px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New</span>
+              </button>
+            </NotionTooltip>
           </div>
 
           {/* Right Anchor: Essential Tools Icons + Dedicated Full Tools Logo + + New Button */}
           <div className="flex items-center gap-1 relative">
+            {/* Logbook Smart Task Recommendations Button */}
+            {isLogbookTable && (
+              <button
+                type="button"
+                onClick={() => setShowLogbookRecModal(true)}
+                className="h-7 px-2.5 rounded-lg bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-teal-400/30 mr-1"
+                title="Buka Rekomendasi Rencana Tugas Hari Ini (Routine & Non-Routine yang Aktif)"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                <span className="hidden sm:inline">Rekomendasi Rencana</span>
+                <span className="sm:hidden">Rekomendasi</span>
+              </button>
+            )}
             {/* 1. SEARCH TOOL (Expandable inline input or icon button) */}
             <div className="relative notion-search-container">
               {isSearchInputOpen || searchQuery ? (
@@ -3749,7 +4547,7 @@ export function NotionDatabaseTable({
 
             {/* 2. FILTER TOOL (Popover with active indicator dot) */}
             <div className="relative notion-filter-popover-container">
-              <NotionTooltip content="Filter Status & Prioritas" position="bottom">
+              <NotionTooltip content="Filter Status, Prioritas & PIC" position="bottom">
                 <button
                   type="button"
                   onClick={() => {
@@ -3758,15 +4556,15 @@ export function NotionDatabaseTable({
                     setIsFullToolsPopoverOpen(false);
                   }}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
-                    statusFilter !== 'ALL' || priorityFilter !== 'ALL'
+                    (selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) || selectedPriorities.length > 0 || selectedPics.length > 0
                       ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50'
                       : isNotionLight
-                      ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]'
+                      ? 'text-[#37352f] hover:bg-[#efefed]'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                   }`}
                 >
                   <Filter className="w-4 h-4" />
-                  {(statusFilter !== 'ALL' || priorityFilter !== 'ALL') && (
+                  {((selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) || selectedPriorities.length > 0 || selectedPics.length > 0) && (
                     <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
                   )}
                 </button>
@@ -3775,22 +4573,27 @@ export function NotionDatabaseTable({
               {/* Filter Popover Content */}
               {isFilterPopoverOpen && (
                 <div 
-                  className={`absolute right-0 top-full mt-1.5 w-72 rounded-xl shadow-2xl border p-3 z-50 transition-all text-left ${
-                    isNotionLight ? 'bg-white border-[#e9e9e8] text-slate-800' : 'bg-[#202020] border-[#333333] text-slate-100'
+                  className={`absolute right-0 top-full mt-1.5 w-80 sm:w-96 max-h-[82vh] overflow-y-auto rounded-2xl shadow-2xl border p-3.5 z-50 transition-all text-left space-y-3 ${
+                    isNotionLight ? 'bg-white border-[#e9e9e7] text-[#37352f]' : 'bg-[#202020] border-[#333333] text-slate-100'
                   }`}
+                  style={{
+                    fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
+                  }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-xs font-bold flex items-center gap-1.5">
-                      <Filter className="w-3.5 h-3.5 text-teal-500" />
-                      Filter Kegiatan
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold flex items-center gap-1.5 text-[#37352f] dark:text-slate-100">
+                      <Filter className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                      Filter Kegiatan (Multi-Select)
                     </span>
-                    {(statusFilter !== 'ALL' || priorityFilter !== 'ALL') && (
+                    {((selectedStatuses.length > 0 && !selectedStatuses.includes('ALL')) || selectedPriorities.length > 0 || selectedPics.length > 0) && (
                       <button
                         type="button"
                         onClick={() => {
-                          setStatusFilter('ALL');
-                          setPriorityFilter('ALL');
+                          setSelectedStatuses(['ALL']);
+                          setSelectedPriorities([]);
+                          setSelectedPics([]);
+                          setPicSearchQuery('');
                         }}
                         className="text-[10px] text-rose-500 hover:underline font-semibold cursor-pointer"
                       >
@@ -3799,9 +4602,12 @@ export function NotionDatabaseTable({
                     )}
                   </div>
 
-                  {/* Status Options */}
-                  <div className="space-y-1 mb-3">
-                    <label className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Status Kegiatan</label>
+                  {/* 1. Status Options (Multi-select) */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">Status Kegiatan</label>
+                      <span className="text-[10px] text-slate-400">Pilih 1 atau lebih</span>
+                    </div>
                     <div className="flex flex-wrap gap-1">
                       {[
                         { key: 'ALL', label: 'Semua', count: stats.total },
@@ -3811,17 +4617,39 @@ export function NotionDatabaseTable({
                         { key: 'CLOSE', label: 'Selesai', count: stats.closed },
                         { key: 'CANCELED', label: 'Batal', count: stats.canceled },
                       ].map((st) => {
-                        const isActive = statusFilter === st.key;
+                        const isSelected = st.key === 'ALL'
+                          ? (selectedStatuses.length === 0 || selectedStatuses.includes('ALL'))
+                          : selectedStatuses.includes(st.key);
                         return (
                           <button
                             key={st.key}
                             type="button"
-                            onClick={() => setStatusFilter(st.key)}
+                            onClick={() => {
+                              if (st.key === 'ALL') {
+                                setSelectedStatuses(['ALL']);
+                                return;
+                              }
+                              if (st.key === 'ACTIVE') {
+                                if (selectedStatuses.includes('ACTIVE')) {
+                                  setSelectedStatuses(['ALL']);
+                                } else {
+                                  setSelectedStatuses(['ACTIVE']);
+                                }
+                                return;
+                              }
+                              const cleaned = selectedStatuses.filter(s => s !== 'ALL' && s !== 'ACTIVE');
+                              if (cleaned.includes(st.key)) {
+                                const next = cleaned.filter(s => s !== st.key);
+                                setSelectedStatuses(next.length === 0 ? ['ALL'] : next);
+                              } else {
+                                setSelectedStatuses([...cleaned, st.key]);
+                              }
+                            }}
                             className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
-                              isActive
-                                ? 'bg-slate-900 text-white border-slate-900 dark:bg-teal-600 dark:border-teal-500'
+                              isSelected
+                                ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
                                 : isNotionLight
-                                ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
                                 : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
                             }`}
                           >
@@ -3833,23 +4661,136 @@ export function NotionDatabaseTable({
                     </div>
                   </div>
 
-                  {/* Priority Options */}
-                  <div className="space-y-1">
-                    <label className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Tingkat Prioritas</label>
-                    <select
-                      value={priorityFilter}
-                      onChange={(e) => setPriorityFilter(e.target.value)}
-                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-medium outline-none cursor-pointer ${
-                        isNotionLight ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-[#282828] border-slate-700 text-slate-200'
-                      }`}
-                    >
-                      <option value="ALL">Semua Prioritas</option>
-                      <option value="URGENT">🚨 Urgent / Critical</option>
-                      <option value="HIGH">🔴 High Priority</option>
-                      <option value="MEDIUM">🔵 Medium Priority</option>
-                      <option value="NORMAL">🟢 Normal Priority</option>
-                      <option value="LOW">⚪ Low Priority</option>
-                    </select>
+                  {/* 2. Priority Options (Multi-select) */}
+                  <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">Tingkat Prioritas</label>
+                      <span className="text-[10px] text-slate-400">Pilih 1 atau lebih</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { key: 'ALL', label: 'Semua Prioritas', count: stats.total },
+                        { key: 'URGENT', label: '🚨 Urgent', count: stats.urgent || 0 },
+                        { key: 'HIGH', label: '🔴 High', count: stats.high || 0 },
+                        { key: 'MEDIUM', label: '🔵 Medium', count: stats.medium || 0 },
+                        { key: 'NORMAL', label: '🟢 Normal', count: stats.normal || 0 },
+                        { key: 'LOW', label: '⚪ Low', count: stats.low || 0 },
+                      ].map((p) => {
+                        const isSelected = p.key === 'ALL'
+                          ? selectedPriorities.length === 0
+                          : selectedPriorities.includes(p.key);
+                        return (
+                          <button
+                            key={p.key}
+                            type="button"
+                            onClick={() => {
+                              if (p.key === 'ALL') {
+                                setSelectedPriorities([]);
+                                return;
+                              }
+                              const cleaned = selectedPriorities.filter(x => x !== 'ALL');
+                              if (cleaned.includes(p.key)) {
+                                setSelectedPriorities(cleaned.filter(x => x !== p.key));
+                              } else {
+                                setSelectedPriorities([...cleaned, p.key]);
+                              }
+                            }}
+                            className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
+                              isSelected
+                                ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
+                                : isNotionLight
+                                ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                                : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
+                            }`}
+                          >
+                            <span>{p.label}</span>
+                            <span className="text-[10px] opacity-75 font-mono">({p.count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 3. PIC Filter (Multi-select with Search) */}
+                  <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Pemilihan PIC (Assignee)
+                      </label>
+                      {selectedPics.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPics([])}
+                          className="text-[10px] text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer"
+                        >
+                          Semua PIC
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="relative mb-1">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Cari nama PIC..."
+                        value={picSearchQuery}
+                        onChange={(e) => setPicSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-2.5 py-1 rounded-lg border text-[11px] outline-none focus:border-teal-500 font-sans"
+                        style={{
+                          backgroundColor: isNotionLight ? '#fbfbfa' : '#1a1a1a',
+                          borderColor: isNotionLight ? '#e9e9e7' : '#333333',
+                          color: isNotionLight ? '#37352f' : '#f1f5f9'
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto pr-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPics([])}
+                        className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all border cursor-pointer ${
+                          selectedPics.length === 0
+                            ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
+                            : isNotionLight
+                            ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                            : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        Semua PIC
+                      </button>
+                      {availablePics
+                        .filter((p) => !picSearchQuery.trim() || p.name.toLowerCase().includes(picSearchQuery.toLowerCase()))
+                        .map((p) => {
+                          const isSelected = selectedPics.includes(p.name);
+                          return (
+                            <button
+                              key={p.name}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedPics(selectedPics.filter(x => x !== p.name));
+                                } else {
+                                  setSelectedPics([...selectedPics, p.name]);
+                                }
+                              }}
+                              className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
+                                isSelected
+                                  ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
+                                  : isNotionLight
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
+                                  : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
+                              }`}
+                            >
+                              <User className="w-2.5 h-2.5 opacity-60" />
+                              <span className="truncate max-w-[130px]">{p.name}</span>
+                              <span className="text-[10px] opacity-75 font-mono">({p.count})</span>
+                            </button>
+                          );
+                        })}
+                      {availablePics.filter((p) => !picSearchQuery.trim() || p.name.toLowerCase().includes(picSearchQuery.toLowerCase())).length === 0 && (
+                        <span className="text-[11px] text-slate-400 py-1 italic">Tidak ada PIC yang cocok</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -3995,7 +4936,27 @@ export function NotionDatabaseTable({
               </button>
             </NotionTooltip>
 
-            {/* 5. THE 1 DEDICATED LOGO FOR FULL TOOLS (SlidersHorizontal) */}
+            {/* 5. EDIT TABLE TOGGLE (Icon Only) */}
+            <NotionTooltip content={isTableEditMode ? "Selesai Edit Tabel (Kunci Kolom)" : "Mode Edit Tabel (Atur Posisi & Hapus Kolom)"} position="bottom">
+              <button
+                type="button"
+                onClick={() => setIsTableEditMode(!isTableEditMode)}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
+                  isTableEditMode
+                    ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 ring-1 ring-amber-500/50'
+                    : isNotionLight
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-[#efefed]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                <TableProperties className="w-4 h-4" />
+                {isTableEditMode && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                )}
+              </button>
+            </NotionTooltip>
+
+            {/* 6. THE 1 DEDICATED LOGO FOR FULL TOOLS (SlidersHorizontal) */}
             <div className="relative notion-fulltools-popover-container">
               <NotionTooltip content="Semua Tools & Pengaturan (Full Tools)" position="bottom">
                 <button
@@ -4192,6 +5153,32 @@ export function NotionDatabaseTable({
                       <ChevronRight className="w-3.5 h-3.5" style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }} />
                     </button>
 
+                    {/* Mode Edit Tabel (Atur Kolom) Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setIsTableEditMode(!isTableEditMode)}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-colors cursor-pointer ${
+                        isTableEditMode 
+                          ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400' 
+                          : 'hover:border-teal-500/60'
+                      }`}
+                      style={{
+                        backgroundColor: isTableEditMode ? undefined : (isNotionLight ? '#f8fafc' : '#262626'),
+                        borderColor: isTableEditMode ? undefined : (isNotionLight ? '#e2e8f0' : '#383838'),
+                        color: isTableEditMode ? undefined : (isNotionLight ? '#0f172a' : '#f8fafc')
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <TableProperties className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Mode Edit Tabel (Atur Kolom)</span>
+                      </div>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        isTableEditMode ? 'bg-amber-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {isTableEditMode ? 'Aktif' : 'Nonaktif'}
+                      </span>
+                    </button>
+
                     {/* Theme Switcher Button */}
                     <button
                       type="button"
@@ -4325,21 +5312,28 @@ export function NotionDatabaseTable({
                 </div>
               )}
             </div>
-
-            {/* 7. PRIMARY "+ New" BUTTON ALA NOTION */}
-            <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
-              <button
-                type="button"
-                onClick={handleOpenAddModal}
-                className="px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>New</span>
-              </button>
-            </NotionTooltip>
           </div>
         </div>
       </div>
+
+      {/* Banner Mode Edit Tabel Aktif */}
+      {viewMode === 'table' && isTableEditMode && (
+        <div className="mb-2 px-3 py-1.5 rounded-xl text-xs flex items-center justify-between border bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-200 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <TableProperties className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>
+              <strong>Mode Edit Tabel Aktif:</strong> Tombol atur posisi (<span className="px-1 py-0.5 rounded bg-amber-500/20 font-mono font-bold">&lt;</span> <span className="px-1 py-0.5 rounded bg-amber-500/20 font-mono font-bold">&gt;</span>) dan hapus kolom (<span className="px-1 py-0.5 rounded bg-amber-500/20 font-mono font-bold">×</span>) aktif pada header kolom.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsTableEditMode(false)}
+            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium text-[11px] transition-colors cursor-pointer shadow-xs ml-3 shrink-0"
+          >
+            Selesai Edit
+          </button>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 1. TABLE VIEW (Exact Notion Column Hierarchy & Zoom / Fit Page)            */}
@@ -4407,6 +5401,8 @@ export function NotionDatabaseTable({
               background: #14b8a6;
               border-radius: 9999px;
               box-shadow: 0 1px 6px rgba(20, 184, 166, 0.5);
+            .notion-font-scope {
+              color: ${isNotionLight ? '#37352f' : '#f1f5f9'};
             }
             .notion-font-scope th,
             .notion-font-scope td,
@@ -4420,7 +5416,8 @@ export function NotionDatabaseTable({
             style={{
               fontSize: `${labNoteFontSize}px`,
               fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-              letterSpacing: '-0.005em'
+              letterSpacing: '-0.005em',
+              color: isNotionLight ? '#37352f' : '#f1f5f9'
             }}
           >
             {/* Table Header */}
@@ -4430,29 +5427,27 @@ export function NotionDatabaseTable({
                   isNotionLight ? 'border-[#e9e9e8]' : 'border-[#303030]'
                 }`}
               >
-                {/* Select All Checkbox Column - Hanya Muncul Saat Mode Seleksi Aktif */}
-                {(isSelectionModeActive || selectedRowIndices.size > 0) && (
-                  <th 
-                    className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r ${
-                      isNotionLight ? 'bg-[#fbfbfa] text-slate-700 border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
-                    } ${fitPageMode ? 'w-[3%] px-1.5 py-2.5' : 'w-10 px-2 py-3'}`}
-                  >
-                    <div className="flex items-center justify-center">
-                      <input
-                        type="checkbox"
-                        checked={isAllSelected}
-                        ref={(el) => {
-                          if (el) el.indeterminate = isSomeSelected;
-                        }}
-                        onChange={handleToggleSelectAll}
-                        className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
-                          isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
-                        }`}
-                        title={isAllSelected ? "Batalkan pilihan semua" : "Pilih semua baris"}
-                      />
-                    </div>
-                  </th>
-                )}
+                {/* 0. Dedicated Action Gutter (+, ::, [ ]) Column Header ala Notion */}
+                <th 
+                  className={`sticky top-0 z-20 text-center shadow-2xs border-b border-r select-none ${
+                    isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 border-[#303030]'
+                  } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-1 py-2.5' : 'w-16 min-w-[62px] max-w-[62px] px-1.5 py-3'}`}
+                >
+                  <div className="flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeSelected;
+                      }}
+                      onChange={handleToggleSelectAll}
+                      className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 opacity-60 hover:opacity-100 transition-opacity ${
+                        isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
+                      }`}
+                      title={isAllSelected ? "Batalkan pilihan semua" : "Pilih semua baris"}
+                    />
+                  </div>
+                </th>
                 {displayHeaders.map((colHeader) => {
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
@@ -4477,7 +5472,7 @@ export function NotionDatabaseTable({
                   } else {
                     if (isNum) widthClass = 'w-16 text-center px-3.5 py-3 whitespace-nowrap';
                     else if (isJudul) widthClass = 'min-w-[260px] px-3.5 py-3 whitespace-nowrap';
-                    else if (colLower.includes('keterangan')) widthClass = 'min-w-[300px] px-3.5 py-3';
+                    else if (colLower.includes('keterangan')) widthClass = 'w-[360px] min-w-[280px] max-w-[450px] px-3.5 py-3 overflow-hidden';
                     else widthClass = 'px-3.5 py-3 whitespace-nowrap';
                   }
 
@@ -4486,7 +5481,7 @@ export function NotionDatabaseTable({
                       key={colHeader}
                       style={getColStyle(colHeader)}
                       className={`sticky top-0 z-20 shadow-2xs font-semibold hover:opacity-90 transition-opacity group/th relative border-b border-r text-[13px] ${
-                        isNotionLight ? 'bg-[#fbfbfa] text-slate-800 border-[#e9e9e8]' : 'bg-[#202020] text-slate-200 border-[#303030]'
+                        isNotionLight ? 'bg-[#fbfbfa] text-[#37352f] border-[#e9e9e8]' : 'bg-[#202020] text-slate-200 border-[#303030]'
                       } ${widthClass}`}
                     >
                       <div className={`flex items-center justify-between gap-1.5 ${isNum ? 'justify-center' : ''}`}>
@@ -4496,7 +5491,7 @@ export function NotionDatabaseTable({
                           title="Klik untuk mengurutkan kolom"
                         >
                           {getNotionColumnIcon(colHeader)}
-                          <span className={`truncate font-semibold ${isNotionLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                          <span className={`truncate font-semibold ${isNotionLight ? 'text-[#37352f]' : 'text-slate-300'}`}>
                             {colLower.includes('tanggal selesai') || colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')
                               ? 'Tanggal Selesai'
                               : colHeader}
@@ -4521,9 +5516,9 @@ export function NotionDatabaseTable({
                           </button>
                         )}
 
-                        {/* Column Reorder (< and >) and Delete (X) Actions */}
-                        {!isNum && (
-                          <div className="opacity-0 group-hover/th:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0">
+                        {/* Column Reorder (< and >) and Delete (X) Actions - HANYA MUNCUL DI MODE EDIT TABEL */}
+                        {!isNum && isTableEditMode && (
+                          <div className="flex items-center gap-0.5 shrink-0 bg-slate-800/80 dark:bg-slate-900/90 rounded px-1 py-0.5 border border-slate-700/50 shadow-xs ml-1">
                             {/* Geser Kiri */}
                             {colIdx > 1 && (
                               <button
@@ -4533,7 +5528,7 @@ export function NotionDatabaseTable({
                                   handleMoveColumn(colHeader, 'left');
                                 }}
                                 title={`Geser kolom "${colHeader}" ke kiri`}
-                                className="p-0.5 rounded hover:bg-slate-700/50 text-slate-400 hover:text-teal-300 transition-all cursor-pointer"
+                                className="p-0.5 rounded hover:bg-slate-700 text-slate-300 hover:text-teal-300 transition-all cursor-pointer"
                               >
                                 <ChevronLeft className="w-3 h-3" />
                               </button>
@@ -4548,7 +5543,7 @@ export function NotionDatabaseTable({
                                   handleMoveColumn(colHeader, 'right');
                                 }}
                                 title={`Geser kolom "${colHeader}" ke kanan`}
-                                className="p-0.5 rounded hover:bg-slate-700/50 text-slate-400 hover:text-teal-300 transition-all cursor-pointer"
+                                className="p-0.5 rounded hover:bg-slate-700 text-slate-300 hover:text-teal-300 transition-all cursor-pointer"
                               >
                                 <ChevronRight className="w-3 h-3" />
                               </button>
@@ -4563,7 +5558,7 @@ export function NotionDatabaseTable({
                                   handleDeleteColumn(colHeader);
                                 }}
                                 title={`Hapus kolom "${colHeader}"`}
-                                className="p-0.5 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all cursor-pointer"
+                                className="p-0.5 rounded hover:bg-rose-500/30 text-rose-300 hover:text-rose-200 transition-all cursor-pointer"
                               >
                                 <X className="w-3 h-3" />
                               </button>
@@ -4793,26 +5788,14 @@ export function NotionDatabaseTable({
                                 {groupRows.length}
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenAddModal();
-                              }}
-                              className={`p-1 rounded transition-colors ${
-                                isNotionLight ? 'hover:bg-slate-200 text-slate-500' : 'hover:bg-slate-700 text-slate-400'
-                              }`}
-                              title={`Tambah kegiatan baru di ${groupName}`}
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
                           </div>
                         </td>
                       </tr>
 
                       {/* Group Rows (Hierarchical Parent & Sub-items) */}
                       {!isCollapsed && (() => {
-                        // Susun baris hierarkis: Parent -> SubItems
+                        // Susun baris hierarkis: Parent -> SubItems (menggunakan rowToParentMap yang stabil)
+
                         const hierarchicalItems: Array<{
                           parentRow: TableRowData;
                           parentIndex: number;
@@ -4825,23 +5808,83 @@ export function NotionDatabaseTable({
                           subItems: Array<{ row: TableRowData; actualIndex: number }>;
                         } | null = null;
 
+                        const seenSubItemRows = new Set<TableRowData>();
+
                         groupRows.forEach((row) => {
                           const actualRowIndex = localRows.indexOf(row) !== -1 ? localRows.indexOf(row) : 0;
                           const isSub = isSubItemRow(row);
 
-                          if (isSub && currentParentItem) {
-                            currentParentItem.subItems.push({
-                              row,
-                              actualIndex: actualRowIndex
-                            });
+                          if (isSub) {
+                            if (seenSubItemRows.has(row)) return;
+                            seenSubItemRows.add(row);
+
+                            const designatedParent = rowToParentMap.get(row);
+                            const existingParent = designatedParent 
+                              ? hierarchicalItems.find(h => h.parentRow === designatedParent || (designatedParent.id && h.parentRow.id && h.parentRow.id === designatedParent.id)) 
+                              : null;
+
+                            const isCurrentParentValid = currentParentItem && (
+                              (getRowVal(currentParentItem.parentRow, 'Jenis kegiatan') || '').trim().length > 0
+                            );
+
+                            if (existingParent) {
+                              existingParent.subItems.push({
+                                row,
+                                actualIndex: actualRowIndex
+                              });
+                            } else if (isCurrentParentValid && (!designatedParent || designatedParent === currentParentItem.parentRow)) {
+                              currentParentItem.subItems.push({
+                                row,
+                                actualIndex: actualRowIndex
+                              });
+                            } else if (designatedParent) {
+                              const parentIdx = localRows.indexOf(designatedParent);
+                              const newParent = {
+                                parentRow: designatedParent,
+                                parentIndex: parentIdx !== -1 ? parentIdx : 0,
+                                subItems: [{ row, actualIndex: actualRowIndex }]
+                              };
+                              hierarchicalItems.push(newParent);
+                              currentParentItem = newParent;
+                            } else if (isCurrentParentValid) {
+                              currentParentItem.subItems.push({
+                                row,
+                                actualIndex: actualRowIndex
+                              });
+                            } else {
+                              currentParentItem = {
+                                parentRow: row,
+                                parentIndex: actualRowIndex,
+                                subItems: []
+                              };
+                              hierarchicalItems.push(currentParentItem);
+                            }
                           } else {
-                            currentParentItem = {
-                              parentRow: row,
-                              parentIndex: actualRowIndex,
-                              subItems: []
-                            };
-                            hierarchicalItems.push(currentParentItem);
+                            // Prevent duplicating parent row if already registered by prior sub-items
+                            const existingParent = hierarchicalItems.find(h => 
+                              h.parentRow === row || 
+                              (row.id && h.parentRow.id && h.parentRow.id === row.id)
+                            );
+                            if (existingParent) {
+                              currentParentItem = existingParent;
+                            } else {
+                              currentParentItem = {
+                                parentRow: row,
+                                parentIndex: actualRowIndex,
+                                subItems: []
+                              };
+                              hierarchicalItems.push(currentParentItem);
+                            }
                           }
+                        });
+
+                        // Prioritaskan baris yang di-pin agar selalu berada di posisi paling atas tabel
+                        hierarchicalItems.sort((a, b) => {
+                          const aPin = isRowPinned(a.parentRow);
+                          const bPin = isRowPinned(b.parentRow);
+                          if (aPin && !bPin) return -1;
+                          if (!aPin && bPin) return 1;
+                          return 0;
                         });
 
                         // Helper render item baris (parent atau sub-item)
@@ -4865,7 +5908,7 @@ export function NotionDatabaseTable({
 
                           return (
                             <tr
-                              key={actualRowIndex}
+                              key={isSubItem ? `sub-${actualRowIndex}-${row.id || ''}` : `row-${actualRowIndex}-${row.id || ''}`}
                               className={`transition-all group border-b ${
                                 isSelected 
                                   ? 'bg-teal-500/10 hover:bg-teal-500/15' 
@@ -4889,26 +5932,62 @@ export function NotionDatabaseTable({
                                     : 'var(--border-main, #334155)' 
                               }}
                             >
-                              {/* Checkbox Column - Hanya Muncul Saat Mode Seleksi Aktif */}
-                              {(isSelectionModeActive || selectedRowIndices.size > 0) && (
-                                <td 
-                                  className={`text-center border-r ${
-                                    isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                  } ${fitPageMode ? 'px-1.5 py-2.5' : 'px-2 py-3'}`} 
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <div className="flex items-center justify-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
-                                      className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 ${
-                                        isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
+                              {/* 0. Dedicated Action Gutter (+, ::, [ ]) Column ala Notion */}
+                              <td 
+                                className={`border-r select-none transition-colors ${
+                                  isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                } ${fitPageMode ? 'w-14 min-w-[56px] max-w-[56px] px-0.5 py-1' : 'w-16 min-w-[62px] max-w-[62px] px-1 py-1'}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {/* + Button: Insert new task/row at top (#1) */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleInsertBlankRow(0);
+                                    }}
+                                    className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                                    title="Tambah baris tugas baru (#1) di posisi paling atas"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Pin Button: Menggantikan logo drag handle GripVertical */}
+                                  {!isSubItem ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTogglePinRow(actualRowIndex);
+                                      }}
+                                      className={`p-0.5 rounded transition-all cursor-pointer ${
+                                        isRowPinned(row)
+                                          ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
+                                          : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
-                                    />
-                                  </div>
-                                </td>
-                              )}
+                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 5 task)'}
+                                    >
+                                      <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45 text-amber-500' : ''}`} />
+                                    </button>
+                                  ) : (
+                                    <div className="w-3.5 h-3.5" />
+                                  )}
+
+                                  {/* [ ] Select Checkbox */}
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
+                                    className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 transition-opacity ${
+                                      isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                    } ${
+                                      isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
+                                    }`}
+                                    title={isSelected ? "Batalkan pilihan" : "Pilih baris ini"}
+                                  />
+                                </div>
+                              </td>
 
                               {displayHeaders.map((colName) => {
                                 const val = getRowVal(row, colName);
@@ -4928,19 +6007,6 @@ export function NotionDatabaseTable({
                                       }`}
                                     >
                                       <div className="flex items-center justify-center gap-1 relative group/num">
-                                        {!isSubItem && (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleInsertBlankRow(actualRowIndex);
-                                            }}
-                                            className="w-4 h-4 rounded hover:bg-teal-500/20 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 flex items-center justify-center opacity-30 group-hover:opacity-100 hover:opacity-100 transition-opacity cursor-pointer shrink-0 -ml-1"
-                                            title="Sisipkan baris kegiatan kosong di nomor ini"
-                                          >
-                                            <Plus className="w-3.5 h-3.5" />
-                                          </button>
-                                        )}
                                         {isDirty && (
                                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="Ada perubahan belum disimpan" />
                                         )}
@@ -4964,7 +6030,13 @@ export function NotionDatabaseTable({
                                         isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3'
-                                      }`}
+                                      } ${!isEditingThis && onToggleExpand ? 'cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/20' : ''}`}
+                                      onClick={(e) => {
+                                        if (!isEditingThis && onToggleExpand) {
+                                          onToggleExpand(e);
+                                        }
+                                      }}
+                                      title={!isEditingThis && onToggleExpand ? (isExpanded ? "Klik untuk menutup subtask dan keterangan" : "Klik untuk membuka subtask dan keterangan lengkap") : undefined}
                                     >
                                       {isEditingThis ? (
                                         <NotionInlineEditor
@@ -5026,12 +6098,23 @@ export function NotionDatabaseTable({
                                                 isSubCompleted 
                                                   ? 'line-through text-slate-400 dark:text-slate-500 font-normal' 
                                                   : isNotionLight 
-                                                    ? 'text-slate-900 font-semibold' 
+                                                    ? 'text-[#37352f] font-semibold' 
                                                     : 'text-slate-100'
                                               } ${fitPageMode ? 'break-words' : ''}`}
                                             >
                                               {displayTitle ? displayTitle : <em style={{ color: 'var(--text-muted, #64748b)' }}>Tanpa Judul</em>}
                                             </span>
+
+                                            {/* Pinned Badge */}
+                                            {isRowPinned(row) && !isSubItem && (
+                                              <span 
+                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 select-none shrink-0 shadow-2xs"
+                                                title="Task disematkan (pinned) ke posisi teratas dan tidak terpengaruh filter"
+                                              >
+                                                <Pin className="w-2.5 h-2.5 fill-amber-500 text-amber-600 dark:text-amber-400 rotate-45" />
+                                                <span>PINNED</span>
+                                              </span>
+                                            )}
                                             
                                             {/* Open Badge / Button */}
                                             <button
@@ -5099,11 +6182,11 @@ export function NotionDatabaseTable({
                                   return (
                                     <td 
                                       key={colName} 
-                                      style={getColStyle(colName)} 
-                                      className={`border-r ${
+                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} 
+                                      className={`font-sans border-r ${
                                         isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                       } ${
-                                        fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3 max-w-md'
+                                        fitPageMode ? 'px-2 py-2 text-xs overflow-hidden' : 'px-3.5 py-2.5 w-[360px] min-w-[280px] max-w-[450px] overflow-hidden text-[13px]'
                                       }`}
                                     >
                                       {isEditingThis ? (
@@ -5121,14 +6204,14 @@ export function NotionDatabaseTable({
                                         />
                                       ) : (
                                         <div 
-                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer"
+                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer font-sans w-full min-w-0 overflow-hidden"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
                                           }}
                                         >
-                                          <div className={`flex-1 text-[13px] leading-relaxed ${fitPageMode ? 'break-words' : ''}`}>
-                                            {renderFormattedNotes(val)}
+                                          <div className={`flex-1 min-w-0 overflow-hidden font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
+                                            {renderFormattedNotes(val, isExpanded)}
                                           </div>
                                           <button
                                             type="button"
@@ -5160,9 +6243,13 @@ export function NotionDatabaseTable({
                                       if (taskProg.items.length > 0) {
                                         const dates = taskProg.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
                                         if (dates.length > 0) {
-                                          displayDate = dates[dates.length - 1];
+                                          displayDate = formatToDDMMYYYY(dates[dates.length - 1]);
                                         }
                                       }
+                                    }
+
+                                    if (displayDate) {
+                                      displayDate = formatToDDMMYYYY(displayDate);
                                     }
                                   }
 
@@ -5196,7 +6283,7 @@ export function NotionDatabaseTable({
                                       ) : (
                                         <span 
                                           onClick={() => {
-                                            const todayStr = new Date().toISOString().slice(0, 10);
+                                            const todayStr = getTodayDDMMYYYY();
                                             handleUpdateCellDirect(actualRowIndex, colName, todayStr);
                                           }}
                                           className="font-mono text-slate-400 hover:text-emerald-500 cursor-pointer text-xs transition-colors"
@@ -5230,29 +6317,37 @@ export function NotionDatabaseTable({
                                       );
                                     });
 
+                                  const picTooltip = val && val !== '-' 
+                                    ? `PIC: ${val} (Klik untuk mengganti)` 
+                                    : 'Belum ada PIC (Klik untuk menetapkan)';
+
                                   return (
                                     <td 
                                       key={colName} 
                                       style={getColStyle(colName)} 
-                                      className={`relative border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                      } ${fitPageMode ? 'px-2 py-2 overflow-visible' : 'px-3.5 py-2.5 whitespace-nowrap overflow-visible'}`}
-                                      onClick={(e) => e.stopPropagation()}
+                                      className={`relative border-r cursor-pointer select-none transition-colors ${
+                                        isNotionLight ? 'border-[#e9e9e8] hover:bg-slate-100/60' : 'border-[#2d2d2d] hover:bg-slate-800/40'
+                                      } ${fitPageMode ? 'px-2 py-1.5 overflow-visible' : 'px-3.5 py-2 whitespace-nowrap overflow-visible'}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if ((e.target as HTMLElement).closest('.notion-pic-popover')) {
+                                          return;
+                                        }
+                                        setActiveInlinePicCell(isEditingPic ? null : { rowIndex: actualRowIndex, colName });
+                                        setInlinePicSearch('');
+                                      }}
+                                      title={picTooltip}
                                     >
-                                      <div 
-                                        onClick={() => {
-                                          setActiveInlinePicCell(isEditingPic ? null : { rowIndex: actualRowIndex, colName });
-                                          setInlinePicSearch('');
-                                        }}
-                                        className="cursor-pointer inline-block group/pic transition-transform hover:scale-105"
-                                        title="Klik langsung untuk mengganti PIC"
-                                      >
-                                        {renderPicBadge(val)}
+                                      <div className="w-full h-full min-h-[26px] flex items-center group/pic">
+                                        <div className="transition-transform group-hover/pic:scale-105 inline-flex items-center">
+                                          {renderPicBadge(val, 'sm', false)}
+                                        </div>
                                       </div>
 
                                       {isEditingPic && (
                                         <div 
-                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-72 max-h-72 overflow-y-auto rounded-xl shadow-2xl border p-2.5 z-50 text-left ${
+                                          onClick={(e) => e.stopPropagation()}
+                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-72 max-h-72 overflow-y-auto rounded-xl shadow-2xl border p-2.5 z-50 text-left cursor-default select-text ${
                                             isNotionLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-[#1e293b] border-slate-700 text-slate-100'
                                           }`}
                                         >
@@ -5531,18 +6626,29 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // 8. Created Time Column
+                                // 8. Created Time Column (Tanggal saja, tanpa jam dan menit)
                                 if (colLower.includes('created')) {
+                                  const displayDate = (() => {
+                                    if (!val || val === '-') return '-';
+                                    const trimmed = String(val).trim();
+                                    const match = trimmed.match(/^(\d{4}[-/]\d{1,2}[-/]\d{1,2})/);
+                                    if (match) return match[1];
+                                    if (trimmed.includes(' ') || trimmed.includes('T')) {
+                                      return trimmed.split(/[ T]/)[0];
+                                    }
+                                    return trimmed;
+                                  })();
+
                                   return (
                                     <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans border-r ${
                                       isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                     } ${
                                       fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                     }`}>
-                                      {val && val !== '-' ? (
+                                      {displayDate !== '-' ? (
                                         <span className="inline-flex items-center gap-1.5 font-sans">
                                           <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                          <span>{val}</span>
+                                          <span>{displayDate}</span>
                                         </span>
                                       ) : (
                                         <span className="font-mono text-slate-400">-</span>
@@ -5681,26 +6787,48 @@ export function NotionDatabaseTable({
 
                                {/* Row Action Buttons - Menu Titik Tiga */}
                                <td className={`text-center whitespace-nowrap relative notion-row-action-menu-container ${fitPageMode ? 'px-1 py-2' : 'px-2 py-2.5'}`} onClick={(e) => e.stopPropagation()}>
-                                 <div className="relative inline-block">
-                                   <button
-                                     type="button"
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       setActiveActionMenuRowIndex(activeActionMenuRowIndex === actualRowIndex ? null : actualRowIndex);
-                                     }}
-                                     className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-300 text-black dark:text-black hover:text-black transition-colors cursor-pointer"
-                                     title="Pilihan Aksi"
-                                   >
-                                     <MoreVertical className="w-4 h-4 text-black dark:text-black" />
-                                   </button>
+                                 {(() => {
+                                   const rowActionKey = `${actualRowIndex}-${isSubItem ? 'sub' : 'parent'}`;
+                                   return (
+                                     <div className="relative inline-block">
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           setActiveActionMenuRowIndex(activeActionMenuRowIndex === rowActionKey ? null : rowActionKey);
+                                         }}
+                                         className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-300 text-black dark:text-black hover:text-black transition-colors cursor-pointer"
+                                         title="Pilihan Aksi"
+                                       >
+                                         <MoreVertical className="w-4 h-4 text-black dark:text-black" />
+                                       </button>
 
-                                   {activeActionMenuRowIndex === actualRowIndex && (
+                                       {activeActionMenuRowIndex === rowActionKey && (
                                      <div 
                                        className={`absolute right-0 top-full mt-1 w-52 rounded-xl shadow-2xl border p-1 z-50 text-left transition-all ${
                                          isNotionLight ? 'bg-white border-slate-200 text-slate-800 shadow-slate-300/60' : 'bg-[#202020] border-slate-700 text-slate-100 shadow-black/80'
                                        }`}
                                        onClick={(e) => e.stopPropagation()}
                                      >
+                                       {!isSubItem && (
+                                         <button
+                                           type="button"
+                                           onClick={(e) => {
+                                             e.stopPropagation();
+                                             handleTogglePinRow(actualRowIndex);
+                                             setActiveActionMenuRowIndex(null);
+                                           }}
+                                           className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
+                                             isRowPinned(row)
+                                               ? 'hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold'
+                                               : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                           }`}
+                                           title={isRowPinned(row) ? "Lepas sematan (unpin) task ini" : "Sematkan task ini ke posisi teratas (Maks. 5 task)"}
+                                         >
+                                           <Pin className={`w-3.5 h-3.5 shrink-0 ${isRowPinned(row) ? 'text-amber-500 fill-amber-500 rotate-45' : 'text-slate-400'}`} />
+                                           <span>{isRowPinned(row) ? 'Lepas Pin (Unpin Task)' : 'Pin Task ke Atas (Maks 5)'}</span>
+                                         </button>
+                                       )}
                                        {!isSubItem && (
                                          <button
                                            type="button"
@@ -5770,18 +6898,21 @@ export function NotionDatabaseTable({
                                      </div>
                                    )}
                                  </div>
-                               </td>
-                            </tr>
+                               );
+                             })()}
+                           </td>
+                         </tr>
                           );
                         };
 
                         return hierarchicalItems.map((hItem) => {
                           const parentRow = hItem.parentRow;
                           const parentIndex = hItem.parentIndex;
-                          const isParentExpanded = Boolean(expandedParents[parentIndex]); // Default collapsed (tertutup), baru terbuka jika diklik
+                          const parentKey = parentRow.id || `${parentIndex}-${parentRow['Jenis kegiatan'] || ''}`;
+                          const isParentExpanded = Boolean(expandedParents[parentIndex] || expandedParents[parentKey]);
 
                           return (
-                            <React.Fragment key={`parent-${parentIndex}`}>
+                            <React.Fragment key={`parent-${parentKey}`}>
                               {/* Render Parent Row */}
                               {renderRowItem(
                                 parentRow,
@@ -5794,22 +6925,42 @@ export function NotionDatabaseTable({
                                   e.stopPropagation();
                                   setExpandedParents(prev => ({
                                     ...prev,
-                                    [parentIndex]: isParentExpanded ? false : true
+                                    [parentIndex]: !isParentExpanded,
+                                    [parentKey]: !isParentExpanded
                                   }));
                                 }
                               )}
 
                               {/* Render Sub-items if Parent is expanded */}
-                              {isParentExpanded && hItem.subItems.map((sub) => (
-                                <React.Fragment key={`sub-${sub.actualIndex}`}>
-                                  {renderRowItem(sub.row, sub.actualIndex, true, false, false, undefined)}
-                                </React.Fragment>
-                              ))}
+                              {isParentExpanded && hItem.subItems.map((sub) => {
+                                const subKey = sub.row.id || `${sub.actualIndex}-${sub.row['Jenis kegiatan'] || ''}`;
+                                const isSubExpanded = Boolean(expandedParents[`sub-${sub.actualIndex}`] || expandedParents[`sub-${subKey}`]);
+                                return (
+                                  <React.Fragment key={`sub-${subKey}`}>
+                                    {renderRowItem(
+                                      sub.row, 
+                                      sub.actualIndex, 
+                                      true, 
+                                      false, 
+                                      isSubExpanded, 
+                                      undefined,
+                                      (e) => {
+                                        e.stopPropagation();
+                                        setExpandedParents(prev => ({
+                                          ...prev,
+                                          [`sub-${sub.actualIndex}`]: !isSubExpanded,
+                                          [`sub-${subKey}`]: !isSubExpanded
+                                        }));
+                                      }
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
 
                               {/* + New sub-item row if Parent is expanded */}
                               {isParentExpanded && (
                                 <tr
-                                  key={`new-sub-row-${parentIndex}`}
+                                  key={`new-sub-row-${parentKey}`}
                                   className={`transition-colors border-b select-none ${
                                     isNotionLight
                                       ? 'hover:bg-[#fbfbfa]/80 bg-white/40 border-[#e9e9e8]'
@@ -5832,7 +6983,7 @@ export function NotionDatabaseTable({
                                           onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                               e.preventDefault();
-                                              handleAddSubItem(parentIndex, newSubItemTitle);
+                                              handleAddSubItem(parentRow, newSubItemTitle);
                                             } else if (e.key === 'Escape') {
                                               setCreatingSubItemForParent(null);
                                               setNewSubItemTitle('');
@@ -5887,24 +7038,6 @@ export function NotionDatabaseTable({
                         });
                       })()}
 
-                      {/* + New page button at bottom of group */}
-                      {!isCollapsed && (
-                        <tr
-                          onClick={() => handleOpenAddModal()}
-                          className={`cursor-pointer transition-colors border-b select-none ${
-                            isNotionLight
-                              ? 'hover:bg-[#f7f7f5] text-slate-600 border-[#e9e9e8]'
-                              : 'hover:bg-slate-800/40 text-slate-400 border-[#2d2d2d]'
-                          }`}
-                        >
-                          <td colSpan={displayHeaders.length + 3} className="px-3.5 py-2.5 text-xs">
-                            <div className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity">
-                              <Plus className="w-4 h-4 text-slate-500" />
-                              <span className="font-semibold text-xs tracking-wide">New page</span>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </React.Fragment>
                   );
                 })
@@ -5919,15 +7052,6 @@ export function NotionDatabaseTable({
             }`}
           >
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleOpenAddModal}
-                className={`text-xs font-semibold flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
-                  isNotionLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' : 'text-slate-400 hover:text-teal-400 hover:bg-slate-800'
-                }`}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Tambah Baris Kegiatan Baru</span>
-              </button>
               {localRows.length > 0 && (
                 <button
                   type="button"
@@ -6419,6 +7543,81 @@ export function NotionDatabaseTable({
                     <span>Pindahkan Topik</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: LAST SUBTASK COMPLETED WARNING (CLOSING MAIN TASK)                */}
+      {/* ========================================================================= */}
+      {lastSubtaskConfirmModal && lastSubtaskConfirmModal.isOpen && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 select-none"
+          onClick={() => setLastSubtaskConfirmModal(null)}
+        >
+          <div 
+            className="w-full max-w-md border rounded-2xl shadow-2xl p-6 overflow-hidden animate-in zoom-in-95 duration-150"
+            style={{
+              backgroundColor: isNotionLight ? '#ffffff' : '#1e1e1e',
+              borderColor: isNotionLight ? '#e2e8f0' : '#334155',
+              color: isNotionLight ? '#0f172a' : '#f8fafc'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className={`p-3 rounded-2xl shrink-0 ${
+                isNotionLight 
+                  ? 'bg-amber-50 border border-amber-200 text-amber-600' 
+                  : 'bg-amber-500/15 border border-amber-500/40 text-amber-400'
+              }`}>
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className={`text-base font-bold leading-snug ${
+                  isNotionLight ? 'text-slate-900' : 'text-slate-100'
+                }`}>
+                  Selesaikan Subtask Terakhir?
+                </h3>
+                <p className={`text-xs mt-2 leading-relaxed ${
+                  isNotionLight ? 'text-slate-600' : 'text-slate-300'
+                }`}>
+                  Subtask ini merupakan tugas terakhir untuk topik <strong className="font-semibold text-teal-600 dark:text-teal-400">"{lastSubtaskConfirmModal.topicTitle}"</strong>.
+                </p>
+                <div className={`mt-3 p-3 rounded-xl border text-xs leading-relaxed ${
+                  isNotionLight 
+                    ? 'bg-amber-50/80 border-amber-200/80 text-amber-900' 
+                    : 'bg-amber-950/30 border-amber-800/40 text-amber-200'
+                }`}>
+                  ⚠️ <strong>Perhatian:</strong> Jika subtask ini diceklis, seluruh subtask telah rampung (100%) dan status kegiatan utama otomatis berubah menjadi <strong>Closed</strong>. Topik ini akan <strong>hilang dari filter Pekerjaan Aktif</strong>.
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setLastSubtaskConfirmModal(null)}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                  isNotionLight 
+                    ? 'border-slate-200 hover:bg-slate-100 text-slate-700' 
+                    : 'border-slate-700 hover:bg-slate-800 text-slate-300'
+                }`}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const cb = lastSubtaskConfirmModal.onConfirm;
+                  setLastSubtaskConfirmModal(null);
+                  cb();
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-500 text-white transition-all shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Ya, Selesaikan & Tutup Task</span>
               </button>
             </div>
           </div>
@@ -7248,7 +8447,7 @@ export function NotionDatabaseTable({
                         </div>
                         <div>
                           <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>PIC</span>
-                          {renderPicBadge(getRowVal(selectedRow, 'PIC'))}
+                          {renderPicBadge(getRowVal(selectedRow, 'PIC'), 'sm', true)}
                         </div>
                         <div>
                           <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Activity Type</span>
@@ -8519,6 +9718,19 @@ export function NotionDatabaseTable({
           title={previewImage.title}
           driveViewUrl={previewImage.driveViewUrl}
           driveDownloadUrl={previewImage.driveDownloadUrl}
+        />
+      )}
+
+      {/* Logbook Task Recommendation Modal */}
+      {isLogbookTable && (
+        <LogbookTaskRecommendationModal
+          isOpen={showLogbookRecModal}
+          onClose={() => setShowLogbookRecModal(false)}
+          sectionName={section || 'Preparasi'}
+          allPosts={allPosts || []}
+          targetUniverse={pt === 'GTS' ? 'GTS' : 'TBP'}
+          existingRows={localRows}
+          onAddSelectedTasks={handleAddRecommendedTasks}
         />
       )}
 

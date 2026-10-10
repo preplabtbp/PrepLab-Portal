@@ -13,10 +13,12 @@ import { NOTION_COLORS, stripColorTags } from './tasklist-utils';
 export type FormatAction = 
   | 'bold' 
   | 'italic' 
+  | 'underline'
   | 'strike' 
   | 'code' 
   | 'clear' 
-  | { color: string };
+  | { color: string }
+  | { link: string };
 
 /**
  * Pure function to format a substring within a text string based on start and end offsets.
@@ -49,6 +51,12 @@ export function formatSelectedText(
     } else {
       formatted = `*${selected}*`;
     }
+  } else if (action === 'underline') {
+    if (selected.startsWith('<u>') && selected.endsWith('</u>') && selected.length >= 7) {
+      formatted = selected.slice(3, -4);
+    } else {
+      formatted = `<u>${selected}</u>`;
+    }
   } else if (action === 'strike') {
     if (selected.startsWith('~~') && selected.endsWith('~~') && selected.length >= 4) {
       formatted = selected.slice(2, -2);
@@ -65,9 +73,12 @@ export function formatSelectedText(
     formatted = selected
       .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/\*(.*?)\*/g, '$1')
+      .replace(/<u>(.*?)<\/u>/g, '$1')
       .replace(/~~(.*?)~~/g, '$1')
       .replace(/`(.*?)`/g, '$1');
     formatted = stripColorTags(formatted);
+  } else if (typeof action === 'object' && 'link' in action) {
+    formatted = `[${selected}](${action.link})`;
   } else if (typeof action === 'object' && 'color' in action) {
     const cKey = action.color;
     const cleanSelected = stripColorTags(selected);
@@ -144,18 +155,39 @@ export const FloatingSelectionToolbar: React.FC<FloatingSelectionToolbarProps> =
       {/* Separator */}
       <div className="w-[1px] h-4 bg-slate-700 mx-0.5" />
 
+      {/* Quick Color Swatches directly on bar (including Black) */}
+      <div className="flex items-center gap-1 px-0.5">
+        {[
+          { key: 'default', label: 'Hitam', hex: '#37352f', border: '#475569' },
+          { key: 'red', label: 'Merah', hex: '#e11d48', border: '#f43f5e' },
+          { key: 'amber', label: 'Kuning', hex: '#d97706', border: '#f59e0b' },
+          { key: 'green', label: 'Hijau', hex: '#16a34a', border: '#22c55e' },
+          { key: 'blue', label: 'Biru', hex: '#2563eb', border: '#3b82f6' },
+          { key: 'purple', label: 'Ungu', hex: '#9333ea', border: '#a855f7' }
+        ].map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => onFormat({ color: c.key })}
+            title={`Beri Warna ${c.label}`}
+            className="w-4 h-4 rounded-full border hover:scale-125 transition-transform cursor-pointer shadow-xs"
+            style={{ backgroundColor: c.hex, borderColor: c.border }}
+          />
+        ))}
+      </div>
+
       {/* Color Palette Button & Dropdown */}
       <div className="relative">
         <button
           type="button"
           onClick={() => setShowColorPalette(!showColorPalette)}
-          title="Warna Teks"
+          title="Semua Pilihan Warna"
           className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
             showColorPalette ? 'bg-teal-600 text-white' : 'hover:bg-slate-800 text-slate-200 hover:text-white'
           }`}
         >
           <Palette className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span className="text-[10px] font-bold">Warna</span>
+          <span className="text-[10px] font-bold">Lainnya</span>
         </button>
 
         {/* Color Swatches Popover */}

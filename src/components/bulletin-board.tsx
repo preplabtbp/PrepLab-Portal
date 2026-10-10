@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
 import { NotionDatabaseTable, TableRowData } from "./NotionDatabaseTable";
+import { isLogbookPost, getSectionFromPost, getLogbookTableData, aggregateSectionActiveTasks, KNOWN_SECTIONS } from "./notion/logbook-section-utils";
 import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
 import { PortalImagePickerModal } from "./PortalImagePickerModal";
 import { BannerCover } from "./BannerCover";
@@ -101,8 +102,35 @@ export function BulletinBoard({
   const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  // Restore selected post immediately on initial render from sessionStorage to prevent flash of dashboard on refresh
+  const [selectedPost, setSelectedPost] = useState<any | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlPostId = params.get("page") || params.get("postId") || params.get("id");
+      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
+      const targetId = urlPostId || savedPageId;
+      const cached = sessionStorage.getItem("preplab_cached_selected_post");
+      if (cached && targetId) {
+        const parsed = JSON.parse(cached);
+        if (parsed && String(parsed.id) === String(targetId)) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  });
   const [navHistory, setNavHistory] = useState<any[]>([]);
+
+  // Keep sessionStorage in sync with selectedPost
+  useEffect(() => {
+    try {
+      if (selectedPost?.id) {
+        sessionStorage.setItem("preplab_cached_selected_post", JSON.stringify(selectedPost));
+      } else if (selectedPost === null) {
+        sessionStorage.removeItem("preplab_cached_selected_post");
+      }
+    } catch {}
+  }, [selectedPost]);
 
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -156,6 +184,7 @@ export function BulletinBoard({
   const [showAiMeetingModal, setShowAiMeetingModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
+  const [showLogbookDropdown, setShowLogbookDropdown] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [notificationsList, setNotificationsList] = useState<any[]>([]);
   const [bulletinNotifTab, setBulletinNotifTab] = useState<'notifications' | 'changelog'>('notifications');
@@ -331,27 +360,7 @@ export function BulletinBoard({
   // Handle URL deep link (e.g. from notifications /bulletin/TBP?postId=411&topic=...)
   const [deepLinkTopic, setDeepLinkTopic] = useState<string | undefined>(undefined);
 
-  // Handle URL persistence on refresh and deep link (e.g. ?page=123 or ?postId=123)
-  useEffect(() => {
-    if (posts.length === 0) return;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const urlPostId = params.get("page") || params.get("postId") || params.get("id");
-      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
-      const targetId = urlPostId || savedPageId;
-      const urlTopic = params.get("topic");
-      if (urlTopic) {
-        setDeepLinkTopic(urlTopic);
-      }
-      if (targetId && !selectedPost) {
-        const target = posts.find((p) => String(p.id) === String(targetId));
-        if (target) {
-          setSelectedPost(target);
-          addRecentPost(target.id);
-        }
-      }
-    } catch (e) {}
-  }, [posts, addRecentPost, selectedPost]);
+
 
   // Real-time synchronization: poll active post every 6 seconds so updates from mobile (HP) reflect on PC
   useEffect(() => {
@@ -530,6 +539,14 @@ export function BulletinBoard({
       setNavHistory([]);
       setSelectedPost(null);
       setIsEditing(false);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("page");
+        url.searchParams.delete("postId");
+        localStorage.removeItem("preplab_active_bulletin_page");
+        sessionStorage.removeItem("preplab_cached_selected_post");
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
       return;
     }
 
@@ -568,6 +585,67 @@ export function BulletinBoard({
     } catch {}
   };
 
+  // Open Unified Logbook for a specific section
+  const openSectionLogbook = useCallback((sectionName: string) => {
+    const cleanSection = sectionName.replace(/^[#\s\-*]+/, '').trim();
+    const logbookTitle = `Logbook ${cleanSection}`;
+    const targetUniverse = selectedPtFilter !== 'ALL' ? selectedPtFilter : userUniverse;
+
+    // Check if a real post already exists in this universe with title "Logbook [Section]"
+    let target = posts.find(p => {
+      const pUniv = p.pt === 'GTS' ? 'GTS' : 'TBP';
+      if (pUniv !== targetUniverse && targetUniverse !== 'ALL') return false;
+      return (p.title || '').trim().toLowerCase() === logbookTitle.toLowerCase();
+    });
+
+    if (!target) {
+      target = {
+        id: `logbook-${cleanSection.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        title: logbookTitle,
+        department: 'Prep & Lab',
+        category: cleanSection,
+        isLogbook: true,
+        pt: targetUniverse === 'ALL' ? 'TBP' : targetUniverse,
+        content: `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${cleanSection}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`
+      };
+    }
+
+    navigateToPost(target);
+    setShowLogbookDropdown(false);
+  }, [posts, selectedPtFilter, userUniverse]);
+
+  // Handle URL persistence on refresh and deep link (e.g. ?page=123 or ?postId=123)
+  useEffect(() => {
+    if (posts.length === 0) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlPostId = params.get("page") || params.get("postId") || params.get("id");
+      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
+      const targetId = urlPostId || savedPageId;
+      const urlTopic = params.get("topic");
+      if (urlTopic) {
+        setDeepLinkTopic(urlTopic);
+      }
+      const urlLogbook = params.get("logbook") || params.get("sectionLogbook");
+      if (urlLogbook && !selectedPost) {
+        openSectionLogbook(urlLogbook === 'true' ? 'Preparasi' : urlLogbook);
+        return;
+      }
+      if (targetId && String(targetId).startsWith('logbook-') && !selectedPost) {
+        const secPart = String(targetId).replace(/^logbook-/, '');
+        openSectionLogbook(secPart);
+        return;
+      }
+      if (targetId && !selectedPost) {
+        const target = posts.find((p) => String(p.id) === String(targetId));
+        if (target) {
+          setSelectedPost(target);
+          addRecentPost(target.id);
+        }
+      }
+    } catch (e) {}
+  }, [posts, addRecentPost, selectedPost, openSectionLogbook]);
+
   // Go back to previous history or parent
   const goBack = () => {
     if (isEditing) {
@@ -598,12 +676,13 @@ export function BulletinBoard({
         url.searchParams.delete("page");
         url.searchParams.delete("postId");
         localStorage.removeItem("preplab_active_bulletin_page");
+        sessionStorage.removeItem("preplab_cached_selected_post");
         window.history.replaceState({}, "", url.toString());
       } catch {}
     }
   };
 
-  // Keyboard shortcut for Back (Escape or Alt+ArrowLeft)
+  // Keyboard shortcut: Escape cancels active editing (NEVER navigates back to homepage)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -616,8 +695,16 @@ export function BulletinBoard({
       ) {
         return;
       }
-      if (e.key === "Escape" || (e.altKey && e.key === "ArrowLeft")) {
-        if (selectedPost || isEditing) {
+      if (e.key === "Escape") {
+        if (isEditing) {
+          e.preventDefault();
+          setIsEditing(false); // Batalkan mode edit, tetap di halaman
+        }
+        // Escape default adalah cancel editing, BUKAN kembali ke homepage
+        return;
+      }
+      if (e.altKey && e.key === "ArrowLeft") {
+        if (selectedPost) {
           e.preventDefault();
           goBack();
         }
@@ -905,9 +992,15 @@ export function BulletinBoard({
 
   const parsedTableData = useMemo(() => {
     if (!selectedPost || isEditing) return null;
+
+    if (isLogbookPost(selectedPost)) {
+      const secName = getSectionFromPost(selectedPost);
+      return getLogbookTableData(selectedPost, secName);
+    }
+
     const content = getRenderableContent(selectedPost);
     return extractMarkdownTable(content);
-  }, [selectedPost, isEditing, extractMarkdownTable, getRenderableContent]);
+  }, [selectedPost, isEditing, posts, selectedPtFilter, userUniverse, extractMarkdownTable, getRenderableContent]);
 
   // Clean beforeText to strip redundant document titles and empty headings
   const cleanBeforeTableText = useMemo(() => {
@@ -1402,6 +1495,39 @@ ${aiMeetingNotes
               </div>
             </div>
 
+            {/* Logbook Seksi Navigation */}
+            <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <div className="text-xs font-semibold mb-1.5 tracking-wide flex items-center justify-between text-teal-400">
+                <span className="flex items-center gap-1.5">
+                  <ClipboardList className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Logbook Seksi</span>
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300">
+                  Aktif
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                {KNOWN_SECTIONS.slice(0, 6).map((sec) => {
+                  const isActive = isLogbookPost(selectedPost) && getSectionFromPost(selectedPost) === sec;
+                  return (
+                    <button
+                      key={sec}
+                      onClick={() => openSectionLogbook(sec)}
+                      className={`text-left px-2 py-1.5 rounded-lg text-xs font-medium truncate transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 font-bold'
+                          : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                      }`}
+                      title={`Logbook ${sec}`}
+                    >
+                      <span className="text-xs">📔</span>
+                      <span className="truncate">{sec}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Recents Section */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 custom-scrollbar">
               <div className="text-xs font-semibold mb-1.5 tracking-wide flex items-center justify-between" style={{ color: 'var(--text-muted, #94a3b8)' }}>
@@ -1586,14 +1712,71 @@ ${aiMeetingNotes
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Direct Jump to Log Book Section */}
-            <button
-              onClick={() => navigate('/logbook')}
-              className="px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-teal-500/50"
-              title="Buka Log Book Section (Meeting P5M & Task PIC)"
-            >
-              <ClipboardList className="w-3.5 h-3.5 text-teal-400" />
-              <span className="hidden md:inline">Log Book</span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => {
+                  if (selectedPost && !isLogbookPost(selectedPost)) {
+                    const sec = getSectionFromPost(selectedPost);
+                    openSectionLogbook(sec);
+                  } else {
+                    setShowLogbookDropdown(prev => !prev);
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
+                  isLogbookPost(selectedPost)
+                    ? 'bg-teal-600 border-teal-500 text-white font-bold shadow-teal-900/30'
+                    : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:text-white hover:border-teal-500/50'
+                }`}
+                title="Buka Log Book Seksi Terpadu (Routine & Non-Routine Aktif)"
+              >
+                <ClipboardList className="w-3.5 h-3.5 text-teal-400" />
+                <span className="hidden md:inline">
+                  {isLogbookPost(selectedPost) ? `Logbook ${getSectionFromPost(selectedPost)}` : 'Log Book'}
+                </span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </button>
+
+              {/* Logbook Section Quick Dropdown */}
+              {showLogbookDropdown && (
+                <div 
+                  className="absolute right-0 mt-1 w-56 rounded-xl border shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100"
+                  style={{
+                    backgroundColor: 'var(--card-bg, #1e293b)',
+                    borderColor: 'var(--border-main, #334155)'
+                  }}
+                >
+                  <div className="px-3 py-1.5 border-b text-[11px] font-bold uppercase tracking-wider text-teal-400 flex items-center justify-between" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                    <span>Pilih Logbook Seksi</span>
+                    <button onClick={() => setShowLogbookDropdown(false)} className="text-slate-400 hover:text-white">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="py-1 max-h-64 overflow-y-auto">
+                    {KNOWN_SECTIONS.map((sec) => (
+                      <button
+                        key={sec}
+                        onClick={() => openSectionLogbook(sec)}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-teal-500/10 hover:text-teal-300 transition-colors flex items-center gap-2 text-slate-200 cursor-pointer"
+                      >
+                        <span className="text-sm">📔</span>
+                        <span className="font-medium">Logbook {sec}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t pt-1 px-1" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                    <button
+                      onClick={() => {
+                        setShowLogbookDropdown(false);
+                        navigate('/logbook');
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-[11px] text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg flex items-center gap-1.5"
+                    >
+                      <span>📊 Buka Halaman Logbook Penuh</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {selectedPost && !isEditing && (
               <>
@@ -1661,17 +1844,38 @@ ${aiMeetingNotes
         {/* Content Body */}
         <div className={`flex-1 w-full ${isSectionHubPost(selectedPost) ? 'p-2 sm:p-4 md:p-6 pb-32' : parsedTableData ? 'p-0 sm:px-2 md:px-3 pt-0 pb-0' : 'p-4 md:p-6 lg:p-8 pb-32'}`}>
           {!selectedPost && !isEditing ? (
-            <TbpDashboard
-              posts={selectedPtFilter !== "ALL" ? posts.filter((p) => {
-                const pPt = (p.pt || 'TBP').toUpperCase();
-                if (selectedPtFilter === 'GTS') return pPt === 'GTS';
-                return pPt === 'TBP' || pPt === 'GPS' || pPt === 'TBP_GPS';
-              }) : posts}
-              onSelectPost={(post) => navigateToPost(post)}
-              agendaEvents={agendaEventsList}
-              onOpenFullAgenda={() => setShowFullAgendaModal(true)}
-              activeUniverse={selectedPtFilter}
-            />
+            (() => {
+              const params = new URLSearchParams(window.location.search);
+              const hasTargetId = Boolean(
+                params.get("page") || params.get("postId") || params.get("id") ||
+                params.get("logbook") || params.get("sectionLogbook") ||
+                localStorage.getItem("preplab_active_bulletin_page")
+              );
+
+              // Jika sedang memuat data dan URL/localStorage menunjukkan target post tertentu, jangan flash dashboard utama
+              if (hasTargetId && (loading || posts.length === 0)) {
+                return (
+                  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 animate-in fade-in duration-200">
+                    <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-medium text-slate-400">Memuat halaman dokumen...</span>
+                  </div>
+                );
+              }
+
+              return (
+                <TbpDashboard
+                  posts={selectedPtFilter !== "ALL" ? posts.filter((p) => {
+                    const pPt = (p.pt || 'TBP').toUpperCase();
+                    if (selectedPtFilter === 'GTS') return pPt === 'GTS';
+                    return pPt === 'TBP' || pPt === 'GPS' || pPt === 'TBP_GPS';
+                  }) : posts}
+                  onSelectPost={(post) => navigateToPost(post)}
+                  agendaEvents={agendaEventsList}
+                  onOpenFullAgenda={() => setShowFullAgendaModal(true)}
+                  activeUniverse={selectedPtFilter}
+                />
+              );
+            })()
           ) : isEditing ? (
             <div className="space-y-6 max-w-4xl mx-auto">
               {/* Editor Mode */}

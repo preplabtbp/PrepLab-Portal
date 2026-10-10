@@ -32,6 +32,7 @@ import {
   SubtaskNote,
   NOTION_COLORS,
   formatColorTagsToHtml,
+  stripColorTags,
   applyColorToText
 } from './tasklist-utils';
 import { 
@@ -116,6 +117,7 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
   // Notes draft (non-checklist part)
   const [notes, setNotes] = useState<string>(() => parseValueToNotes(value));
   const [notesSelection, setNotesSelection] = useState<{ start: number; end: number } | null>(null);
+  const [notesViewMode, setNotesViewMode] = useState<'visual' | 'edit'>('visual');
 
   const handleNotesSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
     const target = e.currentTarget;
@@ -1003,33 +1005,95 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
             </div>
 
             {/* Supplementary Notes Section */}
-            <div className="pt-2 border-t border-slate-200 space-y-1">
-              <label 
-                className="text-[11px] font-bold uppercase tracking-wider block text-black"
-              >
-                CATATAN UMUM / INSTRUKSI KHUSUS (OPSIONAL)
-              </label>
-              <div className="relative">
-                {notesSelection && (
-                  <FloatingSelectionToolbar
-                    onFormat={handleApplyNotesFormat}
-                    onClose={() => setNotesSelection(null)}
-                  />
-                )}
-                <textarea
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => {
-                    setNotes(e.target.value);
-                    emitChecklistChange(subtasks, e.target.value);
-                  }}
-                  onSelect={handleNotesSelect}
-                  onKeyUp={handleNotesSelect}
-                  onMouseUp={handleNotesSelect}
-                  placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
-                  className="w-full text-xs font-sans p-2.5 rounded-xl border border-slate-300 bg-white text-black outline-none resize-none focus:border-teal-500 font-medium placeholder:text-slate-400"
-                />
+            <div className="pt-2 border-t border-slate-200 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label 
+                  className="text-[11px] font-bold uppercase tracking-wider block text-black"
+                >
+                  CATATAN UMUM / INSTRUKSI KHUSUS (OPSIONAL)
+                </label>
+                <div className="flex items-center gap-1.5">
+                  {notes.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setNotesViewMode(notesViewMode === 'visual' ? 'edit' : 'visual')}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                    >
+                      {notesViewMode === 'visual' ? <Edit3 className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
+                      <span>{notesViewMode === 'visual' ? 'Edit Teks' : 'Tampilan Rapi'}</span>
+                    </button>
+                  )}
+                  {notes.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cleaned = stripColorTags(notes).replace(/(\*\*|~~|\*|`)/g, '');
+                        setNotes(cleaned);
+                        emitChecklistChange(subtasks, cleaned);
+                      }}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
+                      title="Hapus format yang berantakan"
+                    >
+                      <Sparkles className="w-2.5 h-2.5" />
+                      <span>Reset Tag</span>
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {notesViewMode === 'visual' && notes.trim() ? (
+                <div 
+                  onClick={() => setNotesViewMode('edit')}
+                  className="w-full text-xs font-sans font-medium p-3 rounded-xl border border-slate-300 bg-slate-50 text-[#37352f] leading-relaxed cursor-pointer hover:border-teal-500 transition-colors shadow-2xs group relative"
+                >
+                  <div 
+                    className="space-y-1"
+                    dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(notes)) }}
+                  />
+                  <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                    <span>💡 Tampilan visual rapi (Notion)</span>
+                    <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-1">
+                      <Edit3 className="w-2.5 h-2.5" /> Klik untuk edit
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="relative">
+                    {notesSelection && (
+                      <FloatingSelectionToolbar
+                        onFormat={handleApplyNotesFormat}
+                        onClose={() => setNotesSelection(null)}
+                      />
+                    )}
+                    <textarea
+                      rows={2}
+                      value={notes}
+                      onChange={(e) => {
+                        setNotes(e.target.value);
+                        emitChecklistChange(subtasks, e.target.value);
+                      }}
+                      onSelect={handleNotesSelect}
+                      onKeyUp={handleNotesSelect}
+                      onMouseUp={handleNotesSelect}
+                      placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
+                      className="w-full text-xs font-sans p-2.5 rounded-xl border border-slate-300 bg-white text-[#37352f] outline-none resize-none focus:border-teal-500 font-medium placeholder:text-slate-400"
+                    />
+                  </div>
+
+                  {notes.trim() && (
+                    <div className="p-2.5 rounded-xl border border-teal-200 bg-teal-50/60 text-[#37352f] text-xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 block mb-1">
+                        Pratinjau Hasil Format Visual:
+                      </span>
+                      <div 
+                        className="text-xs leading-relaxed font-sans"
+                        dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(notes)) }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

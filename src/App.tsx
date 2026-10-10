@@ -17,6 +17,7 @@ import { InspectionCompletionModal, InspectionCompletionData } from './component
 import { GroupReportScreen } from './components/GroupReportScreen';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
+import { PwaMigrationModal } from './components/PwaMigrationModal';
 import { PromotionWelcomeModal } from './components/PromotionWelcomeModal';
 import { GamificationAlertCenter } from './components/GamificationAlertCenter';
 import { MeetingRoomDevModal } from './components/MeetingRoomDevModal';
@@ -2200,6 +2201,9 @@ export default function App() {
         userNik={inspectorNik} 
         userName={inspectorName} 
       />
+
+      {/* PWA Domain Migration & Auto-Update Modal */}
+      <PwaMigrationModal />
 
       {/* Universal Gamification Multi-Tier Celebration & Alert Center */}
       <GamificationAlertCenter

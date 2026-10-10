@@ -661,7 +661,7 @@ export async function syncBulletinToLogbook(post: any) {
           rTitle = (r[k] || '').trim();
         }
       });
-      const isSub = rTitle.startsWith('↳') || r['isSubItem'] === 'true' || (r['isSubItem'] as any) === true;
+      const isSub = rTitle.startsWith('↳') || rTitle.startsWith('->') || rTitle.startsWith('↪') || rTitle.startsWith('– ') || rTitle.startsWith('- ') || r['isSubItem'] === 'true' || (r['isSubItem'] as any) === true || r['parentId'];
 
       if (isSub && currentGroup) {
         currentGroup.subRows.push(r);
@@ -734,6 +734,7 @@ export async function syncBulletinToLogbook(post: any) {
           .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Done|Closed|Close|Finish|Selesai|CL)\)?\*\*\s*$/gim, '- [x] $1')
           .replace(/^[-*•]?\s*(.+?)\s*\*\*\(?(Open|OP|Belum|In Progress|Pending)\)?\*\*\s*$/gim, '- [ ] $1');
       }
+      cleanDesc = cleanDesc.replace(/^[•*]\s*\[([ xX])\]/gm, '- [$1]');
 
       // Attach nested sub-items as markdown checklist in description
       if (group.subRows.length > 0) {

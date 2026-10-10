@@ -5,6 +5,7 @@ coverage/
 .DS_Store
 *.log
 .env*
+*.env.yaml
 !.env.example
 public/uploads/
 
@@ -15,6 +16,7 @@ cookies.txt
 db_backups/
 database_backup.json
 public/database_backup.json
+*.sql
 *.xlsx
 *.xls
 sheet.html
