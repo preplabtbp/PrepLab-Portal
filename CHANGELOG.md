@@ -2,6 +2,20 @@
 
 Semua riwayat pembaruan, penambahan fitur, dan perbaikan sistem Prep & Lab Portal dicatat secara runtut dalam dokumen ini menggunakan bahasa yang jelas dan mudah dipahami.
 
+## [2.9.40] - 2026-10-10
+
+### 🛡️ Strategi Migrasi PWA Mulus (Seamless) ke Domain Resmi portal.preplabtbp.com & Kompatibilitas Database Jakarta
+
+- **Modal Pintar & Banner Pembaruan PWA Khusus Domain Lama (`src/components/PwaMigrationModal.tsx`, `src/App.tsx`)**:
+  - **Deteksi Domain Lama Otomatis**: Sistem mendeteksi otomatis saat aplikasi diakses melalui domain lama Cloud Run (`*.run.app` / `preplab-portal-1034501170626`).
+  - **Dialog Interaktif Pembaruan Aplikasi**: Menampilkan pop-up informatif bertajuk *"Pembaruan Aplikasi PrepLab Portal"* yang menginfokan migrasi resmi ke `portal.preplabtbp.com` dengan kecepatan akses 10x lebih cepat (server Jakarta).
+  - **Aksi 1-Klik Pemasangan ke Layar Utama**: Tombol `[Buka & Pasang Versi Resmi ➔]` langsung membuka domain resmi `portal.preplabtbp.com` dan memicu proses install PWA ke layar HP, disertai panduan praktis menghapus icon shortcut lama.
+  - **Fleksibilitas Operasional Lapangan**: Pengguna tetap dapat melanjutkan pekerjaan darurat (*Nanti Saja*) dengan banner pengingat ringkas di atas layar tanpa mengganggu pengisian laporan/inspeksi.
+
+- **Dukungan Ganda String Koneksi Database PostgreSQL (`src/db/index.ts`)**:
+  - Memperbarui fungsi `createPool` agar mendukung parameter `process.env.DATABASE_URL` (format `postgresql://...`) di samping konfigurasi individual `SQL_HOST`, `SQL_USER`, `SQL_PASSWORD`, dan `SQL_DB_NAME`.
+  - Memastikan server lama dan server baru dapat tersambung langsung secara serempak ke database pusat Jakarta (`34.50.109.113`) dengan integritas data 100% tunggal tanpa duplikasi maupun data terbelah.
+
 ## [2.9.39] - 2026-10-10
 
 ### 🚀 Gutter Aksi Kiri Ala Notion, Mode Edit Tabel & Editor Teks Seamless dengan Bubble Toolbar
