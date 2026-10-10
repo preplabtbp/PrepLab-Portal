@@ -6178,25 +6178,29 @@ export function NotionDatabaseTable({
                                     <td 
                                       key={colName} 
                                       style={getColStyle(colName)} 
-                                      className={`relative border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                      } ${fitPageMode ? 'px-2 py-2 overflow-visible' : 'px-3.5 py-2.5 whitespace-nowrap overflow-visible'}`}
-                                      onClick={(e) => e.stopPropagation()}
+                                      className={`relative border-r cursor-pointer select-none transition-colors ${
+                                        isNotionLight ? 'border-[#e9e9e8] hover:bg-slate-100/60' : 'border-[#2d2d2d] hover:bg-slate-800/40'
+                                      } ${fitPageMode ? 'px-2 py-1.5 overflow-visible' : 'px-3.5 py-2 whitespace-nowrap overflow-visible'}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if ((e.target as HTMLElement).closest('.notion-pic-popover')) {
+                                          return;
+                                        }
+                                        setActiveInlinePicCell(isEditingPic ? null : { rowIndex: actualRowIndex, colName });
+                                        setInlinePicSearch('');
+                                      }}
+                                      title={picTooltip}
                                     >
-                                      <div 
-                                        onClick={() => {
-                                          setActiveInlinePicCell(isEditingPic ? null : { rowIndex: actualRowIndex, colName });
-                                          setInlinePicSearch('');
-                                        }}
-                                        className="cursor-pointer inline-block group/pic transition-transform hover:scale-105"
-                                        title={picTooltip}
-                                      >
-                                        {renderPicBadge(val, 'sm', false)}
+                                      <div className="w-full h-full min-h-[26px] flex items-center group/pic">
+                                        <div className="transition-transform group-hover/pic:scale-105 inline-flex items-center">
+                                          {renderPicBadge(val, 'sm', false)}
+                                        </div>
                                       </div>
 
                                       {isEditingPic && (
                                         <div 
-                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-72 max-h-72 overflow-y-auto rounded-xl shadow-2xl border p-2.5 z-50 text-left ${
+                                          onClick={(e) => e.stopPropagation()}
+                                          className={`notion-pic-popover absolute left-0 top-full mt-1 w-72 max-h-72 overflow-y-auto rounded-xl shadow-2xl border p-2.5 z-50 text-left cursor-default select-text ${
                                             isNotionLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-[#1e293b] border-slate-700 text-slate-100'
                                           }`}
                                         >
