@@ -57,6 +57,7 @@ export const employees = pgTable('employees', {
   equippedTitle: text('equipped_title').default('Frontline Trainee'),
   sisaCt: text('sisa_ct'),
   jatuhTempoCt: text('jatuh_tempo_ct'),
+  jumlahCutiSite: text('jumlah_cuti_site'),
   attendanceData: json('attendance_data'),
   achievements: json('achievements'),
   catatan: text('catatan'),

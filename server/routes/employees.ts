@@ -113,6 +113,7 @@ async function getCounselingMap(): Promise<Record<string, any>> {
       ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS alasan_konseling TEXT;
       ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS sppt TEXT;
       ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS tanggal_sp TEXT;
+      ALTER TABLE employees ADD COLUMN IF NOT EXISTS jumlah_cuti_site TEXT;
     `);
 
     const allC = await db.select().from(employeeCounseling);
@@ -779,6 +780,7 @@ employeesRouter.post("/", async (req, res) => {
       alamatDomisili: body.alamatDomisili?.trim() || null,
       sisaCt: body.sisaCt !== undefined && body.sisaCt !== null ? String(body.sisaCt) : '0',
       jatuhTempoCt: body.jatuhTempoCt?.trim() || null,
+      jumlahCutiSite: body.jumlahCutiSite !== undefined && body.jumlahCutiSite !== null ? String(body.jumlahCutiSite).trim() : '0',
       photo: body.photo?.trim() || null,
       avatar: body.avatar?.trim() || null,
     };
@@ -843,7 +845,7 @@ function parseCount(val: any): number {
 
 employeesRouter.post("/import", async (req, res) => {
   try {
-    const { rows, attendanceRows, counselingRows, achievementRows, editorNik } = req.body;
+    const { rows, attendanceRows, counselingRows, achievementRows, cutiSiteRows, editorNik } = req.body;
     const requesterNik = editorNik || req.headers['x-user-nik'] || req.body?.requesterNik;
     const isAuth = await isAuthorizedDatabaseEditor(String(requesterNik || ''));
     if (!isAuth) {
@@ -857,8 +859,9 @@ employeesRouter.post("/import", async (req, res) => {
     const hasAttRows = Array.isArray(attendanceRows) && attendanceRows.length > 0;
     const hasCounselRows = Array.isArray(counselingRows) && counselingRows.length > 0;
     const hasAchRows = Array.isArray(achievementRows) && achievementRows.length > 0;
+    const hasCutiSiteRows = Array.isArray(cutiSiteRows) && cutiSiteRows.length > 0;
 
-    if (!hasRows && !hasAttRows && !hasCounselRows && !hasAchRows) {
+    if (!hasRows && !hasAttRows && !hasCounselRows && !hasAchRows && !hasCutiSiteRows) {
       return res.status(400).json({ status: "error", message: "Tidak ada data baris yang dikirim untuk diimport." });
     }
 
@@ -868,6 +871,7 @@ employeesRouter.post("/import", async (req, res) => {
     let attUpdatedCount = 0;
     let counselUpdatedCount = 0;
     let achUpdatedCount = 0;
+    let cutiSiteUpdatedCount = 0;
     const errors: string[] = [];
 
     // 1. Process Master Employee Rows (Sheet 1)
@@ -938,6 +942,7 @@ employeesRouter.post("/import", async (req, res) => {
           phoneDarurat: normalized['notelephonedaruratorangterdekat'] || normalized['notelpdarurat'] || normalized['telpdarurat'] || null,
           alamatKtp: normalized['alamatsesuaiktp'] || normalized['alamatktp'] || null,
           alamatDomisili: normalized['alamatdomisili'] || normalized['domisili'] || null,
+          jumlahCutiSite: normalized['jumlahcutisite'] || normalized['cutisite'] || normalized['jumlahcutisiteperperiode'] || normalized['cutisiteperiode'] || raw['Jumlah Cuti Site'] || raw['Jumlah Cuti Site per Periode'] || null,
           ...(driveAvatarUrl ? { photo: driveAvatarUrl } : {})
         };
 
@@ -1608,16 +1613,74 @@ employeesRouter.post("/import", async (req, res) => {
       }
     }
 
+    // 5. Process Cuti Site Rows (Sheet 5: "Jumlah Cuti Site")
+    if (hasCutiSiteRows) {
+      const allCurrentEmployees = await db.select().from(employees);
+      const nameToEmpMap = new Map<string, any>();
+      const nikToEmpMap = new Map<string, any>();
+
+      for (const emp of allCurrentEmployees) {
+        if (emp.nik) nikToEmpMap.set(emp.nik.toUpperCase().trim(), emp);
+        if (emp.name) {
+          const normKey = normalizeNameKey(emp.name);
+          if (normKey) nameToEmpMap.set(normKey, emp);
+        }
+      }
+
+      for (let cIdx = 0; cIdx < cutiSiteRows.length; cIdx++) {
+        const csRaw = cutiSiteRows[cIdx];
+        if (!csRaw || typeof csRaw !== 'object') continue;
+
+        const csNorm: Record<string, string> = {};
+        for (const [k, v] of Object.entries(csRaw)) {
+          const cleanK = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (cleanK) {
+            csNorm[cleanK] = v !== undefined && v !== null ? String(v).trim() : '';
+          }
+        }
+
+        const rawName = csRaw['Nama Karyawan'] || csRaw['Nama'] || csRaw['Name'] || csNorm['namakaryawan'] || csNorm['nama'] || csNorm['name'] || '';
+        const rawNik = csRaw['NIK'] || csNorm['nik'] || csNorm['id'] || csNorm['noid'] || '';
+        const cutiSiteVal = csRaw['Jumlah Cuti Site'] || csRaw['Jumlah Cuti Site per Periode'] || csRaw['Cuti Site'] || csNorm['jumlahcutisite'] || csNorm['cutisite'] || csNorm['jumlah'] || csNorm['total'] || csNorm['jumlahcuti'] || '';
+
+        let matchedEmp = rawNik ? nikToEmpMap.get(rawNik.toUpperCase().trim()) : null;
+        if (!matchedEmp && rawName) {
+          const normN = normalizeNameKey(rawName);
+          matchedEmp = nameToEmpMap.get(normN);
+          if (!matchedEmp) {
+            for (const [key, emp] of nameToEmpMap.entries()) {
+              if (key && normN && (key.includes(normN) || normN.includes(key))) {
+                matchedEmp = emp;
+                break;
+              }
+            }
+          }
+        }
+
+        if (matchedEmp && cutiSiteVal !== '') {
+          try {
+            await db.update(employees)
+              .set({ jumlahCutiSite: String(cutiSiteVal).trim() })
+              .where(eq(employees.id, matchedEmp.id));
+            cutiSiteUpdatedCount++;
+          } catch (csErr: any) {
+            console.warn(`Error updating jumlah cuti site for ${matchedEmp.nik}:`, csErr.message);
+          }
+        }
+      }
+    }
+
     res.json({
       status: "success",
-      message: `Import berhasil selesai! ${updatedCount} data master diperbarui, ${insertedCount} ditambahkan, ${attUpdatedCount} absensi, ${counselUpdatedCount} konseling/SPDK & ${achUpdatedCount} data achievements disinkronkan.`,
+      message: `Import berhasil selesai! ${updatedCount} data master diperbarui, ${insertedCount} ditambahkan, ${attUpdatedCount} absensi, ${counselUpdatedCount} konseling/SPDK, ${achUpdatedCount} achievements & ${cutiSiteUpdatedCount} kuota cuti site disinkronkan.`,
       stats: {
-        total: (rows?.length || 0) + (attendanceRows?.length || 0) + (counselingRows?.length || 0) + (achievementRows?.length || 0),
+        total: (rows?.length || 0) + (attendanceRows?.length || 0) + (counselingRows?.length || 0) + (achievementRows?.length || 0) + (cutiSiteRows?.length || 0),
         updated: updatedCount,
         inserted: insertedCount,
         attendanceUpdated: attUpdatedCount,
         counselingUpdated: counselUpdatedCount,
         achievementsUpdated: achUpdatedCount,
+        cutiSiteUpdated: cutiSiteUpdatedCount,
         errors: errorCount,
         errorList: errors.slice(0, 10)
       }
@@ -1874,7 +1937,7 @@ employeesRouter.put("/:nik", async (req, res) => {
       'jobGrade', 'gol', 'jabatan', 'tanggalPermanent', 'tempatLahir',
       'tanggalLahir', 'phone', 'keluargaKandung', 'phoneKeluarga',
       'orangTerdekat', 'phoneDarurat', 'alamatKtp', 'alamatDomisili',
-      'sisaCt', 'jatuhTempoCt', 'photo'
+      'sisaCt', 'jatuhTempoCt', 'jumlahCutiSite', 'photo'
     ];
 
     for (const f of stringFields) {
