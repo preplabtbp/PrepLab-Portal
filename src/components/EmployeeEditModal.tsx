@@ -91,7 +91,8 @@ export function EmployeeEditModal({
         alamatKtp: '',
         alamatDomisili: '',
         sisaCt: '0',
-        jatuhTempoCt: ''
+        jatuhTempoCt: '',
+        jumlahCutiSite: '0'
       });
 
       setAttData({
@@ -171,7 +172,8 @@ export function EmployeeEditModal({
         alamatKtp: employee.alamatKtp || '',
         alamatDomisili: employee.alamatDomisili || '',
         sisaCt: employee.sisaCt !== undefined && employee.sisaCt !== null ? String(employee.sisaCt) : '0',
-        jatuhTempoCt: employee.jatuhTempoCt || ''
+        jatuhTempoCt: employee.jatuhTempoCt || '',
+        jumlahCutiSite: employee.jumlahCutiSite !== undefined && employee.jumlahCutiSite !== null ? String(employee.jumlahCutiSite) : '0'
       });
 
       const rawAtt26 = employee.attendance2026 || employee.attendance?.['2026'] || employee.attendance?.[2026] || {};
@@ -734,6 +736,36 @@ export function EmployeeEditModal({
                     placeholder="Contoh: 06 Maret"
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#22a7b8]"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Jumlah Cuti Site (per Periode)</span>
+                    {Number(formData.jumlahCutiSite || 0) >= 2 && (
+                      <span className="text-[10px] text-rose-600 font-extrabold flex items-center gap-1">
+                        <AlertOctagon className="w-3 h-3 text-rose-600" />
+                        Melebihi Limit
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.jumlahCutiSite ?? '0'}
+                    onChange={(e) => handleInputChange('jumlahCutiSite', e.target.value)}
+                    placeholder="0"
+                    className={`w-full px-3.5 py-2 rounded-xl border text-xs font-semibold focus:outline-none focus:ring-2 ${
+                      Number(formData.jumlahCutiSite || 0) >= 2
+                        ? 'border-rose-400 bg-rose-50/50 text-rose-950 focus:ring-rose-500'
+                        : 'border-slate-200 focus:ring-[#22a7b8]'
+                    }`}
+                  />
+                  {Number(formData.jumlahCutiSite || 0) >= 2 && (
+                    <p className="text-[10.5px] font-bold text-rose-600 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                      Melebihi Limit pengambilan Cuti Site
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
