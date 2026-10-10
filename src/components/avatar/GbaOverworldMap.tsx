@@ -467,9 +467,9 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
       // 2. Bangku Panjang Berbentuk 'n' - SISI KIRI (Kapasitas Maksimal 3 Orang, Menghadap ke KANAN): (x: 2.6..4.4, y: 3.4..6.5)
       if (tx >= 2.6 && tx <= 4.4 && ty >= 3.4 && ty <= 6.5) {
         const leftSlots = [
-          { x: 3.6, y: 4.1 },
-          { x: 3.6, y: 4.85 },
-          { x: 3.6, y: 5.6 }
+          { x: 3.44, y: 4.05 },
+          { x: 3.44, y: 4.75 },
+          { x: 3.44, y: 5.45 }
         ];
         // Pilih slot terdekat yang masih kosong
         const sortedSlots = [...leftSlots].sort((a, b) => 
@@ -480,8 +480,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         if (availableSlot) {
           startMoveTo(availableSlot.x, availableSlot.y, { 
             action: 'sit', 
-            facing: 'right',
-            speech: '🪑 Duduk di sisi kiri menghadap ke rekan-rekan di meja tengah' 
+            facing: 'right'
           });
           return;
         } else {
@@ -495,9 +494,9 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
       // 3. Bangku Panjang Berbentuk 'n' - SISI ATAS (Kapasitas Maksimal 3 Orang, Menghadap ke BAWAH): (x: 4.4..7.6, y: 2.9..4.3)
       if (tx >= 4.4 && tx <= 7.6 && ty >= 2.9 && ty <= 4.3) {
         const topSlots = [
-          { x: 4.9, y: 3.5 },
-          { x: 6.0, y: 3.5 },
-          { x: 7.1, y: 3.5 }
+          { x: 4.75, y: 3.45 },
+          { x: 6.0, y: 3.45 },
+          { x: 7.25, y: 3.45 }
         ];
         // Pilih slot terdekat yang masih kosong
         const sortedSlots = [...topSlots].sort((a, b) => 
@@ -508,8 +507,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         if (availableSlot) {
           startMoveTo(availableSlot.x, availableSlot.y, { 
             action: 'sit', 
-            facing: 'down',
-            speech: '🪑 Duduk di sisi atas menghadap ke meja tengah' 
+            facing: 'down'
           });
           return;
         } else {
@@ -523,9 +521,9 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
       // 4. Bangku Panjang Berbentuk 'n' - SISI KANAN (Kapasitas Maksimal 3 Orang, Menghadap ke KIRI): (x: 7.6..9.4, y: 3.4..6.5)
       if (tx >= 7.6 && tx <= 9.4 && ty >= 3.4 && ty <= 6.5) {
         const rightSlots = [
-          { x: 8.0, y: 4.1 },
-          { x: 8.0, y: 4.85 },
-          { x: 8.0, y: 5.6 }
+          { x: 7.56, y: 4.05 },
+          { x: 7.56, y: 4.75 },
+          { x: 7.56, y: 5.45 }
         ];
         // Pilih slot terdekat yang masih kosong
         const sortedSlots = [...rightSlots].sort((a, b) => 
@@ -536,8 +534,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
         if (availableSlot) {
           startMoveTo(availableSlot.x, availableSlot.y, { 
             action: 'sit', 
-            facing: 'left',
-            speech: '🪑 Duduk di sisi kanan menghadap ke rekan-rekan di meja tengah' 
+            facing: 'left'
           });
           return;
         } else {

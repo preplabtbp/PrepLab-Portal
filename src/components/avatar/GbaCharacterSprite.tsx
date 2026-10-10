@@ -105,8 +105,10 @@ export const GbaCharacterSprite: React.FC<GbaCharacterSpriteProps> = ({
         className={className}
         style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
       >
-        {/* Drop shadow on ground */}
-        <ellipse cx="8" cy="20" rx="5" ry="1.2" fill="#58A068" opacity="0.8" />
+        {/* Drop shadow on ground (neutral shade, hidden when sitting on a bench) */}
+        {!isSitting && (
+          <ellipse cx="8" cy="20" rx="5" ry="1.2" fill="#000000" opacity="0.3" />
+        )}
 
         <g transform={`translate(0, ${bobY})`}>
           {/* --- HELMET / HAT (Rows 1 - 4) --- */}
@@ -227,7 +229,10 @@ export const GbaCharacterSprite: React.FC<GbaCharacterSpriteProps> = ({
         className={className}
         style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
       >
-        <ellipse cx="8" cy="20" rx="5" ry="1.2" fill="#58A068" opacity="0.8" />
+        {/* Drop shadow on ground (neutral shade, hidden when sitting) */}
+        {!isSitting && (
+          <ellipse cx="8" cy="20" rx="5" ry="1.2" fill="#000000" opacity="0.3" />
+        )}
 
         <g transform={`translate(0, ${bobY})`}>
           {/* Helmet from Behind */}
@@ -277,7 +282,10 @@ export const GbaCharacterSprite: React.FC<GbaCharacterSpriteProps> = ({
       className={className}
       style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
     >
-      <ellipse cx="8" cy="20" rx="5" ry="1.2" fill="#58A068" opacity="0.8" />
+      {/* Drop shadow on ground (neutral shade, hidden when sitting) */}
+      {!isSitting && (
+        <ellipse cx="8" cy="20" rx="5" ry="1.2" fill="#000000" opacity="0.3" />
+      )}
 
       <g transform={`translate(0, ${bobY}) ${flip}`}>
         {/* Helmet Profile */}

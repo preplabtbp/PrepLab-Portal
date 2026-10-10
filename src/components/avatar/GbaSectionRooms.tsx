@@ -997,53 +997,206 @@ export const GbaGazeboTable: React.FC<{ x: number; y: number }> = ({ x, y }) => 
  */
 export const GbaGazeboNBench: React.FC<{ x: number; y: number }> = ({ x, y }) => (
   <g transform={`translate(${x * 16}, ${y * 16})`}>
-    {/* Ground Shadows under Left & Right Wings */}
-    <ellipse cx="7" cy="49" rx="6" ry="1.5" fill="#000000" opacity="0.3" />
-    <ellipse cx="69" cy="49" rx="6" ry="1.5" fill="#000000" opacity="0.3" />
+    {/* Ground Soft Contact Shadow (Blends bench naturally onto the paving floor) */}
+    <rect x="-1" y="2" width="4" height="46" rx="1.5" fill="#000000" opacity="0.22" />
+    <rect x="73" y="2" width="4" height="46" rx="1.5" fill="#000000" opacity="0.22" />
+    <rect x="2" y="0" width="72" height="3" rx="1" fill="#000000" opacity="0.2" />
+    <ellipse cx="6.5" cy="48.5" rx="7" ry="2" fill="#000000" opacity="0.32" />
+    <ellipse cx="68.5" cy="48.5" rx="7" ry="2" fill="#000000" opacity="0.32" />
 
-    {/* Bottom Cast-Iron Legs */}
-    <rect x="0" y="46" width="2.5" height="4" fill="#111827" />
-    <rect x="11.5" y="46" width="2.5" height="4" fill="#111827" />
-    <rect x="62" y="46" width="2.5" height="4" fill="#111827" />
-    <rect x="73.5" y="46" width="2.5" height="4" fill="#111827" />
+    {/* Bottom Heavy Cast-Iron Feet with Floor Anchor Flanges */}
+    <rect x="0.5" y="45" width="3" height="4" fill="#111827" />
+    <rect x="10.5" y="45" width="3" height="4" fill="#111827" />
+    <rect x="61.5" y="45" width="3" height="4" fill="#111827" />
+    <rect x="71.5" y="45" width="3" height="4" fill="#111827" />
+    {/* Floor anchor bolts */}
+    <rect x="1.5" y="48" width="1" height="1" fill="#94A3B8" />
+    <rect x="11.5" y="48" width="1" height="1" fill="#94A3B8" />
+    <rect x="62.5" y="48" width="1" height="1" fill="#94A3B8" />
+    <rect x="72.5" y="48" width="1" height="1" fill="#94A3B8" />
 
-    {/* Outer Black Metal Rails */}
+    {/* Outer Heavy Steel Frame / Backrest Rail (Charcoal with Bevel) */}
     <rect x="0" y="0" width="76" height="2.5" fill="#181820" />
+    <rect x="0" y="0" width="76" height="0.8" fill="#3E4754" />
     <rect x="0" y="0" width="2.5" height="46" fill="#181820" />
+    <rect x="0" y="0" width="0.8" height="46" fill="#3E4754" />
     <rect x="73.5" y="0" width="2.5" height="46" fill="#181820" />
+    <rect x="75.2" y="0" width="0.8" height="46" fill="#0F141C" />
 
-    {/* Small green inspection/K3 tag on left rail */}
-    <rect x="-1" y="27" width="2" height="4" rx="0.5" fill="#15803D" />
+    {/* Corner Reinforcement Steel Angle Plates with Brass Studs */}
+    <rect x="0" y="0" width="6.5" height="6.5" fill="#1E242B" />
+    <rect x="0" y="0" width="6.5" height="1" fill="#4B5563" />
+    <circle cx="2.5" cy="2.5" r="0.9" fill="#F59E0B" />
+    <circle cx="2.5" cy="2.5" r="0.4" fill="#FEF08A" />
 
-    {/* Top-Left & Top-Right Metal Corner Caps with Golden Rivets */}
-    <rect x="0" y="0" width="7" height="6" fill="#181820" />
-    <circle cx="2.5" cy="2.5" r="0.8" fill="#FBBF24" />
-    <rect x="69" y="0" width="7" height="6" fill="#181820" />
-    <circle cx="73.5" cy="2.5" r="0.8" fill="#FBBF24" />
+    <rect x="69.5" y="0" width="6.5" height="6.5" fill="#1E242B" />
+    <rect x="69.5" y="0" width="6.5" height="1" fill="#4B5563" />
+    <circle cx="73.5" cy="2.5" r="0.9" fill="#F59E0B" />
+    <circle cx="73.5" cy="2.5" r="0.4" fill="#FEF08A" />
 
-    {/* --- TOP WING PLANKS (3 Horizontal Panels Side-by-Side) --- */}
-    <rect x="2.5" y="2.5" width="71" height="9.5" fill="#C26818" />
-    <rect x="2.5" y="2.5" width="71" height="1" fill="#F59E0B" opacity="0.6" />
-    {/* Dividers between the 3 top seats */}
-    <rect x="25.5" y="2.5" width="1" height="9.5" fill="#5A2906" />
-    <rect x="49.5" y="2.5" width="1" height="9.5" fill="#5A2906" />
-    <rect x="14" y="11" width="48" height="1" fill="#5A2906" />
+    {/* Green K3 Safety & Maintenance Inspection Tag on Left Outer Frame */}
+    <rect x="-1" y="26" width="2" height="4.5" rx="0.5" fill="#166534" />
+    <rect x="-0.8" y="26.5" width="1.6" height="3.5" fill="#22C55E" />
+    <rect x="-0.4" y="27.5" width="0.8" height="1.5" fill="#FFFFFF" />
 
-    {/* --- LEFT WING PLANKS (3 Vertical Panels Stacked) --- */}
-    <rect x="2.5" y="12" width="11.5" height="34" fill="#C26818" />
-    <rect x="13" y="12" width="1" height="34" fill="#5A2906" />
-    <rect x="2.5" y="12" width="1" height="34" fill="#F59E0B" opacity="0.4" />
-    {/* Dividers between the 3 left seats */}
-    <rect x="2.5" y="23" width="11.5" height="1" fill="#5A2906" />
-    <rect x="2.5" y="34" width="11.5" height="1" fill="#5A2906" />
+    {/* ============================================================== */}
+    {/* --- TOP WING (Horizontal Seating - 3 Symmetrical Seatings) --- */}
+    {/* ============================================================== */}
+    {/* Dark Base / Slotted Frame Bed */}
+    <rect x="2.5" y="2.5" width="71" height="9.5" fill="#381808" />
 
-    {/* --- RIGHT WING PLANKS (3 Vertical Panels Stacked) --- */}
-    <rect x="62" y="12" width="11.5" height="34" fill="#C26818" />
-    <rect x="62" y="12" width="1" height="34" fill="#5A2906" />
-    <rect x="72.5" y="12" width="1" height="34" fill="#F59E0B" opacity="0.4" />
-    {/* Dividers between the 3 right seats */}
-    <rect x="62" y="23" width="11.5" height="1" fill="#5A2906" />
-    <rect x="62" y="34" width="11.5" height="1" fill="#5A2906" />
+    {/* Top Wooden Planks: 3 Distinct Seats with Teak Wood Grain & Highlights */}
+    {/* Seat Top 1 (Left): x: 3..25 */}
+    <g>
+      <rect x="3" y="3" width="21.5" height="8.5" fill="#78350F" />
+      <rect x="3" y="3" width="21.5" height="2.5" fill="#9A4515" />
+      <rect x="3" y="3" width="21.5" height="0.8" fill="#D97706" />
+      <rect x="3" y="6" width="21.5" height="2.5" fill="#9A4515" />
+      <rect x="3" y="6" width="21.5" height="0.6" fill="#D97706" />
+      <rect x="3" y="9" width="21.5" height="2.5" fill="#78350F" />
+      <rect x="3" y="11" width="21.5" height="0.5" fill="#381808" />
+    </g>
+
+    {/* Seat Top 2 (Middle): x: 26..49 */}
+    <g>
+      <rect x="26" y="3" width="23" height="8.5" fill="#78350F" />
+      <rect x="26" y="3" width="23" height="2.5" fill="#9A4515" />
+      <rect x="26" y="3" width="23" height="0.8" fill="#D97706" />
+      <rect x="26" y="6" width="23" height="2.5" fill="#9A4515" />
+      <rect x="26" y="6" width="23" height="0.6" fill="#D97706" />
+      <rect x="26" y="9" width="23" height="2.5" fill="#78350F" />
+      <rect x="26" y="11" width="23" height="0.5" fill="#381808" />
+    </g>
+
+    {/* Seat Top 3 (Right): x: 50.5..73 */}
+    <g>
+      <rect x="50.5" y="3" width="22.5" height="8.5" fill="#78350F" />
+      <rect x="50.5" y="3" width="22.5" height="2.5" fill="#9A4515" />
+      <rect x="50.5" y="3" width="22.5" height="0.8" fill="#D97706" />
+      <rect x="50.5" y="6" width="22.5" height="2.5" fill="#9A4515" />
+      <rect x="50.5" y="6" width="22.5" height="0.6" fill="#D97706" />
+      <rect x="50.5" y="9" width="22.5" height="2.5" fill="#78350F" />
+      <rect x="50.5" y="11" width="22.5" height="0.5" fill="#381808" />
+    </g>
+
+    {/* Heavy Cast-Iron Brackets dividing the 3 Top Seats */}
+    <rect x="24.5" y="2.5" width="1.5" height="9.5" fill="#181820" />
+    <rect x="24.5" y="2.5" width="0.5" height="9.5" fill="#3E4754" />
+    <circle cx="25.2" cy="7" r="0.5" fill="#F59E0B" />
+
+    <rect x="49" y="2.5" width="1.5" height="9.5" fill="#181820" />
+    <rect x="49" y="2.5" width="0.5" height="9.5" fill="#3E4754" />
+    <circle cx="49.7" cy="7" r="0.5" fill="#F59E0B" />
+
+    {/* Inside Beveled Front Rim along Top Wing */}
+    <rect x="14" y="11" width="48" height="1" fill="#381808" />
+    <rect x="14" y="11.8" width="48" height="0.5" fill="#1F0D04" />
+
+    {/* ============================================================== */}
+    {/* --- LEFT WING (Vertical Seating - 3 Stacked Teak Slats) ---    */}
+    {/* ============================================================== */}
+    <rect x="2.5" y="12" width="11.5" height="34" fill="#381808" />
+    <rect x="13.2" y="12" width="0.8" height="34" fill="#1F0D04" />
+
+    {/* Left Seat 1 (Top): y: 12.5..22.5 */}
+    <g>
+      <rect x="3" y="12.5" width="10" height="9.5" fill="#78350F" />
+      <rect x="3" y="12.5" width="10" height="0.8" fill="#F59E0B" opacity="0.6" />
+      <rect x="3" y="13.5" width="9" height="8" fill="#9A4515" />
+      {/* Wood grain slats lines */}
+      <rect x="3" y="16" width="9" height="0.7" fill="#381808" />
+      <rect x="3" y="16.7" width="9" height="0.5" fill="#D97706" />
+      <rect x="3" y="19.5" width="9" height="0.7" fill="#381808" />
+      <rect x="3" y="20.2" width="9" height="0.5" fill="#D97706" />
+    </g>
+
+    {/* Divider Bracket between Left Seat 1 & 2 */}
+    <rect x="2.5" y="22.5" width="11" height="1.5" fill="#181820" />
+    <rect x="2.5" y="22.5" width="11" height="0.5" fill="#3E4754" />
+    <circle cx="8" cy="23.2" r="0.5" fill="#F59E0B" />
+
+    {/* Left Seat 2 (Middle): y: 24..33.5 */}
+    <g>
+      <rect x="3" y="24" width="10" height="9.5" fill="#78350F" />
+      <rect x="3" y="24" width="10" height="0.8" fill="#F59E0B" opacity="0.6" />
+      <rect x="3" y="25" width="9" height="8" fill="#9A4515" />
+      {/* Wood grain slats lines */}
+      <rect x="3" y="27.5" width="9" height="0.7" fill="#381808" />
+      <rect x="3" y="28.2" width="9" height="0.5" fill="#D97706" />
+      <rect x="3" y="31" width="9" height="0.7" fill="#381808" />
+      <rect x="3" y="31.7" width="9" height="0.5" fill="#D97706" />
+    </g>
+
+    {/* Divider Bracket between Left Seat 2 & 3 */}
+    <rect x="2.5" y="34" width="11" height="1.5" fill="#181820" />
+    <rect x="2.5" y="34" width="11" height="0.5" fill="#3E4754" />
+    <circle cx="8" cy="34.7" r="0.5" fill="#F59E0B" />
+
+    {/* Left Seat 3 (Bottom): y: 35.5..45.5 */}
+    <g>
+      <rect x="3" y="35.5" width="10" height="9.5" fill="#78350F" />
+      <rect x="3" y="35.5" width="10" height="0.8" fill="#F59E0B" opacity="0.6" />
+      <rect x="3" y="36.5" width="9" height="8" fill="#9A4515" />
+      {/* Wood grain slats lines */}
+      <rect x="3" y="39" width="9" height="0.7" fill="#381808" />
+      <rect x="3" y="39.7" width="9" height="0.5" fill="#D97706" />
+      <rect x="3" y="42.5" width="9" height="0.7" fill="#381808" />
+      <rect x="3" y="43.2" width="9" height="0.5" fill="#D97706" />
+      <rect x="2.5" y="45.5" width="11.5" height="1" fill="#381808" />
+    </g>
+
+    {/* ============================================================== */}
+    {/* --- RIGHT WING (Vertical Seating - 3 Stacked Teak Slats) ---   */}
+    {/* ============================================================== */}
+    <rect x="62" y="12" width="11.5" height="34" fill="#381808" />
+    <rect x="62" y="12" width="0.8" height="34" fill="#1F0D04" />
+
+    {/* Right Seat 1 (Top): y: 12.5..22.5 */}
+    <g>
+      <rect x="63" y="12.5" width="10" height="9.5" fill="#78350F" />
+      <rect x="63" y="12.5" width="10" height="0.8" fill="#F59E0B" opacity="0.6" />
+      <rect x="63" y="13.5" width="9" height="8" fill="#9A4515" />
+      {/* Wood grain slats lines */}
+      <rect x="63" y="16" width="9" height="0.7" fill="#381808" />
+      <rect x="63" y="16.7" width="9" height="0.5" fill="#D97706" />
+      <rect x="63" y="19.5" width="9" height="0.7" fill="#381808" />
+      <rect x="63" y="20.2" width="9" height="0.5" fill="#D97706" />
+    </g>
+
+    {/* Divider Bracket between Right Seat 1 & 2 */}
+    <rect x="62" y="22.5" width="11.5" height="1.5" fill="#181820" />
+    <rect x="62" y="22.5" width="11.5" height="0.5" fill="#3E4754" />
+    <circle cx="67.5" cy="23.2" r="0.5" fill="#F59E0B" />
+
+    {/* Right Seat 2 (Middle): y: 24..33.5 */}
+    <g>
+      <rect x="63" y="24" width="10" height="9.5" fill="#78350F" />
+      <rect x="63" y="24" width="10" height="0.8" fill="#F59E0B" opacity="0.6" />
+      <rect x="63" y="25" width="9" height="8" fill="#9A4515" />
+      {/* Wood grain slats lines */}
+      <rect x="63" y="27.5" width="9" height="0.7" fill="#381808" />
+      <rect x="63" y="28.2" width="9" height="0.5" fill="#D97706" />
+      <rect x="63" y="31" width="9" height="0.7" fill="#381808" />
+      <rect x="63" y="31.7" width="9" height="0.5" fill="#D97706" />
+    </g>
+
+    {/* Divider Bracket between Right Seat 2 & 3 */}
+    <rect x="62" y="34" width="11.5" height="1.5" fill="#181820" />
+    <rect x="62" y="34" width="11.5" height="0.5" fill="#3E4754" />
+    <circle cx="67.5" cy="34.7" r="0.5" fill="#F59E0B" />
+
+    {/* Right Seat 3 (Bottom): y: 35.5..45.5 */}
+    <g>
+      <rect x="63" y="35.5" width="10" height="9.5" fill="#78350F" />
+      <rect x="63" y="35.5" width="10" height="0.8" fill="#F59E0B" opacity="0.6" />
+      <rect x="63" y="36.5" width="9" height="8" fill="#9A4515" />
+      {/* Wood grain slats lines */}
+      <rect x="63" y="39" width="9" height="0.7" fill="#381808" />
+      <rect x="63" y="39.7" width="9" height="0.5" fill="#D97706" />
+      <rect x="63" y="42.5" width="9" height="0.7" fill="#381808" />
+      <rect x="63" y="43.2" width="9" height="0.5" fill="#D97706" />
+      <rect x="62" y="45.5" width="11.5" height="1" fill="#381808" />
+    </g>
   </g>
 );
 
