@@ -72,6 +72,7 @@ import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
+import { syncLogbookRowBackToOrigin } from './notion/logbook-section-utils';
 import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './notion/FloatingSelectionToolbar';
 import { PicAvatarGroup, smartSplitPicString } from './PicAvatarGroup';
 import {
@@ -2245,28 +2246,31 @@ export function NotionDatabaseTable({
         return r;
       });
 
+      // Two-way live sync for any rows aggregated from origin posts (Logbook Unified View)
+      const rowsWithOrigin = normalizedRows.filter(r => r._originPostId);
+      if (rowsWithOrigin.length > 0 && allPosts && allPosts.length > 0) {
+        Promise.all(rowsWithOrigin.map(r => syncLogbookRowBackToOrigin(r, allPosts))).catch(err => {
+          console.warn('[Logbook Sync] Error syncing back to origin posts:', err);
+        });
+      }
+
       const targetHeaders = headersToSave || displayHeaders;
       const updatedMarkdown = serializeMarkdownTable(targetHeaders, normalizedRows, beforeText, afterText);
-      const res = await fetch(`/api/bulletin/${postId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: updatedMarkdown })
-      });
-      if (res.ok) {
-        onPostContentUpdate?.(updatedMarkdown);
 
-        // Instant background sync directly to logbook to guarantee zero delay
-        fetch('/api/logbook/sync-from-bulletin', {
-          method: 'POST',
+      // If postId is a real numeric post ID (or numeric string), persist to backend API
+      if (typeof postId === 'number' || (typeof postId === 'string' && /^\d+$/.test(postId))) {
+        const res = await fetch(`/api/bulletin/${postId}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bulletinPostId: postId,
-            section: section || '',
-            userNik: currentAuthorNik || '',
-            userName: currentAuthorName || ''
-          })
-        }).catch(err => console.warn('Instant logbook sync non-fatal:', err));
-
+          body: JSON.stringify({ content: updatedMarkdown })
+        });
+        if (res.ok) {
+          onPostContentUpdate?.(updatedMarkdown);
+          return true;
+        }
+      } else {
+        // Synthetic / virtual post ID (e.g. logbook-preparasi), notify parent state
+        onPostContentUpdate?.(updatedMarkdown);
         return true;
       }
       return false;

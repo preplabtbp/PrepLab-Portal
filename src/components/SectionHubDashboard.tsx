@@ -43,6 +43,7 @@ interface SectionHubDashboardProps {
 interface HubItem {
   title: string;
   icon: string;
+  isLogbook?: boolean;
   searchKeywords?: string[];
   linkUrl?: string;
 }
@@ -172,6 +173,20 @@ export function SectionHubDashboard({
       window.open(item.linkUrl, '_blank');
       return;
     }
+    if (item.isLogbook || item.title.toLowerCase().startsWith('logbook')) {
+      const logbookTitle = item.title;
+      const target = findPost(item.searchKeywords || logbookTitle) || {
+        id: `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        title: logbookTitle,
+        department: 'Prep & Lab',
+        category: sectionTitle,
+        isLogbook: true,
+        pt: currentUniverse,
+        content: `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${sectionTitle}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`
+      };
+      onSelectPost(target);
+      return;
+    }
     const target = findPost(item.searchKeywords || item.title);
     if (target) {
       onSelectPost(target);
@@ -197,6 +212,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
+          { title: 'Logbook Prosedur', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Prosedur', 'Logbook'] },
           { title: 'SOP Preparasi', icon: '📐', searchKeywords: ['SOP Preparasi', 'Preparasi Basah', 'Preparasi Kering'] },
           { title: 'JSA', icon: '💼', searchKeywords: ['JSA', 'Job Safety Analysis'] },
           { title: 'SOP Laboratorium', icon: '💈', searchKeywords: ['SOP Laboratorium', 'ED-XRF', 'LOI', 'Fused Bead'] },
@@ -221,6 +237,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
+          { title: 'Logbook Information', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Information', 'Logbook'] },
           { title: 'INFORMATION', icon: '📜', searchKeywords: ['Information', 'Pengumuman'] },
           { title: 'INFORMASI IT', icon: '💻', searchKeywords: ['Informasi IT', 'IT'] },
           { title: 'HARITA CORE', icon: '💎', searchKeywords: ['Harita Core', 'Core'] },
@@ -265,6 +282,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
+          { title: 'Logbook Laboratorium', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Laboratorium', 'Logbook Lab', 'Logbook'] },
           { title: 'Non Routine Laboratorium', icon: '▌', searchKeywords: ['Non Routine Laboratorium', '535', 'Non Routine'] },
           { title: 'Routine Laboratorium (Tentative)', icon: '▌', searchKeywords: ['Routine Laboratorium', 'Daily Laboratorium', '541'] },
           { title: 'Weekly Laboratorium', icon: '▌', searchKeywords: ['Weekly Laboratorium', '542'] },
@@ -295,6 +313,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
+          { title: 'Logbook Administrasi', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Administrasi', 'Logbook Admin', 'Logbook'] },
           { title: 'Non Routine', icon: '▌', searchKeywords: ['Non Routine', '517'] },
           { title: 'Daily', icon: '▌', searchKeywords: ['Daily', '518'] },
           { title: 'Weekly', icon: '▌', searchKeywords: ['Weekly', '519'] },
@@ -331,6 +350,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
+          { title: 'Logbook Preparasi', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Preparasi', 'Logbook Prep', 'Logbook'] },
           { title: 'Non Routine Preparasi', icon: '▌', searchKeywords: ['Non Routine Preparasi', '636'] },
           { title: 'Daily Preparasi', icon: '▌', searchKeywords: ['Daily Preparasi', '637'] },
           { title: 'Weekly Preparasi', icon: '▌', searchKeywords: ['Weekly Preparasi', '638'] },
@@ -358,6 +378,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
+          { title: 'Logbook Quality Assurance', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Quality Assurance', 'Logbook QA', 'Logbook'] },
           { title: 'Non Routine Quality Assurance', icon: '▌', searchKeywords: ['Non Routine Quality Assurance', '406'] },
           { title: 'Daily Quality Assurance', icon: '▌', searchKeywords: ['Daily Quality Assurance', '448'] },
           { title: 'Weekly Quality Assurance', icon: '▌', searchKeywords: ['Weekly Quality Assurance', '423'] },
@@ -385,6 +406,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
+          { title: 'Logbook Maintenance', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Maintenance', 'Logbook'] },
           { title: 'Non Routine Maintenance', icon: '▌', searchKeywords: ['Non Routine Maintenance', '412'] },
           { title: 'Daily Maintenance', icon: '▌', searchKeywords: ['Daily Maintenance', '427'] },
           { title: 'Weekly Maintenance', icon: '▌', searchKeywords: ['Weekly Maintenance', '424'] },
@@ -412,6 +434,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
+          { title: 'Logbook Inventory', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Inventory', 'Logbook Warehouse', 'Logbook'] },
           { title: 'Non Routine Inventory', icon: '▌', searchKeywords: ['Non Routine Inventory', '668', 'Non Routine Warehouse', '432', 'Non Routine'] },
           { title: 'Daily Inventory', icon: '▌', searchKeywords: ['Daily Inventory', '669', 'Daily Warehouse', '463', 'Daily'] },
           { title: 'Weekly Inventory', icon: '▌', searchKeywords: ['Weekly Inventory', '670', 'Weekly Warehouse', '431', 'Weekly'] },
@@ -450,6 +473,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
+          { title: 'Logbook Manajemen Mutu', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Manajemen Mutu', 'Logbook Mutu', 'Logbook'] },
           { title: 'Non Routine Manajemen Mutu', icon: '▌', searchKeywords: ['Non Routine Manajemen Mutu', '585'] },
           { title: 'Daily Manajemen Mutu', icon: '▌', searchKeywords: ['Daily Manajemen Mutu', '586'] },
           { title: 'Weekly Manajemen Mutu', icon: '▌', searchKeywords: ['Weekly Manajemen Mutu', '587'] },
@@ -474,11 +498,13 @@ export function SectionHubDashboard({
     }
 
     // Default configuration for general section hubs
+    const cleanSection = sectionTitle.replace(/^[#\s\-*]+/, '').trim();
     return {
       icon: '📂',
       bannerUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80',
       infoTitle: 'INFO',
       infoItems: [
+        { title: `Logbook ${cleanSection}`, icon: '📔', isLogbook: true, searchKeywords: [`Logbook ${cleanSection}`, 'Logbook'] },
         { title: 'Non Routine', icon: '▌', searchKeywords: ['Non Routine'] },
         { title: 'Daily', icon: '▌', searchKeywords: ['Daily'] },
         { title: 'Weekly', icon: '▌', searchKeywords: ['Weekly'] },
@@ -660,14 +686,34 @@ export function SectionHubDashboard({
           {sectionTitle}
         </h1>
 
-        {/* Home Navigation Pill: HOME TBP & GPS */}
-        <div className="pt-2">
+        {/* Home Navigation Pill: HOME TBP & GPS + Logbook Seksi */}
+        <div className="pt-2 flex items-center gap-2 flex-wrap">
           <button
             onClick={onGoHome}
             className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-xs transition-all cursor-pointer group"
           >
             <Home className="w-3.5 h-3.5 text-slate-600 group-hover:scale-110 transition-transform" />
             <span>{currentUniverse === 'GTS' ? 'HOME GTS' : 'HOME TBP & GPS'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const logbookItem = config.infoItems.find(i => i.isLogbook || i.title.toLowerCase().startsWith('logbook')) || {
+                title: `Logbook ${sectionTitle}`,
+                icon: '📔',
+                isLogbook: true,
+                searchKeywords: [`Logbook ${sectionTitle}`, 'Logbook']
+              };
+              handleItemClick(logbookItem);
+            }}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-xs transition-all cursor-pointer group"
+            title={`Buka Logbook Terpadu ${sectionTitle}`}
+          >
+            <span className="text-sm">📔</span>
+            <span>Logbook {sectionTitle}</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-teal-800 text-teal-100 font-mono">
+              Aktif
+            </span>
           </button>
         </div>
       </div>
@@ -695,21 +741,52 @@ export function SectionHubDashboard({
               {/* Items List (Soft Sky Blue Rounded Pill Rows) */}
               <div className="space-y-1.5">
                 {config.infoItems.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleItemClick(item)}
-                    className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-[#f0f6fd] hover:bg-[#e4effb] text-slate-800 border border-[#e2edfa] text-sm font-medium transition-all group shadow-2xs text-left cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5 truncate">
-                      <span className="text-sky-600 font-bold text-xs select-none">
-                        {item.icon === '▌' ? '▌' : item.icon}
-                      </span>
-                      <span className="truncate group-hover:text-sky-950">
-                        {item.title}
-                      </span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
-                  </button>
+                  item.isLogbook ? (
+                    <button
+                      key={idx}
+                      onClick={() => handleItemClick(item)}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50/50 hover:from-teal-100 hover:via-emerald-100 hover:to-teal-100/70 border-2 border-teal-500/40 hover:border-teal-500/70 text-slate-900 text-sm font-semibold transition-all group shadow-xs text-left cursor-pointer mb-2"
+                    >
+                      <div className="flex items-center gap-3 truncate">
+                        <div className="w-7 h-7 rounded-lg bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-700 text-sm shrink-0 group-hover:scale-105 transition-transform">
+                          📔
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-teal-950 group-hover:text-teal-700 truncate">
+                              {item.title}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-600 text-white tracking-wider uppercase shrink-0">
+                              AKTIF
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-teal-700 font-medium truncate mt-0.5">
+                            Semua kegiatan Routine & Non-Routine aktif
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 text-teal-600 font-bold text-xs shrink-0">
+                        <span className="hidden sm:inline">Buka</span>
+                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </button>
+                  ) : (
+                    <button
+                      key={idx}
+                      onClick={() => handleItemClick(item)}
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-[#f0f6fd] hover:bg-[#e4effb] text-slate-800 border border-[#e2edfa] text-sm font-medium transition-all group shadow-2xs text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        <span className="text-sky-600 font-bold text-xs select-none">
+                          {item.icon === '▌' ? '▌' : item.icon}
+                        </span>
+                        <span className="truncate group-hover:text-sky-950">
+                          {item.title}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
+                    </button>
+                  )
                 ))}
               </div>
             </div>
@@ -764,21 +841,52 @@ export function SectionHubDashboard({
             {/* Vertical List of Soft Sky Blue Pills */}
             <div className="space-y-1.5">
               {config.infoItems.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleItemClick(item)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-[#f0f6fd] hover:bg-[#e4effb] text-slate-800 border border-[#e2edfa] text-sm font-medium transition-all group shadow-2xs text-left cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 truncate">
-                    <span className="text-base flex-shrink-0">
-                      {item.icon}
-                    </span>
-                    <span className="truncate group-hover:text-sky-950 font-medium">
-                      {item.title}
-                    </span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
-                </button>
+                item.isLogbook ? (
+                  <button
+                    key={idx}
+                    onClick={() => handleItemClick(item)}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50/50 hover:from-teal-100 hover:via-emerald-100 hover:to-teal-100/70 border-2 border-teal-500/40 hover:border-teal-500/70 text-slate-900 text-sm font-semibold transition-all group shadow-xs text-left cursor-pointer mb-2"
+                  >
+                    <div className="flex items-center gap-3 truncate">
+                      <div className="w-7 h-7 rounded-lg bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-700 text-sm shrink-0 group-hover:scale-105 transition-transform">
+                        📔
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-teal-950 group-hover:text-teal-700 truncate">
+                            {item.title}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-600 text-white tracking-wider uppercase shrink-0">
+                            AKTIF
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-teal-700 font-medium truncate mt-0.5">
+                          Semua kegiatan Routine & Non-Routine aktif
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-teal-600 font-bold text-xs shrink-0">
+                      <span className="hidden sm:inline">Buka</span>
+                      <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    key={idx}
+                    onClick={() => handleItemClick(item)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-[#f0f6fd] hover:bg-[#e4effb] text-slate-800 border border-[#e2edfa] text-sm font-medium transition-all group shadow-2xs text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 truncate">
+                      <span className="text-base flex-shrink-0">
+                        {item.icon}
+                      </span>
+                      <span className="truncate group-hover:text-sky-950 font-medium">
+                        {item.title}
+                      </span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
+                  </button>
+                )
               ))}
             </div>
           </div>
