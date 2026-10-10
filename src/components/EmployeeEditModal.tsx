@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   Gavel,
   AlertOctagon,
+  AlertTriangle,
   RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
