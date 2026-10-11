@@ -1376,21 +1376,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         .find(s => s && s !== '-' && s !== '0' && (s.includes('-') || s.includes('/') || /[a-zA-Z]{3,}/.test(s))) || '-';
 
       // Masa berlaku Surat Teguran (ST) dan Konseling adalah 3 bulan.
-      // Jika sanksi sudah lewat 3 bulan, sanksi sudah kadaluarsa / selesai pembinaan (bukan konseling aktif lagi)
-      let isExpired = false;
-      let expiryDateObj: Date | null = null;
-      if (tgl && tgl !== '-') {
-        const baseDate = parseSanctionDate(tgl);
-        if (baseDate) {
-          expiryDateObj = new Date(baseDate.getTime());
-          expiryDateObj.setMonth(expiryDateObj.getMonth() + 3);
-          if (now > expiryDateObj) {
-            isExpired = true;
-          }
-        }
-      }
+      // Hanya sanksi konseling dengan tanggal valid dan belum lewat 3 bulan yang terhitung sebagai Konseling Aktif.
+      if (!tgl || tgl === '-') return;
 
-      if (isExpired) return;
+      const baseDate = parseSanctionDate(tgl);
+      if (!baseDate) return;
+
+      const expiryDateObj = new Date(baseDate.getTime());
+      expiryDateObj.setMonth(expiryDateObj.getMonth() + 3);
+      if (now > expiryDateObj) {
+        return; // Sudah lewat 3 bulan (kadaluarsa / selesai pembinaan)
+      }
 
       let displayStatus = 'Konseling I';
       let levelBadgeBg = 'bg-amber-500';
