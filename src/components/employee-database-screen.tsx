@@ -2692,12 +2692,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             </div>
           </div>
         ) : (
-          /* PROFILE MODE (HARMONIOUS PASTEL GREEN CANVAS WITH FLOATING EXECUTIVE CARDS) */
+          /* PROFILE MODE (CLEAN WHITE CANVAS WITH FLOATING EXECUTIVE CARDS) */
           <motion.div 
             initial={{ opacity: 0, y: 15 }} 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="flex flex-col lg:flex-row h-auto lg:h-full w-full min-h-full p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-[#f4faf5] via-[#edf6f0] to-[#e6f3eb] gap-4 lg:gap-6 overflow-visible lg:overflow-hidden relative pb-32 lg:pb-6"
+            className="flex flex-col lg:flex-row h-auto lg:h-full w-full min-h-full p-3 sm:p-4 lg:p-6 bg-white gap-4 lg:gap-6 overflow-visible lg:overflow-hidden relative pb-32 lg:pb-6"
           >
             {/* SIDEBAR (Profile Info) - WARNA SOLID FLAT PINHOME TEAL: #20A2A0 */}
             <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-[#20A2A0] text-white shrink-0 shadow-2xl shadow-[#20A2A0]/30 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-white/20 ring-1 ring-black/5 transition-all">
@@ -2875,8 +2875,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               </div>
             </div>
 
-            {/* MAIN CONTENT AREA (CLEAN EXECUTIVE WHITE CANVAS ON PASTEL GREEN BACKDROP) */}
-            <div className="w-full flex-1 h-auto lg:h-full lg:max-h-full p-4 sm:p-6 lg:p-8 overflow-visible lg:overflow-y-auto bg-white/70 backdrop-blur-xs rounded-3xl shadow-xs border border-emerald-200/60 pb-28 lg:pb-24 ring-1 ring-emerald-500/5 transition-all custom-scrollbar">
+            {/* MAIN CONTENT AREA (CLEAN EXECUTIVE CANVAS ON WHITE BACKDROP) */}
+            <div className="w-full flex-1 h-auto lg:h-full lg:max-h-full p-4 sm:p-6 lg:p-8 overflow-visible lg:overflow-y-auto bg-slate-50/60 backdrop-blur-xs rounded-3xl shadow-xs border border-slate-200/80 pb-28 lg:pb-24 transition-all custom-scrollbar">
               
               {/* HEADER W/ SPONSOR & EDIT BUTTON */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
