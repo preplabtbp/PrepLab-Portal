@@ -3190,8 +3190,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </div>
                 </div>
 
-                {/* REKAP ABSENSI */}
-                <div className="xl:col-span-2 space-y-6">
+                {/* REKAP ABSENSI, CATATAN & ACHIEVEMENTS (SEJAJAR PENUH DENGAN KOLOM STATUS KIRI) */}
+                <div className="xl:col-span-2 flex flex-col justify-between gap-6 h-full">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* 2026 */}
                     <Card className="p-5 shadow-xs border border-teal-200/80 bg-white rounded-2xl">
@@ -3256,10 +3256,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </Card>
                   </div>
 
-                  {/* CATATAN & LIST ACHIEVEMENTS */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* CATATAN & LIST ACHIEVEMENTS (FLEX-1 MENGISI RUANG VERTIKAL AGAR SEJAJAR RATA BAWAH) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 items-stretch">
                     {/* Card 1: Catatan Karyawan */}
-                    <Card className="p-5 shadow-xs border border-slate-200/90 bg-white rounded-2xl flex flex-col justify-between min-h-[220px]">
+                    <Card className="p-5 shadow-xs border border-slate-200/90 bg-white rounded-2xl flex flex-col justify-between h-full">
                       <div className="flex-1 flex flex-col">
                         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                           <div className="flex items-center gap-2">
@@ -3289,7 +3289,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               value={noteContent}
                               onChange={(e) => setNoteContent(e.target.value)}
                               placeholder="Tuliskan catatan di sini..."
-                              className="w-full flex-1 min-h-[120px] p-2 text-[13px] md:text-sm italic font-medium text-slate-800 placeholder:text-slate-400 bg-transparent border-0 border-b-2 border-amber-400 focus:outline-none focus:border-amber-600 resize-none leading-relaxed"
+                              className="w-full flex-1 min-h-[140px] p-2 text-[13px] md:text-sm italic font-medium text-slate-800 placeholder:text-slate-400 bg-transparent border-0 border-b-2 border-amber-400 focus:outline-none focus:border-amber-600 resize-none leading-relaxed"
                               autoFocus
                             />
                             <div className="flex items-center justify-end gap-2 pt-1">
@@ -3327,7 +3327,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 setIsEditingNotes(true);
                               }
                             }}
-                            className={`py-3 flex-1 flex flex-col justify-center min-h-[140px] max-h-[170px] overflow-y-auto custom-scrollbar ${
+                            className={`py-3 flex-1 flex flex-col justify-center min-h-[130px] overflow-y-auto custom-scrollbar ${
                               canEditCatatan ? 'cursor-pointer group' : ''
                             }`}
                             title={canEditCatatan ? 'Klik untuk mengubah catatan' : undefined}
@@ -3351,90 +3351,92 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </Card>
 
                     {/* Card 2: List Achievements */}
-                    <Card className="p-5 shadow-xs border border-slate-200/90 bg-white rounded-2xl flex flex-col justify-between min-h-[220px]">
-                      <div>
-                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
-                          <div className="flex items-center gap-2">
-                            <span className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600">
-                              <Trophy className="w-4 h-4 text-amber-600" />
-                            </span>
-                            <h4 className="font-black text-sm text-slate-950 tracking-tight">List Achievements</h4>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-900 border border-amber-300">
-                              {achievementList.length}
-                            </span>
-                          </div>
-                          {canManageDatabase && (
-                            <button
-                              type="button"
-                              onClick={() => setIsAddAchievementModalOpen(true)}
-                              className="text-xs font-black text-amber-900 hover:text-amber-950 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100/90 hover:bg-amber-200 transition-all cursor-pointer border border-amber-300 shadow-2xs"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Tambah</span>
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="max-h-[160px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
-                          {achievementList.length > 0 ? (
-                            achievementList.map((ach: any, idx: number) => (
-                              <div
-                                key={ach.id || idx}
-                                className="p-3 rounded-xl bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white border border-amber-300/80 hover:border-amber-400 transition-all group relative shadow-2xs"
+                    <Card className="p-5 shadow-xs border border-slate-200/90 bg-white rounded-2xl flex flex-col justify-between h-full">
+                      <div className="flex-1 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <span className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600">
+                                <Trophy className="w-4 h-4 text-amber-600" />
+                              </span>
+                              <h4 className="font-black text-sm text-slate-950 tracking-tight">List Achievements</h4>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-900 border border-amber-300">
+                                {achievementList.length}
+                              </span>
+                            </div>
+                            {canManageDatabase && (
+                              <button
+                                type="button"
+                                onClick={() => setIsAddAchievementModalOpen(true)}
+                                className="text-xs font-black text-amber-900 hover:text-amber-950 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100/90 hover:bg-amber-200 transition-all cursor-pointer border border-amber-300 shadow-2xs"
                               >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex items-start gap-2.5 min-w-0">
-                                    <span className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs shrink-0 mt-0.5">
-                                      <Award className="w-3.5 h-3.5" />
-                                    </span>
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <h5 className="font-black text-xs text-slate-950 truncate">{ach.title}</h5>
-                                        <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-amber-200/80 text-amber-950 border border-amber-300 shrink-0">
-                                          {ach.category}
-                                        </span>
-                                      </div>
-                                      {ach.description && (
-                                        <p className="text-[11px] text-slate-600 mt-0.5 leading-snug line-clamp-2">
-                                          {ach.description}
-                                        </p>
-                                      )}
-                                      <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
-                                        {ach.date && (
-                                          <span className="font-mono text-slate-500 flex items-center gap-1">
-                                            <Calendar className="w-2.5 h-2.5" /> {formatShortDate(ach.date)}
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Tambah</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="max-h-[200px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+                            {achievementList.length > 0 ? (
+                              achievementList.map((ach: any, idx: number) => (
+                                <div
+                                  key={ach.id || idx}
+                                  className="p-3 rounded-xl bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white border border-amber-300/80 hover:border-amber-400 transition-all group relative shadow-2xs"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-start gap-2.5 min-w-0">
+                                      <span className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs shrink-0 mt-0.5">
+                                        <Award className="w-3.5 h-3.5" />
+                                      </span>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <h5 className="font-black text-xs text-slate-950 truncate">{ach.title}</h5>
+                                          <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-amber-200/80 text-amber-950 border border-amber-300 shrink-0">
+                                            {ach.category}
                                           </span>
+                                        </div>
+                                        {ach.description && (
+                                          <p className="text-[11px] text-slate-600 mt-0.5 leading-snug line-clamp-2">
+                                            {ach.description}
+                                          </p>
                                         )}
-                                        {ach.notes && (
-                                          <span className="italic text-slate-500 truncate max-w-[180px]">
-                                            • {ach.notes}
-                                          </span>
-                                        )}
+                                        <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
+                                          {ach.date && (
+                                            <span className="font-mono text-slate-500 flex items-center gap-1">
+                                              <Calendar className="w-2.5 h-2.5" /> {formatShortDate(ach.date)}
+                                            </span>
+                                          )}
+                                          {ach.notes && (
+                                            <span className="italic text-slate-500 truncate max-w-[180px]">
+                                              • {ach.notes}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
+                                    {canManageDatabase && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteAchievement(ach.id)}
+                                        title="Hapus achievement"
+                                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shrink-0 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                   </div>
-                                  {canManageDatabase && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteAchievement(ach.id)}
-                                      title="Hapus achievement"
-                                      className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shrink-0 cursor-pointer"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
                                 </div>
+                              ))
+                            ) : (
+                              <div className="h-full min-h-[110px] flex flex-col items-center justify-center text-center text-slate-400 py-4">
+                                <Trophy className="w-6 h-6 mb-1 text-slate-300" />
+                                <p className="text-xs font-medium">Belum ada achievement/prestasi tercatat</p>
+                                {canManageDatabase && (
+                                  <p className="text-[10px] text-amber-600 mt-0.5">Import sheet Achievements atau klik '+ Tambah'</p>
+                                )}
                               </div>
-                            ))
-                          ) : (
-                            <div className="h-full min-h-[110px] flex flex-col items-center justify-center text-center text-slate-400">
-                              <Trophy className="w-6 h-6 mb-1 text-slate-300" />
-                              <p className="text-xs font-medium">Belum ada achievement/prestasi tercatat</p>
-                              {canManageDatabase && (
-                                <p className="text-[10px] text-amber-600 mt-0.5">Import sheet Achievements atau klik '+ Tambah'</p>
-                              )}
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     </Card>
@@ -3442,71 +3444,73 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 </div>
               </div>
 
-              {/* DATA DIRI & ALAMAT */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <Card className="p-6 shadow-xs border border-slate-200/90 bg-white rounded-3xl">
-                  <h3 className="text-base font-black text-slate-950 mb-5 flex items-center">
-                    <User className="w-5 h-5 mr-2 text-[#135864]" />
-                    Data Diri (Umum)
-                  </h3>
-                  <div className="space-y-3.5">
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">NIK KTP</p>
-                      <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.ktp || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">TTL</p>
-                      <p className="text-sm font-bold text-slate-900 col-span-2">
-                        {selectedEmployee.tempatLahir && selectedEmployee.tempatLahir !== '-'
-                          ? `${selectedEmployee.tempatLahir}, ${formatTtlDate(selectedEmployee.tanggalLahir)}`
-                          : formatTtlDate(selectedEmployee.tanggalLahir)}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Nomor Telp.</p>
-                      <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phone || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Kel. Kandung</p>
-                      <p className="text-sm font-bold text-slate-900 col-span-2">{selectedEmployee.keluargaKandung || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Telp Kel.</p>
-                      <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phoneKeluarga || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Org Terdekat</p>
-                      <p className="text-sm font-bold text-slate-900 col-span-2">{selectedEmployee.orangTerdekat || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 pb-1">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Telp Darurat</p>
-                      <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phoneDarurat || '-'}</p>
+              {/* DATA DIRI & ALAMAT (SEJAJAR SEMPURNA KIRI & KANAN) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 items-stretch">
+                <Card className="p-6 shadow-xs border border-slate-200/90 bg-white rounded-3xl h-full flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-base font-black text-slate-950 mb-5 flex items-center">
+                      <User className="w-5 h-5 mr-2 text-[#135864]" />
+                      Data Diri (Umum)
+                    </h3>
+                    <div className="space-y-3.5">
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">NIK KTP</p>
+                        <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.ktp || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">TTL</p>
+                        <p className="text-sm font-bold text-slate-900 col-span-2">
+                          {selectedEmployee.tempatLahir && selectedEmployee.tempatLahir !== '-'
+                            ? `${selectedEmployee.tempatLahir}, ${formatTtlDate(selectedEmployee.tanggalLahir)}`
+                            : formatTtlDate(selectedEmployee.tanggalLahir)}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Nomor Telp.</p>
+                        <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phone || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Kel. Kandung</p>
+                        <p className="text-sm font-bold text-slate-900 col-span-2">{selectedEmployee.keluargaKandung || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Telp Kel.</p>
+                        <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phoneKeluarga || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Org Terdekat</p>
+                        <p className="text-sm font-bold text-slate-900 col-span-2">{selectedEmployee.orangTerdekat || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pb-1">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Telp Darurat</p>
+                        <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phoneDarurat || '-'}</p>
+                      </div>
                     </div>
                   </div>
                 </Card>
 
-                <div className="space-y-6">
-                  <Card className="p-6 shadow-xs border border-slate-200/90 bg-white rounded-3xl h-full flex flex-col">
+                <Card className="p-6 shadow-xs border border-slate-200/90 bg-white rounded-3xl h-full flex flex-col justify-between">
+                  <div className="flex-1 flex flex-col">
                     <h3 className="text-base font-black text-slate-950 mb-4 flex items-center">
                       <MapPin className="w-5 h-5 mr-2 text-[#135864]" />
                       Alamat KTP & Domisili
                     </h3>
-                    <div className="space-y-4 flex-1">
-                      <div>
+                    <div className="space-y-4 flex-1 flex flex-col justify-between">
+                      <div className="flex-1 flex flex-col">
                         <p className="text-xs font-black text-[#135864] uppercase tracking-wider mb-2">Sesuai KTP</p>
-                        <p className="text-sm text-slate-950 leading-relaxed bg-gradient-to-br from-[#f8fdfa] to-[#edf7f1] p-4 rounded-2xl border border-emerald-200/80 font-bold shadow-2xs">
+                        <p className="text-sm text-slate-950 leading-relaxed bg-gradient-to-br from-[#f8fdfa] to-[#edf7f1] p-4 rounded-2xl border border-emerald-200/80 font-bold shadow-2xs flex-1 flex items-center">
                           {selectedEmployee.alamatKtp || 'Tidak ada data alamat KTP.'}
                         </p>
                       </div>
-                      <div>
+                      <div className="flex-1 flex flex-col">
                         <p className="text-xs font-black text-[#135864] uppercase tracking-wider mb-2">Domisili (Tinggal)</p>
-                        <p className="text-sm text-slate-950 leading-relaxed bg-gradient-to-br from-[#f8fdfa] to-[#edf7f1] p-4 rounded-2xl border border-emerald-200/80 font-bold shadow-2xs">
+                        <p className="text-sm text-slate-950 leading-relaxed bg-gradient-to-br from-[#f8fdfa] to-[#edf7f1] p-4 rounded-2xl border border-emerald-200/80 font-bold shadow-2xs flex-1 flex items-center">
                           {selectedEmployee.alamatDomisili || 'Tidak ada data domisili.'}
                         </p>
                       </div>
                     </div>
-                  </Card>
-                </div>
+                  </div>
+                </Card>
               </div>
 
               {/* SECTION: HISTORI ABSENSI & ALASAN */}
