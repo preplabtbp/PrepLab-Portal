@@ -1,12 +1,10 @@
 # Prep & Lab All in One Portal
 
-> [!WARNING]
-> **PEMBERITAHUAN MIGRASI AKUN HOSTING GCP:**
-> Akun hosting Google Cloud telah berganti ke project resmi: **`project-1bcc4549-c8d6-4962-958`**.
-> - **Project lama (`project-054e3351-b8d1-42f7-9c8` / "My First Project") sudah tidak aktif/ditinggalkan.**
-> - Skrip `npm run deploy:main` dan `npm run deploy:staging` di `package.json` sudah dikunci secara default ke `project-1bcc4549-c8d6-4962-958`.
-> - Untuk mengaktifkan build otomatis saat push `main`, hubungkan trigger di Google Cloud Console:
->   `https://console.cloud.google.com/cloud-build/triggers?project=project-1bcc4549-c8d6-4962-958`
+> [!NOTE]
+> **INFORMASI AKUN HOSTING GCP AKTIF:**
+> Akun hosting Google Cloud aktif: **`project-054e3351-b8d1-42f7-9c8`** (*"My First Project"*).
+> - Skrip `npm run deploy:main` dan `npm run deploy:staging` di `package.json` telah dikonfigurasi ke `project-054e3351-b8d1-42f7-9c8`.
+> - Jika Cloud Build gagal di Step 2 deploy, pastikan role **Cloud Run Admin** telah diaktifkan untuk Cloud Build Service Account di menu *Cloud Build > Permissions*.
 
 ## Migrasi ke Google Cloud Run
 

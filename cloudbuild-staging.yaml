@@ -1,7 +1,6 @@
 # NOTE: File ini digunakan ketika Cloud Build Trigger aktif di Google Cloud Console.
-# DEFAULT PROJECT TARGET: project-1bcc4549-c8d6-4962-958 (Akun Baru)
-# JANGAN deploy ke project lama (project-054e3351-b8d1-42f7-9c8).
-# Untuk deploy manual via CLI, gunakan: npm run deploy:staging (otomatis target project baru)
+# DEFAULT PROJECT TARGET: project-054e3351-b8d1-42f7-9c8 (Akun Baru / My First Project)
+# Untuk deploy manual via CLI, gunakan: npm run deploy:staging
 steps:
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
