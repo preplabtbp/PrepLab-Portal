@@ -9,7 +9,8 @@ import {
   ChevronDown, 
   Link as LinkIcon, 
   ListTodo, 
-  Type 
+  Type,
+  List
 } from 'lucide-react';
 import { 
   parseTasklist,
@@ -452,6 +453,18 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         title="Tautan / Link"
       >
         <LinkIcon className="w-3.5 h-3.5" />
+      </button>
+
+      {/* Bullet List */}
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onExecCmd('insertUnorderedList')}
+        className="p-1 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+        style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
+        title="Daftar Bullet (Poin •)"
+      >
+        <List className="w-3.5 h-3.5" />
       </button>
 
       {/* Code */}
@@ -1226,7 +1239,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       return;
     }
 
-    // Enter biasa: otomatis ubah keterangan jadi mode bullet dan langsung pindah ke bullet kedua di baris 2
+    // Enter pada baris bullet / teks biasa
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       let insideLi: HTMLElement | null = null;
       const sel = window.getSelection();
@@ -1241,25 +1254,44 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
         }
       }
 
-      // Cek apakah kursor sudah berada di dalam daftar bullet
       const isAlreadyList = Boolean(insideLi) || document.queryCommandState('insertUnorderedList');
 
-      if (!isAlreadyList) {
-        // Belum mode bullet: jadikan baris saat ini sebagai bullet pertama, lalu buat bullet kedua di baris 2
-        e.preventDefault();
-        document.execCommand('insertUnorderedList');
-        document.execCommand('insertParagraph');
-        return;
-      } else {
-        // Sudah di dalam bullet list:
+      if (isAlreadyList) {
         const currentText = (insideLi?.textContent || sel?.anchorNode?.textContent || '').replace(/^[•\-\*]\s*/, '').trim();
         if (!currentText) {
-          // Bullet saat ini kosong -> tekan enter untuk keluar dari mode bullet
+          // Bullet saat ini kosong -> tekan enter untuk keluar dari mode bullet jadi baris biasa
           e.preventDefault();
           document.execCommand('insertUnorderedList');
           return;
         }
-        // Jika bullet memiliki teks, Enter biasa secara native akan membuat bullet berikutnya
+        // Jika ada teks di bullet, biarkan browser native Enter membuat bullet berikutnya secara otomatis
+        return;
+      }
+      // Jika bukan dalam bullet list: biarkan Enter biasa membuat baris baru biasa (jangan dipaksa jadi bullet!)
+    }
+
+    // Backspace pada bullet kosong: hapus bullet dan kembali ke baris biasa
+    if (e.key === 'Backspace' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      let insideLi: HTMLElement | null = null;
+      const sel = window.getSelection();
+      if (sel && sel.anchorNode) {
+        let node: Node | null = sel.anchorNode;
+        while (node && node !== editorRef.current) {
+          if (node.nodeName === 'LI') {
+            insideLi = node as HTMLElement;
+            break;
+          }
+          node = node.parentNode;
+        }
+      }
+
+      if (insideLi) {
+        const currentText = (insideLi.textContent || '').replace(/^[•\-\*]\s*/, '').trim();
+        if (!currentText) {
+          e.preventDefault();
+          document.execCommand('insertUnorderedList');
+          return;
+        }
       }
     }
   };

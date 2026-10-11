@@ -279,6 +279,7 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS pending_pic_name TEXT;`);
     await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS pending_reason TEXT;`);
     await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS draft_change TEXT;`);
+    await db.execute(sql`ALTER TABLE logbook_tasks ADD COLUMN IF NOT EXISTS task_code TEXT;`);
 
     // Clinic Visits Table (Pelaporan Kunjungan Klinik)
     try {

@@ -422,7 +422,8 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
       isPending = false,
       pendingPicNik,
       pendingPicName,
-      pendingReason
+      pendingReason,
+      taskCode
     } = req.body;
 
     if (!title || !title.trim()) {
@@ -486,6 +487,7 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
       pendingPicNik: pendingPicNik || null,
       pendingPicName: pendingPicName || null,
       pendingReason: pendingReason || null,
+      taskCode: taskCode || req.body.task_code || null,
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning();
@@ -561,6 +563,8 @@ logbookRouter.post("/api/logbook/tasks", async (req, res) => {
                 const hl = h.toLowerCase().trim();
                 if (hl === 'number' || hl === 'no' || hl === '#') {
                   newRow[h] = '1';
+                } else if (hl.includes('id task') || hl.includes('kode task') || hl === 'task id' || hl === 'task_id') {
+                  newRow[h] = taskCode || req.body.task_code || '-';
                 } else if (hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul') {
                   newRow[h] = title.trim();
                 } else if (hl.includes('keterangan') || hl.includes('catatan') || hl.includes('deskripsi')) {

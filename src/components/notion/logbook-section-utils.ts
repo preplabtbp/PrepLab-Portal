@@ -1109,3 +1109,151 @@ export function getLogbookTableData(
   };
 }
 
+export function getTaskPrefix(categoryOrSection?: string): string {
+  const cat = (categoryOrSection || '').toLowerCase().trim();
+  if (cat.includes('prep')) return 'P';
+  if (cat.includes('qa') || cat.includes('quality') || cat.includes('mutu')) return 'Q';
+  if (cat.includes('admin')) return 'A';
+  if (cat.includes('invent')) return 'I';
+  if (cat.includes('maint')) return 'M';
+  if (cat.includes('lab')) return 'L';
+  if (cat.length > 0) return cat.charAt(0).toUpperCase();
+  return 'L'; // Default Laboratorium
+}
+
+/**
+ * Auto-generates unique task code based on category:
+ * L1 (Lab), P1 (Prep), Q1 (QA), A1 (Admin), I1 (Inventory), M1 (Maintenance)
+ */
+export function generateTaskCode(categoryOrSection?: string, rows?: TableRowData[]): string {
+  const prefix = getTaskPrefix(categoryOrSection);
+
+  let maxSeq = 0;
+  if (rows && rows.length > 0) {
+    const regex = new RegExp(`^${prefix}(\\d+)$`, 'i');
+    rows.forEach(r => {
+      const codeCandidates = [
+        r.taskCode,
+        r['Task ID'],
+        r['ID Task'],
+        r.id,
+        r.number,
+        r['number'],
+        r['No']
+      ];
+      for (const val of codeCandidates) {
+        if (!val) continue;
+        const str = String(val).trim();
+        const match = str.match(regex);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxSeq) {
+            maxSeq = num;
+          }
+          break;
+        }
+      }
+    });
+  }
+
+  return `${prefix}${maxSeq + 1}`;
+}
+
+/**
+ * Normalizes all existing task rows so every task has a consistent, immutable ID Task (L1, P1, Q1, A1, I1, M1...)
+ * based on its section/category.
+ */
+export function normalizeExistingTaskCodes(rows: TableRowData[], defaultSection?: string): { rows: TableRowData[]; hasChanges: boolean } {
+  if (!rows || rows.length === 0) return { rows: [], hasChanges: false };
+
+  let hasChanges = false;
+  // Track used sequence numbers per prefix
+  const usedSeqByPrefix: Record<string, Set<number>> = {};
+  const currentMaxSeq: Record<string, number> = {};
+
+  const getPrefixFor = (r: TableRowData): string => {
+    const cat = r['Kategori'] || r['kategori'] || r['section'] || r['Section'] || r['Departemen'] || defaultSection;
+    return getTaskPrefix(cat);
+  };
+
+  // Phase 1: Collect valid existing task codes that already conform to prefix + number
+  rows.forEach(r => {
+    if (isSubItemRow(r)) return;
+    const targetPrefix = getPrefixFor(r);
+    if (!usedSeqByPrefix[targetPrefix]) {
+      usedSeqByPrefix[targetPrefix] = new Set();
+      currentMaxSeq[targetPrefix] = 0;
+    }
+
+    const codeCandidates = [r.taskCode, r['Task ID'], r['ID Task']];
+    for (const code of codeCandidates) {
+      if (!code) continue;
+      const str = String(code).trim().toUpperCase();
+      const match = str.match(new RegExp(`^${targetPrefix}(\\d+)$`));
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > 0) {
+          usedSeqByPrefix[targetPrefix].add(num);
+          if (num > currentMaxSeq[targetPrefix]) {
+            currentMaxSeq[targetPrefix] = num;
+          }
+          break;
+        }
+      }
+    }
+  });
+
+  // Phase 2: For each row, if it doesn't have a valid matching task code, assign the next available one
+  const nextRows = rows.map(r => {
+    if (isSubItemRow(r)) return r;
+
+    const targetPrefix = getPrefixFor(r);
+    if (!usedSeqByPrefix[targetPrefix]) {
+      usedSeqByPrefix[targetPrefix] = new Set();
+      currentMaxSeq[targetPrefix] = 0;
+    }
+
+    // Check if current row already has valid code
+    let validCode: string | null = null;
+    const codeCandidates = [r.taskCode, r['Task ID'], r['ID Task']];
+    for (const code of codeCandidates) {
+      if (!code) continue;
+      const str = String(code).trim().toUpperCase();
+      const match = str.match(new RegExp(`^${targetPrefix}(\\d+)$`));
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > 0) {
+          validCode = `${targetPrefix}${num}`;
+          break;
+        }
+      }
+    }
+
+    if (!validCode) {
+      // Find next unused sequence number
+      let nextSeq = (currentMaxSeq[targetPrefix] || 0) + 1;
+      while (usedSeqByPrefix[targetPrefix].has(nextSeq)) {
+        nextSeq++;
+      }
+      usedSeqByPrefix[targetPrefix].add(nextSeq);
+      currentMaxSeq[targetPrefix] = Math.max(currentMaxSeq[targetPrefix] || 0, nextSeq);
+      validCode = `${targetPrefix}${nextSeq}`;
+      hasChanges = true;
+    }
+
+    // Check if row needs updating
+    if (r.taskCode !== validCode || r['Task ID'] !== validCode || r['ID Task'] !== validCode) {
+      hasChanges = true;
+      return {
+        ...r,
+        taskCode: validCode,
+        'Task ID': validCode,
+        'ID Task': validCode
+      };
+    }
+
+    return r;
+  });
+
+  return { rows: nextRows, hasChanges };
+}

@@ -779,6 +779,7 @@ export const logbookTasks = pgTable('logbook_tasks', {
   pendingPicName: text('pending_pic_name'), // Nama PIC Job Pending
   pendingReason: text('pending_reason'), // Alasan / kendala / keterangan pending
   draftChange: text('draft_change'), // JSON stringified draft perubahan dari PIC (menunggu review pembuat tugas)
+  taskCode: text('task_code'), // ID Task unik permanen (L1, P1, Q1, A1, I1, M1)
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (t) => [
