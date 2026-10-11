@@ -1491,7 +1491,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         img.onload = async () => {
           try {
             const canvas = document.createElement('canvas');
-            const maxDim = 320;
+            const maxDim = 800; // HD: cukup tajam untuk foto profil besar (retina)
             let width = img.width;
             let height = img.height;
             if (width > height) {
@@ -1509,8 +1509,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             if (!ctx) throw new Error('Gagal memproses kanvas foto');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
-            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
             const res = await fetch('/api/employees/photo', {
               method: 'POST',
@@ -2530,10 +2532,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           {/* 4. KARYAWAN AKTIF (BAGAN STRUKTUR ORGANISASI) */}
                           {activeStatDetail === 'active' && (() => {
                             // Garis pelaporan bagan: Manager -> Superintendent -> Section.
-                            // Section yang tidak berada di bawah Superintendent terhubung langsung ke Manager.
+                            // QA, Maintenance, Inventory Control, dan Administration melapor langsung ke Manager,
+                            // namun digambar turun sejajar level Section (bukan sejajar Superintendent).
                             const PREP_SECTIONS = ['Preparation Wet', 'Preparation Dry', 'Preparation'];
-                            const LAB_SECTIONS = ['Laboratory', 'Quality Assurance', 'Inventory Control', 'Maintenance'];
-                            const DIRECT_SECTIONS = ['Administration', 'Lainnya'];
+                            const LAB_SECTIONS = ['Laboratory'];
+                            const DIRECT_SECTIONS = ['Quality Assurance', 'Maintenance', 'Inventory Control', 'Administration', 'Lainnya'];
 
                             const normJab = (emp: any) => String(emp.jabatan || emp['Jabatan Baru'] || '')
                               .toLowerCase()
@@ -2621,166 +2624,268 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               </div>
                             );
 
-                            // Kartu orang (Manager / Superintendent / Supervisor)
+                            // Kartu orang (Manager / Superintendent / Supervisor) - nama & jabatan tampil penuh (tidak dipotong)
                             const personCard = (emp: any, tone: string) => (
                               <button
                                 key={emp.nik}
                                 type="button"
                                 onClick={() => setSelectedEmployee(emp)}
-                                title={`${emp.name} — ${emp.jabatan || "-"}`}
-                                className={`w-full max-w-[10rem] min-w-0 p-2 rounded-2xl border bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col items-center gap-1.5 ${tone}`}
+                                className={`relative z-10 w-full max-w-[11rem] min-w-0 px-2 py-1.5 rounded-2xl border bg-white shadow-xs hover:shadow-md transition-shadow cursor-pointer flex flex-col items-center gap-0.5 ${tone}`}
                               >
-                                {avatar(emp, 'w-12 h-12 text-base bg-slate-100 text-slate-700')}
-                                <div className="text-[11px] font-extrabold text-slate-800 leading-tight line-clamp-2 break-words w-full">{emp.name}</div>
-                                <div className="text-[10px] text-slate-500 leading-tight line-clamp-2 break-words w-full">{emp.jabatan || '-'}</div>
+                                {avatar(emp, 'w-10 h-10 text-sm bg-slate-100 text-slate-700')}
+                                <div className="w-full text-[11px] font-extrabold text-slate-800 leading-tight break-words">{emp.name}</div>
+                                <div className="w-full text-[10px] text-slate-500 leading-tight break-words">{emp.jabatan || '-'}</div>
                                 <div className="text-[9px] font-mono text-slate-400">{emp.nik}</div>
                               </button>
                             );
 
                             const vacantCard = (label: string) => (
-                              <div className="w-full max-w-[10rem] p-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center">
-                                <div className="text-[11px] font-extrabold text-slate-500">{label}</div>
+                              <div className="relative z-10 w-full max-w-[11rem] p-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center">
+                                <div className="text-[11px] font-extrabold text-slate-500 leading-tight break-words">{label}</div>
                                 <div className="text-[10px] text-slate-400">Kosong / Tidak sesuai pencarian</div>
                               </div>
                             );
 
-                            // Baris ringkas (Foreman / Staff / Crew)
+                            // Baris ringkas (Foreman / Staff / Crew) - nama dibungkus ke baris berikutnya, tidak dipotong
                             const compactRow = (emp: any) => (
                               <button
                                 key={emp.nik}
                                 type="button"
-                                title={`${emp.name} — ${emp.jabatan || "-"}`}
                                 onClick={() => setSelectedEmployee(emp)}
-                                className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                                className="w-full flex items-start gap-1.5 p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer text-left"
                               >
-                                {avatar(emp, 'w-7 h-7 text-[10px] bg-slate-100 text-slate-700')}
-                                <div className="min-w-0">
-                                  <div className="text-[11px] font-bold text-slate-800 truncate">{emp.name}</div>
-                                  <div className="text-[9.5px] text-slate-400 truncate">{emp.jabatan || '-'}</div>
+                                {avatar(emp, 'w-6 h-6 text-[9px] bg-slate-100 text-slate-700 mt-0.5')}
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[10.5px] font-bold text-slate-800 leading-tight break-words">{emp.name}</div>
+                                  <div className="text-[9.5px] text-slate-400 leading-tight break-words">{emp.jabatan || '-'}</div>
                                 </div>
                               </button>
                             );
 
-                            const vLine = <div className="w-0.5 h-4 bg-slate-300 mx-auto" />;
+                            // Supervisor: 1 orang tampil sebagai kartu foto, lebih dari 1 digabung dalam satu kotak
+                            const supervisorBlock = (list: any[]) => (list.length === 1
+                              ? personCard(list[0], 'border-cyan-200')
+                              : (
+                                <div className="relative z-10 w-full rounded-xl border border-cyan-200 bg-cyan-50 p-1">
+                                  <div className="text-[10px] font-extrabold uppercase tracking-wide px-1 pb-1 leading-tight text-cyan-800">Supervisor · {list.length}</div>
+                                  <div className="bg-white rounded-lg">
+                                    {list.map(emp => (
+                                      <button
+                                        key={emp.nik}
+                                        type="button"
+                                        onClick={() => setSelectedEmployee(emp)}
+                                        className="w-full flex items-start gap-1.5 p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                                      >
+                                        {avatar(emp, 'w-8 h-8 text-[10px] bg-slate-100 text-slate-700')}
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-[10.5px] font-bold text-slate-800 leading-tight break-words">{emp.name}</div>
+                                          <div className="text-[9.5px] text-slate-400 leading-tight break-words">{emp.jabatan || '-'}</div>
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ));
 
-                            const sectionNode = (name: string) => {
+                            const sectionHeader = (name: string, total: number) => (
+                              <div className="relative z-10 w-full rounded-xl bg-[#22a7b8] text-white px-1.5 py-1.5 text-center shadow-sm">
+                                <div className="text-[10.5px] font-black uppercase tracking-wide leading-tight break-words">{name}</div>
+                                <div className="text-[10px] font-semibold opacity-90">{total} Orang</div>
+                              </div>
+                            );
+
+                            const groupBox = (title: string, list: any[], tone: string, titleTone: string) => (
+                              <div className={`relative z-10 w-full rounded-xl border p-1 ${tone}`}>
+                                <div className={`text-[10px] font-extrabold uppercase tracking-wide px-1 pb-1 leading-tight ${titleTone}`}>{title} · {list.length}</div>
+                                <div className="bg-white rounded-lg">{list.map(emp => compactRow(emp))}</div>
+                              </div>
+                            );
+
+                            const crewBox = (list: any[]) => (
+                              <details className="relative z-10 w-full rounded-xl border border-slate-200 bg-slate-50 p-1 group/crew" open={!!q}>
+                                <summary className="flex items-center justify-between gap-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-600 px-1 py-0.5 cursor-pointer select-none list-none">
+                                  <span>Crew · {list.length}</span>
+                                  <ChevronDown className="w-3.5 h-3.5 shrink-0 transition-transform group-open/crew:rotate-180" />
+                                </summary>
+                                <div className="bg-white rounded-lg mt-1 max-h-72 overflow-y-auto custom-scrollbar">
+                                  {list.map(emp => compactRow(emp))}
+                                </div>
+                              </details>
+                            );
+
+                            const sectionTotal = (name: string) => {
+                              const b = sections.get(name);
+                              return b ? b.supervisor.length + b.foreman.length + b.staff.length + b.crew.length : 0;
+                            };
+
+                            // ===== Susunan kolom bagan =====
+                            const presentSections = (names: string[]) => names.filter(n => sections.has(n));
+                            type OrgGroup = { key: string; spts: any[] | null; label: string; cols: string[] };
+                            const groups: OrgGroup[] = [
+                              { key: 'prep', spts: prepSpts, label: 'Preparation Superintendent', cols: presentSections(PREP_SECTIONS) },
+                              { key: 'lab', spts: labSpts, label: 'Laboratory Superintendent', cols: presentSections(LAB_SECTIONS) },
+                              ...presentSections(DIRECT_SECTIONS).map(name => ({ key: name, spts: null, label: name, cols: [name] })),
+                            ]
+                              .filter(g => g.spts === null || g.spts.length > 0 || g.cols.length > 0)
+                              .map(g => (g.cols.length > 0 ? g : { ...g, cols: [`__empty_${g.key}`] }));
+
+                            const columns: Array<{ name: string; groupIdx: number; pos: number; size: number }> = [];
+                            groups.forEach((g, gi) => g.cols.forEach((name, pos) => columns.push({ name, groupIdx: gi, pos, size: g.cols.length })));
+                            const nCols = Math.max(columns.length, 1);
+
+                            // Isi sel per level. Hanya Section & Supervisor yang dibuat sejajar antar kolom;
+                            // Foreman, Admin / Staff, dan Crew ditumpuk langsung di bawahnya (baris 'body') agar garis tidak memanjang.
+                            // Administration turun ke baris 'body', sejajar Admin / Staff Inventory Control.
+                            const ROWS = ['header', 'supervisor', 'body'] as const;
+                            const joinLine = <div className="w-0.5 h-2 shrink-0 bg-slate-300 mx-auto" />;
+                            const cellContent = (name: string, row: typeof ROWS[number]): React.ReactNode => {
+                              if (name.startsWith('__empty_')) return null;
                               const b = sections.get(name);
                               if (!b) return null;
-                              const total = b.supervisor.length + b.foreman.length + b.staff.length + b.crew.length;
-                              return (
-                                <div className="w-full min-w-0 flex flex-col items-stretch">
-                                  <div className="rounded-xl bg-[#22a7b8] text-white px-2 py-1.5 text-center shadow-sm">
-                                    <div className="text-[10.5px] font-black uppercase tracking-wide leading-tight">{name}</div>
-                                    <div className="text-[10px] font-semibold opacity-90">{total} Orang</div>
+                              if (name === 'Administration') {
+                                if (row !== 'body' || b.staff.length + b.supervisor.length === 0) return null;
+                                return (
+                                  <div className="w-full flex flex-col items-stretch">
+                                    {sectionHeader(name, sectionTotal(name))}
+                                    <div className="w-0.5 h-2 bg-slate-300 mx-auto" />
+                                    {b.supervisor.length > 0 && <div className="mb-1.5 flex justify-center">{supervisorBlock(b.supervisor)}</div>}
+                                    {groupBox('Admin', b.staff, 'border-amber-200 bg-amber-50', 'text-amber-800')}
                                   </div>
-                                  {b.supervisor.length > 0 && (
-                                    <>
-                                      {vLine}
-                                      <div className="flex flex-col items-center gap-2">
-                                        {b.supervisor.map(emp => personCard(emp, "border-cyan-200"))}
-                                      </div>
-                                    </>
-                                  )}
-                                  {b.foreman.length > 0 && (
-                                    <>
-                                      {vLine}
-                                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-1.5">
-                                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 px-1.5 pb-1">Foreman / Officer · {b.foreman.length}</div>
-                                        <div className="bg-white rounded-lg">{b.foreman.map(emp => compactRow(emp))}</div>
-                                      </div>
-                                    </>
-                                  )}
-                                  {b.staff.length > 0 && (
-                                    <>
-                                      {vLine}
-                                      <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-1.5">
-                                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 px-1.5 pb-1">{name === 'Administration' ? 'Admin' : 'Admin / Staff'} · {b.staff.length}</div>
-                                        <div className="bg-white rounded-lg">{b.staff.map(emp => compactRow(emp))}</div>
-                                      </div>
-                                    </>
-                                  )}
-                                  {b.crew.length > 0 && (
-                                    <>
-                                      {vLine}
-                                      <details className="rounded-xl border border-slate-200 bg-slate-50/60 p-1.5 group/crew" open={!!q}>
-                                        <summary className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-600 px-1.5 py-0.5 cursor-pointer select-none list-none">
-                                          <span>Crew · {b.crew.length}</span>
-                                          <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/crew:rotate-180" />
-                                        </summary>
-                                        <div className="bg-white rounded-lg mt-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                          {b.crew.map(emp => compactRow(emp))}
-                                        </div>
-                                      </details>
-                                    </>
-                                  )}
+                                );
+                              }
+                              if (row === 'header') return sectionHeader(name, sectionTotal(name));
+                              if (row === 'supervisor') return b.supervisor.length > 0
+                                ? <div className="w-full flex justify-center">{supervisorBlock(b.supervisor)}</div>
+                                : null;
+                              const bodyParts: React.ReactNode[] = [];
+                              if (b.foreman.length > 0) bodyParts.push(groupBox('Foreman / Officer', b.foreman, 'border-emerald-200 bg-emerald-50', 'text-emerald-800'));
+                              if (b.staff.length > 0) bodyParts.push(groupBox('Admin / Staff', b.staff, 'border-amber-200 bg-amber-50', 'text-amber-800'));
+                              if (b.crew.length > 0) bodyParts.push(crewBox(b.crew));
+                              if (bodyParts.length === 0) return null;
+                              return (
+                                <div className="w-full flex flex-col items-stretch">
+                                  {bodyParts.map((part, i) => (
+                                    <React.Fragment key={i}>
+                                      {i > 0 && joinLine}
+                                      {part}
+                                    </React.Fragment>
+                                  ))}
                                 </div>
                               );
                             };
 
-                            const presentSections = (names: string[]) => names.filter(n => sections.has(n));
-                            const prepChildren = presentSections(PREP_SECTIONS);
-                            const labChildren = presentSections(LAB_SECTIONS);
-                            const directChildren = presentSections(DIRECT_SECTIONS);
-
-                            const superintendentBranch = (spts: any[], label: string, children: string[]) => (
-                              <li key={label} style={{ flex: `${Math.max(children.length, 1)} 1 0` }}>
-                                <div className="w-full flex flex-wrap gap-2 justify-center">
-                                  {spts.length > 0
-                                    ? spts.map(emp => personCard(emp, "border-blue-200"))
-                                    : vacantCard(label)}
-                                </div>
-                                {children.length > 0 && (
-                                  <ul>
-                                    {children.map(name => (
-                                      <li key={name}><div className="w-full">{sectionNode(name)}</div></li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </li>
+                            // Garis penghubung
+                            const LINE = 'bg-slate-300';
+                            const vFull = <div className={`absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 ${LINE}`} />;
+                            // Baris konektor: garis horizontal di atas (setengah kiri / kanan) + garis turun di tengah
+                            const connectorCell = (key: string, gridColumn: string, pos: number, size: number) => (
+                              <div key={key} className="relative h-3" style={{ gridColumn }}>
+                                {pos > 0 && <div className={`absolute top-0 left-0 right-1/2 h-0.5 ${LINE}`} />}
+                                {pos < size - 1 && <div className={`absolute top-0 left-1/2 right-0 h-0.5 ${LINE}`} />}
+                                {vFull}
+                              </div>
                             );
 
+                            // Sel konten: garis masuk dari atas, konten, lalu garis lanjut ke bawah bila masih ada level berikutnya
+                            const contentCell = (key: string, gridColumn: string, node: React.ReactNode, hasBelow: boolean) => {
+                              if (!node) {
+                                return <div key={key} className="relative" style={{ gridColumn }}>{hasBelow && vFull}</div>;
+                              }
+                              return (
+                                <div key={key} className="px-0.5 flex flex-col items-center" style={{ gridColumn }}>
+                                  <div className={`w-0.5 h-2 shrink-0 ${LINE}`} />
+                                  {node}
+                                  {hasBelow && <div className={`w-0.5 flex-1 min-h-2 ${LINE}`} />}
+                                </div>
+                              );
+                            };
+
+                            const groupStart = (gi: number) => columns.findIndex(c => c.groupIdx === gi) + 1;
+                            const groupSpan = (gi: number) => `${groupStart(gi)} / span ${groups[gi].cols.length}`;
+                            const colSpan = (ci: number) => `${ci + 1} / span 1`;
+
+                            // ===== Tampilan vertikal untuk layar sempit =====
+                            const stackSection = (name: string) => {
+                              const b = sections.get(name);
+                              if (!b) return null;
+                              return (
+                                <div key={name} className="relative pl-4 pt-3 before:absolute before:left-0 before:top-7 before:w-3 before:h-0.5 before:bg-slate-300">
+                                  <div className="space-y-2">
+                                    {sectionHeader(name, sectionTotal(name))}
+                                    {b.supervisor.length > 0 && supervisorBlock(b.supervisor)}
+                                    {b.foreman.length > 0 && groupBox('Foreman / Officer', b.foreman, 'border-emerald-200 bg-emerald-50', 'text-emerald-800')}
+                                    {b.staff.length > 0 && groupBox(name === 'Administration' ? 'Admin' : 'Admin / Staff', b.staff, 'border-amber-200 bg-amber-50', 'text-amber-800')}
+                                    {b.crew.length > 0 && crewBox(b.crew)}
+                                  </div>
+                                </div>
+                              );
+                            };
+
                             return (
-                              <div className="max-h-[75vh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-xl border border-slate-100 bg-slate-50/40 p-4">
-                                <style>{`
-                                  .org-tree ul { position: relative; display: flex; justify-content: center; width: 100%; padding: 20px 0 0; margin: 0; }
-                                  .org-tree li { position: relative; list-style: none; text-align: center; padding: 20px 4px 0; display: flex; flex-direction: column; align-items: center; flex: 1 1 0; min-width: 0; }
-                                  .org-tree li::before, .org-tree li::after { content: ''; position: absolute; top: 0; right: 50%; width: 50%; height: 20px; border-top: 2px solid #cbd5e1; }
-                                  .org-tree li::after { right: auto; left: 50%; border-left: 2px solid #cbd5e1; }
-                                  .org-tree li:only-child::before, .org-tree li:only-child::after { display: none; }
-                                  .org-tree li:only-child { padding-top: 0; }
-                                  .org-tree li:first-child::before, .org-tree li:last-child::after { border: 0 none; }
-                                  .org-tree li:last-child::before { border-right: 2px solid #cbd5e1; border-radius: 0 8px 0 0; }
-                                  .org-tree li:first-child::after { border-radius: 8px 0 0 0; }
-                                  .org-tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; height: 20px; border-left: 2px solid #cbd5e1; }
-                                  .org-tree > ul { padding-top: 0; }
-                                  /* Layar sempit: bagan menjadi pohon vertikal agar tidak perlu geser kiri-kanan */
-                                  @media (max-width: 1023px) {
-                                    .org-tree ul { display: block; padding: 0 0 0 14px; margin-left: 10px; border-left: 2px solid #cbd5e1; }
-                                    .org-tree > ul { padding-left: 0; margin-left: 0; border-left: 0; }
-                                    .org-tree ul ul::before { display: none; }
-                                    .org-tree li { padding: 10px 0 0 !important; align-items: stretch; text-align: left; flex: none !important; }
-                                    .org-tree li::before { display: block !important; content: ''; position: absolute; top: 30px; left: -14px; right: auto; width: 12px; height: 0; border: 0 !important; border-top: 2px solid #cbd5e1 !important; border-radius: 0 !important; }
-                                    .org-tree li::after { display: none !important; }
-                                    .org-tree > ul > li::before { display: none !important; }
-                                  }
-                                `}</style>
-                                <div className="org-tree w-full">
-                                  <ul>
-                                    <li>
+                              <div className="max-h-[75vh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-xl border border-slate-100 bg-slate-50/40 p-3 sm:p-4">
+                                {/* Layar lebar: bagan grid dengan baris level yang sama tinggi agar garis & kotak selalu sejajar */}
+                                <div className="hidden lg:grid w-full" style={{ gridTemplateColumns: `repeat(${nCols}, minmax(0, 1fr))` }}>
+                                  {/* Level 1: Manager */}
+                                  <div className="flex flex-col items-center" style={{ gridColumn: `1 / span ${nCols}` }}>
+                                    <div className="w-full flex flex-wrap gap-2 justify-center">
+                                      {managers.length > 0
+                                        ? managers.map(emp => personCard(emp, 'border-violet-300 ring-2 ring-violet-100'))
+                                        : vacantCard('Preparation & Laboratory Manager')}
+                                    </div>
+                                    <div className={`w-0.5 h-3 ${LINE}`} />
+                                  </div>
+
+                                  {/* Konektor Manager -> cabang */}
+                                  {groups.map((g, gi) => connectorCell(`c1-${g.key}`, groupSpan(gi), gi, groups.length))}
+
+                                  {/* Level 2: Superintendent (cabang langsung Manager hanya diteruskan garisnya) */}
+                                  {groups.map((g, gi) => g.spts === null ? (
+                                    <div key={`s-${g.key}`} className="relative" style={{ gridColumn: groupSpan(gi) }}>{vFull}</div>
+                                  ) : (
+                                    <div key={`s-${g.key}`} className="px-1 flex flex-col items-center" style={{ gridColumn: groupSpan(gi) }}>
                                       <div className="w-full flex flex-wrap gap-2 justify-center">
-                                        {managers.length > 0
-                                          ? managers.map(emp => personCard(emp, "border-violet-300 ring-2 ring-violet-100"))
-                                          : vacantCard("Preparation & Laboratory Manager")}
+                                        {g.spts.length > 0 ? g.spts.map(emp => personCard(emp, 'border-blue-200')) : vacantCard(g.label)}
                                       </div>
-                                      <ul>
-                                        {superintendentBranch(prepSpts, "Preparation Superintendent", prepChildren)}
-                                        {superintendentBranch(labSpts, "Laboratory Superintendent", labChildren)}
-                                        {directChildren.map(name => (
-                                          <li key={name}><div className="w-full">{sectionNode(name)}</div></li>
-                                        ))}
-                                      </ul>
-                                    </li>
-                                  </ul>
+                                      <div className={`w-0.5 flex-1 min-h-2 ${LINE}`} />
+                                    </div>
+                                  ))}
+
+                                  {/* Konektor Superintendent -> Section */}
+                                  {columns.map((c, ci) => connectorCell(`c2-${ci}`, colSpan(ci), c.pos, c.size))}
+
+                                  {/* Level 3+: Section, Supervisor, Foreman, Staff, Crew */}
+                                  {ROWS.map((row, ri) => columns.map((c, ci) => {
+                                    const node = cellContent(c.name, row);
+                                    const hasBelow = ROWS.slice(ri + 1).some(r => cellContent(c.name, r) !== null);
+                                    return contentCell(`${row}-${ci}`, colSpan(ci), node, hasBelow);
+                                  }))}
+                                </div>
+
+                                {/* Layar sempit: pohon vertikal */}
+                                <div className="lg:hidden space-y-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    {managers.length > 0
+                                      ? managers.map(emp => personCard(emp, 'border-violet-300 ring-2 ring-violet-100'))
+                                      : vacantCard('Preparation & Laboratory Manager')}
+                                  </div>
+                                  <div className="ml-4 pl-3 border-l-2 border-slate-300 space-y-3">
+                                    {groups.map(g => (
+                                      <div key={`m-${g.key}`} className="relative pt-3 before:absolute before:-left-3 before:top-8 before:w-3 before:h-0.5 before:bg-slate-300">
+                                        {g.spts === null ? (
+                                          stackSection(g.cols[0])
+                                        ) : (
+                                          <>
+                                            <div className="flex flex-wrap gap-2">
+                                              {g.spts.length > 0 ? g.spts.map(emp => personCard(emp, 'border-blue-200')) : vacantCard(g.label)}
+                                            </div>
+                                            <div className="ml-4 pl-0 border-l-2 border-slate-300">
+                                              {g.cols.filter(n => !n.startsWith('__empty_')).map(n => stackSection(n))}
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
                             );
@@ -2972,7 +3077,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-white/25 border-2 border-white/60 overflow-hidden flex items-center justify-center shrink-0 shadow-lg relative ring-4 ring-white/30 group mx-auto">
                   {selectedEmployee.photo ? (
                     <img 
-                      src={formatAvatarUrl(selectedEmployee.photo)} 
+                      src={formatAvatarUrl(selectedEmployee.photo, 800)} 
                       alt={selectedEmployee.name} 
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
                       referrerPolicy="no-referrer"
@@ -4686,8 +4791,60 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         const rawList = Array.isArray(val) ? val : String(val).split(/[\r\n,;]+/);
                         return rawList
                           .map(s => String(s).trim())
-                          .filter(s => s && s !== '-' && s !== '0' && s !== '#N/A')
-                          .map(s => formatShortDate(s));
+                          .filter(s => s && s !== '-' && s !== '0' && s !== '#N/A');
+                      };
+
+                      // Jangka waktu: Konseling & ST = 3 bulan, SP I - SPPT = 6 bulan (dihitung dari tanggal terbit)
+                      const addMonthsClamped = (d: Date, months: number): Date => {
+                        const r = new Date(d.getFullYear(), d.getMonth() + months, 1);
+                        const lastDay = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+                        r.setDate(Math.min(d.getDate(), lastDay));
+                        return r;
+                      };
+                      const todayStart = new Date();
+                      todayStart.setHours(0, 0, 0, 0);
+
+                      const periodCell = (raw: string | undefined, months: number, accent: { border: string; bar: string }) => {
+                        if (!raw) return <span className="block text-center text-slate-300">—</span>;
+                        const base = parseSanctionDate(raw);
+                        if (!base) {
+                          return (
+                            <div className={`mx-auto w-fit min-w-[9.5rem] text-center rounded-lg border border-slate-200 border-l-[3px] ${accent.border} bg-white px-2.5 py-2`}>
+                              <span className="text-xs font-bold text-slate-800 tabular-nums">{formatShortDate(raw)}</span>
+                              <div className="mt-0.5 text-[10px] text-slate-400">Tanggal tidak terbaca</div>
+                            </div>
+                          );
+                        }
+                        const end = addMonthsClamped(base, months);
+                        const totalMs = Math.max(1, end.getTime() - base.getTime());
+                        const elapsed = Math.min(1, Math.max(0, (todayStart.getTime() - base.getTime()) / totalMs));
+                        const daysLeft = Math.round((end.getTime() - todayStart.getTime()) / 86400000);
+                        const isActive = daysLeft >= 0;
+                        return (
+                          <div className={`mx-auto w-fit min-w-[9.5rem] text-center rounded-lg border border-slate-200 border-l-[3px] ${accent.border} bg-white px-2.5 py-2 shadow-2xs`}>
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-xs font-bold text-slate-800 tabular-nums">{formatShortDate(base)}</span>
+                              <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                                isActive ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'
+                              }`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                                {isActive ? 'Aktif' : 'Selesai'}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 text-[10px] text-slate-500 tabular-nums">
+                              Berlaku s/d {formatShortDate(end)}
+                            </div>
+                            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className={`h-full rounded-full ${isActive ? accent.bar : 'bg-slate-300'}`}
+                                style={{ width: `${Math.round(elapsed * 100)}%` }}
+                              />
+                            </div>
+                            <div className="mt-1 text-[10px] text-slate-400 tabular-nums">
+                              {isActive ? `Sisa ${daysLeft} hari` : `Berakhir ${Math.abs(daysLeft)} hari lalu`}
+                            </div>
+                          </div>
+                        );
                       };
 
                       const k1Dates = parseSanctionDateList(k1);
@@ -4719,104 +4876,62 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         spptDates.length
                       );
 
+                      const sanctionColumns = [
+                        { label: 'Konseling I', dates: k1Dates, months: 3, head: 'text-[#135e69]', accent: { border: 'border-l-teal-500', bar: 'bg-teal-500' } },
+                        { label: 'Konseling II', dates: k2Dates, months: 3, head: 'text-[#135e69]', accent: { border: 'border-l-teal-500', bar: 'bg-teal-500' } },
+                        { label: 'Konseling III', dates: k3Dates, months: 3, head: 'text-[#135e69]', accent: { border: 'border-l-teal-500', bar: 'bg-teal-500' } },
+                        { label: 'Surat Teguran', dates: stDates, months: 3, head: 'text-yellow-700', accent: { border: 'border-l-yellow-500', bar: 'bg-yellow-500' } },
+                        { label: 'SP I', dates: sp1Dates, months: 6, head: 'text-amber-700', accent: { border: 'border-l-amber-500', bar: 'bg-amber-500' } },
+                        { label: 'SP II', dates: sp2Dates, months: 6, head: 'text-orange-700', accent: { border: 'border-l-orange-500', bar: 'bg-orange-500' } },
+                        { label: 'SP III', dates: sp3Dates, months: 6, head: 'text-rose-700', accent: { border: 'border-l-rose-500', bar: 'bg-rose-500' } },
+                        { label: 'SPPT', dates: spptDates, months: 6, head: 'text-rose-900', accent: { border: 'border-l-rose-800', bar: 'bg-rose-700' } },
+                      ];
+
+                      const activeRecordCount = sanctionColumns.reduce((sum, col) => sum + col.dates.filter(raw => {
+                        const base = parseSanctionDate(raw);
+                        return !!base && addMonthsClamped(base, col.months).getTime() >= todayStart.getTime();
+                      }).length, 0);
+
                       return (
-                        <Card className="p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col mb-6 bg-white rounded-2xl max-h-[360px]">
-                          <div className="overflow-x-auto overflow-y-auto max-h-[300px] custom-scrollbar">
+                        <Card className="p-0 overflow-hidden border-slate-200/60 shadow-sm flex flex-col mb-6 bg-white rounded-2xl">
+                          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-100 bg-white">
+                            <div className="flex items-center gap-2">
+                              <CalendarRange className="w-4 h-4 text-slate-500" />
+                              <span className="text-xs font-extrabold uppercase tracking-wider text-slate-700">Riwayat &amp; Jangka Waktu Sanksi</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                              <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-500" />Aktif</span>
+                              <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Selesai</span>
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-700">{activeRecordCount} catatan aktif</span>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto overflow-y-auto max-h-[340px] custom-scrollbar">
                             <table className="w-full text-sm text-left border-collapse">
-                              <thead className="text-xs uppercase bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
+                              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                                 <tr>
-                                  <th className="px-4 py-3 font-bold text-[#135e69] whitespace-nowrap bg-slate-50">Konseling I</th>
-                                  <th className="px-4 py-3 font-bold text-[#135e69] whitespace-nowrap bg-slate-50">Konseling II</th>
-                                  <th className="px-4 py-3 font-bold text-[#135e69] whitespace-nowrap bg-slate-50">Konseling III</th>
-                                  <th className="px-4 py-3 font-bold text-yellow-700 whitespace-nowrap bg-slate-50">Surat Teguran (ST)</th>
-                                  <th className="px-4 py-3 font-bold text-amber-700 whitespace-nowrap bg-slate-50">SP I</th>
-                                  <th className="px-4 py-3 font-bold text-orange-700 whitespace-nowrap bg-slate-50">SP II</th>
-                                  <th className="px-4 py-3 font-bold text-rose-700 whitespace-nowrap bg-slate-50">SP III</th>
-                                  <th className="px-4 py-3 font-bold text-rose-900 whitespace-nowrap bg-slate-50">SPPT</th>
+                                  {sanctionColumns.map(col => (
+                                    <th key={col.label} className="px-3 py-2.5 whitespace-nowrap bg-slate-50 align-bottom text-center">
+                                      <div className={`text-[11px] font-bold uppercase tracking-wide ${col.head}`}>{col.label}</div>
+                                      <div className="text-[10px] font-medium normal-case text-slate-400">Masa berlaku {col.months} bulan</div>
+                                    </th>
+                                  ))}
                                 </tr>
                               </thead>
                               <tbody>
                                 {maxSanctionRows === 0 ? (
-                                  <tr className="border-b border-slate-50 bg-slate-50/30">
-                                    <td colSpan={8} className="px-4 py-10 text-center text-slate-400 font-medium">
+                                  <tr>
+                                    <td colSpan={sanctionColumns.length} className="px-4 py-10 text-center text-slate-400 font-medium">
                                       Belum ada catatan rincian tanggal surat peringatan (ST/SP) atau konseling.
                                     </td>
                                   </tr>
                                 ) : (
                                   Array.from({ length: maxSanctionRows }).map((_, idx) => (
-                                    <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
-                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
-                                        {k1Dates[idx] ? (
-                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
-                                            {k1Dates[idx]}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-300">-</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
-                                        {k2Dates[idx] ? (
-                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
-                                            {k2Dates[idx]}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-300">-</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
-                                        {k3Dates[idx] ? (
-                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
-                                            {k3Dates[idx]}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-300">-</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
-                                        {stDates[idx] ? (
-                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-yellow-50 text-yellow-800 border border-yellow-200">
-                                            {stDates[idx]}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-300">-</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
-                                        {sp1Dates[idx] ? (
-                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-50 text-amber-800 border border-amber-200">
-                                            {sp1Dates[idx]}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-300">-</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
-                                        {sp2Dates[idx] ? (
-                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-orange-50 text-orange-800 border border-orange-200">
-                                            {sp2Dates[idx]}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-300">-</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
-                                        {sp3Dates[idx] ? (
-                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-rose-50 text-rose-700 border border-rose-200">
-                                            {sp3Dates[idx]}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-300">-</span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">
-                                        {spptDates[idx] ? (
-                                          <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md bg-rose-100 text-rose-950 border border-rose-300 font-bold">
-                                            {spptDates[idx]}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-300">-</span>
-                                        )}
-                                      </td>
+                                    <tr key={idx} className="border-b border-slate-100 last:border-b-0 align-top">
+                                      {sanctionColumns.map(col => (
+                                        <td key={col.label} className="px-3 py-2.5 align-middle text-center">
+                                          {periodCell(col.dates[idx], col.months, col.accent)}
+                                        </td>
+                                      ))}
                                     </tr>
                                   ))
                                 )}

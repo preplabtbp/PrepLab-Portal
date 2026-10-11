@@ -991,7 +991,7 @@ export function ProfilePage({
                   >
                     {avatar ? (
                       <img 
-                        src={formatAvatarUrl(avatar)} 
+                        src={formatAvatarUrl(avatar, 400)} 
                         alt={inspectorName || 'Foto Profil'} 
                         className="w-full h-full rounded-full object-cover"
                         referrerPolicy="no-referrer"
