@@ -570,12 +570,13 @@ async function getSenamHistory(): Promise<Record<string, number>> {
       if (p.nik) countMap[p.nik.trim()] = (countMap[p.nik.trim()] || 0) + 1;
     });
 
-    // 2. Data riwayat dari jadwal tersimpan sebelumnya
+    // 2. Data riwayat dari jadwal tersimpan sebelumnya (KHUSUS SHIFT PAGI)
     allSchedules.forEach(schRow => {
       if (schRow.scheduleData) {
         const sch = schRow.scheduleData as Record<string, any>;
         Object.values(sch).forEach((dayData: any) => {
-          ['pagi', 'malam'].forEach(shift => {
+          // User: "perbaiki rotasi senam agar yang dimaksud merata adalah senam pagi hari"
+          ['pagi'].forEach(shift => {
             if (dayData[shift]) {
               Object.values(dayData[shift]).forEach((slotArr: any) => {
                 if (Array.isArray(slotArr)) {
@@ -1334,38 +1335,25 @@ p5mRouter.post("/randomize", async (req, res) => {
       // SENAM RULE:
       const isSenam = slot.kategori === 'Senam' || slot.isSenam || (slot.materi && slot.materi.toLowerCase().includes('senam'));
 
-      // ── ATURAN DISTRIBUSI SENAM MERATA (Pagi & Malam) ──
-      // User: "pastikan materi senam dibawakan secara merata, personil yang belum dapat senam harus dapat semua sebelum ada yang terpilih 2x"
-      if (isSenam) {
-        // Ambil SEMUA personil yang masuk shift kerja ini di hari ini dan belum dapat tugas
+      // ── ATURAN DISTRIBUSI SENAM MERATA (Khusus Senam Pagi Hari) ──
+      // User: "perbaiki rotasi senam agar yang dimaksud merata adalah senam pagi hari"
+      if (isSenam && shift === 'pagi') {
+        // Ambil SEMUA personil yang masuk shift pagi di hari ini dan belum dapat tugas
         const availableWorkersOnDay = poolKaryawan.filter(k => {
           const jdwl = (k.jadwal[hari] || '').toUpperCase();
-          const isMasuk = shift === 'malam'
-            ? (jdwl === 'N' || jdwl.startsWith('N'))
-            : (jdwl === 'D' || jdwl === 'LS' || jdwl === 'S' || jdwl === 'NONSHIFT');
+          const isMasuk = (jdwl === 'D' || jdwl === 'LS' || jdwl === 'S' || jdwl === 'NONSHIFT');
           if (!isMasuk) return false;
-          if (shift === 'pagi' && k.tugasMingguIni >= 1) return false;
+          if (k.tugasMingguIni >= 1) return false;
           if (sudahDipilihHariIni.has(k.nama)) return false;
           return true;
         });
 
-        let candidatePool = availableWorkersOnDay;
-        // Fallback untuk shift malam jika semua pekerja malam sudah ada penugasan lain di minggu ini
-        if (candidatePool.length === 0 && shift === 'malam') {
-          candidatePool = poolKaryawan.filter(k => {
-            const jdwl = (k.jadwal[hari] || '').toUpperCase();
-            if (!(jdwl === 'N' || jdwl.startsWith('N'))) return false;
-            if (sudahDipilihHariIni.has(k.nama)) return false;
-            return true;
-          });
-        }
-
-        if (candidatePool.length > 0) {
-          // Cari angka senam terendah di antara personil yang masuk kerja di shift ini
-          const globalMinSenam = Math.min(...candidatePool.map(c => c.senamCount || 0));
+        if (availableWorkersOnDay.length > 0) {
+          // Cari angka senam pagi terendah di antara personil yang masuk kerja shift pagi hari ini
+          const globalMinSenam = Math.min(...availableWorkersOnDay.map(c => c.senamCount || 0));
 
           // Filter ketat: HANYA personil yang memiliki senamCount terendah (semua 0x harus habis dulu sebelum ada yang dapat 2x)
-          const strictlyFreshWorkers = candidatePool.filter(c => (c.senamCount || 0) === globalMinSenam);
+          const strictlyFreshWorkers = availableWorkersOnDay.filter(c => (c.senamCount || 0) === globalMinSenam);
 
           // Jika ada slot.kelas atau slot.divisi dan ada kandidat fresh di kelas/divisi tersebut, utamakan
           let prioritized = strictlyFreshWorkers;
@@ -1603,7 +1591,8 @@ p5mRouter.post("/randomize", async (req, res) => {
           if (isJsaTarget) {
             if (kat !== 'JSA' && !(/\bjsa\b/i.test(j) || j.toLowerCase().includes('job safety analysis'))) return false;
           } else if (isIkTarget) {
-            if ((kat !== 'IK' && !(/\bik\b/i.test(j) || j.toLowerCase().includes('instruksi kerja') || /\bsop\b/i.test(j))) || kat === 'JSA') return false;
+            if (kat === 'SOP' || kat === 'JSA' || /\bsop\b/i.test(j) || j.toLowerCase().includes('standar operasional') || j.toLowerCase().includes('standar operasi')) return false;
+            if (kat !== 'IK' && !(/\bik\b/i.test(j) || j.toLowerCase().includes('instruksi kerja'))) return false;
           } else if (isSopTarget) {
             if (!isSopIk(j)) return false;
           } else if (kategoriTarget && kategoriTarget !== 'All') {
@@ -1867,9 +1856,7 @@ p5mRouter.post("/randomize", async (req, res) => {
               sudahDipilihMalam.add(terpilih.nama);
               terpilih.tugasMingguIni++;
               terpilih.hariTerakhirBriefingSesi = indexHariIni;
-              if (isSenamSlot) {
-                terpilih.senamCount = (terpilih.senamCount || 0) + 1;
-              }
+              // Catatan: senamCount tidak diincrement di shift malam karena rotasi merata dikhususkan untuk senam pagi hari
             }
             const isFallback = Boolean((cand as any)?._isFallback);
 
