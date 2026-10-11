@@ -1,6 +1,17 @@
 import type { TableRowData } from '../NotionDatabaseTable';
 export type { TableRowData };
 
+export function isSubItemRow(row: TableRowData): boolean {
+  if (!row) return false;
+  if (row.isSubItem === 'true' || (row as any).isSubItem === true) return true;
+  if (row.parentId || row.parentRowId) return true;
+  const title = String(row['Jenis kegiatan'] || row['Jenis Kegiatan'] || row['Name'] || row['Judul'] || '').trim();
+  if (title.startsWith('↳') || title.startsWith('↪')) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Formats any date string or Date object into DD-MM-YYYY format.
  * Examples: '2026-10-10' -> '10-10-2026', '2026-10-10 08:30' -> '10-10-2026 08:30'
