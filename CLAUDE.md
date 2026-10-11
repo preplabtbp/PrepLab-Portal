@@ -7,12 +7,16 @@
 - **Database**: PostgreSQL dikelola via Drizzle ORM (`src/db/schema.ts` & `src/db/index.ts`).
 - **External Services**: Google Drive API & Google Sheets API untuk arsip foto, PDF laporan, dan sync roster.
 
-## 2. Development Commands
+## 2. Development Commands & Git/Deploy Rules
 - Run Dev Server: `npm run dev` (Menjalankan `tsx watch server.ts` yang melayani Express API + Vite HMR)
 - Type Check / Lint: `npm run lint` (Menjalankan `tsc --noEmit`)
 - Build Production: `npm run build`
 - Run Tests: `npm test`
-- ⚠️ **Peringatan Hosting Cloud Run**: Akun hosting GCP telah berpindah. Dilarang mendeploy ke project lama `project-054e3351-b8d1-42f7-9c8` (*My First Project*). Selalu pastikan gcloud menargetkan project ID akun baru sebelum menjalankan script deploy.
+- 🚨 **ATURAN MUTLAK GIT PUSH & CLOUD DEPLOY (SEMUA BRANCH)**:
+  - **DILARANG KERAS** melakukan `git push` ke branch manapun (`main`, `staging`, `PC-Alvin`, dsb.) tanpa perintah eksplisit dari user.
+  - **DILARANG KERAS** menjalankan Cloud Build atau deploy ke server (`gcloud run deploy`, `gcloud builds submit`, dsb.) jika tidak diminta secara eksplisit.
+  - Seluruh pekerjaan harus diselesaikan dan divalidasi secara lokal (`npm run lint`), lalu laporkan ke user untuk menunggu instruksi selanjutnya.
+- ⚠️ **Konfigurasi Hosting Cloud Run**: Default project target resmi adalah `project-054e3351-b8d1-42f7-9c8` di region `asia-southeast2` (Jakarta).
 
 ## 3. Critical Domain Rules & Conventions
 1. **Pemisahan Tiket Temuan vs WO Permintaan**:

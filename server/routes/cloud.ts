@@ -148,23 +148,68 @@ router.post('/api/preplab-cloud-upload', async (req, res) => {
       stream.push(buffer);
       stream.push(null);
 
-      const fileMetadata = { name: filename, parents: [folderId] };
+      const cleanFilename = (filename || 'uploaded_file').replace(/\.jpeg$/i, '.jpg');
       const media = { mimeType: mimeType || 'application/octet-stream', body: stream };
-      
-      const response = await drive.files.create({
-        requestBody: fileMetadata,
-        media: media,
-        fields: 'id, webViewLink, webContentLink',
-        supportsAllDrives: true
-      });
-      
-      await drive.permissions.create({
-        fileId: response.data.id,
-        requestBody: { role: 'reader', type: 'anyone' },
-        supportsAllDrives: true
-      });
 
-      res.json({ success: true, file: response.data });
+      // Cek apakah file dengan nama yang sama sudah ada di dalam folder tujuan (trashed = false)
+      let existingFileId = null;
+      let duplicateFiles = [];
+      try {
+        const escapedFilename = cleanFilename.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+        const checkQuery = `'${folderId}' in parents and name = '${escapedFilename}' and trashed = false`;
+        const searchRes = await drive.files.list({
+          q: checkQuery,
+          fields: 'files(id, name, webViewLink, webContentLink)',
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true
+        });
+        if (searchRes.data.files && searchRes.data.files.length > 0) {
+          existingFileId = searchRes.data.files[0].id;
+          duplicateFiles = searchRes.data.files.slice(1);
+        }
+      } catch (checkErr) {
+        console.warn('Gagal cek file duplikat di Drive:', checkErr.message);
+      }
+
+      let response;
+      let overwritten = false;
+
+      if (existingFileId) {
+        // OVERWRITE file yang sudah ada
+        response = await drive.files.update({
+          fileId: existingFileId,
+          media: media,
+          fields: 'id, name, webViewLink, webContentLink',
+          supportsAllDrives: true
+        });
+        overwritten = true;
+
+        // Jika sebelumnya ada file ganda berlebih, bersihkan file ganda tersebut
+        for (const dup of duplicateFiles) {
+          try {
+            await drive.files.delete({ fileId: dup.id, supportsAllDrives: true });
+          } catch (_) {}
+        }
+      } else {
+        // Buat file baru
+        const fileMetadata = { name: cleanFilename, parents: [folderId] };
+        response = await drive.files.create({
+          requestBody: fileMetadata,
+          media: media,
+          fields: 'id, name, webViewLink, webContentLink',
+          supportsAllDrives: true
+        });
+      }
+      
+      try {
+        await drive.permissions.create({
+          fileId: response.data.id,
+          requestBody: { role: 'reader', type: 'anyone' },
+          supportsAllDrives: true
+        });
+      } catch (_) {}
+
+      res.json({ success: true, file: response.data, overwritten });
     } catch (e) {
       console.error(e);
       res.status(500).json({error: e.message});

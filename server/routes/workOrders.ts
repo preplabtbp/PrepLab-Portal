@@ -272,7 +272,7 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
 router.get(["/api/work-orders", "/api/workorders"], async (req, res) => {
     try {
       const { pt } = req.query;
-      let query: any = db.select().from(workOrders).orderBy(asc(workOrders.woId));
+      let query: any = db.select().from(workOrders).orderBy(desc(workOrders.date), desc(workOrders.id));
       if (pt && (pt as string).toUpperCase() === 'GTS') {
         query = query.where(eq(workOrders.pt, 'GTS'));
       }

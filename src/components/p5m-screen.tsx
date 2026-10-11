@@ -6,7 +6,7 @@ import {
   ChevronLeft, ArrowRight, ArrowLeft, Shield, ShieldAlert, Award, CheckCircle2, FileText,
   Briefcase, Loader2, Star, Eye, RefreshCw, Image as ImageIcon, ExternalLink,
   Building2, FileSpreadsheet, Tag, CheckSquare, Square,
-  UploadCloud, Paperclip
+  UploadCloud, Paperclip, Zap
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import * as XLSX from 'xlsx';
@@ -79,6 +79,9 @@ const KELAS_OPTIONS = [
 
 const KATEGORI_OPTIONS = [
   { value: 'All', label: 'Semua Kategori' },
+  { value: 'JSA', label: 'JSA (Job Safety Analysis)' },
+  { value: 'SOP', label: 'SOP (Standard Operating Procedure)' },
+  { value: 'IK', label: 'IK (Instruksi Kerja)' },
   { value: 'Teknis', label: 'Teknis' },
   { value: 'Non-Teknis', label: 'Non-Teknis' },
   { value: 'Senam', label: 'Senam' }
@@ -138,7 +141,469 @@ export function isTopicForbiddenForSection(title?: string, sec?: string): boolea
   return false;
 }
 
-function buildDefaultConfig() {
+// Preset khusus permintaan manajemen: Minggu ini HANYA JSA & IK
+export function buildJsaIkConfig() {
+  const slot = (divisi: string, kelas: string, kategori: string, extra?: any) => ({
+    divisi,
+    kelas,
+    kategori,
+    ...(extra || {})
+  });
+
+  const cfg: Record<string, any> = {};
+
+  // SENIN (Gabungan)
+  cfg['Senin'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'JSA'),
+        slot('Laboratory', 'SPV', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'IK'),
+        slot('Laboratory', 'SPV', 'JSA'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    }
+  };
+
+  // SELASA (Split)
+  cfg['Selasa'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'JSA'),
+        slot('Maintenance', 'Foreman/Officer', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'JSA'),
+        slot('IC', 'Admin', 'IK')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Maintenance', 'Foreman/Officer', 'JSA')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'JSA')
+      ]
+    }
+  };
+
+  // RABU (Split)
+  cfg['Rabu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Preparation', 'All', 'JSA')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('Administration', 'Admin', 'JSA')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'JSA'),
+        slot('Preparation', 'Foreman/Officer', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'JSA'),
+        slot('Laboratory', 'Foreman/Officer', 'IK')
+      ]
+    }
+  };
+
+  // KAMIS (Gabungan)
+  cfg['Kamis'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'JSA'),
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'JSA'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    }
+  };
+
+  // JUMAT (Gabungan)
+  cfg['Jumat'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'JSA'),
+        slot('Laboratory', 'SPV', 'IK'),
+        slot('All', 'Foreman/Officer', 'JSA')
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'JSA')
+      ]
+    }
+  };
+
+  // SABTU (Split)
+  cfg['Sabtu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'JSA'),
+        slot('All', 'All', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('All', 'All', 'JSA')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Preparation', 'Foreman/Officer', 'JSA')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'JSA'),
+        slot('Laboratory', 'Foreman/Officer', 'IK')
+      ]
+    }
+  };
+
+  // MINGGU (Gabungan)
+  cfg['Minggu'] = {
+    pagi: {
+      gabungan: [
+        slot('All', 'SPV', 'JSA'),
+        slot('All', 'SPV', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: []
+    }
+  };
+
+  return cfg;
+}
+
+// Preset khusus arahan manajemen: Seluruh materi IK (Senam tetap di Senin, Kamis, & Minggu materi ke-3)
+export function buildAllIkConfig() {
+  const slot = (divisi: string, kelas: string, kategori: string, extra?: any) => ({
+    divisi,
+    kelas,
+    kategori,
+    ...(extra || {})
+  });
+
+  const cfg: Record<string, any> = {};
+
+  // SENIN (Gabungan)
+  cfg['Senin'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'IK'),
+        slot('Laboratory', 'SPV', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'IK'),
+        slot('Laboratory', 'SPV', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    }
+  };
+
+  // SELASA (Split)
+  cfg['Selasa'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Maintenance', 'Foreman/Officer', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('IC', 'Admin', 'IK')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Maintenance', 'Foreman/Officer', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'IK')
+      ]
+    }
+  };
+
+  // RABU (Split)
+  cfg['Rabu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Preparation', 'All', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('Administration', 'Admin', 'IK')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Preparation', 'Foreman/Officer', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'IK')
+      ]
+    }
+  };
+
+  // KAMIS (Gabungan)
+  cfg['Kamis'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    }
+  };
+
+  // JUMAT (Gabungan)
+  cfg['Jumat'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'IK'),
+        slot('Laboratory', 'SPV', 'IK'),
+        slot('All', 'Foreman/Officer', 'IK')
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'IK')
+      ]
+    }
+  };
+
+  // SABTU (Split)
+  cfg['Sabtu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('All', 'All', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('All', 'All', 'IK')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Preparation', 'Foreman/Officer', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'IK')
+      ]
+    }
+  };
+
+  // MINGGU (Gabungan)
+  cfg['Minggu'] = {
+    pagi: {
+      gabungan: [
+        slot('All', 'SPV', 'IK'),
+        slot('All', 'SPV', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: []
+    }
+  };
+
+  return cfg;
+}
+
+// Preset khusus: Seluruh materi SOP (Senam tetap di Senin, Kamis, & Minggu materi ke-3)
+export function buildAllSopConfig() {
+  const slot = (divisi: string, kelas: string, kategori: string, extra?: any) => ({
+    divisi,
+    kelas,
+    kategori,
+    ...(extra || {})
+  });
+
+  const cfg: Record<string, any> = {};
+
+  // SENIN (Gabungan)
+  cfg['Senin'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'SOP'),
+        slot('Laboratory', 'SPV', 'SOP'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'SOP'),
+        slot('Laboratory', 'SPV', 'SOP'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    }
+  };
+
+  // SELASA (Split)
+  cfg['Selasa'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'SOP'),
+        slot('Maintenance', 'Foreman/Officer', 'SOP')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'SOP'),
+        slot('IC', 'Admin', 'SOP')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'SOP'),
+        slot('Maintenance', 'Foreman/Officer', 'SOP')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'SOP'),
+        slot('Laboratory', 'Foreman/Officer', 'SOP')
+      ]
+    }
+  };
+
+  // RABU (Split)
+  cfg['Rabu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'SOP'),
+        slot('Preparation', 'All', 'SOP')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'SOP'),
+        slot('Administration', 'Admin', 'SOP')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'SOP'),
+        slot('Preparation', 'Foreman/Officer', 'SOP')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'SOP'),
+        slot('Laboratory', 'Foreman/Officer', 'SOP')
+      ]
+    }
+  };
+
+  // KAMIS (Gabungan)
+  cfg['Kamis'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'SOP'),
+        slot('Laboratory', 'Foreman/Officer', 'SOP'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'SOP'),
+        slot('Laboratory', 'Foreman/Officer', 'SOP'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    }
+  };
+
+  // JUMAT (Gabungan)
+  cfg['Jumat'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'SOP'),
+        slot('Laboratory', 'SPV', 'SOP'),
+        slot('All', 'Foreman/Officer', 'SOP')
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
+        slot('Preparation', 'Foreman/Officer', 'SOP'),
+        slot('Laboratory', 'Foreman/Officer', 'SOP')
+      ]
+    }
+  };
+
+  // SABTU (Split)
+  cfg['Sabtu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'SOP'),
+        slot('All', 'All', 'SOP')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'SOP'),
+        slot('All', 'All', 'SOP')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'SOP'),
+        slot('Preparation', 'Foreman/Officer', 'SOP')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'SOP'),
+        slot('Laboratory', 'Foreman/Officer', 'SOP')
+      ]
+    }
+  };
+
+  // MINGGU (Gabungan)
+  cfg['Minggu'] = {
+    pagi: {
+      gabungan: [
+        slot('All', 'SPV', 'SOP'),
+        slot('All', 'SPV', 'SOP'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: []
+    }
+  };
+
+  return cfg;
+}
+
+export function buildDefaultConfig() {
   const slot = (divisi: string, kelas: string, kategori: string, extra?: any) => ({
     divisi,
     kelas,
@@ -335,6 +800,25 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   });
   const [openDays, setOpenDays] = useState<Set<string>>(new Set(['Senin']));
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
+  const [scheduleSubTab, setScheduleSubTab] = useState<'table' | 'rules'>('table');
+  const [showSideConfig, setShowSideConfig] = useState(false);
+  const [sideConfigDay, setSideConfigDay] = useState<string>('ALL');
+
+  const handleApplyTheme = (theme: 'IK' | 'SOP' | 'JSA_IK' | 'DEFAULT') => {
+    if (theme === 'IK') {
+      setUiConfig(buildAllIkConfig());
+      toast.success('🎯 Tema "Semua IK" berhasil diterapkan ke seluruh slot! (Senam tetap Senin, Kamis, & Minggu ke-3)');
+    } else if (theme === 'SOP') {
+      setUiConfig(buildAllSopConfig());
+      toast.success('🎯 Tema "Semua SOP" berhasil diterapkan ke seluruh slot! (Senam tetap Senin, Kamis, & Minggu ke-3)');
+    } else if (theme === 'JSA_IK') {
+      setUiConfig(buildJsaIkConfig());
+      toast.success('🎯 Tema "Kombinasi JSA & IK" berhasil diterapkan!');
+    } else {
+      setUiConfig(buildDefaultConfig());
+      toast.success('🔄 Aturan jadwal di-reset ke default standar.');
+    }
+  };
 
   // Schedule Generated State
   // Schedule Generated State
@@ -1541,8 +2025,12 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       const matchSearch = m.judul?.toLowerCase().includes(materiSearch.toLowerCase());
       let matchKat = false;
       if (materiFilterKat === 'All') matchKat = true;
-      else if (materiFilterKat === 'SOP / IK') {
-        matchKat = /\b(sop|ik)\b|instruksi kerja/i.test(m.judul || '');
+      else if (materiFilterKat === 'JSA') {
+        matchKat = m.kategori === 'JSA' || /\bjsa\b/i.test(m.judul || '') || (m.judul || '').toLowerCase().includes('job safety analysis');
+      } else if (materiFilterKat === 'SOP') {
+        matchKat = (m.kategori === 'SOP' || /\bsop\b/i.test(m.judul || '') || (m.judul || '').toLowerCase().includes('standar operasional') || (m.judul || '').toLowerCase().includes('standar operasi')) && m.kategori !== 'JSA';
+      } else if (materiFilterKat === 'IK') {
+        matchKat = (m.kategori === 'IK' || /\bik\b/i.test(m.judul || '') || (m.judul || '').toLowerCase().includes('instruksi kerja')) && m.kategori !== 'JSA' && m.kategori !== 'SOP';
       } else {
         matchKat = m.kategori === materiFilterKat;
       }
@@ -1949,16 +2437,16 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
                 <Button
                   variant="secondary"
-                  onClick={() => setShowConfigDrawer(!showConfigDrawer)}
+                  onClick={() => setShowSideConfig(!showSideConfig)}
                   className={`w-auto text-xs h-9 px-3.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
-                    showConfigDrawer 
-                      ? 'bg-[var(--primary)]/15 text-[var(--primary)] border-[var(--primary)]/40 font-bold' 
+                    showSideConfig 
+                      ? 'bg-[var(--primary)]/20 text-[var(--primary)] border-[var(--primary)]/50 font-bold ring-1 ring-[var(--primary)]/30' 
                       : 'bg-[var(--input-bg)] text-[var(--text-main)] border-[var(--border-main)] hover:bg-[var(--bg-main)]'
                   }`}
+                  title="Buka panel pengaturan slot di samping (Side-by-side view tanpa scroll)"
                 >
                   <Layers className="w-4 h-4 mr-1.5 text-[var(--primary)]" />
-                  <span>Konfigurasi Slot Hari</span>
-                  <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${showConfigDrawer ? 'rotate-180' : ''}`} />
+                  <span>Aturan Slot (Samping)</span>
                 </Button>
 
                 {isQATeam && (
@@ -2023,11 +2511,82 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                   )}
                 </Button>
               </div>
+
+              {/* ── ROW 2: PRESET TEMA SEKALIGUS & SUB-VIEW SWITCHER ── */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full pt-2.5 border-t border-[var(--border-main)]">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-bold text-amber-500 flex items-center gap-1 font-mono uppercase tracking-wider pr-1">
+                    <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span>Tema Sekaligus:</span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleApplyTheme('IK')}
+                    className="text-xs h-7 px-2.5 font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/40 rounded-lg cursor-pointer"
+                    title="Arahan Manajemen: Atur semua materi menjadi IK (Senam tetap Senin, Kamis, & Minggu ke-3)"
+                  >
+                    ⭐ Semua IK (Manajemen)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleApplyTheme('SOP')}
+                    className="text-xs h-7 px-2.5 font-semibold bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/40 rounded-lg cursor-pointer"
+                    title="Atur semua materi menjadi SOP (Senam tetap Senin, Kamis, & Minggu ke-3)"
+                  >
+                    📙 Semua SOP
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleApplyTheme('JSA_IK')}
+                    className="text-xs h-7 px-2.5 font-semibold bg-purple-500/15 hover:bg-purple-500/25 text-purple-400 border border-purple-500/40 rounded-lg cursor-pointer"
+                    title="Kombinasi JSA & IK bergantian (Senam tetap Senin, Kamis, & Minggu ke-3)"
+                  >
+                    ⚡ JSA &amp; IK
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleApplyTheme('DEFAULT')}
+                    className="text-xs h-7 px-2 text-slate-400 hover:text-rose-400 rounded-lg cursor-pointer"
+                    title="Kembali ke rotasi default standar"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" />
+                    Reset Default
+                  </Button>
+                </div>
+
+                {/* Sub-View Switcher to eliminate scroll fatigue */}
+                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700 self-start sm:self-auto shrink-0 shadow-xs">
+                  <button
+                    onClick={() => setScheduleSubTab('table')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      scheduleSubTab === 'table'
+                        ? 'bg-[var(--primary)] text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    📅 Tabel Jadwal &amp; Edit Manual
+                  </button>
+                  <button
+                    onClick={() => setScheduleSubTab('rules')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      scheduleSubTab === 'rules'
+                        ? 'bg-[var(--primary)] text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    ⚙️ Aturan 7 Hari (Penuh)
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* ── DRAWER: SLOT CONFIGURATION ── */}
-          {showConfigDrawer && (
+          {/* ── FULL-PAGE ATURAN JADWAL (HANYA MUNCUL JIKA SUB-TAB 'rules') ── */}
+          {scheduleSubTab === 'rules' && (
             <Card className="bg-slate-800 border-slate-700 p-4 sm:p-5 rounded-2xl space-y-4 animate-in slide-in-from-top-4 duration-200 shadow-2xl">
               <div className="flex items-center justify-between border-b border-slate-700 pb-3">
                 <div className="flex items-center gap-2">
@@ -2036,13 +2595,26 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     Pengaturan Slot &amp; Target Kategori Per Hari
                   </h3>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  onClick={() => setUiConfig(buildDefaultConfig())}
-                  className="text-xs text-slate-400 hover:text-rose-400 h-7 px-2"
-                >
-                  <RotateCcw className="w-3 h-3 mr-1" /> Reset Default
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => {
+                      setUiConfig(buildJsaIkConfig());
+                      toast.success('Jadwal khusus JSA & IK minggu ini berhasil diterapkan ke seluruh slot!');
+                    }}
+                    className="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 h-7 px-2.5 font-bold shadow-xs cursor-pointer"
+                    title="Terapkan jadwal seminggu penuh khusus JSA dan IK (sesuai arahan manajemen)"
+                  >
+                    <Zap className="w-3 h-3 mr-1 text-amber-400 fill-amber-400" /> ⚡ Jadwal Khusus JSA &amp; IK Minggu Ini
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => setUiConfig(buildDefaultConfig())}
+                    className="text-xs text-slate-400 hover:text-rose-400 h-7 px-2"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" /> Reset Default
+                  </Button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -2703,6 +3275,312 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
         </div>
       </div>
     )}
+
+    {/* ── SLIDE-OVER DRAWER: PENGATURAN ATURAN JADWAL (SIDE PANEL) ── */}
+    {showSideConfig && (
+      <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
+        <div 
+          className="fixed inset-0" 
+          onClick={() => setShowSideConfig(false)} 
+        />
+        <div className="relative w-full max-w-2xl bg-slate-900 border-l border-slate-700 shadow-2xl h-full flex flex-col z-10 animate-in slide-in-from-right duration-300">
+          {/* Header */}
+          <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between shrink-0">
+            <div>
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-amber-400" />
+                <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider font-mono">
+                  Setting Aturan Jadwal
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Atur slot target divisi, kelas, &amp; kategori tanpa perlu scroll jauh dari tabel
+              </p>
+            </div>
+            <button
+              onClick={() => setShowSideConfig(false)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Tutup Panel"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Preset Toolbar in Drawer */}
+          <div className="px-4 py-3 bg-slate-800/80 border-b border-slate-700 flex items-center justify-between gap-2 flex-wrap shrink-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-bold text-amber-400 font-mono">Tema:</span>
+              <button
+                onClick={() => handleApplyTheme('IK')}
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 cursor-pointer"
+                title="Arahan Manajemen: Set semua slot ke IK (Senam tetap Senin, Kamis, & Minggu ke-3)"
+              >
+                ⭐ Semua IK
+              </button>
+              <button
+                onClick={() => handleApplyTheme('SOP')}
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 cursor-pointer"
+                title="Set semua slot ke SOP (Senam tetap Senin, Kamis, & Minggu ke-3)"
+              >
+                📙 Semua SOP
+              </button>
+              <button
+                onClick={() => handleApplyTheme('JSA_IK')}
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 cursor-pointer"
+                title="Kombinasi JSA & IK (Senam tetap Senin, Kamis, & Minggu ke-3)"
+              >
+                ⚡ JSA &amp; IK
+              </button>
+              <button
+                onClick={() => handleApplyTheme('DEFAULT')}
+                className="px-2 py-1 text-xs text-slate-400 hover:text-rose-400 cursor-pointer"
+                title="Reset default"
+              >
+                <RotateCcw className="w-3 h-3 inline mr-1" /> Reset
+              </button>
+            </div>
+          </div>
+
+          {/* Day Quick Filter */}
+          <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center gap-1.5 overflow-x-auto shrink-0">
+            <button
+              onClick={() => setSideConfigDay('ALL')}
+              className={`px-2.5 py-1 text-xs rounded-lg font-bold shrink-0 transition-colors cursor-pointer ${
+                sideConfigDay === 'ALL'
+                  ? 'bg-amber-500 text-slate-950 font-black'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              Semua Hari
+            </button>
+            {DAYS.map(d => (
+              <button
+                key={d}
+                onClick={() => setSideConfigDay(d)}
+                className={`px-2.5 py-1 text-xs rounded-lg font-bold shrink-0 transition-colors cursor-pointer ${
+                  sideConfigDay === d
+                    ? 'bg-blue-600 text-white font-bold'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+
+          {/* Scrollable Day Cards Content */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {DAYS.filter(d => sideConfigDay === 'ALL' || sideConfigDay === d).map(day => {
+              const isG = HARI_GABUNGAN.has(day);
+              const dayCfg = uiConfig[day] || { pagi: {}, malam: {} };
+
+              return (
+                <div key={day} className="bg-slate-800/90 border border-slate-700 rounded-xl overflow-hidden shadow-sm">
+                  <div className="flex items-center justify-between p-3 bg-slate-800 border-b border-slate-700">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DAY_COLORS[day] }} />
+                      <span className="font-bold text-xs text-white">{day}</span>
+                      <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border ${
+                        isG ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                      }`}>
+                        {isG ? 'Gabungan' : 'Split'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-850 space-y-3 text-xs">
+                    {/* Day Shift Slots */}
+                    <div>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold block mb-1.5">
+                        ☀️ Day Shift (Pagi)
+                      </span>
+                      {isG ? (
+                        <SlotListEditor 
+                          slots={dayCfg.pagi?.gabungan || []} 
+                          allowedSections={DIVISI_OPTIONS}
+                          onChange={newSlots => {
+                            setUiConfig(prev => ({
+                              ...prev,
+                              [day]: { ...prev[day], pagi: { ...prev[day]?.pagi, gabungan: newSlots } }
+                            }));
+                          }}
+                        />
+                      ) : (
+                        <div className="grid grid-cols-1 gap-2.5">
+                          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-750 space-y-1.5">
+                            <span className="text-[10px] font-semibold text-slate-300">Preparasi &amp; Maintenance</span>
+                            <SlotListEditor 
+                              slots={dayCfg.pagi?.preparasi || []} 
+                              allowedSections={PREPARATION_GROUP_OPTIONS}
+                              onChange={newSlots => {
+                                setUiConfig(prev => ({
+                                  ...prev,
+                                  [day]: { ...prev[day], pagi: { ...prev[day]?.pagi, preparasi: newSlots } }
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-750 space-y-1.5">
+                            <span className="text-[10px] font-semibold text-slate-300">Lab, QA, Admin, IC</span>
+                            <SlotListEditor 
+                              slots={dayCfg.pagi?.laboratorium || []} 
+                              allowedSections={LABORATORY_GROUP_OPTIONS}
+                              onChange={newSlots => {
+                                setUiConfig(prev => ({
+                                  ...prev,
+                                  [day]: { ...prev[day], pagi: { ...prev[day]?.pagi, laboratorium: newSlots } }
+                                }));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Night Shift Slots */}
+                    {day !== 'Minggu' && (
+                      <div className="pt-2 border-t border-slate-700/60">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 font-bold block mb-1.5">
+                          🌙 Night Shift (Malam)
+                        </span>
+                        {isG ? (
+                          <SlotListEditor 
+                            slots={dayCfg.malam?.gabungan || []} 
+                            allowedSections={DIVISI_OPTIONS}
+                            onChange={newSlots => {
+                              setUiConfig(prev => ({
+                                ...prev,
+                                [day]: { ...prev[day], isManualNight: true, malam: { ...prev[day]?.malam, gabungan: newSlots } }
+                              }));
+                            }}
+                          />
+                        ) : (
+                          <div className="grid grid-cols-1 gap-2.5">
+                            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-750 space-y-1.5">
+                              <span className="text-[10px] font-semibold text-slate-300">Preparasi &amp; Maintenance</span>
+                              <SlotListEditor 
+                                slots={dayCfg.malam?.preparasi || []} 
+                                allowedSections={PREPARATION_GROUP_OPTIONS}
+                                onChange={newSlots => {
+                                  setUiConfig(prev => ({
+                                    ...prev,
+                                    [day]: { ...prev[day], isManualNight: true, malam: { ...prev[day]?.malam, preparasi: newSlots } }
+                                  }));
+                                }}
+                              />
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-750 space-y-1.5">
+                              <span className="text-[10px] font-semibold text-slate-300">Lab, QA, Admin, IC</span>
+                              <SlotListEditor 
+                                slots={dayCfg.malam?.laboratorium || []} 
+                                allowedSections={LABORATORY_GROUP_OPTIONS}
+                                onChange={newSlots => {
+                                  setUiConfig(prev => ({
+                                    ...prev,
+                                    [day]: { ...prev[day], isManualNight: true, malam: { ...prev[day]?.malam, laboratorium: newSlots } }
+                                  }));
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Drawer Footer */}
+          <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between gap-2 shrink-0">
+            <Button
+              variant="secondary"
+              onClick={() => setShowSideConfig(false)}
+              className="text-xs h-9 px-4 rounded-xl cursor-pointer"
+            >
+              Tutup Panel
+            </Button>
+            <Button
+              onClick={() => {
+                setShowSideConfig(false);
+                handleRandomize();
+              }}
+              disabled={isGenerating}
+              className="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold text-xs h-9 px-4 rounded-xl shadow-md cursor-pointer"
+            >
+              {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Shuffle className="w-3.5 h-3.5 mr-1.5" />}
+              Terapkan &amp; Acak Ulang
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── STICKY FLOATING QUICK DOCK (FOR EFFORTLESS EDITING & SAVING) ── */}
+    {isQATeam && scheduleData && (
+      <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 shadow-2xl rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-3 max-w-[95vw] overflow-x-auto animate-in fade-in slide-in-from-bottom-3">
+        <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-300 font-semibold pr-2 border-r border-slate-700/80 shrink-0">
+          <Calendar className="w-3.5 h-3.5 text-amber-400" />
+          <span>P5M PT {selectedPt}</span>
+        </div>
+
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => handleApplyTheme('IK')}
+          className="h-8 px-2.5 text-xs font-bold text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-xl shrink-0 cursor-pointer"
+          title="Arahan Manajemen: Terapkan Tema Semua IK (Senam tetap Senin, Kamis, & Minggu ke-3)"
+        >
+          <Zap className="w-3 h-3 mr-1 fill-amber-400 text-amber-400" />
+          <span>Semua IK ⭐</span>
+        </Button>
+
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowSideConfig(true)}
+          className="h-8 px-2.5 text-xs text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl shrink-0 cursor-pointer"
+          title="Buka panel aturan jadwal di samping tanpa scroll"
+        >
+          <Layers className="w-3.5 h-3.5 mr-1 text-[var(--primary)]" />
+          <span>Aturan Slot</span>
+        </Button>
+
+        <Button
+          size="sm"
+          onClick={() => setIsEditMode(!isEditMode)}
+          className={`h-8 px-3 text-xs font-bold rounded-xl border transition-all shrink-0 cursor-pointer ${
+            isEditMode
+              ? 'bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-600/30 ring-1 ring-blue-400'
+              : 'bg-slate-800 text-slate-200 hover:text-white border-slate-700'
+          }`}
+        >
+          <Edit3 className="w-3.5 h-3.5 mr-1 text-blue-400" />
+          <span>{isEditMode ? 'Selesai Edit' : 'Edit Manual'}</span>
+        </Button>
+
+        <Button
+          size="sm"
+          onClick={handleRandomize}
+          disabled={isGenerating}
+          className="h-8 px-3 text-xs font-bold bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white rounded-xl shadow-md shrink-0 cursor-pointer"
+        >
+          {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Shuffle className="w-3.5 h-3.5 mr-1" />}
+          <span>Acak</span>
+        </Button>
+
+        <Button
+          size="sm"
+          onClick={handleSaveSchedule}
+          disabled={isSaving}
+          className="h-8 px-3.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md shadow-emerald-600/25 shrink-0 cursor-pointer"
+        >
+          {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Save className="w-3.5 h-3.5 mr-1" />}
+          <span>{activeScheduleId ? 'Simpan' : 'Publikasikan'}</span>
+        </Button>
+      </div>
+    )}
   </div>
 )}
 
@@ -2845,7 +3723,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-main)] outline-none cursor-pointer"
             >
               <option value="All">Semua Kategori</option>
-              <option value="SOP / IK">📘 Dokumen SOP &amp; IK</option>
+              <option value="JSA">🛡️ JSA (Job Safety Analysis)</option>
+              <option value="SOP">📙 SOP (Standard Operating Procedure)</option>
+              <option value="IK">📘 IK (Instruksi Kerja)</option>
               <option value="Teknis">Teknis</option>
               <option value="Non-Teknis">Non-Teknis</option>
             </select>
@@ -2938,7 +3818,13 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         </td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
-                            item.kategori === 'Teknis' 
+                            item.kategori === 'JSA'
+                              ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                              : item.kategori === 'SOP'
+                              ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30'
+                              : item.kategori === 'IK'
+                              ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                              : item.kategori === 'Teknis' 
                               ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
                               : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30'
                           }`}>
@@ -3159,6 +4045,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     onChange={e => setFormKategori(e.target.value)}
                     className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
                   >
+                    <option value="JSA">JSA (Job Safety Analysis)</option>
+                    <option value="SOP">SOP (Standard Operating Procedure)</option>
+                    <option value="IK">IK (Instruksi Kerja)</option>
                     <option value="Teknis">Teknis</option>
                     <option value="Non-Teknis">Non-Teknis</option>
                     <option value="Senam">Senam</option>
@@ -3183,7 +4072,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </div>
               </div>
 
-              {formKategori === 'Teknis' && (
+              {(formKategori === 'Teknis' || formKategori === 'JSA' || formKategori === 'SOP' || formKategori === 'IK') && (
                 <div>
                   <label className="block text-[var(--text-main)] font-semibold mb-1">Sub-Kategori Teknis</label>
                   <select
@@ -4190,52 +5079,64 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
     if (isGabungan) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     if (personDivisi.includes('lab')) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'Laboratory', label: 'Teknis Lab' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     if (personDivisi.includes('prep')) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'Preparation', label: 'Teknis Prep' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     if (personDivisi.includes('maint')) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'Maintenance', label: 'Teknis Maint' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     if (personDivisi.includes('ic') || personDivisi.includes('inventory')) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'IC', label: 'Teknis IC' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     return [
       { key: 'All', label: 'Semua' },
+      { key: 'JSA', label: '🛡️ JSA' },
+      { key: 'SOP', label: '📙 SOP' },
+      { key: 'IK', label: '📘 IK' },
       { key: 'General', label: 'General' },
-      { key: 'Non-Teknis', label: 'Non-Teknis' },
-      { key: 'SOP / IK', label: 'SOP & IK' }
+      { key: 'Non-Teknis', label: 'Non-Teknis' }
     ];
   }, [isGabungan, personDivisi]);
 
@@ -4247,7 +5148,6 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       if (!matchSearch) return false;
 
       // 1. ATURAN HARI GABUNGAN:
-      // "ketika materi teknis dipilih di briefing gabungan maka akan otomatis yang terpilih harus teknis general"
       if (isGabungan) {
         if (m.kategori === 'Senam') {
           if (mKatFilter !== 'All' && mKatFilter !== 'Senam') return false;
@@ -4258,9 +5158,29 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
           return true;
         }
 
-        // Untuk materi Teknis / SOP: HANYA izinkan General universal
+        const isMateriJsa = m.kategori === 'JSA' || /\bjsa\b/i.test(judul) || judul.toLowerCase().includes('job safety analysis');
+        const isMateriSop = (m.kategori === 'SOP' || /\bsop\b/i.test(judul) || judul.toLowerCase().includes('standar operasional') || judul.toLowerCase().includes('standar operasi')) && !isMateriJsa;
+        const isMateriIk = (m.kategori === 'IK' || /\bik\b/i.test(judul) || judul.toLowerCase().includes('instruksi kerja')) && !isMateriJsa && !isMateriSop;
+
+        if (mKatFilter === 'JSA') {
+          if (!isMateriJsa) return false;
+          if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
+          return true;
+        }
+        if (mKatFilter === 'SOP') {
+          if (!isMateriSop) return false;
+          if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
+          return true;
+        }
+        if (mKatFilter === 'IK') {
+          if (!isMateriIk) return false;
+          if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
+          return true;
+        }
+
+        // Untuk materi Teknis / General universal:
         const isGeneral = (m.subKategori === 'General' || !m.subKategori) && (m.divisi === 'All' || !m.divisi || m.divisi === 'General');
-        if (!isGeneral) return false;
+        if (!isGeneral && !isMateriJsa && !isMateriSop && !isMateriIk) return false;
 
         // Blokir topik spesifik section agar tidak bocor ke briefing gabungan
         if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
@@ -4305,9 +5225,14 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       }
 
       if (mKatFilter === 'All') return true;
-      if (mKatFilter === 'SOP / IK') {
-        const j = judul.toLowerCase();
-        return /\b(sop|ik)\b|instruksi kerja/i.test(j) || j.startsWith('sop') || j.startsWith('ik ') || j.includes('sop') || j.includes('ik -');
+      if (mKatFilter === 'JSA') {
+        return m.kategori === 'JSA' || /\bjsa\b/i.test(judul) || judul.toLowerCase().includes('job safety analysis');
+      }
+      if (mKatFilter === 'SOP') {
+        return (m.kategori === 'SOP' || /\bsop\b/i.test(judul) || judul.toLowerCase().includes('standar operasional') || judul.toLowerCase().includes('standar operasi')) && m.kategori !== 'JSA';
+      }
+      if (mKatFilter === 'IK') {
+        return (m.kategori === 'IK' || /\bik\b/i.test(judul) || judul.toLowerCase().includes('instruksi kerja')) && m.kategori !== 'JSA' && m.kategori !== 'SOP';
       }
       if (mKatFilter === 'Senam') return m.kategori === 'Senam';
       if (mKatFilter === 'Non-Teknis') return m.kategori === 'Non-Teknis';
@@ -4839,16 +5764,22 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border outline-none cursor-pointer transition-colors ${
                   sl.kategori === 'Senam'
                     ? 'bg-amber-50 text-amber-800 border-amber-200'
-                    : sl.kategori === 'SOP / IK'
-                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                    : sl.kategori === 'JSA'
+                    ? 'bg-rose-50 text-rose-800 border-rose-200'
+                    : sl.kategori === 'SOP'
+                    ? 'bg-orange-50 text-orange-800 border-orange-200'
+                    : sl.kategori === 'IK'
+                    ? 'bg-sky-50 text-sky-800 border-sky-200'
                     : sl.kategori === 'Non-Teknis'
                     ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
                     : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                 }`}
                 title="Pilih Kategori Materi"
               >
+                <option value="JSA">🛡️ JSA (Job Safety Analysis)</option>
+                <option value="SOP">📙 SOP (Standard Operating Procedure)</option>
+                <option value="IK">📘 IK (Instruksi Kerja)</option>
                 <option value="Teknis">Teknis</option>
-                <option value="SOP / IK">SOP &amp; IK</option>
                 <option value="Non-Teknis">Non-Teknis</option>
                 <option value="Senam">Senam</option>
               </select>

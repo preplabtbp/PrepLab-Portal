@@ -18,7 +18,8 @@ import {
   getSectionActiveRecommendations, 
   getTodayDDMMYYYY, 
   formatToDDMMYYYY,
-  TableRowData 
+  TableRowData,
+  generateTaskCode
 } from './logbook-section-utils';
 
 interface LogbookTaskRecommendationModalProps {
@@ -29,6 +30,7 @@ interface LogbookTaskRecommendationModalProps {
   targetUniverse?: string;
   existingRows: TableRowData[];
   onAddSelectedTasks: (tasksToAdd: TableRowData[]) => void;
+  onOpenManualAddTaskModal?: () => void;
 }
 
 export function LogbookTaskRecommendationModal({
@@ -38,7 +40,8 @@ export function LogbookTaskRecommendationModal({
   allPosts,
   targetUniverse = 'TBP',
   existingRows,
-  onAddSelectedTasks
+  onAddSelectedTasks,
+  onOpenManualAddTaskModal
 }: LogbookTaskRecommendationModalProps) {
   const [filterType, setFilterType] = useState<'ALL' | 'Routine' | 'Non-Routine'>('ALL');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -102,10 +105,15 @@ export function LogbookTaskRecommendationModal({
     if (selectedRecs.length === 0) return;
 
     const todayStr = getTodayDDMMYYYY();
+    const tempRows = [...existingRows];
 
-    const newRows: TableRowData[] = selectedRecs.map((rec, idx) => {
-      return {
-        number: String(existingRows.length + idx + 1),
+    const newRows: TableRowData[] = selectedRecs.map((rec) => {
+      const code = generateTaskCode(sectionName, tempRows);
+      const rowItem: TableRowData = {
+        taskCode: code,
+        'Task ID': code,
+        'ID Task': code,
+        number: code,
         'Jenis kegiatan': rec.title,
         Keterangan: rec.description || '',
         'Created Time': todayStr,
@@ -121,6 +129,8 @@ export function LogbookTaskRecommendationModal({
         _originRowIndex: String(rec.originRowIndex),
         _isLogbookAggregated: 'true'
       };
+      tempRows.push(rowItem);
+      return rowItem;
     });
 
     onAddSelectedTasks(newRows);
@@ -312,6 +322,20 @@ export function LogbookTaskRecommendationModal({
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenManualAddTaskModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenManualAddTaskModal();
+                }}
+                className="px-3.5 py-2.5 rounded-xl font-bold text-xs text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 hover:bg-teal-100 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-800 transition cursor-pointer flex items-center gap-1.5"
+                title="Buka form input manual task baru"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Buat Task Baru Manual</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer"

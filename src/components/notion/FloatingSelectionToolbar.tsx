@@ -6,7 +6,8 @@ import {
   Code, 
   Palette, 
   RotateCcw, 
-  X 
+  X,
+  List
 } from 'lucide-react';
 import { NOTION_COLORS, stripColorTags } from './tasklist-utils';
 
@@ -16,6 +17,7 @@ export type FormatAction =
   | 'underline'
   | 'strike' 
   | 'code' 
+  | 'bullet'
   | 'clear' 
   | { color: string }
   | { link: string };
@@ -69,6 +71,18 @@ export function formatSelectedText(
     } else {
       formatted = `\`${selected}\``;
     }
+  } else if (action === 'bullet') {
+    const lines = selected.split('\n');
+    const allHaveBullet = lines.every(l => !l.trim() || /^\s*[•\-\*]\s+/.test(l));
+    if (allHaveBullet) {
+      formatted = lines.map(l => l.replace(/^(\s*)[•\-\*]\s+/, '$1')).join('\n');
+    } else {
+      formatted = lines.map(l => {
+        if (!l.trim()) return l;
+        if (/^\s*[•\-\*]\s+/.test(l)) return l;
+        return `• ${l}`;
+      }).join('\n');
+    }
   } else if (action === 'clear') {
     formatted = selected
       .replace(/\*\*(.*?)\*\*/g, '$1')
@@ -98,64 +112,84 @@ export interface FloatingSelectionToolbarProps {
   onFormat: (action: FormatAction) => void;
   onClose: () => void;
   className?: string;
+  isNotionLight?: boolean;
 }
 
 export const FloatingSelectionToolbar: React.FC<FloatingSelectionToolbarProps> = ({
   onFormat,
   onClose,
-  className = ''
+  className = '',
+  isNotionLight = false
 }) => {
   const [showColorPalette, setShowColorPalette] = useState(false);
 
   return (
     <div 
-      className={`absolute -top-12 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 px-2 py-1 bg-slate-900/95 dark:bg-slate-950 text-white rounded-xl shadow-2xl border border-slate-700/80 backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none ${className}`}
+      className={`absolute -top-12 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 px-2.5 py-1 rounded-full shadow-2xl border backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none ${
+        isNotionLight 
+          ? 'bg-white/95 text-slate-800 border-slate-300 shadow-slate-300/60' 
+          : 'bg-[#1e293b]/95 text-slate-100 border-slate-600 shadow-black/80'
+      } ${className}`}
       onMouseDown={(e) => e.preventDefault()}
     >
-      {/* Bold */}
-      <button
-        type="button"
-        onClick={() => onFormat('bold')}
-        title="Tebal (Bold: **teks**)"
-        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white transition-colors cursor-pointer"
-      >
-        <Bold className="w-3.5 h-3.5 stroke-[2.5]" />
-      </button>
+      {/* A (Color Dropdown Picker) */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setShowColorPalette(!showColorPalette)}
+          title="Pilih Warna Teks Notion"
+          className={`px-2 py-1 rounded-lg transition-colors cursor-pointer font-bold flex items-center gap-1 ${
+            showColorPalette 
+              ? 'bg-teal-600 text-white' 
+              : isNotionLight 
+              ? 'hover:bg-slate-100 text-slate-700 hover:text-slate-900' 
+              : 'hover:bg-slate-700 text-slate-200 hover:text-white'
+          }`}
+        >
+          <span className="underline decoration-teal-500 font-extrabold text-xs">A</span>
+          <Palette className="w-3 h-3 opacity-70" />
+        </button>
 
-      {/* Italic */}
-      <button
-        type="button"
-        onClick={() => onFormat('italic')}
-        title="Miring (Italic: *teks*)"
-        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white transition-colors cursor-pointer"
-      >
-        <Italic className="w-3.5 h-3.5 stroke-[2.5]" />
-      </button>
+        {/* Notion Color Swatches Popover */}
+        {showColorPalette && (
+          <div 
+            className={`absolute top-full left-0 mt-2 p-2 rounded-2xl border shadow-2xl z-60 grid grid-cols-3 gap-1.5 min-w-[230px] animate-in fade-in zoom-in-95 duration-100 ${
+              isNotionLight ? 'bg-white border-slate-300 text-slate-800' : 'bg-slate-900 border-slate-700 text-slate-100'
+            }`}
+          >
+            <div 
+              className={`col-span-3 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider border-b mb-1 ${
+                isNotionLight ? 'text-slate-500 border-slate-200' : 'text-slate-400 border-slate-700'
+              }`}
+            >
+              Warna Teks Notion
+            </div>
+            {Object.entries(NOTION_COLORS).map(([cKey, cVal]) => (
+              <button
+                key={cKey}
+                type="button"
+                onClick={() => {
+                  onFormat({ color: cKey });
+                  setShowColorPalette(false);
+                }}
+                title={cVal.label}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[11px] font-semibold transition-colors text-left cursor-pointer active:scale-95 hover:opacity-85"
+                style={{ color: cVal.hex }}
+              >
+                <span 
+                  className="w-3.5 h-3.5 rounded-full shrink-0 border shadow-2xs" 
+                  style={{ backgroundColor: cVal.hex, borderColor: isNotionLight ? '#cbd5e1' : '#64748b' }} 
+                />
+                <span className="truncate text-xs">{cVal.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* Strikethrough */}
-      <button
-        type="button"
-        onClick={() => onFormat('strike')}
-        title="Coret (Strikethrough: ~~teks~~)"
-        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white transition-colors cursor-pointer"
-      >
-        <Strikethrough className="w-3.5 h-3.5 stroke-[2.5]" />
-      </button>
+      <div className={`w-[1px] h-4 mx-0.5 ${isNotionLight ? 'bg-slate-200' : 'bg-slate-700'}`} />
 
-      {/* Inline Code */}
-      <button
-        type="button"
-        onClick={() => onFormat('code')}
-        title="Kode (Inline Code: `teks`)"
-        className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-200 hover:text-white transition-colors cursor-pointer"
-      >
-        <Code className="w-3.5 h-3.5 stroke-[2.5]" />
-      </button>
-
-      {/* Separator */}
-      <div className="w-[1px] h-4 bg-slate-700 mx-0.5" />
-
-      {/* Quick Color Swatches directly on bar (including Black) */}
+      {/* Quick Color Swatches directly on bar */}
       <div className="flex items-center gap-1 px-0.5">
         {[
           { key: 'default', label: 'Hitam', hex: '#37352f', border: '#475569' },
@@ -176,53 +210,92 @@ export const FloatingSelectionToolbar: React.FC<FloatingSelectionToolbarProps> =
         ))}
       </div>
 
-      {/* Color Palette Button & Dropdown */}
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setShowColorPalette(!showColorPalette)}
-          title="Semua Pilihan Warna"
-          className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
-            showColorPalette ? 'bg-teal-600 text-white' : 'hover:bg-slate-800 text-slate-200 hover:text-white'
-          }`}
-        >
-          <Palette className="w-3.5 h-3.5 stroke-[2.5]" />
-          <span className="text-[10px] font-bold">Lainnya</span>
-        </button>
+      <div className={`w-[1px] h-4 mx-0.5 ${isNotionLight ? 'bg-slate-200' : 'bg-slate-700'}`} />
 
-        {/* Color Swatches Popover */}
-        {showColorPalette && (
-          <div 
-            className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 bg-slate-900 border border-slate-700 rounded-xl p-2 shadow-2xl flex items-center gap-1.5 z-60 animate-in fade-in zoom-in-95 duration-100"
-          >
-            {Object.entries(NOTION_COLORS).map(([cKey, cVal]) => (
-              <button
-                key={cKey}
-                type="button"
-                onClick={() => {
-                  onFormat({ color: cKey });
-                  setShowColorPalette(false);
-                }}
-                title={cVal.label}
-                className="w-5 h-5 rounded-full border border-slate-600 hover:scale-125 transition-transform cursor-pointer relative shadow-xs"
-                style={{ backgroundColor: cVal.hex }}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Bold */}
+      <button
+        type="button"
+        onClick={() => onFormat('bold')}
+        title="Tebal (Bold: **teks**)"
+        className={`px-2 py-1 rounded-lg font-extrabold text-xs cursor-pointer hover:opacity-80 transition-opacity ${
+          isNotionLight ? 'text-slate-800 hover:bg-slate-100' : 'text-slate-100 hover:bg-slate-700'
+        }`}
+      >
+        B
+      </button>
 
-      {/* Separator */}
-      <div className="w-[1px] h-4 bg-slate-700 mx-0.5" />
+      {/* Italic */}
+      <button
+        type="button"
+        onClick={() => onFormat('italic')}
+        title="Miring (Italic: *teks*)"
+        className={`px-2 py-1 rounded-lg italic font-serif text-xs cursor-pointer hover:opacity-80 transition-opacity ${
+          isNotionLight ? 'text-slate-800 hover:bg-slate-100' : 'text-slate-100 hover:bg-slate-700'
+        }`}
+      >
+        I
+      </button>
 
-      {/* Clear Formatting */}
+      {/* Underline */}
+      <button
+        type="button"
+        onClick={() => onFormat('underline')}
+        title="Garis Bawah (Underline: <u>teks</u>)"
+        className={`px-2 py-1 rounded-lg underline text-xs font-bold cursor-pointer hover:opacity-80 transition-opacity ${
+          isNotionLight ? 'text-slate-800 hover:bg-slate-100' : 'text-slate-100 hover:bg-slate-700'
+        }`}
+      >
+        U
+      </button>
+
+      {/* Strikethrough */}
+      <button
+        type="button"
+        onClick={() => onFormat('strike')}
+        title="Coret (Strikethrough: ~~teks~~)"
+        className={`px-2 py-1 rounded-lg line-through text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity ${
+          isNotionLight ? 'text-slate-800 hover:bg-slate-100' : 'text-slate-100 hover:bg-slate-700'
+        }`}
+      >
+        S
+      </button>
+
+      {/* Inline Code */}
+      <button
+        type="button"
+        onClick={() => onFormat('code')}
+        title="Kode (Inline Code: `teks`)"
+        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+          isNotionLight ? 'hover:bg-slate-100 text-slate-700 hover:text-slate-900' : 'hover:bg-slate-700 text-slate-200 hover:text-white'
+        }`}
+      >
+        <Code className="w-3.5 h-3.5 stroke-[2.5]" />
+      </button>
+
+      {/* Bullet List */}
+      <button
+        type="button"
+        onClick={() => onFormat('bullet')}
+        title="Daftar Bullet (• Teks)"
+        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+          isNotionLight ? 'hover:bg-slate-100 text-slate-700 hover:text-slate-900' : 'hover:bg-slate-700 text-slate-200 hover:text-white'
+        }`}
+      >
+        <List className="w-3.5 h-3.5 stroke-[2.5]" />
+      </button>
+
+      <div className={`w-[1px] h-4 mx-0.5 ${isNotionLight ? 'bg-slate-200' : 'bg-slate-700'}`} />
+
+      {/* Clear Formatting (Tx / RotateCcw) */}
       <button
         type="button"
         onClick={() => onFormat('clear')}
-        title="Hapus Format / Warna Teks"
-        className="p-1.5 rounded-lg hover:bg-rose-950/60 hover:text-rose-300 text-slate-400 transition-colors cursor-pointer"
+        title="Hapus Warna & Format Teks"
+        className={`px-1.5 py-1 rounded-lg font-bold text-[11px] cursor-pointer hover:opacity-80 transition-opacity ${
+          isNotionLight ? 'text-slate-500 hover:bg-slate-100' : 'text-slate-400 hover:bg-slate-700'
+        }`}
       >
-        <RotateCcw className="w-3.5 h-3.5 stroke-[2.5]" />
+        Tx
       </button>
 
       {/* Close Floating Toolbar */}
@@ -230,13 +303,12 @@ export const FloatingSelectionToolbar: React.FC<FloatingSelectionToolbarProps> =
         type="button"
         onClick={onClose}
         title="Tutup Toolbar"
-        className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer ml-0.5"
+        className={`p-1 rounded-md transition-colors cursor-pointer ml-0.5 ${
+          isNotionLight ? 'hover:bg-slate-100 text-slate-400 hover:text-slate-700' : 'hover:bg-slate-700 text-slate-400 hover:text-white'
+        }`}
       >
         <X className="w-3 h-3" />
       </button>
-
-      {/* Downward triangle arrow notch */}
-      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r border-b border-slate-700 rotate-45" />
     </div>
   );
 };

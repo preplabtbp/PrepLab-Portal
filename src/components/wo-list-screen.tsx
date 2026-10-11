@@ -99,7 +99,14 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
   const filterItemsByPeriod = (items: any[]) => {
     return items.filter(item => {
       // 1. Period filter
-      if (filterPeriod === 'this_iso_week' || filterPeriod === 'this_week') {
+      if (filterPeriod === 'today') {
+        if (!item.date) return false;
+        const d = new Date(item.date);
+        const now = new Date();
+        if (d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth() || d.getDate() !== now.getDate()) {
+          return false;
+        }
+      } else if (filterPeriod === 'this_iso_week' || filterPeriod === 'this_week') {
         if (!item.date || !isThisISOWeek(item.date)) return false;
       } else if (filterPeriod === 'last_iso_week' || filterPeriod === 'last_week') {
         if (!item.date || !isLastISOWeek(item.date)) return false;
@@ -170,19 +177,31 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
     });
   };
 
-  // Sort WOData (Open at top, Closed at bottom, recent first if possible)
+  // Sort WOData: Status Open / In Progress di atas Closed, dan YANG TERBARU ADA DI PALING ATAS
   const filteredWoData = filterItemsByPeriod(woData);
-  const sortedWoData = [...filteredWoData].reverse().sort((a, b) => {
+  const sortedWoData = [...filteredWoData].sort((a, b) => {
      const statusA = isCompleted(a.status) ? 1 : 0;
      const statusB = isCompleted(b.status) ? 1 : 0;
-     return statusA - statusB;
+     if (statusA !== statusB) return statusA - statusB;
+
+     const dateA = a.date ? new Date(a.date).getTime() : 0;
+     const dateB = b.date ? new Date(b.date).getTime() : 0;
+     if (dateA !== dateB) return dateB - dateA;
+
+     return (b.id || 0) - (a.id || 0) || (b.woId || '').localeCompare(a.woId || '', 'id', { numeric: true });
   });
 
   const filteredPermintaanData = filterItemsByPeriod(ticketData);
-  const sortedPermintaanData = [...filteredPermintaanData].reverse().sort((a, b) => { 
+  const sortedPermintaanData = [...filteredPermintaanData].sort((a, b) => { 
     const statusA = isCompleted(a.status) ? 1 : 0; 
     const statusB = isCompleted(b.status) ? 1 : 0; 
-    return statusA - statusB; 
+    if (statusA !== statusB) return statusA - statusB;
+
+    const dateA = a.date || a.createdAt ? new Date(a.date || a.createdAt).getTime() : 0;
+    const dateB = b.date || b.createdAt ? new Date(b.date || b.createdAt).getTime() : 0;
+    if (dateA !== dateB) return dateB - dateA;
+
+    return (b.id || 0) - (a.id || 0) || (b.ticketId || '').localeCompare(a.ticketId || '', 'id', { numeric: true });
   });
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
@@ -217,6 +236,30 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
         </button>
       </div>
 
+      {/* Quick Filter Pills */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {[
+          { value: 'all', label: '📅 Semua Waktu' },
+          { value: 'today', label: '☀️ Hari Ini' },
+          { value: 'this_week', label: '📅 Minggu Ini' },
+          { value: 'last_30_days', label: '⏱️ 30 Hari Terakhir' },
+          { value: 'this_month', label: '📆 Bulan Ini' }
+        ].map(pill => (
+          <button
+            key={pill.value}
+            type="button"
+            onClick={() => setFilterPeriod(pill.value)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              filterPeriod === pill.value
+                ? 'bg-teal-600 text-white shadow-xs'
+                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+            }`}
+          >
+            {pill.label}
+          </button>
+        ))}
+      </div>
+
       {/* FILTER CONTROLS (Minggu ISO, Status, Search) */}
       <Card className="p-4 bg-white border border-slate-200 shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -232,6 +275,8 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
             >
               <optgroup label="⚡ Filter Cepat">
                 <option value="all">📅 Semua Waktu</option>
+                <option value="today">☀️ Hari Ini</option>
+                <option value="this_week">📅 Minggu Ini</option>
                 <option value="last_30_days">⏱️ 30 Hari Terakhir</option>
                 <option value="this_year">📆 Tahun Ini ({new Date().getFullYear()})</option>
                 <option value="custom">🎯 Rentang Tanggal Kustom...</option>

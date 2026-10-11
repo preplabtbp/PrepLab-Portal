@@ -74,6 +74,8 @@ import {
 import { NotionDropdownCell, DropdownOption } from './notion/NotionDropdownCell';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
+import { LogbookTaskRecommendationModal } from './notion/LogbookTaskRecommendationModal';
+import { generateTaskCode } from './notion/logbook-section-utils';
 import {
   getNextSubPeriod,
   getNextDefaultTargetDate,
@@ -1151,6 +1153,7 @@ export function LogbookScreen({
 
   // Quick Assign Task State
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showLogbookRecModal, setShowLogbookRecModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newAssigneeNiks, setNewAssigneeNiks] = useState<string[]>([]);
@@ -1163,6 +1166,58 @@ export function LogbookScreen({
   const [selectedBulletinPostId, setSelectedBulletinPostId] = useState<string>('');
   const [targetTaskSection, setTargetTaskSection] = useState<string>('Preparation');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const allLoadedTasks = useMemo(() => {
+    return [...todayTasks, ...yesterdayTasks, ...carryOverTasks];
+  }, [todayTasks, yesterdayTasks, carryOverTasks]);
+
+  const currentAssignTaskCode = useMemo(() => {
+    const finalSection = (isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? targetTaskSection : userSection;
+    return generateTaskCode(finalSection, allLoadedTasks.map(t => ({
+      taskCode: (t as any).taskCode,
+      number: (t as any).taskCode,
+      section: t.section
+    })));
+  }, [targetTaskSection, userSection, isSuperAdmin, isMeetingRoom, allLoadedTasks]);
+
+  const handleAddSelectedLogbookTasks = async (tasksToAdd: any[]) => {
+    try {
+      toast.loading(`Menambahkan ${tasksToAdd.length} rekomendasi kegiatan...`, { id: 'add-recs' });
+      const targetSec = (selectedSection && selectedSection !== 'Semua Seksi' && selectedSection !== 'ALL')
+        ? selectedSection
+        : (userSection !== 'ALL' ? userSection : 'Laboratorium');
+
+      for (const t of tasksToAdd) {
+        await fetch('/api/logbook/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskCode: t.taskCode,
+            title: t['Jenis kegiatan'] || t.title,
+            description: t.Keterangan || '',
+            section: targetSec,
+            assigneeNik: t.PIC || '',
+            assigneeName: t.PIC || '',
+            assignedByNik: inspectorNik || 'SUPERVISOR',
+            assignedByName: inspectorName || 'Atasan / Manajemen',
+            priority: t.Priority || 'Normal',
+            activityType: t['Activity (routine/non routine)'] || 'Routine',
+            taskDate: selectedDate || getTodayStr(),
+            targetDate: selectedDate || getTodayStr(),
+            targetTime: '23:59',
+            status: 'Open',
+            progressPercent: 0,
+            pt: selectedPt,
+            bulletinPostId: t._originPostId ? parseInt(t._originPostId) : null
+          })
+        });
+      }
+      toast.success(`${tasksToAdd.length} kegiatan rekomendasi berhasil ditambahkan!`, { id: 'add-recs' });
+      fetchTasks();
+    } catch (e: any) {
+      toast.error('Gagal menambahkan kegiatan: ' + e.message, { id: 'add-recs' });
+    }
+  };
 
   // In Assign Modal: Job Pending Options
   const [isAssignPending, setIsAssignPending] = useState(false);
@@ -1864,6 +1919,7 @@ export function LogbookScreen({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          taskCode: currentAssignTaskCode,
           title: newTitle.trim(),
           description: newTaskDescription.trim(),
           section: finalSection,
@@ -3631,7 +3687,7 @@ export function LogbookScreen({
             </button>
 
             <button
-              onClick={openAssignModal}
+              onClick={() => setShowLogbookRecModal(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs tracking-wide transition-all shadow-md active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -4477,7 +4533,7 @@ export function LogbookScreen({
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
-                          onClick={openAssignModal}
+                          onClick={() => setShowLogbookRecModal(true)}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold text-xs shadow-2xs transition-all cursor-pointer active:scale-95"
                           title="Tambah kegiatan baru ke planning hari ini"
                         >
@@ -6040,6 +6096,20 @@ export function LogbookScreen({
       </div>
 
       {/* ========================================================================= */}
+      {/* MODAL: REKOMENDASI TUGAS AKTIF LOGBOOK                                     */}
+      {/* ========================================================================= */}
+      <LogbookTaskRecommendationModal
+        isOpen={showLogbookRecModal}
+        onClose={() => setShowLogbookRecModal(false)}
+        sectionName={(selectedSection && selectedSection !== 'Semua Seksi' && selectedSection !== 'ALL') ? selectedSection : (userSection !== 'ALL' ? userSection : 'Laboratorium')}
+        allPosts={bulletinList}
+        targetUniverse={selectedPt || 'TBP'}
+        existingRows={allLoadedTasks.map(t => ({ 'Jenis kegiatan': t.title, Keterangan: t.description || '', ...t }))}
+        onAddSelectedTasks={handleAddSelectedLogbookTasks}
+        onOpenManualAddTaskModal={openAssignModal}
+      />
+
+      {/* ========================================================================= */}
       {/* MODAL: ASSIGN NEW TASK (Mendukung Multi-PIC & PIC Job Pending)             */}
       {/* ========================================================================= */}
       {showAssignModal && (
@@ -6116,6 +6186,23 @@ export function LogbookScreen({
                   >
                     Kelola
                   </button>
+                </div>
+              </div>
+
+              {/* ID Task (Auto Generated & Immutable) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black block text-black">ID Task (Kode Unik)</label>
+                  <span className="text-[10px] font-mono font-bold text-teal-700">Auto Generated (L1, P1, Q1, A1, I1, M1)</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    readOnly
+                    value={currentAssignTaskCode}
+                    className="w-full px-3 py-2 pr-8 rounded-xl border-2 outline-none text-xs font-mono font-black bg-slate-100 text-slate-700 border-slate-300 cursor-not-allowed select-none"
+                  />
+                  <Lock className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
                 </div>
               </div>
 

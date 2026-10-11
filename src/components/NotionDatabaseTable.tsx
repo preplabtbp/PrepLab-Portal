@@ -59,7 +59,8 @@ import {
   RotateCcw,
   TableProperties,
   GripVertical,
-  Pin
+  Pin,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -82,7 +83,9 @@ import {
   getRowDateDDMMYYYY,
   extractLogbookMeta,
   injectLogbookMeta,
-  LogbookMeta 
+  LogbookMeta,
+  generateTaskCode,
+  normalizeExistingTaskCodes
 } from './notion/logbook-section-utils';
 import { LogbookTaskRecommendationModal } from './notion/LogbookTaskRecommendationModal';
 import { LogbookChangelogCard } from './notion/LogbookChangelogCard';
@@ -447,7 +450,11 @@ export const isSubItemCompleted = (row: TableRowData): boolean => {
 
 export const getDisplayTitle = (title: string): string => {
   if (!title) return '';
-  return title.replace(/^[↳↪\s]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
+  return title
+    .replace(/^[↳↪\s]+/, '')
+    .replace(/^\[[ xX]\]\s*/, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .trim();
 };
 
 // Canonical Notion Table Column definition in exact order
@@ -544,7 +551,31 @@ export function serializeMarkdownTable(
   const separatorLine = `| ${cleanHeaders.map(() => '---').join(' | ')} |`;
   const rowLines = rows.map(row => {
     return `| ${cleanHeaders.map(h => {
-      const val = getCellValue(row, h);
+      let val = getCellValue(row, h);
+      const hLower = h.toLowerCase().trim();
+      const isTitleCol = hLower.includes('jenis kegiatan') || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama';
+      
+      // Embed persistent ID metadata into the primary title cell
+      if (isTitleCol && val) {
+        const taskId = row.id || (row as any)._id;
+        const parentId = row.parentId || row.parentRowId;
+        const lastMod = row['Last Modified'] || row['Date Modified'];
+        
+        let metaTags = '';
+        if (taskId && !val.includes(`<!--task-id:`)) {
+          metaTags += ` <!--task-id:${taskId}-->`;
+        }
+        if (parentId && !val.includes(`<!--parent-id:`)) {
+          metaTags += ` <!--parent-id:${parentId}-->`;
+        }
+        if (lastMod && !val.includes(`<!--last-modified:`)) {
+          metaTags += ` <!--last-modified:${lastMod}-->`;
+        }
+        if (metaTags) {
+          val = `${val.trim()}${metaTags}`;
+        }
+      }
+
       return String(val || '').replace(/\|/g, '\\|').replace(/\n/g, '<br/>').trim();
     }).join(' | ')} |`;
   });
@@ -563,25 +594,54 @@ export function migrateChecklistsInRows(
 ): { migratedCount: number; rows: TableRowData[] } {
   let migratedCount = 0;
   const newRows: TableRowData[] = [];
+  const seenSubUnderParent = new Set<string>();
 
   for (let i = 0; i < inputRows.length; i++) {
     const row = { ...inputRows[i] };
     const isSub = isSubItemRow(row);
 
     if (isSub) {
+      // Deduplicate sub-items under the parent
+      const subTitle = (getCellValue(row, 'Jenis kegiatan') || getCellValue(row, 'Jenis Kegiatan') || '').replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').replace(/\[[ xX]\]\s*/, '').trim().toLowerCase();
+      const parentKey = row.parentId || row.parentRowId || 'unknown';
+      const dedupeKey = `${parentKey}:::${subTitle}`;
+      if (seenSubUnderParent.has(dedupeKey)) {
+        continue;
+      }
+      seenSubUnderParent.add(dedupeKey);
       newRows.push(row);
       continue;
+    }
+
+    // Ensure parent row has stable unique ID
+    if (!row.id) {
+      const rowCode = row.taskCode || row['Task ID'] || row['ID Task'] || '';
+      const cleanTitle = (getCellValue(row, 'Jenis kegiatan') || getCellValue(row, 'Name') || getCellValue(row, 'Judul') || '').replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+      const safeTitle = cleanTitle.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      row.id = rowCode ? `task_${rowCode}` : `task_${defaultSection || 'sec'}_${i}_${safeTitle}`;
+    }
+
+    newRows.push(row);
+
+    // Check if inputRows ALREADY has sub-item rows for this parent
+    let hasExistingSubRows = false;
+    for (let j = i + 1; j < inputRows.length; j++) {
+      const nextR = inputRows[j];
+      if (isSubItemRow(nextR)) {
+        if (!nextR.parentId || nextR.parentId === row.id || nextR.parentRowId === row.id) {
+          hasExistingSubRows = true;
+          break;
+        }
+      } else {
+        break; // Reached next parent task
+      }
     }
 
     const ketVal = getCellValue(row, 'Keterangan') || '';
     const taskProg = parseTasklist(ketVal);
 
-    if (taskProg.hasTasklist && taskProg.items.length > 0) {
-      // Strip tasklist lines from parent row's Keterangan, keep non-checklist text
-      row['Keterangan'] = taskProg.cleanText || '';
-      newRows.push(row);
-
-      const parentIndex = newRows.length - 1;
+    // ONLY synthesize sub-items if inputRows does NOT already have sub-item rows for this parent!
+    if (!hasExistingSubRows && taskProg.hasTasklist && taskProg.items.length > 0) {
       const parentCat = getCellValue(row, 'Kategori') || defaultSection || 'Laboratorium';
       const parentPIC = getCellValue(row, 'PIC') || '';
       const parentAct = getCellValue(row, 'Activity (routine/non routine)') || 'Monthly';
@@ -589,29 +649,36 @@ export function migrateChecklistsInRows(
       const now = new Date();
       const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-      // Create a sub-item row for each checklist item
-      taskProg.items.forEach(item => {
+      taskProg.items.forEach((item, subIdx) => {
+        const safeSubText = (item.text || '').slice(0, 25).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const subId = `sub_${row.id}_${subIdx}_${safeSubText}`;
         const subTitle = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
-        const subRow: TableRowData = {
-          number: '',
-          'Jenis kegiatan': subTitle,
-          'Jenis Kegiatan': subTitle,
-          Keterangan: item.note || '',
-          PIC: parentPIC,
-          Priority: 'Normal',
-          Status: item.checked ? 'Closed' : 'Open',
-          'Created Time': createdStr,
-          Kategori: parentCat,
-          'Activity (routine/non routine)': parentAct,
-          period: parentPeriod,
-          isSubItem: 'true',
-          parentId: String(parentIndex)
-        };
-        newRows.push(subRow);
-        migratedCount++;
+        const dedupeKey = `${row.id}:::${(item.text || '').trim().toLowerCase()}`;
+
+        if (!seenSubUnderParent.has(dedupeKey)) {
+          seenSubUnderParent.add(dedupeKey);
+          const subRow: TableRowData = {
+            number: '',
+            id: subId,
+            parentId: row.id,
+            parentRowId: row.id,
+            'Jenis kegiatan': subTitle,
+            'Jenis Kegiatan': subTitle,
+            Keterangan: item.note || '-',
+            PIC: parentPIC,
+            Priority: 'Normal',
+            Status: item.checked ? 'Closed' : 'Open',
+            isCompleted: item.checked ? 'true' : 'false',
+            'Created Time': createdStr,
+            Kategori: parentCat,
+            'Activity (routine/non routine)': parentAct,
+            period: parentPeriod,
+            isSubItem: 'true'
+          };
+          newRows.push(subRow);
+          migratedCount++;
+        }
       });
-    } else {
-      newRows.push(row);
     }
   }
 
@@ -625,7 +692,7 @@ export function splitMarkdownRow(line: string): string[] {
   return rawCells.map(c => c.trim().replace(/\\\|/g, '|'));
 }
 
-// Helper untuk mengekstrak tabel markdown dari string konten
+// Helper untuk mengekstrak tabel markdown dari string konten dengan Persistent ID
 export function extractMarkdownTableFromContent(content: string): {
   headers: string[];
   rows: TableRowData[];
@@ -662,6 +729,32 @@ export function extractMarkdownTableFromContent(content: string): {
         headers.forEach((h, idx) => {
           rowObj[h] = cells[idx] || '';
         });
+
+        // Extract persistent Unique ID and metadata from cells
+        const rowStr = cells.join(' ');
+        const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
+        const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
+        const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
+
+        const isPin = rowStr.includes('<!--pin-->') || rowStr.includes('<!--pinned-->');
+        const cleanTitle = (rowObj['Jenis kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '').replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+        const safeTitle = cleanTitle.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+        rowObj.id = taskMatch ? taskMatch[1].trim() : `task_${i}_${safeTitle}`;
+        if (parentMatch) {
+          rowObj.parentId = parentMatch[1].trim();
+          rowObj.parentRowId = parentMatch[1].trim();
+          rowObj.isSubItem = 'true';
+        }
+        if (modMatch) {
+          rowObj['Last Modified'] = modMatch[1].trim();
+          rowObj['Date Modified'] = modMatch[1].trim();
+        }
+        if (isPin) {
+          rowObj.isPinned = 'true';
+          (rowObj as any)._pinned = 'true';
+        }
+
         rows.push(rowObj);
       }
     }
@@ -877,15 +970,16 @@ export function NotionDatabaseTable({
 
   useEffect(() => {
     if (rows) {
-      const { migratedCount, rows: prepped } = migrateChecklistsInRows(rows, section);
-      if (migratedCount > 0) {
-        setLocalRows(prepped);
-        setOriginalRowsBackup(JSON.parse(JSON.stringify(prepped)));
-        saveTableToBackend(prepped);
-      } else {
-        setLocalRows(rows);
-        setOriginalRowsBackup(JSON.parse(JSON.stringify(rows)));
-      }
+      let targetRows = rows;
+
+      const { rows: prepped } = migrateChecklistsInRows(targetRows, section);
+      targetRows = prepped;
+
+      const { rows: normalizedRows } = normalizeExistingTaskCodes(targetRows, section);
+      targetRows = normalizedRows;
+
+      setLocalRows(targetRows);
+      setOriginalRowsBackup(JSON.parse(JSON.stringify(targetRows)));
       setDirtyRowIndices(new Set());
     }
   }, [rows]);
@@ -1112,20 +1206,20 @@ export function NotionDatabaseTable({
   const [rowFormData, setRowFormData] = useState<TableRowData>({});
   const [isSavingRow, setIsSavingRow] = useState(false);
 
-  // ── PIN TASK TOOLS (Maksimal 5 task per halaman / tidak terpengaruh filter) ──
+  // ── PIN TASK TOOLS (Maksimal 10 task per halaman / tidak terpengaruh filter) ──
   const tablePinStorageKey = useMemo(() => {
     return `preplab_pinned_tasks_${postId || section || title || 'default'}`;
   }, [postId, section, title]);
 
-  const [pinnedRowKeys, setPinnedRowKeys] = useState<Set<string>>(() => {
+  const [pinnedRowKeys, setPinnedRowKeys] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(`preplab_pinned_tasks_${postId || section || title || 'default'}`);
       if (saved) {
         const arr = JSON.parse(saved);
-        if (Array.isArray(arr)) return new Set(arr);
+        if (Array.isArray(arr)) return arr;
       }
     } catch {}
-    return new Set<string>();
+    return [];
   });
 
   // Helper untuk mengecek apakah baris di-pin
@@ -1137,42 +1231,57 @@ export function NotionDatabaseTable({
     const jk = typeof row['Jenis kegiatan'] === 'string' ? row['Jenis kegiatan'] : String(row['Jenis kegiatan'] || '');
     if (jk.includes('<!--pin-->') || jk.includes('<!--pinned-->')) return true;
     const rowId = row.id ? String(row.id) : '';
-    if (rowId && pinnedRowKeys.has(rowId)) return true;
-    const cleanTitle = jk.replace(/^↳\s*/, '').trim();
-    if (cleanTitle && pinnedRowKeys.has(cleanTitle)) return true;
+    if (rowId && pinnedRowKeys.includes(rowId)) return true;
+    const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+    if (cleanTitle && pinnedRowKeys.includes(cleanTitle)) return true;
+    const taskCode = row.taskCode || row['Task ID'] || row['ID Task'];
+    if (taskCode && pinnedRowKeys.includes(String(taskCode))) return true;
     return false;
   }, [pinnedRowKeys]);
 
-  // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys
+  // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys saat rows prop dimuat
   useEffect(() => {
-    const newlyFoundPinned = new Set(pinnedRowKeys);
-    let changed = false;
-    localRows.forEach(r => {
-      if (!isSubItemRow(r)) {
-        const ket = r['Keterangan'] || '';
-        const jk = r['Jenis kegiatan'] || '';
-        const isPinTag = ket.includes('<!--pin-->') || ket.includes('<!--pinned-->') || jk.includes('<!--pin-->') || r.isPinned === 'true';
-        if (isPinTag) {
-          const key = r.id ? String(r.id) : jk.replace(/^↳\s*/, '').trim();
-          if (key && !newlyFoundPinned.has(key)) {
-            newlyFoundPinned.add(key);
+    if (!rows || rows.length === 0) return;
+    setPinnedRowKeys(prevKeys => {
+      const nextKeys = [...prevKeys];
+      let changed = false;
+      rows.forEach(r => {
+        if (!isSubItemRow(r)) {
+          const ket = r['Keterangan'] || '';
+          const jk = r['Jenis kegiatan'] || '';
+          const isPinTag = ket.includes('<!--pin-->') || ket.includes('<!--pinned-->') || jk.includes('<!--pin-->') || r.isPinned === 'true';
+          const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+          const key = r.id ? String(r.id) : cleanTitle;
+          if (isPinTag && key && !nextKeys.includes(key)) {
+            nextKeys.push(key);
             changed = true;
           }
         }
+      });
+      if (changed) {
+        try {
+          localStorage.setItem(tablePinStorageKey, JSON.stringify(nextKeys));
+        } catch {}
+        return nextKeys;
       }
+      return prevKeys;
     });
-    if (changed) {
-      setPinnedRowKeys(newlyFoundPinned);
-      try {
-        localStorage.setItem(tablePinStorageKey, JSON.stringify(Array.from(newlyFoundPinned)));
-      } catch {}
-    }
-  }, [localRows, tablePinStorageKey]);
+  }, [rows, tablePinStorageKey]);
 
   // Handler toggle pin / unpin baris task
-  const handleTogglePinRow = async (rowIndex: number) => {
-    let targetRow = localRows[rowIndex];
-    if (!targetRow) return;
+  const handleTogglePinRow = async (targetRowOrIndex: TableRowData | number) => {
+    let targetRow: TableRowData | undefined;
+    let rowIndex = -1;
+
+    if (typeof targetRowOrIndex === 'number') {
+      rowIndex = targetRowOrIndex;
+      targetRow = localRows[rowIndex];
+    } else {
+      targetRow = targetRowOrIndex;
+      rowIndex = localRows.indexOf(targetRow);
+    }
+
+    if (!targetRow || rowIndex === -1) return;
 
     // Jika yang diklik adalah subtask, pin parent task utamanya
     if (isSubItemRow(targetRow)) {
@@ -1189,10 +1298,10 @@ export function NotionDatabaseTable({
     const currentlyPinned = isRowPinned(targetRow);
 
     if (!currentlyPinned) {
-      // Validasi: Maksimal 5 task yang dapat di-pin per halaman
+      // Validasi: Maksimal 10 task yang dapat di-pin per halaman
       const currentPinnedCount = localRows.filter(r => !isSubItemRow(r) && isRowPinned(r)).length;
-      if (currentPinnedCount >= 5) {
-        toast.warning('Maksimal 5 task yang dapat di-pin per halaman', {
+      if (currentPinnedCount >= 10) {
+        toast.warning('Maksimal 10 task yang dapat di-pin per halaman', {
           description: 'Lepas pin (unpin) salah satu task terlebih dahulu untuk menyematkan task ini.'
         });
         return;
@@ -1200,18 +1309,29 @@ export function NotionDatabaseTable({
     }
 
     const newPinnedState = !currentlyPinned;
-    const targetKey = targetRow.id ? String(targetRow.id) : (targetRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
+    const rowId = targetRow.id ? String(targetRow.id) : '';
+    const jkRaw = targetRow['Jenis kegiatan'] || targetRow['Name'] || targetRow['Judul'] || '';
+    const cleanTitle = jkRaw.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+    const taskCode = targetRow.taskCode || targetRow['Task ID'] || targetRow['ID Task'] || '';
 
-    // Update state pinnedRowKeys
-    const nextPinnedKeys = new Set(pinnedRowKeys);
+    // Bersihkan semua kemungkinan key untuk task ini agar tidak ada duplikasi atau residual
+    const keysToRemove = new Set<string>();
+    if (rowId) keysToRemove.add(rowId);
+    if (cleanTitle) keysToRemove.add(cleanTitle);
+    if (taskCode) keysToRemove.add(String(taskCode));
+
+    let nextPinnedKeys = pinnedRowKeys.filter(k => !keysToRemove.has(k));
+
     if (newPinnedState) {
-      if (targetKey) nextPinnedKeys.add(targetKey);
-    } else {
-      if (targetKey) nextPinnedKeys.delete(targetKey);
+      const keyToAdd = rowId || cleanTitle || (taskCode ? String(taskCode) : '');
+      if (keyToAdd && !nextPinnedKeys.includes(keyToAdd)) {
+        nextPinnedKeys.push(keyToAdd);
+      }
     }
+
     setPinnedRowKeys(nextPinnedKeys);
     try {
-      localStorage.setItem(tablePinStorageKey, JSON.stringify(Array.from(nextPinnedKeys)));
+      localStorage.setItem(tablePinStorageKey, JSON.stringify(nextPinnedKeys));
     } catch {}
 
     // Update data baris lokal
@@ -1220,16 +1340,20 @@ export function NotionDatabaseTable({
     updatedRow.isPinned = newPinnedState ? 'true' : 'false';
     (updatedRow as any)._pinned = newPinnedState ? 'true' : 'false';
 
-    // Simpan penanda <!--pin--> di kolom Keterangan agar terpersistensi ke backend markdown
+    // Simpan atau hapus penanda <!--pin--> di kolom Keterangan dan Jenis kegiatan
     let ket = updatedRow['Keterangan'] || '';
+    let jk = updatedRow['Jenis kegiatan'] || '';
+
     if (newPinnedState) {
       if (!ket.includes('<!--pin-->')) {
         ket = `${ket} <!--pin-->`.trim();
       }
     } else {
       ket = ket.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
+      jk = jk.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
     }
     updatedRow['Keterangan'] = ket;
+    updatedRow['Jenis kegiatan'] = jk;
 
     nextRows[rowIndex] = updatedRow;
     setLocalRows(nextRows);
@@ -1720,13 +1844,32 @@ export function NotionDatabaseTable({
   };
 
   const handleDeleteColumn = async (colName: string) => {
-    const colLower = colName.toLowerCase();
+    const colLower = colName.toLowerCase().trim();
     if (colLower === 'number' || colLower === 'no') {
       toast.error('Kolom Nomor (#) tidak dapat dihapus');
       return;
     }
-    if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') {
+    if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul' || colLower === 'name') {
       toast.error('Kolom Judul/Kegiatan adalah kolom utama dan tidak dapat dihapus');
+      return;
+    }
+
+    // Proteksi Kolom Wajib: Sembunyikan (Hide) bukan Hapus (Delete) agar data detail task tidak hilang / tereset
+    const isMandatoryCol = (c: string) => {
+      const cl = c.toLowerCase().trim();
+      return (
+        cl === 'keterangan' || cl === 'description' || cl === 'rincian' ||
+        cl === 'status' ||
+        cl === 'pic' || cl === 'assignee' ||
+        cl === 'priority' || cl === 'prioritas' ||
+        cl.includes('routine') || cl === 'activity' || cl === 'period' ||
+        cl.includes('created') || cl.includes('selesai') || cl.includes('modified')
+      );
+    };
+
+    if (isMandatoryCol(colName)) {
+      handleToggleHideColumn(colName);
+      toast.info(`Kolom wajib "${colName}" disembunyikan (bukan dihapus) agar data detail task tetap aman.`);
       return;
     }
 
@@ -2310,7 +2453,7 @@ export function NotionDatabaseTable({
   const saveTableToBackend = async (newRows: TableRowData[], headersToSave?: string[]): Promise<boolean> => {
     if (!postId) return false;
     try {
-      const { rows: preppedRows } = migrateChecklistsInRows(newRows, section);
+      const preppedRows = newRows;
       // Normalize any legacy format subtask tags in Keterangan to canonical markdown checklists
       const normalizedRows = preppedRows.map(r => {
         const ket = getRowVal(r, 'Keterangan');
@@ -2372,7 +2515,22 @@ export function NotionDatabaseTable({
           break;
         }
       }
-      targetRow[keyToSet] = newValue;
+      const wasPinned = isRowPinned(copy[targetRowIndex]);
+      if (wasPinned) {
+        targetRow.isPinned = 'true';
+        (targetRow as any)._pinned = 'true';
+      }
+
+      if (colLower.includes('keterangan') && wasPinned) {
+        let finalVal = newValue;
+        if (!finalVal.includes('<!--pin-->')) {
+          finalVal = `${finalVal} <!--pin-->`.trim();
+        }
+        targetRow[keyToSet] = finalVal;
+      } else {
+        targetRow[keyToSet] = newValue;
+      }
+
       if (colLower === 'jenis kegiatan' || colLower === 'judul' || colLower === 'task' || colLower === 'nama kegiatan') {
         targetRow['Jenis kegiatan'] = newValue;
         targetRow['Jenis Kegiatan'] = newValue;
@@ -2690,7 +2848,8 @@ export function NotionDatabaseTable({
   // Add Row Handler
   const handleOpenAddModal = () => {
     setSelectedRow(null);
-    const nextNum = String(localRows.length + 1);
+    const targetCat = section || 'Laboratorium';
+    const autoTaskCode = generateTaskCode(targetCat, localRows);
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
@@ -2700,7 +2859,10 @@ export function NotionDatabaseTable({
       : 'Monthly';
 
     setRowFormData({
-      number: nextNum,
+      taskCode: autoTaskCode,
+      number: autoTaskCode,
+      'Task ID': autoTaskCode,
+      'ID Task': autoTaskCode,
       'Jenis kegiatan': '',
       'Jenis Kegiatan': '',
       Keterangan: '',
@@ -2708,7 +2870,8 @@ export function NotionDatabaseTable({
       Priority: 'Normal',
       Status: 'Open',
       'Created Time': createdStr,
-      Kategori: section || 'Laboratorium',
+      'Tanggal Selesai': '-',
+      Kategori: targetCat,
       'Activity (routine/non routine)': inheritedCadence,
       period: inheritedPeriod
     });
@@ -2752,22 +2915,38 @@ export function NotionDatabaseTable({
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    const parentId = parentRow.id || `parent-${actualParentIdx}-${parentRow['Jenis kegiatan'] || ''}`;
-    const formattedTitle = `↳ ${cleanTitle}`;
+    const parentId = parentRow.id || `task_${Date.now()}_${actualParentIdx}_${Math.random().toString(36).substr(2, 6)}`;
+    parentRow.id = parentId;
+    const nowIso = new Date().toISOString();
+    parentRow['Last Modified'] = nowIso;
+
+    // Sync subtask into parent row's Keterangan checklist so Discussion Modal stays 100% synchronized
+    const currentKet = getRowVal(parentRow, 'Keterangan') || '';
+    const newChecklistLine = `- [ ] ${cleanTitle}`;
+    const updatedKet = currentKet.trim() ? `${currentKet.trim()}\n${newChecklistLine}` : newChecklistLine;
+    parentRow['Keterangan'] = updatedKet;
+
+    const subId = `sub_${parentId}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const formattedTitle = `↳ [ ] ${cleanTitle}`;
     const newSubRow: TableRowData = {
       number: '',
+      id: subId,
+      parentId: parentId,
+      parentRowId: parentId,
       'Jenis kegiatan': formattedTitle,
       'Jenis Kegiatan': formattedTitle,
-      Keterangan: '',
+      Keterangan: '-',
       PIC: parentPIC,
       Priority: 'Normal',
       Status: 'Open',
+      isCompleted: 'false',
       'Created Time': createdStr,
+      'Tanggal Selesai': '-',
       Kategori: parentCat,
       'Activity (routine/non routine)': parentAct,
       period: parentPeriod,
       isSubItem: 'true',
-      parentId: parentId
+      'Last Modified': nowIso
     };
 
     // Cari posisi sisip: tepat setelah sub-item terakhir dari parent ini
@@ -2777,10 +2956,16 @@ export function NotionDatabaseTable({
     }
 
     const nextRows = [...localRows];
+    nextRows[actualParentIdx] = { ...parentRow };
     nextRows.splice(insertIdx, 0, newSubRow);
+
+    if (selectedRow && (selectedRow === parentRow || selectedRow.id === parentRow.id)) {
+      setSelectedRow(nextRows[actualParentIdx]);
+    }
 
     setLocalRows(nextRows);
     const updatedDirty = new Set(dirtyRowIndices);
+    updatedDirty.add(actualParentIdx);
     updatedDirty.add(insertIdx);
     setDirtyRowIndices(updatedDirty);
 
@@ -2804,16 +2989,17 @@ export function NotionDatabaseTable({
   const handleAddRecommendedTasks = async (tasksToAdd: TableRowData[]) => {
     try {
       const { rows: migratedTasks } = migrateChecklistsInRows(tasksToAdd, section);
-      const nextRows = [...localRows, ...migratedTasks];
+      const combined = [...localRows, ...migratedTasks];
+      const { rows: normalizedRows } = normalizeExistingTaskCodes(combined, section);
       let mainNum = 1;
-      nextRows.forEach(r => {
+      normalizedRows.forEach(r => {
         if (!isSubItemRow(r)) {
           r.number = String(mainNum++);
         }
       });
-      setLocalRows(nextRows);
-      onRowsChange?.(nextRows);
-      await saveTableToBackend(nextRows);
+      setLocalRows(normalizedRows);
+      onRowsChange?.(normalizedRows);
+      await saveTableToBackend(normalizedRows);
       toast.success(`🎉 Berhasil menambahkan ${tasksToAdd.length} rencana tugas ke logbook!`);
       setShowLogbookRecModal(false);
     } catch (err: any) {
@@ -2980,6 +3166,120 @@ export function NotionDatabaseTable({
     }
   };
 
+  // 1-SOURCE OF TRUTH: Sinkronisasi Subtask dari Discussion Modal / Drawer ke Baris Tabel & Backend
+  const handleSyncModalSubtasks = async (parentRowOrIndex: TableRowData | number, newKetVal: string) => {
+    let parentIdx = -1;
+    let parentRow: TableRowData | undefined;
+
+    if (typeof parentRowOrIndex === 'number') {
+      parentIdx = parentRowOrIndex;
+      parentRow = localRows[parentRowOrIndex];
+    } else {
+      parentRow = parentRowOrIndex;
+      parentIdx = localRows.indexOf(parentRowOrIndex);
+      if (parentIdx === -1 && parentRowOrIndex.id) {
+        parentIdx = localRows.findIndex(r => r.id === parentRowOrIndex.id);
+      }
+      if (parentIdx === -1) {
+        parentIdx = localRows.findIndex(r => 
+          (getRowVal(r, 'Jenis kegiatan') || '').trim() === (getRowVal(parentRowOrIndex, 'Jenis kegiatan') || '').trim()
+        );
+      }
+    }
+
+    if (!parentRow || parentIdx === -1) return;
+
+    // Parse subtasks from the new Keterangan markdown
+    const prog = parseTasklist(newKetVal || '');
+    const nowIso = new Date().toISOString();
+    const todayStr = getTodayDDMMYYYY();
+
+    const parentId = parentRow.id || `task_${Date.now()}_${parentIdx}_${Math.random().toString(36).substr(2, 6)}`;
+    const updatedParentRow = { ...parentRow, id: parentId };
+    updatedParentRow['Keterangan'] = newKetVal;
+    updatedParentRow['Last Modified'] = nowIso;
+
+    // Temukan range sub-items lama di bawah parentIdx
+    const oldSubIndices: number[] = [];
+    for (let i = parentIdx + 1; i < localRows.length; i++) {
+      if (isSubItemRow(localRows[i])) {
+        oldSubIndices.push(i);
+      } else {
+        break;
+      }
+    }
+
+    // Bangun daftar baris sub-items baru berdasarkan prog.items
+    const parentCat = getRowVal(parentRow, 'Kategori') || section || 'Laboratorium';
+    const parentPIC = getRowVal(parentRow, 'PIC') || currentAuthorName || '';
+    const parentAct = getRowVal(parentRow, 'Activity (routine/non routine)') || 'Monthly';
+    const parentPeriod = getRowVal(parentRow, 'period') || 'Monthly';
+
+    const newSubRows: TableRowData[] = prog.items.map((item, idx) => {
+      // Coba cocokkan dengan sub-item lama untuk preserve ID jika ada
+      const existingSub = oldSubIndices[idx] !== undefined ? localRows[oldSubIndices[idx]] : undefined;
+      const subId = existingSub?.id || `sub_${parentId}_${idx}_${Math.random().toString(36).substr(2, 6)}`;
+      const formattedTitle = `↳ [${item.checked ? 'x' : ' '}] ${item.text}`;
+
+      return {
+        number: '',
+        id: subId,
+        parentId: parentId,
+        parentRowId: parentId,
+        'Jenis kegiatan': formattedTitle,
+        'Jenis Kegiatan': formattedTitle,
+        Keterangan: item.note || '-',
+        PIC: parentPIC,
+        Priority: 'Normal',
+        Status: item.checked ? 'Closed' : 'Open',
+        isCompleted: item.checked ? 'true' : 'false',
+        'Created Time': existingSub?.['Created Time'] || getTodayDDMMYYYY(),
+        'Tanggal Selesai': item.checked ? (existingSub?.['Tanggal Selesai'] || todayStr) : '-',
+        Kategori: parentCat,
+        'Activity (routine/non routine)': parentAct,
+        period: parentPeriod,
+        isSubItem: 'true',
+        'Last Modified': nowIso
+      };
+    });
+
+    // Perbarui status parent
+    const totalSubs = newSubRows.length;
+    const completedSubs = newSubRows.filter(r => r.isCompleted === 'true').length;
+    const currentParentStatus = (getRowVal(updatedParentRow, 'Status') || '').toUpperCase();
+
+    if (!currentParentStatus.includes('CANCEL')) {
+      if (totalSubs > 0 && completedSubs === totalSubs) {
+        updatedParentRow.Status = 'Closed';
+        updatedParentRow['Tanggal Selesai'] = todayStr;
+      } else if (completedSubs > 0) {
+        updatedParentRow.Status = 'On Progress';
+        updatedParentRow['Tanggal Selesai'] = '-';
+      } else if (totalSubs > 0) {
+        updatedParentRow.Status = 'Open';
+        updatedParentRow['Tanggal Selesai'] = '-';
+      }
+    }
+
+    // Susun array nextRows
+    const nextRows = [...localRows];
+    nextRows[parentIdx] = updatedParentRow;
+
+    // Gantikan sub-items lama dengan newSubRows
+    if (oldSubIndices.length > 0) {
+      nextRows.splice(parentIdx + 1, oldSubIndices.length, ...newSubRows);
+    } else if (newSubRows.length > 0) {
+      nextRows.splice(parentIdx + 1, 0, ...newSubRows);
+    }
+
+    setLocalRows(nextRows);
+    if (selectedRow) {
+      setSelectedRow(updatedParentRow);
+    }
+    onRowsChange?.(nextRows);
+    await saveTableToBackend(nextRows);
+  };
+
   // Toggle Checklist Sub-Item Completed Status & Sinkronkan Progres Task Utama
   const handleToggleSubItemCompleted = (subRowIndex: number, currentCompleted: boolean) => {
     const nextCompleted = !currentCompleted;
@@ -3017,9 +3317,11 @@ export function NotionDatabaseTable({
 
     const executeToggle = async () => {
       const todayStr = getTodayDDMMYYYY();
+      const nowIso = new Date().toISOString();
       const updatedRow = { ...subRow };
       updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
       updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
+      updatedRow['Last Modified'] = nowIso;
 
       // Also update sub-item title prefix ↳ [x] vs ↳ [ ]
       const currentTitle = getRowVal(subRow, 'Jenis kegiatan') || getRowVal(subRow, 'Jenis Kegiatan') || '';
@@ -3052,6 +3354,7 @@ export function NotionDatabaseTable({
         const completedSubs = siblingSubIndices.filter(idx => isSubItemCompleted(nextRows[idx])).length;
 
         const parentRow = { ...nextRows[parentIdx] };
+        parentRow['Last Modified'] = nowIso;
         const currentParentStatus = (getRowVal(parentRow, 'Status') || '').toUpperCase();
 
         if (!currentParentStatus.includes('CANCEL')) {
@@ -3069,7 +3372,22 @@ export function NotionDatabaseTable({
             // Reset tanggal selesai tugas utama jika belum ada subtask diceklis
             setRowCompletedDate(parentRow, '-');
           }
-          nextRows[parentIdx] = parentRow;
+        }
+
+        // Rebuild the parent row's Keterangan checklists so it mirrors the table rows exactly
+        const existingKet = getRowVal(parentRow, 'Keterangan') || '';
+        const nonChecklistLines = existingKet.split('\n').filter(line => !line.trim().match(/^[-*]\s*\[([ xX])\]/));
+        const subChecklistLines = siblingSubIndices.map(sIdx => {
+          const sRow = nextRows[sIdx];
+          const sComp = isSubItemCompleted(sRow);
+          const sTitle = getDisplayTitle(getRowVal(sRow, 'Jenis kegiatan') || getRowVal(sRow, 'Jenis Kegiatan') || '');
+          return `- [${sComp ? 'x' : ' '}] ${sTitle}`;
+        });
+        parentRow['Keterangan'] = [...nonChecklistLines, ...subChecklistLines].join('\n').trim();
+        nextRows[parentIdx] = parentRow;
+
+        if (selectedRow && (selectedRow === localRows[parentIdx] || (selectedRow.id && selectedRow.id === parentRow.id))) {
+          setSelectedRow(parentRow);
         }
       }
 
@@ -3116,10 +3434,20 @@ export function NotionDatabaseTable({
   const handleOpenEditModal = (row: TableRowData, index: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setSelectedRow(null);
-    const data: TableRowData = {};
+    const data: TableRowData = { ...row };
     displayHeaders.forEach(h => {
       data[h] = getRowVal(row, h);
     });
+    // Explicitly preserve pin status
+    const pinned = isRowPinned(row);
+    if (pinned) {
+      data.isPinned = 'true';
+      (data as any)._pinned = 'true';
+    }
+    // Clean <!--pin--> from the textarea so user gets clean text without comment tags
+    if (typeof data['Keterangan'] === 'string') {
+      data['Keterangan'] = data['Keterangan'].replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
+    }
     // Ensure both casing variants of title are explicitly populated
     const titleVal = getRowVal(row, 'Jenis Kegiatan') || getRowVal(row, 'Jenis kegiatan') || '';
     data['Jenis Kegiatan'] = titleVal;
@@ -3149,6 +3477,39 @@ export function NotionDatabaseTable({
       }
     });
 
+    const targetCat = cleanedRow.Kategori || section || 'Laboratorium';
+    const finalTaskCode = (cleanedRow.taskCode || cleanedRow['Task ID'] || cleanedRow['ID Task'] || cleanedRow['number'] || generateTaskCode(targetCat, localRows)).trim();
+    cleanedRow.taskCode = finalTaskCode;
+    cleanedRow['Task ID'] = finalTaskCode;
+    cleanedRow['ID Task'] = finalTaskCode;
+    cleanedRow.number = finalTaskCode;
+    if (!cleanedRow.id) {
+      cleanedRow.id = `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    }
+    cleanedRow['Last Modified'] = new Date().toISOString();
+
+    // Check if row being edited was pinned
+    const wasPinned = (editingRowIndex !== null && localRows[editingRowIndex] && isRowPinned(localRows[editingRowIndex])) || 
+                      isRowPinned(cleanedRow) || 
+                      String(cleanedRow.isPinned) === 'true';
+
+    if (wasPinned) {
+      cleanedRow.isPinned = 'true';
+      (cleanedRow as any)._pinned = 'true';
+      let curKet = cleanedRow['Keterangan'] || '';
+      if (!curKet.includes('<!--pin-->')) {
+        cleanedRow['Keterangan'] = `${curKet} <!--pin-->`.trim();
+      }
+      const pKey = cleanedRow.id ? String(cleanedRow.id) : (cleanedRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
+      if (pKey && !pinnedRowKeys.includes(pKey)) {
+        setPinnedRowKeys(prev => {
+          const next = [...prev, pKey];
+          try { localStorage.setItem(tablePinStorageKey, JSON.stringify(next)); } catch {}
+          return next;
+        });
+      }
+    }
+
     // Auto-progress status jika berisi tasklist (kecuali jika user memilih Canceled)
     const taskProg = parseTasklist(cleanedRow['Keterangan']);
     if (taskProg.hasTasklist) {
@@ -3162,21 +3523,20 @@ export function NotionDatabaseTable({
     try {
       let updatedRows: TableRowData[];
       if (editingRowIndex === null) {
-        // Adding new row -> place at TOP (#1, nomor paling sedikit)
-        let parentCounter = 1;
-        cleanedRow.number = String(parentCounter++);
-
-        const adjustedExisting = localRows.map(r => {
-          if (isSubItemRow(r)) return r;
-          return { ...r, number: String(parentCounter++) };
-        });
-
-        updatedRows = [cleanedRow, ...adjustedExisting];
-        toast.success('Data kegiatan baru berhasil ditambahkan di nomor paling atas (#1)!');
+        // Adding new row -> place at TOP (#1, row 1)
+        updatedRows = [cleanedRow, ...localRows];
+        toast.success(`Data kegiatan baru (${finalTaskCode}) berhasil ditambahkan di Baris #1!`);
       } else {
-        // Editing existing row
-        updatedRows = localRows.map((r, i) => i === editingRowIndex ? { ...r, ...cleanedRow } : r);
-        toast.success('Perubahan data kegiatan berhasil disimpan!');
+        // Editing existing row: pastikan targetIndex cocok dengan id / referensi row yang diedit
+        let targetIndex = editingRowIndex;
+        if (targetIndex < 0 || targetIndex >= localRows.length || (cleanedRow.id && localRows[targetIndex]?.id !== cleanedRow.id)) {
+          const foundIdx = localRows.findIndex(r => (cleanedRow.id && r.id === cleanedRow.id) || r === rowFormData);
+          if (foundIdx !== -1) {
+            targetIndex = foundIdx;
+          }
+        }
+        updatedRows = localRows.map((r, i) => i === targetIndex ? { ...r, ...cleanedRow } : r);
+        toast.success(`Perubahan data kegiatan (${finalTaskCode}) berhasil disimpan!`);
       }
 
       setLocalRows(updatedRows);
@@ -3199,20 +3559,29 @@ export function NotionDatabaseTable({
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const inheritedCadence = currentCadence || 'Non Routine';
+    const targetCat = section || 'Laboratorium';
+    const autoTaskCode = generateTaskCode(targetCat, localRows);
+    const uniqueTaskId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const nowIso = new Date().toISOString();
 
     const blankRow: TableRowData = {
-      id: `row-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      number: '1',
+      id: uniqueTaskId,
+      taskCode: autoTaskCode,
+      'Task ID': autoTaskCode,
+      number: autoTaskCode,
       'Jenis kegiatan': '',
       'Jenis Kegiatan': '',
       Keterangan: '-',
       PIC: currentAuthorName || '',
       Priority: 'Normal',
       Status: 'Open',
+      isCompleted: 'false',
       'Created Time': createdStr,
-      Kategori: section || 'Laboratorium',
+      'Tanggal Selesai': '-',
+      Kategori: targetCat,
       'Activity (routine/non routine)': inheritedCadence,
-      period: inheritedCadence
+      period: inheritedCadence,
+      'Last Modified': nowIso
     };
 
     displayHeaders.forEach(h => {
@@ -3221,19 +3590,12 @@ export function NotionDatabaseTable({
       }
     });
 
-    // Selalu sisipkan di posisi paling atas (#1) dan geser urutan yang lain ke bawah
+    // Sisipkan di posisi paling atas (#1)
     const nextRows = [blankRow, ...localRows];
 
-    // Renumber parent rows sequentially starting from 1
-    let parentNum = 1;
-    const renumbered = nextRows.map(r => {
-      if (isSubItemRow(r)) return r;
-      return { ...r, number: String(parentNum++) };
-    });
-
-    setLocalRows(renumbered);
-    onRowsChange?.(renumbered);
-    saveTableToBackend(renumbered);
+    setLocalRows(nextRows);
+    onRowsChange?.(nextRows);
+    saveTableToBackend(nextRows);
 
     // Immediately activate inline editor on the new empty cell at row 0
     setActiveInlineEditor({
@@ -3243,7 +3605,7 @@ export function NotionDatabaseTable({
       multiline: false
     });
 
-    toast.success('Baris kosong baru (#1) ditambahkan di urutan pertama. Silakan ketik nama kegiatan.');
+    toast.success(`Kegiatan baru (${autoTaskCode}) ditambahkan di Baris #1! Silakan ketik nama kegiatan.`);
   };
 
   // Delete Row Handler
@@ -3446,31 +3808,55 @@ export function NotionDatabaseTable({
     }
 
     // 4. Sort (Pinned row selalu berada di posisi paling atas terlepas dari sort kolom)
+    // PENTING: Subtask tidak boleh lepas dari task utamanya
     result.sort((a, b) => {
       const aPin = isPinnedOrChildOfPinned(a);
       const bPin = isPinnedOrChildOfPinned(b);
       if (aPin && !bPin) return -1;
       if (!aPin && bPin) return 1;
 
-      if (sortColumn) {
-        const rawA = (getRowVal(a, sortColumn) || '').trim();
-        const rawB = (getRowVal(b, sortColumn) || '').trim();
+      // Temukan parent efektif
+      const pA = rowToParentMap.get(a);
+      const pB = rowToParentMap.get(b);
 
-        // If numeric column (number)
+      // Jika keduanya milik parent yang sama:
+      if (pA && pB && pA === pB) {
+        return localRows.indexOf(a) - localRows.indexOf(b);
+      }
+      // Jika a adalah subtask dari b:
+      if (pA === b) return 1;
+      // Jika b adalah subtask dari a:
+      if (pB === a) return -1;
+
+      const effA = pA || a;
+      const effB = pB || b;
+
+      if (sortColumn) {
+        const rawA = (getRowVal(effA, sortColumn) || effA[sortColumn] || '').trim();
+        const rawB = (getRowVal(effB, sortColumn) || effB[sortColumn] || '').trim();
+
+        // 1. Sort by Last Modified
+        if (sortColumn === 'Last Modified' || sortColumn.toLowerCase().includes('modified')) {
+          const timeA = Date.parse(effA['Last Modified'] || effA['Date Modified'] || effA['Created Time'] || 0) || 0;
+          const timeB = Date.parse(effB['Last Modified'] || effB['Date Modified'] || effB['Created Time'] || 0) || 0;
+          return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+        }
+
+        // 2. If numeric column (number)
         if (sortColumn.toLowerCase() === 'number' || sortColumn.toLowerCase() === 'no') {
           const numA = parseFloat(rawA) || 0;
           const numB = parseFloat(rawB) || 0;
           return sortDirection === 'asc' ? numA - numB : numB - numA;
         }
 
-        // If priority column (weighted: Urgent > High > Medium > Normal > Low)
+        // 3. If priority column (weighted: Urgent > High > Medium > Normal > Low)
         if (sortColumn.toLowerCase().includes('priorit') || sortColumn.toLowerCase() === 'priority') {
           const wA = getPriorityWeight(rawA);
           const wB = getPriorityWeight(rawB);
           return sortDirection === 'asc' ? wA - wB : wB - wA;
         }
 
-        // If date/time column
+        // 4. If date/time column
         const timeA = Date.parse(rawA);
         const timeB = Date.parse(rawB);
         if (!isNaN(timeA) && !isNaN(timeB)) {
@@ -4502,18 +4888,6 @@ export function NotionDatabaseTable({
                 </button>
               </NotionTooltip>
             </div>
-
-            {/* Tombol hijau "+ New" dipindahkan ke sebelah kanan tombol Cards */}
-            <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
-              <button
-                type="button"
-                onClick={handleOpenAddModal}
-                className="ml-1 sm:ml-2 px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>New</span>
-              </button>
-            </NotionTooltip>
           </div>
 
           {/* Right Anchor: Essential Tools Icons + Dedicated Full Tools Logo + + New Button */}
@@ -4897,6 +5271,7 @@ export function NotionDatabaseTable({
                   <div className="space-y-1 mb-2.5">
                     <label className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Pilih Kolom</label>
                     {[
+                      { key: 'Last Modified', label: '🕒 Terakhir Diubah (Last Modified)' },
                       { key: 'Tanggal Selesai', label: '📅 Tanggal Selesai' },
                       { key: 'Status', label: '⭕ Status' },
                       { key: 'Priority', label: '⚡ Prioritas' },
@@ -4913,7 +5288,7 @@ export function NotionDatabaseTable({
                               setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
                             } else {
                               setSortColumn(col.key);
-                              setSortDirection('asc');
+                              setSortDirection(col.key === 'Last Modified' ? 'desc' : 'asc');
                             }
                           }}
                           className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium text-left flex items-center justify-between transition-colors cursor-pointer ${
@@ -5358,6 +5733,22 @@ export function NotionDatabaseTable({
                 </div>
               )}
             </div>
+
+            {/* Dedicated Primary "+ New" Button in Top-Right Corner */}
+            <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="ml-1 sm:ml-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 border border-teal-500/50"
+                style={{
+                  backgroundColor: '#0d9488',
+                  color: '#ffffff'
+                }}
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" style={{ color: '#ffffff' }} />
+                <span className="font-bold tracking-wide" style={{ color: '#ffffff' }}>New Task</span>
+              </button>
+            </NotionTooltip>
           </div>
         </div>
       </div>
@@ -5546,6 +5937,26 @@ export function NotionDatabaseTable({
                             sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
                           )}
                         </div>
+
+                        {/* Quick Create Task button inside Jenis kegiatan column header */}
+                        {isJudul && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleInsertBlankRow(0);
+                            }}
+                            title="Quick Create Task: Tambah kegiatan baru langsung di Baris #1"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold text-white shadow-xs transition-all cursor-pointer shrink-0 ml-1 active:scale-95 border border-teal-500/50"
+                            style={{
+                              backgroundColor: '#0d9488',
+                              color: '#ffffff'
+                            }}
+                          >
+                            <Plus className="w-3 h-3 stroke-[2.5]" style={{ color: '#ffffff' }} />
+                            <span className="hidden sm:inline" style={{ color: '#ffffff' }}>Quick</span>
+                          </button>
+                        )}
 
                         {/* Column Reorder (< and >) and Sembunyikan (EyeOff) Actions - HANYA MUNCUL DI MODE EDIT TABEL */}
                         {!isNum && isTableEditMode && (
@@ -5817,8 +6228,9 @@ export function NotionDatabaseTable({
                     )}
                   </td>
                 </tr>
-              ) : (
-                groupedRowsData.map(({ groupName, groupRows }) => {
+              ) : (() => {
+                let runningParentNumber = 0;
+                return groupedRowsData.map(({ groupName, groupRows }) => {
                   const isCollapsed = collapsedGroups[groupName];
 
                   return (
@@ -5937,12 +6349,60 @@ export function NotionDatabaseTable({
                           }
                         });
 
-                        // Prioritaskan baris yang di-pin agar selalu berada di posisi paling atas tabel
+                        // Prioritaskan baris yang di-pin berdasarkan urutan pin (FIFO) dan terapkan sortColumn ke tugas utama
                         hierarchicalItems.sort((a, b) => {
                           const aPin = isRowPinned(a.parentRow);
                           const bPin = isRowPinned(b.parentRow);
                           if (aPin && !bPin) return -1;
                           if (!aPin && bPin) return 1;
+                          if (aPin && bPin) {
+                            const aKey = a.parentRow.id ? String(a.parentRow.id) : (a.parentRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
+                            const bKey = b.parentRow.id ? String(b.parentRow.id) : (b.parentRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
+                            const aIdx = pinnedRowKeys.indexOf(aKey);
+                            const bIdx = pinnedRowKeys.indexOf(bKey);
+                            if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+                            if (aIdx !== -1) return -1;
+                            if (bIdx !== -1) return 1;
+                          }
+
+                          if (sortColumn) {
+                            const rawA = (getRowVal(a.parentRow, sortColumn) || a.parentRow[sortColumn] || '').trim();
+                            const rawB = (getRowVal(b.parentRow, sortColumn) || b.parentRow[sortColumn] || '').trim();
+
+                            // 1. Sort by Last Modified (Terakhir Diubah)
+                            if (sortColumn === 'Last Modified' || sortColumn.toLowerCase().includes('modified')) {
+                              const timeA = Date.parse(a.parentRow['Last Modified'] || a.parentRow['Date Modified'] || a.parentRow['Created Time'] || 0) || 0;
+                              const timeB = Date.parse(b.parentRow['Last Modified'] || b.parentRow['Date Modified'] || b.parentRow['Created Time'] || 0) || 0;
+                              return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+                            }
+
+                            // 2. Sort by Nomor Baris (#)
+                            if (sortColumn.toLowerCase() === 'number' || sortColumn.toLowerCase() === 'no') {
+                              const numA = parseFloat(rawA) || 0;
+                              const numB = parseFloat(rawB) || 0;
+                              return sortDirection === 'asc' ? numA - numB : numB - numA;
+                            }
+
+                            // 3. Sort by Prioritas
+                            if (sortColumn.toLowerCase().includes('priorit') || sortColumn.toLowerCase() === 'priority') {
+                              const wA = getPriorityWeight(rawA);
+                              const wB = getPriorityWeight(rawB);
+                              return sortDirection === 'asc' ? wA - wB : wB - wA;
+                            }
+
+                            // 4. Sort by Date/Time
+                            const timeA = Date.parse(rawA);
+                            const timeB = Date.parse(rawB);
+                            if (!isNaN(timeA) && !isNaN(timeB)) {
+                              return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+                            }
+
+                            // 5. Sort Alphabetical
+                            const valA = rawA.toLowerCase();
+                            const valB = rawB.toLowerCase();
+                            if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+                            if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+                          }
                           return 0;
                         });
 
@@ -5954,7 +6414,8 @@ export function NotionDatabaseTable({
                           hasChildren: boolean,
                           isExpanded: boolean,
                           subItemsList?: Array<{ row: TableRowData; actualIndex: number }>,
-                          onToggleExpand?: (e: React.MouseEvent) => void
+                          onToggleExpand?: (e: React.MouseEvent) => void,
+                          displayRowNumber?: number
                         ) => {
                           const isDirty = dirtyRowIndices.has(actualRowIndex);
                           const isSelected = selectedRowIndices.has(actualRowIndex);
@@ -6005,14 +6466,14 @@ export function NotionDatabaseTable({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleTogglePinRow(actualRowIndex);
+                                        handleTogglePinRow(row);
                                       }}
                                       className={`p-0.5 rounded transition-all cursor-pointer ${
                                         isRowPinned(row)
                                           ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
                                           : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
-                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 5 task)'}
+                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 10 task)'}
                                     >
                                       <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45 text-amber-500' : ''}`} />
                                     </button>
@@ -6057,7 +6518,7 @@ export function NotionDatabaseTable({
                                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="Ada perubahan belum disimpan" />
                                         )}
                                         {!isSubItem && (
-                                          <span>{val || actualRowIndex + 1}</span>
+                                          <span>{displayRowNumber ?? (actualRowIndex + 1)}</span>
                                         )}
                                       </div>
                                     </td>
@@ -6834,7 +7295,7 @@ export function NotionDatabaseTable({
                                {/* Row Action Buttons - Menu Titik Tiga */}
                                <td className={`text-center whitespace-nowrap relative notion-row-action-menu-container ${fitPageMode ? 'px-1 py-2' : 'px-2 py-2.5'}`} onClick={(e) => e.stopPropagation()}>
                                  {(() => {
-                                   const rowActionKey = `${actualRowIndex}-${isSubItem ? 'sub' : 'parent'}`;
+                                   const rowActionKey = row.id ? `action-${row.id}` : `${actualRowIndex}-${isSubItem ? 'sub' : 'parent'}-${(row['Jenis kegiatan'] || row['Name'] || '').slice(0, 20)}`;
                                    return (
                                      <div className="relative inline-block">
                                        <button
@@ -6861,7 +7322,7 @@ export function NotionDatabaseTable({
                                            type="button"
                                            onClick={(e) => {
                                              e.stopPropagation();
-                                             handleTogglePinRow(actualRowIndex);
+                                             handleTogglePinRow(row);
                                              setActiveActionMenuRowIndex(null);
                                            }}
                                            className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
@@ -6869,10 +7330,10 @@ export function NotionDatabaseTable({
                                                ? 'hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold'
                                                : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
                                            }`}
-                                           title={isRowPinned(row) ? "Lepas sematan (unpin) task ini" : "Sematkan task ini ke posisi teratas (Maks. 5 task)"}
+                                           title={isRowPinned(row) ? "Lepas sematan (unpin) task ini" : "Sematkan task ini ke posisi teratas (Maks. 10 task)"}
                                          >
                                            <Pin className={`w-3.5 h-3.5 shrink-0 ${isRowPinned(row) ? 'text-amber-500 fill-amber-500 rotate-45' : 'text-slate-400'}`} />
-                                           <span>{isRowPinned(row) ? 'Lepas Pin (Unpin Task)' : 'Pin Task ke Atas (Maks 5)'}</span>
+                                           <span>{isRowPinned(row) ? 'Lepas Pin (Unpin Task)' : 'Pin Task ke Atas (Maks 10)'}</span>
                                          </button>
                                        )}
                                        {!isSubItem && (
@@ -6951,7 +7412,7 @@ export function NotionDatabaseTable({
                           );
                         };
 
-                        return hierarchicalItems.map((hItem) => {
+                        return hierarchicalItems.map((hItem, hIdx) => {
                           const parentRow = hItem.parentRow;
                           const parentIndex = hItem.parentIndex;
                           const parentKey = parentRow.id || `${parentIndex}-${parentRow['Jenis kegiatan'] || ''}`;
@@ -6974,34 +7435,46 @@ export function NotionDatabaseTable({
                                     [parentIndex]: !isParentExpanded,
                                     [parentKey]: !isParentExpanded
                                   }));
-                                }
+                                },
+                                ++runningParentNumber
                               )}
 
                               {/* Render Sub-items if Parent is expanded */}
-                              {isParentExpanded && hItem.subItems.map((sub) => {
-                                const subKey = sub.row.id || `${sub.actualIndex}-${sub.row['Jenis kegiatan'] || ''}`;
-                                const isSubExpanded = Boolean(expandedParents[`sub-${sub.actualIndex}`] || expandedParents[`sub-${subKey}`]);
-                                return (
-                                  <React.Fragment key={`sub-${subKey}`}>
-                                    {renderRowItem(
-                                      sub.row, 
-                                      sub.actualIndex, 
-                                      true, 
-                                      false, 
-                                      isSubExpanded, 
-                                      undefined,
-                                      (e) => {
-                                        e.stopPropagation();
-                                        setExpandedParents(prev => ({
-                                          ...prev,
-                                          [`sub-${sub.actualIndex}`]: !isSubExpanded,
-                                          [`sub-${subKey}`]: !isSubExpanded
-                                        }));
-                                      }
-                                    )}
-                                  </React.Fragment>
-                                );
-                              })}
+                              {isParentExpanded && (() => {
+                                // Subtask yang sudah terceklis (selesai) otomatis bergabung di bagian atas
+                                const sortedSubItems = [...hItem.subItems].sort((a, b) => {
+                                  const aComp = isSubItemCompleted(a.row);
+                                  const bComp = isSubItemCompleted(b.row);
+                                  if (aComp && !bComp) return -1;
+                                  if (!aComp && bComp) return 1;
+                                  return 0;
+                                });
+
+                                return sortedSubItems.map((sub) => {
+                                  const subKey = sub.row.id || `${sub.actualIndex}-${sub.row['Jenis kegiatan'] || ''}`;
+                                  const isSubExpanded = Boolean(expandedParents[`sub-${sub.actualIndex}`] || expandedParents[`sub-${subKey}`]);
+                                  return (
+                                    <React.Fragment key={`sub-${subKey}`}>
+                                      {renderRowItem(
+                                        sub.row, 
+                                        sub.actualIndex, 
+                                        true, 
+                                        false, 
+                                        isSubExpanded, 
+                                        undefined,
+                                        (e) => {
+                                          e.stopPropagation();
+                                          setExpandedParents(prev => ({
+                                            ...prev,
+                                            [`sub-${sub.actualIndex}`]: !isSubExpanded,
+                                            [`sub-${subKey}`]: !isSubExpanded
+                                          }));
+                                        }
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                });
+                              })()}
 
                               {/* + New sub-item row if Parent is expanded */}
                               {isParentExpanded && (
@@ -7086,8 +7559,8 @@ export function NotionDatabaseTable({
 
                     </React.Fragment>
                   );
-                })
-              )}
+                });
+              })()}
             </tbody>
           </table>
 
@@ -7868,6 +8341,7 @@ export function NotionDatabaseTable({
                     <FloatingSelectionToolbar
                       onFormat={(action) => handleApplyModalFormat('jenisKegiatan', action)}
                       onClose={() => setActiveModalSelection(null)}
+                      isNotionLight={isNotionLight}
                     />
                   )}
                   <input
@@ -7876,13 +8350,24 @@ export function NotionDatabaseTable({
                     value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
                     onChange={(e) => {
                       const val = e.target.value;
+                      const cursor = e.target.selectionStart;
                       setRowFormData(prev => ({ 
                         ...prev, 
                         'Jenis kegiatan': val,
                         'Jenis Kegiatan': val 
                       }));
+                      if (cursor !== null) {
+                        requestAnimationFrame(() => {
+                          e.target.setSelectionRange(cursor, cursor);
+                        });
+                      }
                     }}
-                    onSelect={(e) => handleModalSelectText(e, 'jenisKegiatan')}
+                    onSelect={(e) => {
+                      const target = e.currentTarget;
+                      if ((target.selectionEnd ?? 0) > (target.selectionStart ?? 0)) {
+                        handleModalSelectText(e, 'jenisKegiatan');
+                      }
+                    }}
                     onKeyUp={(e) => {
                       if (e.shiftKey || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
                         handleModalSelectText(e, 'jenisKegiatan');
@@ -7916,25 +8401,31 @@ export function NotionDatabaseTable({
                 })()}
               </div>
 
-              {/* 2. Number & Priority */}
+              {/* 2. Task ID & Priority */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Number */}
+                {/* ID Task (Auto Generated) */}
                 <div>
-                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Number / No
-                  </label>
-                  <input
-                    type="text"
-                    value={rowFormData['number'] || ''}
-                    onChange={(e) => setRowFormData({ ...rowFormData, number: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #141414)',
-                      borderColor: 'var(--border-main, #334155)',
-                      color: 'var(--text-main, #f1f5f9)'
-                    }}
-                    placeholder="1"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                      ID Task (Kode Unik)
+                    </label>
+                    <span className="text-[9.5px] font-mono text-teal-500 font-bold">Auto Format (L1, P1, Q1, A1, I1, M1)</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      readOnly
+                      value={rowFormData['taskCode'] || rowFormData['Task ID'] || rowFormData['ID Task'] || rowFormData['number'] || ''}
+                      className="w-full p-2.5 pr-8 rounded-xl border outline-none text-xs font-mono font-bold cursor-not-allowed opacity-85 select-none"
+                      style={{
+                        backgroundColor: 'var(--input-bg, #141414)',
+                        borderColor: 'var(--border-main, #334155)',
+                        color: 'var(--text-main, #f1f5f9)'
+                      }}
+                      placeholder="Auto generated (L1, P1, Q1, A1, I1, M1)"
+                    />
+                    <Lock className="w-3.5 h-3.5 absolute right-3 top-3 text-slate-400" />
+                  </div>
                 </div>
 
                 {/* Priority */}
@@ -7977,6 +8468,7 @@ export function NotionDatabaseTable({
                     <FloatingSelectionToolbar
                       onFormat={(action) => handleApplyModalFormat('keterangan', action)}
                       onClose={() => setActiveModalSelection(null)}
+                      isNotionLight={isNotionLight}
                     />
                   )}
                   <textarea
@@ -7984,9 +8476,80 @@ export function NotionDatabaseTable({
                     value={rowFormData['Keterangan'] || ''}
                     onChange={(e) => {
                       const val = e.target.value;
+                      const cursor = e.target.selectionStart;
                       setRowFormData(prev => ({ ...prev, Keterangan: val }));
+                      if (cursor !== null) {
+                        requestAnimationFrame(() => {
+                          e.target.setSelectionRange(cursor, cursor);
+                        });
+                      }
                     }}
-                    onSelect={(e) => handleModalSelectText(e, 'keterangan')}
+                    onKeyDown={(e) => {
+                      const textarea = e.currentTarget;
+                      const { selectionStart, selectionEnd } = textarea;
+                      const val = rowFormData['Keterangan'] || '';
+
+                      if (e.key === 'Enter' && selectionStart === selectionEnd && !e.shiftKey) {
+                        const lineStart = val.lastIndexOf('\n', selectionStart - 1) + 1;
+                        const currentLine = val.substring(lineStart, selectionStart);
+                        const bulletMatch = currentLine.match(/^(\s*[•\-\*]\s+)/);
+
+                        if (bulletMatch) {
+                          const bulletPrefix = bulletMatch[1];
+                          const textAfterBullet = currentLine.substring(bulletPrefix.length).trim();
+
+                          if (!textAfterBullet) {
+                            // Bullet kosong -> hapus bullet pada baris ini jadi baris biasa
+                            e.preventDefault();
+                            const before = val.substring(0, lineStart);
+                            const after = val.substring(selectionStart);
+                            const newVal = before + after;
+                            setRowFormData(prev => ({ ...prev, Keterangan: newVal }));
+                            requestAnimationFrame(() => {
+                              textarea.setSelectionRange(lineStart, lineStart);
+                            });
+                            return;
+                          } else {
+                            // Lanjutkan bullet ke baris berikutnya
+                            e.preventDefault();
+                            const before = val.substring(0, selectionStart);
+                            const after = val.substring(selectionEnd);
+                            const insertText = '\n' + bulletPrefix;
+                            const newVal = before + insertText + after;
+                            const newCursor = selectionStart + insertText.length;
+                            setRowFormData(prev => ({ ...prev, Keterangan: newVal }));
+                            requestAnimationFrame(() => {
+                              textarea.setSelectionRange(newCursor, newCursor);
+                            });
+                            return;
+                          }
+                        }
+                      }
+
+                      // Jika tombol Backspace ditekan saat bullet kosong, hapus bullet jadi baris biasa
+                      if (e.key === 'Backspace' && selectionStart === selectionEnd) {
+                        const lineStart = val.lastIndexOf('\n', selectionStart - 1) + 1;
+                        const currentLine = val.substring(lineStart, selectionStart);
+                        const bulletMatch = currentLine.match(/^(\s*[•\-\*]\s+)$/);
+                        if (bulletMatch && selectionStart === lineStart + bulletMatch[1].length) {
+                          e.preventDefault();
+                          const before = val.substring(0, lineStart);
+                          const after = val.substring(selectionStart);
+                          const newVal = before + after;
+                          setRowFormData(prev => ({ ...prev, Keterangan: newVal }));
+                          requestAnimationFrame(() => {
+                            textarea.setSelectionRange(lineStart, lineStart);
+                          });
+                          return;
+                        }
+                      }
+                    }}
+                    onSelect={(e) => {
+                      const target = e.currentTarget;
+                      if ((target.selectionEnd ?? 0) > (target.selectionStart ?? 0)) {
+                        handleModalSelectText(e, 'keterangan');
+                      }
+                    }}
                     onKeyUp={(e) => {
                       if (e.shiftKey || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
                         handleModalSelectText(e, 'keterangan');
@@ -8698,19 +9261,47 @@ export function NotionDatabaseTable({
                         </div>
                       )}
 
-                      {/* Rincian & Keterangan Subtask Manager (Sinergi Penuh dengan Log Book) */}
+                      {/* Rincian & Keterangan Subtask Manager (Sinergi Penuh dengan Log Book & 1-Source-of-Truth) */}
                       {(() => {
-                        const selKetVal = getRowVal(selectedRow, 'Keterangan');
                         const actualIdx = localRows.indexOf(selectedRow) !== -1 
                           ? localRows.indexOf(selectedRow)
-                          : localRows.findIndex(r => getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan'));
+                          : localRows.findIndex(r => 
+                              (selectedRow.id && r.id === selectedRow.id) || 
+                              getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan')
+                            );
+
+                        const liveRow = actualIdx !== -1 ? localRows[actualIdx] : selectedRow;
+                        let canonicalKetVal = getRowVal(liveRow, 'Keterangan') || '';
+
+                        // Collect child rows from table to ensure 100% synchronization
+                        if (actualIdx !== -1) {
+                          const childRows: TableRowData[] = [];
+                          for (let i = actualIdx + 1; i < localRows.length; i++) {
+                            if (isSubItemRow(localRows[i])) {
+                              childRows.push(localRows[i]);
+                            } else {
+                              break;
+                            }
+                          }
+                          if (childRows.length > 0) {
+                            const nonChecklistLines = canonicalKetVal.split('\n').filter(line => !line.trim().match(/^[-*]\s*\[([ xX])\]/));
+                            const childChecklistLines = childRows.map(cRow => {
+                              const isComp = isSubItemCompleted(cRow);
+                              const cleanTitle = getDisplayTitle(getRowVal(cRow, 'Jenis kegiatan') || getRowVal(cRow, 'Jenis Kegiatan') || '');
+                              return `- [${isComp ? 'x' : ' '}] ${cleanTitle}`;
+                            });
+                            canonicalKetVal = [...nonChecklistLines, ...childChecklistLines].join('\n').trim();
+                          }
+                        }
 
                         return (
                           <SharedSubtaskManager
-                            value={selKetVal}
+                            value={canonicalKetVal}
                             onChange={(newVal) => {
                               if (actualIdx !== -1) {
-                                handleUpdateCellDirect(actualIdx, 'Keterangan', newVal);
+                                handleSyncModalSubtasks(actualIdx, newVal);
+                              } else {
+                                handleSyncModalSubtasks(selectedRow, newVal);
                               }
                             }}
                             label="Rincian & Checklist Subtask Kegiatan"

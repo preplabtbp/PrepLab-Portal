@@ -74,7 +74,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
   // Pagination, Search & Sorting for Bottom Drilldown Table
   const [tableCurrentPage, setTableCurrentPage] = useState<number>(1);
   const [tableSearchQuery, setTableSearchQuery] = useState<string>('');
-  const [tableSortOrder, setTableSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [tableSortOrder, setTableSortOrder] = useState<'asc' | 'desc'>('desc');
   const [hidePemutihan, setHidePemutihan] = useState<boolean>(true);
   const ITEMS_PER_PAGE = 20;
 
@@ -173,7 +173,16 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
     }
     
     // Filter by period
-    if (period === 'this_iso_week' || period === 'this_week') {
+    if (period === 'today') {
+      const now = new Date();
+      filtered = filtered.filter(wo => {
+        if (!wo.date) return false;
+        const d = new Date(wo.date);
+        return d.getFullYear() === now.getFullYear() &&
+               d.getMonth() === now.getMonth() &&
+               d.getDate() === now.getDate();
+      });
+    } else if (period === 'this_iso_week' || period === 'this_week') {
       filtered = filtered.filter(wo => wo.date && isThisISOWeek(wo.date));
     } else if (period === 'last_iso_week' || period === 'last_week') {
       filtered = filtered.filter(wo => wo.date && isLastISOWeek(wo.date));
@@ -967,6 +976,8 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
             >
               <optgroup label="⚡ Filter Cepat">
                 <option value="all" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>📅 Semua Waktu</option>
+                <option value="today" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>☀️ Hari Ini</option>
+                <option value="this_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>📅 Minggu Ini</option>
                 <option value="last_30_days" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏱️ 30 Hari Terakhir</option>
                 <option value="this_year" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>📆 Tahun Berjalan ({new Date().getFullYear()})</option>
                 <option value="custom" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>🎯 Kustom Rentang Tanggal...</option>
@@ -1551,6 +1562,11 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
           ].filter(Boolean).join(' ').toLowerCase();
           return str.includes(q);
         }).sort((a, b) => {
+          const dateA = a.date ? new Date(a.date).getTime() : 0;
+          const dateB = b.date ? new Date(b.date).getTime() : 0;
+          if (dateA !== dateB && dateA && dateB) {
+            return tableSortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+          }
           const cmp = (a.woId || '').localeCompare(b.woId || '', 'id', { numeric: true });
           return tableSortOrder === 'asc' ? cmp : -cmp;
         });
@@ -1661,7 +1677,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
                 >
                   <ArrowUpDown className="w-3.5 h-3.5 text-teal-600" />
                   <span className="hidden sm:inline">No. WO:</span>
-                  <span className="text-teal-700 font-bold">{tableSortOrder === 'asc' ? 'A → Z (Terlama)' : 'Z → A (Terbaru)'}</span>
+                  <span className="text-teal-700 font-bold">{tableSortOrder === 'desc' ? '⚡ Terbaru di Atas' : 'Terlama di Atas'}</span>
                 </button>
 
                 <span 

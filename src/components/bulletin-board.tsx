@@ -975,6 +975,29 @@ export function BulletinBoard({
         headers.forEach((h, idx) => {
           rowObj[h] = cells[idx] || "";
         });
+
+        // Extract persistent Unique ID and metadata from cells
+        const rowStr = cells.join(' ');
+        const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
+        const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
+        const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
+        const isPin = rowStr.includes('<!--pin-->') || rowStr.includes('<!--pinned-->');
+
+        if (taskMatch) rowObj.id = taskMatch[1].trim();
+        if (parentMatch) {
+          rowObj.parentId = parentMatch[1].trim();
+          rowObj.parentRowId = parentMatch[1].trim();
+          rowObj.isSubItem = 'true';
+        }
+        if (modMatch) {
+          rowObj['Last Modified'] = modMatch[1].trim();
+          rowObj['Date Modified'] = modMatch[1].trim();
+        }
+        if (isPin) {
+          rowObj.isPinned = 'true';
+          (rowObj as any)._pinned = 'true';
+        }
+
         rows.push(rowObj);
       }
     }

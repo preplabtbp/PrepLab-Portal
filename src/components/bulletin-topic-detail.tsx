@@ -26,7 +26,7 @@ export function BulletinTopicDetail({
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [newComment, setNewComment] = useState('');
-  const [selectedFile, setSelectedFile] = useState<{ name: string; url: string; previewUrl?: string; isImage?: boolean } | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Array<{ name: string; url: string; previewUrl?: string; isImage?: boolean }>>([]);
   const [fileCaption, setFileCaption] = useState('');
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   
@@ -127,17 +127,53 @@ export function BulletinTopicDetail({
     content: string;
   } | null>(null);
 
-  const submitComment = async () => {
-    const finalContent = newComment.trim() || (fileCaption.trim() ? `📎 ${selectedFile?.name}\n\n${fileCaption.trim()}` : (selectedFile ? 'Sent a file' : ''));
-    if (!finalContent && !selectedFile) return;
+  const handleCommentFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFiles = e.target.files ? Array.from(e.target.files) : [];
+    if (rawFiles.length === 0) return;
+    setIsUploadingFile(true);
+    const toastId = toast.loading(`Mengompres dan mengunggah ${rawFiles.length} lampiran...`, { id: 'upload-bulletin' });
     try {
-      const fileUrlPayload = selectedFile ? JSON.stringify([{
-        url: selectedFile.url,
-        name: selectedFile.name,
-        caption: fileCaption.trim(),
-        directUrl: selectedFile.url,
-        isImage: selectedFile.isImage
-      }]) : null;
+      const uploadedList: Array<{ name: string; url: string; previewUrl?: string; isImage?: boolean }> = [];
+      for (const file of rawFiles) {
+        const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const base64Data = base64.split(',')[1];
+        const url = await uploadPhotoToDrive(base64Data, file.type, file.name, 'Bulletin Board');
+        uploadedList.push({
+          name: file.name,
+          url,
+          isImage: isImg,
+          previewUrl: isImg ? base64 : undefined
+        });
+      }
+      setSelectedFiles(prev => [...prev, ...uploadedList]);
+      toast.success(`${uploadedList.length} lampiran siap dikirim!`, { id: 'upload-bulletin' });
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal mengunggah lampiran', { id: 'upload-bulletin' });
+    } finally {
+      setIsUploadingFile(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const submitComment = async () => {
+    const hasFiles = selectedFiles.length > 0;
+    const finalContent = newComment.trim() || (fileCaption.trim() ? `📎 ${selectedFiles[0]?.name}\n\n${fileCaption.trim()}` : (hasFiles ? 'Sent attachments' : ''));
+    if (!finalContent && !hasFiles) return;
+    try {
+      const fileUrlPayload = hasFiles ? JSON.stringify(selectedFiles.map((f, idx) => ({
+        url: f.url,
+        name: f.name,
+        caption: idx === 0 ? fileCaption.trim() : '',
+        directUrl: f.url,
+        isImage: f.isImage
+      }))) : null;
 
       const res = await fetch(`/api/bulletin/${post.id}/comments`, {
         method: 'POST',
@@ -146,7 +182,7 @@ export function BulletinTopicDetail({
           authorNik: inspectorNik,
           authorName: inspectorName,
           content: finalContent,
-          fileName: selectedFile?.name || null,
+          fileName: selectedFiles[0]?.name || null,
           fileUrl: fileUrlPayload,
           replyToId: replyingTo?.id || null,
           replyToNik: replyingTo?.authorNik || null,
@@ -160,7 +196,7 @@ export function BulletinTopicDetail({
           toast.success(`Tanggapan terkirim! Notifikasi otomatis masuk ke ${replyingTo.authorName}.`);
         }
         setNewComment('');
-        setSelectedFile(null);
+        setSelectedFiles([]);
         setFileCaption('');
         setReplyingTo(null);
         fetchComments();
@@ -681,33 +717,48 @@ export function BulletinTopicDetail({
 
                 {/* Chat Input Area (padded at bottom to prevent footer occlusion) */}
                 <div className="p-4 pb-20 md:pb-6 bg-white border-t border-slate-200">
-                   {selectedFile && (
-                     <div className="mb-3 p-3 bg-blue-50/90 border border-blue-200 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-3 shadow-2xs animate-in fade-in">
-                       <div className="flex items-center gap-2.5 min-w-0">
-                         {selectedFile.isImage && (selectedFile.previewUrl || selectedFile.url) ? (
-                           <img 
-                             src={selectedFile.previewUrl || selectedFile.url} 
-                             alt={selectedFile.name} 
-                             className="w-12 h-12 object-cover rounded-xl border border-blue-200 shrink-0 shadow-2xs" 
-                           />
-                         ) : (
-                           <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                             <Paperclip className="w-5 h-5" />
-                           </div>
-                         )}
-                         <div className="min-w-0 flex-1">
-                           <span className="font-semibold text-xs text-blue-900 block truncate max-w-[180px]" title={selectedFile.name}>
-                             {selectedFile.name}
-                           </span>
-                           <span className="text-[10px] text-blue-600 font-medium">Lampiran siap dikirim</span>
-                         </div>
+                   {selectedFiles.length > 0 && (
+                     <div className="mb-3 p-3 bg-blue-50/90 border border-blue-200 rounded-2xl space-y-2.5 shadow-2xs animate-in fade-in">
+                       <div className="flex items-center justify-between">
+                         <span className="text-[11px] font-bold text-blue-900">
+                           {selectedFiles.length} Lampiran siap dikirim
+                         </span>
+                         <button
+                           type="button"
+                           onClick={() => { setSelectedFiles([]); setFileCaption(''); }}
+                           className="text-[10px] text-red-500 hover:text-red-700 font-semibold cursor-pointer"
+                         >
+                           Hapus Semua
+                         </button>
                        </div>
-                       <div className="flex-1 flex items-center gap-2">
+                       <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-0.5">
+                         {selectedFiles.map((f, idx) => (
+                           <div key={idx} className="flex items-center gap-2 p-1.5 pr-2 bg-white rounded-xl border border-blue-200 shadow-2xs text-xs">
+                             {f.isImage && (f.previewUrl || f.url) ? (
+                               <img src={f.previewUrl || f.url} alt={f.name} className="w-8 h-8 object-cover rounded-lg border border-blue-100 shrink-0" />
+                             ) : (
+                               <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                                 <Paperclip className="w-4 h-4" />
+                               </div>
+                             )}
+                             <span className="truncate max-w-[140px] text-blue-950 font-medium text-[11px]" title={f.name}>{f.name}</span>
+                             <button
+                               type="button"
+                               onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                               className="p-1 hover:bg-slate-100 text-slate-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
+                               title="Hapus file ini"
+                             >
+                               <X className="w-3.5 h-3.5" />
+                             </button>
+                           </div>
+                         ))}
+                       </div>
+                       <div className="pt-0.5">
                          <input 
                            type="text"
                            value={fileCaption}
                            onChange={(e) => setFileCaption(e.target.value)}
-                           placeholder="Tambahkan caption gambar (opsional)..."
+                           placeholder="Tambahkan catatan/caption lampiran (opsional)..."
                            className="w-full text-xs px-3 py-2 bg-white border border-blue-200 focus:border-blue-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 text-slate-800 placeholder:text-slate-400 transition-all"
                            onKeyDown={(e) => {
                              if (e.key === 'Enter' && !e.shiftKey) {
@@ -716,14 +767,6 @@ export function BulletinTopicDetail({
                              }
                            }}
                          />
-                         <button
-                           type="button"
-                           onClick={() => { setSelectedFile(null); setFileCaption(''); }}
-                           className="p-1.5 hover:bg-blue-200/60 rounded-xl text-blue-500 hover:text-blue-800 transition-colors shrink-0 cursor-pointer"
-                           title="Hapus Lampiran"
-                         >
-                           <X className="w-4 h-4" />
-                         </button>
                        </div>
                      </div>
                    )}
@@ -754,38 +797,17 @@ export function BulletinTopicDetail({
                        )}
                      </div>
                      <div className="flex-1 flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-2 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all shadow-2xs">
-                       <label className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0 cursor-pointer" title="Lampirkan File">
-                         {isUploadingFile ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Paperclip className="w-5 h-5" />}
-                         <input type="file" className="hidden" disabled={isUploadingFile} onChange={(e) => {
-                           const file = e.target.files?.[0];
-                           if (file) {
-                             setIsUploadingFile(true);
-                             toast.loading('Mengompres dan mengunggah file...', { id: 'upload' });
-                             const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
-                             const reader = new FileReader();
-                             reader.onload = async (ev) => {
-                                try {
-                                  const base64 = ev.target?.result as string;
-                                  const base64Data = base64.split(',')[1];
-                                  const url = await uploadPhotoToDrive(base64Data, file.type, file.name, 'Bulletin Board');
-                                  setSelectedFile({
-                                    name: file.name,
-                                    url,
-                                    isImage: isImg,
-                                    previewUrl: isImg ? base64 : undefined
-                                  });
-                                  toast.success('Upload selesai! Anda dapat menambahkan caption.', { id: 'upload' });
-                                } catch (err) {
-                                  console.error(err);
-                                  toast.error('Upload gagal', { id: 'upload' });
-                                } finally {
-                                  setIsUploadingFile(false);
-                                }
-                             };
-                             reader.readAsDataURL(file);
-                           }
-                         }} />
-                       </label>
+                       <label className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0 cursor-pointer" title="Lampirkan File (Dapat pilih banyak file)">
+                          {isUploadingFile ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Paperclip className="w-5 h-5" />}
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            multiple 
+                            accept="image/*,.pdf,.doc,.docx"
+                            disabled={isUploadingFile} 
+                            onChange={handleCommentFilesUpload} 
+                          />
+                        </label>
                        
                        <textarea 
                          placeholder="Tulis update atau pesan... (Enter untuk kirim)" 
@@ -803,7 +825,7 @@ export function BulletinTopicDetail({
                        
                        <button 
                          onClick={submitComment} 
-                         disabled={isUploadingFile || (!newComment.trim() && !selectedFile)}
+                         disabled={isUploadingFile || (!newComment.trim() && selectedFiles.length === 0)}
                          className="shrink-0 p-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl shadow-2xs transition-all flex items-center justify-center mb-0.5 cursor-pointer disabled:cursor-not-allowed"
                          title="Kirim Komentar"
                        >
