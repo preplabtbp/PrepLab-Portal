@@ -2704,9 +2704,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               );
                             }
 
+                            const displayed = filtered.slice(0, 20);
                             return (
+                              <div>
+                                {filtered.length > 20 && (
+                                  <div className="mb-2 text-[11px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex items-center gap-1.5">
+                                    <span className="inline-flex w-5 h-5 items-center justify-center rounded-full bg-rose-100 text-rose-700 font-black text-[10px]">!</span>
+                                    Menampilkan <strong className="text-slate-700 mx-1">20</strong> dari <strong className="text-rose-600 mx-1">{filtered.length}</strong> karyawan konseling aktif. Gunakan pencarian untuk mempersempit daftar.
+                                  </div>
+                                )}
                               <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
-                                {filtered.map((item, idx) => {
+                                {displayed.map((item, idx) => {
                                   const emp = item.employee;
                                   return (
                                     <div
@@ -2762,6 +2770,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                     </div>
                                   );
                                 })}
+                              </div>
                               </div>
                             );
                           })()}
@@ -2846,63 +2855,63 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </>
                 )}
 
-                <h2 className="text-lg lg:text-xl font-black mt-3 mb-1 leading-tight text-slate-950 text-center w-full tracking-tight">
+                <h2 className="text-lg lg:text-xl font-black mt-3 mb-1 leading-tight text-white text-center w-full tracking-tight drop-shadow-md">
                   {selectedEmployee.name}
                 </h2>
                 <div className="w-full flex justify-center">
-                  <p className="text-slate-950 inline-flex items-center bg-white/45 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-black shadow-xs border border-white/60 font-mono tracking-wider">
-                    <Fingerprint className="w-3.5 h-3.5 mr-1.5 text-teal-950" />
+                  <p className="text-white inline-flex items-center bg-white/25 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-black shadow-xs border border-white/40 font-mono tracking-wider drop-shadow-sm">
+                    <Fingerprint className="w-3.5 h-3.5 mr-1.5 text-white/90" />
                     NIK: {selectedEmployee.nik}
                   </p>
                 </div>
               </div>
 
               {/* Detail Profil Sidebar */}
-              <div className="w-full flex-1 overflow-visible lg:overflow-y-auto pr-0 lg:pr-1 space-y-2 text-slate-950 divide-y divide-black/10 custom-scrollbar-teal text-left relative z-10">
+              <div className="w-full flex-1 overflow-visible lg:overflow-y-auto pr-0 lg:pr-1 space-y-2 text-white divide-y divide-white/20 custom-scrollbar-teal text-left relative z-10">
                 <div className="pt-2 first:pt-0">
-                  <p className="text-[#073634] text-[10.5px] font-black mb-0.5 uppercase tracking-wider">Jabatan</p>
-                  <p className="font-black text-slate-950 text-xs sm:text-sm leading-snug">{selectedEmployee.jabatan || '-'}</p>
+                  <p className="text-white/80 text-[10.5px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-sm">Jabatan</p>
+                  <p className="font-black text-white text-xs sm:text-sm leading-snug drop-shadow-sm">{selectedEmployee.jabatan || '-'}</p>
                 </div>
                 
                 <div className="pt-2">
-                  <p className="text-[#073634] text-[10.5px] font-black mb-0.5 uppercase tracking-wider">Perusahaan</p>
-                  <p className="font-black text-slate-950 text-xs">{selectedEmployee.pt || '-'}</p>
+                  <p className="text-white/80 text-[10.5px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-sm">Perusahaan</p>
+                  <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.pt || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-white/45 hover:bg-white/60 p-2.5 rounded-2xl border border-white/60 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-[#073634] text-[10px] font-black mb-0.5 uppercase tracking-wider">Job Grade</p>
-                    <p className="font-black text-slate-950 text-xs">{selectedEmployee.jobGrade || '-'}</p>
+                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Job Grade</p>
+                    <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
-                  <div className="bg-white/45 hover:bg-white/60 p-2.5 rounded-2xl border border-white/60 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-[#073634] text-[10px] font-black mb-0.5 uppercase tracking-wider">Golongan</p>
-                    <p className="font-black text-slate-950 text-xs">{selectedEmployee.gol || '-'}</p>
+                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Golongan</p>
+                    <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
 
                 <div className="pt-2">
-                  <p className="text-[#073634] text-[10.5px] font-black mb-0.5 uppercase tracking-wider">Bagian (Section)</p>
-                  <p className="font-black text-slate-950 text-xs">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
+                  <p className="text-white/80 text-[10.5px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-sm">Bagian (Section)</p>
+                  <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-white/45 hover:bg-white/60 p-2.5 rounded-2xl border border-white/60 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-[#073634] text-[10px] font-black mb-0.5 uppercase tracking-wider">DOH Awal</p>
-                    <p className="font-black text-slate-950 text-xs font-mono">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
+                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">DOH Awal</p>
+                    <p className="font-black text-white text-xs font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
                   </div>
-                  <div className="bg-white/45 hover:bg-white/60 p-2.5 rounded-2xl border border-white/60 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-[#073634] text-[10px] font-black mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
-                    <p className="font-black text-slate-950 text-xs font-mono">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
+                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
+                    <p className="font-black text-white text-xs font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
                   </div>
                 </div>
 
                 {/* MASA KERJA JABATAN DENGAN DROPDOWN LIST */}
                 <div className="pt-2.5 pb-1 space-y-1.5">
-                  <div className="bg-white/45 hover:bg-white/60 p-3 rounded-2xl border border-white/60 transition-all shadow-xs backdrop-blur-md">
+                  <div className="bg-white/20 hover:bg-white/30 p-3 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
                     <div className="flex items-center justify-between gap-1 mb-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#073634]" />
-                        <span className="text-[#073634] text-[10px] font-black uppercase tracking-wider">
+                        <Clock className="w-3.5 h-3.5 text-white/90" />
+                        <span className="text-white/80 text-[10px] font-extrabold uppercase tracking-wider">
                           Masa Kerja Jabatan
                         </span>
                       </div>
@@ -2924,12 +2933,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                     {/* Nilai Masa Kerja Jabatan */}
                     <div className="flex items-baseline justify-between gap-2">
-                      <p className="font-black text-slate-950 text-sm sm:text-base tracking-tight">
+                      <p className="font-black text-white text-sm sm:text-base tracking-tight drop-shadow-sm">
                         {tenureInfo[tenureDropdownPeriod].value}
                       </p>
                       <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider shadow-xs ${
                         tenureDropdownPeriod === 'sekarang'
-                          ? 'bg-white/60 text-slate-950 border border-white/80'
+                          ? 'bg-white/30 text-white border border-white/50'
                           : 'bg-[#FACC15] text-slate-950 border border-amber-300'
                       }`}>
                         {tenureDropdownPeriod === 'sekarang' ? 'Jabatan Sekarang' : 'Jabatan Sebelumnya'}
@@ -2937,10 +2946,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
 
                     {/* Keterangan */}
-                    <div className="mt-2 text-[10px] text-slate-900 leading-tight flex items-start gap-1.5 font-semibold bg-black/10 p-2 rounded-xl border border-black/10">
-                      <Info className="w-3.5 h-3.5 text-[#073634] shrink-0 mt-0.5" />
+                    <div className="mt-2 text-[10px] text-white/90 leading-tight flex items-start gap-1.5 font-semibold bg-black/20 p-2 rounded-xl border border-white/20">
+                      <Info className="w-3.5 h-3.5 text-white/80 shrink-0 mt-0.5" />
                       <span>
-                        <strong className="text-slate-950 font-black mr-1">
+                        <strong className="text-white font-black mr-1">
                           Keterangan {tenureDropdownPeriod === 'sekarang' ? 'Sekarang:' : 'Sebelumnya:'}
                         </strong>
                         {tenureInfo[tenureDropdownPeriod].keterangan}
@@ -2948,9 +2957,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
 
                     {/* Informasi Total Masa Kerja */}
-                    <div className="mt-2 pt-2 border-t border-black/10 flex items-center justify-between text-[10.5px]">
-                      <span className="text-[#073634] font-black">Masa Kerja Total (DOH):</span>
-                      <span className="font-black text-slate-950 font-mono">{tenureInfo.total.value}</span>
+                    <div className="mt-2 pt-2 border-t border-white/20 flex items-center justify-between text-[10.5px]">
+                      <span className="text-white/80 font-extrabold">Masa Kerja Total (DOH):</span>
+                      <span className="font-black text-white font-mono drop-shadow-sm">{tenureInfo.total.value}</span>
                     </div>
                   </div>
                 </div>
