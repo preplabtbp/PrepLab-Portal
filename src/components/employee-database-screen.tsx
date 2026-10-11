@@ -221,6 +221,71 @@ export function normalizeDepartmentOrSection(raw?: string): string {
   return 'Preparation';
 }
 
+const SANCTION_MONTH_MAP: Record<string, number> = {
+  jan: 0, januari: 0, january: 0,
+  feb: 1, februari: 1, february: 1,
+  mar: 2, maret: 2, march: 2,
+  apr: 3, april: 3,
+  mei: 4, may: 4,
+  jun: 5, juni: 5, june: 5,
+  jul: 6, juli: 6, july: 6,
+  agu: 7, ags: 7, agustus: 7, aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8,
+  okt: 9, oktober: 9, oct: 9, october: 9,
+  nov: 10, november: 10,
+  des: 11, desember: 11, dec: 11, december: 11
+};
+
+export const parseSanctionDate = (val?: any): Date | null => {
+  if (!val) return null;
+  const str = String(val).trim().split(/[\r\n,;]+/)[0].trim();
+  if (!str || str === '-' || str === '#N/A' || str === '0' || /^\d{1,2}$/.test(str) || /^(ya|tidak|ok|v|x|true|false)$/i.test(str)) return null;
+
+  const dMmmY = str.match(/^(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})$/);
+  if (dMmmY) {
+    const day = parseInt(dMmmY[1], 10);
+    const mStr = dMmmY[2].toLowerCase();
+    let year = parseInt(dMmmY[3], 10);
+    if (year < 100) year += 2000;
+    const month = SANCTION_MONTH_MAP[mStr];
+    if (month !== undefined && !isNaN(day) && !isNaN(year)) {
+      return new Date(year, month, day);
+    }
+  }
+
+  const ymd = str.match(/^(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})$/);
+  if (ymd) {
+    const year = parseInt(ymd[1], 10);
+    const month = parseInt(ymd[2], 10) - 1;
+    const day = parseInt(ymd[3], 10);
+    return new Date(year, month, day);
+  }
+
+  const dmy = str.match(/^(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})$/);
+  if (dmy) {
+    const day = parseInt(dmy[1], 10);
+    const month = parseInt(dmy[2], 10) - 1;
+    let year = parseInt(dmy[3], 10);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day);
+  }
+
+  const mY = str.match(/^([a-zA-Z]+)[-\s/](\d{4})$/);
+  if (mY) {
+    const month = SANCTION_MONTH_MAP[mY[1].toLowerCase()];
+    const year = parseInt(mY[2], 10);
+    if (month !== undefined && !isNaN(year)) {
+      return new Date(year, month, 1);
+    }
+  }
+
+  if (/\d{4}/.test(str)) {
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+};
+
 export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik: string, onBack?: () => void }) {
   const cacheKey = `preplab_emp_db_${inspectorNik || 'all'}`;
 
@@ -1265,7 +1330,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     return val % 1 === 0 ? val.toFixed(0) : val.toFixed(1);
   }, [onsiteEmployeesList.length, activeEmployeesCount, scopedEmployees.length]);
 
-  // 7. Data & List Karyawan dengan Konseling Aktif (Konseling I, II, III aktif)
+  // 7. Data & List Karyawan dengan Konseling Aktif (Konseling I, II, III aktif yang belum lewat 3 bulan)
   const activeCounselingList = useMemo(() => {
     const list: Array<{
       employee: any;
@@ -1273,8 +1338,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       levelBadgeBg: string;
       levelColor: string;
       tanggal: string;
+      expiryDateStr: string;
       alasan: string;
     }> = [];
+
+    const now = new Date();
 
     scopedEmployees.forEach(emp => {
       if (isResignedOrNonActiveStatus(emp)) return;
@@ -1304,6 +1372,26 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
       if (!isCounselingStatus) return;
 
+      const tgl = [k3, k2, k1, c.bulanKonseling, c.bulan_konseling, c.tanggalSp, c.tanggal_sp]
+        .find(s => s && s !== '-' && s !== '0' && (s.includes('-') || s.includes('/') || /[a-zA-Z]{3,}/.test(s))) || '-';
+
+      // Masa berlaku Surat Teguran (ST) dan Konseling adalah 3 bulan.
+      // Jika sanksi sudah lewat 3 bulan, sanksi sudah kadaluarsa / selesai pembinaan (bukan konseling aktif lagi)
+      let isExpired = false;
+      let expiryDateObj: Date | null = null;
+      if (tgl && tgl !== '-') {
+        const baseDate = parseSanctionDate(tgl);
+        if (baseDate) {
+          expiryDateObj = new Date(baseDate.getTime());
+          expiryDateObj.setMonth(expiryDateObj.getMonth() + 3);
+          if (now > expiryDateObj) {
+            isExpired = true;
+          }
+        }
+      }
+
+      if (isExpired) return;
+
       let displayStatus = 'Konseling I';
       let levelBadgeBg = 'bg-amber-500';
       let levelColor = 'text-amber-800 bg-amber-50 border-amber-300';
@@ -1324,9 +1412,6 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         displayStatus = st;
       }
 
-      const tgl = [k3, k2, k1, c.bulanKonseling, c.bulan_konseling, c.tanggalSp, c.tanggal_sp]
-        .find(s => s && s !== '-' && s !== '0' && (s.includes('-') || s.includes('/') || /[a-zA-Z]{3,}/.test(s))) || '-';
-
       const alasan = c.alasanKonseling || c.alasan_konseling || c.alasan || c.keterangan || '-';
 
       list.push({
@@ -1335,6 +1420,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         levelBadgeBg,
         levelColor,
         tanggal: tgl,
+        expiryDateStr: expiryDateObj ? formatShortDate(expiryDateObj) : '',
         alasan
       });
     });
@@ -1849,29 +1935,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                   </button>
 
-                  {/* Card 4: Konseling Aktif */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveStatDetail(prev => prev === 'counseling' ? null : 'counseling');
-                      setStatDetailSearch('');
-                    }}
-                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
-                      activeStatDetail === 'counseling'
-                        ? 'border-rose-500 ring-2 ring-rose-500/30 shadow-md bg-rose-50/40'
-                        : 'border-slate-200/90 hover:border-rose-400 hover:shadow-md'
-                    }`}
-                  >
-                    <div className="text-rose-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 flex items-center justify-center gap-1">
-                      <span>Konseling Aktif</span>
-                    </div>
-                    <div className="text-2xl sm:text-3xl font-black text-rose-800 tracking-tight">{activeCounselingList.length}</div>
-                    <div className="text-[10px] sm:text-[11px] text-rose-600/90 font-bold mt-0.5 group-hover:underline">
-                      {activeStatDetail === 'counseling' ? '▲ Tutup Rincian' : '▼ Klik Lihat Kasus'}
-                    </div>
-                  </button>
-
-                  {/* Card 5: Karyawan Permanent */}
+                  {/* Card 4: Karyawan Permanent */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1895,7 +1959,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                   </button>
 
-                  {/* Card 6: Karyawan Kontrak */}
+                  {/* Card 5: Karyawan Kontrak */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1919,7 +1983,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                   </button>
 
-                  {/* Card 7: Jumlah Izin Karyawan */}
+                  {/* Card 6: Jumlah Izin Karyawan */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1940,6 +2004,28 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                     <div className="text-[10px] sm:text-[11px] text-indigo-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'izin' ? '▲ Tutup Rincian' : '▼ Bulan Ini (Urut)'}
+                    </div>
+                  </button>
+
+                  {/* Card 7: Konseling Aktif */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveStatDetail(prev => prev === 'counseling' ? null : 'counseling');
+                      setStatDetailSearch('');
+                    }}
+                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
+                      activeStatDetail === 'counseling'
+                        ? 'border-rose-500 ring-2 ring-rose-500/30 shadow-md bg-rose-50/40'
+                        : 'border-slate-200/90 hover:border-rose-400 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="text-rose-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 flex items-center justify-center gap-1">
+                      <span>Konseling Aktif</span>
+                    </div>
+                    <div className="text-2xl sm:text-3xl font-black text-rose-800 tracking-tight">{activeCounselingList.length}</div>
+                    <div className="text-[10px] sm:text-[11px] text-rose-600/90 font-bold mt-0.5 group-hover:underline">
+                      {activeStatDetail === 'counseling' ? '▲ Tutup Rincian' : '▼ Klik Lihat Kasus'}
                     </div>
                   </button>
 
@@ -2671,7 +2757,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                               Tgl: {formatShortDate(item.tanggal)}
                                             </div>
                                             <div className="text-[10px] text-rose-600 font-semibold mt-0.5">
-                                              Masa Berlaku 3 Bulan
+                                              {item.expiryDateStr ? `Masa Berlaku s/d ${item.expiryDateStr}` : 'Masa Berlaku 3 Bulan'}
                                             </div>
                                           </div>
                                         )}
