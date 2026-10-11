@@ -4344,7 +4344,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
   const popupPlacementClass = `${isNight ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} ${isRightEdge ? 'right-0' : 'left-0'}`;
 
   return (
-    <div className={`p-2 rounded-xl transition-all text-xs flex flex-col justify-between gap-1 ${cardStyle} ${selectNameOpen || selectMateriOpen ? 'z-40 relative' : ''}`}>
+    <div className={`p-2.5 rounded-xl transition-all text-xs flex flex-col gap-1.5 ${cardStyle} ${selectNameOpen || selectMateriOpen ? 'z-40 relative' : ''}`}>
       {/* Backdrop for click outside */}
       {(selectNameOpen || selectMateriOpen) && (
         <div 
@@ -4471,18 +4471,57 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex items-start justify-between gap-1 min-w-0">
-            <span 
-              className={`font-bold text-[11px] leading-snug break-words ${isEmptySDM ? 'text-rose-600 italic' : 'text-slate-900'}`}
-              title={slot.nama}
-            >
-              {slot.nama || '— Tidak Ada SDM —'}
-            </span>
-            {isDouble && (
-              <span className="px-1.5 py-0.2 bg-teal-50 text-teal-800 border border-teal-200 font-black text-[9px] rounded font-mono shadow-xs shrink-0 mt-0.5">
-                2×
-              </span>
-            )}
+          <div className="flex items-start gap-2 min-w-0">
+            {/* Avatar circle with initial letter */}
+            <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[12px] font-black shadow-sm border-2 border-white/80 ${
+              isEmptySDM
+                ? 'bg-rose-100 text-rose-700 border-rose-200'
+                : zone === 'prep'
+                ? 'bg-orange-100 text-orange-800 border-orange-200'
+                : zone === 'lab'
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                : 'bg-amber-100 text-amber-800 border-amber-200'
+            }`}>
+              {(slot.nama || '?').charAt(0).toUpperCase()}
+            </div>
+            {/* Name + NIK + Jabatan + Section */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-1">
+                <span
+                  className={`font-bold text-[11.5px] leading-snug break-words ${isEmptySDM ? 'text-rose-600 italic' : 'text-slate-900'}`}
+                  title={slot.nama}
+                >
+                  {slot.nama || '— Tidak Ada SDM —'}
+                </span>
+                {isDouble && (
+                  <span className="px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 font-black text-[9px] rounded-full font-mono shadow-xs shrink-0">
+                    2×
+                  </span>
+                )}
+              </div>
+              {slot.nik && (
+                <span className={`inline-block text-[9.5px] font-black font-mono px-2 py-0.5 rounded-md mt-0.5 tracking-wide ${
+                  zone === 'prep'
+                    ? 'bg-orange-100 text-orange-800 border border-orange-300'
+                    : zone === 'lab'
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                }`}>
+                  {slot.nik}
+                </span>
+              )}
+              {(matchedPerson?.jabatan || slot.jabatan) && (
+                <p className="text-[10px] text-slate-600 font-medium leading-snug mt-0.5 truncate">
+                  {matchedPerson?.jabatan || slot.jabatan}
+                </p>
+              )}
+              {(matchedPerson?.section || matchedPerson?.divisi || slot.divisi) && (
+                <p className="text-[9.5px] text-slate-400 leading-snug truncate">
+                  {matchedPerson?.section || matchedPerson?.divisi || slot.divisi}
+                  {matchedPerson?.pt && ` • ${matchedPerson.pt}`}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -4662,58 +4701,73 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             )}
           </div>
         ) : (
-          <div className="mt-0.5">
-            <p className="text-[10.5px] text-slate-800 leading-snug font-medium break-words">
-              {slot.materi || '— Materi Standar —'}
-            </p>
+          <div className={`mt-1.5 px-2.5 py-1.5 rounded-xl text-[10.5px] leading-snug font-medium break-words border-l-2 ${
+            isSenamSlot
+              ? 'bg-purple-50 border-purple-400 text-purple-900'
+              : slot.isLogbook
+              ? 'bg-blue-50 border-blue-400 text-blue-900'
+              : zone === 'prep'
+              ? 'bg-orange-50 border-orange-400 text-orange-900'
+              : zone === 'lab'
+              ? 'bg-emerald-50 border-emerald-400 text-emerald-900'
+              : 'bg-amber-50 border-amber-400 text-amber-900'
+          }`}>
+            <span className={`text-[8.5px] font-black uppercase tracking-wider block mb-0.5 ${
+              isSenamSlot ? 'text-purple-600' : slot.isLogbook ? 'text-blue-600' : zone === 'prep' ? 'text-orange-600' : zone === 'lab' ? 'text-emerald-600' : 'text-amber-700'
+            }`}>
+              {isSenamSlot ? 'Senam:' : slot.isLogbook ? 'Logbook:' : 'Materi P5M:'}
+            </span>
+            {slot.materi || '— Materi Standar —'}
           </div>
         )}
       </div>
 
-      {/* Badges / Tags */}
-      <div className="flex items-center justify-between gap-1 flex-wrap mt-0.5">
+      {/* Badges / Tags — lebih visual seperti screenshot */}
+      <div className="flex items-start justify-between gap-1 flex-wrap mt-1.5">
         <div className="flex items-center gap-1 flex-wrap">
           {slot.kategori && slot.kategori !== 'All' && (
-            <span className={`text-[8px] font-bold font-mono px-1.5 py-0.2 rounded uppercase ${
-              slot.kategori === 'Teknis' 
-                ? 'bg-slate-100 text-slate-700 border border-slate-300/80' 
+            <span className={`text-[8.5px] font-black font-mono px-2 py-0.5 rounded-full uppercase tracking-wide ${
+              slot.kategori === 'Teknis'
+                ? 'bg-teal-100 text-teal-800 border border-teal-300'
                 : slot.kategori === 'Senam'
-                ? 'bg-purple-100 text-purple-800 border border-purple-300/60'
-                : 'bg-blue-100 text-blue-800 border border-blue-300/60'
+                ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                : 'bg-blue-100 text-blue-800 border border-blue-300'
             }`}>
               {slot.kategori}
             </span>
           )}
           {slot.subKategori && slot.subKategori !== 'General' && (
-            <span className={`text-[8px] font-bold font-mono px-1.5 py-0.2 rounded ${
+            <span className={`text-[8.5px] font-black font-mono px-2 py-0.5 rounded-full uppercase ${
               slot.subKategori === 'Preparation'
-                ? 'bg-orange-100 text-orange-800 border border-orange-300 font-bold'
+                ? 'bg-orange-100 text-orange-800 border border-orange-300'
                 : slot.subKategori === 'Laboratory'
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold'
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                 : slot.subKategori === 'Maintenance'
-                ? 'bg-amber-100 text-amber-800 border border-amber-300 font-bold'
-                : 'bg-slate-100 text-slate-800 border border-slate-300 font-bold'
+                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                : slot.subKategori === 'IC'
+                ? 'bg-cyan-100 text-cyan-800 border border-cyan-300'
+                : 'bg-slate-100 text-slate-700 border border-slate-300'
             }`}>
               {slot.subKategori}
             </span>
           )}
           {slot.isFallback && (
-            <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-amber-100 text-amber-800 border border-amber-300 rounded">
+            <span className="text-[8.5px] font-black font-mono px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-full uppercase">
               Fallback
             </span>
           )}
           {isSpecial && slot.kategori !== 'Senam' && (
-            <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-purple-100 text-purple-800 border border-purple-300/60 rounded uppercase">
+            <span className="text-[8.5px] font-black font-mono px-2 py-0.5 bg-purple-100 text-purple-800 border border-purple-300 rounded-full uppercase">
               {slot.isLogbook ? 'Logbook' : 'Senam'}
             </span>
           )}
           {shift === 'malam' && slot.isManualEdited && (
-            <span className="text-[8px] font-bold font-mono px-1.5 py-0.2 bg-amber-100 text-amber-800 border border-amber-300 rounded" title="Materi diedit manual di shift malam">
-              Manual Malam
+            <span className="text-[8.5px] font-bold font-mono px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-full" title="Materi diedit manual di shift malam">
+              Manual
             </span>
           )}
           {shift === 'malam' && !slot.isManualEdited && slot.materi && (
-            <span className="text-[8px] font-medium font-mono px-1 py-0.2 text-emerald-700 bg-emerald-50 rounded border border-emerald-200" title="Materi otomatis disinkronkan dari shift pagi">
+            <span className="text-[8.5px] font-semibold font-mono px-2 py-0.5 text-emerald-700 bg-emerald-50 rounded-full border border-emerald-200" title="Materi otomatis disinkronkan dari shift pagi">
               🔗 Sync Pagi
             </span>
           )}
@@ -4725,12 +4779,12 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             <button
               type="button"
               onClick={() => onPreviewImage(slot.fileUrl, slot.materi)}
-              className={`text-[9px] font-bold flex items-center gap-0.5 ml-auto flex-shrink-0 ${
-                isPdf ? 'text-orange-700 hover:text-orange-900' : 'text-amber-700 hover:text-amber-900'
+              className={`p-1 rounded-lg flex items-center gap-0.5 flex-shrink-0 transition-colors ${
+                isPdf ? 'text-orange-600 hover:bg-orange-50 hover:text-orange-800' : 'text-amber-600 hover:bg-amber-50 hover:text-amber-800'
               }`}
               title={isPdf ? "Lihat Dokumen IK / SOP" : "Lihat Flyer Materi"}
             >
-              {isPdf ? <FileText className="w-3 h-3 text-orange-600" /> : <ImageIcon className="w-3 h-3 text-amber-600" />}
+              {isPdf ? <FileText className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />}
             </button>
           );
         })()}
