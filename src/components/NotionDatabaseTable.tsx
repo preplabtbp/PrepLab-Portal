@@ -604,9 +604,12 @@ export function migrateChecklistsInRows(
       continue;
     }
 
-    // Ensure parent row has unique ID
+    // Ensure parent row has stable unique ID
     if (!row.id) {
-      row.id = `task_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 6)}`;
+      const rowCode = row.taskCode || row['Task ID'] || row['ID Task'] || '';
+      const cleanTitle = (getCellValue(row, 'Jenis kegiatan') || getCellValue(row, 'Name') || getCellValue(row, 'Judul') || '').replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+      const safeTitle = cleanTitle.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      row.id = rowCode ? `task_${rowCode}` : `task_${defaultSection || 'sec'}_${i}_${safeTitle}`;
     }
 
     const ketVal = getCellValue(row, 'Keterangan') || '';
@@ -625,7 +628,8 @@ export function migrateChecklistsInRows(
 
       // Create a sub-item row for each checklist item if not already existing
       taskProg.items.forEach((item, subIdx) => {
-        const subId = `sub_${row.id}_${subIdx}_${Math.random().toString(36).substr(2, 6)}`;
+        const safeSubText = (item.text || '').slice(0, 25).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const subId = `sub_${row.id}_${subIdx}_${safeSubText}`;
         const subTitle = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
         const subRow: TableRowData = {
           number: '',
@@ -707,7 +711,11 @@ export function extractMarkdownTableFromContent(content: string): {
         const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
         const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
 
-        rowObj.id = taskMatch ? taskMatch[1].trim() : `task_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 6)}`;
+        const isPin = rowStr.includes('<!--pin-->') || rowStr.includes('<!--pinned-->');
+        const cleanTitle = (rowObj['Jenis kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '').replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+        const safeTitle = cleanTitle.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+        rowObj.id = taskMatch ? taskMatch[1].trim() : `task_${i}_${safeTitle}`;
         if (parentMatch) {
           rowObj.parentId = parentMatch[1].trim();
           rowObj.parentRowId = parentMatch[1].trim();
@@ -716,6 +724,10 @@ export function extractMarkdownTableFromContent(content: string): {
         if (modMatch) {
           rowObj['Last Modified'] = modMatch[1].trim();
           rowObj['Date Modified'] = modMatch[1].trim();
+        }
+        if (isPin) {
+          rowObj.isPinned = 'true';
+          (rowObj as any)._pinned = 'true';
         }
 
         rows.push(rowObj);
@@ -934,25 +946,15 @@ export function NotionDatabaseTable({
   useEffect(() => {
     if (rows) {
       let targetRows = rows;
-      let needSave = false;
 
-      const { migratedCount, rows: prepped } = migrateChecklistsInRows(targetRows, section);
-      if (migratedCount > 0) {
-        targetRows = prepped;
-        needSave = true;
-      }
+      const { rows: prepped } = migrateChecklistsInRows(targetRows, section);
+      targetRows = prepped;
 
-      const { rows: normalizedRows, hasChanges: normalizedChanges } = normalizeExistingTaskCodes(targetRows, section);
-      if (normalizedChanges) {
-        targetRows = normalizedRows;
-        needSave = true;
-      }
+      const { rows: normalizedRows } = normalizeExistingTaskCodes(targetRows, section);
+      targetRows = normalizedRows;
 
       setLocalRows(targetRows);
       setOriginalRowsBackup(JSON.parse(JSON.stringify(targetRows)));
-      if (needSave) {
-        saveTableToBackend(targetRows);
-      }
       setDirtyRowIndices(new Set());
     }
   }, [rows]);
@@ -1205,41 +1207,56 @@ export function NotionDatabaseTable({
     if (jk.includes('<!--pin-->') || jk.includes('<!--pinned-->')) return true;
     const rowId = row.id ? String(row.id) : '';
     if (rowId && pinnedRowKeys.includes(rowId)) return true;
-    const cleanTitle = jk.replace(/^↳\s*/, '').trim();
+    const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
     if (cleanTitle && pinnedRowKeys.includes(cleanTitle)) return true;
+    const taskCode = row.taskCode || row['Task ID'] || row['ID Task'];
+    if (taskCode && pinnedRowKeys.includes(String(taskCode))) return true;
     return false;
   }, [pinnedRowKeys]);
 
-  // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys
+  // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys saat rows prop dimuat
   useEffect(() => {
-    let nextArr = [...pinnedRowKeys];
-    let changed = false;
-    localRows.forEach(r => {
-      if (!isSubItemRow(r)) {
-        const ket = r['Keterangan'] || '';
-        const jk = r['Jenis kegiatan'] || '';
-        const isPinTag = ket.includes('<!--pin-->') || ket.includes('<!--pinned-->') || jk.includes('<!--pin-->') || r.isPinned === 'true';
-        if (isPinTag) {
-          const key = r.id ? String(r.id) : jk.replace(/^↳\s*/, '').trim();
-          if (key && !nextArr.includes(key)) {
-            nextArr.push(key);
+    if (!rows || rows.length === 0) return;
+    setPinnedRowKeys(prevKeys => {
+      const nextKeys = [...prevKeys];
+      let changed = false;
+      rows.forEach(r => {
+        if (!isSubItemRow(r)) {
+          const ket = r['Keterangan'] || '';
+          const jk = r['Jenis kegiatan'] || '';
+          const isPinTag = ket.includes('<!--pin-->') || ket.includes('<!--pinned-->') || jk.includes('<!--pin-->') || r.isPinned === 'true';
+          const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+          const key = r.id ? String(r.id) : cleanTitle;
+          if (isPinTag && key && !nextKeys.includes(key)) {
+            nextKeys.push(key);
             changed = true;
           }
         }
+      });
+      if (changed) {
+        try {
+          localStorage.setItem(tablePinStorageKey, JSON.stringify(nextKeys));
+        } catch {}
+        return nextKeys;
       }
+      return prevKeys;
     });
-    if (changed) {
-      setPinnedRowKeys(nextArr);
-      try {
-        localStorage.setItem(tablePinStorageKey, JSON.stringify(nextArr));
-      } catch {}
-    }
-  }, [localRows, tablePinStorageKey]);
+  }, [rows, tablePinStorageKey]);
 
   // Handler toggle pin / unpin baris task
-  const handleTogglePinRow = async (rowIndex: number) => {
-    let targetRow = localRows[rowIndex];
-    if (!targetRow) return;
+  const handleTogglePinRow = async (targetRowOrIndex: TableRowData | number) => {
+    let targetRow: TableRowData | undefined;
+    let rowIndex = -1;
+
+    if (typeof targetRowOrIndex === 'number') {
+      rowIndex = targetRowOrIndex;
+      targetRow = localRows[rowIndex];
+    } else {
+      targetRow = targetRowOrIndex;
+      rowIndex = localRows.indexOf(targetRow);
+    }
+
+    if (!targetRow || rowIndex === -1) return;
 
     // Jika yang diklik adalah subtask, pin parent task utamanya
     if (isSubItemRow(targetRow)) {
@@ -1267,16 +1284,26 @@ export function NotionDatabaseTable({
     }
 
     const newPinnedState = !currentlyPinned;
-    const targetKey = targetRow.id ? String(targetRow.id) : (targetRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
+    const rowId = targetRow.id ? String(targetRow.id) : '';
+    const jkRaw = targetRow['Jenis kegiatan'] || targetRow['Name'] || targetRow['Judul'] || '';
+    const cleanTitle = jkRaw.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+    const taskCode = targetRow.taskCode || targetRow['Task ID'] || targetRow['ID Task'] || '';
 
-    // Update state pinnedRowKeys dengan mempertahankan urutan FIFO
-    const nextPinnedKeys = [...pinnedRowKeys];
+    // Bersihkan semua kemungkinan key untuk task ini agar tidak ada duplikasi atau residual
+    const keysToRemove = new Set<string>();
+    if (rowId) keysToRemove.add(rowId);
+    if (cleanTitle) keysToRemove.add(cleanTitle);
+    if (taskCode) keysToRemove.add(String(taskCode));
+
+    let nextPinnedKeys = pinnedRowKeys.filter(k => !keysToRemove.has(k));
+
     if (newPinnedState) {
-      if (targetKey && !nextPinnedKeys.includes(targetKey)) nextPinnedKeys.push(targetKey);
-    } else {
-      const idx = nextPinnedKeys.indexOf(targetKey);
-      if (idx !== -1) nextPinnedKeys.splice(idx, 1);
+      const keyToAdd = rowId || cleanTitle || (taskCode ? String(taskCode) : '');
+      if (keyToAdd && !nextPinnedKeys.includes(keyToAdd)) {
+        nextPinnedKeys.push(keyToAdd);
+      }
     }
+
     setPinnedRowKeys(nextPinnedKeys);
     try {
       localStorage.setItem(tablePinStorageKey, JSON.stringify(nextPinnedKeys));
@@ -1288,16 +1315,20 @@ export function NotionDatabaseTable({
     updatedRow.isPinned = newPinnedState ? 'true' : 'false';
     (updatedRow as any)._pinned = newPinnedState ? 'true' : 'false';
 
-    // Simpan penanda <!--pin--> di kolom Keterangan agar terpersistensi ke backend markdown
+    // Simpan atau hapus penanda <!--pin--> di kolom Keterangan dan Jenis kegiatan
     let ket = updatedRow['Keterangan'] || '';
+    let jk = updatedRow['Jenis kegiatan'] || '';
+
     if (newPinnedState) {
       if (!ket.includes('<!--pin-->')) {
         ket = `${ket} <!--pin-->`.trim();
       }
     } else {
       ket = ket.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
+      jk = jk.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
     }
     updatedRow['Keterangan'] = ket;
+    updatedRow['Jenis kegiatan'] = jk;
 
     nextRows[rowIndex] = updatedRow;
     setLocalRows(nextRows);
@@ -6403,14 +6434,14 @@ export function NotionDatabaseTable({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleTogglePinRow(actualRowIndex);
+                                        handleTogglePinRow(row);
                                       }}
                                       className={`p-0.5 rounded transition-all cursor-pointer ${
                                         isRowPinned(row)
                                           ? 'text-amber-500 hover:text-amber-600 bg-amber-50 dark:bg-amber-950/50 opacity-100 shadow-2xs'
                                           : 'text-slate-400 hover:text-amber-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
-                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 5 task)'}
+                                      title={isRowPinned(row) ? 'Lepas Pin Task (Unpin)' : 'Pin Task ke Atas (Maks. 10 task)'}
                                     >
                                       <Pin className={`w-3.5 h-3.5 ${isRowPinned(row) ? 'fill-amber-500 rotate-45 text-amber-500' : ''}`} />
                                     </button>
@@ -7259,7 +7290,7 @@ export function NotionDatabaseTable({
                                            type="button"
                                            onClick={(e) => {
                                              e.stopPropagation();
-                                             handleTogglePinRow(actualRowIndex);
+                                             handleTogglePinRow(row);
                                              setActiveActionMenuRowIndex(null);
                                            }}
                                            className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
@@ -7267,10 +7298,10 @@ export function NotionDatabaseTable({
                                                ? 'hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold'
                                                : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
                                            }`}
-                                           title={isRowPinned(row) ? "Lepas sematan (unpin) task ini" : "Sematkan task ini ke posisi teratas (Maks. 5 task)"}
+                                           title={isRowPinned(row) ? "Lepas sematan (unpin) task ini" : "Sematkan task ini ke posisi teratas (Maks. 10 task)"}
                                          >
                                            <Pin className={`w-3.5 h-3.5 shrink-0 ${isRowPinned(row) ? 'text-amber-500 fill-amber-500 rotate-45' : 'text-slate-400'}`} />
-                                           <span>{isRowPinned(row) ? 'Lepas Pin (Unpin Task)' : 'Pin Task ke Atas (Maks 5)'}</span>
+                                           <span>{isRowPinned(row) ? 'Lepas Pin (Unpin Task)' : 'Pin Task ke Atas (Maks 10)'}</span>
                                          </button>
                                        )}
                                        {!isSubItem && (
