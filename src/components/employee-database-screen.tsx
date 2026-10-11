@@ -2699,8 +2699,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             transition={{ delay: 0.1 }}
             className="flex flex-col lg:flex-row h-auto lg:h-full w-full min-h-full p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-[#f4faf5] via-[#edf6f0] to-[#e6f3eb] gap-4 lg:gap-6 overflow-visible lg:overflow-hidden relative pb-32 lg:pb-6"
           >
-            {/* SIDEBAR (Profile Info) - WARNA SOLID FLAT: #3C9385 (rgb(60, 147, 133)) */}
-            <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-[#3C9385] text-white shrink-0 shadow-2xl shadow-[#3C9385]/30 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-white/20 ring-1 ring-black/5 transition-all">
+            {/* SIDEBAR (Profile Info) - WARNA SOLID FLAT HIJAU CERAH: #2BB673 */}
+            <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-[#2BB673] text-white shrink-0 shadow-2xl shadow-[#2BB673]/30 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-white/20 ring-1 ring-black/5 transition-all">
 
               <div className="flex flex-col items-center text-center mb-3.5 w-full shrink-0 relative z-10">
                 <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-white/15 border-2 border-white/50 overflow-hidden flex items-center justify-center shrink-0 shadow-lg relative ring-4 ring-white/20 group mx-auto">
@@ -2718,7 +2718,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     <User className="w-16 h-16 lg:w-20 lg:h-20 text-white/90 drop-shadow-sm" />
                   )}
                   {isUploadingPhoto && (
-                    <div className="absolute inset-0 bg-[#3C9385]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
+                    <div className="absolute inset-0 bg-[#2BB673]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
                       <RefreshCw className="w-6 h-6 animate-spin text-white mb-1.5" />
                       <span>Mengunggah...</span>
                     </div>
@@ -2830,11 +2830,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         <select
                           value={tenureDropdownPeriod}
                           onChange={(e) => setTenureDropdownPeriod(e.target.value as 'sekarang' | 'sebelumnya')}
-                          className="bg-[#2D7368] hover:bg-[#256157] text-white text-[10.5px] font-black pl-2.5 pr-6 py-0.5 rounded-lg border border-white/40 cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-white/50 appearance-none"
+                          className="bg-[#208C57] hover:bg-[#1A7347] text-white text-[10.5px] font-black pl-2.5 pr-6 py-0.5 rounded-lg border border-white/40 cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-white/50 appearance-none"
                           title="Pilih masa kerja jabatan sekarang atau sebelumnya"
                         >
-                          <option value="sekarang" className="bg-[#2D7368] text-white font-bold">Sekarang</option>
-                          <option value="sebelumnya" className="bg-[#2D7368] text-white font-bold">Sebelumnya</option>
+                          <option value="sekarang" className="bg-[#208C57] text-white font-bold">Sekarang</option>
+                          <option value="sebelumnya" className="bg-[#208C57] text-white font-bold">Sebelumnya</option>
                         </select>
                         <ChevronDown className="w-3 h-3 text-white absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
