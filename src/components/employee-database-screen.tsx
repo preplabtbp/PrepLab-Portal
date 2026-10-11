@@ -15,7 +15,7 @@ import { TimeRangeFetchModal } from './TimeRangeFetchModal';
 import { toast } from 'sonner';
 import { formatAvatarUrl } from '../lib/avatarUtils';
 import { getEmployeeTenureInfo } from '../lib/tenureUtils';
-import { compareEmployeesByJabatan } from '../lib/jabatanHierarchy';
+import { compareEmployeesByJabatan, getJabatanRank } from '../lib/jabatanHierarchy';
 
 export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
   if (!empOrStatus) return false;
@@ -220,6 +220,71 @@ export function normalizeDepartmentOrSection(raw?: string): string {
   if (s.includes('prep') || s.includes('preparasi') || s.includes('sample') || s.includes('crush') || s.includes('crew')) return 'Preparation';
   return 'Preparation';
 }
+
+const SANCTION_MONTH_MAP: Record<string, number> = {
+  jan: 0, januari: 0, january: 0,
+  feb: 1, februari: 1, february: 1,
+  mar: 2, maret: 2, march: 2,
+  apr: 3, april: 3,
+  mei: 4, may: 4,
+  jun: 5, juni: 5, june: 5,
+  jul: 6, juli: 6, july: 6,
+  agu: 7, ags: 7, agustus: 7, aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8,
+  okt: 9, oktober: 9, oct: 9, october: 9,
+  nov: 10, november: 10,
+  des: 11, desember: 11, dec: 11, december: 11
+};
+
+export const parseSanctionDate = (val?: any): Date | null => {
+  if (!val) return null;
+  const str = String(val).trim().split(/[\r\n,;]+/)[0].trim();
+  if (!str || str === '-' || str === '#N/A' || str === '0' || /^\d{1,2}$/.test(str) || /^(ya|tidak|ok|v|x|true|false)$/i.test(str)) return null;
+
+  const dMmmY = str.match(/^(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})$/);
+  if (dMmmY) {
+    const day = parseInt(dMmmY[1], 10);
+    const mStr = dMmmY[2].toLowerCase();
+    let year = parseInt(dMmmY[3], 10);
+    if (year < 100) year += 2000;
+    const month = SANCTION_MONTH_MAP[mStr];
+    if (month !== undefined && !isNaN(day) && !isNaN(year)) {
+      return new Date(year, month, day);
+    }
+  }
+
+  const ymd = str.match(/^(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})$/);
+  if (ymd) {
+    const year = parseInt(ymd[1], 10);
+    const month = parseInt(ymd[2], 10) - 1;
+    const day = parseInt(ymd[3], 10);
+    return new Date(year, month, day);
+  }
+
+  const dmy = str.match(/^(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})$/);
+  if (dmy) {
+    const day = parseInt(dmy[1], 10);
+    const month = parseInt(dmy[2], 10) - 1;
+    let year = parseInt(dmy[3], 10);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day);
+  }
+
+  const mY = str.match(/^([a-zA-Z]+)[-\s/](\d{4})$/);
+  if (mY) {
+    const month = SANCTION_MONTH_MAP[mY[1].toLowerCase()];
+    const year = parseInt(mY[2], 10);
+    if (month !== undefined && !isNaN(year)) {
+      return new Date(year, month, 1);
+    }
+  }
+
+  if (/\d{4}/.test(str)) {
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+};
 
 export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik: string, onBack?: () => void }) {
   const cacheKey = `preplab_emp_db_${inspectorNik || 'all'}`;
@@ -1197,8 +1262,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   }, [rosterData]);
 
   // 6. Data & List Karyawan Onsite pada Hari Ini
-  // Sesuai aturan: Ambil data keterangan OFF, D, N, LS, CS, dan I.
-  // Pengecualian khusus: Tidak termasuk I yang dimana pada tanggal/hari sebelumnya ada C, CT, CE sebelum ditutup oleh TRV atau pada hari ini sudah OFF, D, N, LS
+  // Sesuai aturan: Ambil data keterangan OFF, D, DS, N, NS, S, LS, CS, dan I.
+  // Dianggap Cuti (bukan Onsite): C, TRV, CT, CE, serta I yang kode roster sebelumnya adalah C, CT, atau CE.
   const onsiteEmployeesList = useMemo(() => {
     const idToEnMonths: Record<string, string> = {
       'mei': 'May', 'agu': 'Aug', 'ags': 'Aug', 'okt': 'Oct', 'des': 'Dec'
@@ -1215,15 +1280,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     const todayTs = new Date(todayDateKeys.year, todayDateKeys.month, todayDateKeys.day).getTime();
     const list: Array<{ employee: any; shiftCode: string }> = [];
 
-    scopedEmployees.forEach(emp => {
-      if (isResignedOrNonActiveStatus(emp)) return;
+    // Basis = Karyawan Aktif (sama dengan kartu "Karyawan Aktif") agar Onsite + Outsite = Karyawan Aktif
+    const baseEmployees = activeEmployeesList.length > 0
+      ? activeEmployeesList
+      : scopedEmployees.filter(emp => !isResignedOrNonActiveStatus(emp));
+
+    baseEmployees.forEach(emp => {
       const sched = rosterByNikMap.get(String(emp.nik || '').toUpperCase().trim());
       if (!sched) return;
 
       const todayStatus = (sched[todayDateKeys.enKey] || sched[todayDateKeys.idKey] || '-').trim().toUpperCase();
 
-      // Keterangan yang dihitung Onsite: OFF, D, N, LS, CS, dan I
-      if (['OFF', 'D', 'N', 'LS', 'CS'].includes(todayStatus)) {
+      // Keterangan yang dihitung Onsite: OFF, D, DS, N, NS, S, LS, CS, dan I
+      if (['OFF', 'D', 'DS', 'N', 'NS', 'S', 'LS', 'CS'].includes(todayStatus)) {
         list.push({ employee: emp, shiftCode: todayStatus });
       } else if (todayStatus === 'I') {
         // Pengecualian khusus kode I:
@@ -1233,19 +1302,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           .filter(d => d.ts > 0 && d.ts < todayTs)
           .sort((a, b) => b.ts - a.ts);
 
+        // I dianggap Cuti jika kode roster sebelumnya (melewati I berturut-turut & sel kosong) adalah C, CT, atau CE
         let isExcludedI = false;
         for (const prev of sortedPrevDates) {
           const prevStatus = (sched[prev.key] || '-').trim().toUpperCase();
-          // Jika sudah ditutup oleh TRV atau sudah bekerja/onsite (OFF, D, N, LS, CS)
-          if (['TRV', 'TV', 'OFF', 'D', 'N', 'LS', 'CS'].includes(prevStatus)) {
-            isExcludedI = false;
-            break;
-          }
-          // Jika ada cuti (C, CT, CE) sebelum ditutup TRV/bekerja
-          if (['C', 'CT', 'CE'].includes(prevStatus) || prevStatus.startsWith('CT') || prevStatus.startsWith('CE') || prevStatus.startsWith('C')) {
-            isExcludedI = true;
-            break;
-          }
+          if (prevStatus === 'I' || prevStatus === '-' || prevStatus === '') continue;
+          isExcludedI = prevStatus === 'C' || prevStatus.startsWith('CT') || prevStatus.startsWith('CE');
+          break;
         }
 
         if (!isExcludedI) {
@@ -1255,17 +1318,25 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     });
 
     return list.sort((a, b) => compareEmployeesByJabatan(a.employee, b.employee));
-  }, [scopedEmployees, rosterByNikMap, todayDateKeys]);
+  }, [activeEmployeesList, scopedEmployees, rosterByNikMap, todayDateKeys]);
 
-  // Persentase Karyawan Onsite terhadap Karyawan Aktif
-  const onsitePercentage = useMemo(() => {
-    const activeTotal = activeEmployeesCount > 0 ? activeEmployeesCount : scopedEmployees.length;
-    if (activeTotal === 0) return '0';
-    const val = (onsiteEmployeesList.length / activeTotal) * 100;
-    return val % 1 === 0 ? val.toFixed(0) : val.toFixed(1);
-  }, [onsiteEmployeesList.length, activeEmployeesCount, scopedEmployees.length]);
+  // Persentase Onsite & Outsite terhadap Karyawan Aktif (Onsite + Outsite = Karyawan Aktif)
+  const { onsitePercentage, outsiteCount, outsitePercentage } = useMemo(() => {
+    const activeTotal = activeEmployeesCount > 0
+      ? activeEmployeesCount
+      : scopedEmployees.filter(emp => !isResignedOrNonActiveStatus(emp)).length;
+    const fmt = (v: number) => (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1));
+    if (activeTotal === 0) return { onsitePercentage: '0', outsiteCount: 0, outsitePercentage: '0' };
+    const onsite = onsiteEmployeesList.length;
+    const outsite = Math.max(activeTotal - onsite, 0);
+    return {
+      onsitePercentage: fmt((onsite / activeTotal) * 100),
+      outsiteCount: outsite,
+      outsitePercentage: fmt((outsite / activeTotal) * 100)
+    };
+  }, [onsiteEmployeesList.length, activeEmployeesCount, scopedEmployees]);
 
-  // 7. Data & List Karyawan dengan Konseling Aktif (Konseling I, II, III aktif)
+  // 7. Data & List Karyawan dengan Konseling Aktif (Konseling I, II, III aktif yang belum lewat 3 bulan)
   const activeCounselingList = useMemo(() => {
     const list: Array<{
       employee: any;
@@ -1273,8 +1344,38 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       levelBadgeBg: string;
       levelColor: string;
       tanggal: string;
+      expiryDateStr: string;
       alasan: string;
     }> = [];
+
+    // Hitung manual: masa berlaku = tanggal dapat konseling + 3 bulan kalender.
+    // Jika tanggal tidak ada di bulan tujuan (mis. 31 Jan -> 31 Apr), pakai hari terakhir bulan tersebut (30 Apr).
+    const addMonthsManual = (date: Date, months: number): Date => {
+      const totalMonth = date.getMonth() + months;
+      const year = date.getFullYear() + Math.floor(totalMonth / 12);
+      const month = ((totalMonth % 12) + 12) % 12;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      return new Date(year, month, Math.min(date.getDate(), lastDay));
+    };
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const levelStyles: Record<number, { label: string; badge: string; color: string }> = {
+      1: { label: 'Konseling I', badge: 'bg-amber-500', color: 'text-amber-800 bg-amber-50 border-amber-300' },
+      2: { label: 'Konseling II', badge: 'bg-orange-500', color: 'text-orange-800 bg-orange-50 border-orange-300' },
+      3: { label: 'Konseling III', badge: 'bg-rose-500', color: 'text-rose-800 bg-rose-50 border-rose-300' }
+    };
+
+    // Sel konseling bisa berisi beberapa tanggal (dipisah baris baru / koma / titik koma)
+    const extractDates = (val: any): Array<{ raw: string; date: Date }> =>
+      String(val || '')
+        .split(/[\r\n,;]+/)
+        .map(s => s.trim())
+        .map(raw => ({ raw, date: parseSanctionDate(raw) }))
+        .filter((x): x is { raw: string; date: Date } => x.date !== null);
+
+    const isMarked = (val: string) => !!val && val !== '-' && val !== '0' && val !== '#N/A';
 
     scopedEmployees.forEach(emp => {
       if (isResignedOrNonActiveStatus(emp)) return;
@@ -1282,59 +1383,53 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       const st = String(c.statusSanksi || c.status_sanksi || '').trim();
       const stLower = st.toLowerCase();
 
-      // Sanksi yang selesai / aman / pemutihan dilewati
-      if (
-        stLower.includes('selesai') ||
-        stLower.includes('pemutihan') ||
-        stLower.includes('kadaluarsa') ||
-        stLower.includes('expired') ||
-        stLower === 'aman'
-      ) {
-        return;
+      const kRaw: Record<number, string> = {
+        1: String(c.konseling1 || c.konseling_1 || '').trim(),
+        2: String(c.konseling2 || c.konseling_2 || '').trim(),
+        3: String(c.konseling3 || c.konseling_3 || '').trim()
+      };
+
+      // Kumpulkan semua tanggal Konseling I, II, III
+      const entries: Array<{ level: number; raw: string; date: Date }> = [];
+      [1, 2, 3].forEach(level => {
+        extractDates(kRaw[level]).forEach(d => entries.push({ level, ...d }));
+      });
+
+      // Kolom konseling hanya berisi tanda (mis. "1" / "Ya") tanpa tanggal:
+      // pakai Bulan Konseling / Tanggal SP sebagai tanggal dapat konseling level tertinggi yang ditandai
+      if (entries.length === 0) {
+        const markedLevel = [3, 2, 1].find(l => isMarked(kRaw[l])) ||
+          (stLower.includes('konseling')
+            ? (stLower.includes('iii') ? 3 : stLower.includes('ii') ? 2 : 1)
+            : 0);
+        if (!markedLevel) return;
+        const fallback = [c.bulanKonseling, c.bulan_konseling, c.tanggalSp, c.tanggal_sp]
+          .map(v => extractDates(v)[0])
+          .find(Boolean);
+        if (!fallback) return;
+        entries.push({ level: markedLevel, ...fallback });
       }
 
-      const k1 = String(c.konseling1 || c.konseling_1 || '').trim();
-      const k2 = String(c.konseling2 || c.konseling_2 || '').trim();
-      const k3 = String(c.konseling3 || c.konseling_3 || '').trim();
-      const hasK = (k1 && k1 !== '-' && k1 !== '0') ||
-                   (k2 && k2 !== '-' && k2 !== '0') ||
-                   (k3 && k3 !== '-' && k3 !== '0');
+      // Konseling terakhir yang didapat = tanggal paling baru (jika sama, level tertinggi)
+      const latest = entries.reduce((a, b) =>
+        b.date.getTime() > a.date.getTime() || (b.date.getTime() === a.date.getTime() && b.level > a.level) ? b : a
+      );
 
-      const isCounselingStatus = stLower.includes('konseling') || (hasK && !stLower.includes('sp') && !stLower.includes('st') && !stLower.includes('phk'));
-
-      if (!isCounselingStatus) return;
-
-      let displayStatus = 'Konseling I';
-      let levelBadgeBg = 'bg-amber-500';
-      let levelColor = 'text-amber-800 bg-amber-50 border-amber-300';
-
-      if (stLower.includes('iii') || (k3 && k3 !== '-' && k3 !== '0')) {
-        displayStatus = 'Konseling III';
-        levelBadgeBg = 'bg-rose-500';
-        levelColor = 'text-rose-800 bg-rose-50 border-rose-300';
-      } else if (stLower.includes('ii') || (k2 && k2 !== '-' && k2 !== '0')) {
-        displayStatus = 'Konseling II';
-        levelBadgeBg = 'bg-orange-500';
-        levelColor = 'text-orange-800 bg-orange-50 border-orange-300';
-      } else if (stLower.includes('i') || (k1 && k1 !== '-' && k1 !== '0')) {
-        displayStatus = 'Konseling I';
-        levelBadgeBg = 'bg-amber-500';
-        levelColor = 'text-amber-800 bg-amber-50 border-amber-300';
-      } else if (st) {
-        displayStatus = st;
+      const expiryDateObj = addMonthsManual(latest.date, 3);
+      if (todayStart > expiryDateObj) {
+        return; // Sudah lewat 3 bulan sejak tanggal dapat konseling
       }
 
-      const tgl = [k3, k2, k1, c.bulanKonseling, c.bulan_konseling, c.tanggalSp, c.tanggal_sp]
-        .find(s => s && s !== '-' && s !== '0' && (s.includes('-') || s.includes('/') || /[a-zA-Z]{3,}/.test(s))) || '-';
-
+      const style = levelStyles[latest.level];
       const alasan = c.alasanKonseling || c.alasan_konseling || c.alasan || c.keterangan || '-';
 
       list.push({
         employee: emp,
-        statusSanksi: displayStatus,
-        levelBadgeBg,
-        levelColor,
-        tanggal: tgl,
+        statusSanksi: style.label,
+        levelBadgeBg: style.badge,
+        levelColor: style.color,
+        tanggal: latest.raw,
+        expiryDateStr: formatShortDate(expiryDateObj),
         alasan
       });
     });
@@ -1844,34 +1939,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       </span>
                     </div>
                     <div className="text-2xl sm:text-3xl font-black text-emerald-800 tracking-tight">{onsiteEmployeesList.length}</div>
+                    <div className="text-[10px] sm:text-[11px] text-slate-500 font-semibold">
+                      Outsite: {outsiteCount} ({outsitePercentage}%)
+                    </div>
                     <div className="text-[10px] sm:text-[11px] text-emerald-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'onsite' ? '▲ Tutup Rincian' : '▼ Klik Lihat Shift'}
                     </div>
                   </button>
 
-                  {/* Card 4: Konseling Aktif */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveStatDetail(prev => prev === 'counseling' ? null : 'counseling');
-                      setStatDetailSearch('');
-                    }}
-                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
-                      activeStatDetail === 'counseling'
-                        ? 'border-rose-500 ring-2 ring-rose-500/30 shadow-md bg-rose-50/40'
-                        : 'border-slate-200/90 hover:border-rose-400 hover:shadow-md'
-                    }`}
-                  >
-                    <div className="text-rose-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 flex items-center justify-center gap-1">
-                      <span>Konseling Aktif</span>
-                    </div>
-                    <div className="text-2xl sm:text-3xl font-black text-rose-800 tracking-tight">{activeCounselingList.length}</div>
-                    <div className="text-[10px] sm:text-[11px] text-rose-600/90 font-bold mt-0.5 group-hover:underline">
-                      {activeStatDetail === 'counseling' ? '▲ Tutup Rincian' : '▼ Klik Lihat Kasus'}
-                    </div>
-                  </button>
-
-                  {/* Card 5: Karyawan Permanent */}
+                  {/* Card 4: Karyawan Permanent */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1895,7 +1971,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                   </button>
 
-                  {/* Card 6: Karyawan Kontrak */}
+                  {/* Card 5: Karyawan Kontrak */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1919,7 +1995,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                   </button>
 
-                  {/* Card 7: Jumlah Izin Karyawan */}
+                  {/* Card 6: Jumlah Izin Karyawan */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1940,6 +2016,28 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
                     <div className="text-[10px] sm:text-[11px] text-indigo-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'izin' ? '▲ Tutup Rincian' : '▼ Bulan Ini (Urut)'}
+                    </div>
+                  </button>
+
+                  {/* Card 7: Konseling Aktif */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveStatDetail(prev => prev === 'counseling' ? null : 'counseling');
+                      setStatDetailSearch('');
+                    }}
+                    className={`bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border text-center transition-all shadow-xs cursor-pointer group flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px] ${
+                      activeStatDetail === 'counseling'
+                        ? 'border-rose-500 ring-2 ring-rose-500/30 shadow-md bg-rose-50/40'
+                        : 'border-slate-200/90 hover:border-rose-400 hover:shadow-md'
+                    }`}
+                  >
+                    <div className="text-rose-700 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1 flex items-center justify-center gap-1">
+                      <span>Konseling Aktif</span>
+                    </div>
+                    <div className="text-2xl sm:text-3xl font-black text-rose-800 tracking-tight">{activeCounselingList.length}</div>
+                    <div className="text-[10px] sm:text-[11px] text-rose-600/90 font-bold mt-0.5 group-hover:underline">
+                      {activeStatDetail === 'counseling' ? '▲ Tutup Rincian' : '▼ Klik Lihat Kasus'}
                     </div>
                   </button>
 
@@ -2033,7 +2131,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   {activeStatDetail === 'izin' && `${monthlyIzinData.list.length} Orang (${monthlyIzinData.grandTotal} Hari)`}
                                   {activeStatDetail === 'spdk' && `${activeSpdkData.length} Kasus Aktif`}
                                   {activeStatDetail === 'active' && `${activeEmployeesCount} Karyawan`}
-                                  {activeStatDetail === 'onsite' && `${onsiteEmployeesList.length} Orang (${onsitePercentage}% dari Karyawan Aktif)`}
+                                  {activeStatDetail === 'onsite' && `${onsiteEmployeesList.length} Onsite (${onsitePercentage}%) · ${outsiteCount} Outsite (${outsitePercentage}%) dari ${onsiteEmployeesList.length + outsiteCount} Karyawan Aktif`}
                                   {activeStatDetail === 'counseling' && `${activeCounselingList.length} Karyawan`}
                                 </span>
                               </h3>
@@ -2042,7 +2140,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 {activeStatDetail === 'kontrak' && 'Diurutkan sesuai tingkatan hirarki jabatan resmi. Klik baris untuk profil lengkap.'}
                                 {activeStatDetail === 'izin' && 'Diurutkan dari frekuensi izin terbanyak ke terkecil pada bulan berjalan.'}
                                 {activeStatDetail === 'spdk' && 'Menampilkan sanksi disiplin dan SPDK yang masih berlaku saat ini.'}
-                                {activeStatDetail === 'active' && 'Diurutkan sesuai tingkatan hirarki jabatan resmi.'}
+                                {activeStatDetail === 'active' && 'Bagan struktur organisasi: Manager → Superintendent → Section (Supervisor, Foreman, Staff, Crew). Section mengikuti Jabatan. Klik kartu untuk profil lengkap.'}
                                 {activeStatDetail === 'onsite' && `Menampilkan karyawan dengan status shift onsite hari ini (${todayDateKeys.enKey}). Klik baris untuk profil lengkap.`}
                                 {activeStatDetail === 'counseling' && 'Menampilkan karyawan dengan status pembinaan dan Konseling I, II, III aktif.'}
                               </p>
@@ -2429,42 +2527,63 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             );
                           })()}
 
-                          {/* 4. KARYAWAN AKTIF (GROUPED BY JABATAN) */}
+                          {/* 4. KARYAWAN AKTIF (BAGAN STRUKTUR ORGANISASI) */}
                           {activeStatDetail === 'active' && (() => {
-                            const filtered = activeEmployeesList.filter(e => {
-                              const q = statDetailSearch.toLowerCase().trim();
-                              if (!q) return true;
-                              return (e.name || '').toLowerCase().includes(q) ||
-                                     (e.nik || '').toLowerCase().includes(q) ||
-                                     (e.jabatan || '').toLowerCase().includes(q);
-                            });
+                            // Garis pelaporan bagan: Manager -> Superintendent -> Section.
+                            // Section yang tidak berada di bawah Superintendent terhubung langsung ke Manager.
+                            const PREP_SECTIONS = ['Preparation Wet', 'Preparation Dry', 'Preparation'];
+                            const LAB_SECTIONS = ['Laboratory', 'Quality Assurance', 'Inventory Control', 'Maintenance'];
+                            const DIRECT_SECTIONS = ['Administration', 'Lainnya'];
 
-                            const jabatanLevels = [
-                              { key: 'manager', label: 'Manager', color: 'bg-violet-100 text-violet-800 border-violet-200' },
-                              { key: 'superintendent', label: 'Superintendent', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-                              { key: 'supervisor', label: 'Supervisor', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
-                              { key: 'foreman', label: 'Foreman', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-                              { key: 'admin', label: 'Admin / Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-                              { key: 'crew', label: 'Crew / Operator', color: 'bg-slate-100 text-slate-700 border-slate-200' },
-                              { key: 'other', label: 'Lainnya', color: 'bg-gray-100 text-gray-700 border-gray-200' },
-                            ];
+                            const normJab = (emp: any) => String(emp.jabatan || emp['Jabatan Baru'] || '')
+                              .toLowerCase()
+                              .replace(/laboratorium/g, 'laboratory');
 
-                            const getJabatanGroup = (jabatan: string) => {
-                              const j = (jabatan || '').toLowerCase();
-                              if (j.includes('manager')) return 'manager';
-                              if (j.includes('superintendent') || j.includes('spt')) return 'superintendent';
-                              if (j.includes('supervisor') || j.includes('specialist')) return 'supervisor';
-                              if (j.includes('foreman')) return 'foreman';
-                              if (j.includes('admin') || j.includes('staff') || j.includes('officer')) return 'admin';
-                              if (j.includes('crew') || j.includes('operator') || j.includes('technician') || j.includes('helper')) return 'crew';
+                            // Section diutamakan dari Jabatan; jika jabatan umum (mis. "Crew, Preparation & Laboratory") baru memakai kolom Bagian/Section.
+                            const sectionFromJabatan = (j: string): string | null => {
+                              if (j.includes('wet')) return 'Preparation Wet';
+                              if (j.includes('dry')) return 'Preparation Dry';
+                              if (j.includes('quality assurance') || /\bqa\b/.test(j)) return 'Quality Assurance';
+                              if (j.includes('inventory')) return 'Inventory Control';
+                              if (j.includes('maintenance')) return 'Maintenance';
+                              if (j.includes('admin')) return 'Administration';
+                              if (j.includes('laboratory') && (j.includes('supervisor') || j.includes('foreman'))) return 'Laboratory';
+                              return null;
+                            };
+                            const sectionFromBagian = (emp: any): string | null => {
+                              const s = String(emp.section || emp.bagian || emp['Bagian'] || '').toLowerCase().trim();
+                              if (!s || s === '-') return null;
+                              if (s.includes('wet')) return 'Preparation Wet';
+                              if (s.includes('dry')) return 'Preparation Dry';
+                              if (s.includes('qa') || s.includes('quality')) return 'Quality Assurance';
+                              if (s.includes('inv')) return 'Inventory Control';
+                              if (s.includes('maint')) return 'Maintenance';
+                              if (s.includes('admin')) return 'Administration';
+                              if (s.includes('lab')) return 'Laboratory';
+                              if (s.includes('prep')) return 'Preparation';
+                              return null;
+                            };
+                            const getSection = (emp: any) => sectionFromJabatan(normJab(emp)) || sectionFromBagian(emp) || 'Lainnya';
+
+                            const getLevel = (emp: any): 'manager' | 'prepSpt' | 'labSpt' | 'supervisor' | 'foreman' | 'staff' | 'crew' | 'other' => {
+                              const rank = getJabatanRank(emp.jabatan || emp['Jabatan Baru']);
+                              if (rank === 0) return 'manager';
+                              if (rank === 1) return 'prepSpt';
+                              if (rank === 2) return 'labSpt';
+                              if (rank <= 8) return 'supervisor';
+                              if (rank <= 13) return 'foreman';
+                              if (rank <= 15) return 'staff';
+                              if (rank <= 17.5) return 'crew';
                               return 'other';
                             };
 
-                            const grouped: Record<string, any[]> = {};
-                            filtered.forEach(emp => {
-                              const grp = getJabatanGroup(emp.jabatan);
-                              if (!grouped[grp]) grouped[grp] = [];
-                              grouped[grp].push(emp);
+                            const q = statDetailSearch.toLowerCase().trim();
+                            const filtered = activeEmployeesList.filter(e => {
+                              if (!q) return true;
+                              return (e.name || '').toLowerCase().includes(q) ||
+                                     (e.nik || '').toLowerCase().includes(q) ||
+                                     (e.jabatan || '').toLowerCase().includes(q) ||
+                                     getSection(e).toLowerCase().includes(q);
                             });
 
                             if (filtered.length === 0) {
@@ -2475,50 +2594,194 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               );
                             }
 
-                            return (
-                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 space-y-2">
-                                {jabatanLevels.filter(lv => grouped[lv.key] && grouped[lv.key].length > 0).map(lv => {
-                                  const members = grouped[lv.key];
-                                  return (
-                                    <details key={lv.key} open className="group/jab">
-                                      <summary className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer select-none border ${lv.color} hover:shadow-sm transition-all`}>
-                                        <span className="text-xs font-extrabold flex-1">{lv.label}</span>
-                                        <span className="text-[11px] font-black bg-white/60 px-2 py-0.5 rounded-lg border border-black/5">{members.length} Orang</span>
-                                        <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/jab:rotate-180" />
-                                      </summary>
-                                      <div className="mt-1 ml-3 pl-3 border-l-2 border-amber-100 space-y-0.5">
-                                        {members.map((emp, idx) => (
-                                          <div
-                                            key={emp.nik || idx}
-                                            onClick={() => setSelectedEmployee(emp)}
-                                            className="p-2 rounded-xl hover:bg-amber-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
-                                          >
-                                            <div className="flex items-center gap-2.5 min-w-0">
-                                              <div className="w-8 h-8 rounded-lg bg-amber-100/70 border border-amber-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-amber-800 text-[10px]">
-                                                {emp.photo ? (
-                                                  <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                  (emp.name || 'A').charAt(0).toUpperCase()
-                                                )}
-                                              </div>
-                                              <div className="min-w-0">
-                                                <div className="text-xs font-bold text-slate-800 group-hover:text-amber-700 truncate flex items-center gap-1.5">
-                                                  <span>{emp.name}</span>
-                                                  <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">{emp.nik}</span>
-                                                </div>
-                                                <div className="text-[10px] text-slate-500 truncate mt-0.5">{emp.jabatan || '-'}</div>
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                              <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-lg">Aktif</span>
-                                              <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-600 transition-colors" />
-                                            </div>
-                                          </div>
-                                        ))}
+                            const managers: any[] = [];
+                            const prepSpts: any[] = [];
+                            const labSpts: any[] = [];
+                            const sections = new Map<string, { supervisor: any[]; foreman: any[]; staff: any[]; crew: any[] }>();
+                            [...filtered].sort(compareEmployeesByJabatan).forEach(emp => {
+                              const level = getLevel(emp);
+                              if (level === 'manager') return managers.push(emp);
+                              if (level === 'prepSpt') return prepSpts.push(emp);
+                              if (level === 'labSpt') return labSpts.push(emp);
+                              const sec = getSection(emp);
+                              if (!sections.has(sec)) sections.set(sec, { supervisor: [], foreman: [], staff: [], crew: [] });
+                              const bucket = sections.get(sec)!;
+                              // Administration tidak memiliki Crew: seluruh anggotanya digabung dalam satu kelompok Admin
+                              if (sec === 'Administration' && level !== 'supervisor') return bucket.staff.push(emp);
+                              (level === 'other' ? bucket.crew : bucket[level]).push(emp);
+                            });
+
+                            const avatar = (emp: any, cls: string) => (
+                              <div className={`rounded-full border-2 border-white shadow-sm flex items-center justify-center shrink-0 overflow-hidden font-bold ${cls}`}>
+                                {emp.photo ? (
+                                  <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  (emp.name || '?').charAt(0).toUpperCase()
+                                )}
+                              </div>
+                            );
+
+                            // Kartu orang (Manager / Superintendent / Supervisor)
+                            const personCard = (emp: any, tone: string) => (
+                              <button
+                                key={emp.nik}
+                                type="button"
+                                onClick={() => setSelectedEmployee(emp)}
+                                title={`${emp.name} — ${emp.jabatan || "-"}`}
+                                className={`w-full max-w-[10rem] min-w-0 p-2 rounded-2xl border bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col items-center gap-1.5 ${tone}`}
+                              >
+                                {avatar(emp, 'w-12 h-12 text-base bg-slate-100 text-slate-700')}
+                                <div className="text-[11px] font-extrabold text-slate-800 leading-tight line-clamp-2 break-words w-full">{emp.name}</div>
+                                <div className="text-[10px] text-slate-500 leading-tight line-clamp-2 break-words w-full">{emp.jabatan || '-'}</div>
+                                <div className="text-[9px] font-mono text-slate-400">{emp.nik}</div>
+                              </button>
+                            );
+
+                            const vacantCard = (label: string) => (
+                              <div className="w-full max-w-[10rem] p-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center">
+                                <div className="text-[11px] font-extrabold text-slate-500">{label}</div>
+                                <div className="text-[10px] text-slate-400">Kosong / Tidak sesuai pencarian</div>
+                              </div>
+                            );
+
+                            // Baris ringkas (Foreman / Staff / Crew)
+                            const compactRow = (emp: any) => (
+                              <button
+                                key={emp.nik}
+                                type="button"
+                                title={`${emp.name} — ${emp.jabatan || "-"}`}
+                                onClick={() => setSelectedEmployee(emp)}
+                                className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                              >
+                                {avatar(emp, 'w-7 h-7 text-[10px] bg-slate-100 text-slate-700')}
+                                <div className="min-w-0">
+                                  <div className="text-[11px] font-bold text-slate-800 truncate">{emp.name}</div>
+                                  <div className="text-[9.5px] text-slate-400 truncate">{emp.jabatan || '-'}</div>
+                                </div>
+                              </button>
+                            );
+
+                            const vLine = <div className="w-0.5 h-4 bg-slate-300 mx-auto" />;
+
+                            const sectionNode = (name: string) => {
+                              const b = sections.get(name);
+                              if (!b) return null;
+                              const total = b.supervisor.length + b.foreman.length + b.staff.length + b.crew.length;
+                              return (
+                                <div className="w-full min-w-0 flex flex-col items-stretch">
+                                  <div className="rounded-xl bg-[#22a7b8] text-white px-2 py-1.5 text-center shadow-sm">
+                                    <div className="text-[10.5px] font-black uppercase tracking-wide leading-tight">{name}</div>
+                                    <div className="text-[10px] font-semibold opacity-90">{total} Orang</div>
+                                  </div>
+                                  {b.supervisor.length > 0 && (
+                                    <>
+                                      {vLine}
+                                      <div className="flex flex-col items-center gap-2">
+                                        {b.supervisor.map(emp => personCard(emp, "border-cyan-200"))}
                                       </div>
-                                    </details>
-                                  );
-                                })}
+                                    </>
+                                  )}
+                                  {b.foreman.length > 0 && (
+                                    <>
+                                      {vLine}
+                                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-1.5">
+                                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 px-1.5 pb-1">Foreman / Officer · {b.foreman.length}</div>
+                                        <div className="bg-white rounded-lg">{b.foreman.map(emp => compactRow(emp))}</div>
+                                      </div>
+                                    </>
+                                  )}
+                                  {b.staff.length > 0 && (
+                                    <>
+                                      {vLine}
+                                      <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-1.5">
+                                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 px-1.5 pb-1">{name === 'Administration' ? 'Admin' : 'Admin / Staff'} · {b.staff.length}</div>
+                                        <div className="bg-white rounded-lg">{b.staff.map(emp => compactRow(emp))}</div>
+                                      </div>
+                                    </>
+                                  )}
+                                  {b.crew.length > 0 && (
+                                    <>
+                                      {vLine}
+                                      <details className="rounded-xl border border-slate-200 bg-slate-50/60 p-1.5 group/crew" open={!!q}>
+                                        <summary className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-600 px-1.5 py-0.5 cursor-pointer select-none list-none">
+                                          <span>Crew · {b.crew.length}</span>
+                                          <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/crew:rotate-180" />
+                                        </summary>
+                                        <div className="bg-white rounded-lg mt-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                          {b.crew.map(emp => compactRow(emp))}
+                                        </div>
+                                      </details>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            };
+
+                            const presentSections = (names: string[]) => names.filter(n => sections.has(n));
+                            const prepChildren = presentSections(PREP_SECTIONS);
+                            const labChildren = presentSections(LAB_SECTIONS);
+                            const directChildren = presentSections(DIRECT_SECTIONS);
+
+                            const superintendentBranch = (spts: any[], label: string, children: string[]) => (
+                              <li key={label} style={{ flex: `${Math.max(children.length, 1)} 1 0` }}>
+                                <div className="w-full flex flex-wrap gap-2 justify-center">
+                                  {spts.length > 0
+                                    ? spts.map(emp => personCard(emp, "border-blue-200"))
+                                    : vacantCard(label)}
+                                </div>
+                                {children.length > 0 && (
+                                  <ul>
+                                    {children.map(name => (
+                                      <li key={name}><div className="w-full">{sectionNode(name)}</div></li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </li>
+                            );
+
+                            return (
+                              <div className="max-h-[75vh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                                <style>{`
+                                  .org-tree ul { position: relative; display: flex; justify-content: center; width: 100%; padding: 20px 0 0; margin: 0; }
+                                  .org-tree li { position: relative; list-style: none; text-align: center; padding: 20px 4px 0; display: flex; flex-direction: column; align-items: center; flex: 1 1 0; min-width: 0; }
+                                  .org-tree li::before, .org-tree li::after { content: ''; position: absolute; top: 0; right: 50%; width: 50%; height: 20px; border-top: 2px solid #cbd5e1; }
+                                  .org-tree li::after { right: auto; left: 50%; border-left: 2px solid #cbd5e1; }
+                                  .org-tree li:only-child::before, .org-tree li:only-child::after { display: none; }
+                                  .org-tree li:only-child { padding-top: 0; }
+                                  .org-tree li:first-child::before, .org-tree li:last-child::after { border: 0 none; }
+                                  .org-tree li:last-child::before { border-right: 2px solid #cbd5e1; border-radius: 0 8px 0 0; }
+                                  .org-tree li:first-child::after { border-radius: 8px 0 0 0; }
+                                  .org-tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; height: 20px; border-left: 2px solid #cbd5e1; }
+                                  .org-tree > ul { padding-top: 0; }
+                                  /* Layar sempit: bagan menjadi pohon vertikal agar tidak perlu geser kiri-kanan */
+                                  @media (max-width: 1023px) {
+                                    .org-tree ul { display: block; padding: 0 0 0 14px; margin-left: 10px; border-left: 2px solid #cbd5e1; }
+                                    .org-tree > ul { padding-left: 0; margin-left: 0; border-left: 0; }
+                                    .org-tree ul ul::before { display: none; }
+                                    .org-tree li { padding: 10px 0 0 !important; align-items: stretch; text-align: left; flex: none !important; }
+                                    .org-tree li::before { display: block !important; content: ''; position: absolute; top: 30px; left: -14px; right: auto; width: 12px; height: 0; border: 0 !important; border-top: 2px solid #cbd5e1 !important; border-radius: 0 !important; }
+                                    .org-tree li::after { display: none !important; }
+                                    .org-tree > ul > li::before { display: none !important; }
+                                  }
+                                `}</style>
+                                <div className="org-tree w-full">
+                                  <ul>
+                                    <li>
+                                      <div className="w-full flex flex-wrap gap-2 justify-center">
+                                        {managers.length > 0
+                                          ? managers.map(emp => personCard(emp, "border-violet-300 ring-2 ring-violet-100"))
+                                          : vacantCard("Preparation & Laboratory Manager")}
+                                      </div>
+                                      <ul>
+                                        {superintendentBranch(prepSpts, "Preparation Superintendent", prepChildren)}
+                                        {superintendentBranch(labSpts, "Laboratory Superintendent", labChildren)}
+                                        {directChildren.map(name => (
+                                          <li key={name}><div className="w-full">{sectionNode(name)}</div></li>
+                                        ))}
+                                      </ul>
+                                    </li>
+                                  </ul>
+                                </div>
                               </div>
                             );
                           })()}
@@ -2622,9 +2885,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               );
                             }
 
+                            const displayed = filtered;
                             return (
+                              <div>
                               <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
-                                {filtered.map((item, idx) => {
+                                {displayed.map((item, idx) => {
                                   const emp = item.employee;
                                   return (
                                     <div
@@ -2671,7 +2936,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                               Tgl: {formatShortDate(item.tanggal)}
                                             </div>
                                             <div className="text-[10px] text-rose-600 font-semibold mt-0.5">
-                                              Masa Berlaku 3 Bulan
+                                              {item.expiryDateStr ? `Masa Berlaku s/d ${item.expiryDateStr}` : 'Masa Berlaku 3 Bulan'}
                                             </div>
                                           </div>
                                         )}
@@ -2680,6 +2945,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                     </div>
                                   );
                                 })}
+                              </div>
                               </div>
                             );
                           })()}
@@ -2692,21 +2958,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             </div>
           </div>
         ) : (
-          /* PROFILE MODE (HARMONIOUS PASTEL GREEN CANVAS WITH FLOATING EXECUTIVE CARDS) */
+          /* PROFILE MODE (CLEAN WHITE CANVAS WITH FLOATING EXECUTIVE CARDS) */
           <motion.div 
             initial={{ opacity: 0, y: 15 }} 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="flex flex-col lg:flex-row h-auto lg:h-full w-full min-h-full p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-[#f4faf5] via-[#edf6f0] to-[#e6f3eb] gap-4 lg:gap-6 overflow-visible lg:overflow-hidden relative pb-32 lg:pb-6"
+            className="flex flex-col lg:flex-row h-auto lg:h-full w-full min-h-full p-3 sm:p-4 lg:p-6 bg-white gap-4 lg:gap-6 overflow-visible lg:overflow-hidden relative pb-32 lg:pb-6"
           >
-            {/* SIDEBAR (Profile Info) - HIJAU TOSCA SEPERTI REFERENSI PINHOME (#20a2a0) */}
-            <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-[#20a2a0] text-white shrink-0 shadow-2xl shadow-teal-900/20 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-white/20 ring-1 ring-black/5 transition-all">
-              {/* Decorative Ambient Depth Lights */}
-              <div className="absolute -top-16 -left-16 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-              <div className="absolute -bottom-16 -right-16 w-44 h-44 bg-teal-200/15 rounded-full blur-2xl pointer-events-none" />
+            {/* SIDEBAR (Profile Info) - WARNA SOLID FLAT PINHOME TEAL: #20A2A0 */}
+            <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-[#20A2A0] text-slate-950 shrink-0 shadow-2xl shadow-[#20A2A0]/30 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-white/20 ring-1 ring-black/5 transition-all">
 
               <div className="flex flex-col items-center text-center mb-3.5 w-full shrink-0 relative z-10">
-                <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-white/15 border-2 border-white/50 overflow-hidden flex items-center justify-center shrink-0 shadow-lg relative ring-4 ring-white/20 group mx-auto">
+                <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-white/25 border-2 border-white/60 overflow-hidden flex items-center justify-center shrink-0 shadow-lg relative ring-4 ring-white/30 group mx-auto">
                   {selectedEmployee.photo ? (
                     <img 
                       src={formatAvatarUrl(selectedEmployee.photo)} 
@@ -2718,10 +2981,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       }}
                     />
                   ) : (
-                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-white/90 drop-shadow-sm" />
+                    <User className="w-16 h-16 lg:w-20 lg:h-20 text-slate-900/80 drop-shadow-sm" />
                   )}
                   {isUploadingPhoto && (
-                    <div className="absolute inset-0 bg-[#168583]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
+                    <div className="absolute inset-0 bg-[#20A2A0]/90 backdrop-blur-xs flex flex-col items-center justify-center text-xs text-white z-20">
                       <RefreshCw className="w-6 h-6 animate-spin text-white mb-1.5" />
                       <span>Mengunggah...</span>
                     </div>
@@ -2742,10 +3005,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         type="button"
                         onClick={() => photoInputRef.current?.click()}
                         disabled={isUploadingPhoto}
-                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center gap-1.5 transition-all shadow-xs border border-white/30 backdrop-blur-md cursor-pointer"
+                        className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-white/40 hover:bg-white/60 active:scale-95 text-slate-950 flex items-center gap-1.5 transition-all shadow-xs border border-white/60 backdrop-blur-md cursor-pointer"
                         title="Perbarui atau unggah foto karyawan di database"
                       >
-                        <Camera className="w-3.5 h-3.5 text-white" />
+                        <Camera className="w-3.5 h-3.5 text-slate-950" />
                         <span>{selectedEmployee.photo ? 'Ganti Foto' : 'Unggah Foto'}</span>
                       </button>
 
@@ -2757,73 +3020,73 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                           setEditModalTab('job');
                           setIsEditModalOpen(true);
                         }}
-                        className="text-[11px] font-black px-3.5 py-1.5 rounded-xl bg-[#FACC15] hover:bg-[#EAB308] active:scale-95 text-slate-900 flex items-center gap-1.5 transition-all shadow-md shadow-amber-950/15 border border-amber-200/60 cursor-pointer"
+                        className="text-[11px] font-black px-3.5 py-1.5 rounded-xl bg-[#FACC15] hover:bg-[#EAB308] active:scale-95 text-slate-950 flex items-center gap-1.5 transition-all shadow-md shadow-amber-950/15 border border-amber-300 cursor-pointer"
                         title="Edit data lengkap profil karyawan ini"
                       >
-                        <Pencil className="w-3.5 h-3.5 text-slate-900" />
+                        <Pencil className="w-3.5 h-3.5 text-slate-950" />
                         <span>Edit Data</span>
                       </button>
                     </div>
                   </>
                 )}
 
-                <h2 className="text-lg lg:text-xl font-black mt-3 mb-1 leading-tight text-white drop-shadow-sm text-center w-full tracking-tight">
+                <h2 className="text-lg lg:text-xl font-black mt-3 mb-1 leading-tight text-white text-center w-full tracking-tight drop-shadow-md">
                   {selectedEmployee.name}
                 </h2>
                 <div className="w-full flex justify-center">
-                  <p className="text-white inline-flex items-center bg-white/25 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-black shadow-xs border border-white/40 font-mono tracking-wider">
-                    <Fingerprint className="w-3.5 h-3.5 mr-1.5 text-[#e0faf8]" />
+                  <p className="text-white inline-flex items-center bg-white/25 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-black shadow-xs border border-white/40 font-mono tracking-wider drop-shadow-sm">
+                    <Fingerprint className="w-3.5 h-3.5 mr-1.5 text-white/90" />
                     NIK: {selectedEmployee.nik}
                   </p>
                 </div>
               </div>
 
               {/* Detail Profil Sidebar */}
-              <div className="w-full flex-1 overflow-visible lg:overflow-y-auto pr-0 lg:pr-1 space-y-2 text-white divide-y divide-white/25 custom-scrollbar-teal text-left relative z-10">
+              <div className="w-full flex-1 overflow-visible lg:overflow-y-auto pr-0 lg:pr-1 space-y-2 text-white divide-y divide-white/20 custom-scrollbar-teal text-left relative z-10">
                 <div className="pt-2 first:pt-0">
-                  <p className="text-[#e0faf8] text-[10.5px] font-black mb-0.5 uppercase tracking-wider drop-shadow-xs">Jabatan</p>
-                  <p className="font-black text-white text-xs sm:text-sm leading-snug drop-shadow-xs">{selectedEmployee.jabatan || '-'}</p>
+                  <p className="text-white/80 text-[10.5px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-sm">Jabatan</p>
+                  <p className="font-black text-white text-xs sm:text-sm leading-snug drop-shadow-sm">{selectedEmployee.jabatan || '-'}</p>
                 </div>
                 
                 <div className="pt-2">
-                  <p className="text-[#e0faf8] text-[10.5px] font-black mb-0.5 uppercase tracking-wider drop-shadow-xs">Perusahaan</p>
-                  <p className="font-black text-white text-xs drop-shadow-xs">{selectedEmployee.pt || '-'}</p>
+                  <p className="text-white/80 text-[10.5px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-sm">Perusahaan</p>
+                  <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.pt || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/35 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-[#e0faf8] text-[10px] font-black mb-0.5 uppercase tracking-wider drop-shadow-xs">Job Grade</p>
-                    <p className="font-black text-white text-xs">{selectedEmployee.jobGrade || '-'}</p>
+                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Job Grade</p>
+                    <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
-                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/35 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-[#e0faf8] text-[10px] font-black mb-0.5 uppercase tracking-wider drop-shadow-xs">Golongan</p>
-                    <p className="font-black text-white text-xs">{selectedEmployee.gol || '-'}</p>
+                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Golongan</p>
+                    <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
 
                 <div className="pt-2">
-                  <p className="text-[#e0faf8] text-[10.5px] font-black mb-0.5 uppercase tracking-wider drop-shadow-xs">Bagian (Section)</p>
-                  <p className="font-black text-white text-xs drop-shadow-xs">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
+                  <p className="text-white/80 text-[10.5px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-sm">Bagian (Section)</p>
+                  <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/35 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-[#e0faf8] text-[10px] font-black mb-0.5 uppercase tracking-wider drop-shadow-xs">DOH Awal</p>
-                    <p className="font-black text-white text-xs font-mono">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
+                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">DOH Awal</p>
+                    <p className="font-black text-white text-xs font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
                   </div>
-                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/35 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-[#e0faf8] text-[10px] font-black mb-0.5 uppercase tracking-wider drop-shadow-xs">Tgl Jabatan Baru</p>
-                    <p className="font-black text-white text-xs font-mono">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
+                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
+                    <p className="font-black text-white text-xs font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
                   </div>
                 </div>
 
                 {/* MASA KERJA JABATAN DENGAN DROPDOWN LIST */}
                 <div className="pt-2.5 pb-1 space-y-1.5">
-                  <div className="bg-white/20 hover:bg-white/25 p-3 rounded-2xl border border-white/35 transition-all shadow-xs backdrop-blur-md">
+                  <div className="bg-white/20 hover:bg-white/30 p-3 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
                     <div className="flex items-center justify-between gap-1 mb-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#e0faf8]" />
-                        <span className="text-white text-[10px] font-black uppercase tracking-wider drop-shadow-xs">
+                        <Clock className="w-3.5 h-3.5 text-white/90" />
+                        <span className="text-white/80 text-[10px] font-extrabold uppercase tracking-wider">
                           Masa Kerja Jabatan
                         </span>
                       </div>
@@ -2833,11 +3096,11 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         <select
                           value={tenureDropdownPeriod}
                           onChange={(e) => setTenureDropdownPeriod(e.target.value as 'sekarang' | 'sebelumnya')}
-                          className="bg-[#137674] hover:bg-[#0f6361] text-white text-[10.5px] font-black pl-2.5 pr-6 py-0.5 rounded-lg border border-white/40 cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-white/50 appearance-none"
+                          className="bg-[#10615F] hover:bg-[#0D5250] text-white text-[10.5px] font-black pl-2.5 pr-6 py-0.5 rounded-lg border border-white/40 cursor-pointer shadow-xs focus:outline-none focus:ring-1 focus:ring-white/50 appearance-none"
                           title="Pilih masa kerja jabatan sekarang atau sebelumnya"
                         >
-                          <option value="sekarang" className="bg-[#137674] text-white font-bold">Sekarang</option>
-                          <option value="sebelumnya" className="bg-[#137674] text-white font-bold">Sebelumnya</option>
+                          <option value="sekarang" className="bg-[#10615F] text-white font-bold">Sekarang</option>
+                          <option value="sebelumnya" className="bg-[#10615F] text-white font-bold">Sebelumnya</option>
                         </select>
                         <ChevronDown className="w-3 h-3 text-white absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
@@ -2845,12 +3108,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                     {/* Nilai Masa Kerja Jabatan */}
                     <div className="flex items-baseline justify-between gap-2">
-                      <p className="font-black text-white text-sm sm:text-base tracking-tight drop-shadow-xs">
+                      <p className="font-black text-white text-sm sm:text-base tracking-tight drop-shadow-sm">
                         {tenureInfo[tenureDropdownPeriod].value}
                       </p>
                       <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider shadow-xs ${
                         tenureDropdownPeriod === 'sekarang'
-                          ? 'bg-white/25 text-white border border-white/40'
+                          ? 'bg-white/30 text-white border border-white/50'
                           : 'bg-[#FACC15] text-slate-950 border border-amber-300'
                       }`}>
                         {tenureDropdownPeriod === 'sekarang' ? 'Jabatan Sekarang' : 'Jabatan Sebelumnya'}
@@ -2858,8 +3121,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
 
                     {/* Keterangan */}
-                    <div className="mt-2 text-[10px] text-white leading-tight flex items-start gap-1.5 font-semibold bg-black/15 p-2 rounded-xl border border-white/20">
-                      <Info className="w-3.5 h-3.5 text-[#e0faf8] shrink-0 mt-0.5" />
+                    <div className="mt-2 text-[10px] text-white/90 leading-tight flex items-start gap-1.5 font-semibold bg-black/20 p-2 rounded-xl border border-white/20">
+                      <Info className="w-3.5 h-3.5 text-white/80 shrink-0 mt-0.5" />
                       <span>
                         <strong className="text-white font-black mr-1">
                           Keterangan {tenureDropdownPeriod === 'sekarang' ? 'Sekarang:' : 'Sebelumnya:'}
@@ -2869,17 +3132,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </div>
 
                     {/* Informasi Total Masa Kerja */}
-                    <div className="mt-2 pt-2 border-t border-white/25 flex items-center justify-between text-[10.5px]">
-                      <span className="text-[#e0faf8] font-bold">Masa Kerja Total (DOH):</span>
-                      <span className="font-black text-white font-mono">{tenureInfo.total.value}</span>
+                    <div className="mt-2 pt-2 border-t border-white/20 flex items-center justify-between text-[10.5px]">
+                      <span className="text-white/80 font-extrabold">Masa Kerja Total (DOH):</span>
+                      <span className="font-black text-white font-mono drop-shadow-sm">{tenureInfo.total.value}</span>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* MAIN CONTENT AREA (CLEAN EXECUTIVE WHITE CANVAS ON PASTEL GREEN BACKDROP) */}
-            <div className="w-full flex-1 h-auto lg:h-full lg:max-h-full p-4 sm:p-6 lg:p-8 overflow-visible lg:overflow-y-auto bg-white/70 backdrop-blur-xs rounded-3xl shadow-xs border border-emerald-200/60 pb-28 lg:pb-24 ring-1 ring-emerald-500/5 transition-all custom-scrollbar">
+            {/* MAIN CONTENT AREA (CLEAN EXECUTIVE CANVAS ON WHITE BACKDROP) */}
+            <div className="w-full flex-1 h-auto lg:h-full lg:max-h-full p-4 sm:p-6 lg:p-8 overflow-visible lg:overflow-y-auto bg-slate-50/60 backdrop-blur-xs rounded-3xl shadow-xs border border-slate-200/80 pb-28 lg:pb-24 transition-all custom-scrollbar">
               
               {/* HEADER W/ SPONSOR & EDIT BUTTON */}
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
@@ -2994,6 +3257,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         </div>
                         <p className="font-black text-xl text-emerald-950 tracking-tight">{selectedEmployee.statusKaryawan || '-'}</p>
                       </div>
+
+                      <div className="mt-2.5 pt-2 border-t border-emerald-300/60 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-emerald-200/70 border border-emerald-300/80 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-800" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-800/80 leading-tight">Status Kerja</p>
+                          <p className="font-bold text-xs text-emerald-950 leading-tight whitespace-nowrap">
+                            {String(selectedEmployee.statusKaryawan || '').toUpperCase() === 'ACTIVE' ? 'Aktif Bekerja' : (selectedEmployee.statusKaryawan || 'Aktif')}
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Status Kontrak & Tanggal Permanen (Disatukan) */}
@@ -3017,13 +3292,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         <p className="font-black text-xl text-amber-950 tracking-tight">{selectedEmployee.statusKontrak || '-'}</p>
                       </div>
 
-                      {Boolean(selectedEmployee.tanggalPermanent && selectedEmployee.tanggalPermanent !== '-' && selectedEmployee.tanggalPermanent !== '0') && (
-                        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-amber-200/80 text-[11px] text-amber-900">
-                          <Calendar className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                          <span className="text-[10px] uppercase tracking-wider font-bold text-amber-800/80">Permanen:</span>
-                          <span className="font-mono font-bold text-amber-950">{formatShortDate(selectedEmployee.tanggalPermanent)}</span>
+                      <div className="mt-2.5 pt-2 border-t border-amber-300/60 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-amber-200/70 border border-amber-300/80 flex items-center justify-center shrink-0">
+                          <Calendar className="w-3.5 h-3.5 text-amber-800" />
                         </div>
-                      )}
+                        <div className="min-w-0">
+                          <p className="text-[9px] uppercase tracking-wider font-extrabold text-amber-800/80 leading-tight">Tgl Permanen</p>
+                          <p className="font-mono font-black text-xs text-amber-950 leading-tight whitespace-nowrap">
+                            {selectedEmployee.tanggalPermanent && selectedEmployee.tanggalPermanent !== '-' && selectedEmployee.tanggalPermanent !== '0'
+                              ? formatShortDate(selectedEmployee.tanggalPermanent)
+                              : 'Belum Permanen'}
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Tgl Efektif Tidak Bekerja (Conditional) */}
@@ -3172,76 +3453,76 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   </div>
                 </div>
 
-                {/* REKAP ABSENSI */}
-                <div className="xl:col-span-2 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* REKAP ABSENSI, CATATAN & ACHIEVEMENTS (SEJAJAR PENUH DENGAN KOLOM STATUS KIRI) */}
+                <div className="xl:col-span-2 flex flex-col justify-between gap-6 h-full">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                     {/* 2026 */}
-                    <Card className="p-5 shadow-xs border border-teal-200/80 bg-white rounded-2xl">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-black text-slate-950 text-sm flex items-center">
-                          <BarChart3 className="w-4 h-4 mr-2 text-[#135864]" />
+                    <Card className="p-4 sm:p-5 shadow-xs border border-teal-200/80 bg-white rounded-2xl">
+                      <div className="flex items-center justify-between mb-3.5 sm:mb-4">
+                        <h4 className="font-black text-slate-950 text-xs sm:text-sm flex items-center">
+                          <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-[#135864]" />
                           Rekap Absensi 2026
                         </h4>
                         {(selectedEmployee.attendance2026?.sakitSite > 0 || selectedEmployee.attendance2026?.sakitLuar > 0) && (
-                          <span className="text-[10.5px] font-black text-[#135864] bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                          <span className="text-[9.5px] sm:text-[10.5px] font-black text-[#135864] bg-teal-50 border border-teal-200 px-2 sm:px-2.5 py-0.5 rounded-lg shadow-2xs">
                             SS: {selectedEmployee.attendance2026.sakitSite} | SL: {selectedEmployee.attendance2026.sakitLuar}
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-4 gap-2.5">
-                        <div className="text-center p-2.5 rounded-xl bg-teal-50 border border-teal-300 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-[#135864] mb-1">Izin</p>
-                          <p className="font-black text-xl text-teal-950">{selectedEmployee.attendance2026?.izin ?? 0}</p>
+                      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                        <div className="text-center py-1.5 sm:py-2 px-0.5 sm:px-1 rounded-xl bg-teal-50 border border-teal-300 shadow-2xs flex flex-col justify-center min-w-0 overflow-hidden">
+                          <p className="text-[7.5px] sm:text-[8.5px] uppercase font-bold text-[#135864] mb-0.5 truncate leading-tight tracking-tight" title="Izin">Izin</p>
+                          <p className="font-black text-base sm:text-lg text-teal-950 tracking-tight leading-none">{selectedEmployee.attendance2026?.izin ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-sky-50 border border-sky-300 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-sky-900 mb-1">I.Khusus</p>
-                          <p className="font-black text-xl text-sky-950">{selectedEmployee.attendance2026?.izinKhusus ?? 0}</p>
+                        <div className="text-center py-1.5 sm:py-2 px-0.5 sm:px-1 rounded-xl bg-sky-50 border border-sky-300 shadow-2xs flex flex-col justify-center min-w-0 overflow-hidden">
+                          <p className="text-[7.5px] sm:text-[8.5px] uppercase font-bold text-sky-900 mb-0.5 truncate leading-tight tracking-tight" title="Izin Khusus">I.Khusus</p>
+                          <p className="font-black text-base sm:text-lg text-sky-950 tracking-tight leading-none">{selectedEmployee.attendance2026?.izinKhusus ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-amber-50 border border-amber-300 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-amber-900 mb-1">Sakit</p>
-                          <p className="font-black text-xl text-amber-950">{selectedEmployee.attendance2026?.sakit ?? 0}</p>
+                        <div className="text-center py-1.5 sm:py-2 px-0.5 sm:px-1 rounded-xl bg-amber-50 border border-amber-300 shadow-2xs flex flex-col justify-center min-w-0 overflow-hidden">
+                          <p className="text-[7.5px] sm:text-[8.5px] uppercase font-bold text-amber-900 mb-0.5 truncate leading-tight tracking-tight" title="Sakit">Sakit</p>
+                          <p className="font-black text-base sm:text-lg text-amber-950 tracking-tight leading-none">{selectedEmployee.attendance2026?.sakit ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-rose-50 border border-rose-300 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-rose-900 mb-1">Alpa</p>
-                          <p className="font-black text-xl text-rose-950">{selectedEmployee.attendance2026?.alpa ?? 0}</p>
+                        <div className="text-center py-1.5 sm:py-2 px-0.5 sm:px-1 rounded-xl bg-rose-50 border border-rose-300 shadow-2xs flex flex-col justify-center min-w-0 overflow-hidden">
+                          <p className="text-[7.5px] sm:text-[8.5px] uppercase font-bold text-rose-900 mb-0.5 truncate leading-tight tracking-tight" title="Alpa">Alpa</p>
+                          <p className="font-black text-base sm:text-lg text-rose-950 tracking-tight leading-none">{selectedEmployee.attendance2026?.alpa ?? 0}</p>
                         </div>
                       </div>
                     </Card>
 
                     {/* 2025 */}
-                    <Card className="p-5 shadow-xs border border-slate-200/80 bg-white rounded-2xl">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-black text-slate-800 text-sm flex items-center">
-                          <BarChart3 className="w-4 h-4 mr-2 text-slate-500" />
+                    <Card className="p-4 sm:p-5 shadow-xs border border-slate-200/80 bg-white rounded-2xl">
+                      <div className="flex items-center justify-between mb-3 sm:mb-3.5">
+                        <h4 className="font-black text-slate-800 text-xs sm:text-sm flex items-center">
+                          <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-slate-500" />
                           Rekap Absensi 2025
                         </h4>
-                        <span className="text-[10.5px] font-black text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-lg">Arsip</span>
+                        <span className="text-[9px] sm:text-[10px] font-black text-slate-700 bg-slate-100 border border-slate-300 px-2 sm:px-2.5 py-0.5 rounded-lg">Arsip</span>
                       </div>
-                      <div className="grid grid-cols-4 gap-2.5">
-                        <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-slate-700 mb-1">Izin</p>
-                          <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2025?.izin ?? 0}</p>
+                      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                        <div className="text-center py-1.5 sm:py-2 px-0.5 sm:px-1 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs flex flex-col justify-center min-w-0 overflow-hidden">
+                          <p className="text-[7.5px] sm:text-[8.5px] uppercase font-bold text-slate-700 mb-0.5 truncate leading-tight tracking-tight" title="Izin">Izin</p>
+                          <p className="font-black text-base sm:text-lg text-slate-900 tracking-tight leading-none">{selectedEmployee.attendance2025?.izin ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-slate-700 mb-1">I.Khusus</p>
-                          <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2025?.izinKhusus ?? 0}</p>
+                        <div className="text-center py-1.5 sm:py-2 px-0.5 sm:px-1 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs flex flex-col justify-center min-w-0 overflow-hidden">
+                          <p className="text-[7.5px] sm:text-[8.5px] uppercase font-bold text-slate-700 mb-0.5 truncate leading-tight tracking-tight" title="Izin Khusus">I.Khusus</p>
+                          <p className="font-black text-base sm:text-lg text-slate-900 tracking-tight leading-none">{selectedEmployee.attendance2025?.izinKhusus ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-slate-700 mb-1">Sakit</p>
-                          <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2025?.sakit ?? 0}</p>
+                        <div className="text-center py-1.5 sm:py-2 px-0.5 sm:px-1 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs flex flex-col justify-center min-w-0 overflow-hidden">
+                          <p className="text-[7.5px] sm:text-[8.5px] uppercase font-bold text-slate-700 mb-0.5 truncate leading-tight tracking-tight" title="Sakit">Sakit</p>
+                          <p className="font-black text-base sm:text-lg text-slate-900 tracking-tight leading-none">{selectedEmployee.attendance2025?.sakit ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-rose-50/80 border border-rose-200 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-rose-800 mb-1">Alpa</p>
-                          <p className="font-black text-lg text-rose-900">{selectedEmployee.attendance2025?.alpa ?? 0}</p>
+                        <div className="text-center py-1.5 sm:py-2 px-0.5 sm:px-1 rounded-xl bg-rose-50/80 border border-rose-200 shadow-2xs flex flex-col justify-center min-w-0 overflow-hidden">
+                          <p className="text-[7.5px] sm:text-[8.5px] uppercase font-bold text-rose-800 mb-0.5 truncate leading-tight tracking-tight" title="Alpa">Alpa</p>
+                          <p className="font-black text-base sm:text-lg text-rose-900 tracking-tight leading-none">{selectedEmployee.attendance2025?.alpa ?? 0}</p>
                         </div>
                       </div>
                     </Card>
                   </div>
 
-                  {/* CATATAN & LIST ACHIEVEMENTS */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* CATATAN & LIST ACHIEVEMENTS (FLEX-1 MENGISI RUANG VERTIKAL AGAR SEJAJAR RATA BAWAH) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 items-stretch">
                     {/* Card 1: Catatan Karyawan */}
-                    <Card className="p-5 shadow-xs border border-slate-200/90 bg-white rounded-2xl flex flex-col justify-between min-h-[220px]">
+                    <Card className="p-5 shadow-xs border border-slate-200/90 bg-white rounded-2xl flex flex-col justify-between h-full">
                       <div className="flex-1 flex flex-col">
                         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                           <div className="flex items-center gap-2">
@@ -3271,7 +3552,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               value={noteContent}
                               onChange={(e) => setNoteContent(e.target.value)}
                               placeholder="Tuliskan catatan di sini..."
-                              className="w-full flex-1 min-h-[120px] p-2 text-[13px] md:text-sm italic font-medium text-slate-800 placeholder:text-slate-400 bg-transparent border-0 border-b-2 border-amber-400 focus:outline-none focus:border-amber-600 resize-none leading-relaxed"
+                              className="w-full flex-1 min-h-[140px] p-2 text-[13px] md:text-sm italic font-medium text-slate-800 placeholder:text-slate-400 bg-transparent border-0 border-b-2 border-amber-400 focus:outline-none focus:border-amber-600 resize-none leading-relaxed"
                               autoFocus
                             />
                             <div className="flex items-center justify-end gap-2 pt-1">
@@ -3309,7 +3590,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 setIsEditingNotes(true);
                               }
                             }}
-                            className={`py-3 flex-1 flex flex-col justify-center min-h-[140px] max-h-[170px] overflow-y-auto custom-scrollbar ${
+                            className={`py-3 flex-1 flex flex-col justify-center min-h-[130px] overflow-y-auto custom-scrollbar ${
                               canEditCatatan ? 'cursor-pointer group' : ''
                             }`}
                             title={canEditCatatan ? 'Klik untuk mengubah catatan' : undefined}
@@ -3333,90 +3614,92 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </Card>
 
                     {/* Card 2: List Achievements */}
-                    <Card className="p-5 shadow-xs border border-slate-200/90 bg-white rounded-2xl flex flex-col justify-between min-h-[220px]">
-                      <div>
-                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
-                          <div className="flex items-center gap-2">
-                            <span className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600">
-                              <Trophy className="w-4 h-4 text-amber-600" />
-                            </span>
-                            <h4 className="font-black text-sm text-slate-950 tracking-tight">List Achievements</h4>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-900 border border-amber-300">
-                              {achievementList.length}
-                            </span>
-                          </div>
-                          {canManageDatabase && (
-                            <button
-                              type="button"
-                              onClick={() => setIsAddAchievementModalOpen(true)}
-                              className="text-xs font-black text-amber-900 hover:text-amber-950 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100/90 hover:bg-amber-200 transition-all cursor-pointer border border-amber-300 shadow-2xs"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Tambah</span>
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="max-h-[160px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
-                          {achievementList.length > 0 ? (
-                            achievementList.map((ach: any, idx: number) => (
-                              <div
-                                key={ach.id || idx}
-                                className="p-3 rounded-xl bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white border border-amber-300/80 hover:border-amber-400 transition-all group relative shadow-2xs"
+                    <Card className="p-5 shadow-xs border border-slate-200/90 bg-white rounded-2xl flex flex-col justify-between h-full">
+                      <div className="flex-1 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+                            <div className="flex items-center gap-2">
+                              <span className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600">
+                                <Trophy className="w-4 h-4 text-amber-600" />
+                              </span>
+                              <h4 className="font-black text-sm text-slate-950 tracking-tight">List Achievements</h4>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-900 border border-amber-300">
+                                {achievementList.length}
+                              </span>
+                            </div>
+                            {canManageDatabase && (
+                              <button
+                                type="button"
+                                onClick={() => setIsAddAchievementModalOpen(true)}
+                                className="text-xs font-black text-amber-900 hover:text-amber-950 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100/90 hover:bg-amber-200 transition-all cursor-pointer border border-amber-300 shadow-2xs"
                               >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex items-start gap-2.5 min-w-0">
-                                    <span className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs shrink-0 mt-0.5">
-                                      <Award className="w-3.5 h-3.5" />
-                                    </span>
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <h5 className="font-black text-xs text-slate-950 truncate">{ach.title}</h5>
-                                        <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-amber-200/80 text-amber-950 border border-amber-300 shrink-0">
-                                          {ach.category}
-                                        </span>
-                                      </div>
-                                      {ach.description && (
-                                        <p className="text-[11px] text-slate-600 mt-0.5 leading-snug line-clamp-2">
-                                          {ach.description}
-                                        </p>
-                                      )}
-                                      <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
-                                        {ach.date && (
-                                          <span className="font-mono text-slate-500 flex items-center gap-1">
-                                            <Calendar className="w-2.5 h-2.5" /> {formatShortDate(ach.date)}
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Tambah</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="max-h-[200px] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+                            {achievementList.length > 0 ? (
+                              achievementList.map((ach: any, idx: number) => (
+                                <div
+                                  key={ach.id || idx}
+                                  className="p-3 rounded-xl bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white border border-amber-300/80 hover:border-amber-400 transition-all group relative shadow-2xs"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-start gap-2.5 min-w-0">
+                                      <span className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs shrink-0 mt-0.5">
+                                        <Award className="w-3.5 h-3.5" />
+                                      </span>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <h5 className="font-black text-xs text-slate-950 truncate">{ach.title}</h5>
+                                          <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md bg-amber-200/80 text-amber-950 border border-amber-300 shrink-0">
+                                            {ach.category}
                                           </span>
+                                        </div>
+                                        {ach.description && (
+                                          <p className="text-[11px] text-slate-600 mt-0.5 leading-snug line-clamp-2">
+                                            {ach.description}
+                                          </p>
                                         )}
-                                        {ach.notes && (
-                                          <span className="italic text-slate-500 truncate max-w-[180px]">
-                                            • {ach.notes}
-                                          </span>
-                                        )}
+                                        <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
+                                          {ach.date && (
+                                            <span className="font-mono text-slate-500 flex items-center gap-1">
+                                              <Calendar className="w-2.5 h-2.5" /> {formatShortDate(ach.date)}
+                                            </span>
+                                          )}
+                                          {ach.notes && (
+                                            <span className="italic text-slate-500 truncate max-w-[180px]">
+                                              • {ach.notes}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
+                                    {canManageDatabase && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteAchievement(ach.id)}
+                                        title="Hapus achievement"
+                                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shrink-0 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                   </div>
-                                  {canManageDatabase && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteAchievement(ach.id)}
-                                      title="Hapus achievement"
-                                      className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shrink-0 cursor-pointer"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
                                 </div>
+                              ))
+                            ) : (
+                              <div className="h-full min-h-[110px] flex flex-col items-center justify-center text-center text-slate-400 py-4">
+                                <Trophy className="w-6 h-6 mb-1 text-slate-300" />
+                                <p className="text-xs font-medium">Belum ada achievement/prestasi tercatat</p>
+                                {canManageDatabase && (
+                                  <p className="text-[10px] text-amber-600 mt-0.5">Import sheet Achievements atau klik '+ Tambah'</p>
+                                )}
                               </div>
-                            ))
-                          ) : (
-                            <div className="h-full min-h-[110px] flex flex-col items-center justify-center text-center text-slate-400">
-                              <Trophy className="w-6 h-6 mb-1 text-slate-300" />
-                              <p className="text-xs font-medium">Belum ada achievement/prestasi tercatat</p>
-                              {canManageDatabase && (
-                                <p className="text-[10px] text-amber-600 mt-0.5">Import sheet Achievements atau klik '+ Tambah'</p>
-                              )}
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     </Card>
@@ -3424,71 +3707,73 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 </div>
               </div>
 
-              {/* DATA DIRI & ALAMAT */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                <Card className="p-6 shadow-xs border border-slate-200/90 bg-white rounded-3xl">
-                  <h3 className="text-base font-black text-slate-950 mb-5 flex items-center">
-                    <User className="w-5 h-5 mr-2 text-[#135864]" />
-                    Data Diri (Umum)
-                  </h3>
-                  <div className="space-y-3.5">
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">NIK KTP</p>
-                      <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.ktp || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">TTL</p>
-                      <p className="text-sm font-bold text-slate-900 col-span-2">
-                        {selectedEmployee.tempatLahir && selectedEmployee.tempatLahir !== '-'
-                          ? `${selectedEmployee.tempatLahir}, ${formatTtlDate(selectedEmployee.tanggalLahir)}`
-                          : formatTtlDate(selectedEmployee.tanggalLahir)}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Nomor Telp.</p>
-                      <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phone || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Kel. Kandung</p>
-                      <p className="text-sm font-bold text-slate-900 col-span-2">{selectedEmployee.keluargaKandung || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Telp Kel.</p>
-                      <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phoneKeluarga || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Org Terdekat</p>
-                      <p className="text-sm font-bold text-slate-900 col-span-2">{selectedEmployee.orangTerdekat || '-'}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 pb-1">
-                      <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Telp Darurat</p>
-                      <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phoneDarurat || '-'}</p>
+              {/* DATA DIRI & ALAMAT (SEJAJAR SEMPURNA KIRI & KANAN) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 items-stretch">
+                <Card className="p-6 shadow-xs border border-slate-200/90 bg-white rounded-3xl h-full flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-base font-black text-slate-950 mb-5 flex items-center">
+                      <User className="w-5 h-5 mr-2 text-[#135864]" />
+                      Data Diri (Umum)
+                    </h3>
+                    <div className="space-y-3.5">
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">NIK KTP</p>
+                        <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.ktp || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">TTL</p>
+                        <p className="text-sm font-bold text-slate-900 col-span-2">
+                          {selectedEmployee.tempatLahir && selectedEmployee.tempatLahir !== '-'
+                            ? `${selectedEmployee.tempatLahir}, ${formatTtlDate(selectedEmployee.tanggalLahir)}`
+                            : formatTtlDate(selectedEmployee.tanggalLahir)}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Nomor Telp.</p>
+                        <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phone || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Kel. Kandung</p>
+                        <p className="text-sm font-bold text-slate-900 col-span-2">{selectedEmployee.keluargaKandung || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Telp Kel.</p>
+                        <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phoneKeluarga || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-b border-teal-100/70 pb-3">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Org Terdekat</p>
+                        <p className="text-sm font-bold text-slate-900 col-span-2">{selectedEmployee.orangTerdekat || '-'}</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pb-1">
+                        <p className="text-xs font-black text-[#135864] uppercase tracking-wider col-span-1">Telp Darurat</p>
+                        <p className="text-sm font-black text-slate-950 col-span-2 font-mono tracking-tight">{selectedEmployee.phoneDarurat || '-'}</p>
+                      </div>
                     </div>
                   </div>
                 </Card>
 
-                <div className="space-y-6">
-                  <Card className="p-6 shadow-xs border border-slate-200/90 bg-white rounded-3xl h-full flex flex-col">
+                <Card className="p-6 shadow-xs border border-slate-200/90 bg-white rounded-3xl h-full flex flex-col justify-between">
+                  <div className="flex-1 flex flex-col">
                     <h3 className="text-base font-black text-slate-950 mb-4 flex items-center">
                       <MapPin className="w-5 h-5 mr-2 text-[#135864]" />
                       Alamat KTP & Domisili
                     </h3>
-                    <div className="space-y-4 flex-1">
-                      <div>
+                    <div className="space-y-4 flex-1 flex flex-col justify-between">
+                      <div className="flex-1 flex flex-col">
                         <p className="text-xs font-black text-[#135864] uppercase tracking-wider mb-2">Sesuai KTP</p>
-                        <p className="text-sm text-slate-950 leading-relaxed bg-gradient-to-br from-[#f8fdfa] to-[#edf7f1] p-4 rounded-2xl border border-emerald-200/80 font-bold shadow-2xs">
+                        <p className="text-sm text-slate-950 leading-relaxed bg-gradient-to-br from-[#f8fdfa] to-[#edf7f1] p-4 rounded-2xl border border-emerald-200/80 font-bold shadow-2xs flex-1 flex items-center">
                           {selectedEmployee.alamatKtp || 'Tidak ada data alamat KTP.'}
                         </p>
                       </div>
-                      <div>
+                      <div className="flex-1 flex flex-col">
                         <p className="text-xs font-black text-[#135864] uppercase tracking-wider mb-2">Domisili (Tinggal)</p>
-                        <p className="text-sm text-slate-950 leading-relaxed bg-gradient-to-br from-[#f8fdfa] to-[#edf7f1] p-4 rounded-2xl border border-emerald-200/80 font-bold shadow-2xs">
+                        <p className="text-sm text-slate-950 leading-relaxed bg-gradient-to-br from-[#f8fdfa] to-[#edf7f1] p-4 rounded-2xl border border-emerald-200/80 font-bold shadow-2xs flex-1 flex items-center">
                           {selectedEmployee.alamatDomisili || 'Tidak ada data domisili.'}
                         </p>
                       </div>
                     </div>
-                  </Card>
-                </div>
+                  </div>
+                </Card>
               </div>
 
               {/* SECTION: HISTORI ABSENSI & ALASAN */}
