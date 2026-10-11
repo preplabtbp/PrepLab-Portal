@@ -19,7 +19,79 @@ const NOTION_PAGE_ID = "207d00c5-c809-800c-bf51-ea4e5111bf3f";
 function classifyTopic(title: string) {
   const t = title.toLowerCase();
 
-  // Non-Teknis topics (Health, Mental, Ramadhan, Habits, Soft Skills, Admin/HR)
+  const isJsa = /\bjsa\b/i.test(t) || t.includes("job safety analysis");
+  const isIk = (/\bik\b/i.test(t) || t.includes("instruksi kerja") || /\bsop\b/i.test(t)) && !isJsa;
+
+  // Deteksi Sub-Kategori / Section Spesifik
+  let subKategori = "General";
+  let divisi = "All";
+
+  if (
+    t.includes("inventory") || t.includes("gudang") || t.includes("warehouse") ||
+    t.includes("sparepart") || t.includes("spare part") || t.includes("penyimpanan bahan kimia") ||
+    t.includes("iadl penyimpanan") || t.includes("stock") || t.includes("stok") ||
+    /\bic\b/.test(t)
+  ) {
+    subKategori = "IC";
+    divisi = "IC";
+  } else if (
+    t.includes("pengelasan") || t.includes("welding") || t.includes("las") ||
+    t.includes("gerinda") || t.includes("cutting plasma") || t.includes("plasma cutting") ||
+    t.includes("pengerutan kayu") || t.includes("instalasi listrik") || t.includes("listrik") ||
+    t.includes("kelistrikan") || t.includes("panel listrik") || t.includes("wiring") ||
+    t.includes("dust collector") || t.includes("ducting") || t.includes("maintenance") ||
+    t.includes("perawatan") || t.includes("lubrikasi") || t.includes("genset") ||
+    t.includes("kompresor") || t.includes("kompressor") || t.includes("loto") ||
+    t.includes("kegagalan rem") || t.includes("alat berat") || t.includes("dashcam") ||
+    t.includes("parkir") || t.includes("unit") || t.includes("driving") ||
+    t.includes("blind spot") || t.includes("manuver") || t.includes("bengkel") ||
+    t.includes("workshop") || t.includes("pompa") || t.includes("bearing") ||
+    t.includes("mekanik")
+  ) {
+    subKategori = "Maintenance";
+    divisi = "Maintenance";
+  } else if (
+    t.includes("laboratorium") || t.includes("lab") || t.includes("fusion") ||
+    t.includes("fused bead") || t.includes("xrf") || t.includes("aas") ||
+    t.includes("neraca") || t.includes("timbangan digital") || t.includes("titrasi") ||
+    t.includes("loi") || t.includes("gravimetri") || t.includes("reagen") ||
+    t.includes("asam") || t.includes("press powder") || t.includes("press/timbang") ||
+    t.includes("analitik") || t.includes("kalibrasi") || t.includes("crm") ||
+    t.includes("standar baku") || t.includes("quality") || t.includes("qa") ||
+    t.includes("qc") || t.includes("chiller") || t.includes("radiasi") ||
+    t.includes("desikator") || t.includes("muffle furnace") || t.includes("ultrasonic") ||
+    t.includes("polishing mould") || t.includes("platinum ware") || t.includes("fume hood") ||
+    t.includes("scrubber") || t.includes("ups emmerich") || t.includes("argon") ||
+    t.includes("helium") || t.includes("sds buffer") || t.includes("buffer ph") ||
+    t.includes("flux") || t.includes("iadl laboratory")
+  ) {
+    subKategori = "Laboratory";
+    divisi = "Laboratory";
+  } else if (
+    t.includes("preparasi") || t.includes("prep") || t.includes("jaw crusher") ||
+    t.includes("pulverizer") || t.includes("cup mill") || t.includes("drying") ||
+    t.includes("moisture") || t.includes("quartering") || t.includes("splitting") ||
+    t.includes("double roll") || t.includes("remainder") || t.includes("sieve") ||
+    t.includes("shaker") || t.includes("mixer") || t.includes("oven kontainer") ||
+    t.includes("ayakan") || t.includes("sieving") || t.includes("artco") ||
+    t.includes("kering") || t.includes("basah") || t.includes("sampel") ||
+    t.includes("sample") || t.includes("screen test")
+  ) {
+    subKategori = "Preparation";
+    divisi = "Preparation";
+  }
+
+  // 1. Kategori Mandiri JSA
+  if (isJsa) {
+    return { kategori: "JSA", subKategori, divisi };
+  }
+
+  // 2. Kategori Mandiri IK
+  if (isIk) {
+    return { kategori: "IK", subKategori, divisi };
+  }
+
+  // 3. Non-Teknis topics
   if (
     t.includes("ramadhan") || t.includes("puasa") || t.includes("insomnia") ||
     t.includes("diare") || t.includes("osteoporosis") || t.includes("dehidrasi") ||
@@ -36,69 +108,7 @@ function classifyTopic(title: string) {
     return { kategori: "Non-Teknis", subKategori: "General", divisi: "All" };
   }
 
-  // Inventory Control (IC)
-  if (
-    t.includes("inventory") || t.includes("gudang") || t.includes("warehouse") ||
-    t.includes("sparepart") || t.includes("spare part") || t.includes("penyimpanan bahan kimia") ||
-    t.includes("iadl penyimpanan") || t.includes("stock") || t.includes("stok") ||
-    /\bic\b/.test(t)
-  ) {
-    return { kategori: "Teknis", subKategori: "IC", divisi: "IC" };
-  }
-
-  // Teknis Maintenance
-  if (
-    t.includes("pengelasan") || t.includes("welding") || t.includes("las") ||
-    t.includes("gerinda") || t.includes("cutting plasma") || t.includes("plasma cutting") ||
-    t.includes("pengerutan kayu") || t.includes("instalasi listrik") || t.includes("listrik") ||
-    t.includes("kelistrikan") || t.includes("panel listrik") || t.includes("wiring") ||
-    t.includes("dust collector") || t.includes("ducting") || t.includes("maintenance") ||
-    t.includes("perawatan") || t.includes("lubrikasi") || t.includes("genset") ||
-    t.includes("kompresor") || t.includes("kompressor") || t.includes("loto") ||
-    t.includes("kegagalan rem") || t.includes("alat berat") || t.includes("dashcam") ||
-    t.includes("parkir") || t.includes("unit") || t.includes("driving") ||
-    t.includes("blind spot") || t.includes("manuver") || t.includes("bengkel") ||
-    t.includes("workshop") || t.includes("pompa") || t.includes("bearing") ||
-    t.includes("mekanik")
-  ) {
-    return { kategori: "Teknis", subKategori: "Maintenance", divisi: "Maintenance" };
-  }
-
-  // Teknis Laboratory (including Quality Assurance)
-  if (
-    t.includes("laboratorium") || t.includes("lab") || t.includes("fusion") ||
-    t.includes("fused bead") || t.includes("xrf") || t.includes("aas") ||
-    t.includes("neraca") || t.includes("timbangan digital") || t.includes("titrasi") ||
-    t.includes("loi") || t.includes("gravimetri") || t.includes("reagen") ||
-    t.includes("asam") || t.includes("press powder") || t.includes("press/timbang") ||
-    t.includes("analitik") || t.includes("kalibrasi") || t.includes("crm") ||
-    t.includes("standar baku") || t.includes("quality") || t.includes("qa") ||
-    t.includes("qc") || t.includes("chiller") || t.includes("radiasi") ||
-    t.includes("desikator") || t.includes("muffle furnace") || t.includes("ultrasonic") ||
-    t.includes("polishing mould") || t.includes("platinum ware") || t.includes("fume hood") ||
-    t.includes("scrubber") || t.includes("ups emmerich") || t.includes("argon") ||
-    t.includes("helium") || t.includes("sds buffer") || t.includes("buffer ph") ||
-    t.includes("flux") || t.includes("iadl laboratory")
-  ) {
-    return { kategori: "Teknis", subKategori: "Laboratory", divisi: "Laboratory" };
-  }
-
-  // Teknis Preparation
-  if (
-    t.includes("preparasi") || t.includes("prep") || t.includes("jaw crusher") ||
-    t.includes("pulverizer") || t.includes("cup mill") || t.includes("drying") ||
-    t.includes("moisture") || t.includes("quartering") || t.includes("splitting") ||
-    t.includes("double roll") || t.includes("remainder") || t.includes("sieve") ||
-    t.includes("shaker") || t.includes("mixer") || t.includes("oven kontainer") ||
-    t.includes("ayakan") || t.includes("sieving") || t.includes("artco") ||
-    t.includes("kering") || t.includes("basah") || t.includes("sampel") ||
-    t.includes("sample") || t.includes("screen test")
-  ) {
-    return { kategori: "Teknis", subKategori: "Preparation", divisi: "Preparation" };
-  }
-
-  // Teknis General (K3 Umum, APD, APAR, Golden Rules, Bahaya, Emergency)
-  return { kategori: "Teknis", subKategori: "General", divisi: "All" };
+  return { kategori: "Teknis", subKategori, divisi };
 }
 
 async function syncNotionMateriDatabase() {
@@ -1578,7 +1588,9 @@ p5mRouter.post("/randomize", async (req, res) => {
       }
 
       const effectiveSection = (candidateDivision || divisiTarget || '').toLowerCase();
-      const isSopTarget = kategoriTarget === 'SOP / IK' || kategoriTarget === 'SOP' || kategoriTarget === 'IK';
+      const isJsaTarget = (kategoriTarget || '').toUpperCase() === 'JSA';
+      const isIkTarget = (kategoriTarget || '').toUpperCase() === 'IK';
+      const isSopTarget = kategoriTarget === 'SOP / IK' || kategoriTarget === 'SOP';
 
       function filterPool(pool: typeof poolMateri) {
         return pool.filter(m => {
@@ -1587,17 +1599,26 @@ p5mRouter.post("/randomize", async (req, res) => {
           const mDiv = m.divisi || 'All';
           const j = m.judul || '';
 
-          // 1. Category filter (Teknis vs Non-Teknis vs Senam)
-          if (kategoriTarget && kategoriTarget !== 'All') {
+          // 1. Category filter (JSA, IK, Teknis, Non-Teknis, Senam)
+          if (isJsaTarget) {
+            if (kat !== 'JSA' && !(/\bjsa\b/i.test(j) || j.toLowerCase().includes('job safety analysis'))) return false;
+          } else if (isIkTarget) {
+            if ((kat !== 'IK' && !(/\bik\b/i.test(j) || j.toLowerCase().includes('instruksi kerja') || /\bsop\b/i.test(j))) || kat === 'JSA') return false;
+          } else if (isSopTarget) {
+            if (!isSopIk(j)) return false;
+          } else if (kategoriTarget && kategoriTarget !== 'All') {
             if (kat.toLowerCase() !== kategoriTarget.toLowerCase()) return false;
           }
 
           // 2. ATURAN P5M GABUNGAN:
-          // User: "ketika materi teknis dipilih di briefing gabungan maka akan otomatis yang terpilih harus teknis general"
           if (isGabunganSession) {
-            // Wajib General universal (tidak boleh subkategori atau divisi spesifik)
+            // Jika target adalah JSA atau IK di sesi gabungan, izinkan materi JSA/IK yang relevan
+            if (isJsaTarget || isIkTarget) {
+              if (isTopicForbiddenForSection(j, 'lab') || isTopicForbiddenForSection(j, 'prep')) return false;
+              return true;
+            }
+            // Wajib General universal untuk briefing gabungan reguler
             if (subKat !== 'General' || (mDiv !== 'All' && mDiv !== 'General')) return false;
-            // Pastikan judul juga bukan topik spesifik salah satu section (misal pengelasan atau inventory)
             if (isTopicForbiddenForSection(j, 'lab') || isTopicForbiddenForSection(j, 'prep')) return false;
             return true;
           }

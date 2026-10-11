@@ -6,7 +6,7 @@ import {
   ChevronLeft, ArrowRight, ArrowLeft, Shield, ShieldAlert, Award, CheckCircle2, FileText,
   Briefcase, Loader2, Star, Eye, RefreshCw, Image as ImageIcon, ExternalLink,
   Building2, FileSpreadsheet, Tag, CheckSquare, Square,
-  UploadCloud, Paperclip
+  UploadCloud, Paperclip, Zap
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import * as XLSX from 'xlsx';
@@ -79,6 +79,9 @@ const KELAS_OPTIONS = [
 
 const KATEGORI_OPTIONS = [
   { value: 'All', label: 'Semua Kategori' },
+  { value: 'JSA', label: 'JSA (Job Safety Analysis)' },
+  { value: 'SOP', label: 'SOP (Standard Operating Procedure)' },
+  { value: 'IK', label: 'IK (Instruksi Kerja)' },
   { value: 'Teknis', label: 'Teknis' },
   { value: 'Non-Teknis', label: 'Non-Teknis' },
   { value: 'Senam', label: 'Senam' }
@@ -136,6 +139,160 @@ export function isTopicForbiddenForSection(title?: string, sec?: string): boolea
   }
 
   return false;
+}
+
+// Preset khusus permintaan manajemen: Minggu ini HANYA JSA & IK
+export function buildJsaIkConfig() {
+  const slot = (divisi: string, kelas: string, kategori: string, extra?: any) => ({
+    divisi,
+    kelas,
+    kategori,
+    ...(extra || {})
+  });
+
+  const cfg: Record<string, any> = {};
+
+  // SENIN (Gabungan)
+  cfg['Senin'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'JSA'),
+        slot('Laboratory', 'SPV', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'IK'),
+        slot('Laboratory', 'SPV', 'JSA'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    }
+  };
+
+  // SELASA (Split)
+  cfg['Selasa'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'JSA'),
+        slot('Maintenance', 'Foreman/Officer', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'JSA'),
+        slot('IC', 'Admin', 'IK')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Maintenance', 'Foreman/Officer', 'JSA')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'JSA')
+      ]
+    }
+  };
+
+  // RABU (Split)
+  cfg['Rabu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Preparation', 'All', 'JSA')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('Administration', 'Admin', 'JSA')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'JSA'),
+        slot('Preparation', 'Foreman/Officer', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'JSA'),
+        slot('Laboratory', 'Foreman/Officer', 'IK')
+      ]
+    }
+  };
+
+  // KAMIS (Gabungan)
+  cfg['Kamis'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'JSA'),
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'JSA'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    }
+  };
+
+  // JUMAT (Gabungan)
+  cfg['Jumat'] = {
+    pagi: {
+      gabungan: [
+        slot('Preparation', 'SPV', 'JSA'),
+        slot('Laboratory', 'SPV', 'IK'),
+        slot('All', 'Foreman/Officer', 'JSA')
+      ]
+    },
+    malam: {
+      gabungan: [
+        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Laboratory', 'Foreman/Officer', 'JSA')
+      ]
+    }
+  };
+
+  // SABTU (Split)
+  cfg['Sabtu'] = {
+    pagi: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'JSA'),
+        slot('All', 'All', 'IK')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'IK'),
+        slot('All', 'All', 'JSA')
+      ]
+    },
+    malam: {
+      preparasi: [
+        slot('Preparation', 'Foreman/Officer', 'IK'),
+        slot('Preparation', 'Foreman/Officer', 'JSA')
+      ],
+      laboratorium: [
+        slot('Laboratory', 'Foreman/Officer', 'JSA'),
+        slot('Laboratory', 'Foreman/Officer', 'IK')
+      ]
+    }
+  };
+
+  // MINGGU (Gabungan)
+  cfg['Minggu'] = {
+    pagi: {
+      gabungan: [
+        slot('All', 'SPV', 'JSA'),
+        slot('All', 'SPV', 'IK'),
+        slot('All', 'All', 'Senam', { isSenam: true })
+      ]
+    },
+    malam: {
+      gabungan: []
+    }
+  };
+
+  return cfg;
 }
 
 function buildDefaultConfig() {
@@ -1541,8 +1698,12 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       const matchSearch = m.judul?.toLowerCase().includes(materiSearch.toLowerCase());
       let matchKat = false;
       if (materiFilterKat === 'All') matchKat = true;
-      else if (materiFilterKat === 'SOP / IK') {
-        matchKat = /\b(sop|ik)\b|instruksi kerja/i.test(m.judul || '');
+      else if (materiFilterKat === 'JSA') {
+        matchKat = m.kategori === 'JSA' || /\bjsa\b/i.test(m.judul || '') || (m.judul || '').toLowerCase().includes('job safety analysis');
+      } else if (materiFilterKat === 'SOP') {
+        matchKat = (m.kategori === 'SOP' || /\bsop\b/i.test(m.judul || '') || (m.judul || '').toLowerCase().includes('standar operasional') || (m.judul || '').toLowerCase().includes('standar operasi')) && m.kategori !== 'JSA';
+      } else if (materiFilterKat === 'IK') {
+        matchKat = (m.kategori === 'IK' || /\bik\b/i.test(m.judul || '') || (m.judul || '').toLowerCase().includes('instruksi kerja')) && m.kategori !== 'JSA' && m.kategori !== 'SOP';
       } else {
         matchKat = m.kategori === materiFilterKat;
       }
@@ -2036,13 +2197,26 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     Pengaturan Slot &amp; Target Kategori Per Hari
                   </h3>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  onClick={() => setUiConfig(buildDefaultConfig())}
-                  className="text-xs text-slate-400 hover:text-rose-400 h-7 px-2"
-                >
-                  <RotateCcw className="w-3 h-3 mr-1" /> Reset Default
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => {
+                      setUiConfig(buildJsaIkConfig());
+                      toast.success('Jadwal khusus JSA & IK minggu ini berhasil diterapkan ke seluruh slot!');
+                    }}
+                    className="text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 h-7 px-2.5 font-bold shadow-xs cursor-pointer"
+                    title="Terapkan jadwal seminggu penuh khusus JSA dan IK (sesuai arahan manajemen)"
+                  >
+                    <Zap className="w-3 h-3 mr-1 text-amber-400 fill-amber-400" /> ⚡ Jadwal Khusus JSA &amp; IK Minggu Ini
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => setUiConfig(buildDefaultConfig())}
+                    className="text-xs text-slate-400 hover:text-rose-400 h-7 px-2"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" /> Reset Default
+                  </Button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -2845,7 +3019,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-main)] outline-none cursor-pointer"
             >
               <option value="All">Semua Kategori</option>
-              <option value="SOP / IK">📘 Dokumen SOP &amp; IK</option>
+              <option value="JSA">🛡️ JSA (Job Safety Analysis)</option>
+              <option value="SOP">📙 SOP (Standard Operating Procedure)</option>
+              <option value="IK">📘 IK (Instruksi Kerja)</option>
               <option value="Teknis">Teknis</option>
               <option value="Non-Teknis">Non-Teknis</option>
             </select>
@@ -2938,7 +3114,13 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         </td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
-                            item.kategori === 'Teknis' 
+                            item.kategori === 'JSA'
+                              ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                              : item.kategori === 'SOP'
+                              ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30'
+                              : item.kategori === 'IK'
+                              ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30'
+                              : item.kategori === 'Teknis' 
                               ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
                               : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30'
                           }`}>
@@ -3159,6 +3341,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     onChange={e => setFormKategori(e.target.value)}
                     className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
                   >
+                    <option value="JSA">JSA (Job Safety Analysis)</option>
+                    <option value="SOP">SOP (Standard Operating Procedure)</option>
+                    <option value="IK">IK (Instruksi Kerja)</option>
                     <option value="Teknis">Teknis</option>
                     <option value="Non-Teknis">Non-Teknis</option>
                     <option value="Senam">Senam</option>
@@ -3183,7 +3368,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </div>
               </div>
 
-              {formKategori === 'Teknis' && (
+              {(formKategori === 'Teknis' || formKategori === 'JSA' || formKategori === 'SOP' || formKategori === 'IK') && (
                 <div>
                   <label className="block text-[var(--text-main)] font-semibold mb-1">Sub-Kategori Teknis</label>
                   <select
@@ -4190,52 +4375,64 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
     if (isGabungan) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     if (personDivisi.includes('lab')) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'Laboratory', label: 'Teknis Lab' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     if (personDivisi.includes('prep')) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'Preparation', label: 'Teknis Prep' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     if (personDivisi.includes('maint')) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'Maintenance', label: 'Teknis Maint' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     if (personDivisi.includes('ic') || personDivisi.includes('inventory')) {
       return [
         { key: 'All', label: 'Semua' },
+        { key: 'JSA', label: '🛡️ JSA' },
+        { key: 'SOP', label: '📙 SOP' },
+        { key: 'IK', label: '📘 IK' },
         { key: 'IC', label: 'Teknis IC' },
         { key: 'General', label: 'Teknis General' },
-        { key: 'Non-Teknis', label: 'Non-Teknis' },
-        { key: 'SOP / IK', label: 'SOP & IK' }
+        { key: 'Non-Teknis', label: 'Non-Teknis' }
       ];
     }
     return [
       { key: 'All', label: 'Semua' },
+      { key: 'JSA', label: '🛡️ JSA' },
+      { key: 'SOP', label: '📙 SOP' },
+      { key: 'IK', label: '📘 IK' },
       { key: 'General', label: 'General' },
-      { key: 'Non-Teknis', label: 'Non-Teknis' },
-      { key: 'SOP / IK', label: 'SOP & IK' }
+      { key: 'Non-Teknis', label: 'Non-Teknis' }
     ];
   }, [isGabungan, personDivisi]);
 
@@ -4247,7 +4444,6 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       if (!matchSearch) return false;
 
       // 1. ATURAN HARI GABUNGAN:
-      // "ketika materi teknis dipilih di briefing gabungan maka akan otomatis yang terpilih harus teknis general"
       if (isGabungan) {
         if (m.kategori === 'Senam') {
           if (mKatFilter !== 'All' && mKatFilter !== 'Senam') return false;
@@ -4258,9 +4454,29 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
           return true;
         }
 
-        // Untuk materi Teknis / SOP: HANYA izinkan General universal
+        const isMateriJsa = m.kategori === 'JSA' || /\bjsa\b/i.test(judul) || judul.toLowerCase().includes('job safety analysis');
+        const isMateriSop = (m.kategori === 'SOP' || /\bsop\b/i.test(judul) || judul.toLowerCase().includes('standar operasional') || judul.toLowerCase().includes('standar operasi')) && !isMateriJsa;
+        const isMateriIk = (m.kategori === 'IK' || /\bik\b/i.test(judul) || judul.toLowerCase().includes('instruksi kerja')) && !isMateriJsa && !isMateriSop;
+
+        if (mKatFilter === 'JSA') {
+          if (!isMateriJsa) return false;
+          if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
+          return true;
+        }
+        if (mKatFilter === 'SOP') {
+          if (!isMateriSop) return false;
+          if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
+          return true;
+        }
+        if (mKatFilter === 'IK') {
+          if (!isMateriIk) return false;
+          if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
+          return true;
+        }
+
+        // Untuk materi Teknis / General universal:
         const isGeneral = (m.subKategori === 'General' || !m.subKategori) && (m.divisi === 'All' || !m.divisi || m.divisi === 'General');
-        if (!isGeneral) return false;
+        if (!isGeneral && !isMateriJsa && !isMateriSop && !isMateriIk) return false;
 
         // Blokir topik spesifik section agar tidak bocor ke briefing gabungan
         if (isTopicForbiddenForSection(judul, 'lab') || isTopicForbiddenForSection(judul, 'prep')) return false;
@@ -4305,9 +4521,14 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       }
 
       if (mKatFilter === 'All') return true;
-      if (mKatFilter === 'SOP / IK') {
-        const j = judul.toLowerCase();
-        return /\b(sop|ik)\b|instruksi kerja/i.test(j) || j.startsWith('sop') || j.startsWith('ik ') || j.includes('sop') || j.includes('ik -');
+      if (mKatFilter === 'JSA') {
+        return m.kategori === 'JSA' || /\bjsa\b/i.test(judul) || judul.toLowerCase().includes('job safety analysis');
+      }
+      if (mKatFilter === 'SOP') {
+        return (m.kategori === 'SOP' || /\bsop\b/i.test(judul) || judul.toLowerCase().includes('standar operasional') || judul.toLowerCase().includes('standar operasi')) && m.kategori !== 'JSA';
+      }
+      if (mKatFilter === 'IK') {
+        return (m.kategori === 'IK' || /\bik\b/i.test(judul) || judul.toLowerCase().includes('instruksi kerja')) && m.kategori !== 'JSA' && m.kategori !== 'SOP';
       }
       if (mKatFilter === 'Senam') return m.kategori === 'Senam';
       if (mKatFilter === 'Non-Teknis') return m.kategori === 'Non-Teknis';
@@ -4785,16 +5006,22 @@ const SlotListEditor: React.FC<SlotListEditorProps> = ({ slots, onChange, allowe
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border outline-none cursor-pointer transition-colors ${
                   sl.kategori === 'Senam'
                     ? 'bg-amber-50 text-amber-800 border-amber-200'
-                    : sl.kategori === 'SOP / IK'
-                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                    : sl.kategori === 'JSA'
+                    ? 'bg-rose-50 text-rose-800 border-rose-200'
+                    : sl.kategori === 'SOP'
+                    ? 'bg-orange-50 text-orange-800 border-orange-200'
+                    : sl.kategori === 'IK'
+                    ? 'bg-sky-50 text-sky-800 border-sky-200'
                     : sl.kategori === 'Non-Teknis'
                     ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
                     : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                 }`}
                 title="Pilih Kategori Materi"
               >
+                <option value="JSA">🛡️ JSA (Job Safety Analysis)</option>
+                <option value="SOP">📙 SOP (Standard Operating Procedure)</option>
+                <option value="IK">📘 IK (Instruksi Kerja)</option>
                 <option value="Teknis">Teknis</option>
-                <option value="SOP / IK">SOP &amp; IK</option>
                 <option value="Non-Teknis">Non-Teknis</option>
                 <option value="Senam">Senam</option>
               </select>
