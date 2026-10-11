@@ -1167,14 +1167,18 @@ export function LogbookScreen({
   const [targetTaskSection, setTargetTaskSection] = useState<string>('Preparation');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const allLoadedTasks = useMemo(() => {
+    return [...todayTasks, ...yesterdayTasks, ...carryOverTasks];
+  }, [todayTasks, yesterdayTasks, carryOverTasks]);
+
   const currentAssignTaskCode = useMemo(() => {
     const finalSection = (isSuperAdmin || isMeetingRoom || userSection === 'ALL') ? targetTaskSection : userSection;
-    return generateTaskCode(finalSection, tasks.map(t => ({
+    return generateTaskCode(finalSection, allLoadedTasks.map(t => ({
       taskCode: (t as any).taskCode,
       number: (t as any).taskCode,
       section: t.section
     })));
-  }, [targetTaskSection, userSection, isSuperAdmin, isMeetingRoom, tasks]);
+  }, [targetTaskSection, userSection, isSuperAdmin, isMeetingRoom, allLoadedTasks]);
 
   const handleAddSelectedLogbookTasks = async (tasksToAdd: any[]) => {
     try {
@@ -6100,7 +6104,7 @@ export function LogbookScreen({
         sectionName={(selectedSection && selectedSection !== 'Semua Seksi' && selectedSection !== 'ALL') ? selectedSection : (userSection !== 'ALL' ? userSection : 'Laboratorium')}
         allPosts={bulletinList}
         targetUniverse={selectedPt || 'TBP'}
-        existingRows={tasks.map(t => ({ 'Jenis kegiatan': t.title, Keterangan: t.description || '', ...t }))}
+        existingRows={allLoadedTasks.map(t => ({ 'Jenis kegiatan': t.title, Keterangan: t.description || '', ...t }))}
         onAddSelectedTasks={handleAddSelectedLogbookTasks}
         onOpenManualAddTaskModal={openAssignModal}
       />
