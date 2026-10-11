@@ -15,7 +15,7 @@ import { TimeRangeFetchModal } from './TimeRangeFetchModal';
 import { toast } from 'sonner';
 import { formatAvatarUrl } from '../lib/avatarUtils';
 import { getEmployeeTenureInfo } from '../lib/tenureUtils';
-import { compareEmployeesByJabatan } from '../lib/jabatanHierarchy';
+import { compareEmployeesByJabatan, getJabatanRank } from '../lib/jabatanHierarchy';
 
 export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
   if (!empOrStatus) return false;
@@ -1262,8 +1262,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   }, [rosterData]);
 
   // 6. Data & List Karyawan Onsite pada Hari Ini
-  // Sesuai aturan: Ambil data keterangan OFF, D, N, LS, CS, dan I.
-  // Pengecualian khusus: Tidak termasuk I yang dimana pada tanggal/hari sebelumnya ada C, CT, CE sebelum ditutup oleh TRV atau pada hari ini sudah OFF, D, N, LS
+  // Sesuai aturan: Ambil data keterangan OFF, D, DS, N, NS, S, LS, CS, dan I.
+  // Dianggap Cuti (bukan Onsite): C, TRV, CT, CE, serta I yang kode roster sebelumnya adalah C, CT, atau CE.
   const onsiteEmployeesList = useMemo(() => {
     const idToEnMonths: Record<string, string> = {
       'mei': 'May', 'agu': 'Aug', 'ags': 'Aug', 'okt': 'Oct', 'des': 'Dec'
@@ -1280,15 +1280,19 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     const todayTs = new Date(todayDateKeys.year, todayDateKeys.month, todayDateKeys.day).getTime();
     const list: Array<{ employee: any; shiftCode: string }> = [];
 
-    scopedEmployees.forEach(emp => {
-      if (isResignedOrNonActiveStatus(emp)) return;
+    // Basis = Karyawan Aktif (sama dengan kartu "Karyawan Aktif") agar Onsite + Outsite = Karyawan Aktif
+    const baseEmployees = activeEmployeesList.length > 0
+      ? activeEmployeesList
+      : scopedEmployees.filter(emp => !isResignedOrNonActiveStatus(emp));
+
+    baseEmployees.forEach(emp => {
       const sched = rosterByNikMap.get(String(emp.nik || '').toUpperCase().trim());
       if (!sched) return;
 
       const todayStatus = (sched[todayDateKeys.enKey] || sched[todayDateKeys.idKey] || '-').trim().toUpperCase();
 
-      // Keterangan yang dihitung Onsite: OFF, D, N, LS, CS, dan I
-      if (['OFF', 'D', 'N', 'LS', 'CS'].includes(todayStatus)) {
+      // Keterangan yang dihitung Onsite: OFF, D, DS, N, NS, S, LS, CS, dan I
+      if (['OFF', 'D', 'DS', 'N', 'NS', 'S', 'LS', 'CS'].includes(todayStatus)) {
         list.push({ employee: emp, shiftCode: todayStatus });
       } else if (todayStatus === 'I') {
         // Pengecualian khusus kode I:
@@ -1298,19 +1302,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           .filter(d => d.ts > 0 && d.ts < todayTs)
           .sort((a, b) => b.ts - a.ts);
 
+        // I dianggap Cuti jika kode roster sebelumnya (melewati I berturut-turut & sel kosong) adalah C, CT, atau CE
         let isExcludedI = false;
         for (const prev of sortedPrevDates) {
           const prevStatus = (sched[prev.key] || '-').trim().toUpperCase();
-          // Jika sudah ditutup oleh TRV atau sudah bekerja/onsite (OFF, D, N, LS, CS)
-          if (['TRV', 'TV', 'OFF', 'D', 'N', 'LS', 'CS'].includes(prevStatus)) {
-            isExcludedI = false;
-            break;
-          }
-          // Jika ada cuti (C, CT, CE) sebelum ditutup TRV/bekerja
-          if (['C', 'CT', 'CE'].includes(prevStatus) || prevStatus.startsWith('CT') || prevStatus.startsWith('CE') || prevStatus.startsWith('C')) {
-            isExcludedI = true;
-            break;
-          }
+          if (prevStatus === 'I' || prevStatus === '-' || prevStatus === '') continue;
+          isExcludedI = prevStatus === 'C' || prevStatus.startsWith('CT') || prevStatus.startsWith('CE');
+          break;
         }
 
         if (!isExcludedI) {
@@ -1320,15 +1318,23 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     });
 
     return list.sort((a, b) => compareEmployeesByJabatan(a.employee, b.employee));
-  }, [scopedEmployees, rosterByNikMap, todayDateKeys]);
+  }, [activeEmployeesList, scopedEmployees, rosterByNikMap, todayDateKeys]);
 
-  // Persentase Karyawan Onsite terhadap Karyawan Aktif
-  const onsitePercentage = useMemo(() => {
-    const activeTotal = activeEmployeesCount > 0 ? activeEmployeesCount : scopedEmployees.length;
-    if (activeTotal === 0) return '0';
-    const val = (onsiteEmployeesList.length / activeTotal) * 100;
-    return val % 1 === 0 ? val.toFixed(0) : val.toFixed(1);
-  }, [onsiteEmployeesList.length, activeEmployeesCount, scopedEmployees.length]);
+  // Persentase Onsite & Outsite terhadap Karyawan Aktif (Onsite + Outsite = Karyawan Aktif)
+  const { onsitePercentage, outsiteCount, outsitePercentage } = useMemo(() => {
+    const activeTotal = activeEmployeesCount > 0
+      ? activeEmployeesCount
+      : scopedEmployees.filter(emp => !isResignedOrNonActiveStatus(emp)).length;
+    const fmt = (v: number) => (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1));
+    if (activeTotal === 0) return { onsitePercentage: '0', outsiteCount: 0, outsitePercentage: '0' };
+    const onsite = onsiteEmployeesList.length;
+    const outsite = Math.max(activeTotal - onsite, 0);
+    return {
+      onsitePercentage: fmt((onsite / activeTotal) * 100),
+      outsiteCount: outsite,
+      outsitePercentage: fmt((outsite / activeTotal) * 100)
+    };
+  }, [onsiteEmployeesList.length, activeEmployeesCount, scopedEmployees]);
 
   // 7. Data & List Karyawan dengan Konseling Aktif (Konseling I, II, III aktif yang belum lewat 3 bulan)
   const activeCounselingList = useMemo(() => {
@@ -1342,7 +1348,34 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       alasan: string;
     }> = [];
 
+    // Hitung manual: masa berlaku = tanggal dapat konseling + 3 bulan kalender.
+    // Jika tanggal tidak ada di bulan tujuan (mis. 31 Jan -> 31 Apr), pakai hari terakhir bulan tersebut (30 Apr).
+    const addMonthsManual = (date: Date, months: number): Date => {
+      const totalMonth = date.getMonth() + months;
+      const year = date.getFullYear() + Math.floor(totalMonth / 12);
+      const month = ((totalMonth % 12) + 12) % 12;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      return new Date(year, month, Math.min(date.getDate(), lastDay));
+    };
+
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const levelStyles: Record<number, { label: string; badge: string; color: string }> = {
+      1: { label: 'Konseling I', badge: 'bg-amber-500', color: 'text-amber-800 bg-amber-50 border-amber-300' },
+      2: { label: 'Konseling II', badge: 'bg-orange-500', color: 'text-orange-800 bg-orange-50 border-orange-300' },
+      3: { label: 'Konseling III', badge: 'bg-rose-500', color: 'text-rose-800 bg-rose-50 border-rose-300' }
+    };
+
+    // Sel konseling bisa berisi beberapa tanggal (dipisah baris baru / koma / titik koma)
+    const extractDates = (val: any): Array<{ raw: string; date: Date }> =>
+      String(val || '')
+        .split(/[\r\n,;]+/)
+        .map(s => s.trim())
+        .map(raw => ({ raw, date: parseSanctionDate(raw) }))
+        .filter((x): x is { raw: string; date: Date } => x.date !== null);
+
+    const isMarked = (val: string) => !!val && val !== '-' && val !== '0' && val !== '#N/A';
 
     scopedEmployees.forEach(emp => {
       if (isResignedOrNonActiveStatus(emp)) return;
@@ -1350,73 +1383,53 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       const st = String(c.statusSanksi || c.status_sanksi || '').trim();
       const stLower = st.toLowerCase();
 
-      // Sanksi yang selesai / aman / pemutihan dilewati
-      if (
-        stLower.includes('selesai') ||
-        stLower.includes('pemutihan') ||
-        stLower.includes('kadaluarsa') ||
-        stLower.includes('expired') ||
-        stLower === 'aman'
-      ) {
-        return;
+      const kRaw: Record<number, string> = {
+        1: String(c.konseling1 || c.konseling_1 || '').trim(),
+        2: String(c.konseling2 || c.konseling_2 || '').trim(),
+        3: String(c.konseling3 || c.konseling_3 || '').trim()
+      };
+
+      // Kumpulkan semua tanggal Konseling I, II, III
+      const entries: Array<{ level: number; raw: string; date: Date }> = [];
+      [1, 2, 3].forEach(level => {
+        extractDates(kRaw[level]).forEach(d => entries.push({ level, ...d }));
+      });
+
+      // Kolom konseling hanya berisi tanda (mis. "1" / "Ya") tanpa tanggal:
+      // pakai Bulan Konseling / Tanggal SP sebagai tanggal dapat konseling level tertinggi yang ditandai
+      if (entries.length === 0) {
+        const markedLevel = [3, 2, 1].find(l => isMarked(kRaw[l])) ||
+          (stLower.includes('konseling')
+            ? (stLower.includes('iii') ? 3 : stLower.includes('ii') ? 2 : 1)
+            : 0);
+        if (!markedLevel) return;
+        const fallback = [c.bulanKonseling, c.bulan_konseling, c.tanggalSp, c.tanggal_sp]
+          .map(v => extractDates(v)[0])
+          .find(Boolean);
+        if (!fallback) return;
+        entries.push({ level: markedLevel, ...fallback });
       }
 
-      const k1 = String(c.konseling1 || c.konseling_1 || '').trim();
-      const k2 = String(c.konseling2 || c.konseling_2 || '').trim();
-      const k3 = String(c.konseling3 || c.konseling_3 || '').trim();
-      const hasK = (k1 && k1 !== '-' && k1 !== '0') ||
-                   (k2 && k2 !== '-' && k2 !== '0') ||
-                   (k3 && k3 !== '-' && k3 !== '0');
+      // Konseling terakhir yang didapat = tanggal paling baru (jika sama, level tertinggi)
+      const latest = entries.reduce((a, b) =>
+        b.date.getTime() > a.date.getTime() || (b.date.getTime() === a.date.getTime() && b.level > a.level) ? b : a
+      );
 
-      const isCounselingStatus = stLower.includes('konseling') || (hasK && !stLower.includes('sp') && !stLower.includes('st') && !stLower.includes('phk'));
-
-      if (!isCounselingStatus) return;
-
-      const tgl = [k3, k2, k1, c.bulanKonseling, c.bulan_konseling, c.tanggalSp, c.tanggal_sp]
-        .find(s => s && s !== '-' && s !== '0' && (s.includes('-') || s.includes('/') || /[a-zA-Z]{3,}/.test(s))) || '-';
-
-      // Masa berlaku Surat Teguran (ST) dan Konseling adalah 3 bulan.
-      // Hanya sanksi konseling dengan tanggal valid dan belum lewat 3 bulan yang terhitung sebagai Konseling Aktif.
-      if (!tgl || tgl === '-') return;
-
-      const baseDate = parseSanctionDate(tgl);
-      if (!baseDate) return;
-
-      const expiryDateObj = new Date(baseDate.getTime());
-      expiryDateObj.setMonth(expiryDateObj.getMonth() + 3);
-      if (now > expiryDateObj) {
-        return; // Sudah lewat 3 bulan (kadaluarsa / selesai pembinaan)
+      const expiryDateObj = addMonthsManual(latest.date, 3);
+      if (todayStart > expiryDateObj) {
+        return; // Sudah lewat 3 bulan sejak tanggal dapat konseling
       }
 
-      let displayStatus = 'Konseling I';
-      let levelBadgeBg = 'bg-amber-500';
-      let levelColor = 'text-amber-800 bg-amber-50 border-amber-300';
-
-      if (stLower.includes('iii') || (k3 && k3 !== '-' && k3 !== '0')) {
-        displayStatus = 'Konseling III';
-        levelBadgeBg = 'bg-rose-500';
-        levelColor = 'text-rose-800 bg-rose-50 border-rose-300';
-      } else if (stLower.includes('ii') || (k2 && k2 !== '-' && k2 !== '0')) {
-        displayStatus = 'Konseling II';
-        levelBadgeBg = 'bg-orange-500';
-        levelColor = 'text-orange-800 bg-orange-50 border-orange-300';
-      } else if (stLower.includes('i') || (k1 && k1 !== '-' && k1 !== '0')) {
-        displayStatus = 'Konseling I';
-        levelBadgeBg = 'bg-amber-500';
-        levelColor = 'text-amber-800 bg-amber-50 border-amber-300';
-      } else if (st) {
-        displayStatus = st;
-      }
-
+      const style = levelStyles[latest.level];
       const alasan = c.alasanKonseling || c.alasan_konseling || c.alasan || c.keterangan || '-';
 
       list.push({
         employee: emp,
-        statusSanksi: displayStatus,
-        levelBadgeBg,
-        levelColor,
-        tanggal: tgl,
-        expiryDateStr: expiryDateObj ? formatShortDate(expiryDateObj) : '',
+        statusSanksi: style.label,
+        levelBadgeBg: style.badge,
+        levelColor: style.color,
+        tanggal: latest.raw,
+        expiryDateStr: formatShortDate(expiryDateObj),
         alasan
       });
     });
@@ -1926,6 +1939,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       </span>
                     </div>
                     <div className="text-2xl sm:text-3xl font-black text-emerald-800 tracking-tight">{onsiteEmployeesList.length}</div>
+                    <div className="text-[10px] sm:text-[11px] text-slate-500 font-semibold">
+                      Outsite: {outsiteCount} ({outsitePercentage}%)
+                    </div>
                     <div className="text-[10px] sm:text-[11px] text-emerald-600/90 font-bold mt-0.5 group-hover:underline">
                       {activeStatDetail === 'onsite' ? '▲ Tutup Rincian' : '▼ Klik Lihat Shift'}
                     </div>
@@ -2115,7 +2131,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   {activeStatDetail === 'izin' && `${monthlyIzinData.list.length} Orang (${monthlyIzinData.grandTotal} Hari)`}
                                   {activeStatDetail === 'spdk' && `${activeSpdkData.length} Kasus Aktif`}
                                   {activeStatDetail === 'active' && `${activeEmployeesCount} Karyawan`}
-                                  {activeStatDetail === 'onsite' && `${onsiteEmployeesList.length} Orang (${onsitePercentage}% dari Karyawan Aktif)`}
+                                  {activeStatDetail === 'onsite' && `${onsiteEmployeesList.length} Onsite (${onsitePercentage}%) · ${outsiteCount} Outsite (${outsitePercentage}%) dari ${onsiteEmployeesList.length + outsiteCount} Karyawan Aktif`}
                                   {activeStatDetail === 'counseling' && `${activeCounselingList.length} Karyawan`}
                                 </span>
                               </h3>
@@ -2124,7 +2140,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 {activeStatDetail === 'kontrak' && 'Diurutkan sesuai tingkatan hirarki jabatan resmi. Klik baris untuk profil lengkap.'}
                                 {activeStatDetail === 'izin' && 'Diurutkan dari frekuensi izin terbanyak ke terkecil pada bulan berjalan.'}
                                 {activeStatDetail === 'spdk' && 'Menampilkan sanksi disiplin dan SPDK yang masih berlaku saat ini.'}
-                                {activeStatDetail === 'active' && 'Diurutkan sesuai tingkatan hirarki jabatan resmi.'}
+                                {activeStatDetail === 'active' && 'Bagan struktur organisasi: Manager → Superintendent → Section (Supervisor, Foreman, Staff, Crew). Section mengikuti Jabatan. Klik kartu untuk profil lengkap.'}
                                 {activeStatDetail === 'onsite' && `Menampilkan karyawan dengan status shift onsite hari ini (${todayDateKeys.enKey}). Klik baris untuk profil lengkap.`}
                                 {activeStatDetail === 'counseling' && 'Menampilkan karyawan dengan status pembinaan dan Konseling I, II, III aktif.'}
                               </p>
@@ -2511,42 +2527,63 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             );
                           })()}
 
-                          {/* 4. KARYAWAN AKTIF (GROUPED BY JABATAN) */}
+                          {/* 4. KARYAWAN AKTIF (BAGAN STRUKTUR ORGANISASI) */}
                           {activeStatDetail === 'active' && (() => {
-                            const filtered = activeEmployeesList.filter(e => {
-                              const q = statDetailSearch.toLowerCase().trim();
-                              if (!q) return true;
-                              return (e.name || '').toLowerCase().includes(q) ||
-                                     (e.nik || '').toLowerCase().includes(q) ||
-                                     (e.jabatan || '').toLowerCase().includes(q);
-                            });
+                            // Garis pelaporan bagan: Manager -> Superintendent -> Section.
+                            // Section yang tidak berada di bawah Superintendent terhubung langsung ke Manager.
+                            const PREP_SECTIONS = ['Preparation Wet', 'Preparation Dry', 'Preparation'];
+                            const LAB_SECTIONS = ['Laboratory', 'Quality Assurance', 'Inventory Control', 'Maintenance'];
+                            const DIRECT_SECTIONS = ['Administration', 'Lainnya'];
 
-                            const jabatanLevels = [
-                              { key: 'manager', label: 'Manager', color: 'bg-violet-100 text-violet-800 border-violet-200' },
-                              { key: 'superintendent', label: 'Superintendent', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-                              { key: 'supervisor', label: 'Supervisor', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
-                              { key: 'foreman', label: 'Foreman', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-                              { key: 'admin', label: 'Admin / Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
-                              { key: 'crew', label: 'Crew / Operator', color: 'bg-slate-100 text-slate-700 border-slate-200' },
-                              { key: 'other', label: 'Lainnya', color: 'bg-gray-100 text-gray-700 border-gray-200' },
-                            ];
+                            const normJab = (emp: any) => String(emp.jabatan || emp['Jabatan Baru'] || '')
+                              .toLowerCase()
+                              .replace(/laboratorium/g, 'laboratory');
 
-                            const getJabatanGroup = (jabatan: string) => {
-                              const j = (jabatan || '').toLowerCase();
-                              if (j.includes('manager')) return 'manager';
-                              if (j.includes('superintendent') || j.includes('spt')) return 'superintendent';
-                              if (j.includes('supervisor') || j.includes('specialist')) return 'supervisor';
-                              if (j.includes('foreman')) return 'foreman';
-                              if (j.includes('admin') || j.includes('staff') || j.includes('officer')) return 'admin';
-                              if (j.includes('crew') || j.includes('operator') || j.includes('technician') || j.includes('helper')) return 'crew';
+                            // Section diutamakan dari Jabatan; jika jabatan umum (mis. "Crew, Preparation & Laboratory") baru memakai kolom Bagian/Section.
+                            const sectionFromJabatan = (j: string): string | null => {
+                              if (j.includes('wet')) return 'Preparation Wet';
+                              if (j.includes('dry')) return 'Preparation Dry';
+                              if (j.includes('quality assurance') || /\bqa\b/.test(j)) return 'Quality Assurance';
+                              if (j.includes('inventory')) return 'Inventory Control';
+                              if (j.includes('maintenance')) return 'Maintenance';
+                              if (j.includes('admin')) return 'Administration';
+                              if (j.includes('laboratory') && (j.includes('supervisor') || j.includes('foreman'))) return 'Laboratory';
+                              return null;
+                            };
+                            const sectionFromBagian = (emp: any): string | null => {
+                              const s = String(emp.section || emp.bagian || emp['Bagian'] || '').toLowerCase().trim();
+                              if (!s || s === '-') return null;
+                              if (s.includes('wet')) return 'Preparation Wet';
+                              if (s.includes('dry')) return 'Preparation Dry';
+                              if (s.includes('qa') || s.includes('quality')) return 'Quality Assurance';
+                              if (s.includes('inv')) return 'Inventory Control';
+                              if (s.includes('maint')) return 'Maintenance';
+                              if (s.includes('admin')) return 'Administration';
+                              if (s.includes('lab')) return 'Laboratory';
+                              if (s.includes('prep')) return 'Preparation';
+                              return null;
+                            };
+                            const getSection = (emp: any) => sectionFromJabatan(normJab(emp)) || sectionFromBagian(emp) || 'Lainnya';
+
+                            const getLevel = (emp: any): 'manager' | 'prepSpt' | 'labSpt' | 'supervisor' | 'foreman' | 'staff' | 'crew' | 'other' => {
+                              const rank = getJabatanRank(emp.jabatan || emp['Jabatan Baru']);
+                              if (rank === 0) return 'manager';
+                              if (rank === 1) return 'prepSpt';
+                              if (rank === 2) return 'labSpt';
+                              if (rank <= 8) return 'supervisor';
+                              if (rank <= 13) return 'foreman';
+                              if (rank <= 15) return 'staff';
+                              if (rank <= 17.5) return 'crew';
                               return 'other';
                             };
 
-                            const grouped: Record<string, any[]> = {};
-                            filtered.forEach(emp => {
-                              const grp = getJabatanGroup(emp.jabatan);
-                              if (!grouped[grp]) grouped[grp] = [];
-                              grouped[grp].push(emp);
+                            const q = statDetailSearch.toLowerCase().trim();
+                            const filtered = activeEmployeesList.filter(e => {
+                              if (!q) return true;
+                              return (e.name || '').toLowerCase().includes(q) ||
+                                     (e.nik || '').toLowerCase().includes(q) ||
+                                     (e.jabatan || '').toLowerCase().includes(q) ||
+                                     getSection(e).toLowerCase().includes(q);
                             });
 
                             if (filtered.length === 0) {
@@ -2557,50 +2594,194 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               );
                             }
 
-                            return (
-                              <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 space-y-2">
-                                {jabatanLevels.filter(lv => grouped[lv.key] && grouped[lv.key].length > 0).map(lv => {
-                                  const members = grouped[lv.key];
-                                  return (
-                                    <details key={lv.key} open className="group/jab">
-                                      <summary className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer select-none border ${lv.color} hover:shadow-sm transition-all`}>
-                                        <span className="text-xs font-extrabold flex-1">{lv.label}</span>
-                                        <span className="text-[11px] font-black bg-white/60 px-2 py-0.5 rounded-lg border border-black/5">{members.length} Orang</span>
-                                        <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/jab:rotate-180" />
-                                      </summary>
-                                      <div className="mt-1 ml-3 pl-3 border-l-2 border-amber-100 space-y-0.5">
-                                        {members.map((emp, idx) => (
-                                          <div
-                                            key={emp.nik || idx}
-                                            onClick={() => setSelectedEmployee(emp)}
-                                            className="p-2 rounded-xl hover:bg-amber-50/60 transition-all flex items-center justify-between gap-3 cursor-pointer group"
-                                          >
-                                            <div className="flex items-center gap-2.5 min-w-0">
-                                              <div className="w-8 h-8 rounded-lg bg-amber-100/70 border border-amber-200 flex items-center justify-center shrink-0 overflow-hidden font-bold text-amber-800 text-[10px]">
-                                                {emp.photo ? (
-                                                  <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                  (emp.name || 'A').charAt(0).toUpperCase()
-                                                )}
-                                              </div>
-                                              <div className="min-w-0">
-                                                <div className="text-xs font-bold text-slate-800 group-hover:text-amber-700 truncate flex items-center gap-1.5">
-                                                  <span>{emp.name}</span>
-                                                  <span className="text-[10px] font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">{emp.nik}</span>
-                                                </div>
-                                                <div className="text-[10px] text-slate-500 truncate mt-0.5">{emp.jabatan || '-'}</div>
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                              <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-lg">Aktif</span>
-                                              <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-600 transition-colors" />
-                                            </div>
-                                          </div>
-                                        ))}
+                            const managers: any[] = [];
+                            const prepSpts: any[] = [];
+                            const labSpts: any[] = [];
+                            const sections = new Map<string, { supervisor: any[]; foreman: any[]; staff: any[]; crew: any[] }>();
+                            [...filtered].sort(compareEmployeesByJabatan).forEach(emp => {
+                              const level = getLevel(emp);
+                              if (level === 'manager') return managers.push(emp);
+                              if (level === 'prepSpt') return prepSpts.push(emp);
+                              if (level === 'labSpt') return labSpts.push(emp);
+                              const sec = getSection(emp);
+                              if (!sections.has(sec)) sections.set(sec, { supervisor: [], foreman: [], staff: [], crew: [] });
+                              const bucket = sections.get(sec)!;
+                              // Administration tidak memiliki Crew: seluruh anggotanya digabung dalam satu kelompok Admin
+                              if (sec === 'Administration' && level !== 'supervisor') return bucket.staff.push(emp);
+                              (level === 'other' ? bucket.crew : bucket[level]).push(emp);
+                            });
+
+                            const avatar = (emp: any, cls: string) => (
+                              <div className={`rounded-full border-2 border-white shadow-sm flex items-center justify-center shrink-0 overflow-hidden font-bold ${cls}`}>
+                                {emp.photo ? (
+                                  <img src={formatAvatarUrl(emp.photo)} alt={emp.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  (emp.name || '?').charAt(0).toUpperCase()
+                                )}
+                              </div>
+                            );
+
+                            // Kartu orang (Manager / Superintendent / Supervisor)
+                            const personCard = (emp: any, tone: string) => (
+                              <button
+                                key={emp.nik}
+                                type="button"
+                                onClick={() => setSelectedEmployee(emp)}
+                                title={`${emp.name} — ${emp.jabatan || "-"}`}
+                                className={`w-full max-w-[10rem] min-w-0 p-2 rounded-2xl border bg-white shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col items-center gap-1.5 ${tone}`}
+                              >
+                                {avatar(emp, 'w-12 h-12 text-base bg-slate-100 text-slate-700')}
+                                <div className="text-[11px] font-extrabold text-slate-800 leading-tight line-clamp-2 break-words w-full">{emp.name}</div>
+                                <div className="text-[10px] text-slate-500 leading-tight line-clamp-2 break-words w-full">{emp.jabatan || '-'}</div>
+                                <div className="text-[9px] font-mono text-slate-400">{emp.nik}</div>
+                              </button>
+                            );
+
+                            const vacantCard = (label: string) => (
+                              <div className="w-full max-w-[10rem] p-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-center">
+                                <div className="text-[11px] font-extrabold text-slate-500">{label}</div>
+                                <div className="text-[10px] text-slate-400">Kosong / Tidak sesuai pencarian</div>
+                              </div>
+                            );
+
+                            // Baris ringkas (Foreman / Staff / Crew)
+                            const compactRow = (emp: any) => (
+                              <button
+                                key={emp.nik}
+                                type="button"
+                                title={`${emp.name} — ${emp.jabatan || "-"}`}
+                                onClick={() => setSelectedEmployee(emp)}
+                                className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                              >
+                                {avatar(emp, 'w-7 h-7 text-[10px] bg-slate-100 text-slate-700')}
+                                <div className="min-w-0">
+                                  <div className="text-[11px] font-bold text-slate-800 truncate">{emp.name}</div>
+                                  <div className="text-[9.5px] text-slate-400 truncate">{emp.jabatan || '-'}</div>
+                                </div>
+                              </button>
+                            );
+
+                            const vLine = <div className="w-0.5 h-4 bg-slate-300 mx-auto" />;
+
+                            const sectionNode = (name: string) => {
+                              const b = sections.get(name);
+                              if (!b) return null;
+                              const total = b.supervisor.length + b.foreman.length + b.staff.length + b.crew.length;
+                              return (
+                                <div className="w-full min-w-0 flex flex-col items-stretch">
+                                  <div className="rounded-xl bg-[#22a7b8] text-white px-2 py-1.5 text-center shadow-sm">
+                                    <div className="text-[10.5px] font-black uppercase tracking-wide leading-tight">{name}</div>
+                                    <div className="text-[10px] font-semibold opacity-90">{total} Orang</div>
+                                  </div>
+                                  {b.supervisor.length > 0 && (
+                                    <>
+                                      {vLine}
+                                      <div className="flex flex-col items-center gap-2">
+                                        {b.supervisor.map(emp => personCard(emp, "border-cyan-200"))}
                                       </div>
-                                    </details>
-                                  );
-                                })}
+                                    </>
+                                  )}
+                                  {b.foreman.length > 0 && (
+                                    <>
+                                      {vLine}
+                                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-1.5">
+                                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 px-1.5 pb-1">Foreman / Officer · {b.foreman.length}</div>
+                                        <div className="bg-white rounded-lg">{b.foreman.map(emp => compactRow(emp))}</div>
+                                      </div>
+                                    </>
+                                  )}
+                                  {b.staff.length > 0 && (
+                                    <>
+                                      {vLine}
+                                      <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-1.5">
+                                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 px-1.5 pb-1">{name === 'Administration' ? 'Admin' : 'Admin / Staff'} · {b.staff.length}</div>
+                                        <div className="bg-white rounded-lg">{b.staff.map(emp => compactRow(emp))}</div>
+                                      </div>
+                                    </>
+                                  )}
+                                  {b.crew.length > 0 && (
+                                    <>
+                                      {vLine}
+                                      <details className="rounded-xl border border-slate-200 bg-slate-50/60 p-1.5 group/crew" open={!!q}>
+                                        <summary className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-600 px-1.5 py-0.5 cursor-pointer select-none list-none">
+                                          <span>Crew · {b.crew.length}</span>
+                                          <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/crew:rotate-180" />
+                                        </summary>
+                                        <div className="bg-white rounded-lg mt-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                          {b.crew.map(emp => compactRow(emp))}
+                                        </div>
+                                      </details>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            };
+
+                            const presentSections = (names: string[]) => names.filter(n => sections.has(n));
+                            const prepChildren = presentSections(PREP_SECTIONS);
+                            const labChildren = presentSections(LAB_SECTIONS);
+                            const directChildren = presentSections(DIRECT_SECTIONS);
+
+                            const superintendentBranch = (spts: any[], label: string, children: string[]) => (
+                              <li key={label} style={{ flex: `${Math.max(children.length, 1)} 1 0` }}>
+                                <div className="w-full flex flex-wrap gap-2 justify-center">
+                                  {spts.length > 0
+                                    ? spts.map(emp => personCard(emp, "border-blue-200"))
+                                    : vacantCard(label)}
+                                </div>
+                                {children.length > 0 && (
+                                  <ul>
+                                    {children.map(name => (
+                                      <li key={name}><div className="w-full">{sectionNode(name)}</div></li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </li>
+                            );
+
+                            return (
+                              <div className="max-h-[75vh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                                <style>{`
+                                  .org-tree ul { position: relative; display: flex; justify-content: center; width: 100%; padding: 20px 0 0; margin: 0; }
+                                  .org-tree li { position: relative; list-style: none; text-align: center; padding: 20px 4px 0; display: flex; flex-direction: column; align-items: center; flex: 1 1 0; min-width: 0; }
+                                  .org-tree li::before, .org-tree li::after { content: ''; position: absolute; top: 0; right: 50%; width: 50%; height: 20px; border-top: 2px solid #cbd5e1; }
+                                  .org-tree li::after { right: auto; left: 50%; border-left: 2px solid #cbd5e1; }
+                                  .org-tree li:only-child::before, .org-tree li:only-child::after { display: none; }
+                                  .org-tree li:only-child { padding-top: 0; }
+                                  .org-tree li:first-child::before, .org-tree li:last-child::after { border: 0 none; }
+                                  .org-tree li:last-child::before { border-right: 2px solid #cbd5e1; border-radius: 0 8px 0 0; }
+                                  .org-tree li:first-child::after { border-radius: 8px 0 0 0; }
+                                  .org-tree ul ul::before { content: ''; position: absolute; top: 0; left: 50%; height: 20px; border-left: 2px solid #cbd5e1; }
+                                  .org-tree > ul { padding-top: 0; }
+                                  /* Layar sempit: bagan menjadi pohon vertikal agar tidak perlu geser kiri-kanan */
+                                  @media (max-width: 1023px) {
+                                    .org-tree ul { display: block; padding: 0 0 0 14px; margin-left: 10px; border-left: 2px solid #cbd5e1; }
+                                    .org-tree > ul { padding-left: 0; margin-left: 0; border-left: 0; }
+                                    .org-tree ul ul::before { display: none; }
+                                    .org-tree li { padding: 10px 0 0 !important; align-items: stretch; text-align: left; flex: none !important; }
+                                    .org-tree li::before { display: block !important; content: ''; position: absolute; top: 30px; left: -14px; right: auto; width: 12px; height: 0; border: 0 !important; border-top: 2px solid #cbd5e1 !important; border-radius: 0 !important; }
+                                    .org-tree li::after { display: none !important; }
+                                    .org-tree > ul > li::before { display: none !important; }
+                                  }
+                                `}</style>
+                                <div className="org-tree w-full">
+                                  <ul>
+                                    <li>
+                                      <div className="w-full flex flex-wrap gap-2 justify-center">
+                                        {managers.length > 0
+                                          ? managers.map(emp => personCard(emp, "border-violet-300 ring-2 ring-violet-100"))
+                                          : vacantCard("Preparation & Laboratory Manager")}
+                                      </div>
+                                      <ul>
+                                        {superintendentBranch(prepSpts, "Preparation Superintendent", prepChildren)}
+                                        {superintendentBranch(labSpts, "Laboratory Superintendent", labChildren)}
+                                        {directChildren.map(name => (
+                                          <li key={name}><div className="w-full">{sectionNode(name)}</div></li>
+                                        ))}
+                                      </ul>
+                                    </li>
+                                  </ul>
+                                </div>
                               </div>
                             );
                           })()}
@@ -2704,15 +2885,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               );
                             }
 
-                            const displayed = filtered.slice(0, 20);
+                            const displayed = filtered;
                             return (
                               <div>
-                                {filtered.length > 20 && (
-                                  <div className="mb-2 text-[11px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex items-center gap-1.5">
-                                    <span className="inline-flex w-5 h-5 items-center justify-center rounded-full bg-rose-100 text-rose-700 font-black text-[10px]">!</span>
-                                    Menampilkan <strong className="text-slate-700 mx-1">20</strong> dari <strong className="text-rose-600 mx-1">{filtered.length}</strong> karyawan konseling aktif. Gunakan pencarian untuk mempersempit daftar.
-                                  </div>
-                                )}
                               <div className="max-h-80 md:max-h-96 overflow-y-auto custom-scrollbar pr-1 divide-y divide-slate-100">
                                 {displayed.map((item, idx) => {
                                   const emp = item.employee;
