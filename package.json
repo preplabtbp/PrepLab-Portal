@@ -13,7 +13,7 @@
     "test:auth": "tsx test/auth-guard.test.ts",
     "test": "npm run test:auth",
     "deploy:staging": "npm run build && gcloud run deploy preplab-portal-staging --project project-054e3351-b8d1-42f7-9c8 --source . --region asia-southeast2 --update-secrets JWT_SECRET=JWT_SECRET:latest",
-    "deploy:main": "npm run build && gcloud run deploy preplab-portal --project project-054e3351-b8d1-42f7-9c8 --source . --region us-central1 --update-secrets JWT_SECRET=JWT_SECRET:latest",
+    "deploy:main": "npm run build && gcloud run deploy preplab-portal --project project-054e3351-b8d1-42f7-9c8 --source . --region asia-southeast2 --update-secrets JWT_SECRET=JWT_SECRET:latest",
     "deploy:build": "gcloud builds submit --project project-054e3351-b8d1-42f7-9c8 --config cloudbuild.yaml ."
   },
   "dependencies": {
