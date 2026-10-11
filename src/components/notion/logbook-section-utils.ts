@@ -337,7 +337,7 @@ export function aggregateSectionActiveTasks(
     if (seenTaskKeys.has(dedupKey)) return;
     seenTaskKeys.add(dedupKey);
 
-    // Determine Activity and Period
+    // Determine Activity and Period based on table location
     const postTitle = post.title || '';
     const isNonRoutine = postTitle.toLowerCase().includes('non routine') || postTitle.toLowerCase().includes('non-routine');
     const defaultActivity = isNonRoutine ? 'Non-Routine' : 'Routine';
@@ -352,6 +352,19 @@ export function aggregateSectionActiveTasks(
     else if (ptLow.includes('yearly')) defaultPeriod = 'Yearly';
     else if (isNonRoutine) defaultPeriod = 'Non-Routine';
 
+    // Map existing activity / period or align with current position
+    let finalActivity = String(row['Activity (routine/non routine)'] || row.Aktivitas || row.aktivitas || defaultActivity).trim();
+    if (isNonRoutine && (finalActivity.toLowerCase() === 'routine' || finalActivity.toLowerCase() === 'rutin')) {
+      finalActivity = 'Non-Routine';
+    } else if (!isNonRoutine && (finalActivity.toLowerCase() === 'non-routine' || finalActivity.toLowerCase() === 'non routine')) {
+      finalActivity = 'Routine';
+    }
+
+    let finalPeriod = String(row.period || row.Period || defaultPeriod).trim();
+    if (isNonRoutine && (finalPeriod.toLowerCase() === 'routine' || finalPeriod.toLowerCase() === 'rutin')) {
+      finalPeriod = 'Non-Routine';
+    }
+
     // Normalize keys to canonical headers
     const normalizedRow: TableRowData = {
       number: String(activeRows.length + 1),
@@ -362,8 +375,8 @@ export function aggregateSectionActiveTasks(
       Status: String(row.Status || row.status || 'Open'),
       PIC: String(row.PIC || row.pic || ''),
       Priority: String(row.Priority || row.priority || 'Normal'),
-      'Activity (routine/non routine)': String(row['Activity (routine/non routine)'] || row.Aktivitas || row.aktivitas || defaultActivity),
-      period: String(row.period || row.Period || defaultPeriod),
+      'Activity (routine/non routine)': finalActivity,
+      period: finalPeriod,
       'Asal Halaman': postTitle,
       // Metadata for origin tracking and two-way persistence
       _originPostId: String(post.id),
@@ -713,6 +726,11 @@ export function aggregateYesterdayProgress(
         if (seenKeys.has(dedupKey)) return;
         seenKeys.add(dedupKey);
 
+        const postTitle = post.title || '';
+        const isNonRoutine = postTitle.toLowerCase().includes('non routine') || postTitle.toLowerCase().includes('non-routine');
+        const defaultActivity = isNonRoutine ? 'Non-Routine' : 'Routine';
+        const defaultPeriod = isNonRoutine ? 'Non-Routine' : 'Daily';
+
         const normalized: TableRowData = {
           number: String(yesterdayTasks.length + 1),
           'Jenis kegiatan': title,
@@ -722,8 +740,8 @@ export function aggregateYesterdayProgress(
           Status: isFinishedYesterday ? 'Closed' : (row.Status || 'Open'),
           PIC: String(row.PIC || row.pic || ''),
           Priority: String(row.Priority || 'Normal'),
-          'Activity (routine/non routine)': String(row['Activity (routine/non routine)'] || 'Routine'),
-          period: String(row.period || 'Daily'),
+          'Activity (routine/non routine)': String(row['Activity (routine/non routine)'] || defaultActivity),
+          period: String(row.period || defaultPeriod),
           'Asal Halaman': post.title || sectionName,
           _originPostId: String(post.id),
           _originRowIndex: String(idx)

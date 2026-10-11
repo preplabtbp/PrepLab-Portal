@@ -447,7 +447,11 @@ export const isSubItemCompleted = (row: TableRowData): boolean => {
 
 export const getDisplayTitle = (title: string): string => {
   if (!title) return '';
-  return title.replace(/^[↳↪\s]+/, '').replace(/^\[[ xX]\]\s*/, '').trim();
+  return title
+    .replace(/^[↳↪\s]+/, '')
+    .replace(/^\[[ xX]\]\s*/, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .trim();
 };
 
 // Canonical Notion Table Column definition in exact order
@@ -544,7 +548,31 @@ export function serializeMarkdownTable(
   const separatorLine = `| ${cleanHeaders.map(() => '---').join(' | ')} |`;
   const rowLines = rows.map(row => {
     return `| ${cleanHeaders.map(h => {
-      const val = getCellValue(row, h);
+      let val = getCellValue(row, h);
+      const hLower = h.toLowerCase().trim();
+      const isTitleCol = hLower.includes('jenis kegiatan') || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama';
+      
+      // Embed persistent ID metadata into the primary title cell
+      if (isTitleCol && val) {
+        const taskId = row.id || (row as any)._id;
+        const parentId = row.parentId || row.parentRowId;
+        const lastMod = row['Last Modified'] || row['Date Modified'];
+        
+        let metaTags = '';
+        if (taskId && !val.includes(`<!--task-id:`)) {
+          metaTags += ` <!--task-id:${taskId}-->`;
+        }
+        if (parentId && !val.includes(`<!--parent-id:`)) {
+          metaTags += ` <!--parent-id:${parentId}-->`;
+        }
+        if (lastMod && !val.includes(`<!--last-modified:`)) {
+          metaTags += ` <!--last-modified:${lastMod}-->`;
+        }
+        if (metaTags) {
+          val = `${val.trim()}${metaTags}`;
+        }
+      }
+
       return String(val || '').replace(/\|/g, '\\|').replace(/\n/g, '<br/>').trim();
     }).join(' | ')} |`;
   });
@@ -573,15 +601,18 @@ export function migrateChecklistsInRows(
       continue;
     }
 
+    // Ensure parent row has unique ID
+    if (!row.id) {
+      row.id = `task_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 6)}`;
+    }
+
     const ketVal = getCellValue(row, 'Keterangan') || '';
     const taskProg = parseTasklist(ketVal);
 
     if (taskProg.hasTasklist && taskProg.items.length > 0) {
-      // Strip tasklist lines from parent row's Keterangan, keep non-checklist text
-      row['Keterangan'] = taskProg.cleanText || '';
+      // PRESERVE the checklist in parent row's Keterangan for 100% sync with Discussion Modal
       newRows.push(row);
 
-      const parentIndex = newRows.length - 1;
       const parentCat = getCellValue(row, 'Kategori') || defaultSection || 'Laboratorium';
       const parentPIC = getCellValue(row, 'PIC') || '';
       const parentAct = getCellValue(row, 'Activity (routine/non routine)') || 'Monthly';
@@ -589,23 +620,27 @@ export function migrateChecklistsInRows(
       const now = new Date();
       const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-      // Create a sub-item row for each checklist item
-      taskProg.items.forEach(item => {
+      // Create a sub-item row for each checklist item if not already existing
+      taskProg.items.forEach((item, subIdx) => {
+        const subId = `sub_${row.id}_${subIdx}_${Math.random().toString(36).substr(2, 6)}`;
         const subTitle = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
         const subRow: TableRowData = {
           number: '',
+          id: subId,
+          parentId: row.id,
+          parentRowId: row.id,
           'Jenis kegiatan': subTitle,
           'Jenis Kegiatan': subTitle,
-          Keterangan: item.note || '',
+          Keterangan: item.note || '-',
           PIC: parentPIC,
           Priority: 'Normal',
           Status: item.checked ? 'Closed' : 'Open',
+          isCompleted: item.checked ? 'true' : 'false',
           'Created Time': createdStr,
           Kategori: parentCat,
           'Activity (routine/non routine)': parentAct,
           period: parentPeriod,
-          isSubItem: 'true',
-          parentId: String(parentIndex)
+          isSubItem: 'true'
         };
         newRows.push(subRow);
         migratedCount++;
@@ -625,7 +660,7 @@ export function splitMarkdownRow(line: string): string[] {
   return rawCells.map(c => c.trim().replace(/\\\|/g, '|'));
 }
 
-// Helper untuk mengekstrak tabel markdown dari string konten
+// Helper untuk mengekstrak tabel markdown dari string konten dengan Persistent ID
 export function extractMarkdownTableFromContent(content: string): {
   headers: string[];
   rows: TableRowData[];
@@ -662,6 +697,24 @@ export function extractMarkdownTableFromContent(content: string): {
         headers.forEach((h, idx) => {
           rowObj[h] = cells[idx] || '';
         });
+
+        // Extract persistent Unique ID and metadata from cells
+        const rowStr = cells.join(' ');
+        const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
+        const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
+        const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
+
+        rowObj.id = taskMatch ? taskMatch[1].trim() : `task_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 6)}`;
+        if (parentMatch) {
+          rowObj.parentId = parentMatch[1].trim();
+          rowObj.parentRowId = parentMatch[1].trim();
+          rowObj.isSubItem = 'true';
+        }
+        if (modMatch) {
+          rowObj['Last Modified'] = modMatch[1].trim();
+          rowObj['Date Modified'] = modMatch[1].trim();
+        }
+
         rows.push(rowObj);
       }
     }
@@ -1720,13 +1773,32 @@ export function NotionDatabaseTable({
   };
 
   const handleDeleteColumn = async (colName: string) => {
-    const colLower = colName.toLowerCase();
+    const colLower = colName.toLowerCase().trim();
     if (colLower === 'number' || colLower === 'no') {
       toast.error('Kolom Nomor (#) tidak dapat dihapus');
       return;
     }
-    if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') {
+    if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul' || colLower === 'name') {
       toast.error('Kolom Judul/Kegiatan adalah kolom utama dan tidak dapat dihapus');
+      return;
+    }
+
+    // Proteksi Kolom Wajib: Sembunyikan (Hide) bukan Hapus (Delete) agar data detail task tidak hilang / tereset
+    const isMandatoryCol = (c: string) => {
+      const cl = c.toLowerCase().trim();
+      return (
+        cl === 'keterangan' || cl === 'description' || cl === 'rincian' ||
+        cl === 'status' ||
+        cl === 'pic' || cl === 'assignee' ||
+        cl === 'priority' || cl === 'prioritas' ||
+        cl.includes('routine') || cl === 'activity' || cl === 'period' ||
+        cl.includes('created') || cl.includes('selesai') || cl.includes('modified')
+      );
+    };
+
+    if (isMandatoryCol(colName)) {
+      handleToggleHideColumn(colName);
+      toast.info(`Kolom wajib "${colName}" disembunyikan (bukan dihapus) agar data detail task tetap aman.`);
       return;
     }
 
@@ -2310,7 +2382,7 @@ export function NotionDatabaseTable({
   const saveTableToBackend = async (newRows: TableRowData[], headersToSave?: string[]): Promise<boolean> => {
     if (!postId) return false;
     try {
-      const { rows: preppedRows } = migrateChecklistsInRows(newRows, section);
+      const preppedRows = newRows;
       // Normalize any legacy format subtask tags in Keterangan to canonical markdown checklists
       const normalizedRows = preppedRows.map(r => {
         const ket = getRowVal(r, 'Keterangan');
@@ -2752,22 +2824,38 @@ export function NotionDatabaseTable({
     const now = new Date();
     const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    const parentId = parentRow.id || `parent-${actualParentIdx}-${parentRow['Jenis kegiatan'] || ''}`;
-    const formattedTitle = `↳ ${cleanTitle}`;
+    const parentId = parentRow.id || `task_${Date.now()}_${actualParentIdx}_${Math.random().toString(36).substr(2, 6)}`;
+    parentRow.id = parentId;
+    const nowIso = new Date().toISOString();
+    parentRow['Last Modified'] = nowIso;
+
+    // Sync subtask into parent row's Keterangan checklist so Discussion Modal stays 100% synchronized
+    const currentKet = getRowVal(parentRow, 'Keterangan') || '';
+    const newChecklistLine = `- [ ] ${cleanTitle}`;
+    const updatedKet = currentKet.trim() ? `${currentKet.trim()}\n${newChecklistLine}` : newChecklistLine;
+    parentRow['Keterangan'] = updatedKet;
+
+    const subId = `sub_${parentId}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const formattedTitle = `↳ [ ] ${cleanTitle}`;
     const newSubRow: TableRowData = {
       number: '',
+      id: subId,
+      parentId: parentId,
+      parentRowId: parentId,
       'Jenis kegiatan': formattedTitle,
       'Jenis Kegiatan': formattedTitle,
-      Keterangan: '',
+      Keterangan: '-',
       PIC: parentPIC,
       Priority: 'Normal',
       Status: 'Open',
+      isCompleted: 'false',
       'Created Time': createdStr,
+      'Tanggal Selesai': '-',
       Kategori: parentCat,
       'Activity (routine/non routine)': parentAct,
       period: parentPeriod,
       isSubItem: 'true',
-      parentId: parentId
+      'Last Modified': nowIso
     };
 
     // Cari posisi sisip: tepat setelah sub-item terakhir dari parent ini
@@ -2777,10 +2865,16 @@ export function NotionDatabaseTable({
     }
 
     const nextRows = [...localRows];
+    nextRows[actualParentIdx] = { ...parentRow };
     nextRows.splice(insertIdx, 0, newSubRow);
+
+    if (selectedRow && (selectedRow === parentRow || selectedRow.id === parentRow.id)) {
+      setSelectedRow(nextRows[actualParentIdx]);
+    }
 
     setLocalRows(nextRows);
     const updatedDirty = new Set(dirtyRowIndices);
+    updatedDirty.add(actualParentIdx);
     updatedDirty.add(insertIdx);
     setDirtyRowIndices(updatedDirty);
 
@@ -2980,6 +3074,120 @@ export function NotionDatabaseTable({
     }
   };
 
+  // 1-SOURCE OF TRUTH: Sinkronisasi Subtask dari Discussion Modal / Drawer ke Baris Tabel & Backend
+  const handleSyncModalSubtasks = async (parentRowOrIndex: TableRowData | number, newKetVal: string) => {
+    let parentIdx = -1;
+    let parentRow: TableRowData | undefined;
+
+    if (typeof parentRowOrIndex === 'number') {
+      parentIdx = parentRowOrIndex;
+      parentRow = localRows[parentRowOrIndex];
+    } else {
+      parentRow = parentRowOrIndex;
+      parentIdx = localRows.indexOf(parentRowOrIndex);
+      if (parentIdx === -1 && parentRowOrIndex.id) {
+        parentIdx = localRows.findIndex(r => r.id === parentRowOrIndex.id);
+      }
+      if (parentIdx === -1) {
+        parentIdx = localRows.findIndex(r => 
+          (getRowVal(r, 'Jenis kegiatan') || '').trim() === (getRowVal(parentRowOrIndex, 'Jenis kegiatan') || '').trim()
+        );
+      }
+    }
+
+    if (!parentRow || parentIdx === -1) return;
+
+    // Parse subtasks from the new Keterangan markdown
+    const prog = parseTasklist(newKetVal || '');
+    const nowIso = new Date().toISOString();
+    const todayStr = getTodayDDMMYYYY();
+
+    const parentId = parentRow.id || `task_${Date.now()}_${parentIdx}_${Math.random().toString(36).substr(2, 6)}`;
+    const updatedParentRow = { ...parentRow, id: parentId };
+    updatedParentRow['Keterangan'] = newKetVal;
+    updatedParentRow['Last Modified'] = nowIso;
+
+    // Temukan range sub-items lama di bawah parentIdx
+    const oldSubIndices: number[] = [];
+    for (let i = parentIdx + 1; i < localRows.length; i++) {
+      if (isSubItemRow(localRows[i])) {
+        oldSubIndices.push(i);
+      } else {
+        break;
+      }
+    }
+
+    // Bangun daftar baris sub-items baru berdasarkan prog.items
+    const parentCat = getRowVal(parentRow, 'Kategori') || section || 'Laboratorium';
+    const parentPIC = getRowVal(parentRow, 'PIC') || currentAuthorName || '';
+    const parentAct = getRowVal(parentRow, 'Activity (routine/non routine)') || 'Monthly';
+    const parentPeriod = getRowVal(parentRow, 'period') || 'Monthly';
+
+    const newSubRows: TableRowData[] = prog.items.map((item, idx) => {
+      // Coba cocokkan dengan sub-item lama untuk preserve ID jika ada
+      const existingSub = oldSubIndices[idx] !== undefined ? localRows[oldSubIndices[idx]] : undefined;
+      const subId = existingSub?.id || `sub_${parentId}_${idx}_${Math.random().toString(36).substr(2, 6)}`;
+      const formattedTitle = `↳ [${item.checked ? 'x' : ' '}] ${item.text}`;
+
+      return {
+        number: '',
+        id: subId,
+        parentId: parentId,
+        parentRowId: parentId,
+        'Jenis kegiatan': formattedTitle,
+        'Jenis Kegiatan': formattedTitle,
+        Keterangan: item.note || '-',
+        PIC: parentPIC,
+        Priority: 'Normal',
+        Status: item.checked ? 'Closed' : 'Open',
+        isCompleted: item.checked ? 'true' : 'false',
+        'Created Time': existingSub?.['Created Time'] || getTodayDDMMYYYY(),
+        'Tanggal Selesai': item.checked ? (existingSub?.['Tanggal Selesai'] || todayStr) : '-',
+        Kategori: parentCat,
+        'Activity (routine/non routine)': parentAct,
+        period: parentPeriod,
+        isSubItem: 'true',
+        'Last Modified': nowIso
+      };
+    });
+
+    // Perbarui status parent
+    const totalSubs = newSubRows.length;
+    const completedSubs = newSubRows.filter(r => r.isCompleted === 'true').length;
+    const currentParentStatus = (getRowVal(updatedParentRow, 'Status') || '').toUpperCase();
+
+    if (!currentParentStatus.includes('CANCEL')) {
+      if (totalSubs > 0 && completedSubs === totalSubs) {
+        updatedParentRow.Status = 'Closed';
+        updatedParentRow['Tanggal Selesai'] = todayStr;
+      } else if (completedSubs > 0) {
+        updatedParentRow.Status = 'On Progress';
+        updatedParentRow['Tanggal Selesai'] = '-';
+      } else if (totalSubs > 0) {
+        updatedParentRow.Status = 'Open';
+        updatedParentRow['Tanggal Selesai'] = '-';
+      }
+    }
+
+    // Susun array nextRows
+    const nextRows = [...localRows];
+    nextRows[parentIdx] = updatedParentRow;
+
+    // Gantikan sub-items lama dengan newSubRows
+    if (oldSubIndices.length > 0) {
+      nextRows.splice(parentIdx + 1, oldSubIndices.length, ...newSubRows);
+    } else if (newSubRows.length > 0) {
+      nextRows.splice(parentIdx + 1, 0, ...newSubRows);
+    }
+
+    setLocalRows(nextRows);
+    if (selectedRow) {
+      setSelectedRow(updatedParentRow);
+    }
+    onRowsChange?.(nextRows);
+    await saveTableToBackend(nextRows);
+  };
+
   // Toggle Checklist Sub-Item Completed Status & Sinkronkan Progres Task Utama
   const handleToggleSubItemCompleted = (subRowIndex: number, currentCompleted: boolean) => {
     const nextCompleted = !currentCompleted;
@@ -3017,9 +3225,11 @@ export function NotionDatabaseTable({
 
     const executeToggle = async () => {
       const todayStr = getTodayDDMMYYYY();
+      const nowIso = new Date().toISOString();
       const updatedRow = { ...subRow };
       updatedRow.isCompleted = nextCompleted ? 'true' : 'false';
       updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
+      updatedRow['Last Modified'] = nowIso;
 
       // Also update sub-item title prefix ↳ [x] vs ↳ [ ]
       const currentTitle = getRowVal(subRow, 'Jenis kegiatan') || getRowVal(subRow, 'Jenis Kegiatan') || '';
@@ -3052,6 +3262,7 @@ export function NotionDatabaseTable({
         const completedSubs = siblingSubIndices.filter(idx => isSubItemCompleted(nextRows[idx])).length;
 
         const parentRow = { ...nextRows[parentIdx] };
+        parentRow['Last Modified'] = nowIso;
         const currentParentStatus = (getRowVal(parentRow, 'Status') || '').toUpperCase();
 
         if (!currentParentStatus.includes('CANCEL')) {
@@ -3069,7 +3280,22 @@ export function NotionDatabaseTable({
             // Reset tanggal selesai tugas utama jika belum ada subtask diceklis
             setRowCompletedDate(parentRow, '-');
           }
-          nextRows[parentIdx] = parentRow;
+        }
+
+        // Rebuild the parent row's Keterangan checklists so it mirrors the table rows exactly
+        const existingKet = getRowVal(parentRow, 'Keterangan') || '';
+        const nonChecklistLines = existingKet.split('\n').filter(line => !line.trim().match(/^[-*]\s*\[([ xX])\]/));
+        const subChecklistLines = siblingSubIndices.map(sIdx => {
+          const sRow = nextRows[sIdx];
+          const sComp = isSubItemCompleted(sRow);
+          const sTitle = getDisplayTitle(getRowVal(sRow, 'Jenis kegiatan') || getRowVal(sRow, 'Jenis Kegiatan') || '');
+          return `- [${sComp ? 'x' : ' '}] ${sTitle}`;
+        });
+        parentRow['Keterangan'] = [...nonChecklistLines, ...subChecklistLines].join('\n').trim();
+        nextRows[parentIdx] = parentRow;
+
+        if (selectedRow && (selectedRow === localRows[parentIdx] || (selectedRow.id && selectedRow.id === parentRow.id))) {
+          setSelectedRow(parentRow);
         }
       }
 
@@ -3446,31 +3672,55 @@ export function NotionDatabaseTable({
     }
 
     // 4. Sort (Pinned row selalu berada di posisi paling atas terlepas dari sort kolom)
+    // PENTING: Subtask tidak boleh lepas dari task utamanya
     result.sort((a, b) => {
       const aPin = isPinnedOrChildOfPinned(a);
       const bPin = isPinnedOrChildOfPinned(b);
       if (aPin && !bPin) return -1;
       if (!aPin && bPin) return 1;
 
-      if (sortColumn) {
-        const rawA = (getRowVal(a, sortColumn) || '').trim();
-        const rawB = (getRowVal(b, sortColumn) || '').trim();
+      // Temukan parent efektif
+      const pA = rowToParentMap.get(a);
+      const pB = rowToParentMap.get(b);
 
-        // If numeric column (number)
+      // Jika keduanya milik parent yang sama:
+      if (pA && pB && pA === pB) {
+        return localRows.indexOf(a) - localRows.indexOf(b);
+      }
+      // Jika a adalah subtask dari b:
+      if (pA === b) return 1;
+      // Jika b adalah subtask dari a:
+      if (pB === a) return -1;
+
+      const effA = pA || a;
+      const effB = pB || b;
+
+      if (sortColumn) {
+        const rawA = (getRowVal(effA, sortColumn) || effA[sortColumn] || '').trim();
+        const rawB = (getRowVal(effB, sortColumn) || effB[sortColumn] || '').trim();
+
+        // 1. Sort by Last Modified
+        if (sortColumn === 'Last Modified' || sortColumn.toLowerCase().includes('modified')) {
+          const timeA = Date.parse(effA['Last Modified'] || effA['Date Modified'] || effA['Created Time'] || 0) || 0;
+          const timeB = Date.parse(effB['Last Modified'] || effB['Date Modified'] || effB['Created Time'] || 0) || 0;
+          return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+        }
+
+        // 2. If numeric column (number)
         if (sortColumn.toLowerCase() === 'number' || sortColumn.toLowerCase() === 'no') {
           const numA = parseFloat(rawA) || 0;
           const numB = parseFloat(rawB) || 0;
           return sortDirection === 'asc' ? numA - numB : numB - numA;
         }
 
-        // If priority column (weighted: Urgent > High > Medium > Normal > Low)
+        // 3. If priority column (weighted: Urgent > High > Medium > Normal > Low)
         if (sortColumn.toLowerCase().includes('priorit') || sortColumn.toLowerCase() === 'priority') {
           const wA = getPriorityWeight(rawA);
           const wB = getPriorityWeight(rawB);
           return sortDirection === 'asc' ? wA - wB : wB - wA;
         }
 
-        // If date/time column
+        // 4. If date/time column
         const timeA = Date.parse(rawA);
         const timeB = Date.parse(rawB);
         if (!isNaN(timeA) && !isNaN(timeB)) {
@@ -4502,18 +4752,6 @@ export function NotionDatabaseTable({
                 </button>
               </NotionTooltip>
             </div>
-
-            {/* Tombol hijau "+ New" dipindahkan ke sebelah kanan tombol Cards */}
-            <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
-              <button
-                type="button"
-                onClick={handleOpenAddModal}
-                className="ml-1 sm:ml-2 px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>New</span>
-              </button>
-            </NotionTooltip>
           </div>
 
           {/* Right Anchor: Essential Tools Icons + Dedicated Full Tools Logo + + New Button */}
@@ -4897,6 +5135,7 @@ export function NotionDatabaseTable({
                   <div className="space-y-1 mb-2.5">
                     <label className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Pilih Kolom</label>
                     {[
+                      { key: 'Last Modified', label: '🕒 Terakhir Diubah (Last Modified)' },
                       { key: 'Tanggal Selesai', label: '📅 Tanggal Selesai' },
                       { key: 'Status', label: '⭕ Status' },
                       { key: 'Priority', label: '⚡ Prioritas' },
@@ -4913,7 +5152,7 @@ export function NotionDatabaseTable({
                               setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
                             } else {
                               setSortColumn(col.key);
-                              setSortDirection('asc');
+                              setSortDirection(col.key === 'Last Modified' ? 'desc' : 'asc');
                             }
                           }}
                           className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-medium text-left flex items-center justify-between transition-colors cursor-pointer ${
@@ -5358,6 +5597,18 @@ export function NotionDatabaseTable({
                 </div>
               )}
             </div>
+
+            {/* Dedicated Primary "+ New" Button in Top-Right Corner */}
+            <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="ml-1 sm:ml-1.5 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-2xs active:scale-95 transition-all cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New</span>
+              </button>
+            </NotionTooltip>
           </div>
         </div>
       </div>
@@ -5937,12 +6188,51 @@ export function NotionDatabaseTable({
                           }
                         });
 
-                        // Prioritaskan baris yang di-pin agar selalu berada di posisi paling atas tabel
+                        // Prioritaskan baris yang di-pin dan terapkan sortColumn ke tugas utama (parent) tanpa pernah memisahkan subtask
                         hierarchicalItems.sort((a, b) => {
                           const aPin = isRowPinned(a.parentRow);
                           const bPin = isRowPinned(b.parentRow);
                           if (aPin && !bPin) return -1;
                           if (!aPin && bPin) return 1;
+
+                          if (sortColumn) {
+                            const rawA = (getRowVal(a.parentRow, sortColumn) || a.parentRow[sortColumn] || '').trim();
+                            const rawB = (getRowVal(b.parentRow, sortColumn) || b.parentRow[sortColumn] || '').trim();
+
+                            // 1. Sort by Last Modified (Terakhir Diubah)
+                            if (sortColumn === 'Last Modified' || sortColumn.toLowerCase().includes('modified')) {
+                              const timeA = Date.parse(a.parentRow['Last Modified'] || a.parentRow['Date Modified'] || a.parentRow['Created Time'] || 0) || 0;
+                              const timeB = Date.parse(b.parentRow['Last Modified'] || b.parentRow['Date Modified'] || b.parentRow['Created Time'] || 0) || 0;
+                              return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+                            }
+
+                            // 2. Sort by Nomor Baris (#)
+                            if (sortColumn.toLowerCase() === 'number' || sortColumn.toLowerCase() === 'no') {
+                              const numA = parseFloat(rawA) || 0;
+                              const numB = parseFloat(rawB) || 0;
+                              return sortDirection === 'asc' ? numA - numB : numB - numA;
+                            }
+
+                            // 3. Sort by Prioritas
+                            if (sortColumn.toLowerCase().includes('priorit') || sortColumn.toLowerCase() === 'priority') {
+                              const wA = getPriorityWeight(rawA);
+                              const wB = getPriorityWeight(rawB);
+                              return sortDirection === 'asc' ? wA - wB : wB - wA;
+                            }
+
+                            // 4. Sort by Date/Time
+                            const timeA = Date.parse(rawA);
+                            const timeB = Date.parse(rawB);
+                            if (!isNaN(timeA) && !isNaN(timeB)) {
+                              return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+                            }
+
+                            // 5. Sort Alphabetical
+                            const valA = rawA.toLowerCase();
+                            const valB = rawB.toLowerCase();
+                            if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+                            if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+                          }
                           return 0;
                         });
 
@@ -7876,13 +8166,24 @@ export function NotionDatabaseTable({
                     value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
                     onChange={(e) => {
                       const val = e.target.value;
+                      const cursor = e.target.selectionStart;
                       setRowFormData(prev => ({ 
                         ...prev, 
                         'Jenis kegiatan': val,
                         'Jenis Kegiatan': val 
                       }));
+                      if (cursor !== null) {
+                        requestAnimationFrame(() => {
+                          e.target.setSelectionRange(cursor, cursor);
+                        });
+                      }
                     }}
-                    onSelect={(e) => handleModalSelectText(e, 'jenisKegiatan')}
+                    onSelect={(e) => {
+                      const target = e.currentTarget;
+                      if ((target.selectionEnd ?? 0) > (target.selectionStart ?? 0)) {
+                        handleModalSelectText(e, 'jenisKegiatan');
+                      }
+                    }}
                     onKeyUp={(e) => {
                       if (e.shiftKey || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
                         handleModalSelectText(e, 'jenisKegiatan');
@@ -7984,9 +8285,20 @@ export function NotionDatabaseTable({
                     value={rowFormData['Keterangan'] || ''}
                     onChange={(e) => {
                       const val = e.target.value;
+                      const cursor = e.target.selectionStart;
                       setRowFormData(prev => ({ ...prev, Keterangan: val }));
+                      if (cursor !== null) {
+                        requestAnimationFrame(() => {
+                          e.target.setSelectionRange(cursor, cursor);
+                        });
+                      }
                     }}
-                    onSelect={(e) => handleModalSelectText(e, 'keterangan')}
+                    onSelect={(e) => {
+                      const target = e.currentTarget;
+                      if ((target.selectionEnd ?? 0) > (target.selectionStart ?? 0)) {
+                        handleModalSelectText(e, 'keterangan');
+                      }
+                    }}
                     onKeyUp={(e) => {
                       if (e.shiftKey || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
                         handleModalSelectText(e, 'keterangan');
@@ -8698,19 +9010,47 @@ export function NotionDatabaseTable({
                         </div>
                       )}
 
-                      {/* Rincian & Keterangan Subtask Manager (Sinergi Penuh dengan Log Book) */}
+                      {/* Rincian & Keterangan Subtask Manager (Sinergi Penuh dengan Log Book & 1-Source-of-Truth) */}
                       {(() => {
-                        const selKetVal = getRowVal(selectedRow, 'Keterangan');
                         const actualIdx = localRows.indexOf(selectedRow) !== -1 
                           ? localRows.indexOf(selectedRow)
-                          : localRows.findIndex(r => getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan'));
+                          : localRows.findIndex(r => 
+                              (selectedRow.id && r.id === selectedRow.id) || 
+                              getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan')
+                            );
+
+                        const liveRow = actualIdx !== -1 ? localRows[actualIdx] : selectedRow;
+                        let canonicalKetVal = getRowVal(liveRow, 'Keterangan') || '';
+
+                        // Collect child rows from table to ensure 100% synchronization
+                        if (actualIdx !== -1) {
+                          const childRows: TableRowData[] = [];
+                          for (let i = actualIdx + 1; i < localRows.length; i++) {
+                            if (isSubItemRow(localRows[i])) {
+                              childRows.push(localRows[i]);
+                            } else {
+                              break;
+                            }
+                          }
+                          if (childRows.length > 0) {
+                            const nonChecklistLines = canonicalKetVal.split('\n').filter(line => !line.trim().match(/^[-*]\s*\[([ xX])\]/));
+                            const childChecklistLines = childRows.map(cRow => {
+                              const isComp = isSubItemCompleted(cRow);
+                              const cleanTitle = getDisplayTitle(getRowVal(cRow, 'Jenis kegiatan') || getRowVal(cRow, 'Jenis Kegiatan') || '');
+                              return `- [${isComp ? 'x' : ' '}] ${cleanTitle}`;
+                            });
+                            canonicalKetVal = [...nonChecklistLines, ...childChecklistLines].join('\n').trim();
+                          }
+                        }
 
                         return (
                           <SharedSubtaskManager
-                            value={selKetVal}
+                            value={canonicalKetVal}
                             onChange={(newVal) => {
                               if (actualIdx !== -1) {
-                                handleUpdateCellDirect(actualIdx, 'Keterangan', newVal);
+                                handleSyncModalSubtasks(actualIdx, newVal);
+                              } else {
+                                handleSyncModalSubtasks(selectedRow, newVal);
                               }
                             }}
                             label="Rincian & Checklist Subtask Kegiatan"

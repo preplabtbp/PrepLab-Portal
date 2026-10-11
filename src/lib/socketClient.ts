@@ -5,9 +5,21 @@ let currentChatRoom: string | null = null;
 let registeredUser: any = null;
 let activeLoungePayload: any = null;
 
+const getSocketServerUrl = (): string => {
+  if (typeof window === 'undefined') return '';
+  const host = window.location.hostname;
+  // Use local server during development
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return window.location.origin;
+  }
+  // Connect directly to Cloud Run backend in production
+  // (Firebase Hosting rewrites block WebSocket upgrades)
+  return 'https://preplab-portal-scgudezxqq-et.a.run.app';
+};
+
 export function getGlobalSocket(): Socket {
   if (!globalSocket) {
-    globalSocket = io(window.location.origin, {
+    globalSocket = io(getSocketServerUrl(), {
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

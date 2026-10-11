@@ -302,42 +302,79 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    if (!currentFolder) return;
-    const file = e.target.files[0];
+    const rawFiles = e.target.files ? Array.from(e.target.files) : [];
+    if (rawFiles.length === 0 || !currentFolder) return;
+    const inputEl = e.target;
     setUploading(true);
+    const toastId = toast.loading(`Mempersiapkan ${rawFiles.length} file untuk diunggah...`);
+    let successCount = 0;
+    let overwriteCount = 0;
+
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64Data = reader.result as string;
-        
-        const res = await fetch('/api/preplab-cloud-upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-             base64Data,
-             mimeType: file.type,
-             filename: file.name,
-             folderId: currentFolder.id
-          })
-        });
-        
-        if (res.ok) {
-          toast.success('File berhasil diupload');
-          fetchFiles(currentFolder.id);
-        } else {
-          toast.error('Gagal mengupload file');
+      for (let i = 0; i < rawFiles.length; i++) {
+        const file = rawFiles[i];
+        toast.loading(`Mengunggah (${i + 1}/${rawFiles.length}): ${file.name}...`, { id: toastId });
+
+        try {
+          const base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+
+          const res = await fetch('/api/preplab-cloud-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              base64Data,
+              mimeType: file.type,
+              filename: file.name,
+              folderId: currentFolder.id
+            })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            successCount++;
+            if (data.overwritten) {
+              overwriteCount++;
+            }
+            try {
+              await fetch('/api/preplab-cloud-logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId: inspectorNik || 'System',
+                  userName: inspectorName || 'User',
+                  action: data.overwritten ? 'Overwrite File' : 'Upload File',
+                  fileName: file.name,
+                  folderId: currentFolder.id,
+                  folderName: currentFolder.name
+                })
+              });
+            } catch (_) {}
+          } else {
+            console.error('Gagal upload', file.name, data);
+          }
+        } catch (fErr) {
+          console.error('Error saat membaca file:', file.name, fErr);
         }
-        setUploading(false);
-      };
-      reader.onerror = () => {
-        toast.error('Gagal membaca file');
-        setUploading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      toast.error('Terjadi kesalahan saat upload');
+      }
+
+      if (successCount > 0) {
+        const overwriteMsg = overwriteCount > 0 ? ` (${overwriteCount} file ditimpa)` : '';
+        toast.success(`${successCount} file berhasil diunggah${overwriteMsg}!`, { id: toastId });
+        fetchFiles(currentFolder.id);
+        fetchLogs();
+      } else {
+        toast.error('Gagal mengupload file', { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error('Terjadi kesalahan saat upload: ' + (err.message || 'Error'), { id: toastId });
+    } finally {
       setUploading(false);
+      if (inputEl) inputEl.value = '';
     }
   };
 
@@ -563,6 +600,7 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
                        type="file" 
                        id="cloud-upload" 
                        className="hidden" 
+                       multiple 
                        onChange={handleUpload}
                     />
                     <Button 
