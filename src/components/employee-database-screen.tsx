@@ -3192,65 +3192,65 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                 {/* REKAP ABSENSI, CATATAN & ACHIEVEMENTS (SEJAJAR PENUH DENGAN KOLOM STATUS KIRI) */}
                 <div className="xl:col-span-2 flex flex-col justify-between gap-6 h-full">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                     {/* 2026 */}
-                    <Card className="p-5 shadow-xs border border-teal-200/80 bg-white rounded-2xl">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-black text-slate-950 text-sm flex items-center">
-                          <BarChart3 className="w-4 h-4 mr-2 text-[#135864]" />
+                    <Card className="p-4 sm:p-5 shadow-xs border border-teal-200/80 bg-white rounded-2xl">
+                      <div className="flex items-center justify-between mb-3.5 sm:mb-4">
+                        <h4 className="font-black text-slate-950 text-xs sm:text-sm flex items-center">
+                          <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-[#135864]" />
                           Rekap Absensi 2026
                         </h4>
                         {(selectedEmployee.attendance2026?.sakitSite > 0 || selectedEmployee.attendance2026?.sakitLuar > 0) && (
-                          <span className="text-[10.5px] font-black text-[#135864] bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                          <span className="text-[9.5px] sm:text-[10.5px] font-black text-[#135864] bg-teal-50 border border-teal-200 px-2 sm:px-2.5 py-0.5 rounded-lg shadow-2xs">
                             SS: {selectedEmployee.attendance2026.sakitSite} | SL: {selectedEmployee.attendance2026.sakitLuar}
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-4 gap-2.5">
-                        <div className="text-center p-2.5 rounded-xl bg-teal-50 border border-teal-300 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-[#135864] mb-1">Izin</p>
-                          <p className="font-black text-xl text-teal-950">{selectedEmployee.attendance2026?.izin ?? 0}</p>
+                      <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
+                        <div className="text-center py-2 sm:py-2.5 px-1 sm:px-1.5 rounded-xl bg-teal-50 border border-teal-300 shadow-2xs flex flex-col justify-center min-w-0">
+                          <p className="text-[9px] sm:text-[10px] uppercase font-extrabold text-[#135864] mb-0.5 sm:mb-1 truncate leading-tight tracking-tight" title="Izin">Izin</p>
+                          <p className="font-black text-lg sm:text-xl text-teal-950 tracking-tight leading-tight">{selectedEmployee.attendance2026?.izin ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-sky-50 border border-sky-300 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-sky-900 mb-1">I.Khusus</p>
-                          <p className="font-black text-xl text-sky-950">{selectedEmployee.attendance2026?.izinKhusus ?? 0}</p>
+                        <div className="text-center py-2 sm:py-2.5 px-1 sm:px-1.5 rounded-xl bg-sky-50 border border-sky-300 shadow-2xs flex flex-col justify-center min-w-0">
+                          <p className="text-[9px] sm:text-[10px] uppercase font-extrabold text-sky-900 mb-0.5 sm:mb-1 truncate leading-tight tracking-tight" title="Izin Khusus">I.Khusus</p>
+                          <p className="font-black text-lg sm:text-xl text-sky-950 tracking-tight leading-tight">{selectedEmployee.attendance2026?.izinKhusus ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-amber-50 border border-amber-300 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-amber-900 mb-1">Sakit</p>
-                          <p className="font-black text-xl text-amber-950">{selectedEmployee.attendance2026?.sakit ?? 0}</p>
+                        <div className="text-center py-2 sm:py-2.5 px-1 sm:px-1.5 rounded-xl bg-amber-50 border border-amber-300 shadow-2xs flex flex-col justify-center min-w-0">
+                          <p className="text-[9px] sm:text-[10px] uppercase font-extrabold text-amber-900 mb-0.5 sm:mb-1 truncate leading-tight tracking-tight" title="Sakit">Sakit</p>
+                          <p className="font-black text-lg sm:text-xl text-amber-950 tracking-tight leading-tight">{selectedEmployee.attendance2026?.sakit ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-rose-50 border border-rose-300 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-rose-900 mb-1">Alpa</p>
-                          <p className="font-black text-xl text-rose-950">{selectedEmployee.attendance2026?.alpa ?? 0}</p>
+                        <div className="text-center py-2 sm:py-2.5 px-1 sm:px-1.5 rounded-xl bg-rose-50 border border-rose-300 shadow-2xs flex flex-col justify-center min-w-0">
+                          <p className="text-[9px] sm:text-[10px] uppercase font-extrabold text-rose-900 mb-0.5 sm:mb-1 truncate leading-tight tracking-tight" title="Alpa">Alpa</p>
+                          <p className="font-black text-lg sm:text-xl text-rose-950 tracking-tight leading-tight">{selectedEmployee.attendance2026?.alpa ?? 0}</p>
                         </div>
                       </div>
                     </Card>
 
                     {/* 2025 */}
-                    <Card className="p-5 shadow-xs border border-slate-200/80 bg-white rounded-2xl">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-black text-slate-800 text-sm flex items-center">
-                          <BarChart3 className="w-4 h-4 mr-2 text-slate-500" />
+                    <Card className="p-4 sm:p-5 shadow-xs border border-slate-200/80 bg-white rounded-2xl">
+                      <div className="flex items-center justify-between mb-3.5 sm:mb-4">
+                        <h4 className="font-black text-slate-800 text-xs sm:text-sm flex items-center">
+                          <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2 text-slate-500" />
                           Rekap Absensi 2025
                         </h4>
-                        <span className="text-[10.5px] font-black text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-lg">Arsip</span>
+                        <span className="text-[9.5px] sm:text-[10.5px] font-black text-slate-700 bg-slate-100 border border-slate-300 px-2 sm:px-2.5 py-0.5 rounded-lg">Arsip</span>
                       </div>
-                      <div className="grid grid-cols-4 gap-2.5">
-                        <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-slate-700 mb-1">Izin</p>
-                          <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2025?.izin ?? 0}</p>
+                      <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
+                        <div className="text-center py-2 sm:py-2.5 px-1 sm:px-1.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs flex flex-col justify-center min-w-0">
+                          <p className="text-[9px] sm:text-[10px] uppercase font-extrabold text-slate-700 mb-0.5 sm:mb-1 truncate leading-tight tracking-tight" title="Izin">Izin</p>
+                          <p className="font-black text-lg sm:text-xl text-slate-900 tracking-tight leading-tight">{selectedEmployee.attendance2025?.izin ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-slate-700 mb-1">I.Khusus</p>
-                          <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2025?.izinKhusus ?? 0}</p>
+                        <div className="text-center py-2 sm:py-2.5 px-1 sm:px-1.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs flex flex-col justify-center min-w-0">
+                          <p className="text-[9px] sm:text-[10px] uppercase font-extrabold text-slate-700 mb-0.5 sm:mb-1 truncate leading-tight tracking-tight" title="Izin Khusus">I.Khusus</p>
+                          <p className="font-black text-lg sm:text-xl text-slate-900 tracking-tight leading-tight">{selectedEmployee.attendance2025?.izinKhusus ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-slate-700 mb-1">Sakit</p>
-                          <p className="font-black text-lg text-slate-900">{selectedEmployee.attendance2025?.sakit ?? 0}</p>
+                        <div className="text-center py-2 sm:py-2.5 px-1 sm:px-1.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs flex flex-col justify-center min-w-0">
+                          <p className="text-[9px] sm:text-[10px] uppercase font-extrabold text-slate-700 mb-0.5 sm:mb-1 truncate leading-tight tracking-tight" title="Sakit">Sakit</p>
+                          <p className="font-black text-lg sm:text-xl text-slate-900 tracking-tight leading-tight">{selectedEmployee.attendance2025?.sakit ?? 0}</p>
                         </div>
-                        <div className="text-center p-2.5 rounded-xl bg-rose-50/80 border border-rose-200 shadow-2xs">
-                          <p className="text-[10.5px] md:text-xs uppercase font-black text-rose-800 mb-1">Alpa</p>
-                          <p className="font-black text-lg text-rose-900">{selectedEmployee.attendance2025?.alpa ?? 0}</p>
+                        <div className="text-center py-2 sm:py-2.5 px-1 sm:px-1.5 rounded-xl bg-rose-50/80 border border-rose-200 shadow-2xs flex flex-col justify-center min-w-0">
+                          <p className="text-[9px] sm:text-[10px] uppercase font-extrabold text-rose-800 mb-0.5 sm:mb-1 truncate leading-tight tracking-tight" title="Alpa">Alpa</p>
+                          <p className="font-black text-lg sm:text-xl text-rose-900 tracking-tight leading-tight">{selectedEmployee.attendance2025?.alpa ?? 0}</p>
                         </div>
                       </div>
                     </Card>
