@@ -3195,7 +3195,7 @@ export function NotionDatabaseTable({
     const todayStr = getTodayDDMMYYYY();
 
     const parentId = parentRow.id || `task_${Date.now()}_${parentIdx}_${Math.random().toString(36).substr(2, 6)}`;
-    const updatedParentRow = { ...parentRow, id: parentId };
+    const updatedParentRow: TableRowData = { ...parentRow, id: parentId };
     updatedParentRow['Keterangan'] = newKetVal;
     updatedParentRow['Last Modified'] = nowIso;
 
@@ -3837,8 +3837,8 @@ export function NotionDatabaseTable({
 
         // 1. Sort by Last Modified
         if (sortColumn === 'Last Modified' || sortColumn.toLowerCase().includes('modified')) {
-          const timeA = Date.parse(effA['Last Modified'] || effA['Date Modified'] || effA['Created Time'] || 0) || 0;
-          const timeB = Date.parse(effB['Last Modified'] || effB['Date Modified'] || effB['Created Time'] || 0) || 0;
+          const timeA = Date.parse(effA['Last Modified'] || effA['Date Modified'] || effA['Created Time'] || '') || 0;
+          const timeB = Date.parse(effB['Last Modified'] || effB['Date Modified'] || effB['Created Time'] || '') || 0;
           return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
         }
 
@@ -6371,8 +6371,8 @@ export function NotionDatabaseTable({
 
                             // 1. Sort by Last Modified (Terakhir Diubah)
                             if (sortColumn === 'Last Modified' || sortColumn.toLowerCase().includes('modified')) {
-                              const timeA = Date.parse(a.parentRow['Last Modified'] || a.parentRow['Date Modified'] || a.parentRow['Created Time'] || 0) || 0;
-                              const timeB = Date.parse(b.parentRow['Last Modified'] || b.parentRow['Date Modified'] || b.parentRow['Created Time'] || 0) || 0;
+                              const timeA = Date.parse(a.parentRow['Last Modified'] || a.parentRow['Date Modified'] || a.parentRow['Created Time'] || '') || 0;
+                              const timeB = Date.parse(b.parentRow['Last Modified'] || b.parentRow['Date Modified'] || b.parentRow['Created Time'] || '') || 0;
                               return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
                             }
 

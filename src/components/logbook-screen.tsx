@@ -6104,7 +6104,11 @@ export function LogbookScreen({
         sectionName={(selectedSection && selectedSection !== 'Semua Seksi' && selectedSection !== 'ALL') ? selectedSection : (userSection !== 'ALL' ? userSection : 'Laboratorium')}
         allPosts={bulletinList}
         targetUniverse={selectedPt || 'TBP'}
-        existingRows={allLoadedTasks.map(t => ({ 'Jenis kegiatan': t.title, Keterangan: t.description || '', ...t }))}
+        existingRows={allLoadedTasks.map(t => ({
+          'Jenis kegiatan': t.title,
+          Keterangan: t.description || '',
+          ...Object.fromEntries(Object.entries(t).map(([k, v]) => [k, v == null ? '' : String(v)])),
+        }))}
         onAddSelectedTasks={handleAddSelectedLogbookTasks}
         onOpenManualAddTaskModal={openAssignModal}
       />
