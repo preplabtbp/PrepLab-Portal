@@ -8,7 +8,10 @@ import {
 import { toast } from 'sonner';
 import { WidgetSize } from './types';
 import { TbpAvatarCharacter } from '../avatar/TbpAvatarCharacter';
+import { GbaOverworldMap } from '../avatar/GbaOverworldMap';
+import { GbaCharacterSprite } from '../avatar/GbaCharacterSprite';
 import { TempatNongkrongModal } from './TempatNongkrongModal';
+import { getRankByXp } from '../../lib/pointBlankRanks';
 
 interface Avatar3DWidgetProps {
   size: WidgetSize;
@@ -168,6 +171,76 @@ function normalizeUserSection(raw?: string): 'preparation' | 'laboratory' | 'mai
   return 'preparation';
 }
 
+/**
+ * Resolves room type for the GBA workplace diorama:
+ * - Laboratory: Ruang kerja lab kimia & XRF
+ * - Preparation: Ruang preparasi sampel crusher & oven
+ * - Maintenance: Workshop & bengkel pemeliharaan
+ * - Warehouse: Gudang IC bahan kimia & consumables
+ * - QA / Admin: Ruang kerja ber-komputer LIMS & akreditasi
+ */
+export function resolveUserRoomType(rawSection?: string, rawRole?: string): 'laboratory' | 'preparation' | 'maintenance' | 'warehouse' | 'qa' {
+  const s = `${rawSection || ''} ${rawRole || ''}`.toLowerCase();
+  
+  // 1. TOP PRIORITY: Quality Assurance / QA / QC / Assurance
+  if (
+    s.includes('quality') || 
+    s.includes('assurance') || 
+    s.includes('qa') || 
+    s.includes('qc')
+  ) {
+    return 'qa';
+  }
+
+  // 2. Ruang Kerja Laboratorium Kimia & XRF
+  if (
+    s.includes('laboratorium') || 
+    s.includes('kimia') || 
+    s.includes('xrf') || 
+    s.includes('analis') || 
+    s.includes('wet') ||
+    /\blab\b/.test(s)
+  ) {
+    return 'laboratory';
+  }
+
+  // 3. Workshop & Bengkel Pemeliharaan (Maintenance)
+  if (
+    s.includes('maint') || 
+    s.includes('mekanik') || 
+    s.includes('workshop') || 
+    s.includes('bengkel') || 
+    s.includes('pemeliharaan') || 
+    s.includes('teknisi')
+  ) {
+    return 'maintenance';
+  }
+
+  // 4. Gudang IC & Logistik Bahan (Gunakan boundary agar 'ic' tidak menangkap sembarang kata)
+  if (
+    s.includes('gudang') || 
+    s.includes('warehouse') || 
+    s.includes('logistik') || 
+    s.includes('logistic') || 
+    s.includes('inventory') || 
+    /\bic\b/.test(s)
+  ) {
+    return 'warehouse';
+  }
+
+  // 5. Admin / Office / Finance / HR
+  if (
+    s.includes('admin') || 
+    s.includes('adm') || 
+    s.includes('finance') || 
+    s.includes('hr')
+  ) {
+    return 'qa';
+  }
+
+  return 'preparation';
+}
+
 export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({ 
   size, 
   userNik = 'default',
@@ -188,6 +261,7 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
   const effectiveName = userName !== 'Ranger' ? userName : (localProfile.nama || localProfile.name || localStorage.getItem('p2h_inspector_name') || 'Ranger PrepLab');
   const rawSection = propUserSection || localProfile.section || localProfile.department || 'Preparation';
   const currentSectionKey = useMemo(() => normalizeUserSection(rawSection), [rawSection]);
+  const userRoomType = useMemo(() => resolveUserRoomType(rawSection, propUserRole || localProfile.role), [rawSection, propUserRole, localProfile.role]);
 
   const unlockedStorageKey = `preplab_pixel_unlocked_items_${effectiveNik}`;
   const configStorageKey = `preplab_pixel_fullbody_cfg_${effectiveNik}`;
@@ -230,6 +304,45 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
   const [accessory, setAccessory] = useState(ACCESSORY_ITEMS[0]); // lanyard
   const [boots, setBoots] = useState(BOOTS_ITEMS[0]); // boots_brown
   const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // Player military rank & level from gamification
+  const [userRank, setUserRank] = useState<{ level: number; name: string; icon: string }>(() => {
+    try {
+      const saved = localStorage.getItem(`preplab_gamification_${effectiveNik}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const xp = parsed.totalXp || parsed.stats?.totalXp || 0;
+        const r = getRankByXp(xp);
+        return {
+          level: parsed.level || r.currentRank.id || 1,
+          name: parsed.rankInfo?.currentRank?.name || r.currentRank.name || 'Trainee',
+          icon: parsed.rankInfo?.currentRank?.icon || r.currentRank.icon || '/assets/ranks/rank_01_trainee.svg'
+        };
+      }
+    } catch {}
+    const r0 = getRankByXp(0);
+    return { level: 1, name: r0.currentRank.name, icon: r0.currentRank.icon };
+  });
+
+  useEffect(() => {
+    if (!effectiveNik || effectiveNik === 'default') return;
+    let isMounted = true;
+    fetch(`/api/gamification/user-stats/${encodeURIComponent(effectiveNik)}?name=${encodeURIComponent(effectiveName || '')}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && isMounted) {
+          const xp = data.totalXp || data.stats?.totalXp || 0;
+          const r = getRankByXp(xp);
+          setUserRank({
+            level: data.level || r.currentRank.id || 1,
+            name: data.rankInfo?.currentRank?.name || r.currentRank.name || 'Trainee',
+            icon: data.rankInfo?.currentRank?.icon || r.currentRank.icon || '/assets/ranks/rank_01_trainee.svg'
+          });
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [effectiveNik, effectiveName]);
 
   // Load saved appearance
   useEffect(() => {
@@ -497,269 +610,45 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
   };
 
   return (
-    <div className="w-full h-full flex flex-col justify-between select-none relative overflow-hidden">
-      {/* ----------------- TOP CONTROLS BAR ----------------- */}
-      <div className="flex items-center justify-between gap-2 border-b border-[var(--border-main)]/60 pb-2 mb-1.5 z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-lime-500/15 text-lime-600 dark:text-lime-400 flex items-center justify-center shadow-xs">
-            <Footprints className="w-3.5 h-3.5" />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
-              <span>Ranger TBP PrepLab</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-lime-500/10 text-lime-700 dark:text-lime-400 font-semibold border border-lime-500/20 font-mono">
-                {isWalking ? '🚶 Patroli' : actionState === 'coffee' ? '☕ Rehat Kopi' : '🛡️ Siaga K3'}
-              </span>
-            </span>
-          </div>
-        </div>
+    <div className="w-full h-full flex flex-col justify-between select-none relative overflow-hidden font-sans rounded-2xl border-2 border-[#181820] shadow-md bg-[#181820]">
+      <GbaOverworldMap
+        roomType={userRoomType}
+        playerNik={effectiveNik}
+        playerName={effectiveName}
+        playerRankName={userRank.name}
+        playerRankIcon={userRank.icon}
+        headwearId={headwear.id}
+        headwearColor={headwear.hex}
+        outfitId={outfit.id}
+        outfitColor={outfit.hex}
+        bootsColor={boots.hex}
+        playerMessage={speechVisible ? speechText : undefined}
+        soundEnabled={soundEnabled}
+        onOpenWardrobe={() => setShowWardrobe(true)}
+        onSyncProfile={handleSyncToProfile}
+        onOpenFullLounge={() => setShowTempatNongkrong(true)}
+        isCompactDiorama={true}
+      />
 
-        {/* Action Toolbar */}
-        <div className="flex items-center gap-1">
-          {/* Mute button */}
-          <button
-            type="button"
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
-            title={soundEnabled ? 'Suara Aktif' : 'Bisu'}
-          >
-            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-lime-600" /> : <VolumeX className="w-3.5 h-3.5 opacity-40" />}
-          </button>
-
-          {/* Direct Button: Wajah & Kulit */}
-          <button
-            type="button"
-            onClick={() => {
-              setWardrobeTab('eyes');
-              setShowWardrobe(true);
-            }}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-rose-100 hover:bg-rose-200 text-black border border-rose-300 flex items-center gap-1 shadow-xs transition-all cursor-pointer"
-            title="Kustomisasi Wajah, Ekspresi, & Skin Tone Avatar"
-          >
-            <Smile className="w-3 h-3 text-rose-700" />
-            <span className="text-black">Wajah &amp; Kulit</span>
-          </button>
-
-          {/* MASUK TEMPAT NONGKRONG BUTTON */}
-          <button
-            type="button"
-            onClick={() => setShowTempatNongkrong(true)}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-black border border-amber-300 flex items-center gap-1 shadow-xs transition-all cursor-pointer"
-            title="Masuk ke Pos Nongkrong PrepLab"
-          >
-            <Coffee className="w-3 h-3 text-amber-700" />
-            <span className="text-black">Tempat Nongkrong</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-          </button>
-
-          {/* Wardrobe Modal Button */}
-          <button
-            type="button"
-            onClick={() => setShowWardrobe(true)}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-teal-100 hover:bg-teal-200 text-black border border-teal-300 flex items-center gap-1 shadow-xs transition-all cursor-pointer"
-          >
-            <Palette className="w-3 h-3 text-teal-700" />
-            <span className="text-black">Kustomisasi</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ----------------- INTERACTIVE SITE ROOM STAGE ----------------- */}
-      <div 
-        onClick={handleStageClick}
-        className="w-full flex-1 min-h-[175px] relative rounded-2xl border border-[var(--border-main)] overflow-hidden cursor-crosshair group shadow-inner transition-all"
-        style={{
-          background: 'linear-gradient(180deg, #E2E8F0 0%, #CBD5E1 50%, #94A3B8 100%)'
-        }}
-        title="Klik lantai untuk memerintahkan personil berjalan ke sana!"
-      >
-        {/* Background Room Details: Nickel Mining Laboratory Setup */}
-        <div className="absolute inset-0 pointer-events-none">
-          {/* Safety Banner on Wall */}
-          <div className="absolute top-2 left-3 px-2 py-0.5 rounded-md bg-amber-100/95 border border-amber-400 text-[8px] font-mono font-black text-black flex items-center gap-1 shadow-xs">
-            <ShieldAlert className="w-2.5 h-2.5 text-amber-600" />
-            <span className="text-black font-black">HARITA NICKEL &bull; PREPLAB TBP ZERO ACCIDENT</span>
-          </div>
-
-          {/* Nickel Lab Machine Status Silhouette (Top Center) */}
-          <div className="absolute top-2.5 right-28 px-2 py-0.5 rounded-md bg-white/90 border border-slate-300 text-[8px] font-mono text-black font-bold hidden sm:block text-right shadow-2xs">
-            <div className="text-black font-bold">FURNACE 1050°C: READY</div>
-            <div className="text-black font-bold">XRF-01: OK &bull; OVEN: 105°C</div>
-          </div>
-
-          {/* DOOR TO TEMPAT NONGKRONG / LOUNGE (Right Corner) */}
-          <div 
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowTempatNongkrong(true);
-            }}
-            className="absolute top-2.5 right-3 pointer-events-auto px-2 py-1 rounded-xl bg-amber-100 hover:bg-amber-200 border-2 border-amber-400 text-black text-[9px] font-black flex flex-col items-center gap-0.5 shadow-md backdrop-blur-xs cursor-pointer transition-all hover:scale-105"
-            title="Klik untuk masuk Tempat Nongkrong PrepLab"
-          >
-            <div className="flex items-center gap-1">
-              <Coffee className="w-3 h-3 text-amber-700 animate-bounce" />
-              <span className="text-black font-black">POS NONGKRONG</span>
-            </div>
-            <div className="flex items-center gap-1 text-[7.5px] text-emerald-800 font-mono font-black">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
-              <span>MASUK REHAT ➔</span>
-            </div>
-          </div>
-
-          {/* Industrial Epoxy Floor Tiles Line */}
-          <div 
-            className="absolute bottom-0 left-0 right-0 h-10 border-t border-slate-400/40"
-            style={{
-              background: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 24px), linear-gradient(180deg, #F8FAFC 0%, #E2E8F0 100%)'
-            }}
-          />
-
-          {/* Yellow Safety Warning Strip on Floor Edge */}
-          <div 
-            className="absolute bottom-9 left-0 right-0 h-1 opacity-70"
-            style={{
-              background: 'repeating-linear-gradient(45deg, #EAB308, #EAB308 6px, #0F172A 6px, #0F172A 12px)'
-            }}
+      {/* Hidden reference SVG for profile sync snapshot */}
+      <div className="hidden">
+        <div id="mainTbpAvatarSvg">
+          <GbaCharacterSprite
+            direction="down"
+            walkFrame={0}
+            actionState="idle"
+            skinColor={skin.skin}
+            headwearId={headwear.id}
+            headwearColor={headwear.hex}
+            outfitId={outfit.id}
+            outfitColor={outfit.hex}
+            bootsColor={boots.hex}
+            width={160}
+            height={210}
           />
         </div>
-
-        {/* Click Destination Target Ripple Beacon */}
-        {clickTargetMarker !== null && (
-          <div 
-            className="absolute bottom-4 pointer-events-none -translate-x-1/2 animate-ping"
-            style={{ left: `${clickTargetMarker}%` }}
-          >
-            <div className="w-5 h-2 rounded-full border-2 border-lime-400 bg-lime-400/30" />
-          </div>
-        )}
-
-        {/* ----------------- LIVING AVATAR & SPEECH BUBBLE ----------------- */}
-        <div 
-          className="absolute bottom-2 -translate-x-1/2 transition-all duration-75 flex flex-col items-center cursor-pointer"
-          style={{ left: `${posX}%` }}
-          onClick={handleAvatarDirectClick}
-          title="Klik personil untuk berinteraksi!"
-        >
-          {/* Floating Section-Aware Speech Balloon */}
-          {speechVisible && (
-            <div 
-              className="mb-1 max-w-[210px] sm:max-w-[260px] px-3 py-1.5 rounded-2xl bg-white text-[10px] font-medium text-black shadow-xl border border-lime-400 text-center relative animate-in fade-in zoom-in-95 group/balloon"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleNextDialogue();
-              }}
-            >
-              {/* Section Header Pill inside Balloon */}
-              <div className="flex items-center justify-between gap-1 mb-0.5 border-b border-black/10 pb-0.5">
-                <span className="text-[8.5px] font-black uppercase px-1.5 py-0.2 rounded-md bg-lime-200 text-black font-mono flex items-center gap-1 border border-lime-300">
-                  <span>⛏️ {speechBadge}</span>
-                </span>
-                <span className="text-[8px] text-slate-700 font-bold opacity-80">klik ganti ↻</span>
-              </div>
-
-              {/* Message text */}
-              <p className="leading-snug text-black font-bold">
-                {speechText}
-              </p>
-
-              {/* Bubble pointer tail */}
-              <div className="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-inherit border-b border-r border-lime-400 rotate-45" />
-            </div>
-          )}
-
-          {/* CRISP HIGH-DEFINITION TBP UNIFORM AVATAR */}
-          <div className="relative group/avatar">
-            <div id="mainTbpAvatarSvg" className="w-20 h-28 sm:w-24 sm:h-34 block">
-              <TbpAvatarCharacter
-                actionState={actionState}
-                walkFrame={walkFrame}
-                facing={facing}
-                skinColor={skin.skin}
-                skinShadow={skin.skinShadow}
-                headwearId={headwear.id}
-                headwearColor={headwear.hex}
-                outfitId={outfit.id}
-                outfitColor={outfit.hex}
-                eyeId={eyes.id}
-                accessoryId={accessory.id}
-                bootsId={boots.id}
-                bootsColor={boots.hex}
-                userName={effectiveName}
-                userNik={effectiveNik}
-                width={96}
-                height={132}
-              />
-            </div>
-
-            {/* Tap hint emote on hover */}
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 opacity-0 group-hover/avatar:opacity-100 transition-opacity bg-black text-white px-1.5 py-0.2 rounded text-[8px] font-mono font-bold whitespace-nowrap shadow-xs">
-              👋 Sapa Ranger!
-            </div>
-          </div>
-        </div>
-
-        {/* Floor Click Instruction overlay */}
-        <div className="absolute bottom-1 right-2 pointer-events-none px-2 py-0.5 rounded-md bg-white/95 border border-slate-300 text-[9px] font-mono font-black text-black shadow-2xs">
-          Klik lantai untuk berjalan ➔
-        </div>
       </div>
 
-      {/* ----------------- BOTTOM COMMAND ACTION DECK ----------------- */}
-      <div className="flex items-center justify-between gap-1.5 pt-2 mt-1 border-t border-[var(--border-main)]/50">
-        <div className="flex items-center gap-1 flex-wrap">
-          {/* Action 1: Patrol / Auto-walk */}
-          <button
-            type="button"
-            onClick={() => {
-              const nextTarget = posX > 50 ? 20 : 80;
-              setTargetX(nextTarget);
-              setActionState('walk');
-              playRetroSound('beep');
-            }}
-            className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-black border border-slate-300 transition-all flex items-center gap-1 cursor-pointer"
-          >
-            <Footprints className="w-3 h-3 text-lime-700" />
-            <span className="text-black">Patroli</span>
-          </button>
-
-          {/* Action 2: Inspect K3 */}
-          <button
-            type="button"
-            onClick={() => {
-              setActionState('inspect');
-              setSpeechText('🔍 Memeriksa kebersihan mangkok pulverizer & ventilasi lab...');
-              setSpeechBadge('Cek Peralatan');
-              setSpeechVisible(true);
-              playRetroSound('beep');
-              setTimeout(() => setActionState('idle'), 4000);
-            }}
-            className="px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-black border border-slate-300 transition-all flex items-center gap-1 cursor-pointer"
-          >
-            <Search className="w-3 h-3 text-amber-600" />
-            <span className="text-black">Cek APD</span>
-          </button>
-
-          {/* Action 3: Coffee Break -> Opens Tempat Nongkrong */}
-          <button
-            type="button"
-            onClick={() => setShowTempatNongkrong(true)}
-            className="px-2 py-1 rounded-lg text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-black border border-amber-300 transition-all flex items-center gap-1 cursor-pointer"
-          >
-            <Coffee className="w-3 h-3 text-amber-700" />
-            <span className="text-black">Nongkrong</span>
-          </button>
-        </div>
-
-        {/* Change Message Button */}
-        <button
-          type="button"
-          onClick={handleNextDialogue}
-          className="px-2.5 py-1 rounded-lg text-[10px] font-black text-black bg-lime-100 hover:bg-lime-200 border border-lime-300 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
-        >
-          <RefreshCw className="w-3 h-3 text-lime-800" />
-          <span className="text-black">Ganti Info ({speechBadge})</span>
-        </button>
-      </div>
 
       {/* ------------------------------------------------------------- */}
       {/* MODAL KUSTOMISASI: WARDROBE AVATAR TBP                        */}
@@ -806,25 +695,19 @@ export const Avatar3DWidget: React.FC<Avatar3DWidgetProps> = ({
               {/* Preview Box */}
               <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-[var(--border-main)]">
                 {/* SVG Avatar Preview */}
-                <div className="p-2 rounded-2xl bg-slate-900 shadow-md border border-white/10 flex-shrink-0 flex items-center justify-center">
-                  <TbpAvatarCharacter
-                    actionState="idle"
+                <div className="p-3 rounded-2xl bg-[#181820] shadow-md border-2 border-[#283040] flex-shrink-0 flex items-center justify-center">
+                  <GbaCharacterSprite
+                    direction="down"
                     walkFrame={0}
-                    facing="right"
+                    actionState="idle"
                     skinColor={skin.skin}
-                    skinShadow={skin.skinShadow}
                     headwearId={headwear.id}
                     headwearColor={headwear.hex}
                     outfitId={outfit.id}
                     outfitColor={outfit.hex}
-                    eyeId={eyes.id}
-                    accessoryId={accessory.id}
-                    bootsId={boots.id}
                     bootsColor={boots.hex}
-                    userName={effectiveName}
-                    userNik={effectiveNik}
-                    width={100}
-                    height={140}
+                    width={64}
+                    height={84}
                   />
                 </div>
 

@@ -1,5 +1,11 @@
 # Prep & Lab All in One Portal
 
+> [!NOTE]
+> **INFORMASI AKUN HOSTING GCP AKTIF:**
+> Akun hosting Google Cloud aktif: **`project-054e3351-b8d1-42f7-9c8`** (*"My First Project"*).
+> - Skrip `npm run deploy:main` dan `npm run deploy:staging` di `package.json` telah dikonfigurasi ke `project-054e3351-b8d1-42f7-9c8`.
+> - Jika Cloud Build gagal di Step 2 deploy, pastikan role **Cloud Run Admin** telah diaktifkan untuk Cloud Build Service Account di menu *Cloud Build > Permissions*.
+
 ## Migrasi ke Google Cloud Run
 
 Aplikasi ini menggunakan database PostgreSQL (Cloud SQL) yang dikelola oleh AI Studio selama tahap pengembangan. Ketika Anda mengekspor (Download ZIP) aplikasi ini untuk di-deploy ke project Google Cloud Run Anda sendiri, **database tidak ikut diekspor**.

@@ -7,6 +7,8 @@ import {
 import { getGlobalSocket, joinLounge, leaveLounge } from '../../lib/socketClient';
 import { getRankByXp } from '../../lib/pointBlankRanks';
 import { TbpAvatarCharacter } from '../avatar/TbpAvatarCharacter';
+import { GbaCharacterSprite } from '../avatar/GbaCharacterSprite';
+import { GbaOverworldMap } from '../avatar/GbaOverworldMap';
 import { SKIN_TONES } from './Avatar3DWidget';
 import { 
   TeakParkBench, 
@@ -14,7 +16,9 @@ import {
   RoundCoffeeTable, 
   WoodenDiningChair, 
   ModularLoungeSofa, 
-  BeverageBarCounter 
+  BeverageBarCounter,
+  GbaNickelSampleDrums,
+  GbaK3SignPost
 } from './lounge/LoungeFurnitureSvg';
 
 interface TempatNongkrongModalProps {
@@ -36,12 +40,17 @@ interface InRoomAvatar {
   section: string;
   posX: number;
   posY: number;
-  facing: 'left' | 'right';
+  facing: 'down' | 'up' | 'left' | 'right';
   actionState: 'idle' | 'walk' | 'coffee' | 'inspect' | 'jump' | 'smoke' | 'sit' | 'smoke_sit' | 'coffee_sit';
   walkFrame: number;
   speechText?: string;
   speechExpiry?: number;
   avatarUrl?: string;
+  headwearId?: string;
+  headwearColor?: string;
+  outfitId?: string;
+  outfitColor?: string;
+  bootsColor?: string;
   isMe?: boolean;
   isLive?: boolean;
   isDuty?: boolean;
@@ -53,7 +62,7 @@ interface LoungeSpot {
   zoneTitle: string;
   x: number; // Percentage width
   y: number; // Percentage height (exact ground baseline)
-  facing: 'left' | 'right';
+  facing: 'down' | 'up' | 'left' | 'right';
   action: 'smoke_sit' | 'sit' | 'coffee' | 'coffee_sit' | 'smoke' | 'idle' | 'inspect';
   speech: string;
   icon: string;
@@ -124,14 +133,14 @@ const getPangkatData = (nik: string, rawPangkat?: string, rawRole?: string): { n
 
 // EXACT MATCH: Comprehensive distributed seating & relaxation spots across the 2.5D Lounge
 const LOUNGE_SEATS: LoungeSpot[] = [
-  // 1-5: Gazebo & Smoking Zone
+  // 1-5: Gazebo & Smoking Zone (All sitting avatars face forward: 'down')
   {
     id: 'bench_1',
-    name: 'Bangku Gazebo 1 (Kiri)',
+    name: 'Bangku Gazebo 1 (Sisi Kiri)',
     zoneTitle: 'Area Merokok K3',
     x: 13,
     y: 79,
-    facing: 'right',
+    facing: 'down',
     action: 'smoke_sit',
     speech: '🚬 Menikmati hisapan rokok santai di Gazebo K3...',
     icon: '🚬'
@@ -142,7 +151,7 @@ const LOUNGE_SEATS: LoungeSpot[] = [
     zoneTitle: 'Area Merokok K3',
     x: 17,
     y: 79,
-    facing: 'right',
+    facing: 'down',
     action: 'smoke_sit',
     speech: '🚬 Ngobrol santai sambil merokok bareng rekan shift...',
     icon: '🚬'
@@ -153,7 +162,7 @@ const LOUNGE_SEATS: LoungeSpot[] = [
     zoneTitle: 'Area Merokok K3',
     x: 22,
     y: 83,
-    facing: 'right',
+    facing: 'down',
     action: 'smoke',
     speech: '🚬 Berdiri santai di asbak stainless buang puntung aman K3.',
     icon: '🚬'
@@ -164,18 +173,18 @@ const LOUNGE_SEATS: LoungeSpot[] = [
     zoneTitle: 'Area Merokok K3',
     x: 27,
     y: 79,
-    facing: 'left',
+    facing: 'down',
     action: 'smoke_sit',
     speech: '🚬 Rehat sejenak sebelum inspeksi crush & pulverize.',
     icon: '🚬'
   },
   {
     id: 'bench_2',
-    name: 'Bangku Gazebo 2 (Kanan)',
+    name: 'Bangku Gazebo 2 (Sisi Kanan)',
     zoneTitle: 'Area Merokok K3',
     x: 31,
     y: 79,
-    facing: 'left',
+    facing: 'down',
     action: 'smoke_sit',
     speech: '🚬 Duduk merokok santai sambil obrol shift preparasi!',
     icon: '🚬'
@@ -439,12 +448,10 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     };
   }, [userNik, userName, userRole]);
 
-  // My Avatar In-Room State: Start seated at Bangku Gazebo 1 (Exactly centered on bench)
-  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 13, y: 79 });
-  const [myTargetPos, setMyTargetPos] = useState<{ x: number; y: number }>({ x: 13, y: 79 });
-  const [myFacing, setMyFacing] = useState<'left' | 'right'>('right');
-  const [myActionState, setMyActionState] = useState<'idle' | 'walk' | 'coffee' | 'inspect' | 'jump' | 'smoke' | 'sit' | 'smoke_sit' | 'coffee_sit'>('smoke_sit');
-  const [pendingActionOnArrival, setPendingActionOnArrival] = useState<'idle' | 'walk' | 'coffee' | 'inspect' | 'jump' | 'smoke' | 'sit' | 'smoke_sit' | 'coffee_sit' | null>('smoke_sit');
+  // My Avatar In-Room State: Start seated at Gazebo bench (authentic GBA tile coordinates)
+  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 3.44, y: 4.75 });
+  const [myFacing, setMyFacing] = useState<'down' | 'up' | 'left' | 'right'>('right');
+  const [myActionState, setMyActionState] = useState<'idle' | 'walk' | 'coffee' | 'inspect' | 'jump' | 'smoke' | 'sit' | 'smoke_sit' | 'coffee_sit'>('sit');
   const [myWalkFrame, setMyWalkFrame] = useState(0);
   const [mySpeech, setMySpeech] = useState<{ text: string; expiry: number } | null>({
     text: '🚬 Santai sejenak merokok di Gazebo K3 PrepLab Obi!',
@@ -507,53 +514,48 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     } catch {}
   };
 
-  // Movement loop for My Avatar
-  useEffect(() => {
-    const moveTimer = setInterval(() => {
-      setMyPos(curr => {
-        const dx = myTargetPos.x - curr.x;
-        const dy = myTargetPos.y - curr.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < 1.4) {
-          if (pendingActionOnArrival) {
-            setMyActionState(pendingActionOnArrival);
-            setPendingActionOnArrival(null);
-
-            const socket = getGlobalSocket();
-            if (socket.connected) {
-              socket.emit('lounge:action', {
-                room: 'lounge',
-                nik: userNik,
-                username: effectiveUsername,
-                pangkat: effectivePangkat,
-                actionState: pendingActionOnArrival
-              });
-            }
-          } else if (myActionState === 'walk') {
-            setMyActionState('idle');
-          }
-          setClickBeacon(null);
-          return curr;
-        }
-
-        setMyActionState('walk');
-        setMyWalkFrame(f => (f + 1) % 4);
-        setMyFacing(dx >= 0 ? 'right' : 'left');
-
-        const stepSpeed = 1.4;
-        const nextX = curr.x + (dx / dist) * stepSpeed;
-        const nextY = curr.y + (dy / dist) * stepSpeed;
-
-        const boundedX = Math.max(12, Math.min(88, nextX));
-        const boundedY = Math.max(50, Math.min(86, nextY));
-
-        return { x: boundedX, y: boundedY };
+  // Real-time bidirectional movement & action callbacks for GbaOverworldMap
+  const handlePlayerMove = useCallback((pos: { x: number; y: number; facing: string; actionState: string }) => {
+    setMyPos({ x: pos.x, y: pos.y });
+    setMyFacing(pos.facing as any);
+    setMyActionState('walk');
+    const socket = getGlobalSocket();
+    if (socket.connected) {
+      socket.emit('lounge:move', {
+        room: 'lounge',
+        nik: userNik,
+        username: effectiveUsername,
+        pangkat: effectivePangkat,
+        x: pos.x,
+        y: pos.y,
+        facing: pos.facing,
+        actionState: 'walk'
       });
-    }, 85);
+    }
+  }, [userNik, effectiveUsername, effectivePangkat]);
 
-    return () => clearInterval(moveTimer);
-  }, [myTargetPos, myActionState, pendingActionOnArrival, userNik, effectiveUsername, effectivePangkat]);
+  const handlePlayerAction = useCallback((act: { actionState: string; facing?: string; speechText?: string; x: number; y: number }) => {
+    setMyPos({ x: act.x, y: act.y });
+    if (act.facing) setMyFacing(act.facing as any);
+    setMyActionState(act.actionState as any);
+    if (act.speechText) {
+      setMySpeech({ text: act.speechText, expiry: Date.now() + 7500 });
+    }
+    const socket = getGlobalSocket();
+    if (socket.connected) {
+      socket.emit('lounge:action', {
+        room: 'lounge',
+        nik: userNik,
+        username: effectiveUsername,
+        pangkat: effectivePangkat,
+        x: act.x,
+        y: act.y,
+        facing: act.facing,
+        actionState: act.actionState,
+        speechText: act.speechText
+      });
+    }
+  }, [userNik, effectiveUsername, effectivePangkat]);
 
   // Clean up expired speech bubbles (Live overhead balloons fade away after 7.5s)
   useEffect(() => {
@@ -584,14 +586,21 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     const rawLounge = Array.isArray(data.loungeMembers) ? data.loungeMembers : [];
 
     setOtherAvatars(prev => {
-      const next = new Map<string, InRoomAvatar>();
+      const next = new Map(prev);
+      const activeNiks = new Set<string>();
 
       // ONLY process Lounge Members (Real-time live avatars currently inside lounge)
       rawLounge.forEach((lm: any) => {
-        if (!lm.nik || lm.nik === userNik) return;
+        if (!lm || !lm.nik || lm.nik === userNik) return;
+        activeNiks.add(lm.nik);
         const existing = prev.get(lm.nik);
         const cleanUname = getCleanUsername(lm.nik, lm.name, lm.username);
         const rankData = getPangkatData(lm.nik, lm.pangkat);
+        const rawX = typeof lm.posX === 'number' ? lm.posX : (existing?.posX ?? 3.44);
+        const rawY = typeof lm.posY === 'number' ? lm.posY : (existing?.posY ?? 4.75);
+        const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+        const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
         next.set(lm.nik, {
           nik: lm.nik,
           name: cleanUname,
@@ -599,17 +608,28 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           pangkat: lm.pangkat || rankData.name,
           pangkatIcon: lm.pangkatIcon || rankData.icon,
           section: lm.section || 'Prep-Lab',
-          posX: typeof lm.posX === 'number' ? lm.posX : (existing?.posX ?? 13),
-          posY: typeof lm.posY === 'number' ? lm.posY : (existing?.posY ?? 79),
-          facing: lm.facing || existing?.facing || 'right',
-          actionState: lm.actionState || existing?.actionState || 'idle',
+          posX: tileX,
+          posY: tileY,
+          facing: lm.facing || existing?.facing || 'down',
+          actionState: lm.actionState || existing?.actionState || 'sit',
           walkFrame: existing?.walkFrame ?? 0,
           speechText: lm.speechText || existing?.speechText,
           speechExpiry: lm.speechExpiry || existing?.speechExpiry,
           avatarUrl: lm.avatar || existing?.avatarUrl,
+          headwearId: lm.headwearId || existing?.headwearId,
+          headwearColor: lm.headwearColor || existing?.headwearColor,
+          outfitId: lm.outfitId || existing?.outfitId,
+          outfitColor: lm.outfitColor || existing?.outfitColor,
+          bootsColor: lm.bootsColor || existing?.bootsColor,
           isLive: true
         });
       });
+
+      for (const k of next.keys()) {
+        if (!activeNiks.has(k)) {
+          next.delete(k);
+        }
+      }
 
       return next;
     });
@@ -639,11 +659,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    // 1. Initial snapshot fetch
+    // Fast initial snapshot bootstrap
     fetchPresenceOnline();
-
-    // 2. Periodic background refresh fallback (every 8s) to ensure zero desync
-    const pollingTimer = setInterval(fetchPresenceOnline, 8000);
 
     const socket = getGlobalSocket();
     const userPayload = {
@@ -655,6 +672,11 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       pangkatIcon: effectivePangkatIcon,
       section: userSection,
       avatar: avatarUrl || null,
+      headwearId: myCustomCfg?.headwearId || 'helmet_white',
+      headwearColor: myCustomCfg?.headwearColor || '#FFFFFF',
+      outfitId: myCustomCfg?.outfitId || 'uniform_tbp',
+      outfitColor: myCustomCfg?.outfitColor || '#84CC16',
+      bootsColor: myCustomCfg?.bootsColor || '#22C55E',
       posX: myPosRef.current.x,
       posY: myPosRef.current.y,
       facing: myFacingRef.current,
@@ -664,16 +686,22 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     // Join lounge explicitly (emits chat:join & lounge:join)
     joinLounge(userPayload);
 
-    // Initial lounge avatar snapshot from server
     // Initial lounge avatar snapshot from server (authoritative sync)
     const handleLoungeSync = (avatarList: any[]) => {
       if (Array.isArray(avatarList)) {
-        setOtherAvatars(() => {
-          const next = new Map<string, InRoomAvatar>();
+        setOtherAvatars(prev => {
+          const next = new Map(prev);
+          const activeNiks = new Set<string>();
           avatarList.forEach((av: any) => {
             if (!av || !av.nik || av.nik === userNik) return;
+            activeNiks.add(av.nik);
             const cleanUname = getCleanUsername(av.nik, av.name, av.username);
             const rankData = getPangkatData(av.nik, av.pangkat);
+            const rawX = typeof av.posX === 'number' ? av.posX : 3.44;
+            const rawY = typeof av.posY === 'number' ? av.posY : 4.75;
+            const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+            const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
             next.set(av.nik, {
               nik: av.nik,
               name: cleanUname,
@@ -681,17 +709,28 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               pangkat: av.pangkat || rankData.name,
               pangkatIcon: av.pangkatIcon || rankData.icon,
               section: av.section || 'Prep-Lab',
-              posX: typeof av.posX === 'number' ? av.posX : 13,
-              posY: typeof av.posY === 'number' ? av.posY : 79,
-              facing: av.facing || 'right',
-              actionState: av.actionState || 'idle',
+              posX: tileX,
+              posY: tileY,
+              facing: av.facing || 'down',
+              actionState: av.actionState || 'sit',
               walkFrame: 0,
               speechText: av.speechText,
               speechExpiry: av.speechExpiry,
               avatarUrl: av.avatar,
+              headwearId: av.headwearId,
+              headwearColor: av.headwearColor,
+              outfitId: av.outfitId,
+              outfitColor: av.outfitColor,
+              bootsColor: av.bootsColor,
               isLive: true
             });
           });
+
+          for (const k of next.keys()) {
+            if (!activeNiks.has(k)) {
+              next.delete(k);
+            }
+          }
           return next;
         });
       }
@@ -702,6 +741,11 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       if (!data || !data.nik || data.nik === userNik) return;
       const cleanUname = getCleanUsername(data.nik, data.name, data.username);
       const rankData = getPangkatData(data.nik, data.pangkat);
+      const rawX = typeof data.posX === 'number' ? data.posX : 3.44;
+      const rawY = typeof data.posY === 'number' ? data.posY : 4.75;
+      const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+      const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
       setOtherAvatars(prev => {
         const next = new Map(prev);
         const existing = next.get(data.nik);
@@ -712,12 +756,17 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           pangkat: data.pangkat || rankData.name,
           pangkatIcon: data.pangkatIcon || rankData.icon,
           section: data.section || 'Prep-Lab',
-          posX: typeof data.posX === 'number' ? data.posX : (existing?.posX ?? 13),
-          posY: typeof data.posY === 'number' ? data.posY : (existing?.posY ?? 79),
-          facing: data.facing || existing?.facing || 'right',
-          actionState: data.actionState || existing?.actionState || 'idle',
+          posX: tileX,
+          posY: tileY,
+          facing: data.facing || existing?.facing || 'down',
+          actionState: data.actionState || existing?.actionState || 'sit',
           walkFrame: 0,
           avatarUrl: data.avatar || existing?.avatarUrl,
+          headwearId: data.headwearId || existing?.headwearId,
+          headwearColor: data.headwearColor || existing?.headwearColor,
+          outfitId: data.outfitId || existing?.outfitId,
+          outfitColor: data.outfitColor || existing?.outfitColor,
+          bootsColor: data.bootsColor || existing?.bootsColor,
           isLive: true
         });
         return next;
@@ -729,6 +778,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     const handleUserLeft = (data: any) => {
       if (!data || !data.nik) return;
       setOtherAvatars(prev => {
+        if (!prev.has(data.nik)) return prev;
         const next = new Map(prev);
         next.delete(data.nik);
         return next;
@@ -745,7 +795,6 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           setOtherAvatars(prev => {
             const existing = prev.get(msg.senderNik);
             if (!existing) {
-              // Sender is not in the lounge - do not spawn a phantom avatar!
               return prev;
             }
             const next = new Map(prev);
@@ -773,17 +822,17 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           const existing = prev.get(data.nik);
           if (!existing) return prev;
           const next = new Map(prev);
-          const movedUname = getCleanUsername(data.nik, data.name, data.username);
-          const movedRank = getPangkatData(data.nik, data.pangkat);
+          const rawX = typeof data.x === 'number' ? data.x : existing.posX;
+          const rawY = typeof data.y === 'number' ? data.y : existing.posY;
+          const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+          const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
           next.set(data.nik, {
             ...existing,
-            username: data.username || existing.username || movedUname,
-            pangkat: data.pangkat || existing.pangkat || movedRank.name,
-            pangkatIcon: data.pangkatIcon || existing.pangkatIcon || movedRank.icon,
-            posX: data.x,
-            posY: data.y,
+            posX: tileX,
+            posY: tileY,
             facing: data.facing || existing.facing,
-            actionState: data.actionState || 'idle',
+            actionState: data.actionState || 'walk',
             isLive: true
           });
           return next;
@@ -797,13 +846,16 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           const existing = prev.get(data.nik);
           if (!existing) return prev;
           const next = new Map(prev);
-          const actionUname = getCleanUsername(data.nik, data.name, data.username);
-          const actionRank = getPangkatData(data.nik, data.pangkat);
+          const rawX = typeof data.x === 'number' ? data.x : existing.posX;
+          const rawY = typeof data.y === 'number' ? data.y : existing.posY;
+          const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+          const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
           next.set(data.nik, {
             ...existing,
-            username: data.username || existing.username || actionUname,
-            pangkat: data.pangkat || existing.pangkat || actionRank.name,
-            pangkatIcon: data.pangkatIcon || existing.pangkatIcon || actionRank.icon,
+            posX: tileX,
+            posY: tileY,
+            facing: data.facing || existing.facing,
             actionState: data.actionState || existing.actionState,
             speechText: data.speechText || existing.speechText,
             speechExpiry: data.speechText ? Date.now() + 7500 : existing.speechExpiry,
@@ -830,7 +882,6 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     socket.on('new_message', handleNewMessage);
 
     return () => {
-      clearInterval(pollingTimer);
       socket.off('lounge:sync_state', handleLoungeSync);
       socket.off('lounge:user_joined', handleUserJoined);
       socket.off('lounge:user_left', handleUserLeft);
@@ -840,74 +891,46 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       socket.off('new_message', handleNewMessage);
       leaveLounge(userNik);
     };
-  }, [isOpen, userNik, effectiveUsername, effectivePangkat, effectivePangkatIcon, userSection, avatarUrl, fetchPresenceOnline]);
+  }, [isOpen, userNik, effectiveUsername, effectivePangkat, effectivePangkatIcon, userSection, avatarUrl, myCustomCfg, fetchPresenceOnline, syncOnlinePresence]);
 
-  // Click on open floor to walk freely
-  const handleFloorClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!roomStageRef.current) return;
-    const rect = roomStageRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const percentX = Math.max(14, Math.min(86, (clickX / rect.width) * 100));
-    const percentY = Math.max(52, Math.min(85, (clickY / rect.height) * 100));
-
-    setMyTargetPos({ x: percentX, y: percentY });
-    setPendingActionOnArrival('idle');
-    setActiveSeatId(null);
-    setClickBeacon({ x: percentX, y: percentY });
-    playChime('step');
-
-    const socket = getGlobalSocket();
-    if (socket.connected) {
-      socket.emit('lounge:move', {
-        room: 'lounge',
-        nik: userNik,
-        username: effectiveUsername,
-        pangkat: effectivePangkat,
-        x: percentX,
-        y: percentY,
-        facing: percentX >= myPos.x ? 'right' : 'left',
-        actionState: 'walk'
-      });
+  // Check if a spot is already occupied by someone else sitting
+  const isLoungeSpotTaken = (spot: LoungeSpot): boolean => {
+    const tileX = spot.x > 12 ? (spot.x / 100) * 12 : spot.x;
+    const tileY = spot.y > 8 ? (spot.y / 100) * 8 : spot.y;
+    for (const av of otherAvatars.values()) {
+      const isSittingOther = av.actionState === 'sit' || av.actionState === 'smoke_sit' || av.actionState === 'coffee_sit';
+      const dist = Math.hypot(av.posX - tileX, av.posY - tileY);
+      if (isSittingOther && dist < 0.65) {
+        return true;
+      }
     }
+    return false;
   };
 
   // Click on a piece of furniture to sit directly on it
   const handleSitAtSpot = (spot: LoungeSpot) => {
-    setMyTargetPos({ x: spot.x, y: spot.y });
-    setMyFacing(spot.facing);
-    setPendingActionOnArrival(spot.action);
-    setActiveSeatId(spot.id);
-    setClickBeacon({ x: spot.x, y: spot.y });
-    playChime('step');
+    if (isLoungeSpotTaken(spot)) {
+      playChime('msg');
+      setMySpeech({ text: '⚠️ Kursi ini sudah ditempati rekan lain!', expiry: Date.now() + 4500 });
+      return;
+    }
 
+    const tileX = spot.x > 12 ? (spot.x / 100) * 12 : spot.x;
+    const tileY = spot.y > 8 ? (spot.y / 100) * 8 : spot.y;
+    setMyPos({ x: tileX, y: tileY });
+    setMyFacing(spot.facing || 'down');
+    setMyActionState(spot.action);
+    setActiveSeatId(spot.id);
+    playChime('step');
     setMySpeech({ text: spot.speech, expiry: Date.now() + 6500 });
 
-    const socket = getGlobalSocket();
-    if (socket.connected) {
-      socket.emit('lounge:move', {
-        room: 'lounge',
-        nik: userNik,
-        username: effectiveUsername,
-        pangkat: effectivePangkat,
-        x: spot.x,
-        y: spot.y,
-        facing: spot.facing,
-        actionState: 'walk'
-      });
-      socket.emit('send_message', {
-        room: 'lounge',
-        senderNik: userNik,
-        senderName: effectiveUsername,
-        senderUsername: effectiveUsername,
-        senderPangkat: effectivePangkat,
-        senderSection: userSection,
-        senderAvatar: avatarUrl,
-        text: spot.speech,
-        timestamp: new Date().toISOString()
-      });
-    }
+    handlePlayerAction({
+      actionState: spot.action,
+      facing: spot.facing || 'down',
+      speechText: spot.speech,
+      x: tileX,
+      y: tileY
+    });
   };
 
   // Send live overhead speech (No history recorded)
@@ -1056,743 +1079,295 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           .lantern-glow { animation: lanternFlicker 2.5s infinite ease-in-out; }
         `}</style>
 
-        {/* ── TOP HEADER BAR (Crisp, High-Contrast & Enterprise Grade) ── */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-amber-500/30 bg-slate-900/95 text-white z-20 shadow-md">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center shadow-lg font-black text-xl">
-              🚬
+        {/* ── TOP HEADER BAR (Minimalist GBA Retro Title Bar) ── */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b-2 border-emerald-900/40 bg-slate-900 text-white z-20 shadow-md">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md font-black text-lg border-2 border-emerald-800">
+              🏢
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base sm:text-lg font-black text-white font-display flex items-center gap-2">
-                  <span>Tempat Nongkrong &amp; Gazebo Merokok PrepLab</span>
-                </h3>
-                <div className="flex items-center gap-1.5">
-                  <span className="px-3 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-black text-xs shadow-md font-mono flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
-                    <span>{allRenderAvatars.length} Personil di Tempat Nongkrong</span>
-                  </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm sm:text-base font-black text-emerald-300 font-display tracking-tight flex items-center gap-1.5">
+                <span>PREPLAB SITE LOUNGE &amp; GAZEBO</span>
+              </h3>
+
+              {/* Online Personil Counter with Tooltip */}
+              <div className="relative group/tt">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 font-black text-xs shadow-xs font-mono flex items-center gap-1.5 cursor-help">
+                  <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
+                  <span>👥 {allRenderAvatars.length}</span>
+                </span>
+                <div className="absolute left-0 top-7 z-30 hidden group-hover/tt:block px-2.5 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                  {allRenderAvatars.length} Personil di Tempat Nongkrong &amp; Gazebo K3
                 </div>
               </div>
-              <p className="text-xs text-slate-200 flex items-center gap-2 mt-0.5 font-medium">
-                <span className="text-amber-300 font-bold flex items-center gap-1">
-                  <span>🚬 Gazebo Merokok K3</span>
-                </span>
-                <span className="text-slate-400">&bull;</span>
-                <span className="text-emerald-300 font-bold flex items-center gap-1">
-                  <span>☕ Meja Ngopi &amp; Cemilan</span>
-                </span>
-                <span className="text-slate-400">&bull;</span>
-                <span className="text-cyan-300 font-bold flex items-center gap-1">
-                  <span>🛋️ Sofa Rehat Lab</span>
-                </span>
-                <span className="text-slate-400">&bull;</span>
-                <span className="text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded-md font-bold">
-                  Klik langsung furnitur bangku / kursi / sofa untuk duduk!
-                </span>
-              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Manual Sync Button */}
-            <button
-              type="button"
-              onClick={() => handleManualSync()}
-              className="p-2.5 rounded-xl bg-white/10 text-slate-200 hover:text-white hover:bg-white/20 transition-all cursor-pointer shadow-sm flex items-center justify-center"
-              title="Sinkronisasi Ulang Presensi Realtime"
-            >
-              <RefreshCw className={`w-4 h-4 text-cyan-300 ${isSyncing ? 'animate-spin' : ''}`} />
-            </button>
+          <div className="flex items-center gap-1.5">
+            {/* Manual Sync Button with Tooltip */}
+            <div className="relative group/tt">
+              <button
+                type="button"
+                onClick={() => handleManualSync()}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer shadow-xs flex items-center justify-center active:scale-95"
+                aria-label="Sinkronisasi Presensi"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-cyan-300 ${isSyncing ? 'animate-spin' : ''}`} />
+              </button>
+              <div className="absolute right-0 top-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                🔄 Sinkronisasi Presensi Realtime
+              </div>
+            </div>
 
-            {/* Audio Toggle */}
-            <button
-              type="button"
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className="p-2.5 rounded-xl bg-white/10 text-slate-200 hover:text-white hover:bg-white/20 transition-all cursor-pointer shadow-sm"
-              title={soundEnabled ? 'Suara Aktif' : 'Bisu'}
-            >
-              {soundEnabled ? <Volume2 className="w-5 h-5 text-amber-400" /> : <VolumeX className="w-5 h-5 opacity-40" />}
-            </button>
+            {/* Audio Toggle with Tooltip */}
+            <div className="relative group/tt">
+              <button
+                type="button"
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer shadow-xs flex items-center justify-center active:scale-95"
+                aria-label="Toggle Suara"
+              >
+                {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 opacity-40" />}
+              </button>
+              <div className="absolute right-0 top-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                {soundEnabled ? '🔊 Suara Retro: Aktif' : '🔇 Suara Retro: Bisu'}
+              </div>
+            </div>
 
-            {/* Close Button */}
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2.5 rounded-xl bg-rose-500/20 text-rose-300 hover:text-white hover:bg-rose-500 transition-all cursor-pointer shadow-sm"
-              title="Keluar dari Tempat Nongkrong"
-            >
-              <X className="w-5 h-5 font-bold" />
-            </button>
+            {/* Close Button with Tooltip */}
+            <div className="relative group/tt">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-xl bg-rose-600/30 hover:bg-rose-600 text-rose-200 hover:text-white border border-rose-500/40 transition-all cursor-pointer shadow-xs flex items-center justify-center active:scale-95"
+                aria-label="Tutup Lounge"
+              >
+                <X className="w-4 h-4 font-bold" />
+              </button>
+              <div className="absolute right-0 top-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                ❌ Keluar dari Tempat Nongkrong
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ── MAIN VIBRANT ARCHITECTURAL STAGE ── */}
-        <div 
-          ref={roomStageRef}
-          onClick={handleFloorClick}
-          className="w-full flex-1 relative overflow-hidden cursor-crosshair group shadow-inner"
-          style={{
-            background: 'linear-gradient(180deg, #1E293B 0%, #0F172A 45%, #020617 100%)'
-          }}
-        >
-          {/* 1. ROOM ENVIRONMENT: PANORAMA WINDOW & ARCHITECTURAL FLOORING */}
-          <div className="absolute inset-0 pointer-events-none select-none">
-            {/* Bright Daytime Panorama Glass Wall overlooking Pulau Obi Nickel Hills */}
-            <div 
-              className="absolute top-2 left-1/2 -translate-x-1/2 w-[76%] max-w-[660px] h-34 rounded-2xl border-4 border-slate-700/80 overflow-hidden shadow-2xl flex flex-col justify-between p-2"
-              style={{
-                background: 'linear-gradient(180deg, #38BDF8 0%, #BAE6FD 45%, #FEF08A 75%, #FDE047 100%)'
-              }}
-            >
-              {/* Window Header Banner */}
-              <div className="flex items-center justify-between text-[10px] font-black text-slate-900 bg-white/75 backdrop-blur-xs px-3 py-1 rounded-lg shadow-sm">
-                <span className="flex items-center gap-1.5 tracking-wider">
-                  <Sun className="w-3.5 h-3.5 text-amber-600 animate-spin" />
-                  <span>PULAU OBI NICKEL CONCESSION &bull; PT TRIMEGAH BANGUN PERSADA (HARITA NICKEL)</span>
-                </span>
-                <span className="font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md font-bold">
-                  TERAS PREPLAB &bull; 29°C CERAH
-                </span>
-              </div>
+        {/* ── MAIN 1:1 POKÉMON GBA OVERWORLD MULTIPLAYER STAGE ── */}
+        <div className="w-full flex-1 relative overflow-hidden bg-[#181820] flex flex-col">
+          <GbaOverworldMap
+            roomType="lounge_nickel"
+            playerNik={userNik}
+            playerName={effectiveUsername}
+            playerRankName={effectivePangkat}
+            playerRankIcon={effectivePangkatIcon}
+            headwearId={myCustomCfg?.headwearId || 'helmet_white'}
+            headwearColor={myCustomCfg?.headwearColor || '#FFFFFF'}
+            outfitId={myCustomCfg?.outfitId || 'uniform_tbp'}
+            outfitColor={myCustomCfg?.outfitColor || '#84CC16'}
+            bootsColor={myCustomCfg?.bootsColor || '#22C55E'}
+            playerMessage={mySpeech?.text}
+            playerActionState={myActionState === 'smoke_sit' || myActionState === 'coffee_sit' ? 'sit' : (myActionState as any)}
+            onPlayerMove={handlePlayerMove}
+            onPlayerAction={handlePlayerAction}
+            otherPlayers={Array.from(otherAvatars.values()).map(av => {
+              const rawX = typeof av.posX === 'number' ? av.posX : 3.44;
+              const rawY = typeof av.posY === 'number' ? av.posY : 4.75;
+              const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+              const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+              return {
+                id: av.nik,
+                name: av.username || av.name,
+                nik: av.nik,
+                x: tileX,
+                y: tileY,
+                facing: av.facing || 'down',
+                actionState: (av.actionState === 'smoke_sit' || av.actionState === 'coffee_sit') ? 'sit' : ((av.actionState as any) || 'idle'),
+                pangkatName: av.pangkat,
+                pangkatIcon: av.pangkatIcon,
+                headwearId: av.headwearId,
+                headwearColor: av.headwearColor,
+                outfitId: av.outfitId,
+                outfitColor: av.outfitColor,
+                message: av.speechText
+              };
+            })}
+            soundEnabled={soundEnabled}
+            isCompactDiorama={false}
+          />
+        </div>
 
-              {/* Nickel Hills Silhouettes in Perspective */}
-              <div className="relative h-14 w-full overflow-hidden">
-                <svg viewBox="0 0 500 60" className="w-full h-full preserve-3d">
-                  <path d="M 0 50 Q 80 15 160 40 Q 240 10 320 35 Q 410 15 500 45 L 500 60 L 0 60 Z" fill="#15803D" opacity="0.8" />
-                  <path d="M 0 45 Q 60 25 130 50 Q 220 20 300 45 Q 400 25 500 48 L 500 60 L 0 60 Z" fill="#166534" opacity="0.9" />
-                  <path d="M 50 48 L 70 38 L 90 48 Z" fill="#D97706" opacity="0.7" />
-                  <path d="M 280 44 L 305 34 L 330 44 Z" fill="#B45309" opacity="0.7" />
-                </svg>
-              </div>
-
-              {/* Steel Mullion Panes Grid */}
-              <div className="absolute inset-0 border-r-2 border-l-2 border-white/25 grid grid-cols-4 pointer-events-none" />
-            </div>
-
-            {/* Warm Architectural Hardwood Chevron / Parquet Flooring */}
-            <div 
-              className="absolute bottom-0 left-0 right-0 h-[56%] border-t-2 border-amber-500/50"
-              style={{
-                background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 2px, transparent 2px, transparent 40px), linear-gradient(180deg, #451A03 0%, #78350F 40%, #291202 100%)'
-              }}
-            />
-
-            {/* K3 High-Visibility Safety Hazard Transition Stripe */}
-            <div 
-              className="absolute bottom-[55%] left-0 right-0 h-1.5 opacity-90 shadow-md"
-              style={{
-                background: 'repeating-linear-gradient(45deg, #FACC15, #FACC15 10px, #0F172A 10px, #0F172A 20px)'
-              }}
-            />
-          </div>
-
-          {/* ======================================================== */}
-          {/* ZONE 1: GAZEBO & AREA MEROKOK K3 (PERGOLA FRAMEWORK)     */}
-          {/* ======================================================== */}
-          {/* Architectural Pergola Canopy Roof Structure across Left Terrace */}
-          <div className="absolute bottom-[20%] left-[4%] w-[33%] max-w-[340px] pointer-events-none z-5">
-            {/* Pergola Timber Rafters */}
-            <div className="relative w-full h-8 flex justify-between items-center px-4 -mb-3 z-10">
-              <div className="w-3.5 h-8 bg-amber-900 rounded-t-sm border-b-2 border-amber-700 shadow-md" />
-              <div className="w-3.5 h-8 bg-amber-900 rounded-t-sm border-b-2 border-amber-700 shadow-md" />
-              <div className="w-3.5 h-8 bg-amber-900 rounded-t-sm border-b-2 border-amber-700 shadow-md" />
-              <div className="w-3.5 h-8 bg-amber-900 rounded-t-sm border-b-2 border-amber-700 shadow-md" />
-            </div>
-            {/* Horizontal Heavy Lintel Beam */}
-            <div className="w-full h-4.5 bg-gradient-to-r from-amber-800 via-amber-700 to-amber-900 rounded-sm border-b-2 border-amber-950 shadow-xl flex items-center justify-around px-6">
-              {/* 3 Industrial Cage Edison Pendant Lights */}
-              <div className="w-5 h-7 rounded-full bg-amber-400 lantern-glow flex items-center justify-center text-[10px] shadow-lg mt-5">💡</div>
-              <div className="w-5 h-7 rounded-full bg-amber-300 lantern-glow flex items-center justify-center text-[10px] shadow-lg mt-5">💡</div>
-              <div className="w-5 h-7 rounded-full bg-amber-400 lantern-glow flex items-center justify-center text-[10px] shadow-lg mt-5">💡</div>
-            </div>
-
-            {/* Official Harita TBP Enamel Green K3 Signboard */}
-            <div className="mt-3 mx-auto w-[94%] px-3 py-1.5 rounded-xl bg-emerald-600 text-white border-2 border-emerald-300 flex items-center justify-between shadow-2xl">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🚬</span>
-                <div className="leading-tight">
-                  <div className="text-[10px] font-black tracking-wider uppercase">AREA MEROKOK RESMI K3</div>
-                  <div className="text-[7.5px] font-bold text-emerald-100 font-mono">SITE PULAU OBI &bull; PREPLAB HARITA TBP</div>
+        {/* ── BOTTOM COMMAND DECK (High-Contrast, Crisp & Ultra-Visible Chat Bar) ── */}
+        <div className="p-3 sm:p-3.5 border-t-2 border-emerald-500/50 bg-[#1E293B] flex flex-col gap-2.5 z-20 shadow-2xl">
+          {/* Quick Action Icons Bar with Hover Tooltips */}
+          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-0.5">
+            <div className="flex items-center gap-1.5">
+              {/* Sit / Stand Toggle */}
+              <div className="relative group/tt">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isCurrentSitting) {
+                      setMyActionState('idle');
+                      setActiveSeatId(null);
+                    } else {
+                      // Find first available bench slot (2 persons per bench)
+                      const availableSpot = LOUNGE_SEATS.find(s => s.action.includes('sit') && !isLoungeSpotTaken(s));
+                      if (availableSpot) {
+                        handleSitAtSpot(availableSpot);
+                      } else {
+                        playChime('msg');
+                        setMySpeech({ text: '⚠️ Semua bangku gazebo sedang penuh (2 orang per bangku)!', expiry: Date.now() + 4500 });
+                      }
+                    }
+                  }}
+                  className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 border ${
+                    isCurrentSitting 
+                      ? 'bg-amber-400 text-slate-950 border-amber-300' 
+                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                  }`}
+                  aria-label="Duduk atau Berdiri"
+                >
+                  <span>{isCurrentSitting ? '🚶' : '🪑'}</span>
+                </button>
+                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                  {isCurrentSitting ? '🚶 Berdiri Santai' : '🪑 Duduk di Bangku Gazebo'}
                 </div>
               </div>
-              <span className="px-2 py-0.5 rounded-md bg-white text-emerald-800 font-black text-[8px] shadow-xs">
-                K3 ZERO ACCIDENT
+
+              {/* Smoke Action */}
+              <div className="relative group/tt">
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage('🚬 Santai sejenak hisap rokok di Gazebo K3...', 'smoke')}
+                  className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 border ${
+                    myActionState === 'smoke' || myActionState === 'smoke_sit'
+                      ? 'bg-amber-400 text-slate-950 border-amber-300' 
+                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                  }`}
+                  aria-label="Merokok Santai"
+                >
+                  <span>🚬</span>
+                </button>
+                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                  🚬 Merokok Santai di Gazebo K3
+                </div>
+              </div>
+
+              {/* Coffee Action */}
+              <div className="relative group/tt">
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage('☕ Seruput kopi hitam hangat sambil rehat sejenak!', 'coffee')}
+                  className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 border ${
+                    myActionState === 'coffee' || myActionState === 'coffee_sit'
+                      ? 'bg-emerald-400 text-slate-950 border-emerald-300' 
+                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                  }`}
+                  aria-label="Seruput Kopi"
+                >
+                  <span>☕</span>
+                </button>
+                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                  ☕ Seruput Kopi Hitam Hangat
+                </div>
+              </div>
+
+              {/* Snack Action */}
+              <div className="relative group/tt">
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage('🥪 Menaruh pisang goreng & snack hangat di meja!', 'coffee')}
+                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
+                  aria-label="Bagi Pisang Goreng"
+                >
+                  <span>🥪</span>
+                </button>
+                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                  🥪 Bagi Pisang Goreng &amp; Cemilan
+                </div>
+              </div>
+
+              {/* Wave Greeting */}
+              <div className="relative group/tt">
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage('👋 Halo rekan shift Preparasi & Lab Nikel TBP!', 'jump')}
+                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
+                  aria-label="Sapa Rekan"
+                >
+                  <span>👋</span>
+                </button>
+                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                  👋 Sapa Semua Rekan Shift
+                </div>
+              </div>
+
+              {/* Safety K3 Cheers */}
+              <div className="relative group/tt">
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage('👍 Zero Accident harga mati di site TBP!', 'jump')}
+                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
+                  aria-label="Semangat K3"
+                >
+                  <span>👍</span>
+                </button>
+                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                  👍 Semangat K3 Zero Accident!
+                </div>
+              </div>
+
+              {/* Sample Ore Discuss */}
+              <div className="relative group/tt">
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage('🪨 Sample saprolite & limonite shift ini representatif & homogen!', 'inspect')}
+                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
+                  aria-label="Bahas Sampel"
+                >
+                  <span>🪨</span>
+                </button>
+                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                  🪨 Bahas Sampel Saprolite &amp; Limonite
+                </div>
+              </div>
+            </div>
+
+            {/* Current Active Location Pill */}
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 text-[11px] font-mono border border-slate-600 shadow-xs">
+              <span className="text-emerald-400">●</span>
+              <span>{isCurrentSitting ? (activeSpot ? activeSpot.name : 'Duduk Santai') : 'Patroli Siaga K3'}</span>
+            </div>
+          </div>
+
+          {/* ULTRA-VISIBLE, CRISP & HIGH-CONTRAST CHAT INPUT BAR */}
+          <div className="flex items-center gap-2 p-1 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-inner">
+            <div className="flex-1 relative flex items-center">
+              <span className="absolute left-3.5 text-slate-400 text-base select-none pointer-events-none">
+                💬
               </span>
-            </div>
-
-            {/* Subtle Protective Railing behind benches */}
-            <div className="w-full h-8 border-b border-t border-slate-600/40 mt-1 flex justify-around items-center px-4 opacity-40">
-              <div className="w-1 h-full bg-slate-500" />
-              <div className="w-1 h-full bg-slate-500" />
-              <div className="w-1 h-full bg-slate-500" />
-              <div className="w-1 h-full bg-slate-500" />
-            </div>
-          </div>
-
-          {/* ── UNIFIED PERSPECTIVE 2.5D FURNITURE MODELS ── */}
-          {/* 1. Bangku Merokok 1 (Left Bench) - Exactly anchored at x: 13%, y: 79% */}
-          <div 
-            className="absolute -translate-x-1/2 -translate-y-full cursor-pointer group/bench1"
-            style={{ 
-              left: '13%', 
-              top: '79%', 
-              width: 136, 
-              zIndex: 790 
-            }}
-            onMouseEnter={() => setHoveredFurniture('bench_1')}
-            onMouseLeave={() => setHoveredFurniture(null)}
-            onClick={(e) => {
-              e.stopPropagation();
-              const spot = LOUNGE_SEATS.find(s => s.id === 'bench_1') || LOUNGE_SEATS[0];
-              handleSitAtSpot(spot);
-            }}
-          >
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/bench1:opacity-100 transition-opacity bg-amber-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
-              <span>🚬</span>
-              <span>Bangku 1 &bull; Klik Duduk &amp; Merokok</span>
-            </div>
-            <TeakParkBench facing="right" isHovered={hoveredFurniture === 'bench_1' || activeSeatId === 'bench_1'} />
-          </div>
-
-          {/* 2. Standing Stainless Ashtray - Anchored at x: 22%, y: 80% */}
-          <div 
-            className="absolute -translate-x-1/2 -translate-y-full pointer-events-none"
-            style={{ 
-              left: '22%', 
-              top: '80%', 
-              width: 36, 
-              zIndex: 800 
-            }}
-          >
-            <StandingAshtray />
-          </div>
-
-          {/* 3. Bangku Merokok 2 (Right Bench) - Exactly anchored at x: 31%, y: 79% */}
-          <div 
-            className="absolute -translate-x-1/2 -translate-y-full cursor-pointer group/bench2"
-            style={{ 
-              left: '31%', 
-              top: '79%', 
-              width: 136, 
-              zIndex: 790 
-            }}
-            onMouseEnter={() => setHoveredFurniture('bench_2')}
-            onMouseLeave={() => setHoveredFurniture(null)}
-            onClick={(e) => {
-              e.stopPropagation();
-              const spot = LOUNGE_SEATS.find(s => s.id === 'bench_2') || LOUNGE_SEATS[4];
-              handleSitAtSpot(spot);
-            }}
-          >
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/bench2:opacity-100 transition-opacity bg-amber-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
-              <span>🚬</span>
-              <span>Bangku 2 &bull; Klik Duduk &amp; Merokok</span>
-            </div>
-            <TeakParkBench facing="left" isHovered={hoveredFurniture === 'bench_2' || activeSeatId === 'bench_2'} />
-          </div>
-
-          {/* 4. Bar Minuman & Dispenser - Anchored at x: 38%, y: 64% */}
-          <div 
-            className="absolute -translate-x-1/2 -translate-y-full cursor-pointer group/bar"
-            style={{ 
-              left: '38%', 
-              top: '64%', 
-              width: 120, 
-              zIndex: 640 
-            }}
-            onMouseEnter={() => setHoveredFurniture('bar_refreshment')}
-            onMouseLeave={() => setHoveredFurniture(null)}
-            onClick={(e) => {
-              e.stopPropagation();
-              const spot = LOUNGE_SEATS.find(s => s.id === 'bar_refreshment') || LOUNGE_SEATS[5];
-              handleSitAtSpot(spot);
-            }}
-          >
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-purple-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
-              <span>🫖</span>
-              <span>Bar Minuman &bull; Ambil Kopi/Teh</span>
-            </div>
-            <BeverageBarCounter isHovered={hoveredFurniture === 'bar_refreshment' || activeSeatId === 'bar_refreshment'} />
-          </div>
-
-          {/* 5. Kursi Kopi 1 (Left Chair) - Anchored at x: 44%, y: 78% */}
-          <div 
-            className="absolute -translate-x-1/2 -translate-y-full cursor-pointer group/chair1"
-            style={{ 
-              left: '44%', 
-              top: '78%', 
-              width: 70, 
-              zIndex: 780 
-            }}
-            onMouseEnter={() => setHoveredFurniture('chair_coffee_1')}
-            onMouseLeave={() => setHoveredFurniture(null)}
-            onClick={(e) => {
-              e.stopPropagation();
-              const spot = LOUNGE_SEATS.find(s => s.id === 'chair_coffee_1') || LOUNGE_SEATS[7];
-              handleSitAtSpot(spot);
-            }}
-          >
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/chair1:opacity-100 transition-opacity bg-emerald-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
-              <span>☕</span>
-              <span>Kursi Kopi 1 &bull; Klik Duduk</span>
-            </div>
-            <WoodenDiningChair facing="right" isHovered={hoveredFurniture === 'chair_coffee_1' || activeSeatId === 'chair_coffee_1'} />
-          </div>
-
-          {/* 6. Round Teak Coffee Table - Anchored at x: 52%, y: 82% (In front of chairs) */}
-          <div 
-            className="absolute -translate-x-1/2 -translate-y-full pointer-events-none"
-            style={{ 
-              left: '52%', 
-              top: '82%', 
-              width: 145, 
-              zIndex: 820 
-            }}
-          >
-            <RoundCoffeeTable />
-          </div>
-
-          {/* 7. Kursi Kopi 2 (Right Chair) - Anchored at x: 60%, y: 78% */}
-          <div 
-            className="absolute -translate-x-1/2 -translate-y-full cursor-pointer group/chair2"
-            style={{ 
-              left: '60%', 
-              top: '78%', 
-              width: 70, 
-              zIndex: 780 
-            }}
-            onMouseEnter={() => setHoveredFurniture('chair_coffee_2')}
-            onMouseLeave={() => setHoveredFurniture(null)}
-            onClick={(e) => {
-              e.stopPropagation();
-              const spot = LOUNGE_SEATS.find(s => s.id === 'chair_coffee_2') || LOUNGE_SEATS[10];
-              handleSitAtSpot(spot);
-            }}
-          >
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/chair2:opacity-100 transition-opacity bg-emerald-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
-              <span>☕</span>
-              <span>Kursi Kopi 2 &bull; Klik Duduk</span>
-            </div>
-            <WoodenDiningChair facing="left" isHovered={hoveredFurniture === 'chair_coffee_2' || activeSeatId === 'chair_coffee_2'} />
-          </div>
-
-          {/* 8. Modular Lounge Sofa - Anchored at x: 79%, y: 78% */}
-          <div 
-            className="absolute -translate-x-1/2 -translate-y-full cursor-pointer group/sofa"
-            style={{ 
-              left: '79%', 
-              top: '78%', 
-              width: 200, 
-              zIndex: 780 
-            }}
-            onMouseEnter={() => setHoveredFurniture('sofa_left')}
-            onMouseLeave={() => setHoveredFurniture(null)}
-            onClick={(e) => {
-              e.stopPropagation();
-              const spot = LOUNGE_SEATS.find(s => s.id === 'sofa_left') || LOUNGE_SEATS[11];
-              handleSitAtSpot(spot);
-            }}
-          >
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/sofa:opacity-100 transition-opacity bg-cyan-400 text-slate-950 font-black text-[9px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none flex items-center gap-1 z-50">
-              <span>🛋️</span>
-              <span>Sofa Rehat Lab &bull; Klik Duduk Selonjoran</span>
-            </div>
-            <ModularLoungeSofa isHovered={hoveredFurniture === 'sofa_left' || activeSeatId === 'sofa_left' || activeSeatId === 'sofa_right'} />
-          </div>
-
-          {/* Click Destination Beacon Ripple on Floor */}
-          {clickBeacon !== null && (
-            <div 
-              className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 animate-ping z-10"
-              style={{ left: `${clickBeacon.x}%`, top: `${clickBeacon.y}%` }}
-            >
-              <div className="w-10 h-5 rounded-full border-2 border-amber-400 bg-amber-400/50 shadow-xl" />
-            </div>
-          )}
-
-          {/* ── 9. IN-WORLD GATHERED AVATARS (2.5D visual depth sorting) ── */}
-          {allRenderAvatars.map((av) => {
-            const isMe = av.isMe;
-
-            return (
-              <div
-                key={av.nik}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!isMe) {
-                    setSelectedAvatarForInteract(av);
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
                   }
                 }}
-                className={`absolute -translate-x-1/2 -translate-y-full flex flex-col items-center transition-[left,top] duration-75 ease-linear cursor-pointer group/avatar ${
-                  isMe ? 'z-30' : 'z-20'
-                }`}
-                style={{
-                  left: `${av.posX}%`,
-                  top: `${av.posY}%`,
-                  // Seated avatar sits with z-index slightly above the furniture (+2) so it rests on cushion!
-                  zIndex: Math.floor(av.posY * 10) + 2
-                }}
-                title={isMe ? `${effectiveUsername} • ${effectivePangkat}` : `Klik untuk interaksi dengan ${av.username} • ${av.pangkat}`}
-              >
-                {/* Floating Overhead Speech Balloon (Pure Live Dialogue - Fades away) */}
-                {av.speechText && (
-                  <div className="mb-1 max-w-[220px] sm:max-w-[260px] px-3.5 py-2 rounded-2xl bg-white text-slate-950 text-[11px] font-bold shadow-2xl border-2 border-amber-500 text-center relative animate-in fade-in zoom-in-95 leading-snug">
-                    <p className="break-words">
-                      {av.speechText}
-                    </p>
-                    <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b-2 border-r-2 border-amber-500 rotate-45" />
-                  </div>
-                )}
-
-                {/* Overhead Username & Logo Pangkat Badge Pill (Hanya Username & Logo Pangkat Saja) */}
-                <div className="mb-0.5 px-2 py-0.5 rounded-full bg-slate-950/95 backdrop-blur-md text-white text-[9px] font-bold flex items-center gap-1.5 shadow-xl border border-white/20 whitespace-nowrap">
-                  <span 
-                    className={`w-2 h-2 rounded-full shrink-0 ${
-                      isMe || av.isLive 
-                        ? 'bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse' 
-                        : 'bg-cyan-400/80 shadow-[0_0_6px_#22d3ee]'
-                    }`} 
-                    title={isMe || av.isLive ? 'Aktif Realtime Saat Ini' : 'Shift Kerja Hari Ini'}
-                  />
-                  <span className={isMe ? 'text-amber-400 font-black' : (av.isLive ? 'text-emerald-200 font-black' : 'text-slate-100 font-bold')}>
-                    {av.username}
-                  </span>
-                  <span 
-                    className="p-0.5 rounded-md bg-white/10 border border-white/20 flex items-center justify-center shrink-0 shadow-xs"
-                    title={av.pangkat}
-                  >
-                    <img
-                      src={av.pangkatIcon || '/assets/ranks/rank_01_trainee.svg'}
-                      alt={av.pangkat}
-                      className="w-4 h-4 object-contain inline-block shrink-0"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLElement).style.display = 'none';
-                      }}
-                    />
-                  </span>
-                  {(av.actionState === 'smoke' || av.actionState === 'smoke_sit') && (
-                    <span title="Sedang Merokok" className="text-xs">🚬</span>
-                  )}
-                  {(av.actionState === 'coffee' || av.actionState === 'coffee_sit') && (
-                    <span title="Sedang Ngopi" className="text-xs">☕</span>
-                  )}
-                  {av.actionState === 'sit' && (
-                    <span title="Sedang Duduk" className="text-xs">🪑</span>
-                  )}
-                </div>
-
-                {/* CRISP HIGH-DEFINITION TBP UNIFORM AVATAR */}
-                <div className="relative group/sprite hover:scale-105 transition-transform">
-                  {(() => {
-                    const skinToneObj = myCustomCfg?.skinId === 'custom' 
-                      ? { skin: myCustomCfg.customSkinColor, skinShadow: myCustomCfg.customSkinShadow }
-                      : (SKIN_TONES.find(s => s.id === myCustomCfg?.skinId) || null);
-
-                    return (
-                      <TbpAvatarCharacter
-                        actionState={av.actionState}
-                        walkFrame={av.walkFrame}
-                        facing={av.facing}
-                        skinColor={isMe && skinToneObj ? skinToneObj.skin : undefined}
-                        skinShadow={isMe && skinToneObj ? skinToneObj.skinShadow : undefined}
-                        eyeId={isMe && myCustomCfg?.eyesId ? myCustomCfg.eyesId : undefined}
-                        headwearId={isMe && myCustomCfg?.headwearId ? myCustomCfg.headwearId : undefined}
-                        outfitId={isMe && myCustomCfg?.outfitId ? myCustomCfg.outfitId : undefined}
-                        accessoryId={isMe && myCustomCfg?.accessoryId ? myCustomCfg.accessoryId : undefined}
-                        bootsId={isMe && myCustomCfg?.bootsId ? myCustomCfg.bootsId : undefined}
-                        userName={av.username}
-                        userNik={av.nik}
-                        width={84}
-                        height={116}
-                      />
-                    );
-                  })()}
-
-                  {!isMe && (
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 opacity-0 group-hover/sprite:opacity-100 transition-opacity px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black whitespace-nowrap shadow-xl">
-                      👋 Klik Sapa!
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Interactive Popover Menu when Clicking Another Avatar */}
-          {selectedAvatarForInteract && (
-            <div 
-              className="absolute z-50 p-3.5 rounded-2xl bg-slate-950 text-white shadow-2xl border-2 border-amber-500 flex flex-col gap-2 min-w-[230px] animate-in fade-in zoom-in-95 -translate-x-1/2"
-              style={{
-                left: `${selectedAvatarForInteract.posX}%`,
-                top: `${Math.max(20, selectedAvatarForInteract.posY - 40)}%`
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between border-b border-white/20 pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="text-sm font-black text-amber-400">{selectedAvatarForInteract.username}</div>
-                  <img
-                    src={selectedAvatarForInteract.pangkatIcon || '/assets/ranks/rank_01_trainee.svg'}
-                    alt={selectedAvatarForInteract.pangkat}
-                    title={selectedAvatarForInteract.pangkat}
-                    className="w-4 h-4 object-contain inline-block shrink-0"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedAvatarForInteract(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white"
-                >
-                  <X className="w-4 h-4 font-bold" />
-                </button>
-              </div>
-
-              <div className="space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleInteractWithAvatar(selectedAvatarForInteract, 'smoke')}
-                  className="w-full px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-400 hover:text-slate-950 text-amber-300 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer text-left"
-                >
-                  <span className="text-sm">🚬</span>
-                  <span>Ajak Merokok di Gazebo</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleInteractWithAvatar(selectedAvatarForInteract, 'coffee')}
-                  className="w-full px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-400 hover:text-slate-950 text-emerald-300 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer text-left"
-                >
-                  <Coffee className="w-4 h-4" />
-                  <span>☕ Tos Kopi Bareng</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleInteractWithAvatar(selectedAvatarForInteract, 'wave')}
-                  className="w-full px-3 py-2 rounded-xl bg-teal-500/20 hover:bg-teal-400 hover:text-slate-950 text-teal-300 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer text-left"
-                >
-                  <span className="text-sm">👋</span>
-                  <span>Lambaikan Tangan</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleInteractWithAvatar(selectedAvatarForInteract, 'cheer')}
-                  className="w-full px-3 py-2 rounded-xl bg-lime-500/20 hover:bg-lime-400 hover:text-slate-950 text-lime-300 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer text-left"
-                >
-                  <span className="text-sm">👍</span>
-                  <span>Beri Jempol K3</span>
-                </button>
-              </div>
+                placeholder="Ketik obrolan langsung di sini... (teks langsung muncul di atas kepala avatar)"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white text-slate-950 font-bold text-xs sm:text-sm placeholder:text-slate-400 border-2 border-emerald-500 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-400/50 focus:outline-hidden transition-all shadow-md caret-slate-950"
+              />
             </div>
-          )}
-
-          {/* Quick Tip on Floor */}
-          <div className="absolute bottom-2 left-4 pointer-events-none text-[10px] font-mono text-amber-300 bg-slate-950/90 px-3 py-1.5 rounded-xl border border-amber-500/40 shadow-lg">
-            {allRenderAvatars.length === 1 ? (
-              <span>☕ Anda sedang santai sendirian &bull; Rekan shift lain yang online akan otomatis muncul di sini secara realtime!</span>
-            ) : (
-              <span>💡 Klik langsung model bangku, kursi, atau sofa untuk duduk &bull; Klik lantai terbuka untuk berjalan bebas!</span>
-            )}
-          </div>
-        </div>
-
-        {/* ── BOTTOM COMMAND DECK & ENTERPRISE CONTROLS ── */}
-        <div className="p-3.5 border-t-2 border-amber-500/30 bg-slate-950 flex flex-col gap-2.5 z-20 shadow-2xl">
-          {/* Active Status Pill & Quick Furniture Jump Bar */}
-          <div className="flex items-center justify-between text-xs pb-1 border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status Anda:</span>
-              <span className="px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 shadow-sm">
-                <span>{isCurrentSitting ? (myActionState === 'smoke_sit' ? '🚬' : (myActionState === 'coffee_sit' ? '☕' : '🪑')) : '🚶'}</span>
-                <span>
-                  {isCurrentSitting 
-                    ? (activeSpot ? `Duduk di ${activeSpot.name} (${activeSpot.zoneTitle})` : 'Sedang Duduk Santai')
-                    : 'Siaga K3 &bull; Berdiri / Patroli Keliling'}
-                </span>
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400">Pindah Duduk:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const s = LOUNGE_SEATS.find(s => s.id === 'bench_1') || LOUNGE_SEATS[0];
-                  handleSitAtSpot(s);
-                }}
-                className={`px-2.5 py-1 rounded-lg font-black text-[10px] transition-all cursor-pointer shadow-sm ${
-                  activeSeatId === 'bench_1'
-                    ? 'bg-amber-400 text-slate-950 ring-2 ring-white'
-                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
-                }`}
-              >
-                Gazebo 1
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const s = LOUNGE_SEATS.find(s => s.id === 'bench_2') || LOUNGE_SEATS[4];
-                  handleSitAtSpot(s);
-                }}
-                className={`px-2.5 py-1 rounded-lg font-black text-[10px] transition-all cursor-pointer shadow-sm ${
-                  activeSeatId === 'bench_2'
-                    ? 'bg-amber-400 text-slate-950 ring-2 ring-white'
-                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
-                }`}
-              >
-                Gazebo 2
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const s = LOUNGE_SEATS.find(s => s.id === 'chair_coffee_1') || LOUNGE_SEATS[7];
-                  handleSitAtSpot(s);
-                }}
-                className={`px-2.5 py-1 rounded-lg font-black text-[10px] transition-all cursor-pointer shadow-sm ${
-                  activeSeatId === 'chair_coffee_1' || activeSeatId === 'chair_coffee_2'
-                    ? 'bg-emerald-400 text-slate-950 ring-2 ring-white'
-                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
-                }`}
-              >
-                Meja Kopi
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const s = LOUNGE_SEATS.find(s => s.id === 'sofa_left') || LOUNGE_SEATS[11];
-                  handleSitAtSpot(s);
-                }}
-                className={`px-2.5 py-1 rounded-lg font-black text-[10px] transition-all cursor-pointer shadow-sm ${
-                  activeSeatId === 'sofa_left' || activeSeatId === 'sofa_right' || activeSeatId === 'sofa_center'
-                    ? 'bg-cyan-400 text-slate-950 ring-2 ring-white'
-                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
-                }`}
-              >
-                Sofa Lab
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Avatar Actions Bar */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-            <span className="text-xs font-black text-amber-400 whitespace-nowrap pl-1 pr-1 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Aksi Langsung:</span>
-            </span>
-
-            {/* Quick action: Duduk / Berdiri toggle */}
-            <button
-              type="button"
-              onClick={() => {
-                if (isCurrentSitting) {
-                  setMyActionState('idle');
-                  setActiveSeatId(null);
-                } else {
-                  const s = LOUNGE_SEATS.find(s => s.id === 'bench_1') || LOUNGE_SEATS[0];
-                  handleSitAtSpot(s);
-                }
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 ${
-                isCurrentSitting 
-                  ? 'bg-amber-400 text-slate-950 border-amber-300' 
-                  : 'bg-slate-800 text-slate-100 border-white/20 hover:bg-slate-700'
-              }`}
-            >
-              <span>{isCurrentSitting ? '🚶' : '🪑'}</span>
-              <span>{isCurrentSitting ? 'Berdiri' : 'Duduk Santai'}</span>
-            </button>
-
-            {/* Quick action: Merokok */}
-            <button
-              type="button"
-              onClick={() => handleSendMessage('🚬 Santai sejenak hisap rokok di Gazebo K3...', 'smoke')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 ${
-                myActionState === 'smoke' || myActionState === 'smoke_sit'
-                  ? 'bg-amber-400 text-slate-950 border-amber-300' 
-                  : 'bg-slate-800 text-slate-100 border-white/20 hover:bg-slate-700'
-              }`}
-            >
-              <span>🚬</span>
-              <span>Merokok Santai</span>
-            </button>
-
-            {/* Other Quick Actions */}
-            <button
-              type="button"
-              onClick={() => handleSendMessage('☕ Seruput kopi hitam hangat sambil rehat sejenak!', 'coffee')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95 ${
-                myActionState === 'coffee' || myActionState === 'coffee_sit'
-                  ? 'bg-emerald-400 text-slate-950 border-emerald-300 font-black'
-                  : 'bg-slate-800 text-slate-100 border-white/20 hover:bg-slate-700'
-              }`}
-            >
-              <span>☕</span>
-              <span>Seruput Kopi</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSendMessage('🥪 Menaruh pisang goreng & snack hangat di meja!', 'coffee')}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-white/20 transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95"
-            >
-              <span>🥪</span>
-              <span>Bagi Pisang Goreng</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSendMessage('👋 Halo rekan shift Preparasi & Lab Nikel TBP!', 'jump')}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-white/20 transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95"
-            >
-              <span>👋</span>
-              <span>Sapa Rekan</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSendMessage('👍 Zero Accident harga mati di site TBP!', 'jump')}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-white/20 transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95"
-            >
-              <span>👍</span>
-              <span>Mantap K3</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSendMessage('🪨 Sample saprolite & limonite shift ini mantap!', 'inspect')}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-100 border border-white/20 transition-all cursor-pointer flex items-center gap-1.5 shadow-md active:scale-95"
-            >
-              <span>🪨</span>
-              <span>Bahas Sample</span>
-            </button>
-          </div>
-
-          {/* Live Speech Input & Send (Pure live speech - No persistent history log) */}
-          <div className="flex items-center gap-2.5">
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder="Ketik obrolan langsung (balon percakapan muncul di atas kepala avatar)..."
-              className="flex-1 px-4 py-2.5 rounded-2xl bg-slate-900 border-2 border-white/20 text-xs sm:text-sm text-white placeholder:text-slate-400 focus:outline-hidden focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 transition-all"
-            />
 
             <button
               type="button"
               onClick={() => handleSendMessage()}
               disabled={!inputText.trim()}
-              className="px-5 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-xl transition-all cursor-pointer active:scale-95"
+              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-lg transition-all cursor-pointer active:scale-95 border-2 border-emerald-400 whitespace-nowrap"
             >
-              <Send className="w-4 h-4 font-bold" />
+              <Send className="w-4 h-4 font-black" />
               <span>Kirim</span>
             </button>
           </div>
