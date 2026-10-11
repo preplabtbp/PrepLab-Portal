@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "gothic-haven-7sjh2",
+    "site": "project-054e3351-b8d1-42f7-9c8",
     "public": "dist",
     "ignore": [
       "firebase.json",
@@ -12,7 +12,7 @@
         "source": "**",
         "run": {
           "serviceId": "preplab-portal",
-          "region": "us-central1"
+          "region": "asia-southeast2"
         }
       }
     ]
