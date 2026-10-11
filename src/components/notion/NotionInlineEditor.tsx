@@ -103,12 +103,14 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
     };
   }, [onCancel]);
 
+  // Only set initial focus and end-selection ONCE on mount, NOT on every keystroke
   useEffect(() => {
     if (!multiline && singleInputRef.current) {
       singleInputRef.current.focus();
-      singleInputRef.current.setSelectionRange(singleText.length, singleText.length);
+      const len = singleInputRef.current.value.length;
+      singleInputRef.current.setSelectionRange(len, len);
     }
-  }, [multiline, singleText.length]);
+  }, [multiline]);
 
   if (!multiline) {
     const handleKeyDownSingle = (e: React.KeyboardEvent) => {

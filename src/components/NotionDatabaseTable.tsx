@@ -9,6 +9,7 @@ import {
   Download, 
   Plus, 
   Eye, 
+  EyeOff,
   CheckCircle2, 
   Clock, 
   AlertCircle, 
@@ -783,6 +784,43 @@ export function NotionDatabaseTable({
     selectedText: string;
   } | null>(null);
 
+  // Hidden columns feature (hides column without deleting row data or resetting details)
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`notion_hidden_cols_${section || 'default'}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleToggleHideColumn = (colName: string) => {
+    const colLower = colName.toLowerCase().trim();
+    if (colLower === 'number' || colLower === 'no') {
+      toast.error('Kolom Nomor (#) tidak dapat disembunyikan');
+      return;
+    }
+    if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') {
+      toast.error('Kolom Judul/Kegiatan adalah kolom utama dan tidak dapat disembunyikan');
+      return;
+    }
+
+    setHiddenColumns(prev => {
+      let next: string[];
+      if (prev.some(c => c.toLowerCase() === colLower)) {
+        next = prev.filter(c => c.toLowerCase() !== colLower);
+        toast.success(`Kolom "${colName}" ditampilkan kembali di tabel.`);
+      } else {
+        next = [...prev, colName];
+        toast.info(`Kolom "${colName}" disembunyikan dari tabel (data detail tetap aman).`);
+      }
+      try {
+        localStorage.setItem(`notion_hidden_cols_${section || 'default'}`, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const handleModalSelectText = (
     e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>,
     field: 'jenisKegiatan' | 'keterangan'
@@ -794,7 +832,7 @@ export function NotionDatabaseTable({
       const selectedText = target.value.substring(start, end);
       setActiveModalSelection({ field, start, end, selectedText });
     } else {
-      setActiveModalSelection(null);
+      setActiveModalSelection(prev => (prev !== null ? null : prev));
     }
   };
 
@@ -1465,15 +1503,16 @@ export function NotionDatabaseTable({
     };
   };
 
-  // Ensure Progress, Target Selesai, and redundant Kategori columns are never rendered in displayHeaders
+  // Ensure Progress, Target Selesai, redundant Kategori, and hiddenColumns are never rendered in displayHeaders
   const displayHeaders = useMemo(() => {
     return tableHeaders.filter(h => {
       const l = h.toLowerCase().trim();
+      if (hiddenColumns.some(hc => hc.toLowerCase().trim() === l)) return false;
       return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
              !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
              !l.includes('kategori') && !l.includes('category');
     });
-  }, [tableHeaders]);
+  }, [tableHeaders, hiddenColumns]);
 
   // Floating Synchronized Horizontal Scrollbar (Tetap di bawah viewport, transparan saat idle, muncul saat disentuh kursor)
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -1647,6 +1686,13 @@ export function NotionDatabaseTable({
     const trimmed = name.trim();
     if (!trimmed) {
       toast.error('Nama kolom tidak boleh kosong');
+      return;
+    }
+    // If this column is hidden, unhide it and show to user
+    if (hiddenColumns.some(hc => hc.toLowerCase() === trimmed.toLowerCase())) {
+      handleToggleHideColumn(trimmed);
+      setShowAddColumnPopover(false);
+      setCustomColumnName('');
       return;
     }
     if (tableHeaders.some(h => h.toLowerCase() === trimmed.toLowerCase())) {
@@ -5501,22 +5547,7 @@ export function NotionDatabaseTable({
                           )}
                         </div>
 
-                        {/* Quick Add Blank Row at top (#1) on Number Header */}
-                        {isNum && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleInsertBlankRow(0);
-                            }}
-                            className="p-0.5 rounded hover:bg-teal-500/20 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer shrink-0 ml-0.5"
-                            title="Tambah baris kosong baru di nomor paling atas (#1)"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-
-                        {/* Column Reorder (< and >) and Delete (X) Actions - HANYA MUNCUL DI MODE EDIT TABEL */}
+                        {/* Column Reorder (< and >) and Sembunyikan (EyeOff) Actions - HANYA MUNCUL DI MODE EDIT TABEL */}
                         {!isNum && isTableEditMode && (
                           <div className="flex items-center gap-0.5 shrink-0 bg-slate-800/80 dark:bg-slate-900/90 rounded px-1 py-0.5 border border-slate-700/50 shadow-xs ml-1">
                             {/* Geser Kiri */}
@@ -5549,18 +5580,18 @@ export function NotionDatabaseTable({
                               </button>
                             )}
 
-                            {/* Hapus Kolom (Non-protected) */}
+                            {/* Sembunyikan Kolom (Non-protected) */}
                             {!isJudul && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDeleteColumn(colHeader);
+                                  handleToggleHideColumn(colHeader);
                                 }}
-                                title={`Hapus kolom "${colHeader}"`}
-                                className="p-0.5 rounded hover:bg-rose-500/30 text-rose-300 hover:text-rose-200 transition-all cursor-pointer"
+                                title={`Sembunyikan kolom "${colHeader}" (data tersimpan aman)`}
+                                className="p-0.5 rounded hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 transition-all cursor-pointer"
                               >
-                                <X className="w-3 h-3" />
+                                <EyeOff className="w-3 h-3" />
                               </button>
                             )}
                           </div>
@@ -5712,6 +5743,34 @@ export function NotionDatabaseTable({
                           );
                         })}
                       </div>
+
+                      {/* Kolom Tersembunyi Section (Jika ada kolom yang disembunyikan) */}
+                      {hiddenColumns.length > 0 && (
+                        <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-700/60">
+                          <div className="text-[10px] px-1 mb-1.5 font-bold uppercase tracking-wider text-amber-500 flex items-center justify-between">
+                            <span>Kolom Tersembunyi ({hiddenColumns.length})</span>
+                          </div>
+                          <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                            {hiddenColumns.map(colName => (
+                              <div 
+                                key={colName}
+                                className="flex items-center justify-between p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs"
+                              >
+                                <span className="truncate font-medium text-amber-300">{colName}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleHideColumn(colName)}
+                                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-teal-600 hover:bg-teal-500 text-white text-[10px] font-semibold cursor-pointer transition-colors shrink-0"
+                                  title={`Tampilkan kembali kolom "${colName}"`}
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>Tampilkan</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </th>
@@ -5940,19 +5999,6 @@ export function NotionDatabaseTable({
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex items-center justify-center gap-1.5">
-                                  {/* + Button: Insert new task/row at top (#1) */}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleInsertBlankRow(0);
-                                    }}
-                                    className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
-                                    title="Tambah baris tugas baru (#1) di posisi paling atas"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                  </button>
-
                                   {/* Pin Button: Menggantikan logo drag handle GripVertical */}
                                   {!isSubItem ? (
                                     <button
@@ -7830,14 +7876,18 @@ export function NotionDatabaseTable({
                     value={rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || ''}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setRowFormData({ 
-                        ...rowFormData, 
+                      setRowFormData(prev => ({ 
+                        ...prev, 
                         'Jenis kegiatan': val,
                         'Jenis Kegiatan': val 
-                      });
+                      }));
                     }}
                     onSelect={(e) => handleModalSelectText(e, 'jenisKegiatan')}
-                    onKeyUp={(e) => handleModalSelectText(e, 'jenisKegiatan')}
+                    onKeyUp={(e) => {
+                      if (e.shiftKey || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+                        handleModalSelectText(e, 'jenisKegiatan');
+                      }
+                    }}
                     onMouseUp={(e) => handleModalSelectText(e, 'jenisKegiatan')}
                     className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-medium text-xs shadow-2xs"
                     style={{
@@ -7932,9 +7982,16 @@ export function NotionDatabaseTable({
                   <textarea
                     rows={3}
                     value={rowFormData['Keterangan'] || ''}
-                    onChange={(e) => setRowFormData({ ...rowFormData, Keterangan: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRowFormData(prev => ({ ...prev, Keterangan: val }));
+                    }}
                     onSelect={(e) => handleModalSelectText(e, 'keterangan')}
-                    onKeyUp={(e) => handleModalSelectText(e, 'keterangan')}
+                    onKeyUp={(e) => {
+                      if (e.shiftKey || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+                        handleModalSelectText(e, 'keterangan');
+                      }
+                    }}
                     onMouseUp={(e) => handleModalSelectText(e, 'keterangan')}
                     className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none text-xs leading-relaxed resize-y"
                     style={{
