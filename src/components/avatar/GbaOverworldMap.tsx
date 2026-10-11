@@ -48,11 +48,14 @@ export interface GbaOverworldMapProps {
   outfitColor?: string;
   bootsColor?: string;
   playerMessage?: string;
+  playerActionState?: 'idle' | 'walk' | 'sit' | 'coffee' | 'smoke';
   otherPlayers?: GbaInteractivePlayer[];
   soundEnabled?: boolean;
   onOpenWardrobe?: () => void;
   onSyncProfile?: () => void;
   onOpenFullLounge?: () => void;
+  onPlayerMove?: (pos: { x: number; y: number; facing: 'down' | 'up' | 'left' | 'right'; actionState: string }) => void;
+  onPlayerAction?: (action: { actionState: string; facing?: 'down' | 'up' | 'left' | 'right'; speechText?: string; x: number; y: number }) => void;
   className?: string;
   isCompactDiorama?: boolean;
 }
@@ -233,11 +236,14 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
   outfitColor = '#84CC16',
   bootsColor = '#22C55E',
   playerMessage,
+  playerActionState,
   otherPlayers = [],
   soundEnabled = true,
   onOpenWardrobe,
   onSyncProfile,
   onOpenFullLounge,
+  onPlayerMove,
+  onPlayerAction,
   className = '',
   isCompactDiorama = false
 }) => {
@@ -250,14 +256,27 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
   const MAP_WIDTH = MAP_COLS * 16;
   const MAP_HEIGHT = MAP_ROWS * 16;
 
+  // Real-time multi-client callback refs
+  const onPlayerMoveRef = useRef(onPlayerMove);
+  onPlayerMoveRef.current = onPlayerMove;
+  const onPlayerActionRef = useRef(onPlayerAction);
+  onPlayerActionRef.current = onPlayerAction;
+
   // Initial Player Coordinates: Centered on the floor
-  const [posX, setPosX] = useState(() => (isLounge ? 3 : 5));
-  const [posY, setPosY] = useState(() => (isLounge ? 4.8 : 4.5));
-  const [facing, setFacing] = useState<'down' | 'up' | 'left' | 'right'>('down');
+  const [posX, setPosX] = useState(() => (isLounge ? 3.44 : 5));
+  const [posY, setPosY] = useState(() => (isLounge ? 4.75 : 4.5));
+  const [facing, setFacing] = useState<'down' | 'up' | 'left' | 'right'>('right');
   const [walkFrame, setWalkFrame] = useState(0);
   const [actionState, setActionState] = useState<'idle' | 'walk' | 'sit' | 'coffee' | 'smoke'>(
     () => (isLounge ? 'sit' : 'idle')
   );
+
+  // Sync external playerActionState if provided
+  useEffect(() => {
+    if (playerActionState) {
+      setActionState(playerActionState);
+    }
+  }, [playerActionState]);
 
   // Smooth Movement Destination & Target Beacon
   const [clickTarget, setClickTarget] = useState<{ x: number; y: number } | null>(null);
@@ -324,6 +343,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
   useEffect(() => {
     let animId: number;
     let lastStepSoundTime = 0;
+    let lastMoveEmitTime = 0;
 
     const gameLoop = () => {
       const state = movementRef.current;
@@ -344,23 +364,31 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
           setClickTarget(null);
 
           // Execute contextual action upon arrival
-          if (state.pendingAction) {
-            setActionState(state.pendingAction);
-            if (state.pendingAction === 'sit') {
-              const seatFacing = state.pendingFacing || 'down';
-              state.facing = seatFacing;
-              setFacing(seatFacing);
-            }
-            state.pendingAction = null;
-            state.pendingFacing = null;
-          } else {
-            setActionState('idle');
+          const finalAction = state.pendingAction || 'idle';
+          setActionState(finalAction);
+          let finalFacing = state.facing;
+          if (state.pendingAction === 'sit') {
+            finalFacing = state.pendingFacing || 'down';
+            state.facing = finalFacing;
+            setFacing(finalFacing);
           }
 
+          const finalSpeech = state.pendingSpeech || undefined;
           if (state.pendingSpeech) {
             triggerOverheadSpeech(state.pendingSpeech);
             state.pendingSpeech = null;
           }
+          state.pendingAction = null;
+          state.pendingFacing = null;
+
+          // Broadcast arrival & final action state to all players in lounge
+          onPlayerActionRef.current?.({
+            actionState: finalAction,
+            facing: finalFacing,
+            speechText: finalSpeech,
+            x: Number(state.currentX.toFixed(2)),
+            y: Number(state.currentY.toFixed(2))
+          });
         } else {
           // Move towards target smoothly at 0.07 tiles per frame (~4.2 tiles/sec)
           const speed = 0.07;
@@ -388,11 +416,22 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
           setFacing(newFacing);
           setWalkFrame(Math.floor(state.walkDistance * 3.5) % 4);
 
-          // Subtle retro footstep sound every 250ms while walking
           const now = Date.now();
+          // Subtle retro footstep sound every 250ms while walking
           if (now - lastStepSoundTime > 240) {
             playSfx('step');
             lastStepSoundTime = now;
+          }
+
+          // Broadcast real-time walking coordinate stream to other lounge players (every 120ms)
+          if (now - lastMoveEmitTime > 120) {
+            lastMoveEmitTime = now;
+            onPlayerMoveRef.current?.({
+              x: Number(nextX.toFixed(2)),
+              y: Number(nextY.toFixed(2)),
+              facing: newFacing,
+              actionState: 'walk'
+            });
           }
         }
       }
@@ -428,6 +467,14 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     movementRef.current.pendingAction = onArrival?.action || null;
     movementRef.current.pendingSpeech = onArrival?.speech || null;
     movementRef.current.pendingFacing = onArrival?.facing || null;
+
+    // Immediately inform other lounge members of walking intent and destination
+    onPlayerMoveRef.current?.({
+      x: clampX,
+      y: clampY,
+      facing: movementRef.current.facing,
+      actionState: 'walk'
+    });
 
     playSfx('beep');
   }, [isLounge, MAP_COLS, MAP_ROWS, playSfx]);
@@ -1169,7 +1216,14 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
           {/* OTHER MULTIPLAYER PLAYERS (IN LOUNGE)                     */}
           {/* ========================================================= */}
           {otherPlayers.map((other) => (
-            <g key={other.id} transform={`translate(${other.x * 16}, ${other.y * 16 - 5})`}>
+            <g
+              key={other.id}
+              transform={`translate(${other.x * 16}, ${other.y * 16 - 5})`}
+              style={{
+                transition: 'transform 0.16s linear',
+                willChange: 'transform'
+              }}
+            >
               {/* Dynamic Compact Nametag Pill with Exact Rank Icon Beside Name */}
               {renderNametag(other.name, other.pangkatIcon, false)}
 
@@ -1237,8 +1291,15 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
               <div 
                 onClick={() => {
                   playSfx('confirm');
-                  setActionState(actionState === 'sit' ? 'idle' : 'sit');
+                  const nextAct = actionState === 'sit' ? 'idle' : 'sit';
+                  setActionState(nextAct);
                   setShowStartMenu(false);
+                  onPlayerActionRef.current?.({
+                    actionState: nextAct,
+                    facing,
+                    x: Number(posX.toFixed(2)),
+                    y: Number(posY.toFixed(2))
+                  });
                 }}
                 className="flex items-center gap-1.5 p-1 hover:bg-[#D8E0F0] cursor-pointer font-bold"
               >
@@ -1249,8 +1310,15 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
               <div 
                 onClick={() => {
                   playSfx('confirm');
-                  setActionState(actionState === 'coffee' ? 'idle' : 'coffee');
+                  const nextAct = actionState === 'coffee' ? 'idle' : 'coffee';
+                  setActionState(nextAct);
                   setShowStartMenu(false);
+                  onPlayerActionRef.current?.({
+                    actionState: nextAct,
+                    facing,
+                    x: Number(posX.toFixed(2)),
+                    y: Number(posY.toFixed(2))
+                  });
                 }}
                 className="flex items-center gap-1.5 p-1 hover:bg-[#D8E0F0] cursor-pointer font-bold"
               >

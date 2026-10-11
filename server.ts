@@ -486,9 +486,14 @@ const app = express();
     pangkatIcon?: string;
     section: string;
     avatar?: string;
+    headwearId?: string;
+    headwearColor?: string;
+    outfitId?: string;
+    outfitColor?: string;
+    bootsColor?: string;
     posX: number;
     posY: number;
-    facing: 'left' | 'right';
+    facing: 'down' | 'up' | 'left' | 'right';
     actionState: string;
     speechText?: string;
     speechExpiry?: number;
@@ -644,6 +649,27 @@ const app = express();
     socket.on('lounge:join', (data) => {
       if (!data || !data.nik) return;
       socket.join('lounge');
+
+      // Default spawn positions on gazebo benches (authentic GBA tile coords)
+      const defaultSpawnPositions: { x: number; y: number; facing: 'down' | 'up' | 'left' | 'right' }[] = [
+        { x: 3.44, y: 4.05, facing: 'right' },
+        { x: 3.44, y: 4.75, facing: 'right' },
+        { x: 3.44, y: 5.45, facing: 'right' },
+        { x: 4.5, y: 3.45, facing: 'down' },
+        { x: 5.5, y: 3.45, facing: 'down' },
+        { x: 6.5, y: 3.45, facing: 'down' },
+        { x: 7.56, y: 4.05, facing: 'left' },
+        { x: 7.56, y: 4.75, facing: 'left' },
+        { x: 7.56, y: 5.45, facing: 'left' },
+      ];
+      const spawnSlot = defaultSpawnPositions[loungeAvatars.size % defaultSpawnPositions.length];
+
+      const rawX = typeof data.posX === 'number' ? data.posX : spawnSlot.x;
+      const rawY = typeof data.posY === 'number' ? data.posY : spawnSlot.y;
+      // Convert legacy percentages (>12 cols or >8 rows) to GBA tile coordinates
+      const posX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+      const posY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
       const avatarState: LoungeAvatarState = {
         socketId: socket.id,
         nik: data.nik,
@@ -653,10 +679,15 @@ const app = express();
         pangkatIcon: data.pangkatIcon || '/assets/ranks/rank_01_trainee.svg',
         section: data.section || 'Prep-Lab',
         avatar: data.avatar || null,
-        posX: typeof data.posX === 'number' ? data.posX : 13,
-        posY: typeof data.posY === 'number' ? data.posY : 79,
-        facing: data.facing || 'right',
-        actionState: data.actionState || 'smoke_sit',
+        headwearId: data.headwearId,
+        headwearColor: data.headwearColor,
+        outfitId: data.outfitId,
+        outfitColor: data.outfitColor,
+        bootsColor: data.bootsColor,
+        posX,
+        posY,
+        facing: data.facing || spawnSlot.facing,
+        actionState: data.actionState || 'sit',
         speechText: data.speechText,
         speechExpiry: data.speechExpiry,
         lastActive: Date.now()
@@ -678,8 +709,10 @@ const app = express();
       const room = data?.room || 'lounge';
       if (data?.nik && loungeAvatars.has(data.nik)) {
         const current = loungeAvatars.get(data.nik)!;
-        current.posX = data.x;
-        current.posY = data.y;
+        const rawX = typeof data.x === 'number' ? data.x : current.posX;
+        const rawY = typeof data.y === 'number' ? data.y : current.posY;
+        current.posX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+        current.posY = rawY > 8 ? (rawY / 100) * 8 : rawY;
         current.facing = data.facing || current.facing;
         current.actionState = data.actionState || 'walk';
         current.lastActive = Date.now();
@@ -691,7 +724,10 @@ const app = express();
       const room = data?.room || 'lounge';
       if (data?.nik && loungeAvatars.has(data.nik)) {
         const current = loungeAvatars.get(data.nik)!;
-        current.actionState = data.actionState;
+        if (typeof data.x === 'number') current.posX = data.x > 12 ? (data.x / 100) * 12 : data.x;
+        if (typeof data.y === 'number') current.posY = data.y > 8 ? (data.y / 100) * 8 : data.y;
+        if (data.facing) current.facing = data.facing;
+        current.actionState = data.actionState || current.actionState;
         if (data.speechText) {
           current.speechText = data.speechText;
           current.speechExpiry = Date.now() + 7500;

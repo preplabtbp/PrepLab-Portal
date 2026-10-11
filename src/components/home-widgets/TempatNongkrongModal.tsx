@@ -46,6 +46,11 @@ interface InRoomAvatar {
   speechText?: string;
   speechExpiry?: number;
   avatarUrl?: string;
+  headwearId?: string;
+  headwearColor?: string;
+  outfitId?: string;
+  outfitColor?: string;
+  bootsColor?: string;
   isMe?: boolean;
   isLive?: boolean;
   isDuty?: boolean;
@@ -443,12 +448,10 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     };
   }, [userNik, userName, userRole]);
 
-  // My Avatar In-Room State: Start seated at Bangku Gazebo 1 (Exactly centered on bench)
-  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 13, y: 79 });
-  const [myTargetPos, setMyTargetPos] = useState<{ x: number; y: number }>({ x: 13, y: 79 });
-  const [myFacing, setMyFacing] = useState<'down' | 'up' | 'left' | 'right'>('down');
-  const [myActionState, setMyActionState] = useState<'idle' | 'walk' | 'coffee' | 'inspect' | 'jump' | 'smoke' | 'sit' | 'smoke_sit' | 'coffee_sit'>('smoke_sit');
-  const [pendingActionOnArrival, setPendingActionOnArrival] = useState<'idle' | 'walk' | 'coffee' | 'inspect' | 'jump' | 'smoke' | 'sit' | 'smoke_sit' | 'coffee_sit' | null>('smoke_sit');
+  // My Avatar In-Room State: Start seated at Gazebo bench (authentic GBA tile coordinates)
+  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 3.44, y: 4.75 });
+  const [myFacing, setMyFacing] = useState<'down' | 'up' | 'left' | 'right'>('right');
+  const [myActionState, setMyActionState] = useState<'idle' | 'walk' | 'coffee' | 'inspect' | 'jump' | 'smoke' | 'sit' | 'smoke_sit' | 'coffee_sit'>('sit');
   const [myWalkFrame, setMyWalkFrame] = useState(0);
   const [mySpeech, setMySpeech] = useState<{ text: string; expiry: number } | null>({
     text: '🚬 Santai sejenak merokok di Gazebo K3 PrepLab Obi!',
@@ -511,53 +514,48 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     } catch {}
   };
 
-  // Movement loop for My Avatar
-  useEffect(() => {
-    const moveTimer = setInterval(() => {
-      setMyPos(curr => {
-        const dx = myTargetPos.x - curr.x;
-        const dy = myTargetPos.y - curr.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < 1.4) {
-          if (pendingActionOnArrival) {
-            setMyActionState(pendingActionOnArrival);
-            setPendingActionOnArrival(null);
-
-            const socket = getGlobalSocket();
-            if (socket.connected) {
-              socket.emit('lounge:action', {
-                room: 'lounge',
-                nik: userNik,
-                username: effectiveUsername,
-                pangkat: effectivePangkat,
-                actionState: pendingActionOnArrival
-              });
-            }
-          } else if (myActionState === 'walk') {
-            setMyActionState('idle');
-          }
-          setClickBeacon(null);
-          return curr;
-        }
-
-        setMyActionState('walk');
-        setMyWalkFrame(f => (f + 1) % 4);
-        setMyFacing(dx >= 0 ? 'right' : 'left');
-
-        const stepSpeed = 1.4;
-        const nextX = curr.x + (dx / dist) * stepSpeed;
-        const nextY = curr.y + (dy / dist) * stepSpeed;
-
-        const boundedX = Math.max(12, Math.min(88, nextX));
-        const boundedY = Math.max(50, Math.min(86, nextY));
-
-        return { x: boundedX, y: boundedY };
+  // Real-time bidirectional movement & action callbacks for GbaOverworldMap
+  const handlePlayerMove = useCallback((pos: { x: number; y: number; facing: string; actionState: string }) => {
+    setMyPos({ x: pos.x, y: pos.y });
+    setMyFacing(pos.facing as any);
+    setMyActionState('walk');
+    const socket = getGlobalSocket();
+    if (socket.connected) {
+      socket.emit('lounge:move', {
+        room: 'lounge',
+        nik: userNik,
+        username: effectiveUsername,
+        pangkat: effectivePangkat,
+        x: pos.x,
+        y: pos.y,
+        facing: pos.facing,
+        actionState: 'walk'
       });
-    }, 85);
+    }
+  }, [userNik, effectiveUsername, effectivePangkat]);
 
-    return () => clearInterval(moveTimer);
-  }, [myTargetPos, myActionState, pendingActionOnArrival, userNik, effectiveUsername, effectivePangkat]);
+  const handlePlayerAction = useCallback((act: { actionState: string; facing?: string; speechText?: string; x: number; y: number }) => {
+    setMyPos({ x: act.x, y: act.y });
+    if (act.facing) setMyFacing(act.facing as any);
+    setMyActionState(act.actionState as any);
+    if (act.speechText) {
+      setMySpeech({ text: act.speechText, expiry: Date.now() + 7500 });
+    }
+    const socket = getGlobalSocket();
+    if (socket.connected) {
+      socket.emit('lounge:action', {
+        room: 'lounge',
+        nik: userNik,
+        username: effectiveUsername,
+        pangkat: effectivePangkat,
+        x: act.x,
+        y: act.y,
+        facing: act.facing,
+        actionState: act.actionState,
+        speechText: act.speechText
+      });
+    }
+  }, [userNik, effectiveUsername, effectivePangkat]);
 
   // Clean up expired speech bubbles (Live overhead balloons fade away after 7.5s)
   useEffect(() => {
@@ -588,14 +586,21 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     const rawLounge = Array.isArray(data.loungeMembers) ? data.loungeMembers : [];
 
     setOtherAvatars(prev => {
-      const next = new Map<string, InRoomAvatar>();
+      const next = new Map(prev);
+      const activeNiks = new Set<string>();
 
       // ONLY process Lounge Members (Real-time live avatars currently inside lounge)
       rawLounge.forEach((lm: any) => {
-        if (!lm.nik || lm.nik === userNik) return;
+        if (!lm || !lm.nik || lm.nik === userNik) return;
+        activeNiks.add(lm.nik);
         const existing = prev.get(lm.nik);
         const cleanUname = getCleanUsername(lm.nik, lm.name, lm.username);
         const rankData = getPangkatData(lm.nik, lm.pangkat);
+        const rawX = typeof lm.posX === 'number' ? lm.posX : (existing?.posX ?? 3.44);
+        const rawY = typeof lm.posY === 'number' ? lm.posY : (existing?.posY ?? 4.75);
+        const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+        const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
         next.set(lm.nik, {
           nik: lm.nik,
           name: cleanUname,
@@ -603,17 +608,28 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           pangkat: lm.pangkat || rankData.name,
           pangkatIcon: lm.pangkatIcon || rankData.icon,
           section: lm.section || 'Prep-Lab',
-          posX: typeof lm.posX === 'number' ? lm.posX : (existing?.posX ?? 13),
-          posY: typeof lm.posY === 'number' ? lm.posY : (existing?.posY ?? 79),
-          facing: lm.facing || existing?.facing || 'right',
-          actionState: lm.actionState || existing?.actionState || 'idle',
+          posX: tileX,
+          posY: tileY,
+          facing: lm.facing || existing?.facing || 'down',
+          actionState: lm.actionState || existing?.actionState || 'sit',
           walkFrame: existing?.walkFrame ?? 0,
           speechText: lm.speechText || existing?.speechText,
           speechExpiry: lm.speechExpiry || existing?.speechExpiry,
           avatarUrl: lm.avatar || existing?.avatarUrl,
+          headwearId: lm.headwearId || existing?.headwearId,
+          headwearColor: lm.headwearColor || existing?.headwearColor,
+          outfitId: lm.outfitId || existing?.outfitId,
+          outfitColor: lm.outfitColor || existing?.outfitColor,
+          bootsColor: lm.bootsColor || existing?.bootsColor,
           isLive: true
         });
       });
+
+      for (const k of next.keys()) {
+        if (!activeNiks.has(k)) {
+          next.delete(k);
+        }
+      }
 
       return next;
     });
@@ -643,11 +659,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    // 1. Initial snapshot fetch
+    // Fast initial snapshot bootstrap
     fetchPresenceOnline();
-
-    // 2. Periodic background refresh fallback (every 8s) to ensure zero desync
-    const pollingTimer = setInterval(fetchPresenceOnline, 8000);
 
     const socket = getGlobalSocket();
     const userPayload = {
@@ -659,6 +672,11 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       pangkatIcon: effectivePangkatIcon,
       section: userSection,
       avatar: avatarUrl || null,
+      headwearId: myCustomCfg?.headwearId || 'helmet_white',
+      headwearColor: myCustomCfg?.headwearColor || '#FFFFFF',
+      outfitId: myCustomCfg?.outfitId || 'uniform_tbp',
+      outfitColor: myCustomCfg?.outfitColor || '#84CC16',
+      bootsColor: myCustomCfg?.bootsColor || '#22C55E',
       posX: myPosRef.current.x,
       posY: myPosRef.current.y,
       facing: myFacingRef.current,
@@ -668,16 +686,22 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     // Join lounge explicitly (emits chat:join & lounge:join)
     joinLounge(userPayload);
 
-    // Initial lounge avatar snapshot from server
     // Initial lounge avatar snapshot from server (authoritative sync)
     const handleLoungeSync = (avatarList: any[]) => {
       if (Array.isArray(avatarList)) {
-        setOtherAvatars(() => {
-          const next = new Map<string, InRoomAvatar>();
+        setOtherAvatars(prev => {
+          const next = new Map(prev);
+          const activeNiks = new Set<string>();
           avatarList.forEach((av: any) => {
             if (!av || !av.nik || av.nik === userNik) return;
+            activeNiks.add(av.nik);
             const cleanUname = getCleanUsername(av.nik, av.name, av.username);
             const rankData = getPangkatData(av.nik, av.pangkat);
+            const rawX = typeof av.posX === 'number' ? av.posX : 3.44;
+            const rawY = typeof av.posY === 'number' ? av.posY : 4.75;
+            const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+            const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
             next.set(av.nik, {
               nik: av.nik,
               name: cleanUname,
@@ -685,17 +709,28 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               pangkat: av.pangkat || rankData.name,
               pangkatIcon: av.pangkatIcon || rankData.icon,
               section: av.section || 'Prep-Lab',
-              posX: typeof av.posX === 'number' ? av.posX : 13,
-              posY: typeof av.posY === 'number' ? av.posY : 79,
-              facing: av.facing || 'right',
-              actionState: av.actionState || 'idle',
+              posX: tileX,
+              posY: tileY,
+              facing: av.facing || 'down',
+              actionState: av.actionState || 'sit',
               walkFrame: 0,
               speechText: av.speechText,
               speechExpiry: av.speechExpiry,
               avatarUrl: av.avatar,
+              headwearId: av.headwearId,
+              headwearColor: av.headwearColor,
+              outfitId: av.outfitId,
+              outfitColor: av.outfitColor,
+              bootsColor: av.bootsColor,
               isLive: true
             });
           });
+
+          for (const k of next.keys()) {
+            if (!activeNiks.has(k)) {
+              next.delete(k);
+            }
+          }
           return next;
         });
       }
@@ -706,6 +741,11 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       if (!data || !data.nik || data.nik === userNik) return;
       const cleanUname = getCleanUsername(data.nik, data.name, data.username);
       const rankData = getPangkatData(data.nik, data.pangkat);
+      const rawX = typeof data.posX === 'number' ? data.posX : 3.44;
+      const rawY = typeof data.posY === 'number' ? data.posY : 4.75;
+      const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+      const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
       setOtherAvatars(prev => {
         const next = new Map(prev);
         const existing = next.get(data.nik);
@@ -716,12 +756,17 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           pangkat: data.pangkat || rankData.name,
           pangkatIcon: data.pangkatIcon || rankData.icon,
           section: data.section || 'Prep-Lab',
-          posX: typeof data.posX === 'number' ? data.posX : (existing?.posX ?? 13),
-          posY: typeof data.posY === 'number' ? data.posY : (existing?.posY ?? 79),
-          facing: data.facing || existing?.facing || 'right',
-          actionState: data.actionState || existing?.actionState || 'idle',
+          posX: tileX,
+          posY: tileY,
+          facing: data.facing || existing?.facing || 'down',
+          actionState: data.actionState || existing?.actionState || 'sit',
           walkFrame: 0,
           avatarUrl: data.avatar || existing?.avatarUrl,
+          headwearId: data.headwearId || existing?.headwearId,
+          headwearColor: data.headwearColor || existing?.headwearColor,
+          outfitId: data.outfitId || existing?.outfitId,
+          outfitColor: data.outfitColor || existing?.outfitColor,
+          bootsColor: data.bootsColor || existing?.bootsColor,
           isLive: true
         });
         return next;
@@ -733,6 +778,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     const handleUserLeft = (data: any) => {
       if (!data || !data.nik) return;
       setOtherAvatars(prev => {
+        if (!prev.has(data.nik)) return prev;
         const next = new Map(prev);
         next.delete(data.nik);
         return next;
@@ -749,7 +795,6 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           setOtherAvatars(prev => {
             const existing = prev.get(msg.senderNik);
             if (!existing) {
-              // Sender is not in the lounge - do not spawn a phantom avatar!
               return prev;
             }
             const next = new Map(prev);
@@ -777,17 +822,17 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           const existing = prev.get(data.nik);
           if (!existing) return prev;
           const next = new Map(prev);
-          const movedUname = getCleanUsername(data.nik, data.name, data.username);
-          const movedRank = getPangkatData(data.nik, data.pangkat);
+          const rawX = typeof data.x === 'number' ? data.x : existing.posX;
+          const rawY = typeof data.y === 'number' ? data.y : existing.posY;
+          const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+          const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
           next.set(data.nik, {
             ...existing,
-            username: data.username || existing.username || movedUname,
-            pangkat: data.pangkat || existing.pangkat || movedRank.name,
-            pangkatIcon: data.pangkatIcon || existing.pangkatIcon || movedRank.icon,
-            posX: data.x,
-            posY: data.y,
+            posX: tileX,
+            posY: tileY,
             facing: data.facing || existing.facing,
-            actionState: data.actionState || 'idle',
+            actionState: data.actionState || 'walk',
             isLive: true
           });
           return next;
@@ -801,13 +846,16 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           const existing = prev.get(data.nik);
           if (!existing) return prev;
           const next = new Map(prev);
-          const actionUname = getCleanUsername(data.nik, data.name, data.username);
-          const actionRank = getPangkatData(data.nik, data.pangkat);
+          const rawX = typeof data.x === 'number' ? data.x : existing.posX;
+          const rawY = typeof data.y === 'number' ? data.y : existing.posY;
+          const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+          const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+
           next.set(data.nik, {
             ...existing,
-            username: data.username || existing.username || actionUname,
-            pangkat: data.pangkat || existing.pangkat || actionRank.name,
-            pangkatIcon: data.pangkatIcon || existing.pangkatIcon || actionRank.icon,
+            posX: tileX,
+            posY: tileY,
+            facing: data.facing || existing.facing,
             actionState: data.actionState || existing.actionState,
             speechText: data.speechText || existing.speechText,
             speechExpiry: data.speechText ? Date.now() + 7500 : existing.speechExpiry,
@@ -834,7 +882,6 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     socket.on('new_message', handleNewMessage);
 
     return () => {
-      clearInterval(pollingTimer);
       socket.off('lounge:sync_state', handleLoungeSync);
       socket.off('lounge:user_joined', handleUserJoined);
       socket.off('lounge:user_left', handleUserLeft);
@@ -844,45 +891,16 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       socket.off('new_message', handleNewMessage);
       leaveLounge(userNik);
     };
-  }, [isOpen, userNik, effectiveUsername, effectivePangkat, effectivePangkatIcon, userSection, avatarUrl, fetchPresenceOnline]);
-
-  // Click on open floor to walk freely
-  const handleFloorClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!roomStageRef.current) return;
-    const rect = roomStageRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const percentX = Math.max(14, Math.min(86, (clickX / rect.width) * 100));
-    const percentY = Math.max(52, Math.min(85, (clickY / rect.height) * 100));
-
-    setMyTargetPos({ x: percentX, y: percentY });
-    setPendingActionOnArrival('idle');
-    setActiveSeatId(null);
-    setClickBeacon({ x: percentX, y: percentY });
-    playChime('step');
-
-    const socket = getGlobalSocket();
-    if (socket.connected) {
-      socket.emit('lounge:move', {
-        room: 'lounge',
-        nik: userNik,
-        username: effectiveUsername,
-        pangkat: effectivePangkat,
-        x: percentX,
-        y: percentY,
-        facing: percentX >= myPos.x ? 'right' : 'left',
-        actionState: 'walk'
-      });
-    }
-  };
+  }, [isOpen, userNik, effectiveUsername, effectivePangkat, effectivePangkatIcon, userSection, avatarUrl, myCustomCfg, fetchPresenceOnline, syncOnlinePresence]);
 
   // Check if a spot is already occupied by someone else sitting
   const isLoungeSpotTaken = (spot: LoungeSpot): boolean => {
+    const tileX = spot.x > 12 ? (spot.x / 100) * 12 : spot.x;
+    const tileY = spot.y > 8 ? (spot.y / 100) * 8 : spot.y;
     for (const av of otherAvatars.values()) {
       const isSittingOther = av.actionState === 'sit' || av.actionState === 'smoke_sit' || av.actionState === 'coffee_sit';
-      const dist = Math.hypot(av.posX - spot.x, av.posY - spot.y);
-      if (isSittingOther && dist < 5.5) {
+      const dist = Math.hypot(av.posX - tileX, av.posY - tileY);
+      if (isSittingOther && dist < 0.65) {
         return true;
       }
     }
@@ -897,39 +915,22 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       return;
     }
 
-    setMyTargetPos({ x: spot.x, y: spot.y });
-    setMyFacing('down');
-    setPendingActionOnArrival(spot.action);
+    const tileX = spot.x > 12 ? (spot.x / 100) * 12 : spot.x;
+    const tileY = spot.y > 8 ? (spot.y / 100) * 8 : spot.y;
+    setMyPos({ x: tileX, y: tileY });
+    setMyFacing(spot.facing || 'down');
+    setMyActionState(spot.action);
     setActiveSeatId(spot.id);
-    setClickBeacon({ x: spot.x, y: spot.y });
     playChime('step');
-
     setMySpeech({ text: spot.speech, expiry: Date.now() + 6500 });
 
-    const socket = getGlobalSocket();
-    if (socket.connected) {
-      socket.emit('lounge:move', {
-        room: 'lounge',
-        nik: userNik,
-        username: effectiveUsername,
-        pangkat: effectivePangkat,
-        x: spot.x,
-        y: spot.y,
-        facing: 'down',
-        actionState: 'walk'
-      });
-      socket.emit('send_message', {
-        room: 'lounge',
-        senderNik: userNik,
-        senderName: effectiveUsername,
-        senderUsername: effectiveUsername,
-        senderPangkat: effectivePangkat,
-        senderSection: userSection,
-        senderAvatar: avatarUrl,
-        text: spot.speech,
-        timestamp: new Date().toISOString()
-      });
-    }
+    handlePlayerAction({
+      actionState: spot.action,
+      facing: spot.facing || 'down',
+      speechText: spot.speech,
+      x: tileX,
+      y: tileY
+    });
   };
 
   // Send live overhead speech (No history recorded)
@@ -1164,18 +1165,31 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             outfitColor={myCustomCfg?.outfitColor || '#84CC16'}
             bootsColor={myCustomCfg?.bootsColor || '#22C55E'}
             playerMessage={mySpeech?.text}
-            otherPlayers={Array.from(otherAvatars.values()).map(av => ({
-              id: av.nik,
-              name: av.username || av.name,
-              nik: av.nik,
-              x: Math.max(1.2, Math.min(10.5, (av.posX / 100) * 12)),
-              y: Math.max(3.8, Math.min(6.2, (av.posY / 100) * 8)),
-              facing: av.facing || 'down',
-              actionState: (av.actionState === 'smoke_sit' || av.actionState === 'coffee_sit') ? 'sit' : ((av.actionState as any) || 'idle'),
-              pangkatName: av.pangkat,
-              pangkatIcon: av.pangkatIcon,
-              message: av.speechText
-            }))}
+            playerActionState={myActionState === 'smoke_sit' || myActionState === 'coffee_sit' ? 'sit' : (myActionState as any)}
+            onPlayerMove={handlePlayerMove}
+            onPlayerAction={handlePlayerAction}
+            otherPlayers={Array.from(otherAvatars.values()).map(av => {
+              const rawX = typeof av.posX === 'number' ? av.posX : 3.44;
+              const rawY = typeof av.posY === 'number' ? av.posY : 4.75;
+              const tileX = rawX > 12 ? (rawX / 100) * 12 : rawX;
+              const tileY = rawY > 8 ? (rawY / 100) * 8 : rawY;
+              return {
+                id: av.nik,
+                name: av.username || av.name,
+                nik: av.nik,
+                x: tileX,
+                y: tileY,
+                facing: av.facing || 'down',
+                actionState: (av.actionState === 'smoke_sit' || av.actionState === 'coffee_sit') ? 'sit' : ((av.actionState as any) || 'idle'),
+                pangkatName: av.pangkat,
+                pangkatIcon: av.pangkatIcon,
+                headwearId: av.headwearId,
+                headwearColor: av.headwearColor,
+                outfitId: av.outfitId,
+                outfitColor: av.outfitColor,
+                message: av.speechText
+              };
+            })}
             soundEnabled={soundEnabled}
             isCompactDiorama={false}
           />

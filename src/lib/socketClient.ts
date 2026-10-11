@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 let globalSocket: Socket | null = null;
 let currentChatRoom: string | null = null;
 let registeredUser: any = null;
+let activeLoungePayload: any = null;
 
 export function getGlobalSocket(): Socket {
   if (!globalSocket) {
@@ -48,11 +49,8 @@ export function getGlobalSocket(): Socket {
           room: currentChatRoom,
           ...(registeredUser || {})
         });
-        if (currentChatRoom === 'lounge') {
-          globalSocket?.emit('lounge:join', {
-            room: 'lounge',
-            ...(registeredUser || {})
-          });
+        if (currentChatRoom === 'lounge' && activeLoungePayload) {
+          globalSocket?.emit('lounge:join', activeLoungePayload);
         }
       }
     });
@@ -122,6 +120,7 @@ export function joinLounge(userPayload?: any) {
     ...(registeredUser || {}),
     ...(userPayload || {})
   };
+  activeLoungePayload = payload;
   if (socket.connected) {
     socket.emit('chat:join', payload);
     socket.emit('lounge:join', payload);
@@ -137,6 +136,7 @@ export function leaveRoom() {
 }
 
 export function leaveLounge(userNik?: string) {
+  activeLoungePayload = null;
   currentChatRoom = null;
   const socket = getGlobalSocket();
   if (socket.connected) {
