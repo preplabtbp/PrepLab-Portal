@@ -594,12 +594,21 @@ export function migrateChecklistsInRows(
 ): { migratedCount: number; rows: TableRowData[] } {
   let migratedCount = 0;
   const newRows: TableRowData[] = [];
+  const seenSubUnderParent = new Set<string>();
 
   for (let i = 0; i < inputRows.length; i++) {
     const row = { ...inputRows[i] };
     const isSub = isSubItemRow(row);
 
     if (isSub) {
+      // Deduplicate sub-items under the parent
+      const subTitle = (getCellValue(row, 'Jenis kegiatan') || getCellValue(row, 'Jenis Kegiatan') || '').replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').replace(/\[[ xX]\]\s*/, '').trim().toLowerCase();
+      const parentKey = row.parentId || row.parentRowId || 'unknown';
+      const dedupeKey = `${parentKey}:::${subTitle}`;
+      if (seenSubUnderParent.has(dedupeKey)) {
+        continue;
+      }
+      seenSubUnderParent.add(dedupeKey);
       newRows.push(row);
       continue;
     }
@@ -612,13 +621,27 @@ export function migrateChecklistsInRows(
       row.id = rowCode ? `task_${rowCode}` : `task_${defaultSection || 'sec'}_${i}_${safeTitle}`;
     }
 
+    newRows.push(row);
+
+    // Check if inputRows ALREADY has sub-item rows for this parent
+    let hasExistingSubRows = false;
+    for (let j = i + 1; j < inputRows.length; j++) {
+      const nextR = inputRows[j];
+      if (isSubItemRow(nextR)) {
+        if (!nextR.parentId || nextR.parentId === row.id || nextR.parentRowId === row.id) {
+          hasExistingSubRows = true;
+          break;
+        }
+      } else {
+        break; // Reached next parent task
+      }
+    }
+
     const ketVal = getCellValue(row, 'Keterangan') || '';
     const taskProg = parseTasklist(ketVal);
 
-    if (taskProg.hasTasklist && taskProg.items.length > 0) {
-      // PRESERVE the checklist in parent row's Keterangan for 100% sync with Discussion Modal
-      newRows.push(row);
-
+    // ONLY synthesize sub-items if inputRows does NOT already have sub-item rows for this parent!
+    if (!hasExistingSubRows && taskProg.hasTasklist && taskProg.items.length > 0) {
       const parentCat = getCellValue(row, 'Kategori') || defaultSection || 'Laboratorium';
       const parentPIC = getCellValue(row, 'PIC') || '';
       const parentAct = getCellValue(row, 'Activity (routine/non routine)') || 'Monthly';
@@ -626,34 +649,36 @@ export function migrateChecklistsInRows(
       const now = new Date();
       const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-      // Create a sub-item row for each checklist item if not already existing
       taskProg.items.forEach((item, subIdx) => {
         const safeSubText = (item.text || '').slice(0, 25).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
         const subId = `sub_${row.id}_${subIdx}_${safeSubText}`;
         const subTitle = `↳ ${item.checked ? '[x] ' : '[ ] '}${item.text}`;
-        const subRow: TableRowData = {
-          number: '',
-          id: subId,
-          parentId: row.id,
-          parentRowId: row.id,
-          'Jenis kegiatan': subTitle,
-          'Jenis Kegiatan': subTitle,
-          Keterangan: item.note || '-',
-          PIC: parentPIC,
-          Priority: 'Normal',
-          Status: item.checked ? 'Closed' : 'Open',
-          isCompleted: item.checked ? 'true' : 'false',
-          'Created Time': createdStr,
-          Kategori: parentCat,
-          'Activity (routine/non routine)': parentAct,
-          period: parentPeriod,
-          isSubItem: 'true'
-        };
-        newRows.push(subRow);
-        migratedCount++;
+        const dedupeKey = `${row.id}:::${(item.text || '').trim().toLowerCase()}`;
+
+        if (!seenSubUnderParent.has(dedupeKey)) {
+          seenSubUnderParent.add(dedupeKey);
+          const subRow: TableRowData = {
+            number: '',
+            id: subId,
+            parentId: row.id,
+            parentRowId: row.id,
+            'Jenis kegiatan': subTitle,
+            'Jenis Kegiatan': subTitle,
+            Keterangan: item.note || '-',
+            PIC: parentPIC,
+            Priority: 'Normal',
+            Status: item.checked ? 'Closed' : 'Open',
+            isCompleted: item.checked ? 'true' : 'false',
+            'Created Time': createdStr,
+            Kategori: parentCat,
+            'Activity (routine/non routine)': parentAct,
+            period: parentPeriod,
+            isSubItem: 'true'
+          };
+          newRows.push(subRow);
+          migratedCount++;
+        }
       });
-    } else {
-      newRows.push(row);
     }
   }
 
@@ -3502,8 +3527,15 @@ export function NotionDatabaseTable({
         updatedRows = [cleanedRow, ...localRows];
         toast.success(`Data kegiatan baru (${finalTaskCode}) berhasil ditambahkan di Baris #1!`);
       } else {
-        // Editing existing row
-        updatedRows = localRows.map((r, i) => i === editingRowIndex ? { ...r, ...cleanedRow } : r);
+        // Editing existing row: pastikan targetIndex cocok dengan id / referensi row yang diedit
+        let targetIndex = editingRowIndex;
+        if (targetIndex < 0 || targetIndex >= localRows.length || (cleanedRow.id && localRows[targetIndex]?.id !== cleanedRow.id)) {
+          const foundIdx = localRows.findIndex(r => (cleanedRow.id && r.id === cleanedRow.id) || r === rowFormData);
+          if (foundIdx !== -1) {
+            targetIndex = foundIdx;
+          }
+        }
+        updatedRows = localRows.map((r, i) => i === targetIndex ? { ...r, ...cleanedRow } : r);
         toast.success(`Perubahan data kegiatan (${finalTaskCode}) berhasil disimpan!`);
       }
 
@@ -7263,7 +7295,7 @@ export function NotionDatabaseTable({
                                {/* Row Action Buttons - Menu Titik Tiga */}
                                <td className={`text-center whitespace-nowrap relative notion-row-action-menu-container ${fitPageMode ? 'px-1 py-2' : 'px-2 py-2.5'}`} onClick={(e) => e.stopPropagation()}>
                                  {(() => {
-                                   const rowActionKey = `${actualRowIndex}-${isSubItem ? 'sub' : 'parent'}`;
+                                   const rowActionKey = row.id ? `action-${row.id}` : `${actualRowIndex}-${isSubItem ? 'sub' : 'parent'}-${(row['Jenis kegiatan'] || row['Name'] || '').slice(0, 20)}`;
                                    return (
                                      <div className="relative inline-block">
                                        <button
@@ -7408,30 +7440,41 @@ export function NotionDatabaseTable({
                               )}
 
                               {/* Render Sub-items if Parent is expanded */}
-                              {isParentExpanded && hItem.subItems.map((sub) => {
-                                const subKey = sub.row.id || `${sub.actualIndex}-${sub.row['Jenis kegiatan'] || ''}`;
-                                const isSubExpanded = Boolean(expandedParents[`sub-${sub.actualIndex}`] || expandedParents[`sub-${subKey}`]);
-                                return (
-                                  <React.Fragment key={`sub-${subKey}`}>
-                                    {renderRowItem(
-                                      sub.row, 
-                                      sub.actualIndex, 
-                                      true, 
-                                      false, 
-                                      isSubExpanded, 
-                                      undefined,
-                                      (e) => {
-                                        e.stopPropagation();
-                                        setExpandedParents(prev => ({
-                                          ...prev,
-                                          [`sub-${sub.actualIndex}`]: !isSubExpanded,
-                                          [`sub-${subKey}`]: !isSubExpanded
-                                        }));
-                                      }
-                                    )}
-                                  </React.Fragment>
-                                );
-                              })}
+                              {isParentExpanded && (() => {
+                                // Subtask yang sudah terceklis (selesai) otomatis bergabung di bagian atas
+                                const sortedSubItems = [...hItem.subItems].sort((a, b) => {
+                                  const aComp = isSubItemCompleted(a.row);
+                                  const bComp = isSubItemCompleted(b.row);
+                                  if (aComp && !bComp) return -1;
+                                  if (!aComp && bComp) return 1;
+                                  return 0;
+                                });
+
+                                return sortedSubItems.map((sub) => {
+                                  const subKey = sub.row.id || `${sub.actualIndex}-${sub.row['Jenis kegiatan'] || ''}`;
+                                  const isSubExpanded = Boolean(expandedParents[`sub-${sub.actualIndex}`] || expandedParents[`sub-${subKey}`]);
+                                  return (
+                                    <React.Fragment key={`sub-${subKey}`}>
+                                      {renderRowItem(
+                                        sub.row, 
+                                        sub.actualIndex, 
+                                        true, 
+                                        false, 
+                                        isSubExpanded, 
+                                        undefined,
+                                        (e) => {
+                                          e.stopPropagation();
+                                          setExpandedParents(prev => ({
+                                            ...prev,
+                                            [`sub-${sub.actualIndex}`]: !isSubExpanded,
+                                            [`sub-${subKey}`]: !isSubExpanded
+                                          }));
+                                        }
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                });
+                              })()}
 
                               {/* + New sub-item row if Parent is expanded */}
                               {isParentExpanded && (
