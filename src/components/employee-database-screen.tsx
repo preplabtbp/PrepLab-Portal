@@ -2699,11 +2699,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
             transition={{ delay: 0.1 }}
             className="flex flex-col lg:flex-row h-auto lg:h-full w-full min-h-full p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-[#f4faf5] via-[#edf6f0] to-[#e6f3eb] gap-4 lg:gap-6 overflow-visible lg:overflow-hidden relative pb-32 lg:pb-6"
           >
-            {/* SIDEBAR (Profile Info) - PALET WARNA RESMI: #3C9385 / #3D5D5C (rgb(60, 147, 133)) */}
-            <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-gradient-to-b from-[#3C9385] via-[#3a8477] to-[#3D5D5C] text-white shrink-0 shadow-2xl shadow-[#3D5D5C]/35 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-white/20 ring-1 ring-black/5 transition-all">
-              {/* Decorative Ambient Depth Lights */}
-              <div className="absolute -top-16 -left-16 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-              <div className="absolute -bottom-16 -right-16 w-44 h-44 bg-[#3C9385]/20 rounded-full blur-2xl pointer-events-none" />
+            {/* SIDEBAR (Profile Info) - WARNA SOLID FLAT: #3D5D5C */}
+            <div className="w-full lg:w-80 xl:w-92 h-auto lg:h-full lg:max-h-full bg-[#3D5D5C] text-white shrink-0 shadow-2xl shadow-[#3D5D5C]/30 rounded-3xl z-10 p-5 lg:p-6 flex flex-col items-center relative border border-white/20 ring-1 ring-black/5 transition-all">
 
               <div className="flex flex-col items-center text-center mb-3.5 w-full shrink-0 relative z-10">
                 <div className="w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 xl:w-44 xl:h-44 rounded-3xl bg-white/15 border-2 border-white/50 overflow-hidden flex items-center justify-center shrink-0 shadow-lg relative ring-4 ring-white/20 group mx-auto">
