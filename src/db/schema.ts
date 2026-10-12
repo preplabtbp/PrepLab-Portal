@@ -818,3 +818,25 @@ export const clinicVisits = pgTable('clinic_visits', {
   index('idx_clinic_visits_category').on(t.category),
 ]);
 
+// Database Training SAP (HAZID, JSA, IUT OTT, IAI, BFA) per karyawan — acuan format file Training_SAP.csv
+export const trainingRecords = pgTable('training_records', {
+  id: serial('id').primaryKey(),
+  no: integer('no'), // Nomor urut sesuai file sumber
+  nik: text('nik').notNull(),
+  nama: text('nama').notNull(),
+  jabatan: text('jabatan'),
+  gol: text('gol'), // 'II', 'III', 'IV', 'V'
+  shift: text('shift'), // 'A', 'B', 'Nonshift'
+  hazid: text('hazid'), // Tanggal training 'YYYY-MM-DD'
+  jsa: text('jsa'),
+  iutOtt: text('iut_ott'),
+  iai: text('iai'),
+  bfa: text('bfa'),
+  notes: text('notes'),
+  updatedBy: text('updated_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_training_records_nik').on(t.nik),
+]);
+

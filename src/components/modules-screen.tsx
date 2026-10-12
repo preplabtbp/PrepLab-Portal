@@ -5,7 +5,7 @@ import {
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
   Receipt, LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink, Sparkles,
-  ClipboardList, BriefcaseMedical
+  ClipboardList, BriefcaseMedical, GraduationCap
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
@@ -122,6 +122,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
       items: [
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('induksi') },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('employee-database') },
+        { id: 'training-database', title: "Database Training", desc: "HAZID, JSA, IUT OTT, IAI & BFA", icon: <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('training-database') },
         ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('p5m') }] : []),
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('agenda') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('roster-admin') },

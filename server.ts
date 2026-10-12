@@ -69,6 +69,7 @@ import { kbbiRouter } from "./server/routes/kbbi.js";
 import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
+import { trainingRouter } from "./server/routes/training.js";
 import { userPreferencesRouter } from "./server/routes/userPreferences.js";
 import { galleryRouter } from "./server/routes/gallery.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
@@ -1091,6 +1092,7 @@ const app = express();
   app.use("/api/gamification", gamificationRouter);
   app.use(logbookRouter);
   app.use(clinicRouter);
+  app.use(trainingRouter);
   app.use("/api/user", userPreferencesRouter);
   app.use(galleryRouter);
 

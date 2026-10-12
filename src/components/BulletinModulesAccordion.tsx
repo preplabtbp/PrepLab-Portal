@@ -30,6 +30,7 @@ import {
   User, 
   ExternalLink, 
   UploadCloud,
+  GraduationCap,
   X
 } from 'lucide-react';
 import { getKtaUrl } from '../sheets-api';
@@ -126,6 +127,7 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
       items: [
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('induksi') },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('employee-database') },
+        { id: 'training-database', title: "Database Training", desc: "HAZID, JSA, IUT OTT, IAI & BFA", icon: <GraduationCap className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('training-database') },
         { id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('p5m') },
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('agenda') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('roster-admin') },

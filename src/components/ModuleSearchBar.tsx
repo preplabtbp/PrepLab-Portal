@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  Search, 
-  X, 
-  Clock, 
+  Search,
+  X,
+  Clock,
+  GraduationCap,
   ArrowRight, 
   Sparkles, 
   CheckSquare, 
@@ -159,6 +160,18 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     tags: ['roster', 'cuti', 'shift', 'jadwal', 'absensi', 'libur'],
     actionType: 'nav',
     target: 'roster-admin'
+  },
+  {
+    id: 'training-database',
+    title: 'Database Training',
+    desc: 'Rekap training SAP: HAZID, JSA, IUT OTT, IAI & BFA per karyawan',
+    category: 'Administrasi & SDM',
+    icon: <GraduationCap className="w-5 h-5" />,
+    iconBg: 'bg-indigo-500/15 border-indigo-500/25',
+    iconColor: 'text-indigo-600 dark:text-indigo-400',
+    tags: ['training', 'pelatihan', 'hazid', 'jsa', 'iut', 'ott', 'iai', 'bfa', 'sap', 'sertifikat'],
+    actionType: 'nav',
+    target: 'training-database'
   },
   {
     id: 'agenda',

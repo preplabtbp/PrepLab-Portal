@@ -5,7 +5,7 @@ import {
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
   LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink,
-  Trophy, ChevronDown, ChevronsUpDown, ClipboardList, BriefcaseMedical
+  Trophy, ChevronDown, ChevronsUpDown, ClipboardList, BriefcaseMedical, GraduationCap
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
@@ -164,6 +164,7 @@ export function ModulesDrawer({
       items: [
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('induksi')) },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('employee-database')) },
+        { id: 'training-database', title: "Database Training", desc: "HAZID, JSA, IUT OTT, IAI & BFA", icon: <GraduationCap className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('training-database')) },
         ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('p5m')) }] : []),
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('agenda')) },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('roster-admin')) },
