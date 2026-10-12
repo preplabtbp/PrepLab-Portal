@@ -97,6 +97,29 @@ function formatTrainingDate(val: string | null): string {
   return `${m[3]} ${MONTHS_SHORT[Number(m[2]) - 1] || m[2]} ${m[1]}`;
 }
 
+// ===== Pengelompokan Jabatan =====
+// Satukan variasi penulisan (spasi, "Laboratorium"/"Lab" → "Laboratory") agar satu jabatan = satu kelompok
+function normalizeJabatan(jabatan: string | null): string {
+  const s = String(jabatan || '').replace(/\s+/g, ' ').trim();
+  if (!s) return 'Tanpa Jabatan';
+  return s
+    .replace(/\bLaboratorium\b/gi, 'Laboratory')
+    .replace(/\bLab\b/gi, 'Laboratory')
+    .replace(/\s*,\s*/g, ', ');
+}
+
+const JABATAN_RANKS: [RegExp, number][] = [
+  [/manager/i, 1],
+  [/superintendent/i, 2],
+  [/supervisor/i, 3],
+  [/specialist/i, 4],
+  [/officer/i, 5],
+  [/foreman/i, 6],
+  [/admin|staff/i, 7],
+  [/crew/i, 8],
+];
+const jabatanRank = (jabatan: string) => JABATAN_RANKS.find(([re]) => re.test(jabatan))?.[1] ?? 9;
+
 // ===== Aturan Training SAP =====
 // GOL IV & V tidak wajib BFA, sehingga target mereka 4 training
 const sapRequiredKeys = (r: TrainingRecord): SapDateKey[] =>
@@ -381,6 +404,23 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     });
   }, [programRecords, program, searchQuery, golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter, missingFilter]);
 
+  // Kelompokkan per jabatan (urut hierarki), nomor diurutkan ulang dari 1 di tiap kelompok
+  const jabatanGroups = useMemo(() => {
+    const map = new Map<string, TrainingRecord[]>();
+    filteredRecords.forEach(r => {
+      const key = normalizeJabatan(r.jabatan);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(r);
+    });
+    return Array.from(map.entries())
+      .map(([jabatan, rows]) => ({ jabatan, rows: [...rows].sort((a, b) => a.nama.localeCompare(b.nama, 'id')) }))
+      .sort((a, b) => jabatanRank(a.jabatan) - jabatanRank(b.jabatan) || a.jabatan.localeCompare(b.jabatan, 'id'));
+  }, [filteredRecords]);
+
+  // No, NIK, Nama, GOL, Shift, Status (+ Bagian & PT di K3) + kolom training + Aksi
+  const tableColSpan = 6 + (program === 'k3' ? 2 : 0)
+    + (program === 'sap' ? SAP_TRAININGS.length : K3_TRAININGS.length) + (canManage ? 1 : 0);
+
   const hasActiveFilter = !!searchQuery || golFilter !== 'ALL' || shiftFilter !== 'ALL' || bagianFilter !== 'ALL'
     || ptFilter !== 'ALL' || statusFilter !== 'ALL' || !!missingFilter;
 
@@ -543,17 +583,19 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const handleExportCSV = () => {
     let header: string[];
     let rows: (string | number)[][];
+    // Urutan ekspor mengikuti tampilan (dikelompokkan per jabatan), nomor berurutan dari 1
+    const ordered = jabatanGroups.flatMap(g => g.rows.map(r => ({ r, jabatan: g.jabatan })));
     if (program === 'sap') {
       header = ['NO', 'NIK', 'NAMA', 'Jabatan', 'GOL', 'SHIFT', ...SAP_TRAININGS.map(t => t.label)];
-      rows = filteredRecords.map(r => [
-        r.no ?? '', r.nik, r.nama, r.jabatan || '', r.gol || '', r.shift || '',
+      rows = ordered.map(({ r, jabatan }, i) => [
+        i + 1, r.nik, r.nama, jabatan, r.gol || '', r.shift || '',
         ...SAP_TRAININGS.map(t => (t.key === 'bfa' && isBfaExempt(r.gol) && !r.bfa ? 'Tidak Wajib' : r[t.key] || '')),
       ]);
     } else {
       header = ['NO', 'NIK', 'NAMA KARYAWAN', 'Shift', 'BAGIAN', 'JABATAN', 'PT', 'GOL',
         ...K3_TRAININGS.flatMap(t => [t.label.toUpperCase(), 'Status'])];
-      rows = filteredRecords.map(r => [
-        r.noK3 ?? '', r.nik, r.nama, r.shift || '', r.bagian || '', r.jabatan || '', r.pt || '', r.gol || '',
+      rows = ordered.map(({ r, jabatan }, i) => [
+        i + 1, r.nik, r.nama, r.shift || '', r.bagian || '', jabatan, r.pt || '', r.gol || '',
         ...K3_TRAININGS.flatMap(t => [r[t.key] || '-', r[t.statusKey] || '-']),
       ]);
     }
@@ -936,7 +978,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       <th className="px-3 py-2.5 text-center">No</th>
                       <th className="px-3 py-2.5">NIK</th>
                       <th className="px-3 py-2.5">Nama</th>
-                      <th className="px-3 py-2.5">Jabatan</th>
                       {program === 'k3' && <th className="px-3 py-2.5">Bagian</th>}
                       {program === 'k3' && <th className="px-3 py-2.5 text-center">PT</th>}
                       <th className="px-3 py-2.5 text-center">GOL</th>
@@ -949,12 +990,21 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRecords.map(r => (
+                    {jabatanGroups.map(group => (
+                      <React.Fragment key={group.jabatan}>
+                        <tr className="bg-indigo-50/80 border-t-2 border-indigo-200">
+                          <td colSpan={tableColSpan} className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-indigo-950">{group.jabatan}</span>
+                              <span className="px-2 py-px rounded-full text-[10px] font-mono font-black bg-indigo-600 text-white">{group.rows.length}</span>
+                            </div>
+                          </td>
+                        </tr>
+                    {group.rows.map((r, idx) => (
                       <tr key={r.id} className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors">
-                        <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{(program === 'sap' ? r.no : r.noK3) ?? '-'}</td>
+                        <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{idx + 1}</td>
                         <td className="px-3 py-2 text-[11px] font-mono font-bold text-slate-800 whitespace-nowrap">{r.nik}</td>
                         <td className="px-3 py-2 text-xs font-black text-slate-950 min-w-[170px]">{r.nama}</td>
-                        <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 min-w-[170px]">{r.jabatan || '-'}</td>
                         {program === 'k3' && <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap">{r.bagian || '-'}</td>}
                         {program === 'k3' && <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>}
                         <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.gol || '-'}</td>
@@ -977,18 +1027,26 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                         )}
                       </tr>
                     ))}
+                      </React.Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
 
             {/* Kartu (mobile) */}
-            <div className="md:hidden space-y-2.5">
-              {filteredRecords.map(r => (
+            <div className="md:hidden space-y-4">
+              {jabatanGroups.map(group => (
+              <div key={group.jabatan} className="space-y-2.5">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-xs font-black text-indigo-950">{group.jabatan}</span>
+                  <span className="px-2 py-px rounded-full text-[10px] font-mono font-black bg-indigo-600 text-white">{group.rows.length}</span>
+                </div>
+              {group.rows.map((r, idx) => (
                 <div key={r.id} className="p-3.5 rounded-2xl border shadow-xs" style={cardStyle}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-black text-slate-950 leading-tight">{r.nama}</p>
+                      <p className="text-sm font-black text-slate-950 leading-tight"><span className="font-mono text-slate-500 mr-1">{idx + 1}.</span>{r.nama}</p>
                       <p className="text-[11px] font-mono font-bold text-slate-600 mt-0.5">{r.nik}{r.pt ? ` · ${r.pt}` : ''}</p>
                       <p className="text-[11px] font-semibold text-slate-700 mt-0.5">
                         {r.jabatan || '-'} · GOL {r.gol || '-'} · {r.shift || '-'}{program === 'k3' && r.bagian ? ` · ${r.bagian}` : ''}
@@ -1022,6 +1080,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     </div>
                   )}
                 </div>
+              ))}
+              </div>
               ))}
             </div>
           </>
