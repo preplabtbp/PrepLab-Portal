@@ -3362,18 +3362,6 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         </div>
                         <p className="font-black text-xl text-emerald-950 tracking-tight">{selectedEmployee.statusKaryawan || '-'}</p>
                       </div>
-
-                      <div className="mt-2.5 pt-2 border-t border-emerald-300/60 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-emerald-200/70 border border-emerald-300/80 flex items-center justify-center shrink-0">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-800" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-800/80 leading-tight">Status Kerja</p>
-                          <p className="font-bold text-xs text-emerald-950 leading-tight whitespace-nowrap">
-                            {String(selectedEmployee.statusKaryawan || '').toUpperCase() === 'ACTIVE' ? 'Aktif Bekerja' : (selectedEmployee.statusKaryawan || 'Aktif')}
-                          </p>
-                        </div>
-                      </div>
                     </div>
 
                     {/* Status Kontrak & Tanggal Permanen (Disatukan) */}
