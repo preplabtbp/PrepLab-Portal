@@ -10,7 +10,7 @@
 // KET/STATUS dibaca berdasarkan nilainya (PASS/FAILED = hasil, EXPIRED/WARNING = masa berlaku), sehingga header
 // ganda di Excel ("Status", "Status_1") maupun CSV pandas ("Status.1", "TGL2") tetap terbaca benar.
 
-export type TrainingProgram = 'sap' | 'k3';
+export type TrainingProgram = 'sap' | 'k3' | 'pop';
 
 export type SapDateKey = 'hazid' | 'jsa' | 'iutOtt' | 'iai' | 'bfa' | 'bs';
 export type SapStatusKey = 'hazidStatus' | 'jsaStatus' | 'iutOttStatus' | 'iaiStatus' | 'bfaStatus' | 'bsStatus';
@@ -113,7 +113,74 @@ export interface ParsedTrainingRow {
   confinedSpaceStatus?: string | null;
   fireFighting?: string | null;
   fireFightingStatus?: string | null;
+  popData?: PopData | null;
 }
+
+// ===== Sertifikasi Pengawas Operasional (Pra POP / POP / POM) =====
+// Keterangan POP dinormalisasi ke kode baku agar konsisten & mudah difilter
+export type PopKeterangan = 'PASS' | 'TIDAK_WAJIB' | 'IJAZAH' | 'MASA_KERJA';
+export const POP_KETERANGAN: Record<PopKeterangan, { label: string; desc: string }> = {
+  PASS: { label: 'Memenuhi Syarat', desc: 'Memenuhi persyaratan Pengawas Operasional Pertama (POP)' },
+  MASA_KERJA: { label: 'Masa Kerja Belum Cukup', desc: 'Belum memenuhi syarat masa kerja minimum untuk POP' },
+  IJAZAH: { label: 'Ijazah Tidak Mendukung', desc: 'Pendidikan terakhir belum memenuhi syarat POP' },
+  TIDAK_WAJIB: { label: 'Tidak Wajib POP', desc: 'Jabatan tidak termasuk daftar wajib POP' },
+};
+
+export interface PopData {
+  doh?: string | null;               // Tanggal awal bergabung (DOH)
+  praPop?: string | null;            // Tanggal Pra POP
+  praPopIns?: string | null;         // Instruktur Pra POP
+  praPopPre?: number | null;
+  praPopPost?: number | null;
+  praPopResult?: string | null;      // 'PASS' | 'FAIL' | null
+  popBatch?: string | null;          // mis. "Batch 4", "Batch 2 · 2026", "Batch 2022"
+  pendidikan?: string | null;        // Pendidikan terakhir (POP)
+  tahunLulus?: string | null;
+  pengalamanTambang?: string | null; // Pengalaman kerja di pertambangan lain
+  masaKerja?: string | null;         // Masa kerja (teks dari file, cadangan bila DOH kosong)
+  popKeterangan?: PopKeterangan | string | null;
+  pom?: string | null;               // Keikutsertaan POM (batch / keterangan)
+  pomPendidikan?: string | null;
+  pomMasaKerja?: string | null;
+  pomKeterangan?: string | null;     // 'PASS' | null
+}
+
+export function normalizePopKeterangan(val: unknown): PopKeterangan | string | null {
+  const s = String(val ?? '').trim();
+  if (!s || s === '-') return null;
+  const l = s.toLowerCase();
+  if (l === 'pass' || l === 'lulus' || l.includes('memenuhi syarat')) return 'PASS';
+  if (l.includes('tidak masuk') || l.includes('tidak wajib')) return 'TIDAK_WAJIB';
+  if (l.includes('ijazah') || l.includes('pendidikan')) return 'IJAZAH';
+  if (l.includes('masa kerja')) return 'MASA_KERJA';
+  return s;
+}
+
+// "Batch (2022)" → "Batch 2022", "Batch 2 (2026)" → "Batch 2 · 2026", "Batch 4" → "Batch 4"
+export function formatPopBatch(val: unknown): string | null {
+  const s = String(val ?? '').replace(/\s+/g, ' ').trim();
+  if (!s || s === '-') return null;
+  const m = s.match(/^batch\s*(\d+)?\s*\(?\s*(\d{4})?\s*\)?$/i);
+  if (!m) return s;
+  const [, no, year] = m;
+  if (no && year) return `Batch ${no} · ${year}`;
+  if (no) return `Batch ${no}`;
+  if (year) return `Batch ${year}`;
+  return s;
+}
+
+// Masa kerja dari DOH → "9 Tahun 6 Bulan"
+export function masaKerjaFromDoh(doh: string, today: string = todayWit()): string {
+  const [y1, m1, d1] = doh.split('-').map(Number);
+  const [y2, m2, d2] = today.split('-').map(Number);
+  let months = (y2 - y1) * 12 + (m2 - m1) - (d2 < d1 ? 1 : 0);
+  if (months < 0) months = 0;
+  return `${Math.floor(months / 12)} Tahun ${months % 12} Bulan`;
+}
+
+export const popAttendedPra = (p?: PopData | null) => !!p && (!!p.praPop || p.praPopResult === 'PASS' || p.praPopPre != null || p.praPopPost != null);
+export const popAttendedPop = (p?: PopData | null) => !!p?.popBatch;
+export const popPassedPom = (p?: PopData | null) => p?.pomKeterangan === 'PASS';
 
 export interface ParsedTrainingSheet {
   programs: TrainingProgram[];
@@ -292,6 +359,10 @@ export function parseTrainingSheet(rows: unknown[][], options: { singleTraining?
   if (headerIdx < 0) return null;
 
   const headers = rows[headerIdx].map(normalizeHeader);
+  // Format Sertifikasi Pengawas (Pra POP / POP / POM)
+  if (headers.includes('prapop') || headers.some(h => h.startsWith('keteranganpop'))) {
+    return parsePopSheet(rows, headerIdx, headers);
+  }
   const isSingleTraining = headers.some(h => GENERIC_DATE_HEADERS.has(h)) && !headers.some(h => TRAINING_ALIASES[h]);
   if (isSingleTraining && !options.singleTraining) {
     // Format dikenali, tapi jenis trainingnya harus dipilih dulu
@@ -392,9 +463,10 @@ export function parseTrainingSheet(rows: unknown[][], options: { singleTraining?
 }
 
 // ===== Pengingat training per karyawan (WARNING / EXPIRED) =====
-// Dipakai server (notifikasi & kartu pengingat di Home) dan client agar aturannya selalu sama.
-//  - Training SAP: hanya training yang WAJIB untuk GOL karyawan
-//  - Training K3 : training yang sudah pernah diikuti (ada tanggal), kecuali status Pending / FAIL
+// Dipakai server (notifikasi & Action Center di Home) dan client agar aturannya selalu sama.
+// Masa berlaku HANYA berlaku untuk Training SAP (training yang WAJIB untuk GOL karyawan).
+// Training K3 (WAH, LOTO, Confined Space, Fire Fighting) & Sertifikasi POP/POM tidak punya masa berlaku —
+// cukup dihitung jumlah karyawan yang telah mengikuti.
 export interface TrainingAlert {
   key: TrainingKey;
   label: string;
@@ -417,12 +489,84 @@ export function trainingAlertsForRecord(r: Record<string, any>, today: string = 
       if (required.includes(t.key) && r[t.key] && r[t.statusKey] !== 'FAIL') push(t.key, t.label, t.desc, 'sap', r[t.key]);
     });
   }
-  if (r.inK3) {
-    K3_TRAININGS.forEach(t => {
-      const status = r[t.statusKey];
-      if (r[t.key] && status !== 'Pending' && status !== 'FAIL') push(t.key, t.label, t.desc, 'k3', r[t.key]);
-    });
-  }
   // Expired dulu, lalu yang paling cepat habis
   return alerts.sort((a, b) => (a.state === b.state ? a.expiryDate.localeCompare(b.expiryDate) : a.state === 'expired' ? -1 : 1));
+}
+
+// ===== Parser format Sertifikasi Pengawas Operasional (Pra_POP_POP_POM.csv) =====
+// Header: No, Employee Name, NIK, Section, Jabatan, PT, Doh Awal, Pra POP, INS, PRE, POST, Ket, POP,
+//         Pendidikan Terakhir (POP), Lulusan pendidikan Terakhir, Pengalaman Kerja ... (Pertambangan),
+//         Masa Kerja (POP), Keterangan (POP), POM, Pendidikan Terakhir (POM), Masa Kerja (POM), Keterangan (POM)
+// INS/PRE/POST/Ket dibaca sebagai milik kolom "Pra POP" di sebelah kirinya.
+type PopField = keyof PopData | 'no' | 'nik' | 'nama' | 'jabatan' | 'bagian' | 'pt' | 'gol' | 'shift';
+function popFieldOf(h: string, afterPraPop: boolean): PopField | null {
+  const profile: Record<string, PopField> = {
+    no: 'no', nik: 'nik', nama: 'nama', namakaryawan: 'nama', employeename: 'nama', name: 'nama',
+    jabatan: 'jabatan', section: 'bagian', bagian: 'bagian', pt: 'pt', gol: 'gol', golongan: 'gol', shift: 'shift',
+  };
+  if (profile[h]) return profile[h];
+  if (h.startsWith('doh') || h === 'tanggalawalbergabung') return 'doh';
+  if (h === 'prapop') return 'praPop';
+  if (afterPraPop && h.startsWith('ins')) return 'praPopIns';
+  if (afterPraPop && h.startsWith('pre')) return 'praPopPre';
+  if (afterPraPop && h.startsWith('post')) return 'praPopPost';
+  if (afterPraPop && (h === 'ket' || h === 'keterangan' || h === 'hasil')) return 'praPopResult';
+  if (h === 'pop') return 'popBatch';
+  if (h === 'pendidikanterakhirpop') return 'pendidikan';
+  if (h.startsWith('lulusan') || h === 'tahunlulus') return 'tahunLulus';
+  if (h.startsWith('pengalamankerja')) return 'pengalamanTambang';
+  if (h === 'masakerjapop') return 'masaKerja';
+  if (h === 'keteranganpop') return 'popKeterangan';
+  if (h === 'pom') return 'pom';
+  if (h === 'pendidikanterakhirpom') return 'pomPendidikan';
+  if (h === 'masakerjapom') return 'pomMasaKerja';
+  if (h === 'keteranganpom') return 'pomKeterangan';
+  return null;
+}
+
+function parsePopSheet(rows: unknown[][], headerIdx: number, headers: string[]): ParsedTrainingSheet {
+  let afterPraPop = false;
+  const columns = headers.map(h => {
+    const f = popFieldOf(h, afterPraPop);
+    if (f === 'praPop') afterPraPop = true;
+    else if (f === 'popBatch') afterPraPop = false;
+    return f;
+  });
+  const records: ParsedTrainingRow[] = [];
+  let skipped = 0;
+  for (const row of rows.slice(headerIdx + 1)) {
+    if (!Array.isArray(row)) continue;
+    const rec: Record<string, any> = {};
+    const pop: PopData = {};
+    columns.forEach((f, i) => {
+      if (!f) return;
+      const v = row[i];
+      switch (f) {
+        case 'no': { const n = parseInt(String(v ?? '').trim(), 10); rec.no = isNaN(n) ? null : n; break; }
+        case 'nik': rec.nik = String(v ?? '').trim().toUpperCase(); break;
+        case 'nama': case 'jabatan': case 'bagian': case 'pt': case 'shift': rec[f] = cleanText(v); break;
+        case 'gol': rec.gol = cleanText(v)?.toUpperCase() ?? null; break;
+        case 'doh': case 'praPop': pop[f] = normalizeTrainingDate(v); break;
+        case 'praPopPre': case 'praPopPost': pop[f] = toScore(v) ?? null; break;
+        case 'praPopResult': case 'pomKeterangan': {
+          const s = normalizeTrainingStatus(v);
+          pop[f] = s === 'PASS' || s === 'FAIL' ? s : null;
+          break;
+        }
+        case 'popBatch': pop.popBatch = formatPopBatch(v); break;
+        case 'popKeterangan': pop.popKeterangan = normalizePopKeterangan(v); break;
+        case 'tahunLulus': { const y = String(v ?? '').trim().match(/^(\d{4})/); pop.tahunLulus = y ? y[1] : null; break; }
+        case 'praPopIns': { const s = cleanText(v); pop.praPopIns = s ? s.toUpperCase() : null; break; }
+        default: (pop as any)[f] = cleanText(v);
+      }
+    });
+    const hasAnyValue = row.some(c => String(c ?? '').trim() && String(c ?? '').trim() !== '`');
+    if (!rec.nik || !rec.nama) {
+      if (hasAnyValue) skipped++;
+      continue;
+    }
+    rec.popData = pop;
+    records.push(rec as ParsedTrainingRow);
+  }
+  return { programs: ['pop'], records, skipped };
 }

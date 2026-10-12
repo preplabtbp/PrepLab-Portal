@@ -5,7 +5,11 @@ export const PROFILE_FIELDS = ['nama', 'jabatan', 'gol', 'shift', 'bagian', 'pt'
 export const PROGRAM_FIELDS: Record<TrainingProgram, readonly (keyof ParsedTrainingRow)[]> = {
   sap: ['hazid', 'hazidStatus', 'jsa', 'jsaStatus', 'iutOtt', 'iutOttStatus', 'iai', 'iaiStatus', 'bfa', 'bfaStatus', 'bs', 'bsStatus', 'sapDetails'],
   k3: ['wah', 'wahStatus', 'loto', 'lotoStatus', 'confinedSpace', 'confinedSpaceStatus', 'fireFighting', 'fireFightingStatus'],
+  pop: ['popData'],
 };
+// Kolom flag keikutsertaan & nomor urut per program
+export const PROGRAM_FLAG = { sap: 'inSap', k3: 'inK3', pop: 'inPop' } as const;
+export const PROGRAM_NO = { sap: 'no', k3: 'noK3', pop: 'noPop' } as const;
 
 export interface MergeOptions {
   programs: TrainingProgram[];
@@ -18,20 +22,21 @@ export interface MergeOptions {
 // Gabungkan satu baris sumber dengan data lama (bila ada) menjadi baris lengkap untuk di-upsert.
 // - Field program yang ADA di sumber diganti; yang tidak ada (mis. kolom BS di file lama) dipertahankan.
 // - Detail skor (sapDetails) digabung per training.
-// - Profil: Training SAP menimpa, Training K3 & file satu-training hanya mengisi yang kosong
-//   (kecuali Bagian & PT yang memang bersumber dari file K3).
+// - Profil: Training SAP menimpa; Training K3 hanya mengisi yang kosong (kecuali Bagian & PT dari file K3);
+//   file satu-training & Sertifikasi POP hanya mengisi yang kosong.
 export function mergeTrainingRow(
   rec: ParsedTrainingRow,
   existing: Record<string, any> | undefined,
   { programs, updatedBy, now, fillProfileOnly = false }: MergeOptions
 ): Record<string, unknown> {
   const sapIsSource = programs.includes('sap');
+  const fillOnly = fillProfileOnly || (!sapIsSource && !programs.includes('k3'));
   const row: Record<string, unknown> = { nik: rec.nik, updatedBy, updatedAt: now };
 
   PROFILE_FIELDS.forEach(f => {
     const incoming = rec[f] ?? null;
     const current = existing ? existing[f] ?? null : null;
-    const preferIncoming = !fillProfileOnly && (sapIsSource || f === 'bagian' || f === 'pt');
+    const preferIncoming = !fillOnly && (sapIsSource || f === 'bagian' || f === 'pt');
     row[f] = preferIncoming ? (incoming ?? current) : (current ?? incoming);
   });
   (Object.keys(PROGRAM_FIELDS) as TrainingProgram[]).forEach(p => PROGRAM_FIELDS[p].forEach(f => {
@@ -44,9 +49,15 @@ export function mergeTrainingRow(
     }
     row[f] = fromSource ? rec[f] ?? null : current;
   }));
-  row.no = sapIsSource && rec.no != null && !fillProfileOnly ? rec.no : existing?.no ?? null;
-  row.noK3 = !sapIsSource && programs.includes('k3') && rec.no != null && !fillProfileOnly ? rec.no : existing?.noK3 ?? null;
-  row.inSap = programs.includes('sap') || !!existing?.inSap;
-  row.inK3 = programs.includes('k3') || !!existing?.inK3;
+  // Nomor urut hanya dari file utama program tsb (bukan file satu-training)
+  (Object.keys(PROGRAM_NO) as TrainingProgram[]).forEach(p => {
+    const col = PROGRAM_NO[p];
+    const fromSource = programs.length === 1 && programs[0] === p && rec.no != null && !fillProfileOnly;
+    row[col] = fromSource ? rec.no : existing?.[col] ?? null;
+  });
+  (Object.keys(PROGRAM_FLAG) as TrainingProgram[]).forEach(p => {
+    const col = PROGRAM_FLAG[p];
+    row[col] = programs.includes(p) || !!existing?.[col];
+  });
   return row;
 }

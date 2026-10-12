@@ -20,7 +20,6 @@ import { ActionCenterBar } from './ActionCenterBar';
 import { SectionLogBookBar } from './SectionLogBookBar';
 import { HomeWidgetDashboard } from './home-widgets/HomeWidgetDashboard';
 import { HomeWalkthroughTour } from './HomeWalkthroughTour';
-import { TrainingReminderCard } from './TrainingReminderCard';
 
 interface MobileSimpleHomeScreenProps {
   inspectorName: string;
@@ -407,9 +406,6 @@ export function MobileSimpleHomeScreen({
             )}
           </div>
 
-          {/* Pengingat Training WARNING / EXPIRED milik karyawan (hilang setelah training diperbarui) */}
-          <TrainingReminderCard inspectorNik={inspectorNik} />
-
           {/* Quick Search Bar for Mobile View */}
           <div className="sm:hidden">
             <button
@@ -436,6 +432,14 @@ export function MobileSimpleHomeScreen({
           {/* ── CONDITIONAL BODY: CREW DEDICATED MENU vs REGULAR/SUPERVISOR DASHBOARD ── */}
           {isCrew ? (
         <div className="space-y-4 pt-1">
+          {/* Action Center Crew: hanya Training WARNING / EXPIRED (tidak tampil bila tidak ada) */}
+          <ActionCenterBar
+            inspectorNik={effectiveNik}
+            inspectorName={effectiveName}
+            inspectorJabatan={effectiveRole}
+            onNav={onNav}
+            trainingOnly
+          />
           {/* Header Banner */}
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">

@@ -9,7 +9,8 @@ import { TRAINING_SAP_SEED } from "../data/trainingSapSeed.js";
 import { TRAINING_K3_SEED_CSV } from "../data/trainingK3Seed.js";
 import { TRAINING_MONITORING_SEED_CSV } from "../data/trainingMonitoringSeed.js";
 import { TRAINING_BASIC_SAFETY_SEED_CSV } from "../data/trainingBasicSafetySeed.js";
-import { PROGRAM_FIELDS, mergeTrainingRow } from "./trainingMerge.js";
+import { TRAINING_POP_SEED_CSV } from "../data/trainingPopSeed.js";
+import { PROGRAM_FIELDS, PROGRAM_FLAG, PROGRAM_NO, mergeTrainingRow } from "./trainingMerge.js";
 import {
   parseTrainingSheet,
   trainingAlertsForRecord,
@@ -18,8 +19,11 @@ import {
   type TrainingKey,
   normalizeTrainingDate,
   normalizeTrainingStatus,
+  normalizePopKeterangan,
+  formatPopBatch,
   type ParsedTrainingRow,
   type TrainingProgram,
+  type PopData,
 } from "../../src/utils/training-import.js";
 
 export const trainingRouter = Router();
@@ -31,16 +35,52 @@ const STATUS_FIELDS = new Set([
 // Field yang tidak diedit lewat form (hanya dari file Monitoring) — tidak ikut ditimpa saat PUT
 const NON_FORM_FIELDS = new Set(['sapDetails']);
 
+// Bersihkan data Sertifikasi POP dari form / import (tipe & format baku)
+function sanitizePopData(value: unknown): PopData | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const text = (x: unknown) => cleanText(x === '-' ? null : x);
+  const num = (x: unknown) => {
+    const n = parseFloat(String(x ?? '').replace(',', '.'));
+    return isNaN(n) ? null : n;
+  };
+  const passOnly = (x: unknown) => {
+    const s = normalizeTrainingStatus(x);
+    return s === 'PASS' || s === 'FAIL' ? s : null;
+  };
+  const year = String(v.tahunLulus ?? '').match(/(\d{4})/);
+  return {
+    doh: normalizeTrainingDate(v.doh),
+    praPop: normalizeTrainingDate(v.praPop),
+    praPopIns: text(v.praPopIns)?.toUpperCase() ?? null,
+    praPopPre: num(v.praPopPre),
+    praPopPost: num(v.praPopPost),
+    praPopResult: passOnly(v.praPopResult),
+    popBatch: formatPopBatch(v.popBatch),
+    pendidikan: text(v.pendidikan),
+    tahunLulus: year ? year[1] : null,
+    pengalamanTambang: text(v.pengalamanTambang),
+    masaKerja: text(v.masaKerja),
+    popKeterangan: normalizePopKeterangan(v.popKeterangan),
+    pom: text(v.pom),
+    pomPendidikan: text(v.pomPendidikan),
+    pomMasaKerja: text(v.pomMasaKerja),
+    pomKeterangan: passOnly(v.pomKeterangan),
+  };
+}
+
 // Normalisasi satu field program sesuai jenisnya
 function normalizeProgramField(field: string, value: unknown): unknown {
   if (field === 'sapDetails') return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  if (field === 'popData') return sanitizePopData(value);
   return STATUS_FIELDS.has(field) ? normalizeTrainingStatus(value) : normalizeTrainingDate(value);
 }
 
 const MONITORING_SEED_MARKER = 'training_seed_monitoring_sap_v1';
 const BASIC_SAFETY_SEED_MARKER = 'training_seed_basic_safety_v1';
-
-const isProgram = (v: unknown): v is TrainingProgram => v === 'sap' || v === 'k3';
+const POP_SEED_MARKER = 'training_seed_pop_v1';
+const isProgram = (v: unknown): v is TrainingProgram => v === 'sap' || v === 'k3' || v === 'pop';
+const NO_COLUMN = { sap: trainingRecords.no, k3: trainingRecords.noK3, pop: trainingRecords.noPop } as const;
 
 const cleanText = (v: unknown): string | null => {
   if (v === null || v === undefined) return null;
@@ -52,8 +92,9 @@ const cleanText = (v: unknown): string | null => {
 const UPSERT_COLUMNS: { field: keyof typeof trainingRecords.$inferInsert; column: string }[] = [
   { field: 'nama', column: 'nama' }, { field: 'jabatan', column: 'jabatan' }, { field: 'gol', column: 'gol' },
   { field: 'shift', column: 'shift' }, { field: 'bagian', column: 'bagian' }, { field: 'pt', column: 'pt' },
-  { field: 'no', column: 'no' }, { field: 'noK3', column: 'no_k3' },
-  { field: 'inSap', column: 'in_sap' }, { field: 'inK3', column: 'in_k3' },
+  { field: 'no', column: 'no' }, { field: 'noK3', column: 'no_k3' }, { field: 'noPop', column: 'no_pop' },
+  { field: 'inSap', column: 'in_sap' }, { field: 'inK3', column: 'in_k3' }, { field: 'inPop', column: 'in_pop' },
+  { field: 'popData', column: 'pop_data' },
   { field: 'hazid', column: 'hazid' }, { field: 'jsa', column: 'jsa' }, { field: 'iutOtt', column: 'iut_ott' },
   { field: 'iai', column: 'iai' }, { field: 'bfa', column: 'bfa' }, { field: 'bs', column: 'bs' },
   { field: 'hazidStatus', column: 'hazid_status' }, { field: 'jsaStatus', column: 'jsa_status' },
@@ -151,17 +192,22 @@ async function migrateTrainingTable() {
     ADD COLUMN IF NOT EXISTS bfa_status TEXT,
     ADD COLUMN IF NOT EXISTS bs_status TEXT,
     ADD COLUMN IF NOT EXISTS sap_details JSONB;`);
+  // Kolom Sertifikasi Pengawas Operasional (Pra POP / POP / POM)
+  await db.execute(sql`ALTER TABLE training_records
+    ADD COLUMN IF NOT EXISTS in_pop BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS no_pop INTEGER,
+    ADD COLUMN IF NOT EXISTS pop_data JSONB;`);
   // Baris lama (sebelum ada flag program) adalah peserta Training SAP
   await db.execute(sql`UPDATE training_records SET in_sap = TRUE
-    WHERE COALESCE(in_sap, FALSE) = FALSE AND COALESCE(in_k3, FALSE) = FALSE;`);
+    WHERE COALESCE(in_sap, FALSE) = FALSE AND COALESCE(in_k3, FALSE) = FALSE AND COALESCE(in_pop, FALSE) = FALSE;`);
 }
 
-// Menyentuh kolom terbaru (bs_status, sap_details) agar query gagal bila migrasi belum dijalankan
+// Menyentuh kolom terbaru (bs_status, sap_details, pop_data) agar query gagal bila migrasi belum dijalankan
 const countPrograms = async () => {
   const [counts] = await db.select({
     sapCount: sql<number>`count(*) filter (where ${trainingRecords.inSap})::int`,
     k3Count: sql<number>`count(*) filter (where ${trainingRecords.inK3})::int`,
-    detailCount: sql<number>`count(*) filter (where ${trainingRecords.bsStatus} is not null or ${trainingRecords.sapDetails} is not null)::int`,
+    detailCount: sql<number>`count(*) filter (where ${trainingRecords.bsStatus} is not null or ${trainingRecords.sapDetails} is not null or ${trainingRecords.popData} is not null)::int`,
   }).from(trainingRecords);
   return counts;
 };
@@ -220,6 +266,7 @@ export function ensureTrainingRecordsTable(): Promise<void> {
       try {
         await seedCsvOnce(MONITORING_SEED_MARKER, 'Monitoring_Training_Monitoring.csv', TRAINING_MONITORING_SEED_CSV);
         await seedCsvOnce(BASIC_SAFETY_SEED_MARKER, 'Basic_Safety.csv', TRAINING_BASIC_SAFETY_SEED_CSV, 'bs');
+        await seedCsvOnce(POP_SEED_MARKER, 'Pra_POP_POP_POM.csv', TRAINING_POP_SEED_CSV);
       } catch (e: any) {
         console.error("[Training] CSV seed failed:", e.message);
       }
@@ -371,11 +418,11 @@ trainingRouter.post("/api/training-records", async (req, res) => {
       return res.status(400).json({ status: "error", message: "NIK dan Nama wajib diisi." });
     }
     const [existing] = await db.select().from(trainingRecords).where(eq(trainingRecords.nik, rec.nik));
-    if (existing && (program === 'sap' ? existing.inSap : existing.inK3)) {
+    if (existing && existing[PROGRAM_FLAG[program]]) {
       return res.status(409).json({ status: "error", message: `NIK ${rec.nik} sudah terdaftar di program ini.` });
     }
     if (rec.no == null) {
-      const col = program === 'sap' ? trainingRecords.no : trainingRecords.noK3;
+      const col = NO_COLUMN[program];
       const [{ maxNo }] = await db.select({ maxNo: sql<number>`coalesce(max(${col}), 0)::int` }).from(trainingRecords);
       rec.no = maxNo + 1;
     }
@@ -463,7 +510,7 @@ trainingRouter.put("/api/training-records/:id", async (req, res) => {
         shift: rec.shift ?? null,
         bagian: rec.bagian ?? null,
         pt: rec.pt ?? null,
-        ...(program === 'sap' ? { no: rec.no ?? null } : { noK3: rec.no ?? null }),
+        [PROGRAM_NO[program]]: rec.no ?? null,
         ...programValues,
         notes: cleanText(req.body.notes),
         updatedBy: cleanText(req.body.updatedBy),
@@ -481,7 +528,7 @@ trainingRouter.put("/api/training-records/:id", async (req, res) => {
   }
 });
 
-// 5. DELETE /api/training-records/:id?program=sap|k3 — keluarkan karyawan dari satu program;
+// 5. DELETE /api/training-records/:id?program=sap|k3|pop — keluarkan karyawan dari satu program;
 //    baris dihapus permanen hanya jika tidak lagi terdaftar di program manapun
 trainingRouter.delete("/api/training-records/:id", async (req, res) => {
   try {
@@ -495,13 +542,16 @@ trainingRouter.delete("/api/training-records/:id", async (req, res) => {
     if (!existing) {
       return res.status(404).json({ status: "error", message: "Data training tidak ditemukan" });
     }
-    const stillInOther = program === 'sap' ? existing.inK3 : program === 'k3' ? existing.inSap : false;
+    const stillInOther = program
+      ? (Object.keys(PROGRAM_FLAG) as TrainingProgram[]).some(p => p !== program && existing[PROGRAM_FLAG[p]])
+      : false;
     if (program && stillInOther) {
       const cleared: Record<string, unknown> = {};
       PROGRAM_FIELDS[program].forEach(f => { cleared[f] = null; });
       await db.update(trainingRecords).set({
         ...cleared,
-        ...(program === 'sap' ? { inSap: false, no: null } : { inK3: false, noK3: null }),
+        [PROGRAM_FLAG[program]]: false,
+        [PROGRAM_NO[program]]: null,
         updatedAt: new Date(),
       }).where(eq(trainingRecords.id, id));
     } else {

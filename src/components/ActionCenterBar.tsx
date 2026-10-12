@@ -23,12 +23,14 @@ import {
   X,
   Download,
   ExternalLink,
-  ChevronLeft
+  ChevronLeft,
+  GraduationCap
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getOpenFindingsForSupervisor, isPicTemuanRole } from '../utils/inspection-pic-matcher';
 import { getKtaObligation } from './GroupReportScreen';
 import { formatProofImageUrl } from './SimplifiedInspectionModal';
+import type { TrainingAlert } from '../utils/training-import';
 
 interface ActionCenterBarProps {
   inspectorNik?: string | null;
@@ -38,7 +40,12 @@ interface ActionCenterBarProps {
   onOpenKta?: () => void;
   onOpenP5m?: () => void;
   className?: string;
+  // Hanya tampilkan item Training (WARNING / EXPIRED) — dipakai di Home Crew; disembunyikan bila tidak ada
+  trainingOnly?: boolean;
 }
+
+const MONTHS_SHORT_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const fmtTrainingDate = (d: string) => `${d.slice(8, 10)} ${MONTHS_SHORT_ID[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
 
 function getLocalISOWeekTag(d: Date = new Date()): string {
   const utc = d.getTime();
@@ -62,7 +69,8 @@ export function ActionCenterBar({
   onNav,
   onOpenKta,
   onOpenP5m,
-  className = ''
+  className = '',
+  trainingOnly = false
 }: ActionCenterBarProps) {
   const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = useState<boolean>(() => {
@@ -135,6 +143,14 @@ export function ActionCenterBar({
   const [maintenanceWorkOrders, setMaintenanceWorkOrders] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('p2h_cached_maintenance_wos');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+  // Training SAP milik karyawan yang WARNING (≥ 1,5 th) / EXPIRED (≥ 2 th) dan belum diperbarui
+  const [trainingAlerts, setTrainingAlerts] = useState<TrainingAlert[]>(() => {
+    try {
+      const saved = localStorage.getItem('p2h_cached_training_alerts');
       if (saved) return JSON.parse(saved);
     } catch {}
     return [];
@@ -250,6 +266,18 @@ export function ActionCenterBar({
         }
       };
 
+      // 0. Training SAP WARNING / EXPIRED milik user yang login (NIK dari sesi login di server)
+      const trainingPromise = safeFetch('/api/training-records/me');
+
+      // Mode training saja (Home Crew): tidak perlu memuat item operasional lain
+      if (trainingOnly) {
+        const trainingData = await trainingPromise;
+        const alerts: TrainingAlert[] = trainingData?.data?.alerts || [];
+        setTrainingAlerts(alerts);
+        try { localStorage.setItem('p2h_cached_training_alerts', JSON.stringify(alerts)); } catch {}
+        return;
+      }
+
       // 1. Fetch Weekly Inspection Schedule
       const schedPromise = safeFetch(`/api/inspection-schedule?${queryParams.toString()}`);
 
@@ -271,15 +299,23 @@ export function ActionCenterBar({
       // 7. Fetch Work Orders IF user is Maintenance or Supervisor
       const woPromise = (isMaintSection || isSupervisorOrLead) ? safeFetch('/api/work-orders') : Promise.resolve([]);
 
-      const [schedData, p5mData, dailyData, ktaData, ticketsData, proofsData, woData] = await Promise.all([
+      const [schedData, p5mData, dailyData, ktaData, ticketsData, proofsData, woData, trainingData] = await Promise.all([
         schedPromise,
         p5mPromise,
         dailyPromise,
         ktaPromise,
         ticketsPromise,
         proofsPromise,
-        woPromise
+        woPromise,
+        trainingPromise
       ]);
+
+      // Process Training Alerts (null = gagal memuat → pertahankan cache)
+      if (trainingData) {
+        const alerts: TrainingAlert[] = trainingData?.data?.alerts || [];
+        setTrainingAlerts(alerts);
+        try { localStorage.setItem('p2h_cached_training_alerts', JSON.stringify(alerts)); } catch {}
+      }
 
       // Process Weekly Inspection Schedule
       if (schedData && schedData.found && schedData.schedule) {
@@ -477,6 +513,25 @@ export function ActionCenterBar({
       navKey: string;
       navParams?: any;
     }> = [];
+
+    // 0. Training SAP WARNING / EXPIRED — muncul hanya bila ada training yang belum diperbarui
+    if (trainingAlerts.length > 0) {
+      const expiredCount = trainingAlerts.filter(a => a.state === 'expired').length;
+      const warningCount = trainingAlerts.length - expiredCount;
+      list.push({
+        id: 'training',
+        title: expiredCount > 0 ? 'Training Expired — Wajib Training Ulang' : 'Training Akan Expired',
+        subtitle: [expiredCount > 0 && `${expiredCount} expired`, warningCount > 0 && `${warningCount} warning`].filter(Boolean).join(' · ')
+          + ` — ${trainingAlerts.map(a => a.label).join(', ')}`,
+        count: trainingAlerts.length,
+        isPending: true,
+        icon: <GraduationCap className="w-4 h-4" />,
+        iconColor: expiredCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400',
+        bgColor: expiredCount > 0 ? 'bg-red-500/10 border-red-500/25' : 'bg-yellow-400/15 border-yellow-500/30',
+        navKey: 'training'
+      });
+    }
+    if (trainingOnly) return list;
 
     // 1. Jadwal Inspeksi Mingguan
     list.push({
@@ -698,8 +753,10 @@ export function ActionCenterBar({
     maintenanceWorkOrders,
     isSpvMaintenance, 
     lvDamageTickets, 
-    isSupervisorOrLead, 
-    openFindings
+    isSupervisorOrLead,
+    openFindings,
+    trainingAlerts,
+    trainingOnly
   ]);
 
   // Total count is sum of pending counts across all applicable categories
@@ -811,6 +868,9 @@ export function ActionCenterBar({
     window.dispatchEvent(new CustomEvent('open-simplified-inspection', { detail: { tab: 'weekly', openForm: true } }));
   };
 
+  // Mode training saja: tidak tampil sama sekali bila tidak ada training WARNING / EXPIRED
+  if (trainingOnly && trainingAlerts.length === 0) return null;
+
   return (
     <div className={`w-full transition-all duration-300 ${className}`}>
       <div 
@@ -870,7 +930,7 @@ export function ActionCenterBar({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs sm:text-sm font-extrabold tracking-tight text-[var(--text-main,#0f172a)] flex items-center gap-1.5">
-                  Action Center Operasional
+                  {trainingOnly ? 'Action Center' : 'Action Center Operasional'}
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-[var(--text-muted,#64748b)] truncate">
@@ -878,7 +938,7 @@ export function ActionCenterBar({
                   'Memeriksa status jadwal & operasional...'
                 ) : totalActionCount > 0 ? (
                   <>
-                    Terdapat <strong className="text-rose-600 dark:text-rose-400 font-bold">{totalActionCount} tugas operasional</strong> yang memerlukan perhatian Anda.
+                    Terdapat <strong className="text-rose-600 dark:text-rose-400 font-bold">{totalActionCount} {trainingOnly ? 'training perlu diperbarui' : 'tugas operasional'}</strong> yang memerlukan perhatian Anda.
                   </>
                 ) : (
                   'Semua tugas beres! Tidak ada pending inspeksi, KTA, pemantauan, atau P2H.'
@@ -970,8 +1030,8 @@ export function ActionCenterBar({
               {/* Category Rows Container */}
               <div className="space-y-1.5">
                 {categoriesList.map((cat) => (
+                  <React.Fragment key={cat.id}>
                   <div
-                    key={cat.id}
                     onClick={() => handleItemNav(cat.navKey, cat.navParams)}
                     className={`flex items-center justify-between p-2.5 px-3 rounded-xl border transition-all cursor-pointer group shadow-2xs ${
                       cat.isPending
@@ -1073,6 +1133,36 @@ export function ActionCenterBar({
                       )}
                     </div>
                   </div>
+
+                  {/* Rincian training WARNING / EXPIRED (tetap tampil sampai training diperbarui) */}
+                  {cat.id === 'training' && (
+                    <ul className="ml-4 sm:ml-10 space-y-1">
+                      {trainingAlerts.map(a => (
+                        <li
+                          key={`${a.program}-${a.key}`}
+                          className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-white/70 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-bold text-slate-900 dark:text-slate-100 truncate">{a.desc}</p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                              Training {fmtTrainingDate(a.date)} · {a.state === 'expired' ? 'expired sejak' : 'berlaku s/d'} {fmtTrainingDate(a.expiryDate)}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 px-2 py-0.5 rounded-md text-[10px] font-black border ${
+                            a.state === 'expired'
+                              ? 'bg-red-600 text-white border-red-700'
+                              : 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                          }`}>
+                            {a.state === 'expired' ? 'EXPIRED' : 'WARNING'}
+                          </span>
+                        </li>
+                      ))}
+                      <li className="px-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                        Hubungi Admin / Safety untuk jadwal training ulang. Item ini hilang otomatis setelah tanggal training diperbarui.
+                      </li>
+                    </ul>
+                  )}
+                  </React.Fragment>
                 ))}
               </div>
             </motion.div>

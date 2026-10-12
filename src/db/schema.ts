@@ -834,6 +834,9 @@ export const trainingRecords = pgTable('training_records', {
   pt: text('pt'), // 'TBP', 'GPS'
   inSap: boolean('in_sap').default(false), // Termasuk peserta Training SAP
   inK3: boolean('in_k3').default(false), // Termasuk peserta Training K3
+  inPop: boolean('in_pop').default(false), // Termasuk data Sertifikasi Pengawas (Pra POP / POP / POM)
+  noPop: integer('no_pop'), // Nomor urut Sertifikasi POP sesuai file sumber
+  popData: json('pop_data'), // PopData: DOH, Pra POP (tgl/skor/hasil), batch POP, kualifikasi, keterangan POP & POM
   hazid: text('hazid'), // Tanggal training 'YYYY-MM-DD'
   jsa: text('jsa'),
   iutOtt: text('iut_ott'),

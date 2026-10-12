@@ -20,6 +20,7 @@ import {
   Clock,
   BarChart3,
   FileSpreadsheet,
+  Award,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -45,6 +46,13 @@ import {
   todayWit,
   TRAINING_WARNING_MONTHS,
   TRAINING_EXPIRY_MONTHS,
+  POP_KETERANGAN,
+  masaKerjaFromDoh,
+  popAttendedPra,
+  popAttendedPop,
+  popPassedPom,
+  type PopData,
+  type PopKeterangan,
   type TrainingKey,
   type ParsedTrainingSheet,
   type TrainingProgram,
@@ -57,6 +65,13 @@ import {
 import type { Plugin } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+
+// Opsi plugin label batang kustom (lihat barPercentLabels)
+declare module 'chart.js' {
+  interface PluginOptionsByType<TType extends import('chart.js').ChartType> {
+    barPercentLabels?: { mode?: 'percent' | 'count' };
+  }
+}
 
 // Warna status: WARNING kuning, EXPIRED merah, Belum merah muda, Tidak Wajib abu-abu
 const CHART_WARNING = '#facc15';
@@ -100,13 +115,35 @@ const achievementLabels: Plugin<'bar'> = {
   },
 };
 
+// Plugin: jumlah orang di ujung batang horizontal (diagram jumlah peserta)
+const countEndLabels: Plugin<'bar'> = {
+  id: 'countEndLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const ds = chart.data.datasets[0];
+    if (!ds) return;
+    ctx.save();
+    ctx.font = 'bold 11px Inter, system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1e293b';
+    chart.getDatasetMeta(0).data.forEach((bar: any, idx) => {
+      const { x, y } = bar.getProps(['x', 'y'], true);
+      ctx.fillText(`${Number(ds.data[idx]) || 0} orang`, x + 6, y);
+    });
+    ctx.restore();
+  },
+};
+
 const achievementColor = (pct: number) => (pct >= 90 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#f43f5e');
 
-// Plugin: tulis persentase di tengah setiap segmen batang (persentase terhadap total batang tersebut)
+// Plugin: tulis label di tengah setiap segmen batang — persentase terhadap total batang (default),
+// atau jumlah orang bila options.plugins.barPercentLabels.mode = 'count' (training tanpa target / masa berlaku)
 const barPercentLabels: Plugin<'bar'> = {
   id: 'barPercentLabels',
   afterDatasetsDraw(chart) {
     const { ctx, data } = chart;
+    const countMode = chart.options.plugins?.barPercentLabels?.mode === 'count';
     const visible = data.datasets.map((_, i) => chart.isDatasetVisible(i));
     const totals = (data.labels || []).map((_, idx) =>
       data.datasets.reduce((sum, ds, i) => sum + (visible[i] ? Number(ds.data[idx]) || 0 : 0), 0));
@@ -125,7 +162,7 @@ const barPercentLabels: Plugin<'bar'> = {
         if (height < 13 || width < 18) return; // segmen terlalu kecil untuk label
         const bg = String(ds.backgroundColor || '');
         ctx.fillStyle = LIGHT_CHART_COLORS.has(bg) ? '#1e293b' : '#ffffff';
-        ctx.fillText(`${Math.round((value / total) * 100)}%`, x, (y + base) / 2);
+        ctx.fillText(countMode ? String(value) : `${Math.round((value / total) * 100)}%`, x, (y + base) / 2);
       });
     });
     ctx.restore();
@@ -145,6 +182,9 @@ export interface TrainingRecord {
   pt: string | null;
   inSap: boolean | null;
   inK3: boolean | null;
+  inPop: boolean | null;
+  noPop: number | null;
+  popData: PopData | null;
   hazid: string | null;
   jsa: string | null;
   iutOtt: string | null;
@@ -176,7 +216,8 @@ const GOL_OPTIONS = ['I', 'II', 'III', 'IV', 'V'];
 const SHIFT_OPTIONS = ['A', 'B', 'Nonshift'];
 const PT_OPTIONS = ['TBP', 'GPS'];
 const K3_STATUS_OPTIONS = ['PASS', 'Pending', 'FAIL'];
-const SAP_STATUS_OPTIONS = ['PASS', 'WARNING', 'EXPIRED', 'FAIL'];
+// WARNING / EXPIRED dihitung otomatis dari tanggal training, sehingga form hanya menyimpan hasil (PASS / FAIL)
+const SAP_STATUS_OPTIONS = ['PASS', 'FAIL'];
 const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const CHART_COLORS = ['#4f46e5', '#0d9488', '#d97706', '#db2777', '#7c3aed'];
@@ -244,24 +285,36 @@ const isSapComplete = (r: TrainingRecord) => sapDoneCount(r) === sapRequiredKeys
 const sapHasState = (r: TrainingRecord, states: SapState[]) => SAP_TRAININGS.some(t => states.includes(sapState(r, t.key, t.statusKey)));
 
 // ===== Aturan Training K3 =====
-type K3State = 'PASS' | 'WARNING' | 'EXPIRED' | 'Pending' | 'FAIL' | 'none';
+// Tidak ada masa berlaku (WARNING / EXPIRED) — cukup dihitung siapa yang telah mengikuti
+type K3State = 'PASS' | 'Pending' | 'FAIL' | 'none';
 function k3State(r: TrainingRecord, key: K3DateKey, statusKey: K3StatusKey): K3State {
   const status = r[statusKey];
   if (status === 'Pending') return 'Pending';
   if (status === 'FAIL') return 'FAIL';
-  const date = r[key];
-  if (date) {
-    const v = trainingValidity(date, TODAY).state;
-    return v === 'expired' ? 'EXPIRED' : v === 'warning' ? 'WARNING' : 'PASS';
-  }
-  if (status === 'PASS') return 'PASS';
+  if (r[key] || status === 'PASS') return 'PASS';
   return 'none';
 }
-// Masih berlaku = PASS atau WARNING
-const k3IsValid = (s: K3State) => s === 'PASS' || s === 'WARNING';
+const k3IsValid = (s: K3State) => s === 'PASS';
 const k3PassCount = (r: TrainingRecord) => K3_TRAININGS.filter(t => k3IsValid(k3State(r, t.key, t.statusKey))).length;
 const k3HasPending = (r: TrainingRecord) => K3_TRAININGS.some(t => k3State(r, t.key, t.statusKey) === 'Pending');
-const k3HasState = (r: TrainingRecord, states: K3State[]) => K3_TRAININGS.some(t => states.includes(k3State(r, t.key, t.statusKey)));
+
+// ===== Sertifikasi Pengawas Operasional (Pra POP / POP / POM) =====
+// Tidak ada masa berlaku — dihitung jumlah karyawan yang telah mengikuti tiap tahap
+const POP_STAGES = [
+  { key: 'praPop', label: 'Pra POP', desc: 'Pra Pengawas Operasional Pertama', attended: (p?: PopData | null) => popAttendedPra(p) },
+  { key: 'pop', label: 'POP', desc: 'Pengawas Operasional Pertama', attended: (p?: PopData | null) => popAttendedPop(p) },
+  { key: 'pom', label: 'POM', desc: 'Pengawas Operasional Madya', attended: (p?: PopData | null) => popPassedPom(p) },
+] as const;
+const POP_KETERANGAN_STYLE: Record<PopKeterangan, string> = {
+  PASS: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  MASA_KERJA: 'bg-amber-50 text-amber-800 border-amber-200',
+  IJAZAH: 'bg-rose-50 text-rose-700 border-rose-200',
+  TIDAK_WAJIB: 'bg-slate-100 text-slate-600 border-slate-200',
+};
+const POP_KETERANGAN_COLOR: Record<PopKeterangan, string> = {
+  PASS: '#10b981', MASA_KERJA: '#f59e0b', IJAZAH: '#f43f5e', TIDAK_WAJIB: '#94a3b8',
+};
+const popMasaKerja = (p?: PopData | null) => (p?.doh ? masaKerjaFromDoh(p.doh, TODAY) : p?.masaKerja || null);
 
 interface EmployeeMaster {
   nik: string;
@@ -278,7 +331,17 @@ const EMPTY_FORM: FormState = {
   hazid: '', jsa: '', iutOtt: '', iai: '', bfa: '', bs: '',
   hazidStatus: '', jsaStatus: '', iutOttStatus: '', iaiStatus: '', bfaStatus: '', bsStatus: '',
   wah: '', wahStatus: '', loto: '', lotoStatus: '', confinedSpace: '', confinedSpaceStatus: '', fireFighting: '', fireFightingStatus: '',
+  // Sertifikasi POP (disimpan sebagai popData)
+  pop_doh: '', pop_praPop: '', pop_praPopIns: '', pop_praPopPre: '', pop_praPopPost: '', pop_praPopResult: '',
+  pop_popBatch: '', pop_pendidikan: '', pop_tahunLulus: '', pop_pengalamanTambang: '', pop_popKeterangan: '',
+  pop_pom: '', pop_pomKeterangan: '',
 };
+const POP_FORM_KEYS = ['doh', 'praPop', 'praPopIns', 'praPopPre', 'praPopPost', 'praPopResult', 'popBatch', 'pendidikan',
+  'tahunLulus', 'pengalamanTambang', 'popKeterangan', 'pom', 'pomKeterangan'] as const;
+
+const PROGRAM_LABEL: Record<TrainingProgram, string> = { sap: 'Training SAP', k3: 'Training K3', pop: 'Sertifikasi POP/POM' };
+const PROGRAM_FLAG_KEY = { sap: 'inSap', k3: 'inK3', pop: 'inPop' } as const;
+const PROGRAM_NO_KEY = { sap: 'no', k3: 'noK3', pop: 'noPop' } as const;
 
 interface TrainingDatabaseScreenProps {
   inspectorNik?: string;
@@ -307,7 +370,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [developerNiks, setDeveloperNiks] = useState<string[]>([]);
 
   const [program, setProgram] = useState<TrainingProgram>(() => {
-    try { return localStorage.getItem(TAB_STORAGE_KEY) === 'k3' ? 'k3' : 'sap'; } catch { return 'sap'; }
+    try {
+      const saved = localStorage.getItem(TAB_STORAGE_KEY);
+      return saved === 'k3' || saved === 'pop' ? saved : 'sap';
+    } catch { return 'sap'; }
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [golFilter, setGolFilter] = useState('ALL');
@@ -327,7 +393,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [importPreview, setImportPreview] = useState<(ParsedTrainingSheet & { fileName: string; sheetRows: unknown[][] }) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const programLabel = program === 'sap' ? 'Training SAP' : 'Training K3';
+  const programLabel = PROGRAM_LABEL[program];
+  // K3 & POP tidak punya target/masa berlaku → tampilkan jumlah yang telah mengikuti saja
+  const countOnly = program !== 'sap';
 
   const fetchRecords = () => queryClient.invalidateQueries({ queryKey: TRAINING_QUERY_KEY });
 
@@ -378,13 +446,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   }, [inspectorNik, developerNiks]);
 
   const programRecords = useMemo(
-    () => records.filter(r => (program === 'sap' ? r.inSap : r.inK3)),
+    () => records.filter(r => !!r[PROGRAM_FLAG_KEY[program]]),
     [records, program]
   );
 
   const programCounts = useMemo(() => ({
     sap: records.filter(r => r.inSap).length,
     k3: records.filter(r => r.inK3).length,
+    pop: records.filter(r => r.inPop).length,
   }), [records]);
 
   const bagianOptions = useMemo(
@@ -397,6 +466,26 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const stats = useMemo(() => {
     const total = programRecords.length;
     let latest = '';
+    if (program === 'pop') {
+      programRecords.forEach(r => {
+        const v = r.popData?.praPop;
+        if (v && v > latest) latest = v;
+      });
+      // Jumlah yang telah mengikuti tiap tahap (tanpa target / masa berlaku)
+      const coverage = POP_STAGES.map(s => ({
+        key: s.key as string,
+        label: s.label,
+        desc: s.desc,
+        done: programRecords.filter(r => s.attended(r.popData)).length,
+        warning: 0,
+        expired: 0,
+        pending: 0,
+        target: total,
+        exempt: 0,
+      }));
+      const memenuhi = programRecords.filter(r => r.popData?.popKeterangan === 'PASS').length;
+      return { total, latest, coverage, cardA: coverage[1].done, cardB: memenuhi };
+    }
     const allDateKeys = program === 'sap' ? SAP_TRAININGS.map(t => t.key) : K3_TRAININGS.map(t => t.key);
     programRecords.forEach(r => allDateKeys.forEach(k => {
       const v = r[k];
@@ -431,9 +520,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         key: t.key as string,
         label: t.label,
         desc: t.desc,
-        done: states.filter(k3IsValid).length, // termasuk WARNING (masih berlaku)
-        warning: states.filter(s => s === 'WARNING').length,
-        expired: states.filter(s => s === 'EXPIRED' || s === 'FAIL').length,
+        done: states.filter(k3IsValid).length,
+        warning: 0,
+        expired: states.filter(s => s === 'FAIL').length,
         pending: states.filter(s => s === 'Pending').length,
         target: total,
         exempt: 0,
@@ -444,24 +533,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     return { total, latest, coverage, cardA: sudahTraining, cardB: pending };
   }, [programRecords, program]);
 
-  // ===== Pencapaian gabungan seluruh training (SAP + K3) =====
-  // SAP: tercapai = berlaku (PASS/WARNING) dibanding personel yang WAJIB training tsb (aturan per GOL)
-  // K3 : tercapai = PASS dibanding seluruh peserta Training K3
+  // ===== Pencapaian Training SAP (%) — berlaku (PASS/WARNING) dibanding personel yang WAJIB (aturan per GOL) =====
   const achievement = useMemo(() => {
     const sapPeople = records.filter(r => r.inSap);
-    const k3People = records.filter(r => r.inK3);
-    const items = [
-      ...SAP_TRAININGS.map(t => {
-        const required = sapPeople.filter(r => sapRequiredKeys(r).includes(t.key));
-        return { label: t.label, program: 'SAP', done: required.filter(r => sapIsValid(sapState(r, t.key, t.statusKey))).length, target: required.length };
-      }),
-      ...K3_TRAININGS.map(t => ({
-        label: t.label,
-        program: 'K3',
-        done: k3People.filter(r => k3IsValid(k3State(r, t.key, t.statusKey))).length,
-        target: k3People.length,
-      })),
-    ].filter(i => i.target > 0);
+    const items = SAP_TRAININGS.map(t => {
+      const required = sapPeople.filter(r => sapRequiredKeys(r).includes(t.key));
+      return { label: t.label, program: 'SAP', done: required.filter(r => sapIsValid(sapState(r, t.key, t.statusKey))).length, target: required.length };
+    }).filter(i => i.target > 0);
     if (items.length === 0) return null;
     const totalDone = items.reduce((s, i) => s + i.done, 0);
     const totalTarget = items.reduce((s, i) => s + i.target, 0);
@@ -471,10 +549,34 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       rows,
       totalPct: rows[rows.length - 1].pct,
       chart: {
-        labels: rows.map(r => (r.program === 'Semua' ? 'TOTAL' : `${r.label} (${r.program})`)),
+        labels: rows.map(r => r.label),
         datasets: [
           { label: 'Tercapai', data: rows.map(r => r.pct), backgroundColor: rows.map(r => achievementColor(r.pct)), borderRadius: 4, barThickness: 16 },
           { label: 'Belum', data: rows.map(r => 100 - r.pct), backgroundColor: '#e2e8f0', borderRadius: 4, barThickness: 16 },
+        ],
+      },
+    };
+  }, [records]);
+
+  // ===== Jumlah karyawan yang telah mengikuti (Training K3 & Sertifikasi POP — tanpa target/masa berlaku) =====
+  const participation = useMemo(() => {
+    const k3People = records.filter(r => r.inK3);
+    const popPeople = records.filter(r => r.inPop);
+    const rows = [
+      ...K3_TRAININGS.map(t => ({
+        label: t.label, group: 'Training K3',
+        count: k3People.filter(r => k3IsValid(k3State(r, t.key, t.statusKey))).length,
+        pending: k3People.filter(r => k3State(r, t.key, t.statusKey) === 'Pending').length,
+      })),
+      ...POP_STAGES.map(s => ({ label: s.label, group: 'Sertifikasi POP', count: popPeople.filter(r => s.attended(r.popData)).length, pending: 0 })),
+    ];
+    if (k3People.length === 0 && popPeople.length === 0) return null;
+    return {
+      rows,
+      chart: {
+        labels: rows.map(r => r.label),
+        datasets: [
+          { label: 'Telah mengikuti', data: rows.map(r => r.count), backgroundColor: rows.map(r => (r.group === 'Training K3' ? '#0d9488' : '#7c3aed')), borderRadius: 4, barThickness: 16 },
         ],
       },
     };
@@ -492,13 +594,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           { label: 'Belum', data: cov.map(c => c.target - c.done - c.expired), backgroundColor: CHART_BELUM },
           { label: 'Tidak Wajib', data: cov.map(c => c.exempt), backgroundColor: '#cbd5e1' },
         ]
-      : [
-          { label: 'Berlaku', data: cov.map(c => c.done - c.warning), backgroundColor: '#10b981' },
-          { label: 'Warning', data: cov.map(c => c.warning), backgroundColor: CHART_WARNING },
+      : program === 'k3'
+      ? [
+          { label: 'Telah mengikuti', data: cov.map(c => c.done), backgroundColor: '#10b981' },
           { label: 'Pending', data: cov.map(c => c.pending), backgroundColor: '#60a5fa' },
-          { label: 'Expired / Fail', data: cov.map(c => c.expired), backgroundColor: CHART_EXPIRED },
-          { label: 'Belum', data: cov.map(c => c.target - c.done - c.pending - c.expired), backgroundColor: CHART_BELUM },
-        ];
+          { label: 'FAIL', data: cov.map(c => c.expired), backgroundColor: CHART_EXPIRED },
+        ]
+      : [{ label: 'Telah mengikuti', data: cov.map(c => c.done), backgroundColor: '#7c3aed' }];
     return {
       labels: stats.coverage.map(c => c.label),
       datasets: datasets.map(d => ({ ...d, borderRadius: 4, maxBarThickness: 56 })),
@@ -507,18 +609,19 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   // ===== Diagram jumlah training per bulan (batang bertumpuk per jenis training) =====
   const monthlyChartData = useMemo(() => {
-    const trainings = program === 'sap'
+    const trainings: { key: string; label: string; done: (r: TrainingRecord) => string | null | undefined }[] = program === 'sap'
       ? SAP_TRAININGS.map(t => ({
           key: t.key as string,
           label: t.label,
           done: (r: TrainingRecord) => (r[t.statusKey] === 'FAIL' ? null : r[t.key]),
         }))
-      : K3_TRAININGS.map(t => ({
+      : program === 'k3'
+      ? K3_TRAININGS.map(t => ({
           key: t.key as string,
           label: t.label,
-          // Tren per bulan = kapan training dilaksanakan (lulus), termasuk yang kini sudah warning/expired
-          done: (r: TrainingRecord) => (['PASS', 'WARNING', 'EXPIRED'].includes(k3State(r, t.key, t.statusKey)) ? r[t.key] : null),
-        }));
+          done: (r: TrainingRecord) => (k3State(r, t.key, t.statusKey) === 'PASS' ? r[t.key] : null),
+        }))
+      : [{ key: 'praPop', label: 'Pra POP', done: (r: TrainingRecord) => r.popData?.praPop }];
 
     const monthsByTraining = trainings.map(t => {
       const counts: Record<string, number> = {};
@@ -577,15 +680,22 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           const t = SAP_TRAININGS.find(x => x.key === missingFilter)!;
           if (!sapRequiredKeys(r).includes(t.key) || sapIsValid(sapState(r, t.key, t.statusKey))) return false;
         }
-      } else {
+      } else if (program === 'k3') {
         if (statusFilter === 'PENDING' && !k3HasPending(r)) return false;
         if (statusFilter === 'SUDAH' && k3PassCount(r) === 0) return false;
         if (statusFilter === 'BELUM' && (k3PassCount(r) > 0 || k3HasPending(r))) return false;
-        if (statusFilter === 'EXPIRED' && !k3HasState(r, ['EXPIRED', 'FAIL'])) return false;
-        if (statusFilter === 'WARNING' && !k3HasState(r, ['WARNING'])) return false;
         if (missingFilter) {
+          // Klik kartu cakupan → tampilkan yang TELAH mengikuti training tsb
           const t = K3_TRAININGS.find(x => x.key === missingFilter);
-          if (t && k3IsValid(k3State(r, t.key, t.statusKey))) return false;
+          if (t && !k3IsValid(k3State(r, t.key, t.statusKey))) return false;
+        }
+      } else {
+        const p = r.popData;
+        if (statusFilter !== 'ALL' && statusFilter in POP_KETERANGAN && p?.popKeterangan !== statusFilter) return false;
+        if (statusFilter === 'BELUM_POP' && (popAttendedPop(p) || p?.popKeterangan === 'TIDAK_WAJIB')) return false;
+        if (missingFilter) {
+          const s = POP_STAGES.find(x => x.key === missingFilter);
+          if (s && !s.attended(p)) return false;
         }
       }
       return true;
@@ -605,9 +715,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       .sort((a, b) => jabatanRank(a.jabatan) - jabatanRank(b.jabatan) || a.jabatan.localeCompare(b.jabatan, 'id'));
   }, [filteredRecords]);
 
-  // No, NIK, Nama, GOL, Shift, Status (+ Bagian & PT di K3) + kolom training + Aksi
-  const tableColSpan = 6 + (program === 'k3' ? 2 : 0)
-    + (program === 'sap' ? SAP_TRAININGS.length : K3_TRAININGS.length) + (canManage ? 1 : 0);
+  // SAP/K3: No, NIK, Nama, GOL, Shift, Status (+ Bagian & PT di K3) + kolom training + Aksi
+  // POP   : No, NIK, Nama, PT, Masa Kerja, Pra POP, POP, Kualifikasi, Keterangan POP, POM + Aksi
+  const tableColSpan = program === 'pop'
+    ? 10 + (canManage ? 1 : 0)
+    : 6 + (program === 'k3' ? 2 : 0) + (program === 'sap' ? SAP_TRAININGS.length : K3_TRAININGS.length) + (canManage ? 1 : 0);
 
   const hasActiveFilter = !!searchQuery || golFilter !== 'ALL' || shiftFilter !== 'ALL' || bagianFilter !== 'ALL'
     || ptFilter !== 'ALL' || statusFilter !== 'ALL' || !!missingFilter;
@@ -633,10 +745,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     setEditingRecord(r);
     const next: FormState = { ...EMPTY_FORM };
     Object.keys(EMPTY_FORM).forEach(k => {
-      const v = (r as any)[k];
+      const v = k.startsWith('pop_') ? (r.popData as any)?.[k.slice(4)] : (r as any)[k];
       next[k] = v == null ? '' : String(v);
     });
-    next.no = String((program === 'sap' ? r.no : r.noK3) ?? '');
+    next.no = String(r[PROGRAM_NO_KEY[program]] ?? '');
     setForm(next);
     setIsModalOpen(true);
   };
@@ -672,7 +784,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       const res = await fetch(url, {
         method: editingRecord ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, program, updatedBy: inspectorName || inspectorNik }),
+        body: JSON.stringify({
+          ...Object.fromEntries(Object.entries(form).filter(([k]) => !k.startsWith('pop_'))),
+          // Data Sertifikasi POP dikirim sebagai satu objek popData
+          ...(program === 'pop' ? { popData: Object.fromEntries(POP_FORM_KEYS.map(k => [k, form[`pop_${k}`] || null])) } : {}),
+          program,
+          updatedBy: inspectorName || inspectorNik,
+        }),
       });
       const json = await res.json();
       if (!res.ok || json.status !== 'success') {
@@ -799,20 +917,33 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           return [state === 'exempt' ? 'Tidak Wajib' : r[t.key] || '', r[t.statusKey] || (r[t.key] ? 'PASS' : '')];
         }),
       ]);
-    } else {
+    } else if (program === 'k3') {
       header = ['NO', 'NIK', 'NAMA KARYAWAN', 'Shift', 'BAGIAN', 'JABATAN', 'PT', 'GOL',
         ...K3_TRAININGS.flatMap(t => [t.label.toUpperCase(), 'Status'])];
       rows = ordered.map(({ r, jabatan }, i) => [
         i + 1, r.nik, r.nama, r.shift || '', r.bagian || '', jabatan, r.pt || '', r.gol || '',
         ...K3_TRAININGS.flatMap(t => [r[t.key] || '-', r[t.statusKey] || '-']),
       ]);
+    } else {
+      header = ['NO', 'NIK', 'NAMA KARYAWAN', 'SECTION', 'JABATAN', 'PT', 'DOH', 'MASA KERJA',
+        'TGL PRA POP', 'INSTRUKTUR', 'PRE TEST', 'POST TEST', 'HASIL PRA POP', 'BATCH POP',
+        'PENDIDIKAN TERAKHIR', 'TAHUN LULUS', 'PENGALAMAN TAMBANG', 'KETERANGAN POP', 'POM', 'KETERANGAN POM'];
+      rows = ordered.map(({ r, jabatan }, i) => {
+        const p = r.popData || {};
+        const ket = p.popKeterangan ? (POP_KETERANGAN[p.popKeterangan as PopKeterangan]?.label ?? p.popKeterangan) : '';
+        return [
+          i + 1, r.nik, r.nama, r.bagian || '', jabatan, r.pt || '', p.doh || '', popMasaKerja(p) || '',
+          p.praPop || '', p.praPopIns || '', p.praPopPre ?? '', p.praPopPost ?? '', p.praPopResult || '', p.popBatch || '',
+          p.pendidikan || '', p.tahunLulus || '', p.pengalamanTambang || '', ket, p.pom || '', p.pomKeterangan || '',
+        ];
+      });
     }
     const csv = Papa.unparse([header, ...rows]);
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Database_${program === 'sap' ? 'Training_SAP' : 'Training_K3'}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `Database_${programLabel.replace(/[^A-Za-z0-9]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -852,11 +983,55 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     const state = k3State(r, key, statusKey);
     if (state === 'none') return <span className="text-[11px] font-bold text-slate-300">-</span>;
     const date = r[key];
-    const struck = state === 'EXPIRED' || state === 'FAIL';
     return (
-      <div className="inline-flex flex-col items-center gap-0.5" title={date ? `Berlaku s/d ${formatTrainingDate(trainingValidity(date, TODAY).expiryDate)}` : undefined}>
-        {date && <span className={`font-mono text-[11px] font-bold whitespace-nowrap ${struck ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{formatTrainingDate(date)}</span>}
+      <div className="inline-flex flex-col items-center gap-0.5">
+        {date && <span className={`font-mono text-[11px] font-bold whitespace-nowrap ${state === 'FAIL' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{formatTrainingDate(date)}</span>}
         <span className={`inline-flex px-1.5 py-px rounded text-[9px] font-black border ${STATUS_BADGE[state]}`}>{state}</span>
+      </div>
+    );
+  };
+
+  // ===== Render Sertifikasi POP =====
+  const renderPopKeterangan = (ket: string | null | undefined) => {
+    if (!ket) return <span className="text-[11px] font-bold text-slate-300">-</span>;
+    const meta = POP_KETERANGAN[ket as PopKeterangan];
+    return (
+      <span
+        className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black border whitespace-nowrap ${meta ? POP_KETERANGAN_STYLE[ket as PopKeterangan] : 'bg-slate-50 text-slate-700 border-slate-200'}`}
+        title={meta?.desc}
+      >
+        {meta?.label ?? ket}
+      </span>
+    );
+  };
+
+  const renderPraPop = (p?: PopData | null) => {
+    if (!popAttendedPra(p)) return <span className="text-[11px] font-bold text-slate-300">Belum</span>;
+    const score = [p?.praPopPre != null && `Pre ${p.praPopPre}`, p?.praPopPost != null && `Post ${p.praPopPost}`].filter(Boolean).join(' · ');
+    return (
+      <div className="inline-flex flex-col items-center gap-0.5" title={p?.praPopIns ? `Instruktur: ${p.praPopIns}` : undefined}>
+        {p?.praPop && <span className="font-mono text-[11px] font-bold text-slate-900 whitespace-nowrap">{formatTrainingDate(p.praPop)}</span>}
+        {score && <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">{score}</span>}
+        {p?.praPopResult && <span className={`inline-flex px-1.5 py-px rounded text-[9px] font-black border ${STATUS_BADGE[p.praPopResult] || STATUS_BADGE.PASS}`}>{p.praPopResult}</span>}
+      </div>
+    );
+  };
+
+  const renderPopBatch = (p?: PopData | null) => p?.popBatch
+    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-violet-50 text-violet-800 border border-violet-200 whitespace-nowrap"><Award className="w-3 h-3" />{p.popBatch}</span>
+    : <span className="text-[11px] font-bold text-slate-300">Belum</span>;
+
+  const renderPom = (p?: PopData | null) => popPassedPom(p)
+    ? <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black border ${STATUS_BADGE.PASS}`}>PASS</span>
+    : p?.pom ? <span className="text-[11px] font-semibold text-slate-700">{p.pom}</span>
+    : <span className="text-[11px] font-bold text-slate-300">-</span>;
+
+  const renderKualifikasi = (p?: PopData | null) => {
+    const parts = [p?.pendidikan, p?.tahunLulus && `Lulus ${p.tahunLulus}`].filter(Boolean).join(' · ');
+    return (
+      <div className="text-[11px] leading-tight">
+        <span className="font-bold text-slate-800">{parts || '-'}</span>
+        {p?.pengalamanTambang && <span className="block text-[10px] font-semibold text-slate-500">Pengalaman tambang {p.pengalamanTambang}</span>}
       </div>
     );
   };
@@ -895,11 +1070,18 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         { label: 'Belum Lengkap', value: stats.cardB, sub: 'Masih ada training wajib kosong', icon: <AlertCircle className="w-4 h-4" />, tone: 'bg-amber-500/10 text-amber-700' },
         { label: 'Training Terakhir', value: stats.latest ? formatTrainingDate(stats.latest) : '-', sub: 'Tanggal training terbaru', icon: <CalendarCheck className="w-4 h-4" />, tone: 'bg-violet-500/10 text-violet-700' },
       ]
-    : [
+    : program === 'k3'
+    ? [
         { label: 'Total Personel', value: stats.total, sub: 'Peserta Training K3', icon: <Users className="w-4 h-4" />, tone: 'bg-indigo-500/10 text-indigo-700' },
         { label: 'Sudah Training', value: stats.cardA, sub: 'Minimal 1 training PASS', icon: <CheckCircle2 className="w-4 h-4" />, tone: 'bg-emerald-500/10 text-emerald-700' },
         { label: 'Status Pending', value: stats.cardB, sub: 'Menunggu hasil / sertifikat', icon: <Clock className="w-4 h-4" />, tone: 'bg-amber-500/10 text-amber-700' },
         { label: 'Training Terakhir', value: stats.latest ? formatTrainingDate(stats.latest) : '-', sub: 'Tanggal training terbaru', icon: <CalendarCheck className="w-4 h-4" />, tone: 'bg-violet-500/10 text-violet-700' },
+      ]
+    : [
+        { label: 'Total Personel', value: stats.total, sub: 'Terdata Sertifikasi POP/POM', icon: <Users className="w-4 h-4" />, tone: 'bg-indigo-500/10 text-indigo-700' },
+        { label: 'Telah Pra POP', value: stats.coverage[0]?.done ?? 0, sub: 'Mengikuti Pra Pengawas Operasional', icon: <ClipboardCheck className="w-4 h-4" />, tone: 'bg-sky-500/10 text-sky-700' },
+        { label: 'Telah POP', value: stats.cardA, sub: `${stats.coverage[2]?.done ?? 0} orang lulus POM`, icon: <Award className="w-4 h-4" />, tone: 'bg-violet-500/10 text-violet-700' },
+        { label: 'Memenuhi Syarat POP', value: stats.cardB, sub: 'Pendidikan & masa kerja terpenuhi', icon: <CheckCircle2 className="w-4 h-4" />, tone: 'bg-emerald-500/10 text-emerald-700' },
       ];
 
   return (
@@ -934,7 +1116,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <span title="Memperbarui data..."><Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" /></span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-slate-700">Rekap Training SAP & Training K3 per karyawan</p>
+              <p className="text-xs font-semibold text-slate-700">Rekap Training SAP, Training K3 & Sertifikasi POP/POM per karyawan</p>
             </div>
           </div>
 
@@ -982,15 +1164,16 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
-        {/* Diagram Pencapaian Seluruh Training (gabungan SAP + K3) */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {/* Diagram Pencapaian Training SAP (%) */}
         {achievement && (
           <div className="p-4 rounded-2xl border shadow-xs" style={cardStyle}>
             <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-600" />
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Pencapaian Seluruh Training</h3>
-                  <p className="text-[10px] font-semibold text-slate-500">Persentase personel yang sudah memenuhi tiap training (SAP & K3)</p>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Pencapaian Training SAP</h3>
+                  <p className="text-[10px] font-semibold text-slate-500">Persentase personel wajib yang training-nya masih berlaku</p>
                 </div>
               </div>
               <div className="text-right">
@@ -1035,16 +1218,61 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />≥ 90%
               <span className="inline-block w-2 h-2 rounded-full bg-amber-500 ml-3 mr-1" />70–89%
               <span className="inline-block w-2 h-2 rounded-full bg-rose-500 ml-3 mr-1" />&lt; 70%
-              <span className="ml-3">· SAP dihitung dari personel yang wajib (per GOL), K3 dari seluruh peserta K3.</span>
+              <span className="ml-3">· Dihitung dari personel yang wajib (per GOL).</span>
             </p>
           </div>
         )}
 
+        {/* Jumlah Karyawan yang Telah Mengikuti (Training K3 & Sertifikasi POP — tanpa masa berlaku) */}
+        {participation && (
+          <div className="p-4 rounded-2xl border shadow-xs" style={cardStyle}>
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="w-4 h-4 text-teal-600" />
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Jumlah Karyawan Telah Mengikuti</h3>
+                <p className="text-[10px] font-semibold text-slate-500">Training K3 & Sertifikasi POP/POM — tanpa masa berlaku</p>
+              </div>
+            </div>
+            <div style={{ height: participation.rows.length * 26 + 20 }}>
+              <Bar
+                data={participation.chart}
+                plugins={[countEndLabels]}
+                options={{
+                  indexAxis: 'y',
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: ctx => {
+                          const row = participation.rows[ctx.dataIndex];
+                          return ` ${row.count} orang telah mengikuti${row.pending ? ` · ${row.pending} pending` : ''}`;
+                        },
+                      },
+                    },
+                  },
+                  scales: {
+                    x: { beginAtZero: true, grace: '12%', ticks: { precision: 0, font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+                    y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                  },
+                }}
+              />
+            </div>
+            <p className="mt-2 text-[10px] font-semibold text-slate-500">
+              <span className="inline-block w-2 h-2 rounded-full bg-teal-600 mr-1" />Training K3
+              <span className="inline-block w-2 h-2 rounded-full bg-violet-600 ml-3 mr-1" />Sertifikasi POP/POM
+            </p>
+          </div>
+        )}
+        </div>
+
         {/* Tab Program */}
-        <div className="flex gap-2 p-1 rounded-2xl border w-full sm:w-fit" style={cardStyle}>
+        <div className="flex flex-col sm:flex-row gap-2 p-1 rounded-2xl border w-full sm:w-fit" style={cardStyle}>
           {([
-            { id: 'sap' as const, label: 'Training SAP', sub: 'HAZID · JSA · IUT OTT · IAI · BFA · BS', icon: <ClipboardCheck className="w-4 h-4" /> },
+            { id: 'sap' as const, label: 'Training SAP', sub: 'HAZID · JSA · IUT OTT · IAI · BFA · Basic Safety', icon: <ClipboardCheck className="w-4 h-4" /> },
             { id: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · Confined Space · Fire Fighting', icon: <HardHat className="w-4 h-4" /> },
+            { id: 'pop' as const, label: 'Sertifikasi POP/POM', sub: 'Pra POP · POP · POM · Kualifikasi', icon: <Award className="w-4 h-4" /> },
           ]).map(tab => {
             const active = program === tab.id;
             return (
@@ -1114,6 +1342,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
+                      // K3 & POP: tampilkan jumlah orang (bukan persentase) pada diagram status
+                      barPercentLabels: { mode: countOnly && chartMode === 'status' ? 'count' : 'percent' },
                       legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11, weight: 'bold' } } },
                       tooltip: {
                         callbacks: {
@@ -1138,20 +1368,76 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
             <p className="mt-2 text-[10px] font-semibold text-slate-500">
               {chartMode === 'status'
-                ? 'Jumlah personel per status untuk setiap jenis training; angka di batang = persentase dari seluruh personel.'
+                ? countOnly
+                  ? 'Jumlah karyawan yang telah mengikuti tiap training (tanpa masa berlaku).'
+                  : 'Jumlah personel per status untuk setiap jenis training; angka di batang = persentase dari seluruh personel.'
                 : `Jumlah personel yang training per bulan${monthlyChartData?.truncated ? ` (${MONTHLY_CHART_MAX_MONTHS} bulan terakhir)` : ''}; angka di batang = porsi tiap training pada bulan tsb.`}
               {program === 'k3' && chartMode === 'monthly' && ' Hanya status PASS yang dihitung.'}
+              {program === 'pop' && chartMode === 'monthly' && ' Berdasarkan tanggal Pra POP.'}
             </p>
           </div>
 
           {/* Cakupan per Jenis Training */}
           <div className="xl:col-span-2 p-4 rounded-2xl border shadow-xs" style={cardStyle}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Cakupan per Training</h3>
-              <span className="text-[10px] font-semibold text-slate-500">Klik untuk melihat yang belum</span>
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">{countOnly ? 'Jumlah Peserta per Training' : 'Cakupan per Training'}</h3>
+              <span className="text-[10px] font-semibold text-slate-500">{countOnly ? 'Klik untuk melihat pesertanya' : 'Klik untuk melihat yang belum'}</span>
             </div>
             <div className="space-y-2">
-              {stats.coverage.map(c => {
+              {countOnly && stats.coverage.map(c => {
+                // K3 & POP: cukup jumlah karyawan yang telah mengikuti
+                const active = missingFilter === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setMissingFilter(active ? null : c.key)}
+                    className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${active ? 'border-teal-400 bg-teal-50 ring-2 ring-teal-300/40' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100'}`}
+                    title={c.desc}
+                  >
+                    <div className="min-w-0">
+                      <span className="block text-xs font-black text-slate-950">{c.label}</span>
+                      <span className="block text-[10px] font-semibold text-slate-500 truncate">{c.desc}</span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="block text-lg font-black font-mono leading-none text-slate-950">{c.done}</span>
+                      <span className="block text-[10px] font-bold text-slate-500">
+                        orang{c.pending > 0 ? ` · ${c.pending} pending` : ''}{c.expired > 0 ? ` · ${c.expired} fail` : ''}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* POP: komposisi kualifikasi (Keterangan POP) — klik untuk filter */}
+              {program === 'pop' && (
+                <div className="pt-2 mt-1 border-t border-slate-200">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-600 mb-1.5">Kualifikasi POP</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => {
+                      const n = programRecords.filter(r => r.popData?.popKeterangan === k).length;
+                      const active = statusFilter === k;
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setStatusFilter(active ? 'ALL' : k)}
+                          title={POP_KETERANGAN[k].desc}
+                          className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${active ? 'ring-2 ring-indigo-300/50 border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                        >
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: POP_KETERANGAN_COLOR[k] }} />
+                            <span className="text-[10px] font-bold text-slate-800 truncate">{POP_KETERANGAN[k].label}</span>
+                          </span>
+                          <span className="text-xs font-black font-mono text-slate-950">{n}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {!countOnly && stats.coverage.map(c => {
                 const pct = c.target ? Math.round((c.done / c.target) * 100) : 0;
                 const pendingPct = c.target ? Math.round((c.pending / c.target) * 100) : 0;
                 const missing = c.target - c.done;
@@ -1228,13 +1514,18 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <option value="EXPIRED">Ada Expired / Failed</option>
                   <option value="WARNING">Ada Warning</option>
                 </>
-              ) : (
+              ) : program === 'k3' ? (
                 <>
                   <option value="SUDAH">Sudah Training (PASS)</option>
                   <option value="PENDING">Ada Pending</option>
-                  <option value="WARNING">Ada Warning</option>
-                  <option value="EXPIRED">Ada Expired / Fail</option>
                   <option value="BELUM">Belum Training</option>
+                </>
+              ) : (
+                <>
+                  {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => (
+                    <option key={k} value={k}>{POP_KETERANGAN[k].label}</option>
+                  ))}
+                  <option value="BELUM_POP">Wajib, Belum Ikut POP</option>
                 </>
               )}
             </select>
@@ -1253,9 +1544,15 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
         <p className="text-[11px] font-semibold text-slate-600 -mt-2">
           Menampilkan <span className="font-black text-slate-900">{filteredRecords.length}</span> dari {stats.total} personel
-          {missingFilter && <> · belum <span className="font-black text-rose-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>}
-          {program === 'sap' && <> · Wajib: GOL I → BFA & Basic Safety; GOL II–III → HAZID, JSA, IUT OTT, IAI, BFA; GOL IV–V → tanpa BFA</>}
-          <> · Masa berlaku: <span className="font-black text-yellow-700">WARNING</span> ≥ {(TRAINING_WARNING_MONTHS / 12).toLocaleString('id-ID')} th, <span className="font-black text-red-700">EXPIRED</span> ≥ {(TRAINING_EXPIRY_MONTHS / 12).toLocaleString('id-ID')} th sejak tanggal training</>
+          {missingFilter && (countOnly
+            ? <> · telah mengikuti <span className="font-black text-teal-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>
+            : <> · belum <span className="font-black text-rose-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>)}
+          {program === 'sap' && <>
+            {' · '}Wajib: GOL I → BFA & Basic Safety; GOL II–III → HAZID, JSA, IUT OTT, IAI, BFA; GOL IV–V → tanpa BFA
+            {' · '}Masa berlaku: <span className="font-black text-yellow-700">WARNING</span> ≥ {(TRAINING_WARNING_MONTHS / 12).toLocaleString('id-ID')} th, <span className="font-black text-red-700">EXPIRED</span> ≥ {(TRAINING_EXPIRY_MONTHS / 12).toLocaleString('id-ID')} th sejak tanggal training
+          </>}
+          {countOnly && <> · Tanpa masa berlaku — dihitung jumlah karyawan yang telah mengikuti</>}
+          {program === 'pop' && <> · Masa kerja dihitung otomatis dari DOH</>}
         </p>
 
         {/* Data */}
@@ -1277,6 +1574,21 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <div className="overflow-x-auto max-h-[70vh]">
                 <table className="w-full text-left border-collapse">
                   <thead className="sticky top-0 z-10 bg-slate-100">
+                    {program === 'pop' ? (
+                    <tr className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                      <th className="px-3 py-2.5 text-center">No</th>
+                      <th className="px-3 py-2.5">NIK</th>
+                      <th className="px-3 py-2.5">Nama</th>
+                      <th className="px-3 py-2.5 text-center">PT</th>
+                      <th className="px-3 py-2.5" title="Dihitung dari tanggal awal bergabung (DOH)">Masa Kerja</th>
+                      <th className="px-3 py-2.5 text-center" title="Pra Pengawas Operasional Pertama">Pra POP</th>
+                      <th className="px-3 py-2.5 text-center" title="Pengawas Operasional Pertama">POP</th>
+                      <th className="px-3 py-2.5">Kualifikasi</th>
+                      <th className="px-3 py-2.5 text-center">Keterangan POP</th>
+                      <th className="px-3 py-2.5 text-center" title="Pengawas Operasional Madya">POM</th>
+                      {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
+                    </tr>
+                    ) : (
                     <tr className="text-[10px] font-black uppercase tracking-wider text-slate-700">
                       <th className="px-3 py-2.5 text-center">No</th>
                       <th className="px-3 py-2.5">NIK</th>
@@ -1291,6 +1603,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       <th className="px-3 py-2.5 text-center">Status</th>
                       {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
                     </tr>
+                    )}
                   </thead>
                   <tbody>
                     {jabatanGroups.map(group => (
@@ -1308,6 +1621,21 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                         <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{idx + 1}</td>
                         <td className="px-3 py-2 text-[11px] font-mono font-bold text-slate-800 whitespace-nowrap">{r.nik}</td>
                         <td className="px-3 py-2 text-xs font-black text-slate-950 min-w-[170px]">{r.nama}</td>
+                        {program === 'pop' ? (
+                          <>
+                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>
+                            <td className="px-3 py-2 text-[11px] whitespace-nowrap">
+                              <span className="font-bold text-slate-800">{popMasaKerja(r.popData) || '-'}</span>
+                              {r.popData?.doh && <span className="block text-[10px] font-semibold text-slate-500">DOH {formatTrainingDate(r.popData.doh)}</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center">{renderPraPop(r.popData)}</td>
+                            <td className="px-3 py-2 text-center">{renderPopBatch(r.popData)}</td>
+                            <td className="px-3 py-2 min-w-[140px]">{renderKualifikasi(r.popData)}</td>
+                            <td className="px-3 py-2 text-center">{renderPopKeterangan(r.popData?.popKeterangan)}</td>
+                            <td className="px-3 py-2 text-center">{renderPom(r.popData)}</td>
+                          </>
+                        ) : (
+                          <>
                         {program === 'k3' && <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap">{r.bagian || '-'}</td>}
                         {program === 'k3' && <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>}
                         <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.gol || '-'}</td>
@@ -1316,6 +1644,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                           ? SAP_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center">{renderSapCell(r, t.key, t.statusKey)}</td>)
                           : K3_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center">{renderK3Cell(r, t.key, t.statusKey)}</td>)}
                         <td className="px-3 py-2 text-center">{renderStatusBadge(r)}</td>
+                          </>
+                        )}
                         {canManage && (
                           <td className="px-3 py-2">
                             <div className="flex items-center justify-center gap-1">
@@ -1352,13 +1682,22 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       <p className="text-sm font-black text-slate-950 leading-tight"><span className="font-mono text-slate-500 mr-1">{idx + 1}.</span>{r.nama}</p>
                       <p className="text-[11px] font-mono font-bold text-slate-600 mt-0.5">{r.nik}{r.pt ? ` · ${r.pt}` : ''}</p>
                       <p className="text-[11px] font-semibold text-slate-700 mt-0.5">
-                        {r.jabatan || '-'} · GOL {r.gol || '-'} · {r.shift || '-'}{program === 'k3' && r.bagian ? ` · ${r.bagian}` : ''}
+                        {program === 'pop'
+                          ? `${r.jabatan || '-'} · Masa kerja ${popMasaKerja(r.popData) || '-'}`
+                          : `${r.jabatan || '-'} · GOL ${r.gol || '-'} · ${r.shift || '-'}${program === 'k3' && r.bagian ? ` · ${r.bagian}` : ''}`}
                       </p>
                     </div>
-                    {renderStatusBadge(r)}
+                    {program === 'pop' ? renderPopKeterangan(r.popData?.popKeterangan) : renderStatusBadge(r)}
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5">
-                    {program === 'sap'
+                    {program === 'pop' ? (
+                      <>
+                        <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-600">Pra POP</span>{renderPraPop(r.popData)}</div>
+                        <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-600">POP</span>{renderPopBatch(r.popData)}</div>
+                        <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-600">POM</span>{renderPom(r.popData)}</div>
+                        <div className="col-span-2">{renderKualifikasi(r.popData)}</div>
+                      </>
+                    ) : program === 'sap'
                       ? SAP_TRAININGS.map(t => (
                           <div key={t.key} className="flex items-center justify-between gap-2">
                             <span className="text-[10px] font-black uppercase text-slate-600">{t.label}</span>
@@ -1434,7 +1773,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 {employees.map(emp => <option key={emp.nik} value={emp.nik}>{emp.name}</option>)}
               </datalist>
 
-              <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 mb-2 mt-1">Tanggal {programLabel}</p>
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 mb-2 mt-1">{program === 'pop' ? 'Data Sertifikasi POP/POM' : `Tanggal ${programLabel}`}</p>
               {program === 'sap' ? (
                 <>
                   <p className="-mt-1 mb-2 text-[11px] font-semibold text-slate-500">
@@ -1455,7 +1794,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     })}
                   </div>
                 </>
-              ) : (
+              ) : program === 'k3' ? (
                 <div className="space-y-1">
                   {K3_TRAININGS.map(t => (
                     <div key={t.key} className="grid grid-cols-2 gap-x-4">
@@ -1466,6 +1805,48 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       </Select>
                     </div>
                   ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <Input label="Tanggal Awal Bergabung (DOH)" type="date" value={form.pop_doh} onChange={e => updateForm('pop_doh', e.target.value)} containerClassName="mb-0" />
+                  <fieldset className="p-3 rounded-xl border border-slate-200">
+                    <legend className="px-1 text-[11px] font-black uppercase tracking-wider text-slate-700">Pra POP</legend>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4">
+                      <Input label="Tanggal" type="date" value={form.pop_praPop} onChange={e => updateForm('pop_praPop', e.target.value)} />
+                      <Input label="Instruktur" value={form.pop_praPopIns} onChange={e => updateForm('pop_praPopIns', e.target.value)} />
+                      <Select label="Hasil" value={form.pop_praPopResult} onChange={e => updateForm('pop_praPopResult', e.target.value)}>
+                        <option value="">-</option>
+                        <option value="PASS">PASS</option>
+                        <option value="FAIL">FAIL</option>
+                      </Select>
+                      <Input label="Pre Test" type="number" min={0} max={100} value={form.pop_praPopPre} onChange={e => updateForm('pop_praPopPre', e.target.value)} />
+                      <Input label="Post Test" type="number" min={0} max={100} value={form.pop_praPopPost} onChange={e => updateForm('pop_praPopPost', e.target.value)} />
+                    </div>
+                  </fieldset>
+                  <fieldset className="p-3 rounded-xl border border-slate-200">
+                    <legend className="px-1 text-[11px] font-black uppercase tracking-wider text-slate-700">POP & Kualifikasi</legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+                      <Input label="Batch POP" value={form.pop_popBatch} onChange={e => updateForm('pop_popBatch', e.target.value)} placeholder="Contoh: Batch 2 (2026)" />
+                      <Select label="Keterangan POP" value={form.pop_popKeterangan} onChange={e => updateForm('pop_popKeterangan', e.target.value)}>
+                        <option value="">-</option>
+                        {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => <option key={k} value={k}>{POP_KETERANGAN[k].label}</option>)}
+                      </Select>
+                      <Input label="Pendidikan Terakhir" value={form.pop_pendidikan} onChange={e => updateForm('pop_pendidikan', e.target.value)} placeholder="SMA / D3 / S1 ..." />
+                      <Input label="Tahun Lulus" value={form.pop_tahunLulus} onChange={e => updateForm('pop_tahunLulus', e.target.value)} placeholder="Contoh: 2018" />
+                      <Input label="Pengalaman di Tambang Lain" value={form.pop_pengalamanTambang} onChange={e => updateForm('pop_pengalamanTambang', e.target.value)} placeholder="Contoh: 4 Tahun" containerClassName="sm:col-span-2" />
+                    </div>
+                  </fieldset>
+                  <fieldset className="p-3 rounded-xl border border-slate-200">
+                    <legend className="px-1 text-[11px] font-black uppercase tracking-wider text-slate-700">POM</legend>
+                    <div className="grid grid-cols-2 gap-x-4">
+                      <Input label="Batch / Catatan POM" value={form.pop_pom} onChange={e => updateForm('pop_pom', e.target.value)} />
+                      <Select label="Keterangan POM" value={form.pop_pomKeterangan} onChange={e => updateForm('pop_pomKeterangan', e.target.value)}>
+                        <option value="">-</option>
+                        <option value="PASS">PASS</option>
+                        <option value="FAIL">FAIL</option>
+                      </Select>
+                    </div>
+                  </fieldset>
                 </div>
               )}
               <Textarea label="Catatan" rows={2} value={form.notes} onChange={e => updateForm('notes', e.target.value)} placeholder="Opsional" />
@@ -1514,7 +1895,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               ) : (
                 <div className="flex justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                   <span className="font-semibold text-slate-600">Format terdeteksi</span>
-                  <span className="font-black text-slate-950">{importPreview.programs.map(p => (p === 'sap' ? 'Training SAP' : 'Training K3')).join(' + ')}</span>
+                  <span className="font-black text-slate-950">{importPreview.programs.map(p => PROGRAM_LABEL[p]).join(' + ')}</span>
                 </div>
               )}
               <div className="flex justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -1552,7 +1933,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             <h3 className="text-base font-black text-slate-950 mb-1">Hapus dari {programLabel}?</h3>
             <p className="text-xs text-slate-600 mb-5">
               Data {programLabel} <span className="font-black text-slate-900">{deleteTarget.nama}</span> ({deleteTarget.nik}) akan dihapus.
-              {(program === 'sap' ? deleteTarget.inK3 : deleteTarget.inSap) && ' Data di program training lainnya tetap tersimpan.'}
+              {(Object.keys(PROGRAM_FLAG_KEY) as TrainingProgram[]).some(p => p !== program && deleteTarget[PROGRAM_FLAG_KEY[p]])
+                && ' Data di program training lainnya tetap tersimpan.'}
             </p>
             <div className="flex gap-2.5">
               <Button variant="secondary" onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 text-xs font-bold">Batal</Button>
