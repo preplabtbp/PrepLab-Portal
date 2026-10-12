@@ -21,6 +21,8 @@ import {
   BarChart3,
   FileSpreadsheet,
   Award,
+  ChevronDown,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -218,7 +220,6 @@ const PT_OPTIONS = ['TBP', 'GPS'];
 const K3_STATUS_OPTIONS = ['PASS', 'Pending', 'FAIL'];
 // WARNING / EXPIRED dihitung otomatis dari tanggal training, sehingga form hanya menyimpan hasil (PASS / FAIL)
 const SAP_STATUS_OPTIONS = ['PASS', 'FAIL'];
-const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const CHART_COLORS = ['#4f46e5', '#0d9488', '#d97706', '#db2777', '#7c3aed'];
 const MONTHLY_CHART_MAX_MONTHS = 18;
@@ -351,23 +352,204 @@ interface TrainingDatabaseScreenProps {
 
 const TRAINING_QUERY_KEY = ['training-records'];
 
-async function fetchTrainingRecords(): Promise<TrainingRecord[]> {
+// Hak akses ditentukan server: viewAll (Developer / Section Administrasi / Manager / Superintendent),
+// canManage (Developer / Section Administrasi). Selain itu server hanya mengirim data milik sendiri.
+interface TrainingAccess { viewAll: boolean; canManage: boolean; nik: string }
+interface TrainingPayload { records: TrainingRecord[]; access: TrainingAccess }
+const EMPTY_RECORDS: TrainingRecord[] = [];
+
+async function fetchTrainingRecords(): Promise<TrainingPayload> {
   const res = await fetch('/api/training-records');
   const json = await res.json();
   if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memuat Database Training');
-  return json.data || [];
+  return {
+    records: json.data || [],
+    access: { viewAll: !!json.access?.viewAll, canManage: !!json.access?.canManage, nik: json.access?.nik || '' },
+  };
+}
+
+// ===== Tampilan "Training Saya" — untuk karyawan tanpa akses penuh (hanya data milik sendiri) =====
+const SAP_STATE_META: Record<SapState, { label: string; cls: string }> = {
+  done: { label: 'Berlaku', cls: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  warning: { label: 'WARNING', cls: STATUS_BADGE.WARNING },
+  expired: { label: 'EXPIRED', cls: STATUS_BADGE.EXPIRED },
+  failed: { label: 'FAILED', cls: STATUS_BADGE.FAIL },
+  none: { label: 'Belum', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  exempt: { label: 'Tidak Wajib', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+};
+
+function MyTrainingSection({ title, subtitle, icon, children }: { title: string; subtitle?: string; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border shadow-xs overflow-hidden" style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}>
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-100">
+        <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-700 flex items-center justify-center shrink-0">{icon}</div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-black text-slate-950 leading-tight">{title}</h3>
+          {subtitle && <p className="text-[11px] font-semibold text-slate-500">{subtitle}</p>}
+        </div>
+      </div>
+      <ul className="divide-y divide-slate-100">{children}</ul>
+    </section>
+  );
+}
+
+function MyTrainingRow({ label, desc, right, sub }: { label: string; desc?: string; right: React.ReactNode; sub?: string }) {
+  return (
+    <li className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-[13px] font-black text-slate-900 leading-tight">{label}</p>
+        {desc && <p className="text-[11px] font-semibold text-slate-500 truncate">{desc}</p>}
+        {sub && <p className="text-[11px] font-semibold text-slate-600 mt-0.5">{sub}</p>}
+      </div>
+      <div className="shrink-0 text-right">{right}</div>
+    </li>
+  );
+}
+
+function MyTrainingView({ record, name, onBack }: { record: TrainingRecord | null; name: string; onBack?: () => void }) {
+  const badge = (text: string, cls: string) => (
+    <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black border whitespace-nowrap ${cls}`}>{text}</span>
+  );
+  const required = record ? sapRequiredKeys(record) : [];
+  const sapValid = record ? sapDoneCount(record) : 0;
+  const p = record?.popData;
+
+  return (
+    <div className="min-h-screen pb-24 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-main, #f8fafc)' }}>
+      <div className="max-w-2xl mx-auto px-3 sm:px-6 py-4 space-y-4">
+        {/* Profil */}
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button type="button" onClick={onBack} className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 cursor-pointer active:scale-95" title="Kembali">
+              <ArrowLeft className="w-4 h-4 text-slate-700" />
+            </button>
+          )}
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shrink-0">
+            <GraduationCap className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-950">Training Saya</h1>
+            <p className="text-xs font-semibold text-slate-600 truncate">{record?.nama || name}</p>
+          </div>
+        </div>
+
+        {!record ? (
+          <div className="p-8 text-center rounded-2xl border border-dashed border-slate-300 bg-white">
+            <GraduationCap className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+            <p className="text-sm font-bold text-slate-900 mb-1">Data training Anda belum tercatat</p>
+            <p className="text-xs text-slate-600">Hubungi Admin Preparation & Laboratory untuk pembaruan data training.</p>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-2xl border shadow-xs p-4 grid grid-cols-2 gap-3" style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}>
+              {[
+                ['NIK', record.nik],
+                ['Jabatan', record.jabatan || '-'],
+                ['GOL / Shift', `${record.gol || '-'} · ${record.shift || '-'}`],
+                ['PT / Bagian', `${record.pt || '-'}${record.bagian ? ` · ${record.bagian}` : ''}`],
+              ].map(([k, v]) => (
+                <div key={k} className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{k}</p>
+                  <p className="text-xs font-bold text-slate-900 break-words">{v}</p>
+                </div>
+              ))}
+            </div>
+
+            {record.inSap && (
+              <MyTrainingSection
+                title="Training SAP"
+                subtitle={`${sapValid}/${required.length} training wajib berlaku · berlaku 2 tahun`}
+                icon={<ClipboardCheck className="w-4 h-4" />}
+              >
+                {SAP_TRAININGS.map(t => {
+                  const state = sapState(record, t.key, t.statusKey);
+                  const date = record[t.key];
+                  const expiry = date ? trainingValidity(date, TODAY).expiryDate : null;
+                  const meta = SAP_STATE_META[state];
+                  return (
+                    <MyTrainingRow
+                      key={t.key}
+                      label={t.label}
+                      desc={t.desc}
+                      sub={date ? `${formatTrainingDate(date)} · ${state === 'expired' ? 'expired sejak' : 'berlaku s/d'} ${formatTrainingDate(expiry)}` : undefined}
+                      right={badge(meta.label, meta.cls)}
+                    />
+                  );
+                })}
+              </MyTrainingSection>
+            )}
+
+            {record.inK3 && (
+              <MyTrainingSection title="Training K3" subtitle="Tanpa masa berlaku" icon={<HardHat className="w-4 h-4" />}>
+                {K3_TRAININGS.map(t => {
+                  const state = k3State(record, t.key, t.statusKey);
+                  return (
+                    <MyTrainingRow
+                      key={t.key}
+                      label={t.label}
+                      desc={t.desc}
+                      sub={record[t.key] ? formatTrainingDate(record[t.key]) : undefined}
+                      right={state === 'none'
+                        ? badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')
+                        : badge(state === 'PASS' ? 'Telah Mengikuti' : state, STATUS_BADGE[state])}
+                    />
+                  );
+                })}
+              </MyTrainingSection>
+            )}
+
+            {record.inPop && (
+              <MyTrainingSection title="Sertifikasi POP/POM" subtitle={`Masa kerja ${popMasaKerja(p) || '-'}`} icon={<Award className="w-4 h-4" />}>
+                <MyTrainingRow
+                  label="Pra POP"
+                  desc="Pra Pengawas Operasional Pertama"
+                  sub={popAttendedPra(p)
+                    ? [p?.praPop && formatTrainingDate(p.praPop), p?.praPopPre != null && `Pre ${p.praPopPre}`, p?.praPopPost != null && `Post ${p.praPopPost}`].filter(Boolean).join(' · ')
+                    : undefined}
+                  right={popAttendedPra(p) ? badge(p?.praPopResult || 'Telah Mengikuti', STATUS_BADGE.PASS) : badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')}
+                />
+                <MyTrainingRow
+                  label="POP"
+                  desc="Pengawas Operasional Pertama"
+                  right={p?.popBatch ? badge(p.popBatch, 'bg-violet-50 text-violet-800 border-violet-200') : badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')}
+                />
+                <MyTrainingRow
+                  label="Keterangan POP"
+                  sub={[p?.pendidikan, p?.tahunLulus && `Lulus ${p.tahunLulus}`].filter(Boolean).join(' · ') || undefined}
+                  right={p?.popKeterangan && POP_KETERANGAN[p.popKeterangan as PopKeterangan]
+                    ? badge(POP_KETERANGAN[p.popKeterangan as PopKeterangan].label, POP_KETERANGAN_STYLE[p.popKeterangan as PopKeterangan])
+                    : <span className="text-xs font-bold text-slate-400">-</span>}
+                />
+                <MyTrainingRow
+                  label="POM"
+                  desc="Pengawas Operasional Madya"
+                  right={popPassedPom(p) ? badge('PASS', STATUS_BADGE.PASS) : badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')}
+                />
+              </MyTrainingSection>
+            )}
+
+            <p className="text-[11px] font-semibold text-slate-500 px-1">
+              Ada data yang tidak sesuai? Hubungi Admin Preparation & Laboratory untuk pembaruan.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', onBack }: TrainingDatabaseScreenProps) {
   const queryClient = useQueryClient();
   // Data di-cache TanStack Query: kunjungan ulang tampil instan, lalu diperbarui di background
-  const { data: records = [], isLoading, isFetching, error: loadError } = useQuery({
-    queryKey: TRAINING_QUERY_KEY,
+  // Cache per akun (NIK) agar data akses penuh tidak pernah tampil ke akun lain di perangkat yang sama
+  const { data: payload, isLoading, isFetching, error: loadError } = useQuery({
+    queryKey: [...TRAINING_QUERY_KEY, inspectorNik.trim().toUpperCase()],
     queryFn: fetchTrainingRecords,
     staleTime: 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
-  const [developerNiks, setDeveloperNiks] = useState<string[]>([]);
+  const records = payload?.records ?? EMPTY_RECORDS;
+  const access: TrainingAccess = payload?.access ?? { viewAll: false, canManage: false, nik: '' };
 
   const [program, setProgram] = useState<TrainingProgram>(() => {
     try {
@@ -383,6 +565,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [missingFilter, setMissingFilter] = useState<string | null>(null);
   const [chartMode, setChartMode] = useState<'status' | 'monthly'>('status');
+  // Tampilan HP: diagram & filter lanjutan dilipat agar ringkas
+  const [showCharts, setShowCharts] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<TrainingRecord | null>(null);
@@ -415,16 +600,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     staleTime: 10 * 60 * 1000,
   });
 
-  useEffect(() => {
-    fetch('/api/developers')
-      .then(res => res.json())
-      .then(json => {
-        const list = Array.isArray(json) ? json : (json?.data || []);
-        setDeveloperNiks(list.map((d: any) => String(d.nik || '').toUpperCase()));
-      })
-      .catch(() => {});
-  }, []);
-
   const switchProgram = (p: TrainingProgram) => {
     setProgram(p);
     setStatusFilter('ALL');
@@ -432,18 +607,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     try { localStorage.setItem(TAB_STORAGE_KEY, p); } catch {}
   };
 
-  // Hak kelola: Developer & Section Administration (sama dengan Database Karyawan)
-  const canManage = useMemo(() => {
-    const cleanNik = inspectorNik.trim().toUpperCase();
-    if (HARDCODED_DEVS.includes(cleanNik) || developerNiks.includes(cleanNik)) return true;
-    try {
-      const p = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
-      const fields = [p.section, p.department, p.jabatan, p.role].map((v: any) => String(v || '').toLowerCase());
-      return fields.some(f => f.includes('admin') || f.includes('developer'));
-    } catch {
-      return false;
-    }
-  }, [inspectorNik, developerNiks]);
+  // Hak kelola (tambah / edit / import / hapus) ditentukan server: Developer & Section Administrasi
+  const canManage = access.canManage;
 
   const programRecords = useMemo(
     () => records.filter(r => !!r[PROGRAM_FLAG_KEY[program]]),
@@ -721,6 +886,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     ? 10 + (canManage ? 1 : 0)
     : 6 + (program === 'k3' ? 2 : 0) + (program === 'sap' ? SAP_TRAININGS.length : K3_TRAININGS.length) + (canManage ? 1 : 0);
 
+  const activeFilterCount = [golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter].filter(f => f !== 'ALL').length;
   const hasActiveFilter = !!searchQuery || golFilter !== 'ALL' || shiftFilter !== 'ALL' || bagianFilter !== 'ALL'
     || ptFilter !== 'ALL' || statusFilter !== 'ALL' || !!missingFilter;
 
@@ -1084,15 +1250,35 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         { label: 'Memenuhi Syarat POP', value: stats.cardB, sub: 'Pendidikan & masa kerja terpenuhi', icon: <CheckCircle2 className="w-4 h-4" />, tone: 'bg-emerald-500/10 text-emerald-700' },
       ];
 
+  // Hak akses belum diketahui → tampilkan kerangka saja (data akses penuh tidak boleh berkedip ke akun biasa)
+  if (!payload) {
+    return (
+      <div className="min-h-screen px-3 sm:px-6 py-5" style={{ backgroundColor: 'var(--bg-main, #f8fafc)' }}>
+        <div className="max-w-2xl mx-auto space-y-3" aria-busy="true" aria-label="Memuat Database Training">
+          <div className="h-11 w-48 rounded-xl bg-slate-200 animate-pulse" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-16 rounded-2xl bg-slate-100 animate-pulse" style={{ opacity: 1 - i * 0.12 }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Selain Developer / Section Administrasi / Manager / Superintendent: hanya data training milik sendiri
+  if (!access.viewAll) {
+    const own = records.find(r => r.nik === access.nik) ?? records[0] ?? null;
+    return <MyTrainingView record={own} name={inspectorName} onBack={onBack} />;
+  }
+
   return (
     <div className="min-h-screen pb-16 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-main, #f8fafc)' }}>
       {/* Header Toolbar */}
       <div
-        className="sticky top-[57px] z-20 border-b backdrop-blur-md px-4 sm:px-6 py-3.5 transition-colors"
+        className="md:sticky md:top-[57px] z-20 border-b backdrop-blur-md px-3 sm:px-6 py-3 sm:py-3.5 transition-colors"
         style={{ backgroundColor: 'var(--header-bg, rgba(255, 255, 255, 0.95))', borderColor: 'var(--border-main, #cbd5e1)' }}
       >
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3.5">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-2.5 md:gap-3.5">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {onBack && (
               <button
                 type="button"
@@ -1116,7 +1302,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <span title="Memperbarui data..."><Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" /></span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-slate-700">Rekap Training SAP, Training K3 & Sertifikasi POP/POM per karyawan</p>
+              <p className="hidden sm:block text-xs font-semibold text-slate-700">Rekap Training SAP, Training K3 & Sertifikasi POP/POM per karyawan</p>
             </div>
           </div>
 
@@ -1163,8 +1349,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
+        {/* Di HP diagram disembunyikan dulu agar daftar karyawan cepat terjangkau (tombol "Tampilkan Diagram") */}
+        <div className={`${showCharts ? 'grid' : 'hidden'} md:grid grid-cols-1 xl:grid-cols-2 gap-4`}>
         {/* Diagram Pencapaian Training SAP (%) */}
         {achievement && (
           <div className="p-4 rounded-2xl border shadow-xs" style={cardStyle}>
@@ -1268,11 +1455,12 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         </div>
 
         {/* Tab Program */}
-        <div className="flex flex-col sm:flex-row gap-2 p-1 rounded-2xl border w-full sm:w-fit" style={cardStyle}>
+        {/* HP: 3 tab sejajar dengan label ringkas; desktop: label lengkap + keterangan */}
+        <div className="grid grid-cols-3 sm:flex gap-1 sm:gap-2 p-1 rounded-2xl border w-full sm:w-fit" style={cardStyle}>
           {([
-            { id: 'sap' as const, label: 'Training SAP', sub: 'HAZID · JSA · IUT OTT · IAI · BFA · Basic Safety', icon: <ClipboardCheck className="w-4 h-4" /> },
-            { id: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · Confined Space · Fire Fighting', icon: <HardHat className="w-4 h-4" /> },
-            { id: 'pop' as const, label: 'Sertifikasi POP/POM', sub: 'Pra POP · POP · POM · Kualifikasi', icon: <Award className="w-4 h-4" /> },
+            { id: 'sap' as const, label: 'Training SAP', short: 'SAP', sub: 'HAZID · JSA · IUT OTT · IAI · BFA · Basic Safety', icon: <ClipboardCheck className="w-4 h-4 shrink-0" /> },
+            { id: 'k3' as const, label: 'Training K3', short: 'K3', sub: 'WAH · LOTO · Confined Space · Fire Fighting', icon: <HardHat className="w-4 h-4 shrink-0" /> },
+            { id: 'pop' as const, label: 'Sertifikasi POP/POM', short: 'POP/POM', sub: 'Pra POP · POP · POM · Kualifikasi', icon: <Award className="w-4 h-4 shrink-0" /> },
           ]).map(tab => {
             const active = program === tab.id;
             return (
@@ -1280,12 +1468,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 key={tab.id}
                 type="button"
                 onClick={() => switchProgram(tab.id)}
-                className={`flex-1 sm:flex-none flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-left transition-all cursor-pointer ${active ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25' : 'hover:bg-slate-100 text-slate-800'}`}
+                className={`flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-2.5 px-2 sm:px-3.5 py-2 rounded-xl text-center sm:text-left transition-all cursor-pointer ${active ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25' : 'hover:bg-slate-100 text-slate-800'}`}
               >
                 {tab.icon}
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black">{tab.label}</span>
+                  <div className="flex items-center justify-center sm:justify-start gap-1.5">
+                    <span className="text-xs font-black sm:hidden">{tab.short}</span>
+                    <span className="text-xs font-black hidden sm:inline">{tab.label}</span>
                     <span className={`text-[10px] font-mono font-black px-1.5 rounded-full ${active ? 'bg-white/20' : 'bg-slate-200 text-slate-700'}`}>{programCounts[tab.id]}</span>
                   </div>
                   <p className={`hidden sm:block text-[10px] font-semibold truncate ${active ? 'text-indigo-100' : 'text-slate-500'}`}>{tab.sub}</p>
@@ -1296,25 +1485,37 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
           {kpiCards.map(card => (
-            <div key={card.label} className="p-4 rounded-2xl border shadow-xs" style={cardStyle}>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-900">{card.label}</span>
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${card.tone}`}>{card.icon}</div>
+            <div key={card.label} className="p-3 sm:p-4 rounded-2xl border shadow-xs min-w-0" style={cardStyle}>
+              <div className="flex items-start justify-between gap-1.5">
+                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-900 leading-tight">{card.label}</span>
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${card.tone}`}>{card.icon}</div>
               </div>
-              <div className={`mt-2 font-black font-mono tracking-tight text-slate-950 ${typeof card.value === 'number' ? 'text-2xl sm:text-3xl' : 'text-base sm:text-lg'}`}>
+              <div className={`mt-1.5 sm:mt-2 font-black font-mono tracking-tight text-slate-950 ${typeof card.value === 'number' ? 'text-xl sm:text-3xl' : 'text-sm sm:text-lg'}`}>
                 {card.value}
               </div>
-              <p className="text-[10px] text-slate-600 font-semibold mt-1">{card.sub}</p>
+              <p className="text-[10px] text-slate-600 font-semibold mt-1 leading-snug">{card.sub}</p>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        {/* HP: tombol buka/tutup diagram & cakupan */}
+        <button
+          type="button"
+          onClick={() => setShowCharts(v => !v)}
+          className="md:hidden w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border shadow-xs text-xs font-black text-slate-800 cursor-pointer active:scale-[0.99]"
+          style={cardStyle}
+          aria-expanded={showCharts}
+        >
+          <span className="flex items-center gap-2"><BarChart3 className="w-4 h-4 text-indigo-600" />{showCharts ? 'Sembunyikan Diagram & Cakupan' : 'Tampilkan Diagram & Cakupan'}</span>
+          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showCharts ? 'rotate-180' : ''}`} />
+        </button>
+
+        <div className={`${showCharts ? 'grid' : 'hidden'} md:grid grid-cols-1 xl:grid-cols-5 gap-4`}>
           {/* Diagram Training */}
-          <div className="xl:col-span-3 p-4 rounded-2xl border shadow-xs" style={cardStyle}>
-            <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="xl:col-span-3 p-4 rounded-2xl border shadow-xs min-w-0" style={cardStyle}>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-600" />
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Diagram {programLabel}</h3>
@@ -1474,17 +1675,32 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
         {/* Filter Bar */}
         <div className="flex flex-col lg:flex-row lg:items-center gap-2.5">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Cari nama, NIK, jabatan, atau bagian..."
-              className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 bg-white text-base sm:text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
-            />
+          <div className="flex items-center gap-2 flex-1">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Cari nama, NIK, jabatan..."
+                className="w-full pl-9 pr-3 py-2.5 md:py-2 rounded-xl border border-slate-300 bg-white text-base sm:text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            {/* HP: filter lanjutan dilipat di balik tombol */}
+            <button
+              type="button"
+              onClick={() => setShowFilters(v => !v)}
+              className={`md:hidden relative inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs font-black cursor-pointer ${showFilters ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-800'}`}
+              aria-expanded={showFilters}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Filter
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 min-w-[18px] rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center">{activeFilterCount}</span>
+              )}
+            </button>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className={`${showFilters ? 'grid' : 'hidden'} grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center [&>select]:w-full md:[&>select]:w-auto`}>
             <select value={golFilter} onChange={e => setGolFilter(e.target.value)} className={selectClass}>
               <option value="ALL">Semua GOL</option>
               {GOL_OPTIONS.map(g => <option key={g} value={g}>GOL {g}</option>)}
@@ -1533,7 +1749,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <button
                 type="button"
                 onClick={resetFilters}
-                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-800 cursor-pointer"
+                className="col-span-2 md:col-span-1 inline-flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-800 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 Reset
@@ -1547,12 +1763,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           {missingFilter && (countOnly
             ? <> · telah mengikuti <span className="font-black text-teal-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>
             : <> · belum <span className="font-black text-rose-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>)}
-          {program === 'sap' && <>
+          {/* Keterangan aturan: lengkap di desktop, diringkas di HP */}
+          {program === 'sap' && <span className="hidden md:inline">
             {' · '}Wajib: GOL I → BFA & Basic Safety; GOL II–III → HAZID, JSA, IUT OTT, IAI, BFA; GOL IV–V → tanpa BFA
             {' · '}Masa berlaku: <span className="font-black text-yellow-700">WARNING</span> ≥ {(TRAINING_WARNING_MONTHS / 12).toLocaleString('id-ID')} th, <span className="font-black text-red-700">EXPIRED</span> ≥ {(TRAINING_EXPIRY_MONTHS / 12).toLocaleString('id-ID')} th sejak tanggal training
-          </>}
-          {countOnly && <> · Tanpa masa berlaku — dihitung jumlah karyawan yang telah mengikuti</>}
-          {program === 'pop' && <> · Masa kerja dihitung otomatis dari DOH</>}
+          </span>}
+          {program === 'sap' && <span className="md:hidden"> · <span className="font-black text-yellow-700">WARNING</span> ≥ 1,5 th · <span className="font-black text-red-700">EXPIRED</span> ≥ 2 th</span>}
+          {countOnly && <span className="hidden md:inline"> · Tanpa masa berlaku — dihitung jumlah karyawan yang telah mengikuti</span>}
+          {program === 'pop' && <span className="hidden md:inline"> · Masa kerja dihitung otomatis dari DOH</span>}
         </p>
 
         {/* Data */}
@@ -1732,8 +1950,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
       {/* Modal Tambah / Edit */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <form onSubmit={handleSave} className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border" style={cardStyle}>
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <form onSubmit={handleSave} className="w-full max-w-2xl max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl shadow-2xl border" style={cardStyle}>
             <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b" style={cardStyle}>
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-700 flex items-center justify-center">
@@ -1865,8 +2083,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
       {/* Konfirmasi Import */}
       {importPreview && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl shadow-2xl border p-6" style={cardStyle}>
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl shadow-2xl border p-5 sm:p-6 pb-8 sm:pb-6" style={cardStyle}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-11 h-11 rounded-2xl bg-indigo-500/15 text-indigo-700 flex items-center justify-center shrink-0">
                 <FileSpreadsheet className="w-5 h-5" />
@@ -1925,8 +2143,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
       {/* Konfirmasi Hapus */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl shadow-2xl border p-6 text-center" style={cardStyle}>
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl shadow-2xl border p-6 pb-8 sm:pb-6 text-center" style={cardStyle}>
             <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center">
               <Trash2 className="w-6 h-6" />
             </div>

@@ -3,7 +3,7 @@ import Papa from "papaparse";
 import { db } from "../../src/db/index.js";
 import { eq, asc, sql, inArray } from "drizzle-orm";
 import cron from "node-cron";
-import { trainingRecords, notifications } from "../../src/db/schema.js";
+import { trainingRecords, notifications, employees, developerUsers } from "../../src/db/schema.js";
 import { sendWebPush } from "../utils.js";
 import { TRAINING_SAP_SEED } from "../data/trainingSapSeed.js";
 import { TRAINING_K3_SEED_CSV } from "../data/trainingK3Seed.js";
@@ -393,15 +393,65 @@ trainingRouter.get("/api/training-records/me", async (req, res) => {
   }
 });
 
-// 1. GET /api/training-records — seluruh data training (kedua program)
-trainingRouter.get("/api/training-records", async (_req, res) => {
+// ===== Hak akses Database Training =====
+// - Lihat SEMUA data : Developer, Section Administrasi, Jabatan Manager & Superintendent
+// - Kelola (tambah / edit / import / hapus): Developer & Section Administrasi
+// - Selain itu       : hanya data training milik sendiri
+const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+interface TrainingAccess { nik: string; viewAll: boolean; canManage: boolean }
+const accessCache = new Map<string, { access: TrainingAccess; expires: number }>();
+const ACCESS_CACHE_MS = 5 * 60 * 1000;
+
+async function getTrainingAccess(user: any): Promise<TrainingAccess> {
+  const nik = String(user?.nik || '').trim().toUpperCase();
+  if (!nik) return { nik, viewAll: false, canManage: false };
+  const cached = accessCache.get(nik);
+  if (cached && cached.expires > Date.now()) return cached.access;
+
+  let isDev = HARDCODED_DEVS.includes(nik) || !!user?.isDeveloper;
+  if (!isDev) {
+    const [dev] = await db.select({ id: developerUsers.id }).from(developerUsers).where(sql`UPPER(${developerUsers.nik}) = ${nik}`).limit(1);
+    isDev = !!dev;
+  }
+  const [emp] = await db.select().from(employees).where(sql`UPPER(${employees.nik}) = ${nik}`).limit(1);
+  const [rec] = await db.select({ bagian: trainingRecords.bagian, jabatan: trainingRecords.jabatan })
+    .from(trainingRecords).where(eq(trainingRecords.nik, nik)).limit(1);
+
+  const sections = [emp?.section, (emp as any)?.department, user?.section, user?.department, rec?.bagian]
+    .map(v => String(v || '').toLowerCase());
+  const jabatans = [emp?.jabatan, (emp as any)?.position, user?.jabatan, rec?.jabatan].map(v => String(v || '').toLowerCase());
+  const isAdminSection = sections.some(s => s.includes('administra'));
+  const isManagerial = jabatans.some(j => j.includes('manager') || j.includes('superintendent'));
+
+  const access = { nik, viewAll: isDev || isAdminSection || isManagerial, canManage: isDev || isAdminSection };
+  accessCache.set(nik, { access, expires: Date.now() + ACCESS_CACHE_MS });
+  return access;
+}
+
+// Middleware untuk endpoint ubah data: hanya Developer & Section Administrasi
+async function requireTrainingManager(req: any, res: any, next: any) {
+  try {
+    const access = await getTrainingAccess(req.user);
+    if (!access.canManage) {
+      return res.status(403).json({ status: "error", message: "Anda tidak memiliki akses untuk mengubah Database Training." });
+    }
+    next();
+  } catch (error: any) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+}
+
+// 1. GET /api/training-records — seluruh data (akses penuh) atau hanya data milik sendiri
+trainingRouter.get("/api/training-records", async (req, res) => {
   try {
     await ensureTrainingRecordsTable();
+    const access = await getTrainingAccess((req as any).user);
     const rows = await db
       .select()
       .from(trainingRecords)
+      .where(access.viewAll ? undefined : eq(trainingRecords.nik, access.nik || '__none__'))
       .orderBy(sql`${trainingRecords.no} ASC NULLS LAST`, sql`${trainingRecords.noK3} ASC NULLS LAST`, asc(trainingRecords.nama));
-    res.json({ status: "success", data: rows });
+    res.json({ status: "success", data: rows, access: { viewAll: access.viewAll, canManage: access.canManage, nik: access.nik } });
   } catch (error: any) {
     console.error("[Training GET] Error:", error);
     res.status(500).json({ status: "error", message: error.message });
@@ -409,7 +459,7 @@ trainingRouter.get("/api/training-records", async (_req, res) => {
 });
 
 // 2. POST /api/training-records — tambah karyawan ke program training
-trainingRouter.post("/api/training-records", async (req, res) => {
+trainingRouter.post("/api/training-records", requireTrainingManager, async (req, res) => {
   try {
     await ensureTrainingRecordsTable();
     const program = isProgram(req.body?.program) ? req.body.program : 'sap';
@@ -438,7 +488,7 @@ trainingRouter.post("/api/training-records", async (req, res) => {
 });
 
 // 3. POST /api/training-records/import — upsert massal berdasarkan NIK (hasil parse file CSV/Excel)
-trainingRouter.post("/api/training-records/import", async (req, res) => {
+trainingRouter.post("/api/training-records/import", requireTrainingManager, async (req, res) => {
   try {
     await ensureTrainingRecordsTable();
     const rows: ParsedTrainingRow[] = Array.isArray(req.body?.rows) ? req.body.rows : [];
@@ -480,7 +530,7 @@ trainingRouter.post("/api/training-records/import", async (req, res) => {
 });
 
 // 4. PUT /api/training-records/:id — ubah profil + data training program aktif
-trainingRouter.put("/api/training-records/:id", async (req, res) => {
+trainingRouter.put("/api/training-records/:id", requireTrainingManager, async (req, res) => {
   try {
     await ensureTrainingRecordsTable();
     const id = parseInt(req.params.id, 10);
@@ -530,7 +580,7 @@ trainingRouter.put("/api/training-records/:id", async (req, res) => {
 
 // 5. DELETE /api/training-records/:id?program=sap|k3|pop — keluarkan karyawan dari satu program;
 //    baris dihapus permanen hanya jika tidak lagi terdaftar di program manapun
-trainingRouter.delete("/api/training-records/:id", async (req, res) => {
+trainingRouter.delete("/api/training-records/:id", requireTrainingManager, async (req, res) => {
   try {
     await ensureTrainingRecordsTable();
     const id = parseInt(req.params.id, 10);
