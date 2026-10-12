@@ -207,6 +207,22 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
     }
   };
 
+  useEffect(() => {
+    try {
+      const targetCat = sessionStorage.getItem('p2h_selected_category');
+      if (targetCat && equipmentCategories && equipmentCategories.length > 0) {
+        sessionStorage.removeItem('p2h_selected_category');
+        const targetLower = targetCat.toLowerCase();
+        const matched = equipmentCategories.find(c => c.category.toLowerCase().includes(targetLower));
+        if (matched) {
+          handleSelectCategory(matched.category);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to auto-select category", e);
+    }
+  }, [equipmentCategories]);
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full max-w-full md:px-8 pb-36 sm:pb-24">
       <PageHeader 

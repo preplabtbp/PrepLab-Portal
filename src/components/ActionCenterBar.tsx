@@ -132,6 +132,13 @@ export function ActionCenterBar({
 
   const [openFindings, setOpenFindings] = useState<any[]>([]);
   const [lvDamageTickets, setLvDamageTickets] = useState<any[]>([]);
+  const [maintenanceWorkOrders, setMaintenanceWorkOrders] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('p2h_cached_maintenance_wos');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const [completedInspectionInfo, setCompletedInspectionInfo] = useState<any | null>(null);
   const [userInspectionProof, setUserInspectionProof] = useState<any | null>(null);
   const [lightboxData, setLightboxData] = useState<{
@@ -170,29 +177,54 @@ export function ActionCenterBar({
   }, [inspectorJabatan, userProfile]);
 
   const effectiveSection = useMemo(() => {
-    return userProfile.section || localStorage.getItem('p2h_inspector_section') || '';
+    return userProfile.section || localStorage.getItem('p2h_inspector_section') || userProfile.department || localStorage.getItem('p2h_inspector_dept') || '';
   }, [userProfile]);
 
   const jLower = effectiveJabatan.toLowerCase();
   const sLower = effectiveSection.toLowerCase();
 
+  // Section classifications:
+  const isPrepSection = useMemo(() => {
+    return sLower.includes('prep') || jLower.includes('prep');
+  }, [sLower, jLower]);
+
+  const isLabSection = useMemo(() => {
+    return sLower.includes('lab') || sLower.includes('qa') || sLower.includes('quality') ||
+           jLower.includes('lab') || jLower.includes('chemist') || jLower.includes('qa') ||
+           jLower.includes('quality') || jLower.includes('assay') || jLower.includes('analyst');
+  }, [sLower, jLower]);
+
+  const isMaintSection = useMemo(() => {
+    return sLower.includes('maint') || sLower.includes('workshop') ||
+           jLower.includes('maint') || jLower.includes('workshop') ||
+           jLower.includes('mekanik') || jLower.includes('electric') ||
+           jLower.includes('welder') || jLower.includes('bubut');
+  }, [sLower, jLower]);
+
   // Strict Role Isolations:
   // 1. SPV Maintenance ONLY
   const isSpvMaintenance = useMemo(() => {
-    const isMaint = jLower.includes('maintenance') || sLower.includes('maintenance') || jLower.includes('workshop');
     const isLead = jLower.includes('supervisor') || jLower.includes('spv') || jLower.includes('foreman') || jLower.includes('lead') || jLower.includes('specialist');
-    return isMaint && isLead;
-  }, [jLower, sLower]);
+    return isMaintSection && isLead;
+  }, [isMaintSection, jLower]);
 
-  // 2. Supervisor / Leadership in general (Superintendent, Manager, SPV)
+  // 2. Supervisor / Leadership in general (Superintendent, Manager, SPV, Specialist, Lead, Foreman)
   const isSupervisorOrLead = useMemo(() => {
-    return isPicTemuanRole(effectiveJabatan);
-  }, [effectiveJabatan]);
+    return isPicTemuanRole(effectiveJabatan) ||
+           jLower.includes('supervisor') ||
+           jLower.includes('spv') ||
+           jLower.includes('specialist') ||
+           jLower.includes('superintendent') ||
+           jLower.includes('manager') ||
+           jLower.includes('lead') ||
+           jLower.includes('foreman') ||
+           sLower.includes('manager');
+  }, [effectiveJabatan, jLower, sLower]);
 
   // 3. Lab / QA personnel (for Pemantauan Suhu & Gas)
   const isLabOrQA = useMemo(() => {
-    return jLower.includes('lab') || jLower.includes('chemist') || jLower.includes('qa') || jLower.includes('quality') || sLower.includes('lab') || sLower.includes('qa') || sLower.includes('quality');
-  }, [jLower, sLower]);
+    return isLabSection;
+  }, [isLabSection]);
 
   const fetchActionItems = async (manualRefresh = false) => {
     if (!effectiveNik && !effectiveName) {
@@ -236,13 +268,17 @@ export function ActionCenterBar({
       // 6. Fetch Inspection Proofs for Screenshot Confirmation
       const proofsPromise = safeFetch(`/api/inspection-proofs?week=${currentWeekTag}`);
 
-      const [schedData, p5mData, dailyData, ktaData, ticketsData, proofsData] = await Promise.all([
+      // 7. Fetch Work Orders IF user is Maintenance or Supervisor
+      const woPromise = (isMaintSection || isSupervisorOrLead) ? safeFetch('/api/work-orders') : Promise.resolve([]);
+
+      const [schedData, p5mData, dailyData, ktaData, ticketsData, proofsData, woData] = await Promise.all([
         schedPromise,
         p5mPromise,
         dailyPromise,
         ktaPromise,
         ticketsPromise,
-        proofsPromise
+        proofsPromise,
+        woPromise
       ]);
 
       // Process Weekly Inspection Schedule
@@ -350,6 +386,20 @@ export function ActionCenterBar({
         setLvDamageTickets([]);
       }
 
+      // Process Maintenance Work Orders
+      if (Array.isArray(woData)) {
+        const activeWOs = woData.filter((w: any) => {
+          const st = (w.status || '').toUpperCase();
+          return st !== 'CLOSED' && st !== 'SELESAI' && st !== 'COMPLETED';
+        });
+        setMaintenanceWorkOrders(activeWOs);
+        try {
+          localStorage.setItem('p2h_cached_maintenance_wos', JSON.stringify(activeWOs));
+        } catch {}
+      } else {
+        setMaintenanceWorkOrders([]);
+      }
+
     } catch (err) {
       console.warn('ActionCenterBar: Failed to load action items', err);
     } finally {
@@ -360,7 +410,7 @@ export function ActionCenterBar({
 
   useEffect(() => {
     fetchActionItems();
-  }, [effectiveNik, effectiveName, effectiveJabatan]);
+  }, [effectiveNik, effectiveName, effectiveJabatan, effectiveSection]);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -459,12 +509,15 @@ export function ActionCenterBar({
       navKey: 'kta'
     });
 
-    // 3. Penugasan Pemateri P5M
+    // 3. Penugasan Pemateri / Materi P5M Mingguan
     const pendingP5mList = p5mAssignments.filter((a: any) => !a.isCompleted && !a.isPast);
     const isP5mPending = pendingP5mList.length > 0 || Boolean(p5mAssignment && !p5mAssignment.isCompleted);
     const completedCount = p5mAssignments.filter((a: any) => a.isCompleted).length;
-    let p5mSubtitle = 'Tidak ada jadwal pemateri minggu ini';
+    let p5mSubtitle = 'Materi P5M Periode Ini • Tinjau topik & flyer briefing';
+    let p5mTitle = 'Materi P5M Mingguan';
+
     if (p5mAssignments.length > 1) {
+      p5mTitle = `Penugasan Pemateri P5M (${p5mAssignments.length} Sesi)`;
       if (completedCount === p5mAssignments.length) {
         p5mSubtitle = `Semua ${p5mAssignments.length} sesi P5M selesai dibawakan ✓ (+60 EXP)`;
       } else {
@@ -472,6 +525,7 @@ export function ActionCenterBar({
         p5mSubtitle = `${p5mAssignments.length} Sesi (${p5mAssignments.map((a: any) => a.day).join(' & ')}) • ${nextPending?.day}: ${nextPending?.materi || 'Safety Talk'}`;
       }
     } else if (p5mAssignment) {
+      p5mTitle = 'Penugasan Pemateri P5M';
       p5mSubtitle = p5mAssignment.isCompleted 
         ? 'Materi P5M sudah selesai dibawakan hari ini ✓ (+60 EXP)'
         : `${p5mAssignment.day || 'Hari Ini'}: ${p5mAssignment.materi || 'Safety Talk'}`;
@@ -479,7 +533,7 @@ export function ActionCenterBar({
 
     list.push({
       id: 'p5m',
-      title: p5mAssignments.length > 1 ? `Penugasan Pemateri P5M (${p5mAssignments.length} Sesi)` : 'Penugasan Pemateri P5M',
+      title: p5mTitle,
       subtitle: p5mSubtitle,
       count: isP5mPending ? (pendingP5mList.length || 1) : 0,
       isPending: isP5mPending,
@@ -489,8 +543,50 @@ export function ActionCenterBar({
       navKey: 'p5m'
     });
 
-    // 4. Pemantauan Suhu & Gas (Khusus Lab & QA)
-    if (isLabOrQA || dailyTasks?.pemantauan) {
+    // ==========================================
+    // 4. KHUSUS PREPARASI:
+    //    - P2H Khusus Preparasi
+    // ==========================================
+    if (isPrepSection && isOnsite && !isCutiToday) {
+      list.push({
+        id: 'p2h_prep',
+        title: 'P2H Harian Preparasi',
+        subtitle: isP2hPending 
+          ? 'Checklist pra-operasi alat preparasi belum diisi hari ini' 
+          : 'Checklist alat preparasi hari ini sudah tercatat',
+        count: isP2hPending ? 1 : 0,
+        isPending: isP2hPending,
+        icon: <ClipboardList className="w-4 h-4" />,
+        iconColor: 'text-teal-600 dark:text-teal-400',
+        bgColor: 'bg-teal-500/10 border-teal-500/25',
+        navKey: 'p2h',
+        navParams: { category: 'Preparation' }
+      });
+    }
+
+    // ==========================================
+    // 5. KHUSUS LABORATORIUM:
+    //    - P2H Khusus Laboratorium
+    //    - Pemantauan Harian Lab (Suhu & Gas)
+    // ==========================================
+    if (isLabSection && isOnsite && !isCutiToday) {
+      list.push({
+        id: 'p2h_lab',
+        title: 'P2H Harian Laboratorium',
+        subtitle: isP2hPending 
+          ? 'Checklist instrumen & alat lab belum diisi hari ini' 
+          : 'Checklist alat lab hari ini sudah tercatat',
+        count: isP2hPending ? 1 : 0,
+        isPending: isP2hPending,
+        icon: <ClipboardList className="w-4 h-4" />,
+        iconColor: 'text-teal-600 dark:text-teal-400',
+        bgColor: 'bg-teal-500/10 border-teal-500/25',
+        navKey: 'p2h',
+        navParams: { category: 'Laboratory' }
+      });
+    }
+
+    if (isLabSection || dailyTasks?.pemantauan?.completedToday) {
       list.push({
         id: 'pemantauan',
         title: 'Pemantauan Harian Lab (Suhu & Gas)',
@@ -506,8 +602,68 @@ export function ActionCenterBar({
       });
     }
 
-    // 5. Checklist P2H Peralatan
-    if (isOnsite && !isCutiToday) {
+    // ==========================================
+    // 6. KHUSUS MAINTENANCE:
+    //    - Daftar Work Order Maintenance
+    // ==========================================
+    if (isMaintSection) {
+      const activeWoCount = maintenanceWorkOrders.length;
+      list.push({
+        id: 'wo',
+        title: 'Daftar Work Order Maintenance',
+        subtitle: activeWoCount > 0 
+          ? `${activeWoCount} work order aktif memerlukan perbaikan / tindak lanjut` 
+          : 'Semua work order maintenance telah selesai',
+        count: activeWoCount,
+        isPending: activeWoCount > 0,
+        icon: <Wrench className="w-4 h-4" />,
+        iconColor: 'text-amber-600 dark:text-amber-400',
+        bgColor: 'bg-amber-500/10 border-amber-500/25',
+        navKey: 'wo'
+      });
+
+      // Kerusakan Unit LV (Jika ada)
+      if (isSpvMaintenance && lvDamageTickets.length > 0) {
+        list.push({
+          id: 'lv_damage',
+          title: 'Kerusakan Unit LV (Maintenance)',
+          subtitle: `${lvDamageTickets.length} laporan kerusakan unit/kendaraan aktif`,
+          count: lvDamageTickets.length,
+          isPending: true,
+          icon: <Car className="w-4 h-4" />,
+          iconColor: 'text-rose-600 dark:text-rose-400',
+          bgColor: 'bg-rose-500/10 border-rose-500/25',
+          navKey: 'wo'
+        });
+      }
+    }
+
+    // ==========================================
+    // 7. KHUSUS SPV / PIC:
+    //    - Daftar Temuan Terbuka K3
+    // ==========================================
+    if (isSupervisorOrLead) {
+      const hasOpen = openFindings.length > 0;
+      list.push({
+        id: 'findings',
+        title: 'Daftar Temuan Terbuka K3',
+        subtitle: hasOpen 
+          ? `${openFindings.length} temuan inspeksi K3 di area Anda memerlukan tindak lanjut` 
+          : 'Semua temuan inspeksi K3 di area Anda telah ditindaklanjuti ✓',
+        count: openFindings.length,
+        isPending: hasOpen,
+        icon: <AlertTriangle className="w-4 h-4" />,
+        iconColor: hasOpen ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400',
+        bgColor: hasOpen ? 'bg-rose-500/10 border-rose-500/25' : 'bg-emerald-500/10 border-emerald-500/25',
+        navKey: 'findings'
+      });
+    }
+
+    // ==========================================
+    // 8. GENERAL FALLBACK (Crew Non-Prep/Lab/Maint):
+    //    - P2H Standar
+    // ==========================================
+    if (!isPrepSection && !isLabSection && !isMaintSection && isOnsite && !isCutiToday) {
       list.push({
         id: 'p2h',
         title: 'Pemeriksaan Harian Peralatan (P2H)',
@@ -523,38 +679,6 @@ export function ActionCenterBar({
       });
     }
 
-    // 6. Kerusakan Unit LV (KHUSUS SPV MAINTENANCE SAJA)
-    if (isSpvMaintenance) {
-      list.push({
-        id: 'lv_damage',
-        title: 'Kerusakan Unit LV (Maintenance)',
-        subtitle: lvDamageTickets.length > 0 
-          ? `${lvDamageTickets.length} laporan kerusakan unit/kendaraan aktif` 
-          : 'Tidak ada laporan kerusakan unit LV aktif',
-        count: lvDamageTickets.length,
-        isPending: lvDamageTickets.length > 0,
-        icon: <Car className="w-4 h-4" />,
-        iconColor: 'text-rose-600 dark:text-rose-400',
-        bgColor: 'bg-rose-500/10 border-rose-500/25',
-        navKey: 'wo'
-      });
-    }
-
-    // 7. Temuan Inspeksi K3 Terbuka (Khusus SPV Section / Pimpinan selain LV)
-    if (isSupervisorOrLead && openFindings.length > 0) {
-      list.push({
-        id: 'findings',
-        title: 'Temuan Inspeksi Terbuka K3',
-        subtitle: `${openFindings.length} temuan K3 di area Anda memerlukan tindak lanjut`,
-        count: openFindings.length,
-        isPending: openFindings.length > 0,
-        icon: <AlertTriangle className="w-4 h-4" />,
-        iconColor: 'text-rose-600 dark:text-rose-400',
-        bgColor: 'bg-rose-500/10 border-rose-500/25',
-        navKey: 'findings'
-      });
-    }
-
     return list;
   }, [
     inspectionSchedule, 
@@ -562,12 +686,16 @@ export function ActionCenterBar({
     isKtaPending, 
     ktaObligation, 
     p5mAssignment, 
-    isLabOrQA, 
+    p5mAssignments,
+    isPrepSection,
+    isLabSection,
+    isMaintSection,
     dailyTasks, 
     isPemantauanPending, 
     isOnsite, 
     isCutiToday, 
     isP2hPending, 
+    maintenanceWorkOrders,
     isSpvMaintenance, 
     lvDamageTickets, 
     isSupervisorOrLead, 
@@ -601,6 +729,11 @@ export function ActionCenterBar({
       if (onNav) onNav('sap-dashboard');
       else navigate('/sap-dashboard');
     } else if (destination === 'p2h') {
+      if (stateParams?.category) {
+        try {
+          sessionStorage.setItem('p2h_selected_category', stateParams.category);
+        } catch {}
+      }
       if (onNav) onNav('inspect');
       else navigate('/inspect');
     } else if (destination === 'pemantauan') {
