@@ -3399,9 +3399,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       {canManageDatabase && <Pencil className="absolute top-2.5 right-2.5 w-3 h-3 text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
                       <p className="text-amber-800 text-[10px] uppercase font-black tracking-wider">Status Kontrak</p>
                       <p className="mt-1.5 font-black text-xl text-amber-950 tracking-tight leading-tight break-words">{selectedEmployee.statusKontrak || '-'}</p>
-                      <p className="mt-1.5 text-[10px] font-semibold text-amber-800/80 leading-tight">{selectedEmployee.tanggalPermanent && selectedEmployee.tanggalPermanent !== '-' && selectedEmployee.tanggalPermanent !== '0'
-                        ? <>Permanen <span className="font-mono font-black text-amber-950">{formatShortDate(selectedEmployee.tanggalPermanent)}</span></>
-                        : 'Belum Permanen'}</p>
+                      {(() => {
+                        const tglPermanen = formatShortDate(selectedEmployee.tanggalPermanent);
+                        return tglPermanen !== '-' ? (
+                          <div className="mt-2 flex flex-col items-center gap-1">
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700/80 leading-none">Tgl Permanen</span>
+                            <span className="font-mono font-black text-xs text-amber-950 bg-white/70 border border-amber-200 rounded-lg px-2 py-0.5 whitespace-nowrap leading-tight">{tglPermanen}</span>
+                          </div>
+                        ) : (
+                          <p className="mt-1.5 text-[10px] font-semibold text-amber-800/80 leading-tight">Belum Permanen</p>
+                        );
+                      })()}
                     </div>
                     {/* Tgl Efektif Tidak Bekerja (Conditional) */}
                     {selectedEmployee.tanggalEfektifTidakBekerja && (
