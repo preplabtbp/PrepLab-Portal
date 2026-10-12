@@ -71,6 +71,7 @@ import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
 import { userPreferencesRouter } from "./server/routes/userPreferences.js";
 import { galleryRouter } from "./server/routes/gallery.js";
+import { xrfRouter, ensureXrfTables } from "./server/routes/xrfCalibration.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -352,6 +353,13 @@ async function initDbSchema() {
 
     // Auto seed APD data from spreadsheet
     syncApdDataFromSheet().catch(e => console.warn('APD auto-seed notice:', e.message));
+
+    // Ensure XRF Calibration & QC tables and seed initial data
+    try {
+      await ensureXrfTables();
+    } catch (xrfErr: any) {
+      console.warn('XRF tables init notice:', xrfErr.message);
+    }
   } catch (e: any) {
     console.warn("DB schema init warning:", e.message);
   }
@@ -1037,7 +1045,8 @@ const app = express();
     '/api/pdf',
     '/api/user',
     '/api/gallery',
-    '/api/portal-gallery'
+    '/api/portal-gallery',
+    '/api/xrf'
   ];
 
   app.use('/api', (req, res, next) => {
@@ -1055,7 +1064,8 @@ const app = express();
       url.startsWith('/api/agenda') ||
       url.startsWith('/api/apd') ||
       url.startsWith('/api/logbook') ||
-      url.startsWith('/api/clinic')
+      url.startsWith('/api/clinic') ||
+      url.startsWith('/api/xrf')
     )) {
       return next();
     }
@@ -1091,6 +1101,7 @@ const app = express();
   app.use("/api/gamification", gamificationRouter);
   app.use(logbookRouter);
   app.use(clinicRouter);
+  app.use("/api/xrf", xrfRouter);
   app.use("/api/user", userPreferencesRouter);
   app.use(galleryRouter);
 
