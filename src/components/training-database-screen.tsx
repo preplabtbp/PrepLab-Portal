@@ -18,7 +18,7 @@ import {
   HardHat,
   ClipboardCheck,
   Clock,
-  TrendingUp,
+  BarChart3,
   FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,13 +28,11 @@ import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
+  BarElement,
   Tooltip,
   Legend,
-  Filler,
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import { Input, Select, Textarea, Button } from './ui';
 import {
   SAP_TRAININGS,
@@ -48,7 +46,7 @@ import {
   type K3StatusKey,
 } from '../utils/training-import';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 export interface TrainingRecord {
   id: number;
@@ -88,7 +86,8 @@ const PT_OPTIONS = ['TBP', 'GPS'];
 const K3_STATUS_OPTIONS = ['PASS', 'Pending', 'FAIL'];
 const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-const CURVE_COLORS = ['#4f46e5', '#0d9488', '#d97706', '#db2777', '#7c3aed'];
+const CHART_COLORS = ['#4f46e5', '#0d9488', '#d97706', '#db2777', '#7c3aed'];
+const MONTHLY_CHART_MAX_MONTHS = 18;
 const TAB_STORAGE_KEY = 'training_db_active_tab';
 
 function formatTrainingDate(val: string | null): string {
@@ -169,7 +168,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [ptFilter, setPtFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [missingFilter, setMissingFilter] = useState<string | null>(null);
-  const [curveMode, setCurveMode] = useState<'cumulative' | 'monthly'>('cumulative');
+  const [chartMode, setChartMode] = useState<'status' | 'monthly'>('status');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<TrainingRecord | null>(null);
@@ -290,8 +289,23 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     return { total, latest, coverage, cardA: sudahTraining, cardB: pending };
   }, [programRecords, program]);
 
-  // ===== Kurva progres training per bulan =====
-  const curveData = useMemo(() => {
+  // ===== Diagram status per training (batang bertumpuk) =====
+  const statusChartData = useMemo(() => {
+    if (stats.total === 0) return null;
+    const datasets = [
+      { label: program === 'sap' ? 'Sudah' : 'PASS', data: stats.coverage.map(c => c.done), backgroundColor: '#10b981' },
+      ...(program === 'k3' ? [{ label: 'Pending', data: stats.coverage.map(c => c.pending), backgroundColor: '#f59e0b' }] : []),
+      { label: 'Belum', data: stats.coverage.map(c => c.target - c.done - c.pending), backgroundColor: '#f43f5e' },
+      ...(program === 'sap' ? [{ label: 'Tidak Wajib (GOL IV/V)', data: stats.coverage.map(c => c.exempt), backgroundColor: '#cbd5e1' }] : []),
+    ];
+    return {
+      labels: stats.coverage.map(c => c.label),
+      datasets: datasets.map(d => ({ ...d, borderRadius: 4, maxBarThickness: 56 })),
+    };
+  }, [stats, program]);
+
+  // ===== Diagram jumlah training per bulan (batang bertumpuk per jenis training) =====
+  const monthlyChartData = useMemo(() => {
     const trainings = program === 'sap'
       ? SAP_TRAININGS.map(t => ({ key: t.key as string, label: t.label, done: (r: TrainingRecord) => r[t.key] }))
       : K3_TRAININGS.map(t => ({
@@ -321,30 +335,21 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       m++;
       if (m > 12) { m = 1; y++; }
     }
+    // Tampilkan maksimal 18 bulan terakhir agar batang tetap terbaca
+    const shown = months.slice(-MONTHLY_CHART_MAX_MONTHS);
 
     return {
-      labels: months.map(mo => `${MONTHS_SHORT[Number(mo.slice(5, 7)) - 1]} ${mo.slice(2, 4)}`),
-      datasets: trainings.map((t, i) => {
-        let running = 0;
-        const data = months.map(mo => {
-          const c = monthsByTraining[i][mo] || 0;
-          running += c;
-          return curveMode === 'cumulative' ? running : c;
-        });
-        return {
-          label: t.label,
-          data,
-          borderColor: CURVE_COLORS[i % CURVE_COLORS.length],
-          backgroundColor: CURVE_COLORS[i % CURVE_COLORS.length] + '22',
-          tension: 0.4,
-          pointRadius: months.length > 24 ? 0 : 2.5,
-          pointHoverRadius: 5,
-          borderWidth: 2.5,
-          fill: false,
-        };
-      }),
+      labels: shown.map(mo => `${MONTHS_SHORT[Number(mo.slice(5, 7)) - 1]} ${mo.slice(2, 4)}`),
+      truncated: months.length > shown.length,
+      datasets: trainings.map((t, i) => ({
+        label: t.label,
+        data: shown.map(mo => monthsByTraining[i][mo] || 0),
+        backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+        borderRadius: 3,
+        maxBarThickness: 28,
+      })),
     };
-  }, [programRecords, program, curveMode]);
+  }, [programRecords, program]);
 
   // ===== Filter tabel =====
   const filteredRecords = useMemo(() => {
@@ -751,20 +756,20 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-          {/* Kurva Progres Training */}
+          {/* Diagram Training */}
           <div className="xl:col-span-3 p-4 rounded-2xl border shadow-xs" style={cardStyle}>
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-indigo-600" />
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Kurva Progres {programLabel}</h3>
+                <BarChart3 className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Diagram {programLabel}</h3>
               </div>
               <div className="flex p-0.5 rounded-lg bg-slate-100 border border-slate-200">
-                {([['cumulative', 'Kumulatif'], ['monthly', 'Per Bulan']] as const).map(([mode, label]) => (
+                {([['status', 'Status per Training'], ['monthly', 'Tren per Bulan']] as const).map(([mode, label]) => (
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setCurveMode(mode)}
-                    className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${curveMode === mode ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600'}`}
+                    onClick={() => setChartMode(mode)}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${chartMode === mode ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600'}`}
                   >
                     {label}
                   </button>
@@ -772,9 +777,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </div>
             </div>
             <div className="h-64">
-              {curveData ? (
-                <Line
-                  data={curveData}
+              {(chartMode === 'status' ? statusChartData : monthlyChartData) ? (
+                <Bar
+                  data={(chartMode === 'status' ? statusChartData : monthlyChartData)!}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
@@ -784,18 +789,20 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} orang` } },
                     },
                     scales: {
-                      x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
-                      y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } }, title: { display: true, text: 'Jumlah personel', font: { size: 10 } } },
+                      x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' }, maxRotation: 0, autoSkip: true } },
+                      y: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: { size: 10 } }, title: { display: true, text: 'Jumlah personel', font: { size: 10 } } },
                     },
                   }}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-xs font-semibold text-slate-500">Belum ada tanggal training untuk digambar</div>
+                <div className="h-full flex items-center justify-center text-xs font-semibold text-slate-500">Belum ada data untuk ditampilkan</div>
               )}
             </div>
             <p className="mt-2 text-[10px] font-semibold text-slate-500">
-              {curveMode === 'cumulative' ? 'Jumlah personel yang sudah training sampai bulan tersebut.' : 'Jumlah personel yang training pada bulan tersebut.'}
-              {program === 'k3' && ' Hanya status PASS yang dihitung.'}
+              {chartMode === 'status'
+                ? 'Jumlah personel per status untuk setiap jenis training.'
+                : `Jumlah personel yang training per bulan${monthlyChartData?.truncated ? ` (${MONTHLY_CHART_MAX_MONTHS} bulan terakhir)` : ''}.`}
+              {program === 'k3' && chartMode === 'monthly' && ' Hanya status PASS yang dihitung.'}
             </p>
           </div>
 
