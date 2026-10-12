@@ -6,8 +6,11 @@ import { trainingRecords } from "../../src/db/schema.js";
 import { TRAINING_SAP_SEED } from "../data/trainingSapSeed.js";
 import { TRAINING_K3_SEED_CSV } from "../data/trainingK3Seed.js";
 import { TRAINING_MONITORING_SEED_CSV } from "../data/trainingMonitoringSeed.js";
+import { TRAINING_BASIC_SAFETY_SEED_CSV } from "../data/trainingBasicSafetySeed.js";
+import { PROGRAM_FIELDS, mergeTrainingRow } from "./trainingMerge.js";
 import {
   parseTrainingSheet,
+  type TrainingKey,
   normalizeTrainingDate,
   normalizeTrainingStatus,
   type ParsedTrainingRow,
@@ -16,13 +19,6 @@ import {
 
 export const trainingRouter = Router();
 
-type TrainingRow = typeof trainingRecords.$inferSelect;
-
-const PROFILE_FIELDS = ['nama', 'jabatan', 'gol', 'shift', 'bagian', 'pt'] as const;
-const PROGRAM_FIELDS: Record<TrainingProgram, readonly (keyof ParsedTrainingRow)[]> = {
-  sap: ['hazid', 'hazidStatus', 'jsa', 'jsaStatus', 'iutOtt', 'iutOttStatus', 'iai', 'iaiStatus', 'bfa', 'bfaStatus', 'bs', 'bsStatus', 'sapDetails'],
-  k3: ['wah', 'wahStatus', 'loto', 'lotoStatus', 'confinedSpace', 'confinedSpaceStatus', 'fireFighting', 'fireFightingStatus'],
-};
 const STATUS_FIELDS = new Set([
   'hazidStatus', 'jsaStatus', 'iutOttStatus', 'iaiStatus', 'bfaStatus', 'bsStatus',
   'wahStatus', 'lotoStatus', 'confinedSpaceStatus', 'fireFightingStatus',
@@ -37,6 +33,7 @@ function normalizeProgramField(field: string, value: unknown): unknown {
 }
 
 const MONITORING_SEED_MARKER = 'training_seed_monitoring_sap_v1';
+const BASIC_SAFETY_SEED_MARKER = 'training_seed_basic_safety_v1';
 
 const isProgram = (v: unknown): v is TrainingProgram => v === 'sap' || v === 'k3';
 
@@ -73,7 +70,9 @@ const UPSERT_CHUNK = 200;
 async function bulkUpsertTrainingRows(
   recs: ParsedTrainingRow[],
   programs: TrainingProgram[],
-  updatedBy: string | null
+  updatedBy: string | null,
+  // File satu-training (mis. Basic Safety) hanya mengisi profil yang kosong, tidak menimpa nama/jabatan
+  fillProfileOnly = false
 ): Promise<{ inserted: number; updated: number }> {
   // NIK ganda dalam satu file: baris terakhir yang dipakai (ON CONFLICT tidak boleh menyentuh baris 2x)
   const byNik = new Map<string, ParsedTrainingRow>();
@@ -83,31 +82,13 @@ async function bulkUpsertTrainingRows(
 
   const existingRows = await db.select().from(trainingRecords).where(inArray(trainingRecords.nik, unique.map(r => r.nik)));
   const existingByNik = new Map(existingRows.map(r => [r.nik, r]));
-  const sapIsSource = programs.includes('sap');
   const now = new Date();
   let inserted = 0;
 
   const values = unique.map(rec => {
     const existing = existingByNik.get(rec.nik);
     if (!existing) inserted++;
-    const row: Record<string, unknown> = { nik: rec.nik, updatedBy, updatedAt: now };
-
-    PROFILE_FIELDS.forEach(f => {
-      const incoming = rec[f] ?? null;
-      const current = existing ? existing[f as keyof TrainingRow] ?? null : null;
-      const preferIncoming = sapIsSource || f === 'bagian' || f === 'pt';
-      row[f] = preferIncoming ? (incoming ?? current) : (current ?? incoming);
-    });
-    // Semua field program diisi: yang ada di sumber dari file, sisanya dipertahankan dari data lama
-    (Object.keys(PROGRAM_FIELDS) as TrainingProgram[]).forEach(p => PROGRAM_FIELDS[p].forEach(f => {
-      const fromSource = programs.includes(p) && f in rec;
-      row[f] = fromSource ? rec[f] ?? null : existing ? (existing as any)[f] ?? null : null;
-    }));
-    row.no = sapIsSource && rec.no != null ? rec.no : existing?.no ?? null;
-    row.noK3 = !sapIsSource && programs.includes('k3') && rec.no != null ? rec.no : existing?.noK3 ?? null;
-    row.inSap = programs.includes('sap') || !!existing?.inSap;
-    row.inK3 = programs.includes('k3') || !!existing?.inK3;
-    return row as typeof trainingRecords.$inferInsert;
+    return mergeTrainingRow(rec, existing, { programs, updatedBy, now, fillProfileOnly }) as typeof trainingRecords.$inferInsert;
   });
 
   for (let i = 0; i < values.length; i += UPSERT_CHUNK) {
@@ -180,22 +161,22 @@ const countPrograms = async () => {
   return counts;
 };
 
-// Seed sekali pakai data Monitoring Training (SAP lengkap + BS + skor). Penanda di app_settings dibuat secara atomik,
-// sehingga hanya satu instance server yang menjalankannya dan edit/import berikutnya tidak pernah tertimpa.
-async function seedMonitoringOnce() {
+// Seed sekali pakai dari file CSV. Penanda di app_settings dibuat secara atomik, sehingga hanya satu instance server
+// yang menjalankannya dan edit/import berikutnya tidak pernah tertimpa.
+async function seedCsvOnce(marker: string, fileName: string, csv: string, singleTraining?: TrainingKey) {
   const claimed = await db.execute(sql`INSERT INTO app_settings (setting_key, setting_value, description)
-    VALUES (${MONITORING_SEED_MARKER}, 'running', 'Seed Database Training dari Monitoring_Training_Monitoring.csv')
+    VALUES (${marker}, 'running', ${`Seed Database Training dari ${fileName}`})
     ON CONFLICT (setting_key) DO NOTHING RETURNING id;`);
   if (!claimed.rows?.length) return;
   try {
-    const parsed = parseTrainingSheet(Papa.parse<unknown[]>(TRAINING_MONITORING_SEED_CSV, { skipEmptyLines: true }).data);
-    if (parsed) {
-      const result = await bulkUpsertTrainingRows(parsed.records, ['sap'], 'seed:Monitoring_Training_Monitoring.csv');
-      console.log(`[Training] Monitoring seed: ${result.inserted} baru, ${result.updated} diperbarui`);
+    const parsed = parseTrainingSheet(Papa.parse<unknown[]>(csv, { skipEmptyLines: true }).data, { singleTraining });
+    if (parsed && parsed.programs.length > 0) {
+      const result = await bulkUpsertTrainingRows(parsed.records, parsed.programs, `seed:${fileName}`, !!singleTraining);
+      console.log(`[Training] Seed ${fileName}: ${result.inserted} baru, ${result.updated} diperbarui`);
     }
-    await db.execute(sql`UPDATE app_settings SET setting_value = 'done', updated_at = NOW() WHERE setting_key = ${MONITORING_SEED_MARKER};`);
+    await db.execute(sql`UPDATE app_settings SET setting_value = 'done', updated_at = NOW() WHERE setting_key = ${marker};`);
   } catch (e) {
-    await db.execute(sql`DELETE FROM app_settings WHERE setting_key = ${MONITORING_SEED_MARKER};`);
+    await db.execute(sql`DELETE FROM app_settings WHERE setting_key = ${marker};`);
     throw e;
   }
 }
@@ -230,7 +211,13 @@ export function ensureTrainingRecordsTable(): Promise<void> {
         }
       }
       // Gagal seed tidak boleh menghalangi data tampil; akan dicoba lagi saat server berikutnya start
-      await seedMonitoringOnce().catch((e: any) => console.error("[Training] Monitoring seed failed:", e.message));
+      // Urutan penting: Basic Safety (lebih baru) setelah Monitoring agar tanggal BS terbaru yang dipakai
+      try {
+        await seedCsvOnce(MONITORING_SEED_MARKER, 'Monitoring_Training_Monitoring.csv', TRAINING_MONITORING_SEED_CSV);
+        await seedCsvOnce(BASIC_SAFETY_SEED_MARKER, 'Basic_Safety.csv', TRAINING_BASIC_SAFETY_SEED_CSV, 'bs');
+      } catch (e: any) {
+        console.error("[Training] CSV seed failed:", e.message);
+      }
     })().catch((e: any) => {
       ensurePromise = null; // coba lagi di request berikutnya
       console.error("[Training] Ensure table failed:", e.message);
@@ -331,7 +318,7 @@ trainingRouter.post("/api/training-records/import", async (req, res) => {
       }));
       recs.push(rec);
     }
-    const { inserted, updated } = await bulkUpsertTrainingRows(recs, programs, updatedBy);
+    const { inserted, updated } = await bulkUpsertTrainingRows(recs, programs, updatedBy, !!req.body?.singleTraining);
 
     res.json({
       status: "success",

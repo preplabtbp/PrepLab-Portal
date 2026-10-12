@@ -39,6 +39,9 @@ import {
   K3_TRAININGS,
   sapRequiredKeys as sapRequiredKeysForGol,
   parseTrainingSheet,
+  guessTrainingFromFileName,
+  ALL_TRAININGS,
+  type TrainingKey,
   type ParsedTrainingSheet,
   type TrainingProgram,
   type SapDateKey,
@@ -50,6 +53,37 @@ import {
 import type { Plugin } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+
+// Plugin: label persentase di ujung batang pencapaian (dataset pertama) pada diagram horizontal
+const achievementLabels: Plugin<'bar'> = {
+  id: 'achievementLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const ds = chart.data.datasets[0];
+    if (!ds || !chart.isDatasetVisible(0)) return;
+    ctx.save();
+    ctx.font = 'bold 11px Inter, system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    chart.getDatasetMeta(0).data.forEach((bar: any, idx) => {
+      const pct = Number(ds.data[idx]) || 0;
+      const { x, y, base } = bar.getProps(['x', 'y', 'base'], true);
+      const label = `${pct}%`;
+      // Di dalam batang bila cukup lebar, selain itu tepat setelah ujung batang
+      if (x - base > 44) {
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'right';
+        ctx.fillText(label, x - 6, y);
+      } else {
+        ctx.fillStyle = '#1e293b';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, x + 6, y);
+      }
+    });
+    ctx.restore();
+  },
+};
+
+const achievementColor = (pct: number) => (pct >= 90 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#f43f5e');
 
 // Plugin: tulis persentase di tengah setiap segmen batang (persentase terhadap total batang tersebut)
 const barPercentLabels: Plugin<'bar'> = {
@@ -259,7 +293,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TrainingRecord | null>(null);
   const [isImporting, setIsImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<(ParsedTrainingSheet & { fileName: string }) | null>(null);
+  const [importPreview, setImportPreview] = useState<(ParsedTrainingSheet & { fileName: string; sheetRows: unknown[][] }) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const programLabel = program === 'sap' ? 'Training SAP' : 'Training K3';
@@ -378,6 +412,42 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     const pending = programRecords.filter(k3HasPending).length;
     return { total, latest, coverage, cardA: sudahTraining, cardB: pending };
   }, [programRecords, program]);
+
+  // ===== Pencapaian gabungan seluruh training (SAP + K3) =====
+  // SAP: tercapai = berlaku (PASS/WARNING) dibanding personel yang WAJIB training tsb (aturan per GOL)
+  // K3 : tercapai = PASS dibanding seluruh peserta Training K3
+  const achievement = useMemo(() => {
+    const sapPeople = records.filter(r => r.inSap);
+    const k3People = records.filter(r => r.inK3);
+    const items = [
+      ...SAP_TRAININGS.map(t => {
+        const required = sapPeople.filter(r => sapRequiredKeys(r).includes(t.key));
+        return { label: t.label, program: 'SAP', done: required.filter(r => sapIsValid(sapState(r, t.key, t.statusKey))).length, target: required.length };
+      }),
+      ...K3_TRAININGS.map(t => ({
+        label: t.label,
+        program: 'K3',
+        done: k3People.filter(r => k3State(r, t.key, t.statusKey) === 'PASS').length,
+        target: k3People.length,
+      })),
+    ].filter(i => i.target > 0);
+    if (items.length === 0) return null;
+    const totalDone = items.reduce((s, i) => s + i.done, 0);
+    const totalTarget = items.reduce((s, i) => s + i.target, 0);
+    const rows = [...items, { label: 'TOTAL', program: 'Semua', done: totalDone, target: totalTarget }]
+      .map(i => ({ ...i, pct: Math.round((i.done / i.target) * 100) }));
+    return {
+      rows,
+      totalPct: rows[rows.length - 1].pct,
+      chart: {
+        labels: rows.map(r => (r.program === 'Semua' ? 'TOTAL' : `${r.label} (${r.program})`)),
+        datasets: [
+          { label: 'Tercapai', data: rows.map(r => r.pct), backgroundColor: rows.map(r => achievementColor(r.pct)), borderRadius: 4, barThickness: 16 },
+          { label: 'Belum', data: rows.map(r => 100 - r.pct), backgroundColor: '#e2e8f0', borderRadius: 4, barThickness: 16 },
+        ],
+      },
+    };
+  }, [records]);
 
   // ===== Diagram status per training (batang bertumpuk) =====
   const statusChartData = useMemo(() => {
@@ -605,10 +675,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const handleImportFile = async (file: File) => {
     try {
       setIsImporting(true);
+      // File satu-training (mis. Basic_Safety.csv): jenis training ditebak dari nama file, bisa diganti di konfirmasi
+      const guessed = guessTrainingFromFileName(file.name);
+      let sheetRows: unknown[][] | null = null;
       let parsed: ParsedTrainingSheet | null = null;
       if (file.name.toLowerCase().endsWith('.csv')) {
         const text = await file.text();
-        parsed = parseTrainingSheet(Papa.parse<unknown[]>(text, { skipEmptyLines: true }).data);
+        sheetRows = Papa.parse<unknown[]>(text, { skipEmptyLines: true }).data;
+        parsed = parseTrainingSheet(sheetRows, { singleTraining: guessed });
       } else {
         // Library xlsx (~400KB) baru diunduh saat user benar-benar import Excel
         const XLSX = await import('xlsx');
@@ -616,15 +690,20 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         // Pakai sheet pertama yang formatnya dikenali
         for (const name of wb.SheetNames) {
           const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
-          parsed = parseTrainingSheet(rows);
-          if (parsed && parsed.records.length > 0) break;
+          const p = parseTrainingSheet(rows, { singleTraining: guessed });
+          if (p && (p.records.length > 0 || p.singleTraining === null)) {
+            sheetRows = rows;
+            parsed = p;
+            break;
+          }
         }
       }
-      if (!parsed || parsed.records.length === 0) {
-        toast.error('Format tidak dikenali. Pastikan ada kolom NIK, NAMA, dan kolom training (HAZID/JSA/... atau WAH/LOTO/...).');
+      const needsTrainingChoice = parsed?.singleTraining === null;
+      if (!parsed || !sheetRows || (parsed.records.length === 0 && !needsTrainingChoice)) {
+        toast.error('Format tidak dikenali. Pastikan ada kolom NIK, NAMA, dan kolom training (HAZID/JSA/... , WAH/LOTO/... atau Tanggal Training).');
         return;
       }
-      setImportPreview({ ...parsed, fileName: file.name });
+      setImportPreview({ ...parsed, fileName: file.name, sheetRows });
     } catch (err: any) {
       console.error('Import training failed:', err);
       toast.error(err.message || 'Gagal membaca file');
@@ -634,8 +713,15 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     }
   };
 
-  const confirmImport = async () => {
+  // Ganti jenis training untuk file satu-training → parse ulang dari baris mentah
+  const chooseImportTraining = (key: TrainingKey) => {
     if (!importPreview) return;
+    const reparsed = parseTrainingSheet(importPreview.sheetRows, { singleTraining: key });
+    if (reparsed) setImportPreview({ ...importPreview, ...reparsed });
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview || importPreview.records.length === 0) return;
     try {
       setIsImporting(true);
       const res = await fetch('/api/training-records/import', {
@@ -644,6 +730,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         body: JSON.stringify({
           rows: importPreview.records,
           programs: importPreview.programs,
+          singleTraining: importPreview.singleTraining ?? undefined,
           updatedBy: inspectorName || inspectorNik,
         }),
       });
@@ -858,6 +945,64 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+        {/* Diagram Pencapaian Seluruh Training (gabungan SAP + K3) */}
+        {achievement && (
+          <div className="p-4 rounded-2xl border shadow-xs" style={cardStyle}>
+            <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-indigo-600" />
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Pencapaian Seluruh Training</h3>
+                  <p className="text-[10px] font-semibold text-slate-500">Persentase personel yang sudah memenuhi tiap training (SAP & K3)</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-black font-mono leading-none" style={{ color: achievementColor(achievement.totalPct) }}>
+                  {achievement.totalPct}%
+                </div>
+                <p className="text-[10px] font-bold text-slate-500 mt-0.5">Total pencapaian</p>
+              </div>
+            </div>
+            <div style={{ height: achievement.rows.length * 26 + 20 }}>
+              <Bar
+                data={achievement.chart}
+                plugins={[achievementLabels]}
+                options={{
+                  indexAxis: 'y',
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                      filter: item => item.datasetIndex === 0,
+                      callbacks: {
+                        label: ctx => {
+                          const row = achievement.rows[ctx.dataIndex];
+                          return ` ${row.pct}% — ${row.done} dari ${row.target} personel`;
+                        },
+                      },
+                    },
+                  },
+                  scales: {
+                    x: { stacked: true, min: 0, max: 100, ticks: { callback: v => `${v}%`, font: { size: 10 }, stepSize: 25 }, grid: { color: '#f1f5f9' } },
+                    y: {
+                      stacked: true,
+                      grid: { display: false },
+                      ticks: { font: ctx => ({ size: 11, weight: ctx.index === achievement.rows.length - 1 ? 'bold' : 'normal' }) },
+                    },
+                  },
+                }}
+              />
+            </div>
+            <p className="mt-2 text-[10px] font-semibold text-slate-500">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />≥ 90%
+              <span className="inline-block w-2 h-2 rounded-full bg-amber-500 ml-3 mr-1" />70–89%
+              <span className="inline-block w-2 h-2 rounded-full bg-rose-500 ml-3 mr-1" />&lt; 70%
+              <span className="ml-3">· SAP dihitung dari personel yang wajib (per GOL), K3 dari seluruh peserta K3.</span>
+            </p>
+          </div>
+        )}
+
         {/* Tab Program */}
         <div className="flex gap-2 p-1 rounded-2xl border w-full sm:w-fit" style={cardStyle}>
           {([
@@ -1311,10 +1456,27 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </div>
             </div>
             <div className="space-y-2 text-xs">
-              <div className="flex justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="font-semibold text-slate-600">Format terdeteksi</span>
-                <span className="font-black text-slate-950">{importPreview.programs.map(p => (p === 'sap' ? 'Training SAP' : 'Training K3')).join(' + ')}</span>
-              </div>
+              {importPreview.singleTraining !== undefined ? (
+                // File satu-training: pilih / konfirmasi jenis trainingnya
+                <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200">
+                  <label className="block font-semibold text-indigo-900 mb-1.5">Jenis training di file ini</label>
+                  <select
+                    value={importPreview.singleTraining ?? ''}
+                    onChange={e => chooseImportTraining(e.target.value as TrainingKey)}
+                    className="w-full px-3 py-2 rounded-lg border border-indigo-300 bg-white text-xs font-bold text-slate-900 cursor-pointer"
+                  >
+                    <option value="" disabled>Pilih training...</option>
+                    {ALL_TRAININGS.map(t => (
+                      <option key={t.key} value={t.key}>{t.desc} — {t.program === 'sap' ? 'Training SAP' : 'Training K3'}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="font-semibold text-slate-600">Format terdeteksi</span>
+                  <span className="font-black text-slate-950">{importPreview.programs.map(p => (p === 'sap' ? 'Training SAP' : 'Training K3')).join(' + ')}</span>
+                </div>
+              )}
               <div className="flex justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="font-semibold text-slate-600">Baris valid</span>
                 <span className="font-black text-slate-950">{importPreview.records.length} karyawan</span>
@@ -1331,7 +1493,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </p>
             <div className="mt-5 flex gap-2.5">
               <Button variant="secondary" onClick={() => setImportPreview(null)} disabled={isImporting} className="flex-1 py-2.5 text-xs font-bold">Batal</Button>
-              <Button onClick={confirmImport} disabled={isImporting} className="flex-1 py-2.5 text-xs font-bold">
+              <Button onClick={confirmImport} disabled={isImporting || importPreview.records.length === 0} className="flex-1 py-2.5 text-xs font-bold">
                 {isImporting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Import {importPreview.records.length} Data
               </Button>

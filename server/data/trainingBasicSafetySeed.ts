@@ -1,0 +1,129 @@
+// Data Training Basic Safety (BS) — isi asli file Basic_Safety.csv (Okt 2026).
+// Dimuat sekali ke kolom BS Database Training (penanda: app_settings 'training_seed_basic_safety_v1'),
+// diparse dengan parser yang sama dengan fitur Import (src/utils/training-import.ts) sebagai file satu-training.
+export const TRAINING_BASIC_SAFETY_SEED_CSV = `No,Employee Name,SHIFT,NIK,Section,PT,Tanggal Awal Bergabung,Tanggal Training,PRE,POST,Ket.
+1,Safar Laalewu,Nonshift,M0406220751,Support,TBP,2022-06-17,2026-02-19,36,100.0,PASS
+2,La Ode Rizkin,Nonshift,M0210240669,Support,GPS,2024-10-30,2026-02-13,44,100.0,PASS
+3,Ardi Arman,A,M0412251306,"Wet, Preparation",TBP,2025-12-13,2026-03-06,,,PASS
+4,Wahyu Jabir,A,M0402230134,Laboratory,TBP,2020-02-10,2025-12-26,60,80.0,PASS
+5,Ramadhan W. Anwar,A,M0203220102,Laboratory,GPS,2022-03-01,2025-11-11,40,100.0,PASS
+6,Hairun Umawaitina,A,M0203220123,Laboratory,GPS,2022-03-10,2025-11-10,36,84.0,PASS
+7,Naslim Muksin,A,M0406220796,Laboratory,TBP,2022-06-22,2025-11-10,32,80.0,PASS
+8,Harji La Ila,A,M0412221623,Laboratory,TBP,2022-12-07,2025-11-11,40,96.0,PASS
+9,La Bayu,A,M0406230606,Laboratory,TBP,2023-06-28,2026-02-05,44,96.0,PASS
+10,Ahmad Sudirman,A,M0412221673,Laboratory,TBP,2022-12-16,2025-11-11,20,84.0,PASS
+11,Ardila Rusli,A,M0407230672,Laboratory,TBP,2023-07-22,2026-03-19,12,78.0,PASS
+12,Riko Saputra Day,A,M0212210097,Laboratory,GPS,2021-12-16,2025-11-10,40,76.0,PASS
+13,Dulmihdat Tomayou,A,M0401230050,Laboratory,TBP,2023-01-18,2026-02-05,20,92.0,PASS
+14,Randi Zakaria,A,M0405240290,Laboratory,TBP,2024-05-16,2026-03-06,,,PASS
+15,Arlan Hi. Yusup,A,M0402240076,Laboratory,TBP,2024-02-07,2026-02-05,44,100.0,PASS
+16,Alfris Badaruni,A,M0210230879,Laboratory,GPS,2023-10-13,2025-12-12,20,88.0,PASS
+17,Samuel Skiffer Kellah,A,M0407240467,Maintenance,TBP,2024-07-23,2026-02-05,44,84.0,PASS
+18,La Alwino La Ode Pudu,A,M0204190282,Maintenance,GPS,2019-04-29,2025-11-10,40,84.0,PASS
+19,Anadir M. Likur,A,M0405210002,"Dry, Preparation",TBP,2021-05-04,2025-11-10,32,92.0,PASS
+20,Aneldi Muneri,A,M0207190464,"Dry, Preparation",GPS,2017-06-12,2025-11-11,44,88.0,PASS
+21,Hariyatno La Jaya,A,M0408210002,"Wet, Preparation",TBP,2018-07-02,2025-11-10,40,96.0,PASS
+22,Karlos Yafet,A,M0206230586,"Dry, Preparation",GPS,2017-11-18,2026-01-09,70,92.0,PASS
+23,La Topo,A,M0402230213,"Wet, Preparation",TBP,2019-05-22,2025-11-11,24,80.0,PASS
+24,Madraji,A,M0402230122,"Dry, Preparation",TBP,2019-02-08,2025-11-11,40,96.0,PASS
+25,Natanel Tooli,A,M0210190730,"Dry, Preparation",GPS,2016-09-27,2025-11-11,20,88.0,PASS
+26,Jusrandi,A,M0203220101,"Wet, Preparation",GPS,2022-03-01,2026-02-05,36,76.0,PASS
+27,Marlin Muhammad,A,M0203220108,"Dry, Preparation",GPS,2022-03-06,2025-11-11,32,84.0,PASS
+28,Ruslan Tabaika,A,M0407221012,"Wet, Preparation",TBP,2022-07-16,2026-01-09,50,84.0,PASS
+29,Jasriwijaya Ikram,A,M0406220785,"Dry, Preparation",TBP,2022-06-20,2026-02-05,28,91.0,PASS
+30,Buce Bobrikit,A,M0407221010,"Dry, Preparation",TBP,2022-07-16,2026-02-05,52,80.0,PASS
+31,Abdul Manan R. Day,A,M0407221074,"Wet, Preparation",TBP,2022-07-22,2026-02-19,52,100.0,PASS
+32,Agim Maulana Barmawi,A,M0407221077,"Dry, Preparation",TBP,2022-07-23,2026-03-19,40,88.0,PASS
+33,Suryadi La Samusu,A,M0412221652,"Dry, Preparation",TBP,2022-12-11,2025-12-12,20,76.0,PASS
+34,Fajrin Muin,A,M0412221653,"Dry, Preparation",TBP,2022-12-11,2026-02-19,36,80.0,PASS
+35,Muslim Wabula,A,M0209230815,"Dry, Preparation",GPS,2023-09-20,2026-02-19,28,96.0,PASS
+36,Rifaldi I. Arifin,A,M0202220068,"Dry, Preparation",GPS,2022-02-10,2026-02-20,24,76.0,PASS
+37,Erwin Asnawi,A,M0402240075,"Wet, Preparation",TBP,2024-02-07,2026-03-06,,,PASS
+38,Fikri La Atu,A,M0402240080,"Dry, Preparation",TBP,2024-02-08,2026-04-03,ada,,PASS
+39,Fahdin S. Kadim,A,M0402240108,"Dry, Preparation",TBP,2024-02-22,2026-03-19,36,88.0,PASS
+40,Robinson Sumtaki,A,M0407240461,"Wet, Preparation",TBP,2024-07-17,2026-02-05,28,96.0,PASS
+41,Samsir Abubakar,A,M0407240479,"Wet, Preparation",TBP,2024-07-31,2026-02-19,32,78.0,PASS
+42,La Arisan La Atu,A,M0408240485,"Wet, Preparation",TBP,2024-08-02,2026-04-17,62,100.0,PASS
+43,Hendra Alfons,A,M0211240707,"Wet, Preparation",GPS,2024-11-06,2026-02-19,44,90.0,PASS
+44,Risno Hamid,A,M0211240706,"Dry, Preparation",GPS,2024-11-06,2026-03-06,,,PASS
+45,Muhammad Nasir,A,M0211240708,"Wet, Preparation",GPS,2024-11-06,2026-02-20,,,PASS
+46,La Herno,A,M0211240712,"Wet, Preparation",GPS,2024-11-06,2026-03-06,,,PASS
+47,La Ode Elfian,A,M0211240709,"Wet, Preparation",GPS,2024-11-06,2026-02-20,,,PASS
+48,Kardi Tamsil,A,M0201250001,"Wet, Preparation",GPS,2025-01-03,2026-02-20,,,PASS
+49,Andi Haji,A,M0201250016,"Wet, Preparation",GPS,2025-01-06,2026-03-06,,,PASS
+50,M. Hadi Mubarok,A,M0204250504,"Dry, Preparation",GPS,2025-04-21,2026-03-07,,,PASS
+51,La Ode Muhammad Faldin,A,M0205250630,"Wet, Preparation",GPS,2025-05-12,2026-03-07,,,PASS
+52,Aldi Bobrikit,A,M0205250631,"Dry, Preparation",GPS,2025-05-12,2026-02-19,24,92.0,PASS
+53,La Ferdi,A,M0206250799,"Wet, Preparation",GPS,2025-06-23,2026-03-07,,,PASS
+54,Azzam Jufri,A,M0206250813,"Wet, Preparation",GPS,2025-06-28,2026-03-07,,,PASS
+55,Randi Nasarudin,A,M0407250889,"Wet, Preparation",TBP,2025-07-21,2026-04-03,,,PASS
+56,Ardian Wally,A,M0410251163,"Wet, Preparation",TBP,2025-10-19,2026-03-19,50,92.0,PASS
+57,Muhammad Subir,A,M0403260140,"Wet, Preparation",TBP,2026-03-30,2026-04-03,ada,,PASS
+58,M. Ridah Kardi,A,M0410251165,"Wet, Preparation",TBP,2025-10-19,2026-04-17,54,100.0,PASS
+59,Jarfin Saharudin,B,M0402230188,Laboratory,TBP,2020-02-19,2025-12-19,68,96.0,PASS
+60,Sukri Koco,B,M0402230199,Laboratory,TBP,2020-02-20,2026-01-16,,,PASS
+61,La Dai,B,M0406210029,Laboratory,TBP,2021-06-27,2026-01-02,53,93.0,PASS
+62,Irman Welhemus,B,M0406220795,Laboratory,TBP,2022-06-22,2026-02-13,40,88.0,PASS
+63,Agusman Suaib,B,M0407221011,Laboratory,TBP,2022-07-16,2026-02-13,48,96.0,PASS
+64,Iran Rumbia,B,M0412221625,Laboratory,TBP,2022-12-07,2026-03-14,,,PASS
+65,Rahmat Purnomo,B,M0202220051,Laboratory,GPS,2022-02-05,2026-03-27,59,100.0,PASS
+66,Risdiyanto Ladedi,B,M0203220144,Laboratory,GPS,2022-03-19,2026-03-28,62,84.0,PASS
+67,Hasbi Nuh,B,M0411221527,Laboratory,TBP,2022-11-16,2026-02-27,,,PASS
+68,Muh. Alif Multazam NH,B,M0402240078,Laboratory,TBP,2024-02-08,2026-02-27,,,PASS
+69,La Wisnu,B,M0209240583,Laboratory,GPS,2024-09-27,2026-03-14,,,PASS
+70,Jasri,B,M0403240155,Laboratory,TBP,2024-03-13,2026-02-28,,,PASS
+71,Moh. Safrin,B,M0203220111,Laboratory,GPS,2022-03-06,2026-04-11,36,80.0,PASS
+72,Sahrul Sanusi,B,M0203250155,Laboratory,GPS,2025-03-10,2026-02-28,,,PASS
+73,Imran Sebualamo,B,M0201250032,Laboratory,GPS,2025-01-17,2026-03-27,40,88.0,PASS
+74,Mhd. Dahlan Ahmad,B,M0206230531,Maintenance,GPS,2017-10-31,2025-12-19,84,100.0,PASS
+75,Muhamad Syaifuddin Z,B,M0202220050,Maintenance,GPS,2022-02-05,2026-01-16,,,PASS
+76,La Juanda La Ce,B,M0409210113,Maintenance,TBP,2021-09-23,2026-01-02,44,86.0,PASS
+77,Yus Putra Firiyanto,B,M0405210034,Maintenance,TBP,2021-05-08,2026-02-13,36,100.0,PASS
+78,Daud Kedafota,B,M0402230164,"Wet, Preparation",TBP,2016-10-16,2026-02-28,,,PASS
+79,Sirajuddin,B,M0402230098,"Dry, Preparation",TBP,2019-02-05,2026-01-16,,,PASS
+80,Sumarlin Muhammad,B,M0204190253,"Dry, Preparation",GPS,2019-04-12,2026-01-02,25,90.0,PASS
+81,Darno La Bungahari,B,M0208230714,"Dry, Preparation",GPS,2017-05-29,2025-12-19,48,93.0,PASS
+82,Saman Dokulamo,B,M0411230957,"Dry, Preparation",TBP,2020-11-05,2026-01-16,12,82.0,PASS
+83,Ridwan Kedafota,B,M0408210022,"Dry, Preparation",TBP,2021-08-13,2026-02-27,,,PASS
+84,Risal Nurdin,B,M0202220052,"Wet, Preparation",GPS,2022-02-05,2026-04-10,64,100.0,PASS
+85,Husen Dahlan,B,M0202220067,"Dry, Preparation",GPS,2022-02-10,2026-03-13,,,PASS
+86,Sarman La Bunga,B,M0202220093,"Dry, Preparation",GPS,2022-02-27,2026-02-27,,,PASS
+87,Muis La Besi,B,M0203220103,"Wet, Preparation",GPS,2022-03-01,2026-03-13,,,PASS
+88,Riski Djafrudin,B,M0405220496,"Dry, Preparation",TBP,2022-05-07,2026-03-27,72,88.0,PASS
+89,Sardin La Harmoto,B,M0406220815,"Dry, Preparation",TBP,2022-06-23,2026-02-27,,,PASS
+90,La Jojo,B,M0407220997,"Wet, Preparation",TBP,2022-07-15,2026-02-13,32,88.0,PASS
+91,Jimi Muhamad Dun,B,M0407221009,"Dry, Preparation",TBP,2022-07-16,2026-03-14,,,PASS
+92,La Ode Hartanto,B,M0412221624,"Wet, Preparation",TBP,2022-12-07,2026-02-13,28,76.0,PASS
+93,La Rifan,B,M0412221627,"Dry, Preparation",TBP,2022-12-08,2026-02-28,,,PASS
+94,Rifandi Samsudin,B,M0412221654,"Dry, Preparation",TBP,2022-12-11,2026-03-13,,,PASS
+95,Ramadan Muhamad,B,M0412221674,"Dry, Preparation",TBP,2022-12-16,2026-02-28,,,PASS
+96,La Ode Nur Asgar,B,M0402240079,"Wet, Preparation",TBP,2024-02-08,2026-02-27,,,PASS
+97,Firmansya Tueka,B,M0402240085,"Wet, Preparation",TBP,2024-02-11,2026-04-24,,,PASS
+98,Sahrin Hairun,B,M0403240127,"Dry, Preparation",TBP,2024-03-01,2026-03-14,,,PASS
+99,Moh. Irsan Lajunaidi,B,M0403240136,"Dry, Preparation",TBP,2024-03-07,2026-03-28,48,80.0,PASS
+100,Akmal,B,M0407240460,"Wet, Preparation",TBP,2024-07-17,2026-04-10,28,78.0,PASS
+101,Muhamad Nof Nurleti,B,M0407240464,"Wet, Preparation",TBP,2024-07-22,2026-03-28,72,80.0,PASS
+102,Nezar,B,M0407240478,"Wet, Preparation",TBP,2024-07-28,2026-02-27,,,PASS
+103,Chandra Ady Guna,B,M0211240704,"Wet, Preparation",GPS,2024-11-06,2026-03-13,,,PASS
+104,Wanto Koilo,B,M0211240711,"Wet, Preparation",GPS,2024-11-06,2026-03-14,,,PASS
+105,Gian Awaludin,B,M0211240740,"Wet, Preparation",GPS,2024-11-20,2026-02-13,36,86.0,PASS
+106,Muh Dirgahayu Risaldi,B,M0211240748,"Dry, Preparation",GPS,2024-11-26,2026-03-27,60,92.0,PASS
+107,Yakub Umar,B,M0212240804,"Wet, Preparation",GPS,2024-12-27,2026-03-28,0,76.0,PASS
+108,Ridha Putra,B,M0201250003,"Wet, Preparation",GPS,2025-01-03,2026-03-28,34,76.0,PASS
+109,Muhammad Restu,B,M0201250045,"Wet, Preparation",GPS,2025-01-25,2026-02-27,,,PASS
+110,Nanda Nahumarury,B,M0201250046,"Wet, Preparation",GPS,2025-01-25,2026-04-10,24,80.0,PASS
+111,Sakir Kuilo,B,M0202250054,"Wet, Preparation",GPS,2025-02-01,2026-03-27,10,88.0,PASS
+112,Afnal,B,M0205250596,"Wet, Preparation",GPS,2025-05-04,2026-04-10,28,76.0,PASS
+113,La Ode Faldianto,B,M0205250594,"Wet, Preparation",GPS,2025-05-04,2026-04-10,16,80.0,PASS
+114,Muhaimin M. Hasan,B,M0206250740,"Wet, Preparation",GPS,2025-06-05,2026-04-10,38,90.0,PASS
+115,Anggi Putra Kamani,B,M0206250812,"Wet, Preparation",GPS,2025-06-28,2026-02-27,,,PASS
+116,Marlon Tukan,B,M0407250842,"Wet, Preparation",TBP,2025-07-07,2026-03-14,,,PASS
+117,Zhiran Arrazy Barmawi Putra,B,M0409251014,"Wet, Preparation",TBP,2025-09-01,2026-03-28,56,88.0,PASS
+118,Fahrezy U. Kamarullah,B,M0410251164,"Wet, Preparation",TBP,2025-10-19,2026-03-27,35,88.0,PASS
+119,Sarjon Jaya Putra,B,M0401260003,"Wet, Preparation",TBP,2026-01-11,2026-08-21,52,92.0,PASS
+120,Jakrin Ode Muniru,B,M0404260183,"Wet, Preparation",TBP,2026-04-21,2026-05-08,36,80.0,PASS
+121,La Ode Surdin,A,M0405260266,"Wet, Preparation",TBP,2026-05-13,2026-05-22,,,PASS
+122,La Alfian La Idu,B,M0406260342,"Wet, Preparation",TBP,2026-06-10,2026-06-14,20,80.0,PASS
+123,Rahmatul Hidayah,B,M0406260356,"Wet, Preparation",TBP,2026-06-25,2026-06-27,32,96.0,PASS
+124,Burhanudin La Wio,A,M0404220418,Maintenance,TBP,2022-04-22,2025-11-10,44,100.0,PASS
+`;

@@ -25,7 +25,7 @@ export const SAP_TRAININGS: { key: SapDateKey; statusKey: SapStatusKey; label: s
   { key: 'iutOtt', statusKey: 'iutOttStatus', label: 'IUT OTT', desc: 'Inspeksi (IUT OTT)' },
   { key: 'iai', statusKey: 'iaiStatus', label: 'IAI', desc: 'IAI' },
   { key: 'bfa', statusKey: 'bfaStatus', label: 'BFA', desc: 'Basic First Aid' },
-  { key: 'bs', statusKey: 'bsStatus', label: 'BS', desc: 'BS' },
+  { key: 'bs', statusKey: 'bsStatus', label: 'Basic Safety', desc: 'Basic Safety (BS)' },
 ];
 
 export const K3_TRAININGS: { key: K3DateKey; statusKey: K3StatusKey; label: string; desc: string }[] = [
@@ -92,6 +92,34 @@ export interface ParsedTrainingSheet {
   programs: TrainingProgram[];
   records: ParsedTrainingRow[];
   skipped: number;
+  // File satu-training (kolom "Tanggal Training" tanpa nama training, mis. Basic_Safety.csv):
+  // training yang dipakai, atau null bila belum bisa ditentukan (user harus memilih)
+  singleTraining?: TrainingKey | null;
+}
+
+export type TrainingKey = SapDateKey | K3DateKey;
+
+export const ALL_TRAININGS: { key: TrainingKey; label: string; desc: string; program: TrainingProgram }[] = [
+  ...SAP_TRAININGS.map(t => ({ key: t.key as TrainingKey, label: t.label, desc: t.desc, program: 'sap' as const })),
+  ...K3_TRAININGS.map(t => ({ key: t.key as TrainingKey, label: t.label, desc: t.desc, program: 'k3' as const })),
+];
+
+// Tebak jenis training dari nama file, untuk file satu-training (mis. "Basic_Safety.csv" → BS)
+export function guessTrainingFromFileName(fileName: string): TrainingKey | null {
+  const n = fileName.toLowerCase().replace(/[^a-z]/g, '');
+  const rules: [string[], TrainingKey][] = [
+    [['basicsafety'], 'bs'],
+    [['firstaid', 'bfa'], 'bfa'],
+    [['firefight', 'pemadam'], 'fireFighting'],
+    [['confined'], 'confinedSpace'],
+    [['loto', 'lockout'], 'loto'],
+    [['wah', 'workatheight', 'workingatheight'], 'wah'],
+    [['hira', 'hazid'], 'hazid'],
+    [['jsa'], 'jsa'],
+    [['inspeksi', 'iutott'], 'iutOtt'],
+    [['iai'], 'iai'],
+  ];
+  return rules.find(([words]) => words.some(w => n.includes(w)))?.[1] ?? null;
 }
 
 const MONTHS: Record<string, number> = {
@@ -185,7 +213,7 @@ type ColumnDef =
 const PROFILE_ALIASES: Record<string, ProfileField> = {
   no: 'no', nomor: 'no',
   nik: 'nik',
-  nama: 'nama', namakaryawan: 'nama', name: 'nama',
+  nama: 'nama', namakaryawan: 'nama', name: 'nama', employeename: 'nama',
   jabatan: 'jabatan', position: 'jabatan',
   gol: 'gol', golongan: 'gol', grade: 'gol',
   shift: 'shift',
@@ -226,17 +254,33 @@ function subFieldOf(h: string): SubField | null {
   return null;
 }
 
+// Kolom tanggal generik pada file satu-training (tidak menyebut nama training)
+const GENERIC_DATE_HEADERS = new Set(['tanggaltraining', 'tgltraining', 'trainingdate', 'tanggalpelatihan', 'tglpelatihan']);
+
 // rows: array-of-arrays (hasil Papa.parse tanpa header, atau XLSX sheet_to_json { header: 1 })
-export function parseTrainingSheet(rows: unknown[][]): ParsedTrainingSheet | null {
+// singleTraining: jenis training untuk file satu-training (kolom "Tanggal Training"), mis. 'bs' untuk Basic Safety
+export function parseTrainingSheet(rows: unknown[][], options: { singleTraining?: TrainingKey | null } = {}): ParsedTrainingSheet | null {
   // Cari baris header (baris yang memuat kolom NIK) di 15 baris pertama
   const headerIdx = rows.slice(0, 15).findIndex(r => Array.isArray(r) && r.some(c => normalizeHeader(c) === 'nik'));
   if (headerIdx < 0) return null;
 
   const headers = rows[headerIdx].map(normalizeHeader);
+  const isSingleTraining = headers.some(h => GENERIC_DATE_HEADERS.has(h)) && !headers.some(h => TRAINING_ALIASES[h]);
+  if (isSingleTraining && !options.singleTraining) {
+    // Format dikenali, tapi jenis trainingnya harus dipilih dulu
+    return { programs: [], records: [], skipped: 0, singleTraining: null };
+  }
+
   const columns: ColumnDef[] = [];
   let current: DateKey | null = null;
   headers.forEach((h, i) => {
     if (!h) { columns[i] = null; return; }
+    if (isSingleTraining && GENERIC_DATE_HEADERS.has(h)) {
+      // Tanggal training generik → milik training yang dipilih; PRE/POST/Ket sesudahnya ikut training ini
+      current = options.singleTraining!;
+      columns[i] = { kind: 'sub', sub: 'tgl', key: current };
+      return;
+    }
     // Nama training dicek lebih dulu (mis. "INSPEKSI" bukan sub-kolom "INS")
     const training = TRAINING_ALIASES[h];
     if (training) {
@@ -252,11 +296,13 @@ export function parseTrainingSheet(rows: unknown[][]): ParsedTrainingSheet | nul
     columns[i] = sub && current ? { kind: 'sub', sub, key: current } : null;
   });
 
+  const trainingKeys = isSingleTraining
+    ? [options.singleTraining!]
+    : Array.from(new Set(columns.flatMap(c => (c?.kind === 'training' ? [c.key] : []))));
   const programs: TrainingProgram[] = [];
-  if (columns.some(c => c?.kind === 'training' && SAP_KEYS.has(c.key))) programs.push('sap');
-  if (columns.some(c => c?.kind === 'training' && K3_KEYS.has(c.key))) programs.push('k3');
+  if (trainingKeys.some(k => SAP_KEYS.has(k))) programs.push('sap');
+  if (trainingKeys.some(k => K3_KEYS.has(k))) programs.push('k3');
   if (programs.length === 0) return null;
-  const trainingKeys = Array.from(new Set(columns.flatMap(c => (c?.kind === 'training' ? [c.key] : []))));
   // Detail skor hanya ada di format Monitoring; format lain tidak boleh menghapus detail yang sudah tersimpan
   const hasScoreColumns = columns.some(c => c?.kind === 'sub' && c.sub !== 'tgl' && c.sub !== 'status' && SAP_KEYS.has(c.key));
 
@@ -315,5 +361,5 @@ export function parseTrainingSheet(rows: unknown[][]): ParsedTrainingSheet | nul
     }
     records.push(rec as ParsedTrainingRow);
   }
-  return { programs, records, skipped };
+  return { programs, records, skipped, singleTraining: isSingleTraining ? options.singleTraining : undefined };
 }
