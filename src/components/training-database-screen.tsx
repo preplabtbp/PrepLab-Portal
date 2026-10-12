@@ -32,10 +32,11 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  ArcElement,
   Tooltip,
   Legend,
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Doughnut } from 'react-chartjs-2';
 import { Input, Select, Textarea, Button } from './ui';
 import {
   SAP_TRAININGS,
@@ -66,7 +67,7 @@ import {
 } from '../utils/training-import';
 import type { Plugin } from 'chart.js';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 // Opsi plugin label batang kustom (lihat barPercentLabels)
 declare module 'chart.js' {
@@ -74,6 +75,17 @@ declare module 'chart.js' {
     barPercentLabels?: { mode?: 'percent' | 'count' };
   }
 }
+
+// Palet dashboard (teal gelap sebagai warna utama, kuning & coral sebagai aksen)
+const DASH = {
+  bg: '#eef1f0',
+  brand: '#0f5b52',
+  brandSoft: '#e3f0ed',
+  yellow: '#f5c451',
+  coral: '#f08a6c',
+  mint: '#4fd1c1',
+  ink: '#0f172a',
+};
 
 // Warna status: WARNING kuning, EXPIRED merah, Belum merah muda, Tidak Wajib abu-abu
 const CHART_WARNING = '#facc15';
@@ -368,6 +380,58 @@ async function fetchTrainingRecords(): Promise<TrainingPayload> {
   };
 }
 
+// ===== Komponen tampilan dashboard =====
+function DashCard({ className = '', children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <div className={`rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-white dark:border-slate-800 p-4 sm:p-5 min-w-0 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function DashTitle({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-2 mb-3">
+      <div className="min-w-0">
+        <h3 className="text-[15px] font-bold tracking-tight text-slate-900 dark:text-slate-100">{title}</h3>
+        {sub && <p className="text-[11px] font-medium text-slate-500">{sub}</p>}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+// Ring progres (seperti kartu "Traffic Effectives")
+function ProgressRing({ value, color, label }: { value: number; color: string; label: string }) {
+  const r = 30;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="flex flex-col items-center gap-1.5 min-w-0">
+      <div className="relative w-[76px] h-[76px]">
+        <svg viewBox="0 0 76 76" className="w-full h-full -rotate-90">
+          <circle cx="38" cy="38" r={r} fill="none" stroke="#eef1f0" strokeWidth="7" />
+          <circle cx="38" cy="38" r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+            strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(value, 100) / 100)} style={{ transition: 'stroke-dashoffset .6s ease' }} />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-slate-900 dark:text-slate-100">{value}%</span>
+      </div>
+      <span className="text-[11px] font-semibold text-slate-500 text-center leading-tight">{label}</span>
+    </div>
+  );
+}
+
+// Batang mini tren bulanan (seperti grafik kecil di kartu iklan)
+function SparkBars({ values, color }: { values: number[]; color: string }) {
+  const max = Math.max(1, ...values);
+  return (
+    <div className="flex items-end gap-[3px] h-9" aria-hidden="true">
+      {values.map((v, i) => (
+        <span key={i} className="w-[6px] rounded-full" style={{ height: `${Math.max(14, (v / max) * 100)}%`, backgroundColor: color, opacity: v ? 1 : 0.25 }} />
+      ))}
+    </div>
+  );
+}
+
 // ===== Tampilan "Training Saya" — untuk karyawan tanpa akses penuh (hanya data milik sendiri) =====
 const SAP_STATE_META: Record<SapState, { label: string; cls: string }> = {
   done: { label: 'Berlaku', cls: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
@@ -380,9 +444,9 @@ const SAP_STATE_META: Record<SapState, { label: string; cls: string }> = {
 
 function MyTrainingSection({ title, subtitle, icon, children }: { title: string; subtitle?: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border shadow-xs overflow-hidden" style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}>
+    <section className="rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-100">
-        <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-700 flex items-center justify-center shrink-0">{icon}</div>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>{icon}</div>
         <div className="min-w-0">
           <h3 className="text-sm font-black text-slate-950 leading-tight">{title}</h3>
           {subtitle && <p className="text-[11px] font-semibold text-slate-500">{subtitle}</p>}
@@ -415,7 +479,7 @@ function MyTrainingView({ record, name, onBack }: { record: TrainingRecord | nul
   const p = record?.popData;
 
   return (
-    <div className="min-h-screen pb-24 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-main, #f8fafc)' }}>
+    <div className="min-h-screen pb-24 transition-colors duration-200" style={{ backgroundColor: DASH.bg }}>
       <div className="max-w-2xl mx-auto px-3 sm:px-6 py-4 space-y-4">
         {/* Profil */}
         <div className="flex items-center gap-3">
@@ -424,7 +488,7 @@ function MyTrainingView({ record, name, onBack }: { record: TrainingRecord | nul
               <ArrowLeft className="w-4 h-4 text-slate-700" />
             </button>
           )}
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shrink-0">
+          <div className="w-11 h-11 rounded-full flex items-center justify-center text-white shrink-0" style={{ backgroundColor: DASH.brand }}>
             <GraduationCap className="w-5 h-5" />
           </div>
           <div className="min-w-0">
@@ -441,7 +505,7 @@ function MyTrainingView({ record, name, onBack }: { record: TrainingRecord | nul
           </div>
         ) : (
           <>
-            <div className="rounded-2xl border shadow-xs p-4 grid grid-cols-2 gap-3" style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}>
+            <div className="rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 grid grid-cols-2 gap-3">
               {[
                 ['NIK', record.nik],
                 ['Jabatan', record.jabatan || '-'],
@@ -564,7 +628,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [ptFilter, setPtFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [missingFilter, setMissingFilter] = useState<string | null>(null);
-  const [chartMode, setChartMode] = useState<'status' | 'monthly'>('status');
+  // Kartu analitik utama: pilihan tampilan diagram
+  const [analyticsView, setAnalyticsView] = useState<'pencapaian' | 'peserta' | 'status' | 'tren'>('pencapaian');
   // Tampilan HP: diagram & filter lanjutan dilipat agar ringkas
   const [showCharts, setShowCharts] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -720,6 +785,59 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           { label: 'Belum', data: rows.map(r => 100 - r.pct), backgroundColor: '#e2e8f0', borderRadius: 4, barThickness: 16 },
         ],
       },
+    };
+  }, [records]);
+
+  // ===== Data kartu dashboard: komposisi status SAP, ring per program, mini tren per program =====
+  const dashboard = useMemo(() => {
+    const sapPeople = records.filter(r => r.inSap);
+    const k3People = records.filter(r => r.inK3);
+    const popPeople = records.filter(r => r.inPop);
+
+    // Komposisi status seluruh training SAP yang WAJIB (per item training)
+    const pie = { done: 0, warning: 0, expired: 0, none: 0 };
+    sapPeople.forEach(r => sapRequiredKeys(r).forEach(k => {
+      const s = sapState(r, k, SAP_TRAININGS.find(t => t.key === k)!.statusKey);
+      if (s === 'done') pie.done++;
+      else if (s === 'warning') pie.warning++;
+      else if (s === 'expired' || s === 'failed') pie.expired++;
+      else if (s === 'none') pie.none++;
+    }));
+
+    const sapComplete = sapPeople.filter(isSapComplete).length;
+    const sapWarningPeople = sapPeople.filter(r => sapHasState(r, ['warning'])).length;
+    const sapExpiredPeople = sapPeople.filter(r => sapHasState(r, ['expired', 'failed'])).length;
+    const k3Attended = k3People.filter(r => k3PassCount(r) > 0).length;
+    const popWajib = popPeople.filter(r => r.popData?.popKeterangan !== 'TIDAK_WAJIB');
+    const popDone = popWajib.filter(r => popAttendedPop(r.popData)).length;
+    const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+
+    // Mini tren: jumlah training per bulan, 8 bulan terakhir
+    const months: string[] = [];
+    const [ty, tm] = TODAY.split('-').map(Number);
+    for (let i = 7; i >= 0; i--) {
+      const total = ty * 12 + (tm - 1) - i;
+      months.push(`${Math.floor(total / 12)}-${String(total % 12 + 1).padStart(2, '0')}`);
+    }
+    const spark = (dates: (string | null | undefined)[]) => months.map(m => dates.filter(d => d && d.startsWith(m)).length);
+    const latestOf = (dates: (string | null | undefined)[]) => dates.reduce<string>((acc, d) => (d && d > acc ? d : acc), '');
+    const sapDates = sapPeople.flatMap(r => SAP_TRAININGS.map(t => (r[t.statusKey] === 'FAIL' ? null : r[t.key])));
+    const k3Dates = k3People.flatMap(r => K3_TRAININGS.map(t => (k3State(r, t.key, t.statusKey) === 'PASS' ? r[t.key] : null)));
+    const popDates = popPeople.map(r => r.popData?.praPop);
+
+    return {
+      pie,
+      sap: { total: sapPeople.length, complete: sapComplete, warning: sapWarningPeople, expired: sapExpiredPeople, pct: pct(sapComplete, sapPeople.length) },
+      rings: [
+        { key: 'sap', label: 'SAP Lengkap', value: pct(sapComplete, sapPeople.length), color: DASH.brand },
+        { key: 'k3', label: 'K3 Diikuti', value: pct(k3Attended, k3People.length), color: DASH.yellow },
+        { key: 'pop', label: 'POP Wajib', value: pct(popDone, popWajib.length), color: DASH.mint },
+      ],
+      programs: [
+        { key: 'sap' as const, label: 'Training SAP', sub: '6 jenis training · berlaku 2 th', count: sapPeople.length, metric: `${sapComplete} lengkap`, spark: spark(sapDates), latest: latestOf(sapDates) },
+        { key: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · CS · Fire Fighting', count: k3People.length, metric: `${k3Attended} telah ikut`, spark: spark(k3Dates), latest: latestOf(k3Dates) },
+        { key: 'pop' as const, label: 'Sertifikasi POP/POM', sub: 'Pra POP · POP · POM', count: popPeople.length, metric: `${popDone} telah POP`, spark: spark(popDates), latest: latestOf(popDates) },
+      ],
     };
   }, [records]);
 
@@ -1226,34 +1344,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     );
   };
 
-  const selectClass = 'px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-500 cursor-pointer';
+  const selectClass = 'px-3 py-2 rounded-full border border-slate-200 bg-slate-50 dark:bg-slate-800 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-600/20 cursor-pointer';
   const cardStyle = { backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' };
-
-  const kpiCards = program === 'sap'
-    ? [
-        { label: 'Total Personel', value: stats.total, sub: 'Peserta Training SAP', icon: <Users className="w-4 h-4" />, tone: 'bg-indigo-500/10 text-indigo-700' },
-        { label: 'Training Lengkap', value: stats.cardA, sub: `${stats.total ? Math.round((stats.cardA / stats.total) * 100) : 0}% sudah memenuhi target`, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'bg-emerald-500/10 text-emerald-700' },
-        { label: 'Belum Lengkap', value: stats.cardB, sub: 'Masih ada training wajib kosong', icon: <AlertCircle className="w-4 h-4" />, tone: 'bg-amber-500/10 text-amber-700' },
-        { label: 'Training Terakhir', value: stats.latest ? formatTrainingDate(stats.latest) : '-', sub: 'Tanggal training terbaru', icon: <CalendarCheck className="w-4 h-4" />, tone: 'bg-violet-500/10 text-violet-700' },
-      ]
-    : program === 'k3'
-    ? [
-        { label: 'Total Personel', value: stats.total, sub: 'Peserta Training K3', icon: <Users className="w-4 h-4" />, tone: 'bg-indigo-500/10 text-indigo-700' },
-        { label: 'Sudah Training', value: stats.cardA, sub: 'Minimal 1 training PASS', icon: <CheckCircle2 className="w-4 h-4" />, tone: 'bg-emerald-500/10 text-emerald-700' },
-        { label: 'Status Pending', value: stats.cardB, sub: 'Menunggu hasil / sertifikat', icon: <Clock className="w-4 h-4" />, tone: 'bg-amber-500/10 text-amber-700' },
-        { label: 'Training Terakhir', value: stats.latest ? formatTrainingDate(stats.latest) : '-', sub: 'Tanggal training terbaru', icon: <CalendarCheck className="w-4 h-4" />, tone: 'bg-violet-500/10 text-violet-700' },
-      ]
-    : [
-        { label: 'Total Personel', value: stats.total, sub: 'Terdata Sertifikasi POP/POM', icon: <Users className="w-4 h-4" />, tone: 'bg-indigo-500/10 text-indigo-700' },
-        { label: 'Telah Pra POP', value: stats.coverage[0]?.done ?? 0, sub: 'Mengikuti Pra Pengawas Operasional', icon: <ClipboardCheck className="w-4 h-4" />, tone: 'bg-sky-500/10 text-sky-700' },
-        { label: 'Telah POP', value: stats.cardA, sub: `${stats.coverage[2]?.done ?? 0} orang lulus POM`, icon: <Award className="w-4 h-4" />, tone: 'bg-violet-500/10 text-violet-700' },
-        { label: 'Memenuhi Syarat POP', value: stats.cardB, sub: 'Pendidikan & masa kerja terpenuhi', icon: <CheckCircle2 className="w-4 h-4" />, tone: 'bg-emerald-500/10 text-emerald-700' },
-      ];
 
   // Hak akses belum diketahui → tampilkan kerangka saja (data akses penuh tidak boleh berkedip ke akun biasa)
   if (!payload) {
     return (
-      <div className="min-h-screen px-3 sm:px-6 py-5" style={{ backgroundColor: 'var(--bg-main, #f8fafc)' }}>
+      <div className="min-h-screen px-3 sm:px-6 py-5" style={{ backgroundColor: DASH.bg }}>
         <div className="max-w-2xl mx-auto space-y-3" aria-busy="true" aria-label="Memuat Database Training">
           <div className="h-11 w-48 rounded-xl bg-slate-200 animate-pulse" />
           {Array.from({ length: 5 }).map((_, i) => (
@@ -1270,62 +1367,64 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     return <MyTrainingView record={own} name={inspectorName} onBack={onBack} />;
   }
 
+  const tableCardCls = 'rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-white dark:border-slate-800 p-3 sm:p-5 min-w-0';
+  const pieTotal = dashboard.pie.done + dashboard.pie.warning + dashboard.pie.expired + dashboard.pie.none;
+  const pieRows = [
+    { label: 'Berlaku', value: dashboard.pie.done, color: DASH.brand },
+    { label: 'Warning', value: dashboard.pie.warning, color: DASH.yellow },
+    { label: 'Expired', value: dashboard.pie.expired, color: DASH.coral },
+    { label: 'Belum', value: dashboard.pie.none, color: '#cbd5e1' },
+  ];
+  const analyticsOptions = [
+    { id: 'pencapaian' as const, label: 'Pencapaian SAP (%)' },
+    { id: 'peserta' as const, label: 'Jumlah Peserta K3 & POP' },
+    { id: 'status' as const, label: `Status ${programLabel}` },
+    { id: 'tren' as const, label: `Tren Bulanan ${programLabel}` },
+  ];
+
   return (
-    <div className="min-h-screen pb-16 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-main, #f8fafc)' }}>
-      {/* Header Toolbar */}
-      <div
-        className="md:sticky md:top-[57px] z-20 border-b backdrop-blur-md px-3 sm:px-6 py-3 sm:py-3.5 transition-colors"
-        style={{ backgroundColor: 'var(--header-bg, rgba(255, 255, 255, 0.95))', borderColor: 'var(--border-main, #cbd5e1)' }}
-      >
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-2.5 md:gap-3.5">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+    <div className="min-h-screen pb-16 transition-colors duration-200" style={{ backgroundColor: DASH.bg }}>
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-3 sm:space-y-4">
+        {/* ===== Top bar ===== */}
+        <div className="rounded-[26px] bg-white dark:bg-slate-900 px-3 sm:px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="flex items-center gap-3 min-w-0">
             {onBack && (
-              <button
-                type="button"
-                onClick={onBack}
-                className="p-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 transition-all cursor-pointer active:scale-95"
-                title="Kembali"
-              >
+              <button type="button" onClick={onBack} className="p-2 rounded-full border border-slate-200 hover:bg-slate-50 cursor-pointer active:scale-95" title="Kembali">
                 <ArrowLeft className="w-4 h-4 text-slate-700" />
               </button>
             )}
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0" style={{ backgroundColor: DASH.brand }}>
               <GraduationCap className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-950">Database Training</h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-indigo-500/15 text-slate-950 border border-indigo-500/30">
-                  {stats.total} Personel
-                </span>
-                {isFetching && !isLoading && (
-                  <span title="Memperbarui data..."><Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" /></span>
-                )}
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">Database Training</h1>
+                {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" aria-label="Memperbarui data" />}
               </div>
-              <p className="hidden sm:block text-xs font-semibold text-slate-700">Rekap Training SAP, Training K3 & Sertifikasi POP/POM per karyawan</p>
+              <p className="text-[11px] sm:text-xs font-medium text-slate-500 truncate">Halo, {inspectorName || 'Admin'} · Rekap Training SAP, K3 & Sertifikasi POP/POM</p>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             {canManage && (
               <>
                 <button
                   type="button"
                   onClick={openCreateModal}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition-all cursor-pointer active:scale-95"
+                  className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-white font-semibold text-xs transition-all cursor-pointer active:scale-95 hover:opacity-90"
+                  style={{ backgroundColor: DASH.brand }}
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Tambah Data</span>
+                  Tambah Data
                 </button>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isImporting}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100 text-xs font-bold transition-all cursor-pointer shadow-2xs text-slate-950 disabled:opacity-60"
-                  title="Import data training dari Excel / CSV (format Training SAP atau Training K3 terdeteksi otomatis)"
+                  className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 cursor-pointer disabled:opacity-60"
+                  title="Import data training dari Excel / CSV (format terdeteksi otomatis)"
                 >
-                  {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-700" /> : <Upload className="w-3.5 h-3.5 text-indigo-700" />}
-                  <span className="hidden sm:inline">Import Excel/CSV</span>
+                  {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Import
                 </button>
                 <input
                   ref={fileInputRef}
@@ -1336,284 +1435,320 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 />
               </>
             )}
-            <button
-              type="button"
-              onClick={handleExportCSV}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold transition-all cursor-pointer shadow-2xs text-slate-950"
-              title="Ekspor data tab aktif (sesuai filter) ke CSV"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-700" />
-              <span className="hidden sm:inline">Ekspor CSV</span>
-            </button>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
-        {/* Di HP diagram disembunyikan dulu agar daftar karyawan cepat terjangkau (tombol "Tampilkan Diagram") */}
-        <div className={`${showCharts ? 'grid' : 'hidden'} md:grid grid-cols-1 xl:grid-cols-2 gap-4`}>
-        {/* Diagram Pencapaian Training SAP (%) */}
-        {achievement && (
-          <div className="p-4 rounded-2xl border shadow-xs" style={cardStyle}>
-            <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-indigo-600" />
-                <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Pencapaian Training SAP</h3>
-                  <p className="text-[10px] font-semibold text-slate-500">Persentase personel wajib yang training-nya masih berlaku</p>
-                </div>
+        {/* ===== Baris 1: Overview · Status SAP · Ring program ===== */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
+          <DashCard className="lg:col-span-4">
+            <DashTitle title="Training Overview" />
+            <div className="flex items-end justify-between gap-3">
+              <div className="flex items-end gap-2">
+                <span className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{records.length}</span>
+                <span className="text-xs font-medium text-slate-500 leading-tight pb-1">Personel<br />Terdata</span>
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-black font-mono leading-none" style={{ color: achievementColor(achievement.totalPct) }}>
-                  {achievement.totalPct}%
-                </div>
-                <p className="text-[10px] font-bold text-slate-500 mt-0.5">Total pencapaian</p>
-              </div>
-            </div>
-            <div style={{ height: achievement.rows.length * 26 + 20 }}>
-              <Bar
-                data={achievement.chart}
-                plugins={[achievementLabels]}
-                options={{
-                  indexAxis: 'y',
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      filter: item => item.datasetIndex === 0,
-                      callbacks: {
-                        label: ctx => {
-                          const row = achievement.rows[ctx.dataIndex];
-                          return ` ${row.pct}% — ${row.done} dari ${row.target} personel`;
-                        },
-                      },
-                    },
-                  },
-                  scales: {
-                    x: { stacked: true, min: 0, max: 100, ticks: { callback: v => `${v}%`, font: { size: 10 }, stepSize: 25 }, grid: { color: '#f1f5f9' } },
-                    y: {
-                      stacked: true,
-                      grid: { display: false },
-                      ticks: { font: ctx => ({ size: 11, weight: ctx.index === achievement.rows.length - 1 ? 'bold' : 'normal' }) },
-                    },
-                  },
-                }}
-              />
-            </div>
-            <p className="mt-2 text-[10px] font-semibold text-slate-500">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1" />≥ 90%
-              <span className="inline-block w-2 h-2 rounded-full bg-amber-500 ml-3 mr-1" />70–89%
-              <span className="inline-block w-2 h-2 rounded-full bg-rose-500 ml-3 mr-1" />&lt; 70%
-              <span className="ml-3">· Dihitung dari personel yang wajib (per GOL).</span>
-            </p>
-          </div>
-        )}
-
-        {/* Jumlah Karyawan yang Telah Mengikuti (Training K3 & Sertifikasi POP — tanpa masa berlaku) */}
-        {participation && (
-          <div className="p-4 rounded-2xl border shadow-xs" style={cardStyle}>
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-teal-600" />
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Jumlah Karyawan Telah Mengikuti</h3>
-                <p className="text-[10px] font-semibold text-slate-500">Training K3 & Sertifikasi POP/POM — tanpa masa berlaku</p>
-              </div>
-            </div>
-            <div style={{ height: participation.rows.length * 26 + 20 }}>
-              <Bar
-                data={participation.chart}
-                plugins={[countEndLabels]}
-                options={{
-                  indexAxis: 'y',
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: ctx => {
-                          const row = participation.rows[ctx.dataIndex];
-                          return ` ${row.count} orang telah mengikuti${row.pending ? ` · ${row.pending} pending` : ''}`;
-                        },
-                      },
-                    },
-                  },
-                  scales: {
-                    x: { beginAtZero: true, grace: '12%', ticks: { precision: 0, font: { size: 10 } }, grid: { color: '#f1f5f9' } },
-                    y: { grid: { display: false }, ticks: { font: { size: 11 } } },
-                  },
-                }}
-              />
-            </div>
-            <p className="mt-2 text-[10px] font-semibold text-slate-500">
-              <span className="inline-block w-2 h-2 rounded-full bg-teal-600 mr-1" />Training K3
-              <span className="inline-block w-2 h-2 rounded-full bg-violet-600 ml-3 mr-1" />Sertifikasi POP/POM
-            </p>
-          </div>
-        )}
-        </div>
-
-        {/* Tab Program */}
-        {/* HP: 3 tab sejajar dengan label ringkas; desktop: label lengkap + keterangan */}
-        <div className="grid grid-cols-3 sm:flex gap-1 sm:gap-2 p-1 rounded-2xl border w-full sm:w-fit" style={cardStyle}>
-          {([
-            { id: 'sap' as const, label: 'Training SAP', short: 'SAP', sub: 'HAZID · JSA · IUT OTT · IAI · BFA · Basic Safety', icon: <ClipboardCheck className="w-4 h-4 shrink-0" /> },
-            { id: 'k3' as const, label: 'Training K3', short: 'K3', sub: 'WAH · LOTO · Confined Space · Fire Fighting', icon: <HardHat className="w-4 h-4 shrink-0" /> },
-            { id: 'pop' as const, label: 'Sertifikasi POP/POM', short: 'POP/POM', sub: 'Pra POP · POP · POM · Kualifikasi', icon: <Award className="w-4 h-4 shrink-0" /> },
-          ]).map(tab => {
-            const active = program === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => switchProgram(tab.id)}
-                className={`flex flex-col sm:flex-row items-center sm:items-center gap-1 sm:gap-2.5 px-2 sm:px-3.5 py-2 rounded-xl text-center sm:text-left transition-all cursor-pointer ${active ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25' : 'hover:bg-slate-100 text-slate-800'}`}
-              >
-                {tab.icon}
-                <div className="min-w-0">
-                  <div className="flex items-center justify-center sm:justify-start gap-1.5">
-                    <span className="text-xs font-black sm:hidden">{tab.short}</span>
-                    <span className="text-xs font-black hidden sm:inline">{tab.label}</span>
-                    <span className={`text-[10px] font-mono font-black px-1.5 rounded-full ${active ? 'bg-white/20' : 'bg-slate-200 text-slate-700'}`}>{programCounts[tab.id]}</span>
-                  </div>
-                  <p className={`hidden sm:block text-[10px] font-semibold truncate ${active ? 'text-indigo-100' : 'text-slate-500'}`}>{tab.sub}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-          {kpiCards.map(card => (
-            <div key={card.label} className="p-3 sm:p-4 rounded-2xl border shadow-xs min-w-0" style={cardStyle}>
-              <div className="flex items-start justify-between gap-1.5">
-                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-900 leading-tight">{card.label}</span>
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${card.tone}`}>{card.icon}</div>
-              </div>
-              <div className={`mt-1.5 sm:mt-2 font-black font-mono tracking-tight text-slate-950 ${typeof card.value === 'number' ? 'text-xl sm:text-3xl' : 'text-sm sm:text-lg'}`}>
-                {card.value}
-              </div>
-              <p className="text-[10px] text-slate-600 font-semibold mt-1 leading-snug">{card.sub}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* HP: tombol buka/tutup diagram & cakupan */}
-        <button
-          type="button"
-          onClick={() => setShowCharts(v => !v)}
-          className="md:hidden w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border shadow-xs text-xs font-black text-slate-800 cursor-pointer active:scale-[0.99]"
-          style={cardStyle}
-          aria-expanded={showCharts}
-        >
-          <span className="flex items-center gap-2"><BarChart3 className="w-4 h-4 text-indigo-600" />{showCharts ? 'Sembunyikan Diagram & Cakupan' : 'Tampilkan Diagram & Cakupan'}</span>
-          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showCharts ? 'rotate-180' : ''}`} />
-        </button>
-
-        <div className={`${showCharts ? 'grid' : 'hidden'} md:grid grid-cols-1 xl:grid-cols-5 gap-4`}>
-          {/* Diagram Training */}
-          <div className="xl:col-span-3 p-4 rounded-2xl border shadow-xs min-w-0" style={cardStyle}>
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-indigo-600" />
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Diagram {programLabel}</h3>
-              </div>
-              <div className="flex p-0.5 rounded-lg bg-slate-100 border border-slate-200">
-                {([['status', 'Status per Training'], ['monthly', 'Tren per Bulan']] as const).map(([mode, label]) => (
+              <div className="flex items-center gap-1.5">
+                {([
+                  { id: 'sap' as const, icon: <ClipboardCheck className="w-4 h-4" />, title: 'Training SAP' },
+                  { id: 'k3' as const, icon: <HardHat className="w-4 h-4" />, title: 'Training K3' },
+                  { id: 'pop' as const, icon: <Award className="w-4 h-4" />, title: 'Sertifikasi POP/POM' },
+                ]).map(p => (
                   <button
-                    key={mode}
+                    key={p.id}
                     type="button"
-                    onClick={() => setChartMode(mode)}
-                    className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${chartMode === mode ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600'}`}
+                    onClick={() => switchProgram(p.id)}
+                    title={`${p.title} · ${programCounts[p.id]} personel`}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all cursor-pointer ${program === p.id ? 'text-white border-transparent' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                    style={program === p.id ? { backgroundColor: DASH.brand } : undefined}
                   >
-                    {label}
+                    {p.icon}
                   </button>
                 ))}
               </div>
             </div>
-            <div className="h-64">
-              {(chartMode === 'status' ? statusChartData : monthlyChartData) ? (
+            <p className="mt-3 text-xs font-semibold flex flex-wrap gap-x-3 gap-y-1">
+              <span style={{ color: DASH.brand }}>{dashboard.sap.complete} Lengkap</span>
+              <span className="text-yellow-600">{dashboard.sap.warning} Warning</span>
+              <span style={{ color: DASH.coral }}>{dashboard.sap.expired} Expired</span>
+              <span className="text-slate-500">{dashboard.sap.pct}% SAP terpenuhi</span>
+            </p>
+            <div className="relative mt-3">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Cari karyawan..."
+                className="w-full pl-10 pr-3 py-2.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-base sm:text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+              />
+            </div>
+          </DashCard>
+
+          <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+            <DashTitle title="Status Training SAP" sub="Seluruh training wajib (per GOL)" />
+            <div className="flex items-center gap-4">
+              <div className="w-[120px] h-[120px] shrink-0">
+                {pieTotal > 0 && (
+                  <Doughnut
+                    data={{
+                      labels: pieRows.map(r => r.label),
+                      datasets: [{ data: pieRows.map(r => r.value), backgroundColor: pieRows.map(r => r.color), borderColor: '#ffffff', borderWidth: 3, hoverOffset: 6 }],
+                    }}
+                    options={{
+                      cutout: '0%',
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} (${Math.round((Number(ctx.parsed) / pieTotal) * 100)}%)` } },
+                      },
+                    }}
+                  />
+                )}
+              </div>
+              <ul className="space-y-2 min-w-0 flex-1">
+                {pieRows.map(r => (
+                  <li key={r.label} className="flex items-start gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full mt-1 shrink-0" style={{ backgroundColor: r.color }} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-tight">{r.label}</p>
+                      <p className="text-[11px] text-slate-500">{r.value} training · {pieTotal ? Math.round((r.value / pieTotal) * 100) : 0}%</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </DashCard>
+
+          <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+            <DashTitle
+              title="Efektivitas Program"
+              right={
+                <div className="flex flex-wrap justify-end gap-x-2.5 gap-y-1 text-[10px] font-semibold text-slate-500">
+                  {dashboard.rings.map(r => (
+                    <span key={r.key} className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: r.color }} />{r.key.toUpperCase()}</span>
+                  ))}
+                </div>
+              }
+            />
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {dashboard.rings.map(r => <ProgressRing key={r.key} value={r.value} color={r.color} label={r.label} />)}
+            </div>
+          </DashCard>
+        </div>
+
+        {/* HP: tombol buka/tutup diagram */}
+        <button
+          type="button"
+          onClick={() => setShowCharts(v => !v)}
+          className="md:hidden w-full flex items-center justify-between px-4 py-3 rounded-full bg-white text-xs font-semibold text-slate-800 cursor-pointer active:scale-[0.99] shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+          aria-expanded={showCharts}
+        >
+          <span className="flex items-center gap-2"><BarChart3 className="w-4 h-4" style={{ color: DASH.brand }} />{showCharts ? 'Sembunyikan Diagram & Analitik' : 'Tampilkan Diagram & Analitik'}</span>
+          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showCharts ? 'rotate-180' : ''}`} />
+        </button>
+
+        {/* ===== Baris 2: Kartu program · Analitik ===== */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
+          <div className="lg:col-span-4 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
+            {dashboard.programs.map(p => {
+              const active = program === p.key;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => switchProgram(p.key)}
+                  className={`text-left rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 p-3 lg:p-5 transition-all cursor-pointer border-2 ${active ? '' : 'border-white dark:border-slate-800 hover:border-slate-200'}`}
+                  style={active ? { borderColor: DASH.brand } : undefined}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center shrink-0" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>
+                        {p.key === 'sap' ? <ClipboardCheck className="w-4 h-4" /> : p.key === 'k3' ? <HardHat className="w-4 h-4" /> : <Award className="w-4 h-4" />}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] lg:text-[13px] font-semibold text-slate-900 dark:text-slate-100 leading-tight truncate">{p.label}</p>
+                        <p className="hidden lg:block text-[11px] text-slate-500 truncate">{p.sub}</p>
+                      </div>
+                    </div>
+                    {active && (
+                      <span className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: DASH.brand }} />Aktif
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 lg:mt-4 flex items-end justify-between gap-2">
+                    <div>
+                      <p className="text-2xl lg:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{p.count}</p>
+                      <p className="text-[10px] lg:text-xs text-slate-500">{p.metric}</p>
+                    </div>
+                    <div className="hidden lg:flex flex-col items-end gap-1">
+                      <SparkBars values={p.spark} color={DASH.brand} />
+                      <span className="text-[10px] text-slate-500">{p.latest ? formatTrainingDate(p.latest) : '-'}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <DashCard className={`lg:col-span-8 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
+            <DashTitle
+              title="Analitik Training"
+              sub={
+                analyticsView === 'pencapaian' && achievement ? `${achievement.totalPct}% total pencapaian Training SAP`
+                : analyticsView === 'peserta' ? 'Jumlah karyawan yang telah mengikuti — tanpa masa berlaku'
+                : analyticsView === 'status' ? (countOnly ? 'Jumlah peserta per training' : 'Komposisi status per training (persentase)')
+                : `Jumlah training per bulan${monthlyChartData?.truncated ? ` (${MONTHLY_CHART_MAX_MONTHS} bulan terakhir)` : ''}`
+              }
+              right={
+                <div className="relative">
+                  <select
+                    value={analyticsView}
+                    onChange={e => setAnalyticsView(e.target.value as typeof analyticsView)}
+                    className="appearance-none pl-3 pr-8 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-200 cursor-pointer focus:outline-none"
+                  >
+                    {analyticsOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              }
+            />
+            {/* Tinggi diagram mengikuti kolom kartu program di sebelahnya (min. 300px) */}
+            <div className="relative flex-1 min-h-[300px]">
+              <div className="absolute inset-0">
+              {analyticsView === 'pencapaian' && achievement && (
                 <Bar
-                  data={(chartMode === 'status' ? statusChartData : monthlyChartData)!}
+                  data={{
+                    ...achievement.chart,
+                    datasets: [
+                      { ...achievement.chart.datasets[0], backgroundColor: achievement.rows.map(r => (r.pct >= 90 ? DASH.brand : r.pct >= 70 ? DASH.yellow : DASH.coral)), borderRadius: 999, barThickness: 14 },
+                      { ...achievement.chart.datasets[1], backgroundColor: '#eef1f0', borderRadius: 999, barThickness: 14 },
+                    ],
+                  }}
+                  plugins={[achievementLabels]}
+                  options={{
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        filter: item => item.datasetIndex === 0,
+                        callbacks: { label: ctx => { const row = achievement.rows[ctx.dataIndex]; return ` ${row.pct}% — ${row.done} dari ${row.target} personel`; } },
+                      },
+                    },
+                    scales: {
+                      x: { stacked: true, min: 0, max: 100, ticks: { callback: v => `${v}%`, font: { size: 10 }, stepSize: 25 }, grid: { color: '#f1f5f9' }, border: { display: false } },
+                      y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: ctx => ({ size: 11, weight: ctx.index === achievement.rows.length - 1 ? 'bold' : 'normal' }) } },
+                    },
+                  }}
+                />
+              )}
+              {analyticsView === 'peserta' && participation && (
+                <Bar
+                  data={{
+                    ...participation.chart,
+                    datasets: [{ ...participation.chart.datasets[0], backgroundColor: participation.rows.map(r => (r.group === 'Training K3' ? DASH.brand : DASH.mint)), borderRadius: 999, barThickness: 14 }],
+                  }}
+                  plugins={[countEndLabels]}
+                  options={{
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: { callbacks: { label: ctx => { const row = participation.rows[ctx.dataIndex]; return ` ${row.count} orang telah mengikuti${row.pending ? ` · ${row.pending} pending` : ''}`; } } },
+                    },
+                    scales: {
+                      x: { beginAtZero: true, grace: '12%', ticks: { precision: 0, font: { size: 10 } }, grid: { color: '#f1f5f9' }, border: { display: false } },
+                      y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11 } } },
+                    },
+                  }}
+                />
+              )}
+              {(analyticsView === 'status' || analyticsView === 'tren') && (analyticsView === 'status' ? statusChartData : monthlyChartData) && (
+                <Bar
+                  data={(analyticsView === 'status' ? statusChartData : monthlyChartData)!}
                   plugins={[barPercentLabels]}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
-                      // K3 & POP: tampilkan jumlah orang (bukan persentase) pada diagram status
-                      barPercentLabels: { mode: countOnly && chartMode === 'status' ? 'count' : 'percent' },
-                      legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11, weight: 'bold' } } },
+                      barPercentLabels: { mode: countOnly && analyticsView === 'status' ? 'count' : 'percent' },
+                      legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } } },
                       tooltip: {
                         callbacks: {
                           label: ctx => {
-                            const total = ctx.chart.data.datasets.reduce((s, ds, i) =>
-                              s + (ctx.chart.isDatasetVisible(i) ? Number(ds.data[ctx.dataIndex]) || 0 : 0), 0);
-                            const pct = total ? Math.round((ctx.parsed.y / total) * 100) : 0;
-                            return ` ${ctx.dataset.label}: ${ctx.parsed.y} orang (${pct}%)`;
+                            const total = ctx.chart.data.datasets.reduce((s, ds, i) => s + (ctx.chart.isDatasetVisible(i) ? Number(ds.data[ctx.dataIndex]) || 0 : 0), 0);
+                            return ` ${ctx.dataset.label}: ${ctx.parsed.y} orang (${total ? Math.round((ctx.parsed.y / total) * 100) : 0}%)`;
                           },
                         },
                       },
                     },
                     scales: {
-                      x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' }, maxRotation: 0, autoSkip: true } },
-                      y: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: { size: 10 } }, title: { display: true, text: 'Jumlah personel', font: { size: 10 } } },
+                      x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true } },
+                      y: { stacked: true, beginAtZero: true, border: { display: false }, grid: { color: '#f1f5f9' }, ticks: { precision: 0, font: { size: 10 } } },
                     },
                   }}
                 />
-              ) : (
-                <div className="h-full flex items-center justify-center text-xs font-semibold text-slate-500">Belum ada data untuk ditampilkan</div>
               )}
+              {((analyticsView === 'pencapaian' && !achievement) || (analyticsView === 'peserta' && !participation)
+                || (analyticsView === 'status' && !statusChartData) || (analyticsView === 'tren' && !monthlyChartData)) && (
+                <div className="h-full flex items-center justify-center text-xs font-medium text-slate-500">Belum ada data untuk ditampilkan</div>
+              )}
+              </div>
             </div>
-            <p className="mt-2 text-[10px] font-semibold text-slate-500">
-              {chartMode === 'status'
-                ? countOnly
-                  ? 'Jumlah karyawan yang telah mengikuti tiap training (tanpa masa berlaku).'
-                  : 'Jumlah personel per status untuk setiap jenis training; angka di batang = persentase dari seluruh personel.'
-                : `Jumlah personel yang training per bulan${monthlyChartData?.truncated ? ` (${MONTHLY_CHART_MAX_MONTHS} bulan terakhir)` : ''}; angka di batang = porsi tiap training pada bulan tsb.`}
-              {program === 'k3' && chartMode === 'monthly' && ' Hanya status PASS yang dihitung.'}
-              {program === 'pop' && chartMode === 'monthly' && ' Berdasarkan tanggal Pra POP.'}
-            </p>
-          </div>
+          </DashCard>
+        </div>
 
-          {/* Cakupan per Jenis Training */}
-          <div className="xl:col-span-2 p-4 rounded-2xl border shadow-xs" style={cardStyle}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">{countOnly ? 'Jumlah Peserta per Training' : 'Cakupan per Training'}</h3>
-              <span className="text-[10px] font-semibold text-slate-500">{countOnly ? 'Klik untuk melihat pesertanya' : 'Klik untuk melihat yang belum'}</span>
-            </div>
+        {/* ===== Baris 3: Cakupan · Daftar Karyawan ===== */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 items-start">
+          <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+            <DashTitle
+              title={countOnly ? 'Jumlah Peserta per Training' : 'Cakupan per Training'}
+              sub={countOnly ? 'Klik untuk melihat pesertanya' : 'Klik untuk melihat yang belum berlaku'}
+            />
             <div className="space-y-2">
-              {countOnly && stats.coverage.map(c => {
-                // K3 & POP: cukup jumlah karyawan yang telah mengikuti
+              {stats.coverage.map(c => {
                 const active = missingFilter === c.key;
+                const pct = c.target ? Math.round((c.done / c.target) * 100) : 0;
                 return (
                   <button
                     key={c.key}
                     type="button"
                     onClick={() => setMissingFilter(active ? null : c.key)}
-                    className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${active ? 'border-teal-400 bg-teal-50 ring-2 ring-teal-300/40' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100'}`}
                     title={c.desc}
+                    className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition-all cursor-pointer border ${active ? 'border-transparent' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/60 dark:border-slate-700'}`}
+                    style={active ? { backgroundColor: DASH.brandSoft, borderColor: DASH.brand } : undefined}
                   >
-                    <div className="min-w-0">
-                      <span className="block text-xs font-black text-slate-950">{c.label}</span>
-                      <span className="block text-[10px] font-semibold text-slate-500 truncate">{c.desc}</span>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="block text-lg font-black font-mono leading-none text-slate-950">{c.done}</span>
-                      <span className="block text-[10px] font-bold text-slate-500">
-                        orang{c.pending > 0 ? ` · ${c.pending} pending` : ''}{c.expired > 0 ? ` · ${c.expired} fail` : ''}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{c.label}</span>
+                      <span className="text-[11px] font-semibold text-slate-600">
+                        {countOnly ? `${c.done} orang` : `${c.done}/${c.target} · ${pct}%`}
                       </span>
+                    </div>
+                    {!countOnly && (
+                      <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: pct >= 90 ? DASH.brand : pct >= 70 ? DASH.yellow : DASH.coral }} />
+                      </div>
+                    )}
+                    <div className="mt-1 flex flex-wrap gap-x-2.5 text-[10px] font-semibold text-slate-500">
+                      {!countOnly && c.target - c.done > 0 && <span className="text-rose-600">{c.target - c.done} belum berlaku</span>}
+                      {c.warning > 0 && <span className="text-yellow-600">{c.warning} warning</span>}
+                      {!countOnly && c.expired > 0 && <span className="text-red-600">{c.expired} expired/fail</span>}
+                      {c.pending > 0 && <span className="text-sky-600">{c.pending} pending</span>}
+                      {countOnly && c.expired > 0 && <span className="text-red-600">{c.expired} fail</span>}
+                      {c.exempt > 0 && <span>{c.exempt} tidak wajib</span>}
                     </div>
                   </button>
                 );
               })}
 
-              {/* POP: komposisi kualifikasi (Keterangan POP) — klik untuk filter */}
               {program === 'pop' && (
-                <div className="pt-2 mt-1 border-t border-slate-200">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-600 mb-1.5">Kualifikasi POP</p>
+                <div className="pt-2">
+                  <p className="text-[11px] font-semibold text-slate-600 mb-1.5">Kualifikasi POP</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => {
                       const n = programRecords.filter(r => r.popData?.popKeterangan === k).length;
@@ -1624,176 +1759,173 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                           type="button"
                           onClick={() => setStatusFilter(active ? 'ALL' : k)}
                           title={POP_KETERANGAN[k].desc}
-                          className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${active ? 'ring-2 ring-indigo-300/50 border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                          className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl border text-left cursor-pointer ${active ? 'border-transparent' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100'}`}
+                          style={active ? { backgroundColor: DASH.brandSoft, borderColor: DASH.brand } : undefined}
                         >
                           <span className="flex items-center gap-1.5 min-w-0">
                             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: POP_KETERANGAN_COLOR[k] }} />
-                            <span className="text-[10px] font-bold text-slate-800 truncate">{POP_KETERANGAN[k].label}</span>
+                            <span className="text-[10px] font-semibold text-slate-800 truncate">{POP_KETERANGAN[k].label}</span>
                           </span>
-                          <span className="text-xs font-black font-mono text-slate-950">{n}</span>
+                          <span className="text-xs font-bold text-slate-900">{n}</span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
               )}
+            </div>
+          </DashCard>
 
-              {!countOnly && stats.coverage.map(c => {
-                const pct = c.target ? Math.round((c.done / c.target) * 100) : 0;
-                const pendingPct = c.target ? Math.round((c.pending / c.target) * 100) : 0;
-                const missing = c.target - c.done;
-                const active = missingFilter === c.key;
-                return (
+          <div className="lg:col-span-8 min-w-0">
+          <div className={tableCardCls}>
+            {/* Header tabel: judul · tab program · Filter · Export */}
+            <div className="flex flex-col gap-3 mb-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-[15px] font-bold tracking-tight text-slate-900 dark:text-slate-100">Daftar Karyawan</h3>
+                  <p className="text-[11px] font-medium text-slate-500 truncate">{programLabel} · dikelompokkan per jabatan</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
                   <button
-                    key={c.key}
                     type="button"
-                    onClick={() => setMissingFilter(active ? null : c.key)}
-                    className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer ${active ? 'border-rose-400 bg-rose-50 ring-2 ring-rose-300/40' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100'}`}
-                    title={c.desc}
+                    onClick={() => setShowFilters(v => !v)}
+                    className={`relative inline-flex items-center gap-1.5 px-3 py-2 rounded-full border text-xs font-semibold cursor-pointer ${showFilters ? 'border-transparent text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+                    style={showFilters ? { backgroundColor: DASH.brand } : undefined}
+                    aria-expanded={showFilters}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-black text-slate-950">{c.label}</span>
-                      <span className="text-[10px] font-mono font-black text-slate-700">{c.done}/{c.target} · {pct}%</span>
-                    </div>
-                    <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden flex">
-                      <div className={`h-full ${pct === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
-                      {pendingPct > 0 && <div className="h-full bg-amber-400" style={{ width: `${pendingPct}%` }} />}
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-x-2.5 text-[10px] font-bold">
-                      <span className={missing > 0 ? 'text-rose-700' : 'text-emerald-700'}>{missing > 0 ? `${missing} belum berlaku` : 'Semua lengkap'}</span>
-                      {c.expired > 0 && <span className="text-red-700">{c.expired} expired/fail</span>}
-                      {c.warning > 0 && <span className="text-yellow-700">{c.warning} warning</span>}
-                      {c.pending > 0 && <span className="text-amber-700">{c.pending} pending</span>}
-                      {c.exempt > 0 && <span className="text-slate-500">{c.exempt} tidak wajib</span>}
-                    </div>
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    Filter
+                    {activeFilterCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center" style={{ backgroundColor: DASH.coral }}>{activeFilterCount}</span>
+                    )}
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+                  <button
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer"
+                    title="Ekspor data tab aktif (sesuai filter) ke CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Export</span>
+                  </button>
+                </div>
+              </div>
 
-        {/* Filter Bar */}
-        <div className="flex flex-col lg:flex-row lg:items-center gap-2.5">
-          <div className="flex items-center gap-2 flex-1">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Cari nama, NIK, jabatan..."
-                className="w-full pl-9 pr-3 py-2.5 md:py-2 rounded-xl border border-slate-300 bg-white text-base sm:text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-            {/* HP: filter lanjutan dilipat di balik tombol */}
-            <button
-              type="button"
-              onClick={() => setShowFilters(v => !v)}
-              className={`md:hidden relative inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs font-black cursor-pointer ${showFilters ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-800'}`}
-              aria-expanded={showFilters}
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              Filter
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 min-w-[18px] rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center">{activeFilterCount}</span>
-              )}
-            </button>
-          </div>
-          <div className={`${showFilters ? 'grid' : 'hidden'} grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center [&>select]:w-full md:[&>select]:w-auto`}>
-            <select value={golFilter} onChange={e => setGolFilter(e.target.value)} className={selectClass}>
-              <option value="ALL">Semua GOL</option>
-              {GOL_OPTIONS.map(g => <option key={g} value={g}>GOL {g}</option>)}
-            </select>
-            <select value={shiftFilter} onChange={e => setShiftFilter(e.target.value)} className={selectClass}>
-              <option value="ALL">Semua Shift</option>
-              {SHIFT_OPTIONS.map(s => <option key={s} value={s}>{s === 'Nonshift' ? 'Nonshift' : `Shift ${s}`}</option>)}
-            </select>
-            {bagianOptions.length > 0 && (
-              <select value={bagianFilter} onChange={e => setBagianFilter(e.target.value)} className={selectClass}>
-                <option value="ALL">Semua Bagian</option>
-                {bagianOptions.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
-            )}
-            {hasPtData && (
-              <select value={ptFilter} onChange={e => setPtFilter(e.target.value)} className={selectClass}>
-                <option value="ALL">Semua PT</option>
-                {PT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            )}
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={selectClass}>
-              <option value="ALL">Semua Status</option>
-              {program === 'sap' ? (
-                <>
-                  <option value="LENGKAP">Lengkap</option>
-                  <option value="BELUM">Belum Lengkap</option>
-                  <option value="EXPIRED">Ada Expired / Failed</option>
-                  <option value="WARNING">Ada Warning</option>
-                </>
-              ) : program === 'k3' ? (
-                <>
-                  <option value="SUDAH">Sudah Training (PASS)</option>
-                  <option value="PENDING">Ada Pending</option>
-                  <option value="BELUM">Belum Training</option>
-                </>
-              ) : (
-                <>
-                  {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => (
-                    <option key={k} value={k}>{POP_KETERANGAN[k].label}</option>
-                  ))}
-                  <option value="BELUM_POP">Wajib, Belum Ikut POP</option>
-                </>
-              )}
-            </select>
-            {hasActiveFilter && (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="col-span-2 md:col-span-1 inline-flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-800 cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Reset
-              </button>
-            )}
-          </div>
-        </div>
+              {/* Tab program */}
+              <div className="grid grid-cols-3 gap-1 p-1 rounded-full bg-slate-100 dark:bg-slate-800">
+                {([
+                  { id: 'sap' as const, label: 'Training SAP', short: 'SAP' },
+                  { id: 'k3' as const, label: 'Training K3', short: 'K3' },
+                  { id: 'pop' as const, label: 'Sertifikasi POP/POM', short: 'POP/POM' },
+                ]).map(tab => {
+                  const active = program === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => switchProgram(tab.id)}
+                      className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${active ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      <span className="sm:hidden">{tab.short}</span>
+                      <span className="hidden sm:inline">{tab.label}</span>
+                      <span className="text-[10px] font-bold px-1.5 rounded-full" style={active ? { backgroundColor: DASH.brandSoft, color: DASH.brand } : undefined}>{programCounts[tab.id]}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-        <p className="text-[11px] font-semibold text-slate-600 -mt-2">
-          Menampilkan <span className="font-black text-slate-900">{filteredRecords.length}</span> dari {stats.total} personel
-          {missingFilter && (countOnly
-            ? <> · telah mengikuti <span className="font-black text-teal-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>
-            : <> · belum <span className="font-black text-rose-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>)}
-          {/* Keterangan aturan: lengkap di desktop, diringkas di HP */}
-          {program === 'sap' && <span className="hidden md:inline">
-            {' · '}Wajib: GOL I → BFA & Basic Safety; GOL II–III → HAZID, JSA, IUT OTT, IAI, BFA; GOL IV–V → tanpa BFA
-            {' · '}Masa berlaku: <span className="font-black text-yellow-700">WARNING</span> ≥ {(TRAINING_WARNING_MONTHS / 12).toLocaleString('id-ID')} th, <span className="font-black text-red-700">EXPIRED</span> ≥ {(TRAINING_EXPIRY_MONTHS / 12).toLocaleString('id-ID')} th sejak tanggal training
-          </span>}
-          {program === 'sap' && <span className="md:hidden"> · <span className="font-black text-yellow-700">WARNING</span> ≥ 1,5 th · <span className="font-black text-red-700">EXPIRED</span> ≥ 2 th</span>}
-          {countOnly && <span className="hidden md:inline"> · Tanpa masa berlaku — dihitung jumlah karyawan yang telah mengikuti</span>}
-          {program === 'pop' && <span className="hidden md:inline"> · Masa kerja dihitung otomatis dari DOH</span>}
-        </p>
+              {/* Filter lanjutan */}
+              {showFilters && (
+                <div className="grid grid-cols-2 md:flex md:flex-wrap md:items-center gap-2 [&>select]:w-full md:[&>select]:w-auto">
+                  <select value={golFilter} onChange={e => setGolFilter(e.target.value)} className={selectClass}>
+                    <option value="ALL">Semua GOL</option>
+                    {GOL_OPTIONS.map(g => <option key={g} value={g}>GOL {g}</option>)}
+                  </select>
+                  <select value={shiftFilter} onChange={e => setShiftFilter(e.target.value)} className={selectClass}>
+                    <option value="ALL">Semua Shift</option>
+                    {SHIFT_OPTIONS.map(s => <option key={s} value={s}>{s === 'Nonshift' ? 'Nonshift' : `Shift ${s}`}</option>)}
+                  </select>
+                  {bagianOptions.length > 0 && (
+                    <select value={bagianFilter} onChange={e => setBagianFilter(e.target.value)} className={selectClass}>
+                      <option value="ALL">Semua Bagian</option>
+                      {bagianOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  )}
+                  {hasPtData && (
+                    <select value={ptFilter} onChange={e => setPtFilter(e.target.value)} className={selectClass}>
+                      <option value="ALL">Semua PT</option>
+                      {PT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  )}
+                  <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={selectClass}>
+                    <option value="ALL">Semua Status</option>
+                    {program === 'sap' ? (
+                      <>
+                        <option value="LENGKAP">Lengkap</option>
+                        <option value="BELUM">Belum Lengkap</option>
+                        <option value="EXPIRED">Ada Expired / Failed</option>
+                        <option value="WARNING">Ada Warning</option>
+                      </>
+                    ) : program === 'k3' ? (
+                      <>
+                        <option value="SUDAH">Sudah Training (PASS)</option>
+                        <option value="PENDING">Ada Pending</option>
+                        <option value="BELUM">Belum Training</option>
+                      </>
+                    ) : (
+                      <>
+                        {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => (
+                          <option key={k} value={k}>{POP_KETERANGAN[k].label}</option>
+                        ))}
+                        <option value="BELUM_POP">Wajib, Belum Ikut POP</option>
+                      </>
+                    )}
+                  </select>
+                  {hasActiveFilter && (
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="col-span-2 md:col-span-1 inline-flex items-center justify-center gap-1 px-3 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Reset
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[11px] font-medium text-slate-500">
+                Menampilkan <span className="font-bold text-slate-900 dark:text-slate-100">{filteredRecords.length}</span> dari {stats.total} personel
+                {searchQuery && <> · cari “<span className="font-semibold text-slate-700">{searchQuery}</span>”</>}
+                {missingFilter && (countOnly
+                  ? <> · telah mengikuti <span className="font-semibold" style={{ color: DASH.brand }}>{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>
+                  : <> · belum berlaku <span className="font-semibold text-rose-600">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>)}
+                {program === 'sap' && <span className="hidden md:inline"> · <span className="font-semibold text-yellow-600">WARNING</span> ≥ {(TRAINING_WARNING_MONTHS / 12).toLocaleString('id-ID')} th · <span className="font-semibold text-red-600">EXPIRED</span> ≥ {(TRAINING_EXPIRY_MONTHS / 12).toLocaleString('id-ID')} th sejak tanggal training</span>}
+                {countOnly && <span className="hidden md:inline"> · tanpa masa berlaku</span>}
+              </p>
+            </div>
 
         {/* Data */}
         {isLoading ? (
-          <div className="rounded-2xl border shadow-xs p-3 space-y-2" style={cardStyle} aria-busy="true" aria-label="Memuat Database Training">
+          <div className="space-y-2" aria-busy="true" aria-label="Memuat Database Training">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-9 rounded-lg bg-slate-100 animate-pulse" style={{ opacity: 1 - i * 0.09 }} />
             ))}
           </div>
         ) : filteredRecords.length === 0 ? (
-          <div className="p-10 text-center rounded-2xl border border-dashed border-slate-300 bg-white">
+          <div className="p-10 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60">
             <p className="text-sm font-bold text-slate-900 mb-1">Data tidak ditemukan</p>
             <p className="text-xs text-slate-600">{programRecords.length === 0 ? `Belum ada data ${programLabel}.` : 'Coba ubah kata kunci atau filter.'}</p>
           </div>
         ) : (
           <>
             {/* Tabel (desktop / tablet) */}
-            <div className="hidden md:block rounded-2xl border shadow-xs overflow-hidden" style={cardStyle}>
+            <div className="hidden md:block rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
               <div className="overflow-x-auto max-h-[70vh]">
                 <table className="w-full text-left border-collapse">
-                  <thead className="sticky top-0 z-10 bg-slate-100">
+                  <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800">
                     {program === 'pop' ? (
-                    <tr className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                    <tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                       <th className="px-3 py-2.5 text-center">No</th>
                       <th className="px-3 py-2.5">NIK</th>
                       <th className="px-3 py-2.5">Nama</th>
@@ -1807,7 +1939,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
                     </tr>
                     ) : (
-                    <tr className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                    <tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                       <th className="px-3 py-2.5 text-center">No</th>
                       <th className="px-3 py-2.5">NIK</th>
                       <th className="px-3 py-2.5">Nama</th>
@@ -1826,16 +1958,16 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <tbody>
                     {jabatanGroups.map(group => (
                       <React.Fragment key={group.jabatan}>
-                        <tr className="bg-indigo-50/80 border-t-2 border-indigo-200">
+                        <tr className="border-t border-slate-100" style={{ backgroundColor: DASH.brandSoft }}>
                           <td colSpan={tableColSpan} className="px-3 py-2">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-black text-indigo-950">{group.jabatan}</span>
-                              <span className="px-2 py-px rounded-full text-[10px] font-mono font-black bg-indigo-600 text-white">{group.rows.length}</span>
+                              <span className="text-xs font-bold" style={{ color: DASH.brand }}>{group.jabatan}</span>
+                              <span className="px-2 py-px rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: DASH.brand }}>{group.rows.length}</span>
                             </div>
                           </td>
                         </tr>
                     {group.rows.map((r, idx) => (
-                      <tr key={r.id} className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors">
+                      <tr key={r.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                         <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{idx + 1}</td>
                         <td className="px-3 py-2 text-[11px] font-mono font-bold text-slate-800 whitespace-nowrap">{r.nik}</td>
                         <td className="px-3 py-2 text-xs font-black text-slate-950 min-w-[170px]">{r.nama}</td>
@@ -1867,10 +1999,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                         {canManage && (
                           <td className="px-3 py-2">
                             <div className="flex items-center justify-center gap-1">
-                              <button type="button" onClick={() => openEditModal(r)} className="p-1.5 rounded-lg hover:bg-indigo-100 text-indigo-700 cursor-pointer" title="Edit">
+                              <button type="button" onClick={() => openEditModal(r)} className="p-1.5 rounded-full hover:bg-teal-50 text-teal-700 cursor-pointer" title="Edit">
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
-                              <button type="button" onClick={() => setDeleteTarget(r)} className="p-1.5 rounded-lg hover:bg-rose-100 text-rose-600 cursor-pointer" title="Hapus">
+                              <button type="button" onClick={() => setDeleteTarget(r)} className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 cursor-pointer" title="Hapus">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
@@ -1890,11 +2022,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               {jabatanGroups.map(group => (
               <div key={group.jabatan} className="space-y-2.5">
                 <div className="flex items-center gap-2 px-1">
-                  <span className="text-xs font-black text-indigo-950">{group.jabatan}</span>
-                  <span className="px-2 py-px rounded-full text-[10px] font-mono font-black bg-indigo-600 text-white">{group.rows.length}</span>
+                  <span className="text-xs font-bold" style={{ color: DASH.brand }}>{group.jabatan}</span>
+                  <span className="px-2 py-px rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: DASH.brand }}>{group.rows.length}</span>
                 </div>
               {group.rows.map((r, idx) => (
-                <div key={r.id} className="p-3.5 rounded-2xl border shadow-xs" style={cardStyle}>
+                <div key={r.id} className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-black text-slate-950 leading-tight"><span className="font-mono text-slate-500 mr-1">{idx + 1}.</span>{r.nama}</p>
@@ -1931,10 +2063,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   </div>
                   {canManage && (
                     <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-end gap-2">
-                      <button type="button" onClick={() => openEditModal(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 text-[11px] font-bold cursor-pointer">
+                      <button type="button" onClick={() => openEditModal(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-teal-50 text-teal-800 text-[11px] font-bold cursor-pointer">
                         <Edit3 className="w-3 h-3" /> Edit
                       </button>
-                      <button type="button" onClick={() => setDeleteTarget(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-[11px] font-bold cursor-pointer">
+                      <button type="button" onClick={() => setDeleteTarget(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-rose-50 text-rose-600 text-[11px] font-bold cursor-pointer">
                         <Trash2 className="w-3 h-3" /> Hapus
                       </button>
                     </div>
@@ -1946,6 +2078,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
           </>
         )}
+          </div>
+          </div>
+        </div>
       </div>
 
       {/* Modal Tambah / Edit */}
