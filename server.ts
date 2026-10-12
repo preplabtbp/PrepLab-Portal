@@ -69,7 +69,7 @@ import { kbbiRouter } from "./server/routes/kbbi.js";
 import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
-import { trainingRouter } from "./server/routes/training.js";
+import { trainingRouter, ensureTrainingRecordsTable } from "./server/routes/training.js";
 import { userPreferencesRouter } from "./server/routes/userPreferences.js";
 import { galleryRouter } from "./server/routes/gallery.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
@@ -353,6 +353,9 @@ async function initDbSchema() {
 
     // Auto seed APD data from spreadsheet
     syncApdDataFromSheet().catch(e => console.warn('APD auto-seed notice:', e.message));
+
+    // Siapkan tabel & seed Database Training di background agar request pertama tidak menunggu
+    ensureTrainingRecordsTable().catch(e => console.warn('Training init notice:', e.message));
   } catch (e: any) {
     console.warn("DB schema init warning:", e.message);
   }

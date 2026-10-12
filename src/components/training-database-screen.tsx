@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -139,10 +139,24 @@ interface TrainingDatabaseScreenProps {
   onBack?: () => void;
 }
 
+const TRAINING_QUERY_KEY = ['training-records'];
+
+async function fetchTrainingRecords(): Promise<TrainingRecord[]> {
+  const res = await fetch('/api/training-records');
+  const json = await res.json();
+  if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memuat Database Training');
+  return json.data || [];
+}
+
 export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', onBack }: TrainingDatabaseScreenProps) {
-  const [records, setRecords] = useState<TrainingRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [employees, setEmployees] = useState<EmployeeMaster[]>([]);
+  const queryClient = useQueryClient();
+  // Data di-cache TanStack Query: kunjungan ulang tampil instan, lalu diperbarui di background
+  const { data: records = [], isLoading, isFetching, error: loadError } = useQuery({
+    queryKey: TRAINING_QUERY_KEY,
+    queryFn: fetchTrainingRecords,
+    staleTime: 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
   const [developerNiks, setDeveloperNiks] = useState<string[]>([]);
 
   const [program, setProgram] = useState<TrainingProgram>(() => {
@@ -168,30 +182,25 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   const programLabel = program === 'sap' ? 'Training SAP' : 'Training K3';
 
-  const fetchRecords = async () => {
-    try {
-      setIsLoading(true);
-      const res = await fetch('/api/training-records');
-      const json = await res.json();
-      if (json.status === 'success') {
-        setRecords(json.data || []);
-      } else {
-        toast.error(json.message || 'Gagal memuat Database Training');
-      }
-    } catch (err) {
-      console.error('Failed to load training records:', err);
-      toast.error('Gagal memuat Database Training');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const fetchRecords = () => queryClient.invalidateQueries({ queryKey: TRAINING_QUERY_KEY });
 
   useEffect(() => {
-    fetchRecords();
-    fetch('/api/employees')
-      .then(res => res.json())
-      .then(data => { if (Array.isArray(data)) setEmployees(data); })
-      .catch(() => {});
+    if (loadError) toast.error((loadError as Error).message);
+  }, [loadError]);
+
+  // Master karyawan hanya untuk isi otomatis di form — dimuat saat form dibuka saja
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees-master-lite'],
+    queryFn: async (): Promise<EmployeeMaster[]> => {
+      const res = await fetch('/api/employees');
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: isModalOpen,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  useEffect(() => {
     fetch('/api/developers')
       .then(res => res.json())
       .then(json => {
@@ -473,6 +482,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         const text = await file.text();
         parsed = parseTrainingSheet(Papa.parse<unknown[]>(text, { skipEmptyLines: true }).data);
       } else {
+        // Library xlsx (~400KB) baru diunduh saat user benar-benar import Excel
+        const XLSX = await import('xlsx');
         const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
         // Pakai sheet pertama yang formatnya dikenali
         for (const name of wb.SheetNames) {
@@ -644,6 +655,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-indigo-500/15 text-slate-950 border border-indigo-500/30">
                   {stats.total} Personel
                 </span>
+                {isFetching && !isLoading && (
+                  <span title="Memperbarui data..."><Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" /></span>
+                )}
               </div>
               <p className="text-xs font-semibold text-slate-700">Rekap Training SAP & Training K3 per karyawan</p>
             </div>
@@ -894,9 +908,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
         {/* Data */}
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm font-bold text-slate-600">
-            <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
-            Memuat Database Training...
+          <div className="rounded-2xl border shadow-xs p-3 space-y-2" style={cardStyle} aria-busy="true" aria-label="Memuat Database Training">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-9 rounded-lg bg-slate-100 animate-pulse" style={{ opacity: 1 - i * 0.09 }} />
+            ))}
           </div>
         ) : filteredRecords.length === 0 ? (
           <div className="p-10 text-center rounded-2xl border border-dashed border-slate-300 bg-white">
