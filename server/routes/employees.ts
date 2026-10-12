@@ -903,7 +903,18 @@ employeesRouter.post("/import", async (req, res) => {
 
         const statusKaryawanVal = normalized['statuskaryawan'] || normalized['status'] || raw['Status Karyawan'] || raw['Status'] || '';
         if (isResignedOrNonActiveStatus(statusKaryawanVal)) {
-          // Sesuai permintaan: Karyawan berstatus Resign / Mutasi GTS / PHK / SPPHK tidak dimasukkan ke dalam daftar
+          // Sesuai permintaan: Karyawan berstatus Resign / Mutasi GTS / PHK / SPPHK tidak dimasukkan ke dalam daftar.
+          // Namun jika karyawan tsb sudah ada di database, statusnya tetap diperbarui agar tidak terhitung Aktif.
+          const existingResigned = allExistingDbEmployees.find(e => e.nik && e.nik.toUpperCase().trim() === nik.toUpperCase().trim());
+          if (existingResigned && String(existingResigned.statusKaryawan || '').trim() !== String(statusKaryawanVal).trim()) {
+            const tglEfektif = cleanDateVal(normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja']);
+            try {
+              await db.update(employees)
+                .set({ statusKaryawan: String(statusKaryawanVal).trim(), ...(tglEfektif ? { tanggalEfektifTidakBekerja: tglEfektif } : {}) })
+                .where(eq(employees.id, existingResigned.id));
+              updatedCount++;
+            } catch {}
+          }
           continue;
         }
 

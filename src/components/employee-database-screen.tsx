@@ -14,6 +14,7 @@ import { AddAttendanceEntryModal } from './AddAttendanceEntryModal';
 import { TimeRangeFetchModal } from './TimeRangeFetchModal';
 import { toast } from 'sonner';
 import { formatAvatarUrl } from '../lib/avatarUtils';
+import { calculateRosterLeave } from '../lib/rosterLeave';
 import { getEmployeeTenureInfo } from '../lib/tenureUtils';
 import { compareEmployeesByJabatan, getJabatanRank } from '../lib/jabatanHierarchy';
 
@@ -1260,6 +1261,20 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     }
     return map;
   }, [rosterData]);
+
+  // Jatuh Tempo Cuti karyawan terpilih: dihitung dari Modul Roster & Cuti (logika yang sama)
+  const selectedRosterLeave = useMemo(() => {
+    if (!selectedEmployee || rosterData.length === 0) return null;
+    const nik = String(selectedEmployee.nik || '').toUpperCase().trim();
+    const nameKey = String(selectedEmployee.name || '').toLowerCase().replace(/[^a-z]/g, '');
+    const entry =
+      rosterData.find((r: any) => String(r.nik || '').toUpperCase().trim() === nik) ||
+      (nameKey ? rosterData.find((r: any) => String(r.name || '').toLowerCase().replace(/[^a-z]/g, '') === nameKey) : undefined);
+    if (!entry) return null;
+    const leave = calculateRosterLeave(entry);
+    if (!leave?.actualCuti || isNaN(leave.actualCuti.getTime())) return null;
+    return leave;
+  }, [selectedEmployee, rosterData]);
 
   // 6. Data & List Karyawan Onsite pada Hari Ini
   // Sesuai aturan: Ambil data keterangan OFF, D, DS, N, NS, S, LS, CS, dan I.
@@ -3462,7 +3477,24 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         <p className="text-indigo-900 text-[10.5px] uppercase font-black tracking-wider">Jatuh Tempo CT</p>
                         {canManageDatabase && <Pencil className="w-3.5 h-3.5 text-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
                       </div>
-                      <p className="font-black text-sm sm:text-base text-indigo-950 font-mono tracking-tight">{formatShortDate(selectedEmployee.jatuhTempoCt)}</p>
+                      {selectedRosterLeave?.actualCuti ? (
+                        <>
+                          <p className="font-black text-sm sm:text-base text-indigo-950 font-mono tracking-tight">
+                            {formatShortDate(selectedRosterLeave.actualCuti)}
+                          </p>
+                          <p className="mt-1 text-[10px] font-semibold text-indigo-800/80">
+                            {selectedRosterLeave.daysRemaining > 0
+                              ? `${selectedRosterLeave.daysRemaining} hari lagi`
+                              : selectedRosterLeave.daysRemaining === 0 ? 'Hari ini' : 'Sedang cuti'}
+                            {' · '}Roster &amp; Cuti
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-black text-sm sm:text-base text-indigo-950 font-mono tracking-tight">{formatShortDate(selectedEmployee.jatuhTempoCt)}</p>
+                          <p className="mt-1 text-[10px] font-semibold text-indigo-800/60">Belum ada jadwal di Roster</p>
+                        </>
+                      )}
                     </div>
 
                     {/* Jumlah Cuti Site per Periode */}
