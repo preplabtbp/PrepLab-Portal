@@ -818,20 +818,35 @@ export const clinicVisits = pgTable('clinic_visits', {
   index('idx_clinic_visits_category').on(t.category),
 ]);
 
-// Database Training SAP (HAZID, JSA, IUT OTT, IAI, BFA) per karyawan — acuan format file Training_SAP.csv
+// Database Training per karyawan (satu baris per NIK), dua program:
+//  - Training SAP (HAZID, JSA, IUT OTT, IAI, BFA) — acuan Training_SAP.csv
+//  - Training K3 (WAH, LOTO, Confined Space, Basic Fire Fighting + status) — acuan Training_WAH_LOTO_CONFINE_SPACE_FIRE_FIGHTER.csv
 export const trainingRecords = pgTable('training_records', {
   id: serial('id').primaryKey(),
-  no: integer('no'), // Nomor urut sesuai file sumber
+  no: integer('no'), // Nomor urut Training SAP sesuai file sumber
+  noK3: integer('no_k3'), // Nomor urut Training K3 sesuai file sumber
   nik: text('nik').notNull(),
   nama: text('nama').notNull(),
   jabatan: text('jabatan'),
-  gol: text('gol'), // 'II', 'III', 'IV', 'V'
+  gol: text('gol'), // 'I', 'II', 'III', 'IV', 'V'
   shift: text('shift'), // 'A', 'B', 'Nonshift'
+  bagian: text('bagian'), // 'Maintenance', 'Laboratory', 'Dry, Preparation', dll.
+  pt: text('pt'), // 'TBP', 'GPS'
+  inSap: boolean('in_sap').default(false), // Termasuk peserta Training SAP
+  inK3: boolean('in_k3').default(false), // Termasuk peserta Training K3
   hazid: text('hazid'), // Tanggal training 'YYYY-MM-DD'
   jsa: text('jsa'),
   iutOtt: text('iut_ott'),
   iai: text('iai'),
-  bfa: text('bfa'),
+  bfa: text('bfa'), // Tidak wajib untuk GOL IV & V
+  wah: text('wah'),
+  wahStatus: text('wah_status'), // 'PASS' | 'Pending' | 'FAIL'
+  loto: text('loto'),
+  lotoStatus: text('loto_status'),
+  confinedSpace: text('confined_space'),
+  confinedSpaceStatus: text('confined_space_status'),
+  fireFighting: text('fire_fighting'),
+  fireFightingStatus: text('fire_fighting_status'),
   notes: text('notes'),
   updatedBy: text('updated_by'),
   createdAt: timestamp('created_at').defaultNow(),

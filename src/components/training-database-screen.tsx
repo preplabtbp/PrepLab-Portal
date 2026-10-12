@@ -15,46 +15,81 @@ import {
   X,
   Loader2,
   ArrowLeft,
+  HardHat,
+  ClipboardCheck,
+  Clock,
+  TrendingUp,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
 import { Input, Select, Textarea, Button } from './ui';
+import {
+  SAP_TRAININGS,
+  K3_TRAININGS,
+  isBfaExempt,
+  parseTrainingSheet,
+  type ParsedTrainingSheet,
+  type TrainingProgram,
+  type SapDateKey,
+  type K3DateKey,
+  type K3StatusKey,
+} from '../utils/training-import';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 export interface TrainingRecord {
   id: number;
   no: number | null;
+  noK3: number | null;
   nik: string;
   nama: string;
   jabatan: string | null;
   gol: string | null;
   shift: string | null;
+  bagian: string | null;
+  pt: string | null;
+  inSap: boolean | null;
+  inK3: boolean | null;
   hazid: string | null;
   jsa: string | null;
   iutOtt: string | null;
   iai: string | null;
   bfa: string | null;
+  wah: string | null;
+  wahStatus: string | null;
+  loto: string | null;
+  lotoStatus: string | null;
+  confinedSpace: string | null;
+  confinedSpaceStatus: string | null;
+  fireFighting: string | null;
+  fireFightingStatus: string | null;
   notes: string | null;
   updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-type TrainingKey = 'hazid' | 'jsa' | 'iutOtt' | 'iai' | 'bfa';
-
-// Kolom training sesuai file Training_SAP.csv
-const TRAININGS: { key: TrainingKey; label: string; desc: string }[] = [
-  { key: 'hazid', label: 'HAZID', desc: 'Hazard Identification' },
-  { key: 'jsa', label: 'JSA', desc: 'Job Safety Analysis' },
-  { key: 'iutOtt', label: 'IUT OTT', desc: 'IUT OTT' },
-  { key: 'iai', label: 'IAI', desc: 'IAI' },
-  { key: 'bfa', label: 'BFA', desc: 'Basic First Aid' },
-];
-
-const GOL_OPTIONS = ['II', 'III', 'IV', 'V'];
+const GOL_OPTIONS = ['I', 'II', 'III', 'IV', 'V'];
 const SHIFT_OPTIONS = ['A', 'B', 'Nonshift'];
+const PT_OPTIONS = ['TBP', 'GPS'];
+const K3_STATUS_OPTIONS = ['PASS', 'Pending', 'FAIL'];
 const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const CURVE_COLORS = ['#4f46e5', '#0d9488', '#d97706', '#db2777', '#7c3aed'];
+const TAB_STORAGE_KEY = 'training_db_active_tab';
 
 function formatTrainingDate(val: string | null): string {
   if (!val) return '';
@@ -63,54 +98,40 @@ function formatTrainingDate(val: string | null): string {
   return `${m[3]} ${MONTHS_SHORT[Number(m[2]) - 1] || m[2]} ${m[1]}`;
 }
 
-const completedCount = (r: TrainingRecord) => TRAININGS.filter(t => !!r[t.key]).length;
+// ===== Aturan Training SAP =====
+// GOL IV & V tidak wajib BFA, sehingga target mereka 4 training
+const sapRequiredKeys = (r: TrainingRecord): SapDateKey[] =>
+  SAP_TRAININGS.map(t => t.key).filter(k => !(k === 'bfa' && isBfaExempt(r.gol)));
+const sapDoneCount = (r: TrainingRecord) => sapRequiredKeys(r).filter(k => !!r[k]).length;
+const isSapComplete = (r: TrainingRecord) => sapDoneCount(r) === sapRequiredKeys(r).length;
+
+// ===== Aturan Training K3 =====
+type K3State = 'PASS' | 'Pending' | 'FAIL' | 'none';
+function k3State(r: TrainingRecord, key: K3DateKey, statusKey: K3StatusKey): K3State {
+  const status = r[statusKey];
+  if (status === 'Pending') return 'Pending';
+  if (status === 'FAIL') return 'FAIL';
+  if (r[key] || status === 'PASS') return 'PASS';
+  return 'none';
+}
+const k3PassCount = (r: TrainingRecord) => K3_TRAININGS.filter(t => k3State(r, t.key, t.statusKey) === 'PASS').length;
+const k3HasPending = (r: TrainingRecord) => K3_TRAININGS.some(t => k3State(r, t.key, t.statusKey) === 'Pending');
 
 interface EmployeeMaster {
   nik: string;
   name: string;
   jabatan?: string;
+  section?: string;
+  pt?: string;
 }
 
-interface FormState {
-  no: string;
-  nik: string;
-  nama: string;
-  jabatan: string;
-  gol: string;
-  shift: string;
-  hazid: string;
-  jsa: string;
-  iutOtt: string;
-  iai: string;
-  bfa: string;
-  notes: string;
-}
+type FormState = Record<string, string>;
 
 const EMPTY_FORM: FormState = {
-  no: '', nik: '', nama: '', jabatan: '', gol: 'II', shift: 'Nonshift',
-  hazid: '', jsa: '', iutOtt: '', iai: '', bfa: '', notes: '',
+  no: '', nik: '', nama: '', jabatan: '', gol: 'II', shift: 'Nonshift', bagian: '', pt: '', notes: '',
+  hazid: '', jsa: '', iutOtt: '', iai: '', bfa: '',
+  wah: '', wahStatus: '', loto: '', lotoStatus: '', confinedSpace: '', confinedSpaceStatus: '', fireFighting: '', fireFightingStatus: '',
 };
-
-// Peta header file sumber -> field (case-insensitive, abaikan spasi/simbol)
-const HEADER_MAP: Record<string, keyof FormState> = {
-  no: 'no', nik: 'nik', nama: 'nama', name: 'nama', jabatan: 'jabatan', gol: 'gol', golongan: 'gol', shift: 'shift',
-  hazid: 'hazid', jsa: 'jsa', iutott: 'iutOtt', iai: 'iai', bfa: 'bfa', catatan: 'notes', notes: 'notes',
-};
-
-function mapImportRows(rawRows: Record<string, unknown>[]) {
-  return rawRows
-    .map(raw => {
-      const row: Record<string, unknown> = {};
-      Object.entries(raw).forEach(([header, value]) => {
-        const field = HEADER_MAP[header.toLowerCase().replace(/[^a-z]/g, '')];
-        if (!field) return;
-        // Serial tanggal Excel bisa berupa pecahan — bulatkan agar terbaca server
-        row[field] = typeof value === 'number' && value > 30000 ? Math.round(value) : value;
-      });
-      return row;
-    })
-    .filter(r => String(r.nik || '').trim() && String(r.nama || '').trim());
-}
 
 interface TrainingDatabaseScreenProps {
   inspectorNik?: string;
@@ -124,11 +145,17 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [employees, setEmployees] = useState<EmployeeMaster[]>([]);
   const [developerNiks, setDeveloperNiks] = useState<string[]>([]);
 
+  const [program, setProgram] = useState<TrainingProgram>(() => {
+    try { return localStorage.getItem(TAB_STORAGE_KEY) === 'k3' ? 'k3' : 'sap'; } catch { return 'sap'; }
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [golFilter, setGolFilter] = useState('ALL');
   const [shiftFilter, setShiftFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'LENGKAP' | 'BELUM'>('ALL');
-  const [missingFilter, setMissingFilter] = useState<TrainingKey | null>(null);
+  const [bagianFilter, setBagianFilter] = useState('ALL');
+  const [ptFilter, setPtFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [missingFilter, setMissingFilter] = useState<string | null>(null);
+  const [curveMode, setCurveMode] = useState<'cumulative' | 'monthly'>('cumulative');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<TrainingRecord | null>(null);
@@ -136,7 +163,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TrainingRecord | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<(ParsedTrainingSheet & { fileName: string }) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const programLabel = program === 'sap' ? 'Training SAP' : 'Training K3';
 
   const fetchRecords = async () => {
     try {
@@ -171,6 +201,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       .catch(() => {});
   }, []);
 
+  const switchProgram = (p: TrainingProgram) => {
+    setProgram(p);
+    setStatusFilter('ALL');
+    setMissingFilter(null);
+    try { localStorage.setItem(TAB_STORAGE_KEY, p); } catch {}
+  };
+
   // Hak kelola: Developer & Section Administration (sama dengan Database Karyawan)
   const canManage = useMemo(() => {
     const cleanNik = inspectorNik.trim().toUpperCase();
@@ -184,42 +221,166 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     }
   }, [inspectorNik, developerNiks]);
 
+  const programRecords = useMemo(
+    () => records.filter(r => (program === 'sap' ? r.inSap : r.inK3)),
+    [records, program]
+  );
+
+  const programCounts = useMemo(() => ({
+    sap: records.filter(r => r.inSap).length,
+    k3: records.filter(r => r.inK3).length,
+  }), [records]);
+
+  const bagianOptions = useMemo(
+    () => Array.from(new Set(programRecords.map(r => r.bagian).filter(Boolean) as string[])).sort(),
+    [programRecords]
+  );
+  const hasPtData = useMemo(() => programRecords.some(r => r.pt), [programRecords]);
+
+  // ===== Ringkasan & cakupan per training =====
   const stats = useMemo(() => {
-    const total = records.length;
-    const lengkap = records.filter(r => completedCount(r) === TRAININGS.length).length;
-    const coverage = TRAININGS.map(t => ({ ...t, done: records.filter(r => !!r[t.key]).length }));
+    const total = programRecords.length;
     let latest = '';
-    records.forEach(r => TRAININGS.forEach(t => {
-      const v = r[t.key];
+    const allDateKeys = program === 'sap' ? SAP_TRAININGS.map(t => t.key) : K3_TRAININGS.map(t => t.key);
+    programRecords.forEach(r => allDateKeys.forEach(k => {
+      const v = r[k];
       if (v && v > latest) latest = v;
     }));
-    return { total, lengkap, belum: total - lengkap, coverage, latest };
-  }, [records]);
 
+    if (program === 'sap') {
+      const lengkap = programRecords.filter(isSapComplete).length;
+      const coverage = SAP_TRAININGS.map(t => {
+        const required = programRecords.filter(r => sapRequiredKeys(r).includes(t.key));
+        return {
+          key: t.key as string,
+          label: t.label,
+          desc: t.desc,
+          done: required.filter(r => !!r[t.key]).length,
+          pending: 0,
+          target: required.length,
+          exempt: total - required.length,
+        };
+      });
+      return { total, latest, coverage, cardA: lengkap, cardB: total - lengkap };
+    }
+
+    const coverage = K3_TRAININGS.map(t => {
+      const states = programRecords.map(r => k3State(r, t.key, t.statusKey));
+      return {
+        key: t.key as string,
+        label: t.label,
+        desc: t.desc,
+        done: states.filter(s => s === 'PASS').length,
+        pending: states.filter(s => s === 'Pending').length,
+        target: total,
+        exempt: 0,
+      };
+    });
+    const sudahTraining = programRecords.filter(r => k3PassCount(r) > 0).length;
+    const pending = programRecords.filter(k3HasPending).length;
+    return { total, latest, coverage, cardA: sudahTraining, cardB: pending };
+  }, [programRecords, program]);
+
+  // ===== Kurva progres training per bulan =====
+  const curveData = useMemo(() => {
+    const trainings = program === 'sap'
+      ? SAP_TRAININGS.map(t => ({ key: t.key as string, label: t.label, done: (r: TrainingRecord) => r[t.key] }))
+      : K3_TRAININGS.map(t => ({
+          key: t.key as string,
+          label: t.label,
+          done: (r: TrainingRecord) => (k3State(r, t.key, t.statusKey) === 'PASS' ? r[t.key] : null),
+        }));
+
+    const monthsByTraining = trainings.map(t => {
+      const counts: Record<string, number> = {};
+      programRecords.forEach(r => {
+        const d = t.done(r);
+        if (d) counts[d.slice(0, 7)] = (counts[d.slice(0, 7)] || 0) + 1;
+      });
+      return counts;
+    });
+    const allMonths = monthsByTraining.flatMap(c => Object.keys(c)).sort();
+    if (allMonths.length === 0) return null;
+
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const endMonth = allMonths[allMonths.length - 1] > currentMonth ? allMonths[allMonths.length - 1] : currentMonth;
+    const months: string[] = [];
+    let [y, m] = allMonths[0].split('-').map(Number);
+    while (`${y}-${String(m).padStart(2, '0')}` <= endMonth) {
+      months.push(`${y}-${String(m).padStart(2, '0')}`);
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+
+    return {
+      labels: months.map(mo => `${MONTHS_SHORT[Number(mo.slice(5, 7)) - 1]} ${mo.slice(2, 4)}`),
+      datasets: trainings.map((t, i) => {
+        let running = 0;
+        const data = months.map(mo => {
+          const c = monthsByTraining[i][mo] || 0;
+          running += c;
+          return curveMode === 'cumulative' ? running : c;
+        });
+        return {
+          label: t.label,
+          data,
+          borderColor: CURVE_COLORS[i % CURVE_COLORS.length],
+          backgroundColor: CURVE_COLORS[i % CURVE_COLORS.length] + '22',
+          tension: 0.4,
+          pointRadius: months.length > 24 ? 0 : 2.5,
+          pointHoverRadius: 5,
+          borderWidth: 2.5,
+          fill: false,
+        };
+      }),
+    };
+  }, [programRecords, program, curveMode]);
+
+  // ===== Filter tabel =====
   const filteredRecords = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return records.filter(r => {
-      if (q && ![r.nama, r.nik, r.jabatan].some(v => String(v || '').toLowerCase().includes(q))) return false;
+    return programRecords.filter(r => {
+      if (q && ![r.nama, r.nik, r.jabatan, r.bagian].some(v => String(v || '').toLowerCase().includes(q))) return false;
       if (golFilter !== 'ALL' && (r.gol || '') !== golFilter) return false;
       if (shiftFilter !== 'ALL' && (r.shift || '').toLowerCase() !== shiftFilter.toLowerCase()) return false;
-      const done = completedCount(r);
-      if (statusFilter === 'LENGKAP' && done !== TRAININGS.length) return false;
-      if (statusFilter === 'BELUM' && done === TRAININGS.length) return false;
-      if (missingFilter && r[missingFilter]) return false;
+      if (bagianFilter !== 'ALL' && (r.bagian || '') !== bagianFilter) return false;
+      if (ptFilter !== 'ALL' && (r.pt || '') !== ptFilter) return false;
+
+      if (program === 'sap') {
+        if (statusFilter === 'LENGKAP' && !isSapComplete(r)) return false;
+        if (statusFilter === 'BELUM' && isSapComplete(r)) return false;
+        if (missingFilter) {
+          const key = missingFilter as SapDateKey;
+          if (!sapRequiredKeys(r).includes(key) || r[key]) return false;
+        }
+      } else {
+        if (statusFilter === 'PENDING' && !k3HasPending(r)) return false;
+        if (statusFilter === 'SUDAH' && k3PassCount(r) === 0) return false;
+        if (statusFilter === 'BELUM' && (k3PassCount(r) > 0 || k3HasPending(r))) return false;
+        if (missingFilter) {
+          const t = K3_TRAININGS.find(x => x.key === missingFilter);
+          if (t && k3State(r, t.key, t.statusKey) === 'PASS') return false;
+        }
+      }
       return true;
     });
-  }, [records, searchQuery, golFilter, shiftFilter, statusFilter, missingFilter]);
+  }, [programRecords, program, searchQuery, golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter, missingFilter]);
 
-  const hasActiveFilter = !!searchQuery || golFilter !== 'ALL' || shiftFilter !== 'ALL' || statusFilter !== 'ALL' || !!missingFilter;
+  const hasActiveFilter = !!searchQuery || golFilter !== 'ALL' || shiftFilter !== 'ALL' || bagianFilter !== 'ALL'
+    || ptFilter !== 'ALL' || statusFilter !== 'ALL' || !!missingFilter;
 
   const resetFilters = () => {
     setSearchQuery('');
     setGolFilter('ALL');
     setShiftFilter('ALL');
+    setBagianFilter('ALL');
+    setPtFilter('ALL');
     setStatusFilter('ALL');
     setMissingFilter(null);
   };
 
+  // ===== CRUD =====
   const openCreateModal = () => {
     setEditingRecord(null);
     setForm(EMPTY_FORM);
@@ -228,33 +389,30 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   const openEditModal = (r: TrainingRecord) => {
     setEditingRecord(r);
-    setForm({
-      no: r.no != null ? String(r.no) : '',
-      nik: r.nik,
-      nama: r.nama,
-      jabatan: r.jabatan || '',
-      gol: r.gol || '',
-      shift: r.shift || '',
-      hazid: r.hazid || '',
-      jsa: r.jsa || '',
-      iutOtt: r.iutOtt || '',
-      iai: r.iai || '',
-      bfa: r.bfa || '',
-      notes: r.notes || '',
+    const next: FormState = { ...EMPTY_FORM };
+    Object.keys(EMPTY_FORM).forEach(k => {
+      const v = (r as any)[k];
+      next[k] = v == null ? '' : String(v);
     });
+    next.no = String((program === 'sap' ? r.no : r.noK3) ?? '');
+    setForm(next);
     setIsModalOpen(true);
   };
 
-  const updateForm = (field: keyof FormState, value: string) => {
+  const updateForm = (field: string, value: string) => {
     setForm(prev => {
       const next = { ...prev, [field]: value };
-      // Isi otomatis nama & jabatan dari Database Karyawan saat NIK cocok
+      // Isi otomatis profil dari Database Karyawan / data training lain saat NIK cocok
       if (field === 'nik' && !editingRecord) {
-        const emp = employees.find(e => String(e.nik || '').toUpperCase() === value.trim().toUpperCase());
-        if (emp) {
-          next.nama = prev.nama || emp.name || '';
-          next.jabatan = prev.jabatan || emp.jabatan || '';
-        }
+        const nikUpper = value.trim().toUpperCase();
+        const known = records.find(r => r.nik === nikUpper);
+        const emp = employees.find(e => String(e.nik || '').toUpperCase() === nikUpper);
+        next.nama = prev.nama || known?.nama || emp?.name || '';
+        next.jabatan = prev.jabatan || known?.jabatan || emp?.jabatan || '';
+        next.bagian = prev.bagian || known?.bagian || '';
+        next.pt = prev.pt || known?.pt || emp?.pt || '';
+        if (known?.gol) next.gol = known.gol;
+        if (known?.shift) next.shift = known.shift;
       }
       return next;
     });
@@ -272,7 +430,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       const res = await fetch(url, {
         method: editingRecord ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, updatedBy: inspectorName || inspectorNik }),
+        body: JSON.stringify({ ...form, program, updatedBy: inspectorName || inspectorNik }),
       });
       const json = await res.json();
       if (!res.ok || json.status !== 'success') {
@@ -292,7 +450,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/training-records/${deleteTarget.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/training-records/${deleteTarget.id}?program=${program}`, { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok || json.status !== 'success') {
         toast.error(json.message || 'Gagal menghapus data training');
@@ -306,28 +464,49 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     }
   };
 
+  // ===== Import CSV / Excel =====
   const handleImportFile = async (file: File) => {
     try {
       setIsImporting(true);
-      let rawRows: Record<string, unknown>[] = [];
+      let parsed: ParsedTrainingSheet | null = null;
       if (file.name.toLowerCase().endsWith('.csv')) {
         const text = await file.text();
-        const parsed = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true });
-        rawRows = parsed.data;
+        parsed = parseTrainingSheet(Papa.parse<unknown[]>(text, { skipEmptyLines: true }).data);
       } else {
         const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { raw: true, defval: '' });
+        // Pakai sheet pertama yang formatnya dikenali
+        for (const name of wb.SheetNames) {
+          const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+          parsed = parseTrainingSheet(rows);
+          if (parsed && parsed.records.length > 0) break;
+        }
       }
-      const rows = mapImportRows(rawRows);
-      if (rows.length === 0) {
-        toast.error('Tidak ada baris valid. Pastikan file memiliki kolom NIK dan NAMA.');
+      if (!parsed || parsed.records.length === 0) {
+        toast.error('Format tidak dikenali. Pastikan ada kolom NIK, NAMA, dan kolom training (HAZID/JSA/... atau WAH/LOTO/...).');
         return;
       }
+      setImportPreview({ ...parsed, fileName: file.name });
+    } catch (err: any) {
+      console.error('Import training failed:', err);
+      toast.error(err.message || 'Gagal membaca file');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    try {
+      setIsImporting(true);
       const res = await fetch('/api/training-records/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows, updatedBy: inspectorName || inspectorNik }),
+        body: JSON.stringify({
+          rows: importPreview.records,
+          programs: importPreview.programs,
+          updatedBy: inspectorName || inspectorNik,
+        }),
       });
       const json = await res.json();
       if (!res.ok || json.status !== 'success') {
@@ -335,50 +514,107 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         return;
       }
       toast.success(json.message);
+      if (importPreview.programs.length === 1) switchProgram(importPreview.programs[0]);
+      setImportPreview(null);
       fetchRecords();
     } catch (err: any) {
-      console.error('Import training failed:', err);
       toast.error(err.message || 'Import gagal');
     } finally {
       setIsImporting(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleExportCSV = () => {
-    const header = ['NO', 'NIK', 'NAMA', 'Jabatan', 'GOL', 'SHIFT', ...TRAININGS.map(t => t.label)];
-    const rows = filteredRecords.map(r => [
-      r.no ?? '', r.nik, r.nama, r.jabatan || '', r.gol || '', r.shift || '',
-      ...TRAININGS.map(t => r[t.key] || ''),
-    ]);
+    let header: string[];
+    let rows: (string | number)[][];
+    if (program === 'sap') {
+      header = ['NO', 'NIK', 'NAMA', 'Jabatan', 'GOL', 'SHIFT', ...SAP_TRAININGS.map(t => t.label)];
+      rows = filteredRecords.map(r => [
+        r.no ?? '', r.nik, r.nama, r.jabatan || '', r.gol || '', r.shift || '',
+        ...SAP_TRAININGS.map(t => (t.key === 'bfa' && isBfaExempt(r.gol) && !r.bfa ? 'Tidak Wajib' : r[t.key] || '')),
+      ]);
+    } else {
+      header = ['NO', 'NIK', 'NAMA KARYAWAN', 'Shift', 'BAGIAN', 'JABATAN', 'PT', 'GOL',
+        ...K3_TRAININGS.flatMap(t => [t.label.toUpperCase(), 'Status'])];
+      rows = filteredRecords.map(r => [
+        r.noK3 ?? '', r.nik, r.nama, r.shift || '', r.bagian || '', r.jabatan || '', r.pt || '', r.gol || '',
+        ...K3_TRAININGS.flatMap(t => [r[t.key] || '-', r[t.statusKey] || '-']),
+      ]);
+    }
     const csv = Papa.unparse([header, ...rows]);
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Database_Training_SAP_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `Database_${program === 'sap' ? 'Training_SAP' : 'Training_K3'}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const DateCell = ({ value }: { value: string | null }) => value ? (
-    <span className="font-mono text-[11px] font-bold text-slate-900 whitespace-nowrap">{formatTrainingDate(value)}</span>
-  ) : (
-    <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">Belum</span>
-  );
+  // ===== Render helpers =====
+  const renderSapCell = (r: TrainingRecord, key: SapDateKey) => {
+    const value = r[key];
+    if (value) return <span className="font-mono text-[11px] font-bold text-slate-900 whitespace-nowrap">{formatTrainingDate(value)}</span>;
+    if (key === 'bfa' && isBfaExempt(r.gol)) {
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap" title="GOL IV & V tidak wajib BFA">Tidak Wajib</span>;
+    }
+    return <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">Belum</span>;
+  };
 
-  const StatusBadge = ({ r }: { r: TrainingRecord }) => {
-    const done = completedCount(r);
-    const full = done === TRAININGS.length;
+  const renderK3Cell = (r: TrainingRecord, key: K3DateKey, statusKey: K3StatusKey) => {
+    const state = k3State(r, key, statusKey);
+    if (state === 'none') return <span className="text-[11px] font-bold text-slate-300">-</span>;
+    const tone = state === 'PASS'
+      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+      : state === 'Pending' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200';
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${full ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
-        {full ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-        {done}/{TRAININGS.length}
+      <div className="inline-flex flex-col items-center gap-0.5">
+        {r[key] && <span className="font-mono text-[11px] font-bold text-slate-900 whitespace-nowrap">{formatTrainingDate(r[key])}</span>}
+        <span className={`inline-flex px-1.5 py-px rounded text-[9px] font-black border ${tone}`}>{state}</span>
+      </div>
+    );
+  };
+
+  const renderStatusBadge = (r: TrainingRecord) => {
+    if (program === 'sap') {
+      const done = sapDoneCount(r);
+      const target = sapRequiredKeys(r).length;
+      const full = done === target;
+      return (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${full ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+          {full ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+          {done}/{target}
+        </span>
+      );
+    }
+    const pass = k3PassCount(r);
+    const pending = k3HasPending(r);
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${
+        pending ? 'bg-amber-50 text-amber-800 border-amber-200' : pass > 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+      }`}>
+        {pending ? <Clock className="w-3 h-3" /> : pass > 0 ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+        {pass} PASS{pending ? ' · Pending' : ''}
       </span>
     );
   };
 
   const selectClass = 'px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-500 cursor-pointer';
+  const cardStyle = { backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' };
+
+  const kpiCards = program === 'sap'
+    ? [
+        { label: 'Total Personel', value: stats.total, sub: 'Peserta Training SAP', icon: <Users className="w-4 h-4" />, tone: 'bg-indigo-500/10 text-indigo-700' },
+        { label: 'Training Lengkap', value: stats.cardA, sub: `${stats.total ? Math.round((stats.cardA / stats.total) * 100) : 0}% sudah memenuhi target`, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'bg-emerald-500/10 text-emerald-700' },
+        { label: 'Belum Lengkap', value: stats.cardB, sub: 'Masih ada training wajib kosong', icon: <AlertCircle className="w-4 h-4" />, tone: 'bg-amber-500/10 text-amber-700' },
+        { label: 'Training Terakhir', value: stats.latest ? formatTrainingDate(stats.latest) : '-', sub: 'Tanggal training terbaru', icon: <CalendarCheck className="w-4 h-4" />, tone: 'bg-violet-500/10 text-violet-700' },
+      ]
+    : [
+        { label: 'Total Personel', value: stats.total, sub: 'Peserta Training K3', icon: <Users className="w-4 h-4" />, tone: 'bg-indigo-500/10 text-indigo-700' },
+        { label: 'Sudah Training', value: stats.cardA, sub: 'Minimal 1 training PASS', icon: <CheckCircle2 className="w-4 h-4" />, tone: 'bg-emerald-500/10 text-emerald-700' },
+        { label: 'Status Pending', value: stats.cardB, sub: 'Menunggu hasil / sertifikat', icon: <Clock className="w-4 h-4" />, tone: 'bg-amber-500/10 text-amber-700' },
+        { label: 'Training Terakhir', value: stats.latest ? formatTrainingDate(stats.latest) : '-', sub: 'Tanggal training terbaru', icon: <CalendarCheck className="w-4 h-4" />, tone: 'bg-violet-500/10 text-violet-700' },
+      ];
 
   return (
     <div className="min-h-screen pb-16 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-main, #f8fafc)' }}>
@@ -409,7 +645,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   {stats.total} Personel
                 </span>
               </div>
-              <p className="text-xs font-semibold text-slate-700">Rekap training SAP: HAZID, JSA, IUT OTT, IAI & BFA per karyawan</p>
+              <p className="text-xs font-semibold text-slate-700">Rekap Training SAP & Training K3 per karyawan</p>
             </div>
           </div>
 
@@ -429,15 +665,15 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isImporting}
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100 text-xs font-bold transition-all cursor-pointer shadow-2xs text-slate-950 disabled:opacity-60"
-                  title="Import / perbarui data dari file CSV atau Excel (format Training_SAP)"
+                  title="Import data training dari Excel / CSV (format Training SAP atau Training K3 terdeteksi otomatis)"
                 >
                   {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-700" /> : <Upload className="w-3.5 h-3.5 text-indigo-700" />}
-                  <span className="hidden sm:inline">Import CSV/Excel</span>
+                  <span className="hidden sm:inline">Import Excel/CSV</span>
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.xlsx,.xls"
+                  accept=".xlsx,.xls,.csv"
                   className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
                 />
@@ -447,7 +683,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               type="button"
               onClick={handleExportCSV}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold transition-all cursor-pointer shadow-2xs text-slate-950"
-              title="Ekspor data (sesuai filter) ke CSV"
+              title="Ekspor data tab aktif (sesuai filter) ke CSV"
             >
               <Download className="w-3.5 h-3.5 text-slate-700" />
               <span className="hidden sm:inline">Ekspor CSV</span>
@@ -457,27 +693,40 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+        {/* Tab Program */}
+        <div className="flex gap-2 p-1 rounded-2xl border w-full sm:w-fit" style={cardStyle}>
+          {([
+            { id: 'sap' as const, label: 'Training SAP', sub: 'HAZID · JSA · IUT OTT · IAI · BFA', icon: <ClipboardCheck className="w-4 h-4" /> },
+            { id: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · Confined Space · Fire Fighting', icon: <HardHat className="w-4 h-4" /> },
+          ]).map(tab => {
+            const active = program === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => switchProgram(tab.id)}
+                className={`flex-1 sm:flex-none flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-left transition-all cursor-pointer ${active ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25' : 'hover:bg-slate-100 text-slate-800'}`}
+              >
+                {tab.icon}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black">{tab.label}</span>
+                    <span className={`text-[10px] font-mono font-black px-1.5 rounded-full ${active ? 'bg-white/20' : 'bg-slate-200 text-slate-700'}`}>{programCounts[tab.id]}</span>
+                  </div>
+                  <p className={`hidden sm:block text-[10px] font-semibold truncate ${active ? 'text-indigo-100' : 'text-slate-500'}`}>{tab.sub}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {[
-            { label: 'Total Personel', value: stats.total, sub: 'Terdaftar di database training', icon: <Users className="w-4 h-4" />, tone: 'indigo' },
-            { label: 'Training Lengkap', value: stats.lengkap, sub: `${stats.total ? Math.round((stats.lengkap / stats.total) * 100) : 0}% sudah 5/5 training`, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'emerald' },
-            { label: 'Belum Lengkap', value: stats.belum, sub: 'Masih ada training yang kosong', icon: <AlertCircle className="w-4 h-4" />, tone: 'amber' },
-            { label: 'Training Terakhir', value: stats.latest ? formatTrainingDate(stats.latest) : '-', sub: 'Tanggal training terbaru', icon: <CalendarCheck className="w-4 h-4" />, tone: 'violet' },
-          ].map(card => (
-            <div
-              key={card.label}
-              className="p-4 rounded-2xl border shadow-xs"
-              style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
-            >
+          {kpiCards.map(card => (
+            <div key={card.label} className="p-4 rounded-2xl border shadow-xs" style={cardStyle}>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-black uppercase tracking-wider text-slate-900">{card.label}</span>
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                  card.tone === 'emerald' ? 'bg-emerald-500/10 text-emerald-700'
-                  : card.tone === 'amber' ? 'bg-amber-500/10 text-amber-700'
-                  : card.tone === 'violet' ? 'bg-violet-500/10 text-violet-700'
-                  : 'bg-indigo-500/10 text-indigo-700'
-                }`}>{card.icon}</div>
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${card.tone}`}>{card.icon}</div>
               </div>
               <div className={`mt-2 font-black font-mono tracking-tight text-slate-950 ${typeof card.value === 'number' ? 'text-2xl sm:text-3xl' : 'text-base sm:text-lg'}`}>
                 {card.value}
@@ -487,40 +736,92 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           ))}
         </div>
 
-        {/* Cakupan per Jenis Training (klik untuk filter yang belum) */}
-        <div
-          className="p-4 rounded-2xl border shadow-xs"
-          style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Cakupan per Training</h3>
-            <span className="text-[10px] font-semibold text-slate-500">Klik untuk melihat yang belum</span>
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+          {/* Kurva Progres Training */}
+          <div className="xl:col-span-3 p-4 rounded-2xl border shadow-xs" style={cardStyle}>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Kurva Progres {programLabel}</h3>
+              </div>
+              <div className="flex p-0.5 rounded-lg bg-slate-100 border border-slate-200">
+                {([['cumulative', 'Kumulatif'], ['monthly', 'Per Bulan']] as const).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setCurveMode(mode)}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${curveMode === mode ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="h-64">
+              {curveData ? (
+                <Line
+                  data={curveData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                      legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11, weight: 'bold' } } },
+                      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} orang` } },
+                    },
+                    scales: {
+                      x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+                      y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } }, title: { display: true, text: 'Jumlah personel', font: { size: 10 } } },
+                    },
+                  }}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-xs font-semibold text-slate-500">Belum ada tanggal training untuk digambar</div>
+              )}
+            </div>
+            <p className="mt-2 text-[10px] font-semibold text-slate-500">
+              {curveMode === 'cumulative' ? 'Jumlah personel yang sudah training sampai bulan tersebut.' : 'Jumlah personel yang training pada bulan tersebut.'}
+              {program === 'k3' && ' Hanya status PASS yang dihitung.'}
+            </p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-            {stats.coverage.map(c => {
-              const pct = stats.total ? Math.round((c.done / stats.total) * 100) : 0;
-              const active = missingFilter === c.key;
-              return (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => setMissingFilter(active ? null : c.key)}
-                  className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${active ? 'border-rose-400 bg-rose-50 ring-2 ring-rose-300/40' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100'}`}
-                  title={`${c.desc}: ${stats.total - c.done} personel belum`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-950">{c.label}</span>
-                    <span className="text-[10px] font-mono font-black text-slate-700">{c.done}/{stats.total}</span>
-                  </div>
-                  <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                    <div className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
-                  </div>
-                  <p className={`mt-1.5 text-[10px] font-bold ${stats.total - c.done > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                    {stats.total - c.done > 0 ? `${stats.total - c.done} belum` : 'Semua lengkap'}
-                  </p>
-                </button>
-              );
-            })}
+
+          {/* Cakupan per Jenis Training */}
+          <div className="xl:col-span-2 p-4 rounded-2xl border shadow-xs" style={cardStyle}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">Cakupan per Training</h3>
+              <span className="text-[10px] font-semibold text-slate-500">Klik untuk melihat yang belum</span>
+            </div>
+            <div className="space-y-2">
+              {stats.coverage.map(c => {
+                const pct = c.target ? Math.round((c.done / c.target) * 100) : 0;
+                const pendingPct = c.target ? Math.round((c.pending / c.target) * 100) : 0;
+                const missing = c.target - c.done;
+                const active = missingFilter === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setMissingFilter(active ? null : c.key)}
+                    className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer ${active ? 'border-rose-400 bg-rose-50 ring-2 ring-rose-300/40' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100'}`}
+                    title={c.desc}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-slate-950">{c.label}</span>
+                      <span className="text-[10px] font-mono font-black text-slate-700">{c.done}/{c.target} · {pct}%</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden flex">
+                      <div className={`h-full ${pct === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${pct}%` }} />
+                      {pendingPct > 0 && <div className="h-full bg-amber-400" style={{ width: `${pendingPct}%` }} />}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-2.5 text-[10px] font-bold">
+                      <span className={missing > 0 ? 'text-rose-700' : 'text-emerald-700'}>{missing > 0 ? `${missing} belum` : 'Semua lengkap'}</span>
+                      {c.pending > 0 && <span className="text-amber-700">{c.pending} pending</span>}
+                      {c.exempt > 0 && <span className="text-slate-500">{c.exempt} tidak wajib (GOL IV/V)</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -532,7 +833,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Cari nama, NIK, atau jabatan..."
+              placeholder="Cari nama, NIK, jabatan, atau bagian..."
               className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 bg-white text-base sm:text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -545,10 +846,32 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <option value="ALL">Semua Shift</option>
               {SHIFT_OPTIONS.map(s => <option key={s} value={s}>{s === 'Nonshift' ? 'Nonshift' : `Shift ${s}`}</option>)}
             </select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className={selectClass}>
+            {bagianOptions.length > 0 && (
+              <select value={bagianFilter} onChange={e => setBagianFilter(e.target.value)} className={selectClass}>
+                <option value="ALL">Semua Bagian</option>
+                {bagianOptions.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            )}
+            {hasPtData && (
+              <select value={ptFilter} onChange={e => setPtFilter(e.target.value)} className={selectClass}>
+                <option value="ALL">Semua PT</option>
+                {PT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            )}
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={selectClass}>
               <option value="ALL">Semua Status</option>
-              <option value="LENGKAP">Lengkap (5/5)</option>
-              <option value="BELUM">Belum Lengkap</option>
+              {program === 'sap' ? (
+                <>
+                  <option value="LENGKAP">Lengkap</option>
+                  <option value="BELUM">Belum Lengkap</option>
+                </>
+              ) : (
+                <>
+                  <option value="SUDAH">Sudah Training (PASS)</option>
+                  <option value="PENDING">Ada Pending</option>
+                  <option value="BELUM">Belum Training</option>
+                </>
+              )}
             </select>
             {hasActiveFilter && (
               <button
@@ -565,7 +888,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
         <p className="text-[11px] font-semibold text-slate-600 -mt-2">
           Menampilkan <span className="font-black text-slate-900">{filteredRecords.length}</span> dari {stats.total} personel
-          {missingFilter && <> · belum <span className="font-black text-rose-700">{TRAININGS.find(t => t.key === missingFilter)?.label}</span></>}
+          {missingFilter && <> · belum <span className="font-black text-rose-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>}
+          {program === 'sap' && <> · BFA tidak wajib untuk GOL IV & V</>}
         </p>
 
         {/* Data */}
@@ -577,15 +901,12 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         ) : filteredRecords.length === 0 ? (
           <div className="p-10 text-center rounded-2xl border border-dashed border-slate-300 bg-white">
             <p className="text-sm font-bold text-slate-900 mb-1">Data tidak ditemukan</p>
-            <p className="text-xs text-slate-600">{records.length === 0 ? 'Belum ada data training.' : 'Coba ubah kata kunci atau filter.'}</p>
+            <p className="text-xs text-slate-600">{programRecords.length === 0 ? `Belum ada data ${programLabel}.` : 'Coba ubah kata kunci atau filter.'}</p>
           </div>
         ) : (
           <>
             {/* Tabel (desktop / tablet) */}
-            <div
-              className="hidden md:block rounded-2xl border shadow-xs overflow-hidden"
-              style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
-            >
+            <div className="hidden md:block rounded-2xl border shadow-xs overflow-hidden" style={cardStyle}>
               <div className="overflow-x-auto max-h-[70vh]">
                 <table className="w-full text-left border-collapse">
                   <thead className="sticky top-0 z-10 bg-slate-100">
@@ -594,9 +915,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       <th className="px-3 py-2.5">NIK</th>
                       <th className="px-3 py-2.5">Nama</th>
                       <th className="px-3 py-2.5">Jabatan</th>
+                      {program === 'k3' && <th className="px-3 py-2.5">Bagian</th>}
+                      {program === 'k3' && <th className="px-3 py-2.5 text-center">PT</th>}
                       <th className="px-3 py-2.5 text-center">GOL</th>
                       <th className="px-3 py-2.5 text-center">Shift</th>
-                      {TRAININGS.map(t => (
+                      {(program === 'sap' ? SAP_TRAININGS : K3_TRAININGS).map(t => (
                         <th key={t.key} className="px-3 py-2.5 text-center whitespace-nowrap" title={t.desc}>{t.label}</th>
                       ))}
                       <th className="px-3 py-2.5 text-center">Status</th>
@@ -606,16 +929,18 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <tbody>
                     {filteredRecords.map(r => (
                       <tr key={r.id} className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors">
-                        <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{r.no ?? '-'}</td>
+                        <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{(program === 'sap' ? r.no : r.noK3) ?? '-'}</td>
                         <td className="px-3 py-2 text-[11px] font-mono font-bold text-slate-800 whitespace-nowrap">{r.nik}</td>
-                        <td className="px-3 py-2 text-xs font-black text-slate-950 min-w-[180px]">{r.nama}</td>
-                        <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 min-w-[180px]">{r.jabatan || '-'}</td>
+                        <td className="px-3 py-2 text-xs font-black text-slate-950 min-w-[170px]">{r.nama}</td>
+                        <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 min-w-[170px]">{r.jabatan || '-'}</td>
+                        {program === 'k3' && <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap">{r.bagian || '-'}</td>}
+                        {program === 'k3' && <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>}
                         <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.gol || '-'}</td>
                         <td className="px-3 py-2 text-center text-[11px] font-bold text-slate-800 whitespace-nowrap">{r.shift || '-'}</td>
-                        {TRAININGS.map(t => (
-                          <td key={t.key} className="px-3 py-2 text-center"><DateCell value={r[t.key]} /></td>
-                        ))}
-                        <td className="px-3 py-2 text-center"><StatusBadge r={r} /></td>
+                        {program === 'sap'
+                          ? SAP_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center">{renderSapCell(r, t.key)}</td>)
+                          : K3_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center">{renderK3Cell(r, t.key, t.statusKey)}</td>)}
+                        <td className="px-3 py-2 text-center">{renderStatusBadge(r)}</td>
                         {canManage && (
                           <td className="px-3 py-2">
                             <div className="flex items-center justify-center gap-1">
@@ -638,26 +963,31 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             {/* Kartu (mobile) */}
             <div className="md:hidden space-y-2.5">
               {filteredRecords.map(r => (
-                <div
-                  key={r.id}
-                  className="p-3.5 rounded-2xl border shadow-xs"
-                  style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
-                >
+                <div key={r.id} className="p-3.5 rounded-2xl border shadow-xs" style={cardStyle}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-black text-slate-950 leading-tight">{r.nama}</p>
-                      <p className="text-[11px] font-mono font-bold text-slate-600 mt-0.5">{r.nik}</p>
-                      <p className="text-[11px] font-semibold text-slate-700 mt-0.5">{r.jabatan || '-'} · GOL {r.gol || '-'} · {r.shift || '-'}</p>
+                      <p className="text-[11px] font-mono font-bold text-slate-600 mt-0.5">{r.nik}{r.pt ? ` · ${r.pt}` : ''}</p>
+                      <p className="text-[11px] font-semibold text-slate-700 mt-0.5">
+                        {r.jabatan || '-'} · GOL {r.gol || '-'} · {r.shift || '-'}{program === 'k3' && r.bagian ? ` · ${r.bagian}` : ''}
+                      </p>
                     </div>
-                    <StatusBadge r={r} />
+                    {renderStatusBadge(r)}
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5">
-                    {TRAININGS.map(t => (
-                      <div key={t.key} className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-black uppercase text-slate-600">{t.label}</span>
-                        <DateCell value={r[t.key]} />
-                      </div>
-                    ))}
+                    {program === 'sap'
+                      ? SAP_TRAININGS.map(t => (
+                          <div key={t.key} className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-black uppercase text-slate-600">{t.label}</span>
+                            {renderSapCell(r, t.key)}
+                          </div>
+                        ))
+                      : K3_TRAININGS.map(t => (
+                          <div key={t.key} className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-black uppercase text-slate-600">{t.label}</span>
+                            {renderK3Cell(r, t.key, t.statusKey)}
+                          </div>
+                        ))}
                   </div>
                   {canManage && (
                     <div className="mt-3 pt-2.5 border-t border-slate-100 flex justify-end gap-2">
@@ -679,17 +1009,16 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       {/* Modal Tambah / Edit */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <form
-            onSubmit={handleSave}
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border"
-            style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
-          >
-            <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b" style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}>
+          <form onSubmit={handleSave} className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border" style={cardStyle}>
+            <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b" style={cardStyle}>
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-700 flex items-center justify-center">
                   <GraduationCap className="w-4.5 h-4.5" />
                 </div>
-                <h3 className="text-sm sm:text-base font-black text-slate-950">{editingRecord ? 'Edit Data Training' : 'Tambah Data Training'}</h3>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-slate-950">{editingRecord ? 'Edit Data Training' : 'Tambah Data Training'}</h3>
+                  <p className="text-[11px] font-semibold text-slate-500">{programLabel}</p>
+                </div>
               </div>
               <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 rounded-xl hover:bg-slate-100 cursor-pointer">
                 <X className="w-4 h-4 text-slate-600" />
@@ -709,22 +1038,53 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <option value="">-</option>
                   {SHIFT_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                 </Select>
+                <Input label="Bagian" value={form.bagian} onChange={e => updateForm('bagian', e.target.value)} placeholder="Contoh: Laboratory" />
+                <Select label="PT" value={form.pt} onChange={e => updateForm('pt', e.target.value)}>
+                  <option value="">-</option>
+                  {PT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                </Select>
                 <Input label="No. Urut" type="number" min={1} value={form.no} onChange={e => updateForm('no', e.target.value)} placeholder="Otomatis jika kosong" />
               </div>
               <datalist id="training-employee-niks">
                 {employees.map(emp => <option key={emp.nik} value={emp.nik}>{emp.name}</option>)}
               </datalist>
 
-              <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 mb-2 mt-1">Tanggal Training</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4">
-                {TRAININGS.map(t => (
-                  <Input key={t.key} label={t.label} type="date" value={form[t.key]} onChange={e => updateForm(t.key, e.target.value)} title={t.desc} />
-                ))}
-              </div>
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 mb-2 mt-1">Tanggal {programLabel}</p>
+              {program === 'sap' ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4">
+                    {SAP_TRAININGS.map(t => (
+                      <Input
+                        key={t.key}
+                        label={t.key === 'bfa' && isBfaExempt(form.gol) ? 'BFA (tidak wajib)' : t.label}
+                        type="date"
+                        value={form[t.key]}
+                        onChange={e => updateForm(t.key, e.target.value)}
+                        title={t.desc}
+                      />
+                    ))}
+                  </div>
+                  {isBfaExempt(form.gol) && (
+                    <p className="-mt-2 mb-3 text-[11px] font-semibold text-slate-500">GOL {form.gol} tidak wajib mengikuti Basic First Aid (BFA).</p>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-1">
+                  {K3_TRAININGS.map(t => (
+                    <div key={t.key} className="grid grid-cols-2 gap-x-4">
+                      <Input label={t.label} type="date" value={form[t.key]} onChange={e => updateForm(t.key, e.target.value)} title={t.desc} />
+                      <Select label={`Status ${t.label}`} value={form[t.statusKey]} onChange={e => updateForm(t.statusKey, e.target.value)}>
+                        <option value="">-</option>
+                        {K3_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              )}
               <Textarea label="Catatan" rows={2} value={form.notes} onChange={e => updateForm('notes', e.target.value)} placeholder="Opsional" />
             </div>
 
-            <div className="sticky bottom-0 flex gap-2.5 px-5 py-4 border-t" style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}>
+            <div className="sticky bottom-0 flex gap-2.5 px-5 py-4 border-t" style={cardStyle}>
               <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)} className="flex-1 py-2.5 text-xs font-bold">Batal</Button>
               <Button type="submit" disabled={isSaving} className="flex-1 py-2.5 text-xs font-bold">
                 {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -735,16 +1095,60 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         </div>
       )}
 
+      {/* Konfirmasi Import */}
+      {importPreview && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl shadow-2xl border p-6" style={cardStyle}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-500/15 text-indigo-700 flex items-center justify-center shrink-0">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-black text-slate-950">Konfirmasi Import</h3>
+                <p className="text-[11px] font-semibold text-slate-500 truncate">{importPreview.fileName}</p>
+              </div>
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="font-semibold text-slate-600">Format terdeteksi</span>
+                <span className="font-black text-slate-950">{importPreview.programs.map(p => (p === 'sap' ? 'Training SAP' : 'Training K3')).join(' + ')}</span>
+              </div>
+              <div className="flex justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="font-semibold text-slate-600">Baris valid</span>
+                <span className="font-black text-slate-950">{importPreview.records.length} karyawan</span>
+              </div>
+              {importPreview.skipped > 0 && (
+                <div className="flex justify-between p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                  <span className="font-semibold text-amber-800">Dilewati (tanpa NIK/Nama)</span>
+                  <span className="font-black text-amber-900">{importPreview.skipped} baris</span>
+                </div>
+              )}
+            </div>
+            <p className="mt-3 text-[11px] font-semibold text-slate-600">
+              Data dicocokkan berdasarkan NIK: karyawan yang sudah ada akan diperbarui tanggal & status trainingnya, NIK baru akan ditambahkan.
+            </p>
+            <div className="mt-5 flex gap-2.5">
+              <Button variant="secondary" onClick={() => setImportPreview(null)} disabled={isImporting} className="flex-1 py-2.5 text-xs font-bold">Batal</Button>
+              <Button onClick={confirmImport} disabled={isImporting} className="flex-1 py-2.5 text-xs font-bold">
+                {isImporting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Import {importPreview.records.length} Data
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Konfirmasi Hapus */}
       {deleteTarget && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl shadow-2xl border p-6 text-center" style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}>
+          <div className="w-full max-w-sm rounded-3xl shadow-2xl border p-6 text-center" style={cardStyle}>
             <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center">
               <Trash2 className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-black text-slate-950 mb-1">Hapus Data Training?</h3>
+            <h3 className="text-base font-black text-slate-950 mb-1">Hapus dari {programLabel}?</h3>
             <p className="text-xs text-slate-600 mb-5">
-              Data training <span className="font-black text-slate-900">{deleteTarget.nama}</span> ({deleteTarget.nik}) akan dihapus permanen.
+              Data {programLabel} <span className="font-black text-slate-900">{deleteTarget.nama}</span> ({deleteTarget.nik}) akan dihapus.
+              {(program === 'sap' ? deleteTarget.inK3 : deleteTarget.inSap) && ' Data di program training lainnya tetap tersimpan.'}
             </p>
             <div className="flex gap-2.5">
               <Button variant="secondary" onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 text-xs font-bold">Batal</Button>
