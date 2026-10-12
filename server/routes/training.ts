@@ -5,6 +5,7 @@ import { eq, asc, sql, inArray } from "drizzle-orm";
 import { trainingRecords } from "../../src/db/schema.js";
 import { TRAINING_SAP_SEED } from "../data/trainingSapSeed.js";
 import { TRAINING_K3_SEED_CSV } from "../data/trainingK3Seed.js";
+import { TRAINING_MONITORING_SEED_CSV } from "../data/trainingMonitoringSeed.js";
 import {
   parseTrainingSheet,
   normalizeTrainingDate,
@@ -19,10 +20,23 @@ type TrainingRow = typeof trainingRecords.$inferSelect;
 
 const PROFILE_FIELDS = ['nama', 'jabatan', 'gol', 'shift', 'bagian', 'pt'] as const;
 const PROGRAM_FIELDS: Record<TrainingProgram, readonly (keyof ParsedTrainingRow)[]> = {
-  sap: ['hazid', 'jsa', 'iutOtt', 'iai', 'bfa'],
+  sap: ['hazid', 'hazidStatus', 'jsa', 'jsaStatus', 'iutOtt', 'iutOttStatus', 'iai', 'iaiStatus', 'bfa', 'bfaStatus', 'bs', 'bsStatus', 'sapDetails'],
   k3: ['wah', 'wahStatus', 'loto', 'lotoStatus', 'confinedSpace', 'confinedSpaceStatus', 'fireFighting', 'fireFightingStatus'],
 };
-const STATUS_FIELDS = new Set(['wahStatus', 'lotoStatus', 'confinedSpaceStatus', 'fireFightingStatus']);
+const STATUS_FIELDS = new Set([
+  'hazidStatus', 'jsaStatus', 'iutOttStatus', 'iaiStatus', 'bfaStatus', 'bsStatus',
+  'wahStatus', 'lotoStatus', 'confinedSpaceStatus', 'fireFightingStatus',
+]);
+// Field yang tidak diedit lewat form (hanya dari file Monitoring) — tidak ikut ditimpa saat PUT
+const NON_FORM_FIELDS = new Set(['sapDetails']);
+
+// Normalisasi satu field program sesuai jenisnya
+function normalizeProgramField(field: string, value: unknown): unknown {
+  if (field === 'sapDetails') return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  return STATUS_FIELDS.has(field) ? normalizeTrainingStatus(value) : normalizeTrainingDate(value);
+}
+
+const MONITORING_SEED_MARKER = 'training_seed_monitoring_sap_v1';
 
 const isProgram = (v: unknown): v is TrainingProgram => v === 'sap' || v === 'k3';
 
@@ -39,7 +53,11 @@ const UPSERT_COLUMNS: { field: keyof typeof trainingRecords.$inferInsert; column
   { field: 'no', column: 'no' }, { field: 'noK3', column: 'no_k3' },
   { field: 'inSap', column: 'in_sap' }, { field: 'inK3', column: 'in_k3' },
   { field: 'hazid', column: 'hazid' }, { field: 'jsa', column: 'jsa' }, { field: 'iutOtt', column: 'iut_ott' },
-  { field: 'iai', column: 'iai' }, { field: 'bfa', column: 'bfa' },
+  { field: 'iai', column: 'iai' }, { field: 'bfa', column: 'bfa' }, { field: 'bs', column: 'bs' },
+  { field: 'hazidStatus', column: 'hazid_status' }, { field: 'jsaStatus', column: 'jsa_status' },
+  { field: 'iutOttStatus', column: 'iut_ott_status' }, { field: 'iaiStatus', column: 'iai_status' },
+  { field: 'bfaStatus', column: 'bfa_status' }, { field: 'bsStatus', column: 'bs_status' },
+  { field: 'sapDetails', column: 'sap_details' },
   { field: 'wah', column: 'wah' }, { field: 'wahStatus', column: 'wah_status' },
   { field: 'loto', column: 'loto' }, { field: 'lotoStatus', column: 'loto_status' },
   { field: 'confinedSpace', column: 'confined_space' }, { field: 'confinedSpaceStatus', column: 'confined_space_status' },
@@ -50,8 +68,8 @@ const UPSERT_SET = Object.fromEntries(UPSERT_COLUMNS.map(c => [c.field, sql.raw(
 const UPSERT_CHUNK = 200;
 
 // Upsert massal berdasarkan NIK untuk program tertentu — 1 query baca + 1 query tulis per 200 baris.
-// Field program selalu diganti sesuai sumber; field profil: Training SAP menimpa, Training K3 hanya
-// mengisi yang kosong (kecuali Bagian & PT yang memang bersumber dari file K3).
+// Field program yang ADA di data sumber diganti; yang tidak ada (mis. kolom BS di file lama) dipertahankan.
+// Field profil: Training SAP menimpa, Training K3 hanya mengisi yang kosong (kecuali Bagian & PT dari file K3).
 async function bulkUpsertTrainingRows(
   recs: ParsedTrainingRow[],
   programs: TrainingProgram[],
@@ -80,9 +98,10 @@ async function bulkUpsertTrainingRows(
       const preferIncoming = sapIsSource || f === 'bagian' || f === 'pt';
       row[f] = preferIncoming ? (incoming ?? current) : (current ?? incoming);
     });
-    // Semua field program diisi: program sumber dari file, program lain dipertahankan dari data lama
+    // Semua field program diisi: yang ada di sumber dari file, sisanya dipertahankan dari data lama
     (Object.keys(PROGRAM_FIELDS) as TrainingProgram[]).forEach(p => PROGRAM_FIELDS[p].forEach(f => {
-      row[f] = programs.includes(p) ? rec[f] ?? null : existing ? (existing as any)[f] ?? null : null;
+      const fromSource = programs.includes(p) && f in rec;
+      row[f] = fromSource ? rec[f] ?? null : existing ? (existing as any)[f] ?? null : null;
     }));
     row.no = sapIsSource && rec.no != null ? rec.no : existing?.no ?? null;
     row.noK3 = !sapIsSource && programs.includes('k3') && rec.no != null ? rec.no : existing?.noK3 ?? null;
@@ -136,25 +155,57 @@ async function migrateTrainingTable() {
     ADD COLUMN IF NOT EXISTS confined_space_status TEXT,
     ADD COLUMN IF NOT EXISTS fire_fighting TEXT,
     ADD COLUMN IF NOT EXISTS fire_fighting_status TEXT;`);
+  // Kolom status per training SAP, training BS & detail skor (format Monitoring Training)
+  await db.execute(sql`ALTER TABLE training_records
+    ADD COLUMN IF NOT EXISTS bs TEXT,
+    ADD COLUMN IF NOT EXISTS hazid_status TEXT,
+    ADD COLUMN IF NOT EXISTS jsa_status TEXT,
+    ADD COLUMN IF NOT EXISTS iut_ott_status TEXT,
+    ADD COLUMN IF NOT EXISTS iai_status TEXT,
+    ADD COLUMN IF NOT EXISTS bfa_status TEXT,
+    ADD COLUMN IF NOT EXISTS bs_status TEXT,
+    ADD COLUMN IF NOT EXISTS sap_details JSONB;`);
   // Baris lama (sebelum ada flag program) adalah peserta Training SAP
   await db.execute(sql`UPDATE training_records SET in_sap = TRUE
     WHERE COALESCE(in_sap, FALSE) = FALSE AND COALESCE(in_k3, FALSE) = FALSE;`);
 }
 
+// Menyentuh kolom terbaru (bs_status, sap_details) agar query gagal bila migrasi belum dijalankan
 const countPrograms = async () => {
   const [counts] = await db.select({
     sapCount: sql<number>`count(*) filter (where ${trainingRecords.inSap})::int`,
     k3Count: sql<number>`count(*) filter (where ${trainingRecords.inK3})::int`,
+    detailCount: sql<number>`count(*) filter (where ${trainingRecords.bsStatus} is not null or ${trainingRecords.sapDetails} is not null)::int`,
   }).from(trainingRecords);
   return counts;
 };
+
+// Seed sekali pakai data Monitoring Training (SAP lengkap + BS + skor). Penanda di app_settings dibuat secara atomik,
+// sehingga hanya satu instance server yang menjalankannya dan edit/import berikutnya tidak pernah tertimpa.
+async function seedMonitoringOnce() {
+  const claimed = await db.execute(sql`INSERT INTO app_settings (setting_key, setting_value, description)
+    VALUES (${MONITORING_SEED_MARKER}, 'running', 'Seed Database Training dari Monitoring_Training_Monitoring.csv')
+    ON CONFLICT (setting_key) DO NOTHING RETURNING id;`);
+  if (!claimed.rows?.length) return;
+  try {
+    const parsed = parseTrainingSheet(Papa.parse<unknown[]>(TRAINING_MONITORING_SEED_CSV, { skipEmptyLines: true }).data);
+    if (parsed) {
+      const result = await bulkUpsertTrainingRows(parsed.records, ['sap'], 'seed:Monitoring_Training_Monitoring.csv');
+      console.log(`[Training] Monitoring seed: ${result.inserted} baru, ${result.updated} diperbarui`);
+    }
+    await db.execute(sql`UPDATE app_settings SET setting_value = 'done', updated_at = NOW() WHERE setting_key = ${MONITORING_SEED_MARKER};`);
+  } catch (e) {
+    await db.execute(sql`DELETE FROM app_settings WHERE setting_key = ${MONITORING_SEED_MARKER};`);
+    throw e;
+  }
+}
 
 let ensurePromise: Promise<void> | null = null;
 export function ensureTrainingRecordsTable(): Promise<void> {
   if (!ensurePromise) {
     ensurePromise = (async () => {
       // Jalur cepat: 1 query. Jika tabel/kolom terbaru belum ada, query gagal → jalankan migrasi.
-      let counts: { sapCount: number; k3Count: number };
+      let counts: { sapCount: number; k3Count: number; detailCount: number };
       try {
         counts = await countPrograms();
       } catch {
@@ -178,6 +229,8 @@ export function ensureTrainingRecordsTable(): Promise<void> {
           console.log(`[Training] Seeded ${parsed.records.length} K3 records`);
         }
       }
+      // Gagal seed tidak boleh menghalangi data tampil; akan dicoba lagi saat server berikutnya start
+      await seedMonitoringOnce().catch((e: any) => console.error("[Training] Monitoring seed failed:", e.message));
     })().catch((e: any) => {
       ensurePromise = null; // coba lagi di request berikutnya
       console.error("[Training] Ensure table failed:", e.message);
@@ -200,7 +253,7 @@ function parseBody(body: any, program: TrainingProgram): ParsedTrainingRow {
     no: body.no !== undefined && String(body.no).trim() !== '' ? parseInt(String(body.no), 10) || null : null,
   };
   PROGRAM_FIELDS[program].forEach(f => {
-    (rec as any)[f] = STATUS_FIELDS.has(f) ? normalizeTrainingStatus(body[f]) : normalizeTrainingDate(body[f]);
+    if (!NON_FORM_FIELDS.has(f)) (rec as any)[f] = normalizeProgramField(f, body[f]);
   });
   return rec;
 }
@@ -272,9 +325,9 @@ trainingRouter.post("/api/training-records/import", async (req, res) => {
         skipped++;
         continue;
       }
-      // Normalisasi ulang di server agar data tetap konsisten walau dikirim client lain
+      // Normalisasi ulang di server; field yang tidak ada di file dibiarkan tidak ada (data lama dipertahankan)
       programs.forEach(p => PROGRAM_FIELDS[p].forEach(f => {
-        (rec as any)[f] = STATUS_FIELDS.has(f) ? normalizeTrainingStatus(rec[f]) : normalizeTrainingDate(rec[f]);
+        if (f in rec) (rec as any)[f] = normalizeProgramField(f, rec[f]);
       }));
       recs.push(rec);
     }
@@ -309,7 +362,9 @@ trainingRouter.put("/api/training-records/:id", async (req, res) => {
       return res.status(409).json({ status: "error", message: `NIK ${rec.nik} sudah dipakai data lain.` });
     }
     const programValues: Record<string, unknown> = {};
-    PROGRAM_FIELDS[program].forEach(f => { programValues[f] = rec[f] ?? null; });
+    PROGRAM_FIELDS[program].forEach(f => {
+      if (!NON_FORM_FIELDS.has(f)) programValues[f] = rec[f] ?? null;
+    });
     const [updated] = await db
       .update(trainingRecords)
       .set({

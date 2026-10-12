@@ -37,16 +37,49 @@ import { Input, Select, Textarea, Button } from './ui';
 import {
   SAP_TRAININGS,
   K3_TRAININGS,
-  isBfaExempt,
+  sapRequiredKeys as sapRequiredKeysForGol,
   parseTrainingSheet,
   type ParsedTrainingSheet,
   type TrainingProgram,
   type SapDateKey,
+  type SapStatusKey,
+  type SapDetails,
   type K3DateKey,
   type K3StatusKey,
 } from '../utils/training-import';
+import type { Plugin } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+
+// Plugin: tulis persentase di tengah setiap segmen batang (persentase terhadap total batang tersebut)
+const barPercentLabels: Plugin<'bar'> = {
+  id: 'barPercentLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx, data } = chart;
+    const visible = data.datasets.map((_, i) => chart.isDatasetVisible(i));
+    const totals = (data.labels || []).map((_, idx) =>
+      data.datasets.reduce((sum, ds, i) => sum + (visible[i] ? Number(ds.data[idx]) || 0 : 0), 0));
+    ctx.save();
+    ctx.font = 'bold 10px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    data.datasets.forEach((ds, i) => {
+      if (!visible[i]) return;
+      chart.getDatasetMeta(i).data.forEach((bar: any, idx) => {
+        const value = Number(ds.data[idx]) || 0;
+        const total = totals[idx];
+        if (!value || !total) return;
+        const { x, y, base, width } = bar.getProps(['x', 'y', 'base', 'width'], true);
+        const height = Math.abs(base - y);
+        if (height < 13 || width < 18) return; // segmen terlalu kecil untuk label
+        const bg = String(ds.backgroundColor || '');
+        ctx.fillStyle = bg === '#cbd5e1' || bg === '#fbbf24' ? '#1e293b' : '#ffffff';
+        ctx.fillText(`${Math.round((value / total) * 100)}%`, x, (y + base) / 2);
+      });
+    });
+    ctx.restore();
+  },
+};
 
 export interface TrainingRecord {
   id: number;
@@ -66,6 +99,14 @@ export interface TrainingRecord {
   iutOtt: string | null;
   iai: string | null;
   bfa: string | null;
+  bs: string | null;
+  hazidStatus: string | null;
+  jsaStatus: string | null;
+  iutOttStatus: string | null;
+  iaiStatus: string | null;
+  bfaStatus: string | null;
+  bsStatus: string | null;
+  sapDetails: SapDetails | null;
   wah: string | null;
   wahStatus: string | null;
   loto: string | null;
@@ -84,6 +125,7 @@ const GOL_OPTIONS = ['I', 'II', 'III', 'IV', 'V'];
 const SHIFT_OPTIONS = ['A', 'B', 'Nonshift'];
 const PT_OPTIONS = ['TBP', 'GPS'];
 const K3_STATUS_OPTIONS = ['PASS', 'Pending', 'FAIL'];
+const SAP_STATUS_OPTIONS = ['PASS', 'WARNING', 'EXPIRED', 'FAIL'];
 const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const CHART_COLORS = ['#4f46e5', '#0d9488', '#d97706', '#db2777', '#7c3aed'];
@@ -121,11 +163,28 @@ const JABATAN_RANKS: [RegExp, number][] = [
 const jabatanRank = (jabatan: string) => JABATAN_RANKS.find(([re]) => re.test(jabatan))?.[1] ?? 9;
 
 // ===== Aturan Training SAP =====
-// GOL IV & V tidak wajib BFA, sehingga target mereka 4 training
-const sapRequiredKeys = (r: TrainingRecord): SapDateKey[] =>
-  SAP_TRAININGS.map(t => t.key).filter(k => !(k === 'bfa' && isBfaExempt(r.gol)));
-const sapDoneCount = (r: TrainingRecord) => sapRequiredKeys(r).filter(k => !!r[k]).length;
+// Wajib per GOL: GOL I → BFA & BS; GOL IV/V → HAZID, JSA, IUT OTT, IAI; lainnya → HAZID, JSA, IUT OTT, IAI, BFA
+const sapRequiredKeys = (r: TrainingRecord): SapDateKey[] => sapRequiredKeysForGol(r.gol);
+const sapGolRule = (gol: string | null) => {
+  const keys = sapRequiredKeysForGol(gol);
+  return SAP_TRAININGS.filter(t => keys.includes(t.key)).map(t => t.label).join(', ');
+};
+
+// done = sudah & berlaku, warning = berlaku tapi hampir habis, expired/failed = ada tanggal tapi tidak berlaku,
+// none = belum training, exempt = tidak wajib & belum ada data
+type SapState = 'done' | 'warning' | 'expired' | 'failed' | 'none' | 'exempt';
+function sapState(r: TrainingRecord, key: SapDateKey, statusKey: SapStatusKey): SapState {
+  const status = r[statusKey];
+  if (status === 'FAIL') return 'failed';
+  if (status === 'EXPIRED') return 'expired';
+  if (r[key]) return status === 'WARNING' ? 'warning' : 'done';
+  return sapRequiredKeys(r).includes(key) ? 'none' : 'exempt';
+}
+const sapIsValid = (s: SapState) => s === 'done' || s === 'warning';
+const sapDoneCount = (r: TrainingRecord) =>
+  sapRequiredKeys(r).filter(k => sapIsValid(sapState(r, k, SAP_TRAININGS.find(t => t.key === k)!.statusKey))).length;
 const isSapComplete = (r: TrainingRecord) => sapDoneCount(r) === sapRequiredKeys(r).length;
+const sapHasState = (r: TrainingRecord, states: SapState[]) => SAP_TRAININGS.some(t => states.includes(sapState(r, t.key, t.statusKey)));
 
 // ===== Aturan Training K3 =====
 type K3State = 'PASS' | 'Pending' | 'FAIL' | 'none';
@@ -151,7 +210,8 @@ type FormState = Record<string, string>;
 
 const EMPTY_FORM: FormState = {
   no: '', nik: '', nama: '', jabatan: '', gol: 'II', shift: 'Nonshift', bagian: '', pt: '', notes: '',
-  hazid: '', jsa: '', iutOtt: '', iai: '', bfa: '',
+  hazid: '', jsa: '', iutOtt: '', iai: '', bfa: '', bs: '',
+  hazidStatus: '', jsaStatus: '', iutOttStatus: '', iaiStatus: '', bfaStatus: '', bsStatus: '',
   wah: '', wahStatus: '', loto: '', lotoStatus: '', confinedSpace: '', confinedSpaceStatus: '', fireFighting: '', fireFightingStatus: '',
 };
 
@@ -281,15 +341,20 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     if (program === 'sap') {
       const lengkap = programRecords.filter(isSapComplete).length;
       const coverage = SAP_TRAININGS.map(t => {
-        const required = programRecords.filter(r => sapRequiredKeys(r).includes(t.key));
+        // Hanya personel yang WAJIB training ini yang dihitung ke target
+        const states = programRecords
+          .filter(r => sapRequiredKeys(r).includes(t.key))
+          .map(r => sapState(r, t.key, t.statusKey));
         return {
           key: t.key as string,
           label: t.label,
           desc: t.desc,
-          done: required.filter(r => !!r[t.key]).length,
+          done: states.filter(sapIsValid).length, // termasuk WARNING (masih berlaku)
+          warning: states.filter(s => s === 'warning').length,
+          expired: states.filter(s => s === 'expired' || s === 'failed').length,
           pending: 0,
-          target: required.length,
-          exempt: total - required.length,
+          target: states.length,
+          exempt: total - states.length,
         };
       });
       return { total, latest, coverage, cardA: lengkap, cardB: total - lengkap };
@@ -302,6 +367,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         label: t.label,
         desc: t.desc,
         done: states.filter(s => s === 'PASS').length,
+        warning: 0,
+        expired: states.filter(s => s === 'FAIL').length,
         pending: states.filter(s => s === 'Pending').length,
         target: total,
         exempt: 0,
@@ -315,12 +382,21 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   // ===== Diagram status per training (batang bertumpuk) =====
   const statusChartData = useMemo(() => {
     if (stats.total === 0) return null;
-    const datasets = [
-      { label: program === 'sap' ? 'Sudah' : 'PASS', data: stats.coverage.map(c => c.done), backgroundColor: '#10b981' },
-      ...(program === 'k3' ? [{ label: 'Pending', data: stats.coverage.map(c => c.pending), backgroundColor: '#f59e0b' }] : []),
-      { label: 'Belum', data: stats.coverage.map(c => c.target - c.done - c.pending), backgroundColor: '#f43f5e' },
-      ...(program === 'sap' ? [{ label: 'Tidak Wajib (GOL IV/V)', data: stats.coverage.map(c => c.exempt), backgroundColor: '#cbd5e1' }] : []),
-    ];
+    const cov = stats.coverage;
+    const datasets = program === 'sap'
+      ? [
+          { label: 'Berlaku', data: cov.map(c => c.done - c.warning), backgroundColor: '#10b981' },
+          { label: 'Warning', data: cov.map(c => c.warning), backgroundColor: '#fbbf24' },
+          { label: 'Expired / Failed', data: cov.map(c => c.expired), backgroundColor: '#f97316' },
+          { label: 'Belum', data: cov.map(c => c.target - c.done - c.expired), backgroundColor: '#f43f5e' },
+          { label: 'Tidak Wajib', data: cov.map(c => c.exempt), backgroundColor: '#cbd5e1' },
+        ]
+      : [
+          { label: 'PASS', data: cov.map(c => c.done), backgroundColor: '#10b981' },
+          { label: 'Pending', data: cov.map(c => c.pending), backgroundColor: '#fbbf24' },
+          { label: 'FAIL', data: cov.map(c => c.expired), backgroundColor: '#f97316' },
+          { label: 'Belum', data: cov.map(c => c.target - c.done - c.pending - c.expired), backgroundColor: '#f43f5e' },
+        ];
     return {
       labels: stats.coverage.map(c => c.label),
       datasets: datasets.map(d => ({ ...d, borderRadius: 4, maxBarThickness: 56 })),
@@ -330,7 +406,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   // ===== Diagram jumlah training per bulan (batang bertumpuk per jenis training) =====
   const monthlyChartData = useMemo(() => {
     const trainings = program === 'sap'
-      ? SAP_TRAININGS.map(t => ({ key: t.key as string, label: t.label, done: (r: TrainingRecord) => r[t.key] }))
+      ? SAP_TRAININGS.map(t => ({
+          key: t.key as string,
+          label: t.label,
+          done: (r: TrainingRecord) => (r[t.statusKey] === 'FAIL' ? null : r[t.key]),
+        }))
       : K3_TRAININGS.map(t => ({
           key: t.key as string,
           label: t.label,
@@ -387,9 +467,12 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       if (program === 'sap') {
         if (statusFilter === 'LENGKAP' && !isSapComplete(r)) return false;
         if (statusFilter === 'BELUM' && isSapComplete(r)) return false;
+        if (statusFilter === 'EXPIRED' && !sapHasState(r, ['expired', 'failed'])) return false;
+        if (statusFilter === 'WARNING' && !sapHasState(r, ['warning'])) return false;
         if (missingFilter) {
-          const key = missingFilter as SapDateKey;
-          if (!sapRequiredKeys(r).includes(key) || r[key]) return false;
+          // Tampilkan yang wajib tapi belum berlaku (belum training / expired / failed)
+          const t = SAP_TRAININGS.find(x => x.key === missingFilter)!;
+          if (!sapRequiredKeys(r).includes(t.key) || sapIsValid(sapState(r, t.key, t.statusKey))) return false;
         }
       } else {
         if (statusFilter === 'PENDING' && !k3HasPending(r)) return false;
@@ -586,10 +669,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     // Urutan ekspor mengikuti tampilan (dikelompokkan per jabatan), nomor berurutan dari 1
     const ordered = jabatanGroups.flatMap(g => g.rows.map(r => ({ r, jabatan: g.jabatan })));
     if (program === 'sap') {
-      header = ['NO', 'NIK', 'NAMA', 'Jabatan', 'GOL', 'SHIFT', ...SAP_TRAININGS.map(t => t.label)];
+      header = ['NO', 'NIK', 'NAMA', 'Jabatan', 'PT', 'GOL', 'SHIFT', ...SAP_TRAININGS.flatMap(t => [t.label, 'Status'])];
       rows = ordered.map(({ r, jabatan }, i) => [
-        i + 1, r.nik, r.nama, jabatan, r.gol || '', r.shift || '',
-        ...SAP_TRAININGS.map(t => (t.key === 'bfa' && isBfaExempt(r.gol) && !r.bfa ? 'Tidak Wajib' : r[t.key] || '')),
+        i + 1, r.nik, r.nama, jabatan, r.pt || '', r.gol || '', r.shift || '',
+        ...SAP_TRAININGS.flatMap(t => {
+          const state = sapState(r, t.key, t.statusKey);
+          return [state === 'exempt' ? 'Tidak Wajib' : r[t.key] || '', r[t.statusKey] || (r[t.key] ? 'PASS' : '')];
+        }),
       ]);
     } else {
       header = ['NO', 'NIK', 'NAMA KARYAWAN', 'Shift', 'BAGIAN', 'JABATAN', 'PT', 'GOL',
@@ -610,13 +696,31 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   };
 
   // ===== Render helpers =====
-  const renderSapCell = (r: TrainingRecord, key: SapDateKey) => {
-    const value = r[key];
-    if (value) return <span className="font-mono text-[11px] font-bold text-slate-900 whitespace-nowrap">{formatTrainingDate(value)}</span>;
-    if (key === 'bfa' && isBfaExempt(r.gol)) {
-      return <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap" title="GOL IV & V tidak wajib BFA">Tidak Wajib</span>;
+  const renderSapCell = (r: TrainingRecord, key: SapDateKey, statusKey: SapStatusKey) => {
+    const state = sapState(r, key, statusKey);
+    if (state === 'exempt') {
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap" title={`GOL ${r.gol || '-'} wajib: ${sapGolRule(r.gol)}`}>Tidak Wajib</span>;
     }
-    return <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">Belum</span>;
+    if (state === 'none') {
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">Belum</span>;
+    }
+    // Tooltip: instruktur & skor dari file Monitoring
+    const d = r.sapDetails?.[key];
+    const tip = d ? [d.ins && `Instruktur: ${d.ins}`, d.pre != null && `Pre: ${d.pre}`, d.post != null && `Post: ${d.post}`, d.prak != null && `Praktik: ${d.prak}`].filter(Boolean).join(' · ') : undefined;
+    const badge = state === 'warning' ? { text: 'WARNING', cls: 'bg-amber-50 text-amber-800 border-amber-200' }
+      : state === 'expired' ? { text: 'EXPIRED', cls: 'bg-orange-50 text-orange-700 border-orange-200' }
+      : state === 'failed' ? { text: 'FAILED', cls: 'bg-rose-50 text-rose-700 border-rose-200' }
+      : null;
+    return (
+      <div className="inline-flex flex-col items-center gap-0.5" title={tip}>
+        {r[key] && (
+          <span className={`font-mono text-[11px] font-bold whitespace-nowrap ${state === 'expired' || state === 'failed' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+            {formatTrainingDate(r[key])}
+          </span>
+        )}
+        {badge && <span className={`inline-flex px-1.5 py-px rounded text-[9px] font-black border ${badge.cls}`}>{badge.text}</span>}
+      </div>
+    );
   };
 
   const renderK3Cell = (r: TrainingRecord, key: K3DateKey, statusKey: K3StatusKey) => {
@@ -757,7 +861,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         {/* Tab Program */}
         <div className="flex gap-2 p-1 rounded-2xl border w-full sm:w-fit" style={cardStyle}>
           {([
-            { id: 'sap' as const, label: 'Training SAP', sub: 'HAZID · JSA · IUT OTT · IAI · BFA', icon: <ClipboardCheck className="w-4 h-4" /> },
+            { id: 'sap' as const, label: 'Training SAP', sub: 'HAZID · JSA · IUT OTT · IAI · BFA · BS', icon: <ClipboardCheck className="w-4 h-4" /> },
             { id: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · Confined Space · Fire Fighting', icon: <HardHat className="w-4 h-4" /> },
           ]).map(tab => {
             const active = program === tab.id;
@@ -822,13 +926,23 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               {(chartMode === 'status' ? statusChartData : monthlyChartData) ? (
                 <Bar
                   data={(chartMode === 'status' ? statusChartData : monthlyChartData)!}
+                  plugins={[barPercentLabels]}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                       legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11, weight: 'bold' } } },
-                      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} orang` } },
+                      tooltip: {
+                        callbacks: {
+                          label: ctx => {
+                            const total = ctx.chart.data.datasets.reduce((s, ds, i) =>
+                              s + (ctx.chart.isDatasetVisible(i) ? Number(ds.data[ctx.dataIndex]) || 0 : 0), 0);
+                            const pct = total ? Math.round((ctx.parsed.y / total) * 100) : 0;
+                            return ` ${ctx.dataset.label}: ${ctx.parsed.y} orang (${pct}%)`;
+                          },
+                        },
+                      },
                     },
                     scales: {
                       x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' }, maxRotation: 0, autoSkip: true } },
@@ -842,8 +956,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
             <p className="mt-2 text-[10px] font-semibold text-slate-500">
               {chartMode === 'status'
-                ? 'Jumlah personel per status untuk setiap jenis training.'
-                : `Jumlah personel yang training per bulan${monthlyChartData?.truncated ? ` (${MONTHLY_CHART_MAX_MONTHS} bulan terakhir)` : ''}.`}
+                ? 'Jumlah personel per status untuk setiap jenis training; angka di batang = persentase dari seluruh personel.'
+                : `Jumlah personel yang training per bulan${monthlyChartData?.truncated ? ` (${MONTHLY_CHART_MAX_MONTHS} bulan terakhir)` : ''}; angka di batang = porsi tiap training pada bulan tsb.`}
               {program === 'k3' && chartMode === 'monthly' && ' Hanya status PASS yang dihitung.'}
             </p>
           </div>
@@ -877,9 +991,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       {pendingPct > 0 && <div className="h-full bg-amber-400" style={{ width: `${pendingPct}%` }} />}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-2.5 text-[10px] font-bold">
-                      <span className={missing > 0 ? 'text-rose-700' : 'text-emerald-700'}>{missing > 0 ? `${missing} belum` : 'Semua lengkap'}</span>
+                      <span className={missing > 0 ? 'text-rose-700' : 'text-emerald-700'}>{missing > 0 ? `${missing} belum berlaku` : 'Semua lengkap'}</span>
+                      {c.expired > 0 && <span className="text-orange-700">{c.expired} {program === 'sap' ? 'expired/failed' : 'fail'}</span>}
+                      {c.warning > 0 && <span className="text-amber-700">{c.warning} warning</span>}
                       {c.pending > 0 && <span className="text-amber-700">{c.pending} pending</span>}
-                      {c.exempt > 0 && <span className="text-slate-500">{c.exempt} tidak wajib (GOL IV/V)</span>}
+                      {c.exempt > 0 && <span className="text-slate-500">{c.exempt} tidak wajib</span>}
                     </div>
                   </button>
                 );
@@ -927,6 +1043,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <>
                   <option value="LENGKAP">Lengkap</option>
                   <option value="BELUM">Belum Lengkap</option>
+                  <option value="EXPIRED">Ada Expired / Failed</option>
+                  <option value="WARNING">Ada Warning</option>
                 </>
               ) : (
                 <>
@@ -952,7 +1070,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         <p className="text-[11px] font-semibold text-slate-600 -mt-2">
           Menampilkan <span className="font-black text-slate-900">{filteredRecords.length}</span> dari {stats.total} personel
           {missingFilter && <> · belum <span className="font-black text-rose-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>}
-          {program === 'sap' && <> · BFA tidak wajib untuk GOL IV & V</>}
+          {program === 'sap' && <> · Wajib: GOL I → BFA & BS; GOL II–III → HAZID, JSA, IUT OTT, IAI, BFA; GOL IV–V → tanpa BFA</>}
         </p>
 
         {/* Data */}
@@ -1010,7 +1128,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                         <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.gol || '-'}</td>
                         <td className="px-3 py-2 text-center text-[11px] font-bold text-slate-800 whitespace-nowrap">{r.shift || '-'}</td>
                         {program === 'sap'
-                          ? SAP_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center">{renderSapCell(r, t.key)}</td>)
+                          ? SAP_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center">{renderSapCell(r, t.key, t.statusKey)}</td>)
                           : K3_TRAININGS.map(t => <td key={t.key} className="px-3 py-2 text-center">{renderK3Cell(r, t.key, t.statusKey)}</td>)}
                         <td className="px-3 py-2 text-center">{renderStatusBadge(r)}</td>
                         {canManage && (
@@ -1059,7 +1177,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       ? SAP_TRAININGS.map(t => (
                           <div key={t.key} className="flex items-center justify-between gap-2">
                             <span className="text-[10px] font-black uppercase text-slate-600">{t.label}</span>
-                            {renderSapCell(r, t.key)}
+                            {renderSapCell(r, t.key, t.statusKey)}
                           </div>
                         ))
                       : K3_TRAININGS.map(t => (
@@ -1134,21 +1252,23 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 mb-2 mt-1">Tanggal {programLabel}</p>
               {program === 'sap' ? (
                 <>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4">
-                    {SAP_TRAININGS.map(t => (
-                      <Input
-                        key={t.key}
-                        label={t.key === 'bfa' && isBfaExempt(form.gol) ? 'BFA (tidak wajib)' : t.label}
-                        type="date"
-                        value={form[t.key]}
-                        onChange={e => updateForm(t.key, e.target.value)}
-                        title={t.desc}
-                      />
-                    ))}
+                  <p className="-mt-1 mb-2 text-[11px] font-semibold text-slate-500">
+                    Wajib untuk GOL {form.gol || '-'}: <span className="font-black text-slate-700">{sapGolRule(form.gol)}</span>
+                  </p>
+                  <div className="space-y-1">
+                    {SAP_TRAININGS.map(t => {
+                      const required = sapRequiredKeysForGol(form.gol).includes(t.key);
+                      return (
+                        <div key={t.key} className="grid grid-cols-2 gap-x-4">
+                          <Input label={required ? t.label : `${t.label} (tidak wajib)`} type="date" value={form[t.key]} onChange={e => updateForm(t.key, e.target.value)} title={t.desc} />
+                          <Select label={`Status ${t.label}`} value={form[t.statusKey]} onChange={e => updateForm(t.statusKey, e.target.value)}>
+                            <option value="">-</option>
+                            {SAP_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </Select>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {isBfaExempt(form.gol) && (
-                    <p className="-mt-2 mb-3 text-[11px] font-semibold text-slate-500">GOL {form.gol} tidak wajib mengikuti Basic First Aid (BFA).</p>
-                  )}
                 </>
               ) : (
                 <div className="space-y-1">

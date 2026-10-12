@@ -839,6 +839,15 @@ export const trainingRecords = pgTable('training_records', {
   iutOtt: text('iut_ott'),
   iai: text('iai'),
   bfa: text('bfa'), // Tidak wajib untuk GOL IV & V
+  bs: text('bs'), // Wajib untuk GOL I (Crew) bersama BFA
+  // Status per training SAP: 'PASS' | 'FAIL' | 'EXPIRED' | 'WARNING' (dari file Monitoring Training)
+  hazidStatus: text('hazid_status'),
+  jsaStatus: text('jsa_status'),
+  iutOttStatus: text('iut_ott_status'),
+  iaiStatus: text('iai_status'),
+  bfaStatus: text('bfa_status'),
+  bsStatus: text('bs_status'),
+  sapDetails: json('sap_details'), // { [training]: { ins, pre, post, prak } } — instruktur & skor
   wah: text('wah'),
   wahStatus: text('wah_status'), // 'PASS' | 'Pending' | 'FAIL'
   loto: text('loto'),
