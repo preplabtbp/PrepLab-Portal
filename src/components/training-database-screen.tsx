@@ -41,6 +41,10 @@ import {
   parseTrainingSheet,
   guessTrainingFromFileName,
   ALL_TRAININGS,
+  trainingValidity,
+  todayWit,
+  TRAINING_WARNING_MONTHS,
+  TRAINING_EXPIRY_MONTHS,
   type TrainingKey,
   type ParsedTrainingSheet,
   type TrainingProgram,
@@ -53,6 +57,19 @@ import {
 import type { Plugin } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+
+// Warna status: WARNING kuning, EXPIRED merah, Belum merah muda, Tidak Wajib abu-abu
+const CHART_WARNING = '#facc15';
+const CHART_EXPIRED = '#dc2626';
+const CHART_BELUM = '#fda4af';
+const LIGHT_CHART_COLORS = new Set([CHART_WARNING, CHART_BELUM, '#cbd5e1', '#60a5fa']);
+const STATUS_BADGE: Record<string, string> = {
+  PASS: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  WARNING: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+  EXPIRED: 'bg-red-600 text-white border-red-700',
+  FAIL: 'bg-rose-50 text-rose-700 border-rose-200',
+  Pending: 'bg-sky-50 text-sky-800 border-sky-200',
+};
 
 // Plugin: label persentase di ujung batang pencapaian (dataset pertama) pada diagram horizontal
 const achievementLabels: Plugin<'bar'> = {
@@ -107,7 +124,7 @@ const barPercentLabels: Plugin<'bar'> = {
         const height = Math.abs(base - y);
         if (height < 13 || width < 18) return; // segmen terlalu kecil untuk label
         const bg = String(ds.backgroundColor || '');
-        ctx.fillStyle = bg === '#cbd5e1' || bg === '#fbbf24' ? '#1e293b' : '#ffffff';
+        ctx.fillStyle = LIGHT_CHART_COLORS.has(bg) ? '#1e293b' : '#ffffff';
         ctx.fillText(`${Math.round((value / total) * 100)}%`, x, (y + base) / 2);
       });
     });
@@ -207,11 +224,17 @@ const sapGolRule = (gol: string | null) => {
 // done = sudah & berlaku, warning = berlaku tapi hampir habis, expired/failed = ada tanggal tapi tidak berlaku,
 // none = belum training, exempt = tidak wajib & belum ada data
 type SapState = 'done' | 'warning' | 'expired' | 'failed' | 'none' | 'exempt';
+// Masa berlaku dihitung dari tanggal training: ≥ 1 th 6 bln → warning, ≥ 2 th → expired
+const TODAY = todayWit();
 function sapState(r: TrainingRecord, key: SapDateKey, statusKey: SapStatusKey): SapState {
   const status = r[statusKey];
   if (status === 'FAIL') return 'failed';
+  const date = r[key];
+  if (date) {
+    const v = trainingValidity(date, TODAY).state;
+    return v === 'expired' ? 'expired' : v === 'warning' ? 'warning' : 'done';
+  }
   if (status === 'EXPIRED') return 'expired';
-  if (r[key]) return status === 'WARNING' ? 'warning' : 'done';
   return sapRequiredKeys(r).includes(key) ? 'none' : 'exempt';
 }
 const sapIsValid = (s: SapState) => s === 'done' || s === 'warning';
@@ -221,16 +244,24 @@ const isSapComplete = (r: TrainingRecord) => sapDoneCount(r) === sapRequiredKeys
 const sapHasState = (r: TrainingRecord, states: SapState[]) => SAP_TRAININGS.some(t => states.includes(sapState(r, t.key, t.statusKey)));
 
 // ===== Aturan Training K3 =====
-type K3State = 'PASS' | 'Pending' | 'FAIL' | 'none';
+type K3State = 'PASS' | 'WARNING' | 'EXPIRED' | 'Pending' | 'FAIL' | 'none';
 function k3State(r: TrainingRecord, key: K3DateKey, statusKey: K3StatusKey): K3State {
   const status = r[statusKey];
   if (status === 'Pending') return 'Pending';
   if (status === 'FAIL') return 'FAIL';
-  if (r[key] || status === 'PASS') return 'PASS';
+  const date = r[key];
+  if (date) {
+    const v = trainingValidity(date, TODAY).state;
+    return v === 'expired' ? 'EXPIRED' : v === 'warning' ? 'WARNING' : 'PASS';
+  }
+  if (status === 'PASS') return 'PASS';
   return 'none';
 }
-const k3PassCount = (r: TrainingRecord) => K3_TRAININGS.filter(t => k3State(r, t.key, t.statusKey) === 'PASS').length;
+// Masih berlaku = PASS atau WARNING
+const k3IsValid = (s: K3State) => s === 'PASS' || s === 'WARNING';
+const k3PassCount = (r: TrainingRecord) => K3_TRAININGS.filter(t => k3IsValid(k3State(r, t.key, t.statusKey))).length;
 const k3HasPending = (r: TrainingRecord) => K3_TRAININGS.some(t => k3State(r, t.key, t.statusKey) === 'Pending');
+const k3HasState = (r: TrainingRecord, states: K3State[]) => K3_TRAININGS.some(t => states.includes(k3State(r, t.key, t.statusKey)));
 
 interface EmployeeMaster {
   nik: string;
@@ -400,9 +431,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         key: t.key as string,
         label: t.label,
         desc: t.desc,
-        done: states.filter(s => s === 'PASS').length,
-        warning: 0,
-        expired: states.filter(s => s === 'FAIL').length,
+        done: states.filter(k3IsValid).length, // termasuk WARNING (masih berlaku)
+        warning: states.filter(s => s === 'WARNING').length,
+        expired: states.filter(s => s === 'EXPIRED' || s === 'FAIL').length,
         pending: states.filter(s => s === 'Pending').length,
         target: total,
         exempt: 0,
@@ -427,7 +458,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       ...K3_TRAININGS.map(t => ({
         label: t.label,
         program: 'K3',
-        done: k3People.filter(r => k3State(r, t.key, t.statusKey) === 'PASS').length,
+        done: k3People.filter(r => k3IsValid(k3State(r, t.key, t.statusKey))).length,
         target: k3People.length,
       })),
     ].filter(i => i.target > 0);
@@ -456,16 +487,17 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     const datasets = program === 'sap'
       ? [
           { label: 'Berlaku', data: cov.map(c => c.done - c.warning), backgroundColor: '#10b981' },
-          { label: 'Warning', data: cov.map(c => c.warning), backgroundColor: '#fbbf24' },
-          { label: 'Expired / Failed', data: cov.map(c => c.expired), backgroundColor: '#f97316' },
-          { label: 'Belum', data: cov.map(c => c.target - c.done - c.expired), backgroundColor: '#f43f5e' },
+          { label: 'Warning', data: cov.map(c => c.warning), backgroundColor: CHART_WARNING },
+          { label: 'Expired / Failed', data: cov.map(c => c.expired), backgroundColor: CHART_EXPIRED },
+          { label: 'Belum', data: cov.map(c => c.target - c.done - c.expired), backgroundColor: CHART_BELUM },
           { label: 'Tidak Wajib', data: cov.map(c => c.exempt), backgroundColor: '#cbd5e1' },
         ]
       : [
-          { label: 'PASS', data: cov.map(c => c.done), backgroundColor: '#10b981' },
-          { label: 'Pending', data: cov.map(c => c.pending), backgroundColor: '#fbbf24' },
-          { label: 'FAIL', data: cov.map(c => c.expired), backgroundColor: '#f97316' },
-          { label: 'Belum', data: cov.map(c => c.target - c.done - c.pending - c.expired), backgroundColor: '#f43f5e' },
+          { label: 'Berlaku', data: cov.map(c => c.done - c.warning), backgroundColor: '#10b981' },
+          { label: 'Warning', data: cov.map(c => c.warning), backgroundColor: CHART_WARNING },
+          { label: 'Pending', data: cov.map(c => c.pending), backgroundColor: '#60a5fa' },
+          { label: 'Expired / Fail', data: cov.map(c => c.expired), backgroundColor: CHART_EXPIRED },
+          { label: 'Belum', data: cov.map(c => c.target - c.done - c.pending - c.expired), backgroundColor: CHART_BELUM },
         ];
     return {
       labels: stats.coverage.map(c => c.label),
@@ -484,7 +516,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       : K3_TRAININGS.map(t => ({
           key: t.key as string,
           label: t.label,
-          done: (r: TrainingRecord) => (k3State(r, t.key, t.statusKey) === 'PASS' ? r[t.key] : null),
+          // Tren per bulan = kapan training dilaksanakan (lulus), termasuk yang kini sudah warning/expired
+          done: (r: TrainingRecord) => (['PASS', 'WARNING', 'EXPIRED'].includes(k3State(r, t.key, t.statusKey)) ? r[t.key] : null),
         }));
 
     const monthsByTraining = trainings.map(t => {
@@ -548,9 +581,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         if (statusFilter === 'PENDING' && !k3HasPending(r)) return false;
         if (statusFilter === 'SUDAH' && k3PassCount(r) === 0) return false;
         if (statusFilter === 'BELUM' && (k3PassCount(r) > 0 || k3HasPending(r))) return false;
+        if (statusFilter === 'EXPIRED' && !k3HasState(r, ['EXPIRED', 'FAIL'])) return false;
+        if (statusFilter === 'WARNING' && !k3HasState(r, ['WARNING'])) return false;
         if (missingFilter) {
           const t = K3_TRAININGS.find(x => x.key === missingFilter);
-          if (t && k3State(r, t.key, t.statusKey) === 'PASS') return false;
+          if (t && k3IsValid(k3State(r, t.key, t.statusKey))) return false;
         }
       }
       return true;
@@ -791,12 +826,15 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     if (state === 'none') {
       return <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">Belum</span>;
     }
-    // Tooltip: instruktur & skor dari file Monitoring
+    // Tooltip: masa berlaku + instruktur & skor dari file Monitoring
     const d = r.sapDetails?.[key];
-    const tip = d ? [d.ins && `Instruktur: ${d.ins}`, d.pre != null && `Pre: ${d.pre}`, d.post != null && `Post: ${d.post}`, d.prak != null && `Praktik: ${d.prak}`].filter(Boolean).join(' · ') : undefined;
-    const badge = state === 'warning' ? { text: 'WARNING', cls: 'bg-amber-50 text-amber-800 border-amber-200' }
-      : state === 'expired' ? { text: 'EXPIRED', cls: 'bg-orange-50 text-orange-700 border-orange-200' }
-      : state === 'failed' ? { text: 'FAILED', cls: 'bg-rose-50 text-rose-700 border-rose-200' }
+    const tip = [
+      r[key] && `Berlaku s/d ${formatTrainingDate(trainingValidity(r[key]!, TODAY).expiryDate)}`,
+      d?.ins && `Instruktur: ${d.ins}`, d?.pre != null && `Pre: ${d.pre}`, d?.post != null && `Post: ${d.post}`, d?.prak != null && `Praktik: ${d.prak}`,
+    ].filter(Boolean).join(' · ') || undefined;
+    const badge = state === 'warning' ? { text: 'WARNING', cls: STATUS_BADGE.WARNING }
+      : state === 'expired' ? { text: 'EXPIRED', cls: STATUS_BADGE.EXPIRED }
+      : state === 'failed' ? { text: 'FAILED', cls: STATUS_BADGE.FAIL }
       : null;
     return (
       <div className="inline-flex flex-col items-center gap-0.5" title={tip}>
@@ -813,13 +851,12 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const renderK3Cell = (r: TrainingRecord, key: K3DateKey, statusKey: K3StatusKey) => {
     const state = k3State(r, key, statusKey);
     if (state === 'none') return <span className="text-[11px] font-bold text-slate-300">-</span>;
-    const tone = state === 'PASS'
-      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-      : state === 'Pending' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200';
+    const date = r[key];
+    const struck = state === 'EXPIRED' || state === 'FAIL';
     return (
-      <div className="inline-flex flex-col items-center gap-0.5">
-        {r[key] && <span className="font-mono text-[11px] font-bold text-slate-900 whitespace-nowrap">{formatTrainingDate(r[key])}</span>}
-        <span className={`inline-flex px-1.5 py-px rounded text-[9px] font-black border ${tone}`}>{state}</span>
+      <div className="inline-flex flex-col items-center gap-0.5" title={date ? `Berlaku s/d ${formatTrainingDate(trainingValidity(date, TODAY).expiryDate)}` : undefined}>
+        {date && <span className={`font-mono text-[11px] font-bold whitespace-nowrap ${struck ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{formatTrainingDate(date)}</span>}
+        <span className={`inline-flex px-1.5 py-px rounded text-[9px] font-black border ${STATUS_BADGE[state]}`}>{state}</span>
       </div>
     );
   };
@@ -1137,8 +1174,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-2.5 text-[10px] font-bold">
                       <span className={missing > 0 ? 'text-rose-700' : 'text-emerald-700'}>{missing > 0 ? `${missing} belum berlaku` : 'Semua lengkap'}</span>
-                      {c.expired > 0 && <span className="text-orange-700">{c.expired} {program === 'sap' ? 'expired/failed' : 'fail'}</span>}
-                      {c.warning > 0 && <span className="text-amber-700">{c.warning} warning</span>}
+                      {c.expired > 0 && <span className="text-red-700">{c.expired} expired/fail</span>}
+                      {c.warning > 0 && <span className="text-yellow-700">{c.warning} warning</span>}
                       {c.pending > 0 && <span className="text-amber-700">{c.pending} pending</span>}
                       {c.exempt > 0 && <span className="text-slate-500">{c.exempt} tidak wajib</span>}
                     </div>
@@ -1195,6 +1232,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <>
                   <option value="SUDAH">Sudah Training (PASS)</option>
                   <option value="PENDING">Ada Pending</option>
+                  <option value="WARNING">Ada Warning</option>
+                  <option value="EXPIRED">Ada Expired / Fail</option>
                   <option value="BELUM">Belum Training</option>
                 </>
               )}
@@ -1215,7 +1254,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         <p className="text-[11px] font-semibold text-slate-600 -mt-2">
           Menampilkan <span className="font-black text-slate-900">{filteredRecords.length}</span> dari {stats.total} personel
           {missingFilter && <> · belum <span className="font-black text-rose-700">{stats.coverage.find(c => c.key === missingFilter)?.label}</span></>}
-          {program === 'sap' && <> · Wajib: GOL I → BFA & BS; GOL II–III → HAZID, JSA, IUT OTT, IAI, BFA; GOL IV–V → tanpa BFA</>}
+          {program === 'sap' && <> · Wajib: GOL I → BFA & Basic Safety; GOL II–III → HAZID, JSA, IUT OTT, IAI, BFA; GOL IV–V → tanpa BFA</>}
+          <> · Masa berlaku: <span className="font-black text-yellow-700">WARNING</span> ≥ {(TRAINING_WARNING_MONTHS / 12).toLocaleString('id-ID')} th, <span className="font-black text-red-700">EXPIRED</span> ≥ {(TRAINING_EXPIRY_MONTHS / 12).toLocaleString('id-ID')} th sejak tanggal training</>
         </p>
 
         {/* Data */}

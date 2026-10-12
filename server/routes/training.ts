@@ -2,7 +2,9 @@ import { Router } from "express";
 import Papa from "papaparse";
 import { db } from "../../src/db/index.js";
 import { eq, asc, sql, inArray } from "drizzle-orm";
-import { trainingRecords } from "../../src/db/schema.js";
+import cron from "node-cron";
+import { trainingRecords, notifications } from "../../src/db/schema.js";
+import { sendWebPush } from "../utils.js";
 import { TRAINING_SAP_SEED } from "../data/trainingSapSeed.js";
 import { TRAINING_K3_SEED_CSV } from "../data/trainingK3Seed.js";
 import { TRAINING_MONITORING_SEED_CSV } from "../data/trainingMonitoringSeed.js";
@@ -10,6 +12,9 @@ import { TRAINING_BASIC_SAFETY_SEED_CSV } from "../data/trainingBasicSafetySeed.
 import { PROGRAM_FIELDS, mergeTrainingRow } from "./trainingMerge.js";
 import {
   parseTrainingSheet,
+  trainingAlertsForRecord,
+  todayWit,
+  type TrainingAlert,
   type TrainingKey,
   normalizeTrainingDate,
   normalizeTrainingStatus,
@@ -244,6 +249,102 @@ function parseBody(body: any, program: TrainingProgram): ParsedTrainingRow {
   });
   return rec;
 }
+
+// ===== Pengingat & notifikasi training WARNING (≥ 1,5 th) / EXPIRED (≥ 2 th) =====
+const MONTHS_ID_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const fmtDate = (d: string) => `${d.slice(8, 10)} ${MONTHS_ID_SHORT[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
+
+let notificationLogEnsured = false;
+async function ensureNotificationLog() {
+  if (notificationLogEnsured) return;
+  // Satu baris per (karyawan, training, status, tanggal training) → notifikasi tidak pernah terkirim dobel,
+  // dan training yang diperbarui (tanggal baru) akan memicu notifikasi baru saat kembali warning/expired
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS training_notification_log (
+    id SERIAL PRIMARY KEY,
+    nik TEXT NOT NULL,
+    training_key TEXT NOT NULL,
+    state TEXT NOT NULL,
+    training_date TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (nik, training_key, state, training_date)
+  );`);
+  notificationLogEnsured = true;
+}
+
+// Kirim notifikasi ke tiap karyawan yang punya training baru masuk WARNING / EXPIRED (satu notifikasi per karyawan)
+export async function runTrainingExpiryNotifications(): Promise<{ employees: number; alerts: number }> {
+  await ensureTrainingRecordsTable();
+  await ensureNotificationLog();
+  const today = todayWit();
+  const rows = await db.select().from(trainingRecords);
+  const candidates = rows.flatMap(r => trainingAlertsForRecord(r, today).map(a => ({ r, a })));
+  if (candidates.length === 0) return { employees: 0, alerts: 0 };
+
+  // Klaim atomik: hanya alert yang BELUM pernah tercatat yang dikembalikan (aman untuk banyak instance server)
+  const fresh = new Set<string>();
+  const keyOf = (nik: string, key: string, state: string, date: string) => `${nik}|${key}|${state}|${date}`;
+  for (let i = 0; i < candidates.length; i += 500) {
+    const chunk = candidates.slice(i, i + 500);
+    const values = sql.join(chunk.map(({ r, a }) => sql`(${r.nik}, ${a.key}, ${a.state}, ${a.date})`), sql`, `);
+    const inserted = await db.execute(sql`INSERT INTO training_notification_log (nik, training_key, state, training_date)
+      VALUES ${values} ON CONFLICT DO NOTHING RETURNING nik, training_key, state, training_date;`);
+    (inserted.rows as any[]).forEach(x => fresh.add(keyOf(x.nik, x.training_key, x.state, x.training_date)));
+  }
+
+  const byNik = new Map<string, { nama: string; alerts: TrainingAlert[] }>();
+  candidates.forEach(({ r, a }) => {
+    if (!fresh.has(keyOf(r.nik, a.key, a.state, a.date))) return;
+    if (!byNik.has(r.nik)) byNik.set(r.nik, { nama: r.nama, alerts: [] });
+    byNik.get(r.nik)!.alerts.push(a);
+  });
+  if (byNik.size === 0) return { employees: 0, alerts: 0 };
+
+  const notifValues = Array.from(byNik.entries()).map(([nik, { alerts }]) => {
+    const hasExpired = alerts.some(a => a.state === 'expired');
+    const lines = alerts.map(a => a.state === 'expired'
+      ? `${a.desc}: EXPIRED sejak ${fmtDate(a.expiryDate)}`
+      : `${a.desc}: WARNING, berlaku s/d ${fmtDate(a.expiryDate)}`);
+    return {
+      userId: nik,
+      title: hasExpired ? '⛔ Training Anda Sudah Expired' : '⚠️ Training Anda Akan Expired',
+      message: `${lines.join('; ')}. Segera ikuti training ulang — hubungi Admin/Safety untuk jadwal.`,
+      type: hasExpired ? 'error' : 'warning',
+      category: 'training',
+      link: '/',
+    };
+  });
+  const created = await db.insert(notifications).values(notifValues).returning();
+  sendWebPush(created).catch((e: any) => console.warn('[Training] Web push gagal:', e?.message));
+  const alertCount = Array.from(byNik.values()).reduce((s, v) => s + v.alerts.length, 0);
+  console.log(`[Training] Notifikasi masa berlaku: ${byNik.size} karyawan, ${alertCount} training`);
+  return { employees: byNik.size, alerts: alertCount };
+}
+
+// Jadwal harian 07:00 WIT + sekali setelah server start. Hanya di production agar server lokal
+// (yang terhubung ke database yang sama) tidak ikut mengirim notifikasi ke karyawan.
+export function initTrainingNotificationCron() {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[Training] Notifikasi masa berlaku dinonaktifkan di non-production');
+    return;
+  }
+  const run = () => runTrainingExpiryNotifications().catch(e => console.error('[Training] Notifikasi gagal:', e.message));
+  cron.schedule('0 7 * * *', run, { timezone: 'Asia/Jayapura' });
+  setTimeout(run, 2 * 60 * 1000);
+}
+
+// GET /api/training-records/me — training WARNING / EXPIRED milik karyawan yang login (untuk kartu di Home)
+trainingRouter.get("/api/training-records/me", async (req, res) => {
+  try {
+    await ensureTrainingRecordsTable();
+    const nik = String((req as any).user?.nik || '').trim().toUpperCase();
+    if (!nik) return res.json({ status: "success", data: { alerts: [] } });
+    const [rec] = await db.select().from(trainingRecords).where(eq(trainingRecords.nik, nik));
+    res.json({ status: "success", data: { nik, nama: rec?.nama ?? null, alerts: rec ? trainingAlertsForRecord(rec) : [] } });
+  } catch (error: any) {
+    console.error("[Training ME] Error:", error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
 
 // 1. GET /api/training-records — seluruh data training (kedua program)
 trainingRouter.get("/api/training-records", async (_req, res) => {

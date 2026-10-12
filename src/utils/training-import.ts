@@ -47,6 +47,33 @@ export function sapRequiredKeys(gol: string | null | undefined): SapDateKey[] {
 }
 export const isBfaExempt = (gol: string | null | undefined) => !sapRequiredKeys(gol).includes('bfa');
 
+// ===== Masa berlaku training (dihitung dari tanggal training) =====
+// ≥ 1 tahun 6 bulan → WARNING (kuning), ≥ 2 tahun → EXPIRED (merah)
+export const TRAINING_WARNING_MONTHS = 18;
+export const TRAINING_EXPIRY_MONTHS = 24;
+
+export type TrainingValidity = 'valid' | 'warning' | 'expired';
+
+// Tanggal hari ini 'YYYY-MM-DD' zona Asia/Jayapura (WIT)
+export const todayWit = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jayapura' });
+
+// Tambah n bulan ke tanggal 'YYYY-MM-DD' (tanggal 31 dipotong ke akhir bulan)
+export function addMonthsToDate(dateStr: string, months: number): string {
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  const total = y * 12 + (m - 1) + months;
+  const ny = Math.floor(total / 12);
+  const nm = total % 12 + 1;
+  const lastDay = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+  return `${ny}-${String(nm).padStart(2, '0')}-${String(Math.min(d, lastDay)).padStart(2, '0')}`;
+}
+
+export function trainingValidity(dateStr: string, today: string = todayWit()) {
+  const warningDate = addMonthsToDate(dateStr, TRAINING_WARNING_MONTHS);
+  const expiryDate = addMonthsToDate(dateStr, TRAINING_EXPIRY_MONTHS);
+  const state: TrainingValidity = today >= expiryDate ? 'expired' : today >= warningDate ? 'warning' : 'valid';
+  return { state, warningDate, expiryDate };
+}
+
 // Detail nilai per training dari file Monitoring (instruktur & skor)
 export interface TrainingScoreDetail {
   ins?: string;
@@ -362,4 +389,40 @@ export function parseTrainingSheet(rows: unknown[][], options: { singleTraining?
     records.push(rec as ParsedTrainingRow);
   }
   return { programs, records, skipped, singleTraining: isSingleTraining ? options.singleTraining : undefined };
+}
+
+// ===== Pengingat training per karyawan (WARNING / EXPIRED) =====
+// Dipakai server (notifikasi & kartu pengingat di Home) dan client agar aturannya selalu sama.
+//  - Training SAP: hanya training yang WAJIB untuk GOL karyawan
+//  - Training K3 : training yang sudah pernah diikuti (ada tanggal), kecuali status Pending / FAIL
+export interface TrainingAlert {
+  key: TrainingKey;
+  label: string;
+  desc: string;
+  program: TrainingProgram;
+  date: string;
+  expiryDate: string;
+  state: 'warning' | 'expired';
+}
+
+export function trainingAlertsForRecord(r: Record<string, any>, today: string = todayWit()): TrainingAlert[] {
+  const alerts: TrainingAlert[] = [];
+  const push = (key: TrainingKey, label: string, desc: string, program: TrainingProgram, date: string) => {
+    const v = trainingValidity(date, today);
+    if (v.state !== 'valid') alerts.push({ key, label, desc, program, date, expiryDate: v.expiryDate, state: v.state });
+  };
+  if (r.inSap) {
+    const required = sapRequiredKeys(r.gol);
+    SAP_TRAININGS.forEach(t => {
+      if (required.includes(t.key) && r[t.key] && r[t.statusKey] !== 'FAIL') push(t.key, t.label, t.desc, 'sap', r[t.key]);
+    });
+  }
+  if (r.inK3) {
+    K3_TRAININGS.forEach(t => {
+      const status = r[t.statusKey];
+      if (r[t.key] && status !== 'Pending' && status !== 'FAIL') push(t.key, t.label, t.desc, 'k3', r[t.key]);
+    });
+  }
+  // Expired dulu, lalu yang paling cepat habis
+  return alerts.sort((a, b) => (a.state === b.state ? a.expiryDate.localeCompare(b.expiryDate) : a.state === 'expired' ? -1 : 1));
 }

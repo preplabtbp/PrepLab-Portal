@@ -69,7 +69,7 @@ import { kbbiRouter } from "./server/routes/kbbi.js";
 import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
-import { trainingRouter, ensureTrainingRecordsTable } from "./server/routes/training.js";
+import { trainingRouter, ensureTrainingRecordsTable, initTrainingNotificationCron } from "./server/routes/training.js";
 import { userPreferencesRouter } from "./server/routes/userPreferences.js";
 import { galleryRouter } from "./server/routes/gallery.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
@@ -1782,6 +1782,7 @@ async function syncBulletinToAgenda(post: any) {
 
   // Mulai pelayan (server) di port 3000
   initRosterCron();
+  initTrainingNotificationCron();
 
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server backend siap berjalan di http://localhost:${PORT} (http://127.0.0.1:${PORT})`);

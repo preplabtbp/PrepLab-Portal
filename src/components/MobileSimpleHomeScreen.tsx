@@ -20,6 +20,7 @@ import { ActionCenterBar } from './ActionCenterBar';
 import { SectionLogBookBar } from './SectionLogBookBar';
 import { HomeWidgetDashboard } from './home-widgets/HomeWidgetDashboard';
 import { HomeWalkthroughTour } from './HomeWalkthroughTour';
+import { TrainingReminderCard } from './TrainingReminderCard';
 
 interface MobileSimpleHomeScreenProps {
   inspectorName: string;
@@ -405,6 +406,9 @@ export function MobileSimpleHomeScreen({
               </div>
             )}
           </div>
+
+          {/* Pengingat Training WARNING / EXPIRED milik karyawan (hilang setelah training diperbarui) */}
+          <TrainingReminderCard inspectorNik={inspectorNik} />
 
           {/* Quick Search Bar for Mobile View */}
           <div className="sm:hidden">
