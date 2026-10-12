@@ -219,7 +219,9 @@ export function toggleTasklistItem(text: string, targetIndex: number, actionDate
   const todayStr = actionDate || new Date().toISOString().split('T')[0];
 
   let currentIndex = 0;
-  const lines = normalized.split('\n');
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
+  // to ensure item indices always match between parsing and toggling.
+  const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.map(line => {
     // Check if line contains a task item
     const match = line.match(/^(\s*[-*â€¢]?\s*\[)([ xX])(\]\s*)(.+)$/);
@@ -288,7 +290,9 @@ export function addSubtaskNote(
   const timeStr = actionTime || `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   let currentIndex = 0;
-  const lines = normalized.split('\n');
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
+  // to ensure item indices always match between parsing and toggling.
+  const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.map(line => {
     const match = line.match(/^(\s*[-*â€¢]?\s*\[)([ xX])(\]\s*)(.+)$/);
     if (match) {
@@ -371,7 +375,9 @@ export function removeSubtaskNote(text: string, targetIndex: number, noteId: str
   const normalized = text.replace(/<br\s*\/?>/gi, '\n');
 
   let currentIndex = 0;
-  const lines = normalized.split('\n');
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
+  // to ensure item indices always match between parsing and toggling.
+  const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.map(line => {
     const match = line.match(/^(\s*[-*â€¢]?\s*\[)([ xX])(\]\s*)(.+)$/);
     if (match) {
@@ -442,7 +448,9 @@ export function updateTasklistItemNote(text: string, targetIndex: number, newNot
     const normalized = text.replace(/<br\s*\/?>/gi, '\n');
 
     let currentIndex = 0;
-    const lines = normalized.split('\n');
+    // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
+  // to ensure item indices always match between parsing and toggling.
+  const lines = normalized.split(/\r?\n|\u2022/);
     const updatedLines = lines.map(line => {
       const match = line.match(/^(\s*[-*â€¢]?\s*\[)([ xX])(\]\s*)(.+)$/);
       if (match) {
@@ -494,7 +502,9 @@ export function removeTasklistItem(text: string, targetIndex: number): string {
   const normalized = text.replace(/<br\s*\/?>/gi, '\n');
 
   let currentIndex = 0;
-  const lines = normalized.split('\n');
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
+  // to ensure item indices always match between parsing and toggling.
+  const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.filter(line => {
     const match = line.match(/^(\s*[-*â€¢]?\s*\[)([ xX])(\]\s*)(.+)$/);
     if (match) {
@@ -522,7 +532,9 @@ export function updateTasklistItemTitle(text: string, targetIndex: number, newTi
   const normalized = text.replace(/<br\s*\/?>/gi, '\n');
 
   let currentIndex = 0;
-  const lines = normalized.split('\n');
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
+  // to ensure item indices always match between parsing and toggling.
+  const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.map(line => {
     const match = line.match(/^(\s*[-*â€¢]?\s*\[)([ xX])(\]\s*)(.+)$/);
     if (match) {

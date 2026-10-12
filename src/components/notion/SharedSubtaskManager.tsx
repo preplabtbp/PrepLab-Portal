@@ -309,9 +309,12 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
   };
 
   // 7. Extra Notes / General Instructions Sync
+  // FIXED: Parse fresh from value prop to avoid stale state causing duplicate subtasks
   const handleExtraNotesChange = (text: string) => {
     setExtraNotes(text);
-    const checklistLines = progress.items.map(item => {
+    // Parse FRESH from current value prop to get the latest checklist items
+    const freshProgress = parseTasklist(value || '');
+    const checklistLines = freshProgress.items.map(item => {
       let line = `- [${item.checked ? 'x' : ' '}] ${item.text}`;
       if (item.checkedDate) line += ` <!--checkedDate:${item.checkedDate}-->`;
       if (item.notes && item.notes.length > 0) {
