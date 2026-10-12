@@ -700,10 +700,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       setLoading(true);
     }
     try {
-      let url = inspectorNik ? `/api/employees/hierarchy/${encodeURIComponent(inspectorNik)}` : `/api/employees`;
+      let url = inspectorNik ? `/api/employees/hierarchy/${encodeURIComponent(inspectorNik)}?includeInactive=1` : `/api/employees?includeInactive=1`;
       let res = await fetch(url);
       if (!res.ok && isMeetingRoom) {
-        res = await fetch('/api/employees');
+        res = await fetch('/api/employees?includeInactive=1');
       }
       if (!res.ok) throw new Error("Gagal mengambil data karyawan");
       const data = await res.json();
@@ -724,8 +724,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
           }
           if (seenNames.has(normKey)) {
             const existing = seenNames.get(normKey);
-            const existingScore = (existing.ktp ? 3 : 0) + (existing.phone ? 2 : 0) + (existing.jobGrade ? 1 : 0) + (String(existing.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
-            const currentScore = (emp.ktp ? 3 : 0) + (emp.phone ? 2 : 0) + (emp.jobGrade ? 1 : 0) + (String(emp.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
+            const existingScore = (isResignedOrNonActiveStatus(existing) ? 0 : 100) + (existing.ktp ? 3 : 0) + (existing.phone ? 2 : 0) + (existing.jobGrade ? 1 : 0) + (String(existing.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
+            const currentScore = (isResignedOrNonActiveStatus(emp) ? 0 : 100) + (emp.ktp ? 3 : 0) + (emp.phone ? 2 : 0) + (emp.jobGrade ? 1 : 0) + (String(emp.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
             if (currentScore > existingScore) {
               const idx = deduplicatedList.indexOf(existing);
               if (idx !== -1) deduplicatedList[idx] = emp;
@@ -857,8 +857,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       baseList = employees.filter(e => !isGtsEmp(e));
     }
 
-    // Sesuai permintaan: Karyawan berstatus Resign / Mutasi GTS / PHK / SPPHK tidak dimasukkan ke dalam daftar
-    const activeList = baseList.filter(e => !isResignedOrNonActiveStatus(e));
+    // Karyawan Resign / Mutasi GTS / PHK / SPPHK tetap masuk daftar (Total Data & pencarian),
+    // tetapi dikecualikan dari Karyawan Aktif dan statistik lainnya.
+    const activeList = baseList;
 
     // Deduplikasi otomatis berdasarkan nama karyawan agar tidak ada data ganda (misal NIK lama M04 vs NIK baru M05)
     const seenNames = new Map<string, any>();
@@ -877,8 +878,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
       if (seenNames.has(normKey)) {
         const existing = seenNames.get(normKey);
-        const existingScore = (existing.ktp ? 3 : 0) + (existing.phone ? 2 : 0) + (existing.jobGrade ? 1 : 0) + (String(existing.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
-        const currentScore = (emp.ktp ? 3 : 0) + (emp.phone ? 2 : 0) + (emp.jobGrade ? 1 : 0) + (String(emp.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
+        const existingScore = (isResignedOrNonActiveStatus(existing) ? 0 : 100) + (existing.ktp ? 3 : 0) + (existing.phone ? 2 : 0) + (existing.jobGrade ? 1 : 0) + (String(existing.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
+        const currentScore = (isResignedOrNonActiveStatus(emp) ? 0 : 100) + (emp.ktp ? 3 : 0) + (emp.phone ? 2 : 0) + (emp.jobGrade ? 1 : 0) + (String(emp.nik || '').toUpperCase().startsWith('M05') ? 2 : 0);
         if (currentScore > existingScore) {
           const idx = deduplicated.indexOf(existing);
           if (idx !== -1) deduplicated[idx] = emp;
@@ -902,6 +903,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     }).sort(compareEmployeesByJabatan);
   }, [scopedEmployees]);
   const activeEmployeesCount = activeEmployeesList.length;
+  const inactiveEmployeesCount = useMemo(() => scopedEmployees.filter(e => isResignedOrNonActiveStatus(e)).length, [scopedEmployees]);
 
   // 2. Data & List Karyawan Permanent / PKWTT (Diurutkan sesuai Hirarki Jabatan Resmi)
   const permanentEmployeesList = useMemo(() => {
@@ -995,6 +997,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     let grandTotalIzin = 0;
 
     scopedEmployees.forEach(emp => {
+      if (isResignedOrNonActiveStatus(emp)) return;
       const att26 = emp.attendance2026 || emp.attendance?.['2026'] || emp.attendance?.[2026] || emp.attendanceData?.['2026'] || {};
 
       let matchingDates: string[] = [];
@@ -1133,6 +1136,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     }> = [];
 
     scopedEmployees.forEach(emp => {
+      if (isResignedOrNonActiveStatus(emp)) return;
       const c = emp.counselingSpdk || emp.counseling || {};
       const st = String(c.st || '').trim();
       const sp1 = String(c.sp1 || c.sp_1 || '').trim();
@@ -1681,7 +1685,14 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-slate-800 truncate">{emp.name}</h4>
+                        <h4 className="font-semibold text-slate-800 truncate flex items-center gap-1.5">
+                          <span className="truncate">{emp.name}</span>
+                          {isResignedOrNonActiveStatus(emp) && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
+                              {emp.statusKaryawan || 'Non-Aktif'}
+                            </span>
+                          )}
+                        </h4>
                         <p className="text-sm text-slate-500 truncate">{emp.nik} • {emp.jabatan || 'Tanpa Jabatan'}</p>
                       </div>
                       <ChevronRight className="w-5 h-5 text-slate-400" />
@@ -1920,7 +1931,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-4.5 border border-slate-200/90 text-center shadow-xs transition-all flex flex-col justify-between items-center min-h-[130px] sm:min-h-[136px]">
                     <div className="text-slate-500 text-[10.5px] sm:text-xs uppercase font-extrabold tracking-wider mb-1">Total Data</div>
                     <div className="text-2xl sm:text-3xl font-black text-[#104b50] tracking-tight">{scopedEmployees.length}</div>
-                    <div className="text-[10px] sm:text-[11px] text-slate-400 font-semibold mt-0.5">Master Database</div>
+                    <div className="text-[10px] sm:text-[11px] text-slate-400 font-semibold mt-0.5">
+                      {inactiveEmployeesCount > 0 ? `${activeEmployeesCount} aktif · ${inactiveEmployeesCount} non-aktif` : 'Master Database'}
+                    </div>
                   </div>
 
                   {/* Card 2: Karyawan Aktif */}
@@ -3183,12 +3196,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Job Grade</p>
+                  <div className="bg-white/20 hover:bg-white/30 px-2 py-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md h-full flex flex-col items-center justify-center text-center">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-1 uppercase tracking-wider whitespace-nowrap leading-none">Job Grade</p>
                     <p className="font-black text-white text-sm sm:text-base drop-shadow-sm">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
-                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Golongan</p>
+                  <div className="bg-white/20 hover:bg-white/30 px-2 py-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md h-full flex flex-col items-center justify-center text-center">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-1 uppercase tracking-wider whitespace-nowrap leading-none">Golongan</p>
                     <p className="font-black text-white text-sm sm:text-base drop-shadow-sm">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
@@ -3199,13 +3212,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">DOH Awal</p>
-                    <p className="font-black text-white text-sm sm:text-base font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
+                  <div className="bg-white/20 hover:bg-white/30 px-2 py-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md h-full flex flex-col items-center justify-center text-center">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-1 uppercase tracking-wider whitespace-nowrap leading-none">DOH Awal</p>
+                    <p className="font-black text-white text-sm sm:text-base font-mono tracking-tight leading-tight whitespace-nowrap drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
                   </div>
-                  <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
-                    <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
-                    <p className="font-black text-white text-sm sm:text-base font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
+                  <div className="bg-white/20 hover:bg-white/30 px-2 py-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md h-full flex flex-col items-center justify-center text-center">
+                    <p className="text-white/75 text-[10px] font-extrabold mb-1 uppercase tracking-wider whitespace-nowrap leading-none">Tgl Jabatan Baru</p>
+                    <p className="font-black text-white text-sm sm:text-base font-mono tracking-tight leading-tight whitespace-nowrap drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
                   </div>
                 </div>
 
@@ -5111,7 +5124,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         isOpen={isTimeRangeModalOpen}
         onClose={() => setIsTimeRangeModalOpen(false)}
         inspectorNik={inspectorNik}
-        employees={scopedEmployees}
+        employees={activeEmployeesList}
         onSuccess={async () => {
           await fetchEmployees();
         }}

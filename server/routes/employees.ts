@@ -414,10 +414,10 @@ export async function cleanupDuplicateEmployees() {
     }
     for (const [nameKey, list] of map.entries()) {
       if (list.length > 1) {
-        // Prioritaskan record dengan NIK terupdate (M05 vs M04), KTP, phone, atau ID tertinggi
+        // Prioritaskan record berstatus aktif, lalu record dengan NIK terupdate (M05 vs M04), KTP, phone, atau ID tertinggi
         list.sort((a, b) => {
-          const scoreA = (a.ktp ? 3 : 0) + (a.phone ? 2 : 0) + (a.jobGrade ? 1 : 0) + (String(a.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (a.id || 0);
-          const scoreB = (b.ktp ? 3 : 0) + (b.phone ? 2 : 0) + (b.jobGrade ? 1 : 0) + (String(b.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (b.id || 0);
+          const scoreA = (isResignedOrNonActiveStatus(a) ? 0 : 1_000_000) + (a.ktp ? 3 : 0) + (a.phone ? 2 : 0) + (a.jobGrade ? 1 : 0) + (String(a.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (a.id || 0);
+          const scoreB = (isResignedOrNonActiveStatus(b) ? 0 : 1_000_000) + (b.ktp ? 3 : 0) + (b.phone ? 2 : 0) + (b.jobGrade ? 1 : 0) + (String(b.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (b.id || 0);
           return scoreB - scoreA;
         });
         const keep = list[0];
@@ -443,6 +443,9 @@ export async function cleanupDuplicateEmployees() {
 employeesRouter.get("/", async (req, res) => {
   try {
     const { pt, all } = req.query;
+    // includeInactive=1: sertakan karyawan Resign/PHK/SPPHK (dipakai modul Database Karyawan untuk Total Data)
+    const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+    const passStatus = (e: any) => includeInactive || !isResignedOrNonActiveStatus(e);
     
     // Jalankan pembersihan duplikat di database jika ada
     await cleanupDuplicateEmployees();
@@ -472,7 +475,7 @@ employeesRouter.get("/", async (req, res) => {
           const ptStr = (e.pt || '').toString().trim().toUpperCase();
           const nikStr = (e.nik || '').toString().trim().toUpperCase();
           const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
-          return isGts && !isResignedOrNonActiveStatus(e);
+          return isGts && passStatus(e);
         });
       } else {
         // TBP & GPS -> Strictly exclude GTS employees (check pt AND NIK prefix 03/M03) and resigned/non-active personnel
@@ -480,12 +483,12 @@ employeesRouter.get("/", async (req, res) => {
           const ptStr = (e.pt || '').toString().trim().toUpperCase();
           const nikStr = (e.nik || '').toString().trim().toUpperCase();
           const isGts = ptStr === 'GTS' || nikStr.startsWith('03') || nikStr.startsWith('M03');
-          return !isGts && !isResignedOrNonActiveStatus(e);
+          return !isGts && passStatus(e);
         });
       }
     } else {
       // Exclude resigned / non-active personnel even when all=true
-      data = data.filter(e => !isResignedOrNonActiveStatus(e));
+      data = data.filter(e => passStatus(e));
     }
 
     // Deduplikasi otomatis berdasarkan nama agar tidak pernah ada baris ganda
@@ -499,8 +502,9 @@ employeesRouter.get("/", async (req, res) => {
       }
       if (seenNames.has(normName)) {
         const prev = seenNames.get(normName);
-        const prevScore = (prev.ktp ? 3 : 0) + (prev.phone ? 2 : 0) + (prev.jobGrade ? 1 : 0) + (String(prev.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (prev.id || 0);
-        const currScore = (e.ktp ? 3 : 0) + (e.phone ? 2 : 0) + (e.jobGrade ? 1 : 0) + (String(e.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (e.id || 0);
+        const activeBonus = (x: any) => (isResignedOrNonActiveStatus(x) ? 0 : 1_000_000);
+        const prevScore = activeBonus(prev) + (prev.ktp ? 3 : 0) + (prev.phone ? 2 : 0) + (prev.jobGrade ? 1 : 0) + (String(prev.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (prev.id || 0);
+        const currScore = activeBonus(e) + (e.ktp ? 3 : 0) + (e.phone ? 2 : 0) + (e.jobGrade ? 1 : 0) + (String(e.nik || '').toUpperCase().startsWith('M05') ? 3 : 0) + (e.id || 0);
         if (currScore > prevScore) {
           const idx = deduplicatedData.indexOf(prev);
           if (idx !== -1) deduplicatedData[idx] = e;
@@ -570,6 +574,9 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
   try {
     const { nik } = req.params;
     const cleanNik = (nik || "").trim().toUpperCase();
+    const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+    const passStatus = (e: any) => includeInactive || !isResignedOrNonActiveStatus(e);
+    const cacheKey = includeInactive ? `${nik}::all` : nik;
 
     // Meeting Room, Admin, Super Admin virtual account checks (full access to search all employees)
     if (
@@ -591,7 +598,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     }
 
     const now = Date.now();
-    const cached = cachedHierarchy.get(nik);
+    const cached = cachedHierarchy.get(cacheKey);
     if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
       return res.json({ status: "success", data: cached.data });
     }
@@ -615,9 +622,9 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     // Section Manager / Admin / QA dapat mengakses seluruh karyawan aktif (TBP & GTS)
     if (isUserMgr) {
       const allData = await db.select().from(employees);
-      const activeData = allData.filter(e => !isResignedOrNonActiveStatus(e));
+      const activeData = allData.filter(e => passStatus(e));
       const formatted = activeData.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
-      cachedHierarchy.set(nik, { data: formatted, timestamp: now });
+      cachedHierarchy.set(cacheKey, { data: formatted, timestamp: now });
       return res.json({ status: "success", data: formatted });
     }
     
@@ -632,14 +639,14 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     if (allowedJabatans.length === 0) {
       // Crew or someone with no subordinates (only see own profile)
       const formatted = [attachAttendanceToEmployee(user, attMap, counselMap)];
-      cachedHierarchy.set(nik, { data: formatted, timestamp: now });
+      cachedHierarchy.set(cacheKey, { data: formatted, timestamp: now });
       return res.json({ status: "success", data: formatted });
     }
     
     // Fetch all employees and strictly enforce company universe (GTS only for GTS, TBP only for TBP)
     const allEmployees = await db.select().from(employees);
     const subordinates = allEmployees.filter(e => {
-      if (isResignedOrNonActiveStatus(e)) return false;
+      if (!passStatus(e)) return false;
       const eIsGts = isGtsEmployee(e);
       if (isUserGts && !eIsGts) return false; // Karyawan GTS hanya bisa akses data GTS
       if (!isUserGts && eIsGts) return false; // Karyawan TBP hanya bisa akses data TBP
@@ -659,7 +666,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     }
     
     const formatted = subordinates.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
-    cachedHierarchy.set(nik, { data: formatted, timestamp: now });
+    cachedHierarchy.set(cacheKey, { data: formatted, timestamp: now });
     res.json({ status: "success", data: formatted });
   } catch (error) {
     console.error("Error fetching hierarchy:", error);
@@ -902,21 +909,9 @@ employeesRouter.post("/import", async (req, res) => {
         }
 
         const statusKaryawanVal = normalized['statuskaryawan'] || normalized['status'] || raw['Status Karyawan'] || raw['Status'] || '';
-        if (isResignedOrNonActiveStatus(statusKaryawanVal)) {
-          // Sesuai permintaan: Karyawan berstatus Resign / Mutasi GTS / PHK / SPPHK tidak dimasukkan ke dalam daftar.
-          // Namun jika karyawan tsb sudah ada di database, statusnya tetap diperbarui agar tidak terhitung Aktif.
-          const existingResigned = allExistingDbEmployees.find(e => e.nik && e.nik.toUpperCase().trim() === nik.toUpperCase().trim());
-          if (existingResigned && String(existingResigned.statusKaryawan || '').trim() !== String(statusKaryawanVal).trim()) {
-            const tglEfektif = cleanDateVal(normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja']);
-            try {
-              await db.update(employees)
-                .set({ statusKaryawan: String(statusKaryawanVal).trim(), ...(tglEfektif ? { tanggalEfektifTidakBekerja: tglEfektif } : {}) })
-                .where(eq(employees.id, existingResigned.id));
-              updatedCount++;
-            } catch {}
-          }
-          continue;
-        }
+        // Karyawan Resign / Mutasi / PHK / SPPHK tetap disimpan (masuk Total Data, tidak dihitung Karyawan Aktif).
+        // Untuk status non-aktif, pencocokan HANYA via NIK persis agar tidak menimpa record aktif bernama sama.
+        const isInactiveRow = isResignedOrNonActiveStatus(statusKaryawanVal);
 
         const rawFoto = raw['Foto'] || raw['foto'] || normalized['foto'] || normalized['photo'] || normalized['avatar'] || normalized['fotoprofil'] || normalized['kolomfoto'] || normalized['gambar'] || normalized['image'] || '';
         let driveAvatarUrl: string | null = null;
@@ -969,7 +964,7 @@ employeesRouter.post("/import", async (req, res) => {
           let existing = allExistingDbEmployees.filter(e => e.nik && e.nik.toUpperCase().trim() === nik.toUpperCase().trim());
 
           // 2. Jika tidak ada NIK sama persis, cari apakah ada karyawan yang memiliki Nama sama (atau KTP sama)
-          if (existing.length === 0) {
+          if (existing.length === 0 && !isInactiveRow) {
             const inputNormName = normalizeNameKey(name);
             const inputKtp = cleanEmpData.ktp ? String(cleanEmpData.ktp).trim() : '';
 
