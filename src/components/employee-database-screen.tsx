@@ -1276,6 +1276,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     return leave;
   }, [selectedEmployee, rosterData]);
 
+  // Buka modal edit tab Status & Kehadiran (dipakai kartu-kartu status di profil)
+  const openStatusEdit = () => {
+    if (!canManageDatabase) return;
+    setEditModalMode('edit');
+    setSelectedEmployeeForEdit(selectedEmployee);
+    setEditModalTab('job');
+    setIsEditModalOpen(true);
+  };
+
   // 6. Data & List Karyawan Onsite pada Hari Ini
   // Sesuai aturan: Ambil data keterangan OFF, D, DS, N, NS, S, LS, CS, dan I.
   // Dianggap Cuti (bukan Onsite): C, TRV, CT, CE, serta I yang kode roster sebelumnya adalah C, CT, atau CE.
@@ -3170,33 +3179,33 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 
                 <div className="pt-2">
                   <p className="text-white/80 text-[10.5px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-sm">Perusahaan</p>
-                  <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.pt || '-'}</p>
+                  <p className="font-black text-white text-sm sm:text-base leading-snug drop-shadow-sm">{selectedEmployee.pt || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
                   <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
                     <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Job Grade</p>
-                    <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.jobGrade || '-'}</p>
+                    <p className="font-black text-white text-sm sm:text-base drop-shadow-sm">{selectedEmployee.jobGrade || '-'}</p>
                   </div>
                   <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
                     <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Golongan</p>
-                    <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.gol || '-'}</p>
+                    <p className="font-black text-white text-sm sm:text-base drop-shadow-sm">{selectedEmployee.gol || '-'}</p>
                   </div>
                 </div>
 
                 <div className="pt-2">
                   <p className="text-white/80 text-[10.5px] font-extrabold mb-0.5 uppercase tracking-wider drop-shadow-sm">Bagian (Section)</p>
-                  <p className="font-black text-white text-xs drop-shadow-sm">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
+                  <p className="font-black text-white text-sm sm:text-base leading-snug drop-shadow-sm">{selectedEmployee.section || selectedEmployee.department || '-'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-2">
                   <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
                     <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">DOH Awal</p>
-                    <p className="font-black text-white text-xs font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
+                    <p className="font-black text-white text-sm sm:text-base font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalAwalBergabung)}</p>
                   </div>
                   <div className="bg-white/20 hover:bg-white/30 p-2.5 rounded-2xl border border-white/40 transition-all shadow-xs backdrop-blur-md">
                     <p className="text-white/75 text-[10px] font-extrabold mb-0.5 uppercase tracking-wider">Tgl Jabatan Baru</p>
-                    <p className="font-black text-white text-xs font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
+                    <p className="font-black text-white text-sm sm:text-base font-mono drop-shadow-sm">{formatShortDate(selectedEmployee.tanggalJabatanBaru)}</p>
                   </div>
                 </div>
 
@@ -3254,7 +3263,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     {/* Informasi Total Masa Kerja */}
                     <div className="mt-2 pt-2 border-t border-white/20 flex items-center justify-between text-[10.5px]">
                       <span className="text-white/80 font-extrabold">Masa Kerja Total (DOH):</span>
-                      <span className="font-black text-white font-mono drop-shadow-sm">{tenureInfo.total.value}</span>
+                      <span className="font-black text-white text-sm sm:text-base font-mono drop-shadow-sm">{tenureInfo.total.value}</span>
                     </div>
                   </div>
                 </div>
@@ -3355,66 +3364,32 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                   <div className="grid grid-cols-2 gap-3">
                     {/* Status Karyawan */}
-                    <div 
-                      onClick={() => {
-                        if (canManageDatabase) {
-                          setEditModalMode('edit');
-                          setSelectedEmployeeForEdit(selectedEmployee);
-                          setEditModalTab('job');
-                          setIsEditModalOpen(true);
-                        }
-                      }}
-                      className={`bg-gradient-to-br from-[#eaf7ee] via-[#def2e3] to-[#d2ebd9] rounded-2xl p-4 text-emerald-950 shadow-2xs border border-emerald-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm flex flex-col justify-between ${canManageDatabase ? 'cursor-pointer group' : ''}`}
+                    <div
+                      onClick={openStatusEdit}
+                      className={`relative bg-gradient-to-br from-[#eaf7ee] via-[#def2e3] to-[#d2ebd9] text-emerald-950 rounded-2xl px-3 py-4 shadow-2xs border border-emerald-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm min-h-[7.5rem] flex flex-col items-center justify-center text-center ${canManageDatabase ? 'cursor-pointer group' : ''}`}
                       title={canManageDatabase ? "Klik untuk mengedit Status & Kehadiran" : undefined}
                     >
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-emerald-800 text-[10px] uppercase font-black tracking-wider">Status Karyawan</p>
-                          <div className="flex items-center gap-1.5">
-                            {canManageDatabase && <Pencil className="w-3 h-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          </div>
-                        </div>
-                        <p className="font-black text-xl text-emerald-950 tracking-tight">{selectedEmployee.statusKaryawan || '-'}</p>
-                      </div>
+                      {canManageDatabase && <Pencil className="absolute top-2.5 right-2.5 w-3 h-3 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      <p className="text-emerald-800 text-[10px] uppercase font-black tracking-wider">Status Karyawan</p>
+                      <p className="mt-1.5 inline-flex items-center gap-2 font-black text-xl text-emerald-950 tracking-tight leading-tight break-words">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${String(selectedEmployee.statusKaryawan || '').toLowerCase() === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                        {selectedEmployee.statusKaryawan || '-'}
+                      </p>
                     </div>
 
-                    {/* Status Kontrak & Tanggal Permanen (Disatukan) */}
-                    <div 
-                      onClick={() => {
-                        if (canManageDatabase) {
-                          setEditModalMode('edit');
-                          setSelectedEmployeeForEdit(selectedEmployee);
-                          setEditModalTab('job');
-                          setIsEditModalOpen(true);
-                        }
-                      }}
-                      className={`bg-gradient-to-br from-[#fef7ee] via-[#fdefdf] to-[#fce3cc] rounded-2xl p-4 text-amber-950 shadow-2xs border border-amber-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm flex flex-col justify-between ${canManageDatabase ? 'cursor-pointer group' : ''}`}
+                    {/* Status Kontrak & Tanggal Permanen */}
+                    <div
+                      onClick={openStatusEdit}
+                      className={`relative bg-gradient-to-br from-[#fef7ee] via-[#fdefdf] to-[#fce3cc] text-amber-950 rounded-2xl px-3 py-4 shadow-2xs border border-amber-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm min-h-[7.5rem] flex flex-col items-center justify-center text-center ${canManageDatabase ? 'cursor-pointer group' : ''}`}
                       title={canManageDatabase ? "Klik untuk mengedit Status & Kehadiran" : undefined}
                     >
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-amber-800 text-[10px] uppercase font-black tracking-wider">Status Kontrak</p>
-                          {canManageDatabase && <Pencil className="w-3 h-3 text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                        </div>
-                        <p className="font-black text-xl text-amber-950 tracking-tight">{selectedEmployee.statusKontrak || '-'}</p>
-                      </div>
-
-                      <div className="mt-2.5 pt-2 border-t border-amber-300/60 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-amber-200/70 border border-amber-300/80 flex items-center justify-center shrink-0">
-                          <Calendar className="w-3.5 h-3.5 text-amber-800" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[9px] uppercase tracking-wider font-extrabold text-amber-800/80 leading-tight">Tgl Permanen</p>
-                          <p className="font-mono font-black text-xs text-amber-950 leading-tight whitespace-nowrap">
-                            {selectedEmployee.tanggalPermanent && selectedEmployee.tanggalPermanent !== '-' && selectedEmployee.tanggalPermanent !== '0'
-                              ? formatShortDate(selectedEmployee.tanggalPermanent)
-                              : 'Belum Permanen'}
-                          </p>
-                        </div>
-                      </div>
+                      {canManageDatabase && <Pencil className="absolute top-2.5 right-2.5 w-3 h-3 text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      <p className="text-amber-800 text-[10px] uppercase font-black tracking-wider">Status Kontrak</p>
+                      <p className="mt-1.5 font-black text-xl text-amber-950 tracking-tight leading-tight break-words">{selectedEmployee.statusKontrak || '-'}</p>
+                      <p className="mt-1.5 text-[10px] font-semibold text-amber-800/80 leading-tight">{selectedEmployee.tanggalPermanent && selectedEmployee.tanggalPermanent !== '-' && selectedEmployee.tanggalPermanent !== '0'
+                        ? <>Permanen <span className="font-mono font-black text-amber-950">{formatShortDate(selectedEmployee.tanggalPermanent)}</span></>
+                        : 'Belum Permanen'}</p>
                     </div>
-
                     {/* Tgl Efektif Tidak Bekerja (Conditional) */}
                     {selectedEmployee.tanggalEfektifTidakBekerja && (
                       <div 
@@ -3441,62 +3416,32 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     )}
 
                     {/* Sisa Cuti (CT) */}
-                    <div 
-                      onClick={() => {
-                        if (canManageDatabase) {
-                          setEditModalMode('edit');
-                          setSelectedEmployeeForEdit(selectedEmployee);
-                          setEditModalTab('job');
-                          setIsEditModalOpen(true);
-                        }
-                      }}
-                      className={`bg-gradient-to-br from-[#edf9fb] via-[#e1f4f7] to-[#d3eef2] rounded-2xl p-4 text-teal-950 shadow-2xs border border-teal-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm ${canManageDatabase ? 'cursor-pointer group' : ''}`}
+                    <div
+                      onClick={openStatusEdit}
+                      className={`relative bg-gradient-to-br from-[#edf9fb] via-[#e1f4f7] to-[#d3eef2] text-teal-950 rounded-2xl px-3 py-4 shadow-2xs border border-teal-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm min-h-[7.5rem] flex flex-col items-center justify-center text-center ${canManageDatabase ? 'cursor-pointer group' : ''}`}
                       title={canManageDatabase ? "Klik untuk mengedit Status & Kehadiran" : undefined}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-[#135864] text-[10.5px] uppercase font-black tracking-wider">Sisa Cuti (CT)</p>
-                        {canManageDatabase && <Pencil className="w-3.5 h-3.5 text-teal-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                      </div>
-                      <p className="font-black text-2xl text-teal-950 tracking-tight">{selectedEmployee.sisaCt || '-'}</p>
+                      {canManageDatabase && <Pencil className="absolute top-2.5 right-2.5 w-3 h-3 text-teal-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      <p className="text-[#135864] text-[10px] uppercase font-black tracking-wider">Sisa Cuti (CT)</p>
+                      <p className="mt-1.5 font-black text-2xl text-teal-950 tracking-tight leading-tight">{selectedEmployee.sisaCt || '-'}</p>
+                      <p className="mt-1.5 text-[10px] font-semibold text-teal-800/80 leading-tight">{selectedEmployee.sisaCt && selectedEmployee.sisaCt !== '-' ? 'Hari tersisa' : 'Belum ada data'}</p>
                     </div>
 
-                    {/* Jatuh Tempo CT */}
-                    <div 
-                      onClick={() => {
-                        if (canManageDatabase) {
-                          setEditModalMode('edit');
-                          setSelectedEmployeeForEdit(selectedEmployee);
-                          setEditModalTab('job');
-                          setIsEditModalOpen(true);
-                        }
-                      }}
-                      className={`bg-gradient-to-br from-[#f1f4fe] via-[#e5ecfc] to-[#dae4f9] rounded-2xl p-4 text-indigo-950 shadow-2xs border border-indigo-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm ${canManageDatabase ? 'cursor-pointer group' : ''}`}
+                    {/* Jatuh Tempo CT (dari Modul Roster & Cuti) */}
+                    <div
+                      onClick={openStatusEdit}
+                      className={`relative bg-gradient-to-br from-[#f1f4fe] via-[#e5ecfc] to-[#dae4f9] text-indigo-950 rounded-2xl px-3 py-4 shadow-2xs border border-indigo-300/70 transition-all hover:-translate-y-0.5 hover:shadow-sm min-h-[7.5rem] flex flex-col items-center justify-center text-center ${canManageDatabase ? 'cursor-pointer group' : ''}`}
                       title={canManageDatabase ? "Klik untuk mengedit Status & Kehadiran" : undefined}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-indigo-900 text-[10.5px] uppercase font-black tracking-wider">Jatuh Tempo CT</p>
-                        {canManageDatabase && <Pencil className="w-3.5 h-3.5 text-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                      </div>
-                      {selectedRosterLeave?.actualCuti ? (
-                        <>
-                          <p className="font-black text-sm sm:text-base text-indigo-950 font-mono tracking-tight">
-                            {formatShortDate(selectedRosterLeave.actualCuti)}
-                          </p>
-                          <p className="mt-1 text-[10px] font-semibold text-indigo-800/80">
-                            {selectedRosterLeave.daysRemaining > 0
-                              ? `${selectedRosterLeave.daysRemaining} hari lagi`
-                              : selectedRosterLeave.daysRemaining === 0 ? 'Hari ini' : 'Sedang cuti'}
-                            {' · '}Roster &amp; Cuti
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="font-black text-sm sm:text-base text-indigo-950 font-mono tracking-tight">{formatShortDate(selectedEmployee.jatuhTempoCt)}</p>
-                          <p className="mt-1 text-[10px] font-semibold text-indigo-800/60">Belum ada jadwal di Roster</p>
-                        </>
-                      )}
+                      {canManageDatabase && <Pencil className="absolute top-2.5 right-2.5 w-3 h-3 text-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      <p className="text-indigo-900 text-[10px] uppercase font-black tracking-wider">Jatuh Tempo CT</p>
+                      <p className="mt-1.5 font-black text-lg text-indigo-950 font-mono tracking-tight leading-tight">
+                        {selectedRosterLeave?.actualCuti ? formatShortDate(selectedRosterLeave.actualCuti) : formatShortDate(selectedEmployee.jatuhTempoCt)}
+                      </p>
+                      <p className="mt-1.5 text-[10px] font-semibold text-indigo-800/80 leading-tight">{selectedRosterLeave?.actualCuti
+                        ? `${selectedRosterLeave.daysRemaining > 0 ? `${selectedRosterLeave.daysRemaining} hari lagi` : selectedRosterLeave.daysRemaining === 0 ? 'Hari ini' : 'Sedang cuti'} · Roster & Cuti`
+                        : 'Belum ada jadwal di Roster'}</p>
                     </div>
-
                     {/* Jumlah Cuti Site per Periode */}
                     {(() => {
                       const cutiSiteRaw = String(selectedEmployee.jumlahCutiSite ?? '0').trim();
