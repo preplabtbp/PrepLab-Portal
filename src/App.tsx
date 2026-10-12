@@ -107,6 +107,7 @@ const FinanceScreen = lazyWithRetry(() => import('./components/FinanceScreen').t
 const ModulesScreen = lazyWithRetry(() => import('./components/modules-screen').then(m => ({ default: m.ModulesScreen })));
 const LogbookScreen = lazyWithRetry(() => import('./components/logbook-screen').then(m => ({ default: m.LogbookScreen })));
 const ClinicScreen = lazyWithRetry(() => import('./components/clinic-screen').then(m => ({ default: m.ClinicScreen })));
+const XrfCalibrationScreen = lazyWithRetry(() => import('./components/xrf-calibration/XrfCalibrationScreen').then(m => ({ default: m.XrfCalibrationScreen })));
 const GuestMonitoringScreen = lazyWithRetry(() => import('./components/GuestMonitoringScreen').then(m => ({ default: m.GuestMonitoringScreen })));
 import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
@@ -1900,6 +1901,8 @@ export default function App() {
   <Route path="/logbook" element={<LogbookScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} onSelectBulletinPost={(postId) => navigate(`/bulletin/${userProfile?.pt === 'GTS' ? 'GTS' : 'TBP'}?postId=${postId}`)} />} />
   <Route path="/clinic" element={<ClinicScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} />} />
   <Route path="/kunjungan-klinik" element={<Navigate to="/clinic" replace />} />
+  <Route path="/xrf-calibration" element={<XrfCalibrationScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onBack={() => handleNav('home')} />} />
+  <Route path="/kalibrasi-xrf" element={<Navigate to="/xrf-calibration" replace />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>

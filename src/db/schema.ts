@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp, boolean, date, json, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { integer, pgTable, serial, text, timestamp, boolean, date, json, index, uniqueIndex, doublePrecision } from 'drizzle-orm/pg-core';
 
 // Define the 'users' table (Linked to Firebase Auth)
 export const users = pgTable('users', {
@@ -865,5 +865,111 @@ export const trainingRecords = pgTable('training_records', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (t) => [
   uniqueIndex('idx_training_records_nik').on(t.nik),
+]);
+
+// ==========================================
+// XRF CALIBRATION & QC VERIFICATION TABLES
+// ==========================================
+
+// 1. Master Alat XRF (Epsilon A, B, C, D, E)
+export const xrfInstruments = pgTable('xrf_instruments', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(), // 'EPSILON_A', 'EPSILON_B', 'EPSILON_C', 'EPSILON_D', 'EPSILON_E'
+  name: text('name').notNull(),          // 'EPSILON A', 'EPSILON B', 'EPSILON C', 'EPSILON D', 'EPSILON E'
+  brandModel: text('brand_model').default('PANalytical Epsilon 4'),
+  channelType: text('channel_type').default('LIMONITE'), // 'LIMONITE' | 'SAPROLITE' | 'ALL'
+  colorTag: text('color_tag').default('cyan'),           // 'cyan', 'yellow', 'blue', 'green', 'purple'
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// 2. Master Sampel Standar CRM (LIM01 s/d LIM05, OREAS 184 s/d 195, SAP19)
+export const xrfStandards = pgTable('xrf_standards', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(), // 'LIM01', 'LIM02', 'OREAS184', dst.
+  name: text('name').notNull(),          // Display name: 'LIM 01', 'LIM 02', 'OREAS 184'
+  matrixType: text('matrix_type').default('LIMONITE'), // 'LIMONITE' | 'SAPROLITE' | 'CRM'
+  certificateDate: text('certificate_date'),
+  isActive: boolean('is_active').default(true),
+  displayOrder: integer('display_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// 3. Nilai Nominal Acuan (Expected Value) & Fixed STDEV per Standar dan Unsur (Gambar 5 & 1)
+export const xrfStandardReferences = pgTable('xrf_standard_references', {
+  id: serial('id').primaryKey(),
+  standardId: integer('standard_id'),
+  standardCode: text('standard_code').notNull(), // 'LIM01', 'LIM02', dst.
+  elementName: text('element_name').notNull(),   // 'Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO', 'P', 'S', etc.
+  nominalValue: doublePrecision('nominal_value').notNull(), // Expected/Certified Value (Garis Tengah)
+  stdevFixed: doublePrecision('stdev_fixed').notNull(),     // Fixed STDEV dari tabel Gambar 5
+  warningSigma: doublePrecision('warning_sigma').default(2.0), // 2.0 (Upper/Lower Warning)
+  actionSigma: doublePrecision('action_sigma').default(3.0),   // 3.0 (Upper/Lower Action)
+  extremeSigma: doublePrecision('extreme_sigma').default(5.0),  // 5.0 (Upper/Lower Extreme)
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_xrf_std_ref_code_elem').on(t.standardCode, t.elementName),
+  index('idx_xrf_std_ref_std').on(t.standardCode),
+  index('idx_xrf_std_ref_elem').on(t.elementName),
+]);
+
+// 4. Header Batch Transaksi Verifikasi Harian (Gambar 1)
+export const xrfVerifications = pgTable('xrf_verifications', {
+  id: serial('id').primaryKey(),
+  batchCode: text('batch_code').notNull(),
+  instrumentId: integer('instrument_id'),
+  instrumentCode: text('instrument_code').notNull(), // 'EPSILON_C', 'EPSILON_E'
+  instrumentName: text('instrument_name').notNull(), // 'EPSILON C', 'EPSILON E'
+  verificationDate: text('verification_date').notNull(), // 'YYYY-MM-DD'
+  verificationTime: text('verification_time'), // 'HH:mm'
+  shift: text('shift').default('1'), // '1' | '2' | 'Day' | 'Night'
+  weekNo: integer('week_no'),
+  operatorNik: text('operator_nik'),
+  operatorName: text('operator_name'),
+  overallStatus: text('overall_status').default('PASS'), // 'PASS' | 'WARNING' | 'FAIL'
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  index('idx_xrf_verifications_date').on(t.verificationDate),
+  index('idx_xrf_verifications_inst').on(t.instrumentCode),
+]);
+
+// 5. Detail Hasil Pengukuran per Standar dalam Batch (Gambar 1, 2, 3)
+export const xrfVerificationItems = pgTable('xrf_verification_items', {
+  id: serial('id').primaryKey(),
+  verificationId: integer('verification_id'),
+  standardId: integer('standard_id'),
+  standardCode: text('standard_code').notNull(), // 'LIM01', 'LIM02', etc.
+  sampleLabel: text('sample_label'),             // 'VER-LIM01 D 18/02/2025'
+  sequenceNo: integer('sequence_no').default(1),
+  analyzedAt: text('analyzed_at'),               // 'DD/MM/YY HH:mm'
+
+  // Analytes (%)
+  ni: doublePrecision('ni'),
+  co: doublePrecision('co'),
+  fe: doublePrecision('fe'),
+  cao: doublePrecision('cao'),
+  sio2: doublePrecision('sio2'),
+  al2o3: doublePrecision('al2o3'),
+  mgo: doublePrecision('mgo'),
+  p: doublePrecision('p'),
+  s: doublePrecision('s'),
+  cr2o3: doublePrecision('cr2o3'),
+  mno: doublePrecision('mno'),
+
+  // Calculated Metrics
+  bc: doublePrecision('bc'),             // Basic Index
+  feNi: doublePrecision('fe_ni'),        // Ratio Fe / Ni
+  sumConc: doublePrecision('sum_conc'),  // Total Concentration %
+
+  // Evaluated status & differences per element
+  evaluations: json('evaluations'), // { Ni: { measured, expected, diffPct, stdev, sigmaDist, status }, Cr2O3: { ... } }
+  itemStatus: text('item_status').default('PASS'), // 'PASS' | 'WARNING' | 'FAIL'
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => [
+  index('idx_xrf_ver_items_ver_id').on(t.verificationId),
+  index('idx_xrf_ver_items_std_code').on(t.standardCode),
 ]);
 

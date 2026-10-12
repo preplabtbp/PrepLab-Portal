@@ -381,8 +381,7 @@ function buildDefaultConfig(): Record<string, any> {
     pagi: {
       gabungan: [
         slot('Preparation', 'SPV', 'Teknis'),
-        slot('Laboratory', 'SPV', 'Teknis'),
-        slot('All', 'Foreman/Officer', 'Teknis')
+        slot('Laboratory', 'SPV', 'Teknis')
       ]
     },
     malam: {
