@@ -4,6 +4,7 @@ import {
   X,
   Clock,
   GraduationCap,
+  Utensils,
   ArrowRight, 
   Sparkles, 
   CheckSquare, 
@@ -172,6 +173,18 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     tags: ['training', 'internal', 'database training', 'pelatihan', 'hazid', 'jsa', 'iut', 'ott', 'iai', 'bfa', 'sap', 'k3', 'wah', 'loto'],
     actionType: 'nav',
     target: 'training-database'
+  },
+  {
+    id: 'meal-orders',
+    title: 'Orderan Makanan',
+    desc: 'Order makan harian Pagi/Sahur, Siang, Sore, Takjil & Malam (Kantin & Lapangan)',
+    category: 'Administrasi & SDM',
+    icon: <Utensils className="w-5 h-5" />,
+    iconBg: 'bg-indigo-500/15 border-indigo-500/25',
+    iconColor: 'text-indigo-600 dark:text-indigo-400',
+    tags: ['makan', 'makanan', 'order', 'orderan', 'catering', 'kantin', 'lapangan', 'sahur', 'takjil', 'konsumsi'],
+    actionType: 'nav',
+    target: 'meal-orders'
   },
   {
     id: 'training-external',

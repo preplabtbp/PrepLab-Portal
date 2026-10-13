@@ -402,7 +402,8 @@ interface TrainingAccess { nik: string; viewAll: boolean; canManage: boolean }
 const accessCache = new Map<string, { access: TrainingAccess; expires: number }>();
 const ACCESS_CACHE_MS = 5 * 60 * 1000;
 
-async function getTrainingAccess(user: any): Promise<TrainingAccess> {
+// Dipakai juga oleh modul Orderan Makanan (hak kelola: Developer & Section Administrasi)
+export async function getTrainingAccess(user: any): Promise<TrainingAccess> {
   const nik = String(user?.nik || '').trim().toUpperCase();
   if (!nik) return { nik, viewAll: false, canManage: false };
   const cached = accessCache.get(nik);

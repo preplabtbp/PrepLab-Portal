@@ -818,6 +818,40 @@ export const clinicVisits = pgTable('clinic_visits', {
   index('idx_clinic_visits_category').on(t.category),
 ]);
 
+// Orderan Makanan harian (satu baris per karyawan per tanggal) — acuan sheet order makan:
+// Kantin ditandai 'K', Lapangan berisi jumlah porsi; konfirmasi Batch Pagi & Batch Sore
+export const mealOrders = pgTable('meal_orders', {
+  id: serial('id').primaryKey(),
+  orderDate: date('order_date').notNull(),
+  sortNo: integer('sort_no'),
+  nik: text('nik').notNull(),
+  nama: text('nama').notNull(),
+  statusMess: text('status_mess'),
+  pt: text('pt'),
+  shift: text('shift'),
+  section: text('section'),
+  statusKerja: text('status_kerja'),
+  sahur: text('sahur'),
+  tidakPuasa: text('tidak_puasa'),
+  tempatTinggal: text('tempat_tinggal'),
+  shiftKerja: text('shift_kerja'), // SIANG / MALAM / Nonshift
+  pagiKantin: text('pagi_kantin'),
+  pagiLapangan: text('pagi_lapangan'),
+  siangKantin: text('siang_kantin'),
+  siangLapangan: text('siang_lapangan'),
+  soreKantin: text('sore_kantin'),
+  soreLapangan: text('sore_lapangan'),
+  takjilLapangan: text('takjil_lapangan'),
+  malamLapangan: text('malam_lapangan'),
+  konfirmasiPagi: boolean('konfirmasi_pagi').default(false),
+  konfirmasiSore: boolean('konfirmasi_sore').default(false),
+  updatedBy: text('updated_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_meal_orders_date_nik').on(t.orderDate, t.nik),
+]);
+
 // Database Training per karyawan (satu baris per NIK), dua program:
 //  - Training SAP (HAZID, JSA, IUT OTT, IAI, BFA) — acuan Training_SAP.csv
 //  - Training K3 (WAH, LOTO, Confined Space, Basic Fire Fighting + status) — acuan Training_WAH_LOTO_CONFINE_SPACE_FIRE_FIGHTER.csv

@@ -130,6 +130,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
         ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('p5m') }] : []),
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('agenda') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('roster-admin') },
+        { id: 'meal-orders', title: "Orderan Makanan", desc: "Order harian Kantin & Lapangan", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('meal-orders') },
         // { id: 'food-report', title: "Lapor Makan", desc: "Status konsumsi", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => setShowFoodReportModal(true) }, // Di-hide sementara (belum operasional)
       ]
     },

@@ -70,6 +70,7 @@ import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
 import { trainingRouter, ensureTrainingRecordsTable, initTrainingNotificationCron } from "./server/routes/training.js";
+import { mealOrdersRouter, ensureMealOrdersTable } from "./server/routes/mealOrders.js";
 import { userPreferencesRouter } from "./server/routes/userPreferences.js";
 import { galleryRouter } from "./server/routes/gallery.js";
 import { xrfRouter, ensureXrfTables } from "./server/routes/xrfCalibration.js";
@@ -357,6 +358,7 @@ async function initDbSchema() {
 
     // Siapkan tabel & seed Database Training di background agar request pertama tidak menunggu
     ensureTrainingRecordsTable().catch(e => console.warn('Training init notice:', e.message));
+    ensureMealOrdersTable().catch(e => console.warn('Meal orders init notice:', e.message));
 
     // Ensure XRF Calibration & QC tables and seed initial data
     try {
@@ -1106,6 +1108,7 @@ const app = express();
   app.use(logbookRouter);
   app.use(clinicRouter);
   app.use(trainingRouter);
+  app.use(mealOrdersRouter);
   app.use("/api/xrf", xrfRouter);
   app.use("/api/user", userPreferencesRouter);
   app.use(galleryRouter);
