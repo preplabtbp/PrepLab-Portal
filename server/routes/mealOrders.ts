@@ -495,11 +495,12 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
 
   const rosterRows = await db.select({ nik: roster.nik, status: roster.status }).from(roster).where(inArray(roster.date, dateFormats));
   const rosterByNik = new Map(rosterRows.filter(r => r.nik).map(r => [r.nik!.toUpperCase().trim(), (r.status || '-').trim()]));
+  // Hanya karyawan yang tercantum di roster tanggal tsb
   const emps = dbEmps.filter(emp => {
     const nik = (emp.nik || '').toUpperCase().trim();
     const name = (emp.name || '').toLowerCase().trim();
     const sm = (emp.statusMess || '').toUpperCase().trim();
-    if (!nik || !emp.name) return false;
+    if (!nik || !emp.name || !rosterByNik.has(nik)) return false;
     if (nik.includes('DEMO') || name.includes('demo') || nik === 'PREPLABADMIN' || nik.includes('#N/A') || name.includes('#N/A')) return false;
     if (isResignedOrNonActiveStatus(emp) || sm.includes('RESIGN')) return false;
     return true;
@@ -513,13 +514,20 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
   };
 }
 
-export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system', overwrite = false): Promise<{ synced: number; source: RosterSource }> {
+export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system', overwrite = false): Promise<{ synced: number; removed: number; source: RosterSource }> {
   await ensureMealOrdersTable();
   if (!isDate(date)) throw new Error("Format tanggal tidak valid (YYYY-MM-DD)");
 
   // 1. Karyawan + kode roster tanggal ini (dari sheet Database Rooster, cadangan: database)
   const { emps: activeEmps, source } = await loadRosterForDate(date);
-  if (activeEmps.length === 0) return { synced: 0, source };
+  if (activeEmps.length === 0) return { synced: 0, removed: 0, source };
+
+  // Orderan mengikuti roster: karyawan yang tidak ada di roster tanggal ini dikeluarkan dari orderan tanggal tsb
+  const rosterNiks = activeEmps.map(e => e.nik.toUpperCase().trim());
+  const removedRows = await db.delete(mealOrders)
+    .where(and(eq(mealOrders.orderDate, date), notInArray(sql`UPPER(TRIM(${mealOrders.nik}))`, rosterNiks)))
+    .returning({ id: mealOrders.id });
+  const removed = removedRows.length;
 
   // 2. Jika bukan overwrite, cek karyawan yang sudah ada di tanggal tsb
   const existingRows = await db.select({ nik: mealOrders.nik }).from(mealOrders).where(eq(mealOrders.orderDate, date));
@@ -567,7 +575,10 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     });
   }
 
-  if (rowsToSave.length === 0) return { synced: 0, source };
+  if (rowsToSave.length === 0) {
+    if (removed) scheduleSheetSync();
+    return { synced: 0, removed, source };
+  }
 
   for (let i = 0; i < rowsToSave.length; i += 200) {
     const chunk = rowsToSave.slice(i, i + 200);
@@ -586,7 +597,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   }
 
   scheduleSheetSync();
-  return { synced: rowsToSave.length, source };
+  return { synced: rowsToSave.length, removed, source };
 }
 
 export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, rosterStatus: string, updatedBy = 'roster-sync') {
@@ -687,9 +698,10 @@ mealOrdersRouter.post("/api/meal-orders/sync-roster", requireMealManager, async 
     const overwrite = req.body?.overwrite !== false; // default true untuk pembaruan eksplisit
     if (!isDate(date)) return res.status(400).json({ status: "error", message: "Tanggal tidak valid (YYYY-MM-DD)." });
 
-    const { synced, source } = await syncMealOrdersFromRoster(date, updatedByOf(req), overwrite);
+    const { synced, removed, source } = await syncMealOrdersFromRoster(date, updatedByOf(req), overwrite);
     const from = source === 'sheet' ? 'Google Sheets "Database Rooster Prep & Lab"' : 'data Roster database (sheet tidak terbaca / tanggal belum ada di sheet)';
-    res.json({ status: "success", synced, source, message: `Berhasil menyinkronkan ${synced} data order makanan dari ${from}.` });
+    const removedMsg = removed ? ` ${removed} karyawan yang tidak ada di roster dikeluarkan.` : '';
+    res.json({ status: "success", synced, removed, source, message: `Berhasil menyinkronkan ${synced} data order makanan dari ${from}.${removedMsg}` });
   } catch (error: any) {
     console.error("[MealOrders SYNC-ROSTER] Error:", error);
     res.status(500).json({ status: "error", message: error.message });
