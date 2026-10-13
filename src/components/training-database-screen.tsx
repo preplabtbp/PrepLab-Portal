@@ -1292,8 +1292,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           { label: 'Telah mengikuti', data: cov.map(c => c.done), backgroundColor: '#10b981' },
           { label: 'Pending', data: cov.map(c => c.pending), backgroundColor: '#60a5fa' },
           { label: 'FAIL', data: cov.map(c => c.expired), backgroundColor: CHART_EXPIRED },
+          // Persentase dihitung dari yang WAJIB saja (Tidak Wajib tidak ikut dihitung)
           { label: 'Belum', data: cov.map(c => c.target - c.done - c.pending - c.expired), backgroundColor: CHART_BELUM },
-          { label: 'Tidak Wajib', data: cov.map(c => c.exempt), backgroundColor: '#cbd5e1' },
         ]
       : [{ label: 'Telah mengikuti', data: cov.map(c => c.done), backgroundColor: '#7c3aed' }];
     return {
