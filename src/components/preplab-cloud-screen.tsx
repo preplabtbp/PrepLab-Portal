@@ -179,6 +179,42 @@ function ScrollingText({ text, className }: { text: string, className?: string }
   );
 }
 
+// Busur setengah lingkaran (kiri → atas → kanan) dibagi per jenis file, proporsional ukuran,
+// dengan ujung membulat & jeda kecil antar segmen
+function StorageArcGauge({ segments }: { segments: { value: number; color: string }[] }) {
+  const cx = 110, cy = 105, r = 86, sw = 20;
+  const gap = 16; // derajat jeda antar segmen (ujung bulat ±7° di tiap sisi + celah tipis)
+  const point = (deg: number) => {
+    const a = (Math.PI / 180) * deg;
+    return `${(cx + r * Math.cos(a)).toFixed(2)} ${(cy - r * Math.sin(a)).toFixed(2)}`;
+  };
+  // Busur dari sudut a1 ke a2 (derajat, 180 = kiri, 0 = kanan), searah jarum jam melewati atas
+  const arc = (a1: number, a2: number) => `M ${point(a1)} A ${r} ${r} 0 0 1 ${point(a2)}`;
+
+  const nonZero = segments.filter(s => s.value > 0);
+  const total = nonZero.reduce((s, x) => s + x.value, 0);
+  const usable = 180 - gap * Math.max(0, nonZero.length - 1);
+  // Segmen kecil tetap terlihat (min. 6°)
+  const raw = nonZero.map(s => Math.max(6, (s.value / (total || 1)) * usable));
+  const scale = usable / (raw.reduce((s, x) => s + x, 0) || 1);
+  let start = 180;
+  const paths = nonZero.map((s, i) => {
+    const sweep = raw[i] * scale;
+    const p = { d: arc(start, start - sweep), color: s.color };
+    start -= sweep + gap;
+    return p;
+  });
+
+  return (
+    <svg viewBox="0 0 220 120" className="w-full max-w-[240px]" aria-hidden="true">
+      <path d={arc(180, 0)} fill="none" stroke="#EEF2F6" strokeWidth={sw} strokeLinecap="round" />
+      {paths.map((p, i) => (
+        <path key={i} d={p.d} fill="none" stroke={p.color} strokeWidth={sw} strokeLinecap="round" />
+      ))}
+    </svg>
+  );
+}
+
 export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspectorName }: PreplabCloudScreenProps) {
   const [allowedFolders, setAllowedFolders] = useState<any[]>([]);
   const [folderPath, setFolderPath] = useState<any[]>([]);
@@ -510,9 +546,11 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
   }, [files]);
 
   return (
-    <div className="w-full min-h-screen bg-[#edf6f0] p-3 sm:p-5 md:p-6 lg:p-8 flex items-center justify-center font-sans antialiased text-slate-800">
+    // items-start + my-auto: tetap di tengah saat konten pendek, tapi saat konten panjang bagian atas
+    // tidak ikut terpotong (items-center membuat bagian atas tidak bisa di-scroll)
+    <div className="w-full min-h-screen bg-[#edf6f0] p-3 sm:p-5 md:p-6 lg:p-8 flex items-start justify-center font-sans antialiased text-slate-800">
       {/* Outer Floating Main Dashboard Container (Aesthetic MyCloud Canvas) */}
-      <div className="w-full max-w-[1520px] bg-white rounded-3xl sm:rounded-[36px] shadow-2xl shadow-emerald-950/10 border border-emerald-100/80 overflow-hidden flex flex-col xl:flex-row min-h-[850px] relative">
+      <div className="my-auto w-full max-w-[1520px] bg-white rounded-3xl sm:rounded-[36px] shadow-2xl shadow-emerald-950/10 border border-emerald-100/80 overflow-hidden flex flex-col xl:flex-row min-h-[850px] relative">
         
         {/* ========================================================================= */}
         {/* 1. SLIM LEFT ICON DOCK (Emerald Theme) */}
@@ -1167,62 +1205,25 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
             </div>
 
             {/* STORAGE CAPACITY SEMI-CIRCLE ARC GAUGE (Stylized like Reference Image) */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-2xs text-center flex flex-col items-center relative overflow-hidden">
-              <div className="w-44 h-28 relative flex items-end justify-center mb-1">
-                {/* SVG Rainbow Arc */}
-                <svg className="w-44 h-44 -rotate-90 overflow-visible" viewBox="0 0 100 100">
-                  {/* Background Arc */}
-                  <path
-                    d="M 10 50 A 40 40 0 0 1 90 50"
-                    fill="none"
-                    stroke="#F1F5F9"
-                    strokeWidth="10"
-                    strokeLinecap="round"
-                  />
-                  {/* Segment 1: Rose (Videos) */}
-                  <path
-                    d="M 10 50 A 40 40 0 0 1 35 15"
-                    fill="none"
-                    stroke="#F43F5E"
-                    strokeWidth="10"
-                    strokeLinecap="round"
-                  />
-                  {/* Segment 2: Emerald (Photos) */}
-                  <path
-                    d="M 35 15 A 40 40 0 0 1 65 15"
-                    fill="none"
-                    stroke="#10B981"
-                    strokeWidth="10"
-                    strokeLinecap="round"
-                  />
-                  {/* Segment 3: Amber (Documents) */}
-                  <path
-                    d="M 65 15 A 40 40 0 0 1 85 35"
-                    fill="none"
-                    stroke="#F59E0B"
-                    strokeWidth="10"
-                    strokeLinecap="round"
-                  />
-                  {/* Segment 4: Sky Blue (Other Files) */}
-                  <path
-                    d="M 85 35 A 40 40 0 0 1 90 50"
-                    fill="none"
-                    stroke="#38BDF8"
-                    strokeWidth="10"
-                    strokeLinecap="round"
-                  />
-                </svg>
-
-                {/* Center Storage Value */}
-                <div className="absolute inset-x-0 bottom-1 flex flex-col items-center">
-                  <span className="font-black text-xl text-slate-900 tracking-tight">
-                    {formatSize(fileStats.totalBytes) || '42.4 MB'}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                    Total Cloud Usage
-                  </span>
-                </div>
+            <div className="bg-white rounded-3xl px-4 pt-5 pb-4 border border-slate-200/80 shadow-2xs text-center flex flex-col items-center">
+              <StorageArcGauge
+                segments={[
+                  { value: fileStats.videosSize, color: '#F0525F' },
+                  { value: fileStats.photosSize, color: '#3DBE8B' },
+                  { value: fileStats.docsSize, color: '#F5B53F' },
+                  { value: fileStats.otherSize, color: '#5AB8F5' },
+                ]}
+              />
+              {/* Nilai di tengah busur */}
+              <div className="-mt-16 flex flex-col items-center">
+                <span className="font-black text-[26px] leading-none text-slate-900 tracking-tight">
+                  {formatSize(fileStats.totalBytes) || '0 B'}
+                </span>
+                <span className="mt-1.5 text-[11px] text-slate-400 font-semibold">
+                  dari {fileStats.totalFiles} file
+                </span>
               </div>
+              <span className="mt-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Cloud Usage</span>
             </div>
 
             {/* STORAGE BREAKDOWN LIST */}
