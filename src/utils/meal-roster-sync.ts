@@ -116,7 +116,7 @@ export function computeMealOrderByRoster(
   if (isCR && isNirwana && ['D', 'N', 'LS'].includes(code)) {
     // ==========================================
     // LOGIKA MESS CR (Gol II-V) + tempat tinggal Nirwana
-    // Pagi (D/N/LS) & Sore (D/N) bisa dipilih Kantin/Lapangan lewat dropdown di kolom Catatan â€” awalan "K" di Kantin
+    // Pagi (D/N/LS) & Sore (D/N) bisa dipilih Kantin/Lapangan lewat dropdown di kolom Catatan — awalan "K" di Kantin
     // ==========================================
     res.pagiKantin = 'K';
     if (code === 'D') {
