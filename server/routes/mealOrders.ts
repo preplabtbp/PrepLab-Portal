@@ -485,6 +485,25 @@ async function loadMealPreferences(date: string, nik?: string): Promise<Map<stri
   return prefs;
 }
 
+// Karyawan yang semula Nonshift: shift siang terakhir di orderan (tanggal <= date) adalah "Nonshift"
+// → saat roster D tetap Nonshift (tidak berubah jadi SIANG walau grup shift di roster A/B)
+async function loadNonshiftNiks(date: string, nik?: string): Promise<Set<string>> {
+  const rows = await db.select({ nik: mealOrders.nik, shiftKerja: mealOrders.shiftKerja })
+    .from(mealOrders)
+    .where(and(
+      sql`${mealOrders.orderDate} <= ${date}`,
+      sql`UPPER(${mealOrders.shiftKerja}) IN ('SIANG', 'NONSHIFT')`,
+      nik ? sql`UPPER(${mealOrders.nik}) = ${nik.toUpperCase()}` : undefined,
+    ))
+    .orderBy(desc(mealOrders.orderDate));
+  const latest = new Map<string, string>();
+  for (const r of rows) {
+    const k = r.nik.toUpperCase().trim();
+    if (!latest.has(k)) latest.set(k, String(r.shiftKerja).toUpperCase());
+  }
+  return new Set(Array.from(latest).filter(([, s]) => s === 'NONSHIFT').map(([k]) => k));
+}
+
 async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; source: RosterSource }> {
   const dateFormats = getPossibleRosterDateStrings(date);
   // Tempat tinggal (Nirwana dsb.) tidak ada di sheet roster → ambil dari orderan terakhir karyawan tsb, lalu alamat domisili.
@@ -567,6 +586,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   const rowsToSave: any[] = [];
   let sortIndex = 1;
   const prefs = await loadMealPreferences(date);
+  const nonshift = await loadNonshiftNiks(date);
 
   for (const emp of activeEmps) {
     const nik = emp.nik.toUpperCase().trim();
@@ -574,6 +594,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       continue;
     }
     const computed = computeMealOrderByRoster(emp, emp.status, date, prefs.get(nik));
+    if (computed.shiftKerja === 'SIANG' && nonshift.has(nik)) computed.shiftKerja = 'Nonshift';
 
     rowsToSave.push({
       orderDate: date,
@@ -654,6 +675,7 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
       .where(and(eq(mealOrders.orderDate, ymd), eq(mealOrders.nik, emp.nik))).limit(1);
     const prefs = await loadMealPreferences(ymd, cleanNik);
     const computed = computeMealOrderByRoster({ ...emp, tempatTinggal: current?.tempatTinggal || null }, rosterStatus, ymd, prefs.get(cleanNik));
+    if (computed.shiftKerja === 'SIANG' && (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik)) computed.shiftKerja = 'Nonshift';
 
     const updateValues = {
       statusKerja: computed.statusKerja,
