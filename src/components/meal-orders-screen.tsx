@@ -609,7 +609,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 onClick={handleSyncRoster}
                 disabled={syncingRoster}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-indigo-200 bg-indigo-50 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 cursor-pointer disabled:opacity-60 active:scale-95 transition-all shadow-sm"
-                title="Sinkronkan orderan makanan hari ini dengan data Roster & Cuti karyawan"
+                title='Sinkronkan orderan makanan tanggal ini langsung dari Google Sheets "Database Rooster Prep & Lab" (Rooster_Staff & Rooster_Crew)'
               >
                 {syncingRoster ? <Loader2 className="w-4 h-4 animate-spin text-indigo-600" /> : <RefreshCw className="w-4 h-4 text-indigo-600" />} Sinkron Roster
               </button>

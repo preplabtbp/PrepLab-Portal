@@ -10,6 +10,7 @@ import { mealOrders, employees, roster } from "../../src/db/schema.js";
 import { drive } from "../../google-services.js";
 import { getTrainingAccess } from "./training.js";
 import { computeMealOrderByRoster, getPossibleRosterDateStrings } from "../../src/utils/meal-roster-sync.js";
+import { fetchRosterSheetForDate } from "../../src/syncRoster.js";
 
 // ===== Orderan Makanan =====
 // Satu baris per karyawan per tanggal. Kantin ditandai 'K', Lapangan berisi jumlah porsi.
@@ -423,6 +424,8 @@ function pickFields(body: any): Partial<Record<EditableField, any>> {
   return out;
 }
 
+const updatedByOf = (req: any) => String(req.user?.nik || req.user?.name || 'system');
+
 async function requireMealManager(req: any, res: any, next: any) {
   try {
     const access = await getTrainingAccess(req.user);
@@ -436,13 +439,47 @@ async function requireMealManager(req: any, res: any, next: any) {
 }
 
 // ===== Sinkronisasi Otomatis dengan Data Roster & Cuti =====
-export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system', overwrite = false): Promise<number> {
-  await ensureMealOrdersTable();
-  if (!isDate(date)) throw new Error("Format tanggal tidak valid (YYYY-MM-DD)");
+// Sumber utama: Google Sheets "Database Rooster Prep & Lab" (Rooster_Staff & Rooster_Crew) dibaca langsung saat sinkron.
+// Bila sheet tidak bisa dibaca / tanggal belum ada di sheet → pakai salinan tabel roster di database (diperbarui cron 17:00 WIT).
+type RosterSource = 'sheet' | 'database';
+interface RosterEmp { nik: string; name: string; statusMess: string | null; pt: string | null; shift: string | null; section: string | null; gol: string | null; tempatTinggal: string | null; status: string }
 
-  // 1. Ambil seluruh data karyawan aktif
-  const rawEmps = await db.select().from(employees);
-  const activeEmps = rawEmps.filter(emp => {
+async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; source: RosterSource }> {
+  const dateFormats = getPossibleRosterDateStrings(date);
+  // Tempat tinggal (Nirwana dsb.) tidak ada di sheet roster → ambil dari orderan terakhir karyawan tsb, lalu alamat domisili.
+  // Section juga diambil dari orderan terakhir (mis. "Laboratorium Krishna") karena sheet memakai nama lain ("Laboratory").
+  const lastOrders = await db.select({ nik: mealOrders.nik, tempatTinggal: mealOrders.tempatTinggal, section: mealOrders.section })
+    .from(mealOrders).orderBy(desc(mealOrders.orderDate));
+  const placeByNik = new Map<string, string>();
+  const sectionByNik = new Map<string, string>();
+  for (const r of lastOrders) {
+    const k = r.nik.toUpperCase().trim();
+    if (r.tempatTinggal?.trim() && !placeByNik.has(k)) placeByNik.set(k, r.tempatTinggal);
+    if (r.section?.trim() && !sectionByNik.has(k)) sectionByNik.set(k, r.section);
+  }
+  const dbEmps = await db.select().from(employees);
+  const dbByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
+  const placeOf = (nik: string): string | null => placeByNik.get(nik) || dbByNik.get(nik)?.alamatDomisili || null;
+
+  try {
+    const sheet = await fetchRosterSheetForDate(dateFormats);
+    if (sheet.dateFound && sheet.entries.length > 0) {
+      return {
+        source: 'sheet',
+        emps: sheet.entries.map(e => {
+          const nik = e.nik.toUpperCase();
+          return { nik: e.nik, name: e.name, statusMess: e.statusMess || null, pt: e.pt || null, shift: e.shift || null, section: sectionByNik.get(nik) || e.section || null, gol: e.gol || null, tempatTinggal: placeOf(nik), status: e.status };
+        }),
+      };
+    }
+    console.warn(`[MealOrders] Tanggal ${date} belum ada di sheet Database Rooster — pakai tabel roster database`);
+  } catch (err: any) {
+    console.warn(`[MealOrders] Gagal membaca sheet Database Rooster (${err?.message}) — pakai tabel roster database`);
+  }
+
+  const rosterRows = await db.select({ nik: roster.nik, status: roster.status }).from(roster).where(inArray(roster.date, dateFormats));
+  const rosterByNik = new Map(rosterRows.filter(r => r.nik).map(r => [r.nik!.toUpperCase().trim(), (r.status || '-').trim()]));
+  const emps = dbEmps.filter(emp => {
     const nik = (emp.nik || '').toUpperCase().trim();
     const name = (emp.name || '').toLowerCase().trim();
     const st = (emp.statusKaryawan || '').toUpperCase().trim();
@@ -452,23 +489,24 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     if (st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR') || sm.includes('RESIGN')) return false;
     return true;
   });
+  return {
+    source: 'database',
+    emps: emps.map(e => {
+      const nik = e.nik.toUpperCase().trim();
+      return { nik: e.nik, name: e.name, statusMess: e.statusMess, pt: e.pt, shift: e.shift, section: sectionByNik.get(nik) || e.section, gol: e.gol, tempatTinggal: placeOf(nik), status: rosterByNik.get(nik) || '-' };
+    }),
+  };
+}
 
-  if (activeEmps.length === 0) return 0;
+export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system', overwrite = false): Promise<{ synced: number; source: RosterSource }> {
+  await ensureMealOrdersTable();
+  if (!isDate(date)) throw new Error("Format tanggal tidak valid (YYYY-MM-DD)");
 
-  // 2. Ambil data roster untuk tanggal ini (semua kemungkinan format tanggal)
-  const dateFormats = getPossibleRosterDateStrings(date);
-  const rosterRows = await db.select({
-    nik: roster.nik,
-    date: roster.date,
-    status: roster.status
-  }).from(roster).where(inArray(roster.date, dateFormats));
+  // 1. Karyawan + kode roster tanggal ini (dari sheet Database Rooster, cadangan: database)
+  const { emps: activeEmps, source } = await loadRosterForDate(date);
+  if (activeEmps.length === 0) return { synced: 0, source };
 
-  const rosterByNik: Record<string, string> = {};
-  for (const r of rosterRows) {
-    if (r.nik) rosterByNik[r.nik.toUpperCase().trim()] = (r.status || '-').trim();
-  }
-
-  // 3. Jika bukan overwrite, cek karyawan yang sudah ada di tanggal tsb
+  // 2. Jika bukan overwrite, cek karyawan yang sudah ada di tanggal tsb
   const existingRows = await db.select({ nik: mealOrders.nik }).from(mealOrders).where(eq(mealOrders.orderDate, date));
   const existingNiks = new Set(existingRows.map(r => r.nik.toUpperCase().trim()));
 
@@ -480,8 +518,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     if (!overwrite && existingNiks.has(nik)) {
       continue;
     }
-    const rStatus = rosterByNik[nik] || '-';
-    const computed = computeMealOrderByRoster(emp, rStatus, date);
+    const computed = computeMealOrderByRoster(emp, emp.status, date);
 
     rowsToSave.push({
       orderDate: date,
@@ -495,7 +532,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       statusKerja: computed.statusKerja,
       sahur: null,
       tidakPuasa: null,
-      tempatTinggal: emp.tempatTinggal || emp.alamatDomisili || null,
+      tempatTinggal: emp.tempatTinggal,
       shiftKerja: computed.shiftKerja,
       pagiKantin: computed.pagiKantin,
       pagiLapangan: computed.pagiLapangan,
@@ -515,7 +552,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     });
   }
 
-  if (rowsToSave.length === 0) return 0;
+  if (rowsToSave.length === 0) return { synced: 0, source };
 
   for (let i = 0; i < rowsToSave.length; i += 200) {
     const chunk = rowsToSave.slice(i, i + 200);
@@ -527,12 +564,14 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
           'pagiKantin', 'pagiLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan',
           'takjilLapangan', 'malamLapangan', 'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan',
           'updatedBy', 'updatedAt'
-        ].map(f => [f, sql.raw(`excluded.${toSnake(f)}`)]))
+        ].map(f => [f, f === 'tempatTinggal'
+          ? sql.raw(`COALESCE(excluded.tempat_tinggal, meal_orders.tempat_tinggal)`)
+          : sql.raw(`excluded.${toSnake(f)}`)]))
       });
   }
 
   scheduleSheetSync();
-  return rowsToSave.length;
+  return { synced: rowsToSave.length, source };
 }
 
 export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, rosterStatus: string, updatedBy = 'roster-sync') {
@@ -602,7 +641,7 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
     // Jika belum ada data orderan makanan sama sekali pada tanggal tsb, otomatis sinkronkan dari data Roster & Cuti!
     if (rows.length === 0) {
       try {
-        const syncedCount = await syncMealOrdersFromRoster(date, 'auto-roster-sync', false);
+        const { synced: syncedCount } = await syncMealOrdersFromRoster(date, 'auto-roster-sync', false);
         if (syncedCount > 0) {
           rows = await db.select().from(mealOrders)
             .where(eq(mealOrders.orderDate, date))
@@ -630,8 +669,9 @@ mealOrdersRouter.post("/api/meal-orders/sync-roster", requireMealManager, async 
     const overwrite = req.body?.overwrite !== false; // default true untuk pembaruan eksplisit
     if (!isDate(date)) return res.status(400).json({ status: "error", message: "Tanggal tidak valid (YYYY-MM-DD)." });
 
-    const synced = await syncMealOrdersFromRoster(date, updatedByOf(req), overwrite);
-    res.json({ status: "success", synced, message: `Berhasil menyinkronkan ${synced} data order makanan dari Roster & Cuti.` });
+    const { synced, source } = await syncMealOrdersFromRoster(date, updatedByOf(req), overwrite);
+    const from = source === 'sheet' ? 'Google Sheets "Database Rooster Prep & Lab"' : 'data Roster database (sheet tidak terbaca / tanggal belum ada di sheet)';
+    res.json({ status: "success", synced, source, message: `Berhasil menyinkronkan ${synced} data order makanan dari ${from}.` });
   } catch (error: any) {
     console.error("[MealOrders SYNC-ROSTER] Error:", error);
     res.status(500).json({ status: "error", message: error.message });

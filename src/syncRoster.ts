@@ -77,6 +77,12 @@ const CONFIGS: RosterConfig[] = [
   }
 ];
 
+// NIK karyawan yang sudah resign tapi masih tercantum di sheet
+const KNOWN_RESIGNED_NIKS = [
+  '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
+  'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419',
+];
+
 const CUTI_TAHUNAN_CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=CutiTahunan`;
 
 export async function syncCutiTahunan(): Promise<{ updatedCount: number; message: string }> {
@@ -181,10 +187,7 @@ export async function syncRosterData(): Promise<{ success: boolean; staffCount: 
         continue;
       }
 
-      const isKnownResigned = [
-        '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
-        'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419'
-      ].includes(nik);
+      const isKnownResigned = KNOWN_RESIGNED_NIKS.includes(nik);
       const isResignMark = st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR') || sec.includes('#N/A');
       const notInActiveSheet = allActiveSheetNiks.size > 0 && !allActiveSheetNiks.has(emp.nik);
 
@@ -287,10 +290,7 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
     const rawStatusKontrak = config.colStatusKontrak !== -1 ? (row[config.colStatusKontrak] || '').trim().toUpperCase() : '';
     const rawStatusMess = config.colStatusMess !== -1 ? (row[config.colStatusMess] || '').trim().toUpperCase() : '';
     const isResignedSheet = rawStatusKontrak.includes('RESIGN') || rawStatusMess.includes('RESIGN');
-    const isKnownResigned = [
-      '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
-      'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419'
-    ].includes(nik);
+    const isKnownResigned = KNOWN_RESIGNED_NIKS.includes(nik);
 
     const isResigned = isSectionNA || isJobGradeNA || isJabatanNA || isNameNA || isResignedSheet || isKnownResigned;
     if (isResigned) {
@@ -375,6 +375,75 @@ async function fetchAndSync(config: RosterConfig): Promise<{ empCount: number; r
 
   console.log(`Synced ${uniqueEmps.length} employees and ${allRosterData.length} roster entries for ${config.type}.`);
   return { empCount: uniqueEmps.length, rosterCount: allRosterData.length, niks: allNiks };
+}
+
+// ===== Baca langsung sheet "Database Rooster Prep & Lab" untuk satu tanggal (dipakai sinkron Orderan Makanan) =====
+export interface SheetRosterEntry {
+  nik: string;
+  name: string;
+  jabatan: string;
+  jobGrade: string;
+  section: string;
+  gol: string;
+  shift: string;
+  pt: string;
+  statusMess: string;
+  status: string; // kode roster tanggal tsb (D, N, LS, OFF, C, ...) atau '-' bila kosong
+}
+
+export async function fetchRosterSheetForDate(possibleDates: string[]): Promise<{ entries: SheetRosterEntry[]; dateFound: boolean }> {
+  const wanted = new Set(possibleDates.map(d => normalizeDateStr(d).toLowerCase()));
+  const entries = new Map<string, SheetRosterEntry>();
+  let dateFound = false;
+
+  for (const config of CONFIGS) {
+    const res = await fetch(config.url);
+    if (!res.ok) throw new Error(`Gagal membaca sheet Rooster_${config.type}: ${res.statusText}`);
+    const rows = Papa.parse(await res.text(), { skipEmptyLines: true }).data as string[][];
+    if (rows.length < 2) continue;
+
+    const dateHeaders = rows[config.dateRowIndex] || [];
+    let dateCol = -1;
+    for (let c = config.dateStartCol; c < dateHeaders.length; c++) {
+      const h = (dateHeaders[c] || '').trim();
+      if (h && wanted.has(normalizeDateStr(h).toLowerCase())) { dateCol = c; break; }
+    }
+    if (dateCol >= 0) dateFound = true;
+
+    const cell = (row: string[], c: number) => (c !== -1 ? (row[c] || '').trim() : '');
+    let currentSection = '';
+    for (let i = 2; i < rows.length; i++) {
+      const row = rows[i];
+      const nik = cell(row, config.colNik);
+      if (!nik || nik.length < 3) {
+        const possibleSection = (row[1] || row[0] || row[2] || '').trim();
+        if (possibleSection.length > 2 && !/^[0-9]+$/.test(possibleSection)) currentSection = possibleSection;
+        continue;
+      }
+      const name = cell(row, config.colName);
+      const section = cell(row, config.colSection);
+      const statusMess = cell(row, config.colStatusMess);
+      const statusKontrak = cell(row, config.colStatusKontrak).toUpperCase();
+      // Sama dengan syncRosterData: karyawan resign / baris #N/A dilewati
+      const isNA = (v: string) => v.includes('#N/A') || v.toUpperCase() === 'N/A';
+      if (!name || isNA(name) || isNA(section) || isNA(cell(row, config.colJabatan)) || isNA(cell(row, config.colJobGrade))) continue;
+      if (statusKontrak.includes('RESIGN') || statusMess.toUpperCase().includes('RESIGN') || KNOWN_RESIGNED_NIKS.includes(nik)) continue;
+
+      entries.set(nik.toUpperCase(), {
+        nik,
+        name,
+        jabatan: cell(row, config.colJabatan),
+        jobGrade: cell(row, config.colJobGrade),
+        section: section || currentSection,
+        gol: cell(row, config.colGol),
+        shift: cell(row, config.colShift),
+        pt: cell(row, config.colPt) || 'TBP',
+        statusMess,
+        status: (dateCol >= 0 ? cell(row, dateCol) : '') || '-',
+      });
+    }
+  }
+  return { entries: Array.from(entries.values()), dateFound };
 }
 
 export function initRosterCron() {
