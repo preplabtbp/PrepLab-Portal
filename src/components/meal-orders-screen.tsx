@@ -545,8 +545,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   };
 
   // ===== Render sel =====
-  const thBase = 'px-2 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-700 border border-emerald-200/70 bg-emerald-50 whitespace-nowrap';
-  const tdBase = 'px-2 py-1.5 text-xs border border-slate-200 whitespace-nowrap';
+  const thBase = 'px-2 py-1.5 text-[10px] font-black uppercase tracking-wide text-center align-middle text-slate-700 border border-emerald-200/70 bg-emerald-50 whitespace-nowrap';
+  const tdBase = 'px-2 py-1.5 text-xs text-center align-middle border border-slate-200 whitespace-nowrap';
 
   const renderMealCell = (r: MealOrder, key: MealCellKey, kind: 'kantin' | 'lapangan') => {
     const v = r[key] || '';
@@ -1117,27 +1117,27 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   </span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-                  <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1"><Users className="w-3 h-3 text-blue-600" />Karyawan</p>
+                  <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-center gap-1"><Users className="w-3 h-3 text-blue-600" />Karyawan</p>
                     <p className="text-2xl font-semibold text-slate-900">{tbpFiltered.length}</p>
                     <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
                   </div>
                   {summaryCardsTbp.map(c => (
-                    <div key={`tbp-${c.label}`} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`TBP ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
+                    <div key={`tbp-${c.label}`} className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`TBP ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
                       <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
                       <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
                     </div>
                   ))}
                   {columnVisibility.batches && (
-                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
                       <p className="text-2xl font-semibold text-emerald-700">{confirmedTbp.pagi}<span className="text-sm text-slate-400"> · {confirmedTbp.sore}</span></p>
                       <p className="text-[10px] text-slate-500">TBP {dayName(date)}</p>
                     </div>
                   )}
                   {columnVisibility.statusNotes && (
-                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
                       <p className={`text-2xl font-semibold ${confirmedTbp.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmedTbp.belumLapor}</p>
                       <p className="text-[10px] text-slate-500">karyawan</p>
@@ -1156,27 +1156,27 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   </span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-                  <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1"><Users className="w-3 h-3 text-emerald-600" />Karyawan</p>
+                  <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-center gap-1"><Users className="w-3 h-3 text-emerald-600" />Karyawan</p>
                     <p className="text-2xl font-semibold text-slate-900">{gpsFiltered.length}</p>
                     <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
                   </div>
                   {summaryCardsGps.map(c => (
-                    <div key={`gps-${c.label}`} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`GPS ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
+                    <div key={`gps-${c.label}`} className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`GPS ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
                       <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
                       <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
                     </div>
                   ))}
                   {columnVisibility.batches && (
-                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
                       <p className="text-2xl font-semibold text-emerald-700">{confirmedGps.pagi}<span className="text-sm text-slate-400"> · {confirmedGps.sore}</span></p>
                       <p className="text-[10px] text-slate-500">GPS {dayName(date)}</p>
                     </div>
                   )}
                   {columnVisibility.statusNotes && (
-                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
                       <p className={`text-2xl font-semibold ${confirmedGps.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmedGps.belumLapor}</p>
                       <p className="text-[10px] text-slate-500">karyawan</p>
@@ -1195,27 +1195,27 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   </span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-                  <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1"><Users className="w-3 h-3" />Karyawan</p>
+                  <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-center gap-1"><Users className="w-3 h-3" />Karyawan</p>
                     <p className="text-2xl font-semibold text-slate-900">{filtered.length}</p>
                     <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
                   </div>
                   {summaryCardsAll.map(c => (
-                    <div key={`all-${c.label}`} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`Total ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
+                    <div key={`all-${c.label}`} className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`Total ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
                       <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
                       <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
                     </div>
                   ))}
                   {columnVisibility.batches && (
-                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
                       <p className="text-2xl font-semibold text-emerald-700">{confirmedAll.pagi}<span className="text-sm text-slate-400"> · {confirmedAll.sore}</span></p>
                       <p className="text-[10px] text-slate-500">total {dayName(date)}</p>
                     </div>
                   )}
                   {columnVisibility.statusNotes && (
-                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
                       <p className={`text-2xl font-semibold ${confirmedAll.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmedAll.belumLapor}</p>
                       <p className="text-[10px] text-slate-500">karyawan</p>
@@ -1494,7 +1494,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
               {/* Desktop / tablet: tabel seperti sheet */}
               <div ref={tableScrollRef} className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <table className="w-full border-collapse text-left">
+                <table className="w-full border-collapse text-center">
                   <thead className="sticky top-0 z-10">
                     <tr>
                       <th rowSpan={2} className={`${thBase} text-center`}>No</th>
@@ -1716,13 +1716,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               )}
                             </td>
                             <td className={`${tdBase} font-semibold text-slate-700 p-1`}>
-                              <div className="flex items-center gap-1.5">{renderMealChoices(r)}{r.catatan || ''}</div>
+                              <div className="flex items-center justify-center gap-1.5">{renderMealChoices(r)}{r.catatan || ''}</div>
                             </td>
                           </>
                         )}
                         {canManage && (
                           <td className={`${tdBase} p-1`}>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center justify-center gap-1">
                               <button type="button" onClick={() => openEdit(r)} className="p-1.5 rounded-md text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer" title="Edit"><Edit3 className="w-3.5 h-3.5" /></button>
                               <button type="button" onClick={() => setDeleteTarget(r)} className="p-1.5 rounded-md text-slate-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer" title="Hapus"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
@@ -1734,7 +1734,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   </tbody>
                   <tfoot>
                     <tr className="bg-slate-100 font-black">
-                      <td colSpan={leadingColSpan} className={`${tdBase} text-right text-[11px] uppercase tracking-wider text-slate-700`}>Total Order</td>
+                      <td colSpan={leadingColSpan} className={`${tdBase} text-[11px] uppercase tracking-wider text-slate-700`}>Total Order</td>
                       {activeMealCells.map(c => <td key={c.key} className={`${tdBase} text-center text-slate-900`}>{totals[c.key] || '-'}</td>)}
                       {columnVisibility.batches && (
                         <>
