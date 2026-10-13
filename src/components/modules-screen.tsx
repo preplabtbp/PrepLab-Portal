@@ -11,6 +11,7 @@ import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
 import { getKtaUrl } from '../sheets-api';
 import { MeetingRoomDevModal } from './MeetingRoomDevModal';
+import { groupModuleItems } from '../utils/module-groups';
 
 interface ModulesScreenProps {
   onNav: (tab: any) => void;
@@ -77,17 +78,18 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
       ]
     },
     {
-      id: 'reporting',
-      title: 'Observasi & Pelaporan',
+      id: 'safety',
+      title: 'Safety',
       icon: <ShieldCheck className="w-5 h-5" />,
       color: 'amber' as const,
       bgIcon: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20',
       items: [
-        { id: 'weekly-inspection', title: "Inspeksi Mingguan", desc: "Area & kelengkapan", icon: <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('weekly-inspection') },
-        { id: 'clinic', title: "Kunjungan Klinik", desc: "Pelaporan & Rekap Kunjungan Klinik", icon: <BriefcaseMedical className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('clinic') },
-        { id: 'ticket', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('ticket') },
-        { id: 'kta', title: "KTA / TTA", desc: "Laporan Observasi KTA & TTA", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => setShowKtaConfirmation(true) },
-        { id: 'general-inspection', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
+        { id: 'weekly-inspection', group: 'Observasi & Pelaporan', title: "Inspeksi Mingguan", desc: "Area & kelengkapan", icon: <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('weekly-inspection') },
+        { id: 'clinic', group: 'Observasi & Pelaporan', title: "Kunjungan Klinik", desc: "Pelaporan & Rekap Kunjungan Klinik", icon: <BriefcaseMedical className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('clinic') },
+        { id: 'ticket', group: 'Observasi & Pelaporan', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('ticket') },
+        { id: 'kta', group: 'Observasi & Pelaporan', title: "KTA / TTA", desc: "Laporan Observasi KTA & TTA", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => setShowKtaConfirmation(true) },
+        { id: 'general-inspection', group: 'Observasi & Pelaporan', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
+        { id: 'training-database', group: 'Training', title: "Database Training", desc: "SAP, K3 & Sertifikasi POP/POM", icon: <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('training-database') },
       ]
     },
     ...(hasInventoryAccess ? [{
@@ -123,7 +125,6 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
       items: [
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('induksi') },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('employee-database') },
-        { id: 'training-database', title: "Database Training", desc: "HAZID, JSA, IUT OTT, IAI & BFA", icon: <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('training-database') },
         ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('p5m') }] : []),
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('agenda') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('roster-admin') },
@@ -165,7 +166,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
   const tabs = useMemo(() => [
     { id: 'all', label: 'Semua Menu' },
     { id: 'operational', label: 'Operasional' },
-    { id: 'reporting', label: 'Pelaporan' },
+    { id: 'safety', label: 'Safety' },
     ...(hasInventoryAccess ? [{ id: 'inventory', label: 'Inventory' }] : []),
     { id: 'education', label: 'Edukasi' },
     { id: 'admin', label: 'HR & Admin' },
@@ -317,8 +318,17 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
                 </div>
                 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-                  {section.items.map(item => (
-                    <ActionCard key={item.id} {...item} />
+                  {groupModuleItems(section.items).map(g => (
+                    <React.Fragment key={g.name || 'default'}>
+                      {g.name && (
+                        <p className="col-span-full px-1 text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                          {g.name}
+                        </p>
+                      )}
+                      {g.items.map(item => (
+                        <ActionCard key={item.id} {...item} />
+                      ))}
+                    </React.Fragment>
                   ))}
                 </div>
               </motion.section>

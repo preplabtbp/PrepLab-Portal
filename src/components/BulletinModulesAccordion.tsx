@@ -34,6 +34,7 @@ import {
   X
 } from 'lucide-react';
 import { getKtaUrl } from '../sheets-api';
+import { groupModuleItems } from '../utils/module-groups';
 
 interface BulletinModulesAccordionProps {
   onNav?: (route: string) => void;
@@ -77,18 +78,19 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
       ]
     },
     {
-      id: 'reporting',
-      title: 'Observasi & Pelaporan',
+      id: 'safety',
+      title: 'Safety',
       icon: <ShieldCheck className="w-5 h-5" />,
       color: 'amber' as const,
       bgIcon: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20',
       pillColor: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200/60 dark:border-amber-800/60',
       items: [
-        { id: 'weekly-inspection', title: "Inspeksi Mingguan", desc: "Area & kelengkapan", icon: <CheckSquare className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('weekly-inspection') },
-        { id: 'clinic', title: "Kunjungan Klinik", desc: "Pelaporan & Rekap Kunjungan Klinik", icon: <BriefcaseMedical className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('clinic') },
-        { id: 'ticket', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('ticket') },
-        { id: 'kta', title: "KTA / TTA", desc: "Laporan Observasi KTA & TTA", icon: <AlertTriangle className="w-5 h-5" />, color: 'amber', action: () => setShowKtaConfirmation(true) },
-        { id: 'general-inspection', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5" />, color: 'amber', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
+        { id: 'weekly-inspection', group: 'Observasi & Pelaporan', title: "Inspeksi Mingguan", desc: "Area & kelengkapan", icon: <CheckSquare className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('weekly-inspection') },
+        { id: 'clinic', group: 'Observasi & Pelaporan', title: "Kunjungan Klinik", desc: "Pelaporan & Rekap Kunjungan Klinik", icon: <BriefcaseMedical className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('clinic') },
+        { id: 'ticket', group: 'Observasi & Pelaporan', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('ticket') },
+        { id: 'kta', group: 'Observasi & Pelaporan', title: "KTA / TTA", desc: "Laporan Observasi KTA & TTA", icon: <AlertTriangle className="w-5 h-5" />, color: 'amber', action: () => setShowKtaConfirmation(true) },
+        { id: 'general-inspection', group: 'Observasi & Pelaporan', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5" />, color: 'amber', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
+        { id: 'training-database', group: 'Training', title: "Database Training", desc: "SAP, K3 & Sertifikasi POP/POM", icon: <GraduationCap className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('training-database') },
       ]
     },
     {
@@ -127,7 +129,6 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
       items: [
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('induksi') },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('employee-database') },
-        { id: 'training-database', title: "Database Training", desc: "HAZID, JSA, IUT OTT, IAI & BFA", icon: <GraduationCap className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('training-database') },
         { id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('p5m') },
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('agenda') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('roster-admin') },
@@ -205,8 +206,17 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
                     className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5"
                     style={{ backgroundColor: 'var(--bg-main, rgba(248, 250, 252, 0.65))' }}
                   >
-                    {section.items.map(item => (
-                      <ActionItemCard key={item.id} {...item} />
+                    {groupModuleItems(section.items).map(g => (
+                      <React.Fragment key={g.name || 'default'}>
+                        {g.name && (
+                          <p className="col-span-full px-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                            {g.name}
+                          </p>
+                        )}
+                        {g.items.map(item => (
+                          <ActionItemCard key={item.id} {...item} />
+                        ))}
+                      </React.Fragment>
                     ))}
                   </div>
                 </motion.div>
