@@ -185,6 +185,7 @@ export function computeMealOrderByRoster(
   // Cuti kode: C, CE, CT, CI, TRV, TV, XP
   const isCuti = ['C', 'CE', 'CT', 'CI', 'TRV', 'TV', 'XP'].includes(code) || code.startsWith('CT') || code.startsWith('CI') || code.startsWith('CE') || code.startsWith('TRV');
   if (isCuti) {
+    res.shiftKerja = 'CUTI';
     res.statusKerja = 'Cuti';
     res.status = 'CUTI';
     res.catatan = code ? `Cuti (${code})` : 'Cuti';
@@ -193,6 +194,7 @@ export function computeMealOrderByRoster(
 
   // Tempat tinggal Kampung Kawasi: Izin & CS → Pagi, Siang, Sore & Malam kosong (Cuti sudah kosong di atas)
   if (tt.includes('kawasi') && (code === 'I' || code === 'CS')) {
+    res.shiftKerja = code === 'I' ? 'Izin' : 'Cuti Site';
     res.statusKerja = code === 'I' ? 'Izin' : 'CS';
     res.status = code === 'I' ? 'IZIN' : 'CS';
     if (code === 'I' && !isCR) res.keteranganLapor = 'Belum Lapor';
@@ -263,6 +265,7 @@ export function computeMealOrderByRoster(
     } else if (code === 'I' || code === 'S') {
       // 5. I / S (Izin / Sakit)
       // Pagi = Kantin, Siang = Kantin, Sore = Kantin, Malam = Kosongkan
+      res.shiftKerja = code === 'S' ? 'Sakit' : 'Izin';
       res.statusKerja = code === 'S' ? 'Sakit' : 'Izin';
       res.status = code === 'S' ? 'SAKIT' : 'IZIN';
       res.pagiKantin = 'K';
@@ -271,6 +274,7 @@ export function computeMealOrderByRoster(
     } else if (code === 'OFF') {
       // 6. Off
       // Pagi = Kantin, Siang = Kantin, Sore = Kantin, Malam = Kosongkan
+      res.shiftKerja = 'OFF';
       res.statusKerja = 'Off';
       res.status = 'OFF';
       res.pagiKantin = 'K';
@@ -279,6 +283,7 @@ export function computeMealOrderByRoster(
     } else if (code === 'CS') {
       // 7. CS
       // Pagi = Kantin, Siang = Kantin, Sore = Kantin, Malam = Kosongkan
+      res.shiftKerja = 'Cuti Site';
       res.statusKerja = 'CS';
       res.status = 'CS';
       res.pagiKantin = 'K';
@@ -339,6 +344,7 @@ export function computeMealOrderByRoster(
     } else if (code === 'I' || code === 'S') {
       // 5. I: Beri keterangan jika belum lapor akan tetap izin
       // Pagi = Bungkusan Kantin, Siang = Bungkusan Kantin, Sore = Bungkusan Kantin, Malam = Kosongkan
+      res.shiftKerja = code === 'S' ? 'Sakit' : 'Izin';
       res.statusKerja = code === 'S' ? 'Sakit' : 'Izin';
       res.status = code === 'S' ? 'SAKIT' : 'IZIN';
       res.keteranganLapor = 'Belum Lapor';
@@ -349,6 +355,7 @@ export function computeMealOrderByRoster(
       res.batchSore = '1';
     } else if (code === 'CS') {
       // 6. CS: Pagi, Siang, Sore = Kosong (Nirwana: Bungkusan Kantin), Malam = Kosongkan
+      res.shiftKerja = 'Cuti Site';
       res.statusKerja = 'CS';
       res.status = 'CS';
       res.pagiKantin = bungkusanKantinPagi;
@@ -358,6 +365,7 @@ export function computeMealOrderByRoster(
       res.batchSore = batchSoreNirwana;
     } else if (code === 'OFF') {
       // 7. Off: Pagi, Siang, Sore = Kosong (Nirwana: Bungkusan Kantin), Malam = Kosongkan
+      res.shiftKerja = 'OFF';
       res.statusKerja = 'Off';
       res.status = 'OFF';
       res.pagiKantin = bungkusanKantinPagi;
