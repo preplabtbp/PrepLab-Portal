@@ -216,7 +216,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const confirmed = useMemo(() => ({
     pagi: filtered.reduce((s, r) => s + portions(r.batchPagi), 0),
     sore: filtered.reduce((s, r) => s + portions(r.batchSore), 0),
-    belumLapor: filtered.filter(r => r.keteranganLapor).length,
+    belumLapor: filtered.filter(r => r.keteranganLapor && r.keteranganLapor.trim() !== '-').length,
   }), [filtered]);
   // Tanggal sebelumnya yang punya data → sumber "Salin"
   const previousDate = useMemo(() => (data?.dates || []).map(d => String(d.date).slice(0, 10)).find(d => d < date) || null, [data, date]);
@@ -1153,7 +1153,37 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         {columnVisibility.statusNotes && (
                           <>
                             <td className={tdBase}>{r.status || ''}</td>
-                            <td className={`${tdBase} ${r.keteranganLapor ? 'text-rose-600 font-semibold' : ''}`}>{r.keteranganLapor || ''}</td>
+                            <td className={`${tdBase} text-center p-1`}>
+                              {canManage ? (
+                                <select
+                                  value={r.keteranganLapor && r.keteranganLapor !== '-' ? 'Belum Lapor' : '-'}
+                                  onChange={e => {
+                                    const val = e.target.value === '-' ? null : e.target.value;
+                                    saveCell(r, { keteranganLapor: val });
+                                  }}
+                                  className={`rounded-md text-xs font-semibold px-2 py-1 cursor-pointer focus:outline-none transition-all ${
+                                    r.keteranganLapor && r.keteranganLapor !== '-'
+                                      ? 'bg-rose-100 text-rose-700 font-bold border border-rose-300 hover:bg-rose-200'
+                                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'
+                                  }`}
+                                  title="Pilih Keterangan Belum Lapor"
+                                >
+                                  <option value="-">-</option>
+                                  <option value="Belum Lapor">Belum Lapor</option>
+                                  {r.keteranganLapor && r.keteranganLapor !== '-' && r.keteranganLapor !== 'Belum Lapor' && (
+                                    <option value={r.keteranganLapor}>{r.keteranganLapor}</option>
+                                  )}
+                                </select>
+                              ) : (
+                                <span className={`inline-block px-2 py-0.5 rounded text-xs ${
+                                  r.keteranganLapor && r.keteranganLapor !== '-'
+                                    ? 'text-rose-700 font-bold bg-rose-100 border border-rose-200'
+                                    : 'text-slate-400'
+                                }`}>
+                                  {r.keteranganLapor && r.keteranganLapor !== '-' ? r.keteranganLapor : '-'}
+                                </span>
+                              )}
+                            </td>
                             <td className={`${tdBase} font-semibold text-slate-700`}>{r.catatan || ''}</td>
                           </>
                         )}
@@ -1225,8 +1255,30 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-600">
                         <span className="flex items-center gap-1">B.Pagi {renderConfirm(r, 'batchPagi')}</span>
                         <span className="flex items-center gap-1">B.Sore {renderConfirm(r, 'batchSore')}</span>
-                        {columnVisibility.statusNotes && (r.keteranganLapor || r.catatan) && (
-                          <span className="text-rose-600">{[r.keteranganLapor, r.catatan].filter(Boolean).join(' · ')}</span>
+                        {columnVisibility.statusNotes && (
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <span className="text-slate-500">Lapor:</span>
+                            {canManage ? (
+                              <select
+                                value={r.keteranganLapor && r.keteranganLapor !== '-' ? 'Belum Lapor' : '-'}
+                                onChange={e => {
+                                  const val = e.target.value === '-' ? null : e.target.value;
+                                  saveCell(r, { keteranganLapor: val });
+                                }}
+                                className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
+                                  r.keteranganLapor && r.keteranganLapor !== '-' ? 'bg-rose-100 text-rose-700 font-bold' : 'bg-slate-100 text-slate-500'
+                                }`}
+                              >
+                                <option value="-">-</option>
+                                <option value="Belum Lapor">Belum Lapor</option>
+                              </select>
+                            ) : (
+                              <span className={r.keteranganLapor && r.keteranganLapor !== '-' ? 'text-rose-600 font-bold' : 'text-slate-400'}>
+                                {r.keteranganLapor && r.keteranganLapor !== '-' ? r.keteranganLapor : '-'}
+                              </span>
+                            )}
+                            {r.catatan && <span className="text-slate-600 font-medium truncate">· {r.catatan}</span>}
+                          </div>
                         )}
                       </div>
                     )}
@@ -1255,7 +1307,19 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               <Input label="NIK" value={form.nik || ''} onChange={e => updateForm('nik', e.target.value)} disabled={modal.mode === 'edit'} placeholder="Ketik NIK — profil terisi otomatis" />
               <Input label="Nama Karyawan" value={form.nama || ''} onChange={e => updateForm('nama', e.target.value)} />
               {PROFILE_FIELDS.map(f => (
-                <Input key={f.key} label={f.label} value={form[f.key] || ''} onChange={e => updateForm(f.key, e.target.value)} placeholder={f.placeholder} />
+                f.key === 'keteranganLapor' ? (
+                  <Select
+                    key={f.key}
+                    label={f.label}
+                    value={form.keteranganLapor && form.keteranganLapor !== '-' ? 'Belum Lapor' : ''}
+                    onChange={e => updateForm('keteranganLapor', e.target.value)}
+                  >
+                    <option value="">-</option>
+                    <option value="Belum Lapor">Belum Lapor</option>
+                  </Select>
+                ) : (
+                  <Input key={f.key} label={f.label} value={form[f.key] || ''} onChange={e => updateForm(f.key, e.target.value)} placeholder={f.placeholder} />
+                )
               ))}
               <Select label="Shift (Siang/Malam)" value={form.shiftKerja || ''} onChange={e => updateForm('shiftKerja', e.target.value)}>
                 <option value="">-</option>
