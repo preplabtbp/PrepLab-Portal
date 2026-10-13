@@ -327,8 +327,8 @@ export function findSectionTaskPosts(sectionName: string, allPosts: any[], targe
 
     if (!matchesSection) return false;
 
-    // 3. Exclude the section hub itself, archived posts, and meetings
-    if (pTitle.startsWith('archived') || pTitle.includes('[meeting]') || pTitle === sNorm) {
+    // 3. Exclude the section hub itself, archived posts, meetings, and logbook posts
+    if (pTitle.startsWith('archived') || pTitle.includes('[meeting]') || pTitle === sNorm || pTitle.startsWith('logbook') || pTitle.startsWith('log book') || p.isLogbook === true) {
       return false;
     }
 
@@ -628,14 +628,36 @@ export function getSectionActiveRecommendations(
       const isPlanned = plannedSet.has(title.toLowerCase());
       const recId = `rec_${post.id}_${idx}_${title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
 
+      // Determine cadence & routine / non-routine from row or post
+      let rowCadence = defaultCadence;
+      const actVal = String(row['Activity (routine/non routine)'] || row.Aktivitas || row.aktivitas || '').trim();
+      const perVal = String(row.period || row.Period || '').trim();
+
+      const isRowNonRoutine = isNonRoutine || 
+        actVal.toLowerCase().includes('non') || 
+        perVal.toLowerCase().includes('non');
+
+      if (!isRowNonRoutine) {
+        const combined = `${actVal} ${perVal} ${defaultCadence}`.toLowerCase();
+        if (combined.includes('weekly') || combined.includes('mingguan')) rowCadence = 'Weekly';
+        else if (combined.includes('monthly') || combined.includes('bulanan')) rowCadence = 'Monthly';
+        else if (combined.includes('quarterly') || combined.includes('triwulan')) rowCadence = 'Quarterly';
+        else if (combined.includes('biannual') || combined.includes('semester')) rowCadence = 'Biannual';
+        else if (combined.includes('yearly') || combined.includes('tahunan')) rowCadence = 'Yearly';
+        else if (combined.includes('daily') || combined.includes('harian')) rowCadence = 'Daily';
+        else rowCadence = defaultCadence || 'Daily';
+      } else {
+        rowCadence = 'Non-Routine';
+      }
+
       recommendations.push({
         id: recId,
         title,
         description: String(row.Keterangan || row.keterangan || row.uraian || ''),
         pic: String(row.PIC || row.pic || ''),
         priority: String(row.Priority || row.priority || 'Normal'),
-        type: isNonRoutine ? 'Non-Routine' : 'Routine',
-        cadence: defaultCadence,
+        type: isRowNonRoutine ? 'Non-Routine' : 'Routine',
+        cadence: rowCadence,
         originPostId: post.id,
         originPostTitle: postTitle,
         originRowIndex: idx,

@@ -33,7 +33,9 @@ import {
   NOTION_COLORS,
   formatColorTagsToHtml,
   stripColorTags,
-  applyColorToText
+  applyColorToText,
+  isCursorAtStartOfListItem,
+  removeBulletFromLi
 } from './tasklist-utils';
 import { 
   FloatingSelectionToolbar, 
@@ -274,6 +276,16 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
 
   const handleFormatBullet = (e: React.MouseEvent) => {
     e.preventDefault();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const node = sel.anchorNode;
+      const li = node instanceof HTMLElement ? node.closest('li') : node?.parentElement?.closest('li');
+      if (li && editorRef.current) {
+        removeBulletFromLi(li, editorRef.current);
+        syncEditorContent();
+        return;
+      }
+    }
     document.execCommand('insertUnorderedList', false);
     syncEditorContent();
   };
@@ -784,6 +796,17 @@ export const EnterpriseWysiwygEditor: React.FC<EnterpriseWysiwygEditorProps> = (
                   const sel = window.getSelection();
                   if (sel && sel.rangeCount > 0) {
                     const node = sel.anchorNode;
+                    const li = node instanceof HTMLElement ? node.closest('li') : node?.parentElement?.closest('li');
+                    if (li && editorRef.current) {
+                      const isAtStart = isCursorAtStartOfListItem(li);
+                      const currentText = (li.textContent || '').replace(/^[•\-\*]\s*/, '').trim();
+                      if (isAtStart || !currentText) {
+                        e.preventDefault();
+                        removeBulletFromLi(li, editorRef.current);
+                        syncEditorContent();
+                        return;
+                      }
+                    }
                     const bq = node instanceof HTMLElement ? node.closest('blockquote') : node?.parentElement?.closest('blockquote');
                     if (bq) {
                       const text = bq.textContent?.trim();

@@ -2845,8 +2845,8 @@ export function NotionDatabaseTable({
     }
   };
 
-  // Add Row Handler
-  const handleOpenAddModal = () => {
+  // Open Manual Row Modal (Buka Form Input Tabel Lengkap)
+  const handleOpenManualRowModal = () => {
     setSelectedRow(null);
     const targetCat = section || 'Laboratorium';
     const autoTaskCode = generateTaskCode(targetCat, localRows);
@@ -2877,6 +2877,15 @@ export function NotionDatabaseTable({
     });
     setEditingRowIndex(null);
     setShowRowModal(true);
+  };
+
+  // Add Row Handler (Prioritizes Active Section Activities list for Logbook, or opens manual modal)
+  const handleOpenAddModal = () => {
+    if (isLogbookTable) {
+      setShowLogbookRecModal(true);
+      return;
+    }
+    handleOpenManualRowModal();
   };
 
   // Add Sub-Item Handler (Sub-kegiatan di bawah baris kegiatan induk)
@@ -7571,6 +7580,20 @@ export function NotionDatabaseTable({
             }`}
           >
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className={`text-xs font-semibold flex items-center gap-1.5 py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
+                  isNotionLight
+                    ? 'text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200'
+                    : 'text-teal-400 bg-teal-950/40 hover:bg-teal-900/60 border border-teal-800/60'
+                }`}
+                title="Tambah Baris Kegiatan Baru"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>+ Tambah Baris Kegiatan</span>
+              </button>
+
               {localRows.length > 0 && (
                 <button
                   type="button"
@@ -10379,6 +10402,10 @@ export function NotionDatabaseTable({
           targetUniverse={pt === 'GTS' ? 'GTS' : 'TBP'}
           existingRows={localRows}
           onAddSelectedTasks={handleAddRecommendedTasks}
+          onOpenManualAddTaskModal={handleOpenManualRowModal}
+          employeesList={employeesList}
+          currentUserNik={currentAuthorNik}
+          currentUserName={currentAuthorName}
         />
       )}
 

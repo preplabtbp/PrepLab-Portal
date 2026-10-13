@@ -219,7 +219,7 @@ export function toggleTasklistItem(text: string, targetIndex: number, actionDate
   const todayStr = actionDate || new Date().toISOString().split('T')[0];
 
   let currentIndex = 0;
-  // CRITICAL: Use same split logic as parseTasklist (split on \n OR � bullet char)
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
   // to ensure item indices always match between parsing and toggling.
   const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.map(line => {
@@ -290,7 +290,7 @@ export function addSubtaskNote(
   const timeStr = actionTime || `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   let currentIndex = 0;
-  // CRITICAL: Use same split logic as parseTasklist (split on \n OR � bullet char)
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
   // to ensure item indices always match between parsing and toggling.
   const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.map(line => {
@@ -375,7 +375,7 @@ export function removeSubtaskNote(text: string, targetIndex: number, noteId: str
   const normalized = text.replace(/<br\s*\/?>/gi, '\n');
 
   let currentIndex = 0;
-  // CRITICAL: Use same split logic as parseTasklist (split on \n OR � bullet char)
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
   // to ensure item indices always match between parsing and toggling.
   const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.map(line => {
@@ -448,7 +448,7 @@ export function updateTasklistItemNote(text: string, targetIndex: number, newNot
     const normalized = text.replace(/<br\s*\/?>/gi, '\n');
 
     let currentIndex = 0;
-    // CRITICAL: Use same split logic as parseTasklist (split on \n OR � bullet char)
+    // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
   // to ensure item indices always match between parsing and toggling.
   const lines = normalized.split(/\r?\n|\u2022/);
     const updatedLines = lines.map(line => {
@@ -502,7 +502,7 @@ export function removeTasklistItem(text: string, targetIndex: number): string {
   const normalized = text.replace(/<br\s*\/?>/gi, '\n');
 
   let currentIndex = 0;
-  // CRITICAL: Use same split logic as parseTasklist (split on \n OR � bullet char)
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
   // to ensure item indices always match between parsing and toggling.
   const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.filter(line => {
@@ -532,7 +532,7 @@ export function updateTasklistItemTitle(text: string, targetIndex: number, newTi
   const normalized = text.replace(/<br\s*\/?>/gi, '\n');
 
   let currentIndex = 0;
-  // CRITICAL: Use same split logic as parseTasklist (split on \n OR � bullet char)
+  // CRITICAL: Use same split logic as parseTasklist (split on \n OR • bullet char)
   // to ensure item indices always match between parsing and toggling.
   const lines = normalized.split(/\r?\n|\u2022/);
   const updatedLines = lines.map(line => {
@@ -592,14 +592,29 @@ export function reorderTasklistItems(originalText: string, newItems: TaskItem[])
 export const NOTION_COLORS: Record<string, { label: string; textClass: string; hex: string; bgClass: string; borderClass: string }> = {
   default: { label: 'Hitam (Default)', textClass: 'text-[#37352f]', hex: '#37352f', bgClass: 'bg-slate-100', borderClass: 'border-slate-300' },
   black: { label: 'Hitam', textClass: 'text-[#37352f]', hex: '#37352f', bgClass: 'bg-slate-100', borderClass: 'border-slate-300' },
-  blue: { label: 'Biru', textClass: 'text-blue-600', hex: '#2563eb', bgClass: 'bg-blue-50', borderClass: 'border-blue-300' },
-  green: { label: 'Hijau', textClass: 'text-emerald-600', hex: '#16a34a', bgClass: 'bg-emerald-50', borderClass: 'border-emerald-300' },
-  orange: { label: 'Oranye', textClass: 'text-orange-600', hex: '#ea580c', bgClass: 'bg-orange-50', borderClass: 'border-orange-300' },
-  red: { label: 'Merah', textClass: 'text-rose-600', hex: '#e11d48', bgClass: 'bg-rose-50', borderClass: 'border-rose-300' },
-  purple: { label: 'Ungu', textClass: 'text-purple-600', hex: '#9333ea', bgClass: 'bg-purple-50', borderClass: 'border-purple-300' },
-  amber: { label: 'Kuning / Amber', textClass: 'text-amber-600', hex: '#d97706', bgClass: 'bg-amber-50', borderClass: 'border-amber-300' },
-  pink: { label: 'Pink', textClass: 'text-pink-600', hex: '#db2777', bgClass: 'bg-pink-50', borderClass: 'border-pink-300' },
-  gray: { label: 'Abu-abu', textClass: 'text-slate-500', hex: '#787774', bgClass: 'bg-slate-50', borderClass: 'border-slate-300' }
+  gray: { label: 'Abu-abu', textClass: 'text-slate-500', hex: '#787774', bgClass: 'bg-slate-50', borderClass: 'border-slate-300' },
+  brown: { label: 'Cokelat', textClass: 'text-amber-800', hex: '#9f6b53', bgClass: 'bg-amber-50', borderClass: 'border-amber-300' },
+  orange: { label: 'Oranye', textClass: 'text-orange-600', hex: '#d9730d', bgClass: 'bg-orange-50', borderClass: 'border-orange-300' },
+  yellow: { label: 'Kuning', textClass: 'text-amber-600', hex: '#cb912f', bgClass: 'bg-amber-50', borderClass: 'border-amber-300' },
+  green: { label: 'Hijau', textClass: 'text-emerald-600', hex: '#448361', bgClass: 'bg-emerald-50', borderClass: 'border-emerald-300' },
+  blue: { label: 'Biru', textClass: 'text-blue-600', hex: '#337ea9', bgClass: 'bg-blue-50', borderClass: 'border-blue-300' },
+  purple: { label: 'Ungu', textClass: 'text-purple-600', hex: '#9065b0', bgClass: 'bg-purple-50', borderClass: 'border-purple-300' },
+  pink: { label: 'Pink', textClass: 'text-pink-600', hex: '#c14c8a', bgClass: 'bg-pink-50', borderClass: 'border-pink-300' },
+  red: { label: 'Merah', textClass: 'text-rose-600', hex: '#d44c47', bgClass: 'bg-rose-50', borderClass: 'border-rose-300' }
+};
+
+// Authentic Notion Pastel Highlight / Background Colors
+export const NOTION_HIGHLIGHT_COLORS: Record<string, { label: string; hex: string }> = {
+  default: { label: 'Tanpa Highlight', hex: 'transparent' },
+  gray: { label: 'Abu-abu', hex: '#f1f1ef' },
+  brown: { label: 'Cokelat', hex: '#f4eeee' },
+  orange: { label: 'Oranye', hex: '#faebdd' },
+  yellow: { label: 'Kuning', hex: '#fbf3db' },
+  green: { label: 'Hijau', hex: '#edf3ec' },
+  blue: { label: 'Biru', hex: '#e7f3f8' },
+  purple: { label: 'Ungu', hex: '#f4f0f7' },
+  pink: { label: 'Pink', hex: '#faf1f5' },
+  red: { label: 'Merah', hex: '#fdebec' }
 };
 
 const COLOR_ALIASES: Record<string, string> = {
@@ -609,13 +624,15 @@ const COLOR_ALIASES: Record<string, string> = {
   oranye: 'orange',
   merah: 'red',
   ungu: 'purple',
-  kuning: 'amber',
+  kuning: 'yellow',
+  amber: 'yellow',
+  cokelat: 'brown',
   'abu-abu': 'gray',
   abu: 'gray'
 };
 
 /**
- * Replaces Notion color tags like [blue]text[/blue] or [color:blue]text[/color] with styled HTML spans
+ * Replaces Notion color tags like [blue]text[/blue] or [color:blue]text[/color] and [bg:yellow]text[/bg] with styled HTML spans
  */
 export function formatColorTagsToHtml(text?: string | null): string {
   if (!text || typeof text !== 'string') return '';
@@ -627,6 +644,20 @@ export function formatColorTagsToHtml(text?: string | null): string {
     const key = COLOR_ALIASES[rawKey] || rawKey;
     const hex = NOTION_COLORS[key]?.hex || colorKey;
     return `<span data-color="${key}" style="color: ${hex};">${content}</span>`;
+  });
+
+  // Highlight / Background tags: [bg:yellow]...[/bg:yellow] or [bg:#hex]...[/bg:#hex] or [highlight:yellow]...[/highlight] or [bg:key]...[/bg]
+  out = out.replace(/\[(?:bg|highlight):\s*([#a-zA-Z0-9_-]+)\]([\s\S]*?)\[\/(?:bg|highlight)\]/gi, (_, bgKey, content) => {
+    const rawKey = bgKey.toLowerCase();
+    const key = COLOR_ALIASES[rawKey] || rawKey;
+    const hex = NOTION_HIGHLIGHT_COLORS[key]?.hex || bgKey;
+    return `<span data-bg="${key}" style="background-color: ${hex}; padding: 1px 3px; border-radius: 3px;">${content}</span>`;
+  });
+  out = out.replace(/\[bg:\s*([#a-zA-Z0-9_-]+)\]([\s\S]*?)\[\/bg\]/gi, (_, bgKey, content) => {
+    const rawKey = bgKey.toLowerCase();
+    const key = COLOR_ALIASES[rawKey] || rawKey;
+    const hex = NOTION_HIGHLIGHT_COLORS[key]?.hex || bgKey;
+    return `<span data-bg="${key}" style="background-color: ${hex}; padding: 1px 3px; border-radius: 3px;">${content}</span>`;
   });
 
   // Shorthand tags: [blue]...[/blue], [green]...[/green], [orange]...[/orange], [red]...[/red], etc.
@@ -649,11 +680,13 @@ export function formatColorTagsToHtml(text?: string | null): string {
 }
 
 /**
- * Strips all Notion color tags from text
+ * Strips all Notion color and highlight tags from text
  */
 export function stripColorTags(text?: string | null): string {
   if (!text || typeof text !== 'string') return '';
   let out = text.replace(/\[color:\s*([#a-zA-Z0-9_-]+)\]([\s\S]*?)\[\/color\]/gi, '$2');
+  out = out.replace(/\[(?:bg|highlight):\s*([#a-zA-Z0-9_-]+)\]([\s\S]*?)\[\/(?:bg|highlight)\]/gi, '$2');
+  out = out.replace(/\[bg:\s*([#a-zA-Z0-9_-]+)\]([\s\S]*?)\[\/bg\]/gi, '$2');
   for (const key of Object.keys(NOTION_COLORS)) {
     const regex = new RegExp(`\\[${key}\\]([\\s\\S]*?)\\[\\/${key}\\]`, 'gi');
     out = out.replace(regex, '$1');
@@ -713,9 +746,8 @@ export function markdownToVisualHtml(text?: string | null): string {
   html = html.replace(/([^\n])\s*•\s*/g, '$1\n• ');
   html = html.replace(/([^\n])\s+(\d+\.\s+)/g, '$1\n$2');
 
-  // Normalize bullet prefixes missing spaces (e.g. -**text** or •text or *text or _**text**)
-  html = html.replace(/^(\s*[-*•])(?=[^\s])/gm, '$1 ');
-  html = html.replace(/^(\s*_[_*])(?=[^\s])/gm, '- ');
+  // Normalize bullet prefixes missing spaces (ONLY for explicit bullet symbol •)
+  html = html.replace(/^(\s*•)(?=[^\s])/gm, '$1 ');
 
   // Convert status badges
   html = html.replace(/\*\*\(Done\)\*\*|\[Done\]|\(Done\)/gi, '<span class="badge-done inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 mr-1 select-none">DONE</span>&nbsp;');
@@ -745,8 +777,14 @@ export function markdownToVisualHtml(text?: string | null): string {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ') || /^[•\-\*]/.test(trimmed)) {
-      const content = trimmed.replace(/^[•\-\*]\s*/, '');
+    const isBullet = trimmed.startsWith('• ') || 
+                     trimmed.startsWith('•') || 
+                     trimmed.startsWith('- ') || 
+                     /^\*\s+/.test(trimmed);
+    if (isBullet) {
+      const content = trimmed.replace(/^(\s*[•\-]|\s*\*\s+)+\s*/, '').trim();
+      const strippedContent = stripColorTags(content).trim();
+      if (!strippedContent) continue;
       if (!inUl) {
         if (inOl) { processedLines.push('</ol>'); inOl = false; }
         processedLines.push('<ul class="list-disc pl-5 my-1 space-y-1" style="list-style-type: disc; padding-left: 1.25rem;">');
@@ -854,42 +892,111 @@ export function visualHtmlToMarkdown(html?: string | null): string {
         return inner.trim() ? `~~${inner.trim()}~~` : '';
       case 'code':
         return inner.trim() ? `\`${inner.trim()}\`` : '';
+      case 'mark':
       case 'span':
       case 'font': {
         const dataColor = el.getAttribute('data-color');
-        if (dataColor && NOTION_COLORS[dataColor] && dataColor !== 'default') {
-          const cleanInner = stripColorTags(inner);
-          return `[${dataColor}]${cleanInner}[/${dataColor}]`;
-        }
-
+        const dataBg = el.getAttribute('data-bg');
         const style = el.getAttribute('style') || '';
         const colorAttr = el.getAttribute('color') || '';
-        const colorMatch = style.match(/color:\s*([^;]+)/i);
-        const colorVal = colorMatch ? colorMatch[1].trim() : (colorAttr ? colorAttr.trim() : '');
-        if (colorVal) {
-          const c = colorVal.toLowerCase();
-          let foundKey = Object.keys(NOTION_COLORS).find(k => 
-            NOTION_COLORS[k].hex.toLowerCase() === c || 
-            k.toLowerCase() === c
-          );
-          if (!foundKey && c.startsWith('rgb')) {
-            const rgbMatch = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-            if (rgbMatch) {
-              const r = parseInt(rgbMatch[1], 10);
-              const g = parseInt(rgbMatch[2], 10);
-              const b = parseInt(rgbMatch[3], 10);
-              const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`.toLowerCase();
-              foundKey = Object.keys(NOTION_COLORS).find(k => 
-                NOTION_COLORS[k].hex.toLowerCase() === hex
-              );
+
+        // Text color resolution
+        let resolvedColorKey = '';
+        if (dataColor && dataColor !== 'default') {
+          resolvedColorKey = dataColor;
+        } else {
+          const colorMatch = style.match(/(?:^|;)\s*color:\s*([^;]+)/i);
+          const colorVal = colorMatch ? colorMatch[1].trim() : (colorAttr ? colorAttr.trim() : '');
+          if (colorVal) {
+            const c = colorVal.toLowerCase();
+            let foundKey = Object.keys(NOTION_COLORS).find(k => 
+              NOTION_COLORS[k].hex.toLowerCase() === c || k.toLowerCase() === c
+            );
+            if (!foundKey && c.startsWith('rgb')) {
+              const rgbMatch = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+              if (rgbMatch) {
+                const r = parseInt(rgbMatch[1], 10);
+                const g = parseInt(rgbMatch[2], 10);
+                const b = parseInt(rgbMatch[3], 10);
+                const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`.toLowerCase();
+                foundKey = Object.keys(NOTION_COLORS).find(k => NOTION_COLORS[k].hex.toLowerCase() === hex);
+                resolvedColorKey = foundKey || hex;
+              }
+            } else if (c.startsWith('#')) {
+              resolvedColorKey = foundKey || c;
+            } else if (foundKey) {
+              resolvedColorKey = foundKey;
             }
           }
-          if (foundKey && foundKey !== 'default') {
-            const cleanInner = stripColorTags(inner);
-            return `[${foundKey}]${cleanInner}[/${foundKey}]`;
+        }
+
+        // Highlight / Background color resolution
+        let resolvedBgKey = '';
+        if (dataBg && dataBg !== 'default' && dataBg !== 'transparent') {
+          resolvedBgKey = dataBg;
+        } else {
+          const bgMatch = style.match(/(?:^|;)\s*background(?:-color)?:\s*([^;]+)/i);
+          const bgVal = bgMatch ? bgMatch[1].trim() : '';
+          if (bgVal && bgVal !== 'transparent' && bgVal !== 'rgba(0, 0, 0, 0)') {
+            const c = bgVal.toLowerCase();
+            let foundKey = Object.keys(NOTION_HIGHLIGHT_COLORS).find(k => 
+              NOTION_HIGHLIGHT_COLORS[k].hex.toLowerCase() === c || k.toLowerCase() === c
+            );
+            if (!foundKey && c.startsWith('rgb')) {
+              const rgbMatch = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+              if (rgbMatch) {
+                const r = parseInt(rgbMatch[1], 10);
+                const g = parseInt(rgbMatch[2], 10);
+                const b = parseInt(rgbMatch[3], 10);
+                const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`.toLowerCase();
+                foundKey = Object.keys(NOTION_HIGHLIGHT_COLORS).find(k => NOTION_HIGHLIGHT_COLORS[k].hex.toLowerCase() === hex);
+                resolvedBgKey = foundKey || hex;
+              }
+            } else if (c.startsWith('#')) {
+              resolvedBgKey = foundKey || c;
+            } else if (foundKey) {
+              resolvedBgKey = foundKey;
+            }
           }
         }
-        return inner;
+
+        const isBoldStyle = /font-weight:\s*(?:bold|[6-9]00)/i.test(style);
+        const isItalicStyle = /font-style:\s*italic/i.test(style);
+        const isUnderlineStyle = /text-decoration(?:-line)?:\s*[^;]*underline/i.test(style);
+        const isStrikeStyle = /text-decoration(?:-line)?:\s*[^;]*line-through/i.test(style);
+
+        let outText = inner;
+        if (isBoldStyle && !outText.startsWith('**')) {
+          outText = `**${outText}**`;
+        }
+        if (isItalicStyle && !outText.startsWith('*')) {
+          outText = `*${outText}*`;
+        }
+        if (isUnderlineStyle && !outText.startsWith('<u>')) {
+          outText = `<u>${outText}</u>`;
+        }
+        if (isStrikeStyle && !outText.startsWith('~~')) {
+          outText = `~~${outText}~~`;
+        }
+        if (resolvedBgKey && resolvedBgKey !== 'default' && resolvedBgKey !== 'transparent') {
+          // If inner already has any [bg:...], strip it so we don't nest background tags!
+          while (/\[(?:bg|highlight):[^\]]+\]([\s\S]*?)\[\/(?:bg|highlight)\]/i.test(outText)) {
+            outText = outText.replace(/\[(?:bg|highlight):[^\]]+\]([\s\S]*?)\[\/(?:bg|highlight)\]/gi, '$1');
+          }
+          outText = `[bg:${resolvedBgKey}]${outText}[/bg]`;
+        }
+        if (resolvedColorKey && resolvedColorKey !== 'default') {
+          // If inner already has color tags, strip them so we don't nest font colors!
+          while (/\[(?:color:)?[#a-zA-Z0-9_-]+\]([\s\S]*?)\[\/(?:color:)?[#a-zA-Z0-9_-]+\]/i.test(outText)) {
+            outText = outText.replace(/\[(?:color:)?[#a-zA-Z0-9_-]+\]([\s\S]*?)\[\/(?:color:)?[#a-zA-Z0-9_-]+\]/gi, '$1');
+          }
+          if (NOTION_COLORS[resolvedColorKey]) {
+            outText = `[${resolvedColorKey}]${outText}[/${resolvedColorKey}]`;
+          } else {
+            outText = `[color:${resolvedColorKey}]${outText}[/color]`;
+          }
+        }
+        return outText;
       }
       case 'blockquote': {
         const cleanInner = inner.trim();
@@ -898,11 +1005,15 @@ export function visualHtmlToMarkdown(html?: string | null): string {
         }
         return `> ${cleanInner}\n`;
       }
-      case 'li':
-        return `• ${inner.trim()}\n`;
+      case 'li': {
+        const cleanInner = inner.replace(/^(\s*[•\-])+\s*/, '').trim();
+        const strippedTags = stripColorTags(cleanInner).trim();
+        if (!strippedTags) return '';
+        return `• ${cleanInner}\n`;
+      }
       case 'ul':
       case 'ol':
-        return `${inner}\n`;
+        return `${inner.trimEnd()}\n`;
       case 'p':
       case 'div':
         return inner ? `${inner}\n` : '\n';
@@ -913,8 +1024,124 @@ export function visualHtmlToMarkdown(html?: string | null): string {
     }
   }
 
-  const result = traverse(container);
+  let result = traverse(container);
+
+  // Collapse any tiered/nested background tags: [bg:A][bg:B]text[/bg][/bg] -> [bg:B]text[/bg]
+  while (/\[(?:bg|highlight):[^\]]+\]\s*(\[(?:bg|highlight):[^\]]+\][\s\S]*?\[\/(?:bg|highlight)\])\s*\[\/(?:bg|highlight)\]/i.test(result)) {
+    result = result.replace(/\[(?:bg|highlight):[^\]]+\]\s*(\[(?:bg|highlight):[^\]]+\][\s\S]*?\[\/(?:bg|highlight)\])\s*\[\/(?:bg|highlight)\]/gi, '$1');
+  }
+
+  // Collapse any tiered/nested color tags: [color:A][color:B]text[/color][/color] -> [color:B]text[/color]
+  while (/\[(?:color:)?([#a-zA-Z0-9_-]+)\]\s*(\[(?:color:)?[#a-zA-Z0-9_-]+\][\s\S]*?\[\/(?:color:)?[#a-zA-Z0-9_-]+\])\s*\[\/(?:color:)?\1\]/i.test(result)) {
+    result = result.replace(/\[(?:color:)?([#a-zA-Z0-9_-]+)\]\s*(\[(?:color:)?[#a-zA-Z0-9_-]+\][\s\S]*?\[\/(?:color:)?[#a-zA-Z0-9_-]+\])\s*\[\/(?:color:)?\1\]/gi, '$2');
+  }
+
+  // Strip empty background tags [bg:x][/bg]
+  result = result.replace(/\[(?:bg|highlight):[^\]]+\]\s*\[\/(?:bg|highlight)\]/gi, '');
+  // Strip empty color tags [color:x][/color] or [blue][/blue]
+  for (const key of Object.keys(NOTION_COLORS)) {
+    const emptyRegex = new RegExp(`\\[${key}\\]\\s*\\[\\/${key}\\]`, 'gi');
+    result = result.replace(emptyRegex, '');
+  }
+  result = result.replace(/\[color:[^\]]+\]\s*\[\/color\]/gi, '');
+
   return result.replace(/\n{3,}/g, '\n\n').trim();
 }
+
+/**
+ * Checks if the current collapsed cursor is at the very beginning of a list item element (LI).
+ */
+export function isCursorAtStartOfListItem(li: HTMLElement): boolean {
+  if (typeof window === 'undefined') return false;
+  const sel = window.getSelection();
+  if (!sel || !sel.isCollapsed || sel.rangeCount === 0) return false;
+  const range = sel.getRangeAt(0);
+
+  const preRange = document.createRange();
+  preRange.selectNodeContents(li);
+  try {
+    preRange.setEnd(range.startContainer, range.startOffset);
+    return preRange.toString().replace(/[\s\u200B\u00A0]/g, '').length === 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Removes the bullet / list marker from a list item element (LI),
+ * converting it into a normal block line (div) while preserving all inner formatting,
+ * text contents, cursor position, and sibling list structure.
+ */
+export function removeBulletFromLi(li: HTMLElement, container?: HTMLElement): HTMLElement {
+  const parentList = li.parentElement;
+  if (!parentList) return li;
+
+  const newDiv = document.createElement('div');
+  newDiv.className = 'min-h-[1.25rem] my-0.5 leading-relaxed';
+
+  // Move all child nodes from li to newDiv
+  while (li.firstChild) {
+    newDiv.appendChild(li.firstChild);
+  }
+
+  // Ensure line is focusable and visible if empty
+  if (!newDiv.hasChildNodes() || !newDiv.textContent?.trim()) {
+    newDiv.innerHTML = '<br>';
+  }
+
+  // Collect any succeeding siblings after this li
+  const nextSiblings: Node[] = [];
+  let next = li.nextSibling;
+  while (next) {
+    nextSiblings.push(next);
+    next = next.nextSibling;
+  }
+
+  const hasPrevSiblings = li.previousSibling !== null;
+
+  if (hasPrevSiblings) {
+    // There are items before this li in parentList -> insert newDiv right after parentList
+    parentList.insertAdjacentElement('afterend', newDiv);
+
+    // If there were items after this li, move them into a new list element after newDiv
+    if (nextSiblings.length > 0) {
+      const newList = document.createElement(parentList.tagName.toLowerCase()) as HTMLElement;
+      newList.className = parentList.className;
+      newList.style.cssText = parentList.style.cssText;
+      nextSiblings.forEach((sib) => newList.appendChild(sib));
+      newDiv.insertAdjacentElement('afterend', newList);
+    }
+  } else {
+    // This li was the first child of parentList -> insert newDiv before parentList
+    parentList.insertAdjacentElement('beforebegin', newDiv);
+
+    // If parentList has no remaining items, it will be removed below
+  }
+
+  // Remove the old li
+  li.remove();
+
+  // If parentList has no children left, remove it
+  if (parentList.parentElement && parentList.children.length === 0) {
+    parentList.remove();
+  }
+
+  // Position cursor at the beginning of newDiv
+  if (typeof window !== 'undefined') {
+    const sel = window.getSelection();
+    const range = document.createRange();
+    if (newDiv.firstChild && newDiv.firstChild.nodeType === Node.TEXT_NODE) {
+      range.setStart(newDiv.firstChild, 0);
+    } else {
+      range.setStart(newDiv, 0);
+    }
+    range.collapse(true);
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
+
+  return newDiv;
+}
+
 
 

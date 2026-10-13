@@ -69,7 +69,7 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
       pillColor: 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border-teal-200/60 dark:border-teal-800/60',
       items: [
         { id: 'inspect', title: "Inspeksi Harian", desc: "Checklist P2H harian", icon: <CheckSquare className="w-5 h-5" />, color: 'teal', action: () => handleNavigate('inspect') },
-        { id: 'logbook', title: "Log Book Section", desc: "Briefing P5M & Evaluasi Task Harian", icon: <ClipboardList className="w-5 h-5" />, color: 'teal', action: () => handleNavigate('logbook') },
+        { id: 'logbook', title: "Log Book Section", desc: "Logbook Seksi Terpadu & Planning Kegiatan Harian", icon: <ClipboardList className="w-5 h-5" />, color: 'teal', action: () => handleNavigate('logbook') },
         { id: 'pemantauan', title: "Pantau Parameter", desc: "Suhu, kelembapan & gas", icon: <ThermometerSun className="w-5 h-5" />, color: 'teal', action: () => handleNavigate('pemantauan') },
         { id: 'wo-list', title: "Daftar Work Order", desc: "Status & riwayat WO", icon: <Wrench className="w-5 h-5" />, color: 'teal', action: () => handleNavigate('wo-list') },
         { id: 'create-wo', title: "Buat Work Order", desc: "Form temuan kerusakan", icon: <PlusCircle className="w-5 h-5" />, color: 'teal', action: () => handleNavigate('create-wo') },
