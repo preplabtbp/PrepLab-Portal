@@ -415,10 +415,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const kantin = kantinKeys.map(k => (String(r[k] || '').trim() ? 1 : 0));
       const bungkus = bungkusCols.map(c => portions(r[c.key]));
       const jenisMeal = kantin.some(Boolean) || !bungkus.some(Boolean) ? 'Kantin' : 'Bungkusan';
-      const statusKerja = String(r.statusKerja || '').trim();
+      // Hanya status tidak hadir yang dikenal; isian lain (mis. tempat tinggal "Kampung Kawasi") → On Duty
+      const absent = String(r.statusKerja || '').trim().match(/^(cuti|izin|sakit|off|cs|dinas)\b/i);
       return [
         i + 1, r.nik, r.nama, r.shiftKerja ? titleCase(r.shiftKerja) : '-', jenisMeal,
-        statusKerja && statusKerja !== '-' ? titleCase(statusKerja) : 'On Duty', ...kantin, ...bungkus,
+        absent ? (absent[1].toUpperCase() === 'CS' ? 'CS' : titleCase(absent[1])) : 'On Duty', ...kantin, ...bungkus,
       ];
     });
     const sum = (c: number) => body.reduce((s, row) => s + (Number(row[c]) || 0), 0);
