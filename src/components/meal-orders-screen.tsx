@@ -657,13 +657,61 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     );
   };
 
-  const summaryCards = useMemo(() => [
-    ...activeMealGroups.map(g => ({
-      label: g.label,
-      value: g.cells.reduce((s, c) => s + (totals[c.key] || 0), 0),
-      detail: g.cells.map(c => `${c.label} ${totals[c.key] || 0}`).join(' · '),
-    })),
-  ], [activeMealGroups, totals]);
+  const isCRRow = (r: MealOrder) => ['CR', 'MESS'].includes(String(r.statusMess || '').trim().toUpperCase());
+
+  const summaryCards = useMemo(() => {
+    return activeMealGroups.map(g => {
+      let lap = 0;
+      let bungkusKantin = 0;
+      let makanKantin = 0;
+
+      if (g.label === 'Pagi / Sahur') {
+        lap = filtered.reduce((s, r) => s + portions(r.pagiLapangan), 0);
+        bungkusKantin = filtered.reduce((s, r) => {
+          if (isCRRow(r)) return s;
+          return s + (portions(r.batchPagi) || (r.pagiKantin === '1' ? 1 : 0));
+        }, 0);
+        makanKantin = filtered.reduce((s, r) => s + (isCRRow(r) && r.pagiKantin ? 1 : 0), 0);
+      } else if (g.label === 'Siang') {
+        lap = filtered.reduce((s, r) => s + portions(r.siangLapangan), 0);
+        bungkusKantin = filtered.reduce((s, r) => {
+          if (isCRRow(r)) return s;
+          return s + (r.siangKantin && r.siangKantin !== '-' ? 1 : 0);
+        }, 0);
+        makanKantin = filtered.reduce((s, r) => s + (isCRRow(r) && r.siangKantin ? 1 : 0), 0);
+      } else if (g.label === 'Sore') {
+        lap = filtered.reduce((s, r) => s + portions(r.soreLapangan), 0);
+        bungkusKantin = filtered.reduce((s, r) => {
+          if (isCRRow(r)) return s;
+          return s + (portions(r.batchSore) || (r.soreKantin === '1' ? 1 : 0));
+        }, 0);
+        makanKantin = filtered.reduce((s, r) => s + (isCRRow(r) && r.soreKantin ? 1 : 0), 0);
+      } else if (g.label === 'Takjil') {
+        lap = filtered.reduce((s, r) => s + portions(r.takjilLapangan), 0);
+      } else if (g.label === 'Malam') {
+        lap = filtered.reduce((s, r) => s + portions(r.malamLapangan), 0);
+      }
+
+      const totalBungkus = lap + bungkusKantin;
+
+      const details: string[] = [];
+      if (bungkusKantin > 0) {
+        details.push(`B. Lapangan ${lap}`);
+        details.push(`B. Kantin ${bungkusKantin}`);
+      } else {
+        details.push(`B. Lapangan ${lap}`);
+      }
+      if (makanKantin > 0) {
+        details.push(`Kantin ${makanKantin}`);
+      }
+
+      return {
+        label: g.label,
+        value: totalBungkus,
+        detail: details.join(' · '),
+      };
+    });
+  }, [activeMealGroups, filtered]);
 
   return (
     <div className="min-h-screen pb-24 bg-[#f3f6f4]">
@@ -806,10 +854,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
             </div>
             {summaryCards.map(c => (
-              <div key={c.label} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+              <div key={c.label} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]" title={`${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
                 <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
-                <p className="text-2xl font-semibold text-slate-900">{c.value}</p>
-                <p className="text-[10px] text-slate-500 truncate">{c.detail}</p>
+                <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
+                <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
               </div>
             ))}
             {columnVisibility.batches && (
