@@ -20,6 +20,7 @@ export type FormatAction =
   | 'bullet'
   | 'clear' 
   | { color: string }
+  | { highlight: string }
   | { link: string };
 
 /**
@@ -93,7 +94,36 @@ export function formatSelectedText(
     formatted = stripColorTags(formatted);
   } else if (typeof action === 'object' && 'link' in action) {
     formatted = `[${selected}](${action.link})`;
+  }
+
+  let beforeText = before;
+  let afterText = after;
+
+  if (typeof action === 'object' && 'highlight' in action) {
+    const bgOpenMatch = beforeText.match(/\[(?:bg|highlight):[^\]]+\]\s*$/i);
+    const bgCloseMatch = afterText.match(/^\s*\[\/(?:bg|highlight)\]/i);
+    if (bgOpenMatch && bgCloseMatch) {
+      beforeText = beforeText.slice(0, beforeText.length - bgOpenMatch[0].length);
+      afterText = afterText.slice(bgCloseMatch[0].length);
+    }
+    const hKey = action.highlight;
+    const cleanSelected = stripColorTags(selected);
+    if (!hKey || hKey === 'default') {
+      formatted = cleanSelected;
+    } else {
+      formatted = `[bg:${hKey}]${cleanSelected}[/bg]`;
+    }
   } else if (typeof action === 'object' && 'color' in action) {
+    const colorOpenMatch = beforeText.match(/\[(?:color:)?([#a-zA-Z0-9_-]+)\]\s*$/i);
+    if (colorOpenMatch) {
+      const rawTag = colorOpenMatch[1].toLowerCase();
+      const closeRegex = new RegExp(`^\\s*\\[\\/(?:color:)?${rawTag}\\]`, 'i');
+      const colorCloseMatch = afterText.match(closeRegex);
+      if (colorCloseMatch) {
+        beforeText = beforeText.slice(0, beforeText.length - colorOpenMatch[0].length);
+        afterText = afterText.slice(colorCloseMatch[0].length);
+      }
+    }
     const cKey = action.color;
     const cleanSelected = stripColorTags(selected);
     if (!cKey || cKey === 'default') {
@@ -103,9 +133,9 @@ export function formatSelectedText(
     }
   }
 
-  const newText = before + formatted + after;
-  const newEnd = start + formatted.length;
-  return { newText, newStart: start, newEnd };
+  const newText = beforeText + formatted + afterText;
+  const newEnd = beforeText.length + formatted.length;
+  return { newText, newStart: beforeText.length, newEnd };
 }
 
 export interface FloatingSelectionToolbarProps {

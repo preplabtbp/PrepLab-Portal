@@ -10,7 +10,8 @@ import {
   Link as LinkIcon, 
   ListTodo, 
   Type,
-  List
+  List,
+  Highlighter
 } from 'lucide-react';
 import { 
   parseTasklist,
@@ -18,7 +19,10 @@ import {
   SubtaskNote,
   markdownToVisualHtml, 
   visualHtmlToMarkdown, 
-  NOTION_COLORS 
+  NOTION_COLORS,
+  NOTION_HIGHLIGHT_COLORS,
+  isCursorAtStartOfListItem,
+  removeBulletFromLi
 } from './tasklist-utils';
 import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './FloatingSelectionToolbar';
 
@@ -113,6 +117,26 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
     }
   }, [multiline]);
 
+  // Outside click auto-save for single-line mode
+  useEffect(() => {
+    if (multiline) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (isColorMenuOpen) return;
+      if (
+        singleContainerRef.current && !singleContainerRef.current.contains(target) &&
+        (!bubbleRef.current || !bubbleRef.current.contains(target)) &&
+        !(target instanceof Element && target.closest('[data-notion-bubble-toolbar="true"]'))
+      ) {
+        onSave(singleText);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [multiline, singleText, onSave, isColorMenuOpen]);
+
   if (!multiline) {
     const handleKeyDownSingle = (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -145,6 +169,7 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
             isColorMenuOpen={isColorMenuOpen}
             setIsColorMenuOpen={setIsColorMenuOpen}
             onApplyColor={(_hex, colorKey) => handleFormat({ color: colorKey })}
+            onApplyHighlight={(_hex, highlightKey) => handleFormat({ highlight: highlightKey })}
             onExecCmd={(cmd) => {
               if (cmd === 'bold') handleFormat('bold');
               else if (cmd === 'italic') handleFormat('italic');
@@ -170,7 +195,12 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
           onMouseUp={handleSelectText}
           onKeyDown={handleKeyDownSingle}
           onBlur={(e) => {
-            if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node) && !isColorMenuOpen) {
+            const rel = e.relatedTarget as Node | null;
+            if (isColorMenuOpen) return;
+            if (rel && (bubbleRef.current?.contains(rel) || (rel instanceof Element && rel.closest('[data-notion-bubble-toolbar="true"]')))) {
+              return;
+            }
+            if (!singleContainerRef.current?.contains(rel)) {
               onSave(singleText);
             }
           }}
@@ -255,9 +285,12 @@ interface FloatingNotionBubbleToolbarProps {
   isColorMenuOpen: boolean;
   setIsColorMenuOpen: (open: boolean) => void;
   onApplyColor: (hex: string, colorKey: string) => void;
+  onApplyHighlight: (hex: string, highlightKey: string) => void;
   onExecCmd: (cmd: string, val?: string) => void;
   onClearFormat: () => void;
   onInsertLink: () => void;
+  onToggleBullet?: () => void;
+  isBulletActive?: boolean;
   isNotionLight?: boolean;
 }
 
@@ -267,21 +300,44 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
   isColorMenuOpen,
   setIsColorMenuOpen,
   onApplyColor,
+  onApplyHighlight,
   onExecCmd,
   onClearFormat,
   onInsertLink,
+  onToggleBullet,
+  isBulletActive = false,
   isNotionLight = false
 }) => {
+  const [activeSubmenu, setActiveSubmenu] = useState<'text' | 'highlight' | null>(null);
+  const [customTextColor, setCustomTextColor] = useState<string>('#2563eb');
+  const [customHighlightColor, setCustomHighlightColor] = useState<string>('#fde047');
+
   if (!bubblePos) return null;
+
+  const toggleSubmenu = (type: 'text' | 'highlight') => {
+    if (activeSubmenu === type) {
+      setActiveSubmenu(null);
+      setIsColorMenuOpen(false);
+    } else {
+      setActiveSubmenu(type);
+      setIsColorMenuOpen(true);
+    }
+  };
+
+  const closeSubmenu = () => {
+    setActiveSubmenu(null);
+    setIsColorMenuOpen(false);
+  };
 
   return createPortal(
     <div
       ref={bubbleRef}
+      data-notion-bubble-toolbar="true"
       onMouseDown={(e) => {
         // Prevent blur of contentEditable so selection isn't destroyed
         e.preventDefault();
       }}
-      className="fixed z-[99999] px-2.5 py-1 rounded-full backdrop-blur-md border shadow-2xl text-xs animate-in fade-in zoom-in-95 duration-100 select-none font-sans flex items-center gap-1"
+      className="fixed z-[99999] px-2.5 py-1 rounded-full backdrop-blur-md border shadow-2xl text-xs animate-in fade-in zoom-in-95 duration-100 select-none font-sans flex items-center gap-1 whitespace-nowrap"
       style={{
         top: `${bubblePos.top}px`,
         left: `${bubblePos.left}px`,
@@ -290,27 +346,28 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         borderColor: isNotionLight ? '#cbd5e1' : '#475569'
       }}
     >
-      {/* A (Color Dropdown Picker) */}
+      {/* 1. Warna Teks Dropdown */}
       <div className="relative">
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => setIsColorMenuOpen(!isColorMenuOpen)}
-          className="px-2 py-1 rounded-lg transition-colors cursor-pointer font-bold flex items-center gap-1"
-          style={{
-            backgroundColor: isColorMenuOpen ? (isNotionLight ? '#e0f2fe' : 'rgba(20, 184, 166, 0.2)') : 'transparent',
-            color: isNotionLight ? '#0f172a' : '#f8fafc'
-          }}
+          onClick={() => toggleSubmenu('text')}
+          className={`px-2 py-1 rounded-lg transition-colors cursor-pointer font-bold flex items-center gap-1 ${
+            activeSubmenu === 'text' 
+              ? (isNotionLight ? 'bg-teal-50 text-teal-700' : 'bg-teal-950/40 text-teal-300') 
+              : 'hover:opacity-80'
+          }`}
+          style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
           title="Pilih Warna Teks"
         >
-          <span className="underline decoration-teal-500 font-extrabold text-xs">A</span>
+          <span className="font-extrabold text-xs underline decoration-2 decoration-teal-500">A</span>
           <ChevronDown className="w-2.5 h-2.5 opacity-60" />
         </button>
 
-        {/* Notion Color Swatches Menu */}
-        {isColorMenuOpen && (
+        {/* Text Color Popover (No text labels, authentic Notion palette + 1 custom color selector) */}
+        {activeSubmenu === 'text' && (
           <div 
-            className="absolute top-full left-0 mt-2 p-2 rounded-2xl border shadow-2xl z-[100000] grid grid-cols-3 gap-1.5 min-w-[230px] animate-in fade-in zoom-in-95 duration-100"
+            className="absolute top-full left-0 mt-2 p-2 rounded-2xl border shadow-2xl z-[100000] animate-in fade-in zoom-in-95 duration-100"
             style={{
               backgroundColor: isNotionLight ? '#ffffff' : '#1e293b',
               borderColor: isNotionLight ? '#cbd5e1' : '#475569',
@@ -318,59 +375,159 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
             }}
             onMouseDown={(e) => e.preventDefault()}
           >
-            <div 
-              className="col-span-3 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider border-b mb-1"
-              style={{
-                color: isNotionLight ? '#64748b' : '#94a3b8',
-                borderColor: isNotionLight ? '#f1f5f9' : '#334155'
-              }}
-            >
-              Warna Teks Notion
-            </div>
-            {Object.entries(NOTION_COLORS).map(([key, conf]) => (
+            <div className="grid grid-cols-6 gap-2">
+              {/* Default (Hitam) */}
               <button
-                key={key}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => onApplyColor(conf.hex, key)}
-                className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[11px] font-medium transition-colors text-left cursor-pointer active:scale-95"
-                style={{
-                  color: conf.hex
+                onClick={() => {
+                  onApplyColor(NOTION_COLORS.default.hex, 'default');
+                  closeSubmenu();
                 }}
+                className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-[#37352f]"
+                title="Default (Hitam)"
+              />
+
+              {/* 9 Notion Text Colors */}
+              {(['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'] as const).map((key) => {
+                const conf = NOTION_COLORS[key];
+                if (!conf) return null;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      onApplyColor(conf.hex, key);
+                      closeSubmenu();
+                    }}
+                    className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center"
+                    style={{ backgroundColor: conf.hex }}
+                    title={conf.label}
+                  />
+                );
+              })}
+
+              {/* +1 Selector Warna Custom */}
+              <label
+                className="relative w-6 h-6 rounded-full p-[1.5px] hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-gradient-to-tr from-rose-500 via-amber-400 via-emerald-400 to-indigo-500"
+                title="Pilih Warna Kustom..."
+                onMouseDown={(e) => e.preventDefault()}
               >
                 <span 
-                  className="w-3.5 h-3.5 rounded-full shrink-0 border shadow-2xs" 
-                  style={{ backgroundColor: conf.hex, borderColor: isNotionLight ? '#cbd5e1' : '#475569' }} 
+                  className="w-full h-full rounded-full border border-white/60 dark:border-slate-900/60 flex items-center justify-center text-[10px] font-bold text-white shadow-inner"
+                  style={{ backgroundColor: customTextColor }}
+                >
+                  +
+                </span>
+                <input
+                  type="color"
+                  value={customTextColor}
+                  onChange={(e) => {
+                    const newCol = e.target.value;
+                    setCustomTextColor(newCol);
+                    onApplyColor(newCol, newCol);
+                    closeSubmenu();
+                  }}
+                  className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                 />
-                <span className="truncate text-xs font-semibold">{conf.label}</span>
-              </button>
-            ))}
+              </label>
+            </div>
           </div>
         )}
       </div>
 
-      <div 
-        className="w-[1px] h-4 my-auto mx-0.5" 
-        style={{ backgroundColor: isNotionLight ? '#e2e8f0' : '#475569' }} 
-      />
+      {/* 2. Highlight Text Dropdown */}
+      <div className="relative">
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => toggleSubmenu('highlight')}
+          className={`px-2 py-1 rounded-lg transition-colors cursor-pointer font-bold flex items-center gap-1 ${
+            activeSubmenu === 'highlight' 
+              ? (isNotionLight ? 'bg-amber-50 text-amber-700' : 'bg-amber-950/40 text-amber-300') 
+              : 'hover:opacity-80'
+          }`}
+          style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
+          title="Highlight Teks"
+        >
+          <Highlighter className="w-3.5 h-3.5 text-amber-500" />
+          <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+        </button>
 
-      {/* Quick Color Swatches directly on bar (including Black) */}
-      <div className="flex items-center gap-1">
-        {['default', 'red', 'amber', 'green', 'blue', 'purple'].map((cKey) => {
-          const conf = NOTION_COLORS[cKey];
-          if (!conf) return null;
-          return (
-            <button
-              key={cKey}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onApplyColor(conf.hex, cKey)}
-              title={`Beri warna ${conf.label}`}
-              className="w-4 h-4 rounded-full border hover:scale-125 transition-transform cursor-pointer shadow-2xs"
-              style={{ backgroundColor: conf.hex, borderColor: isNotionLight ? '#cbd5e1' : '#64748b' }}
-            />
-          );
-        })}
+        {/* Highlight Popover (No text labels, authentic Notion pastel palette + 1 custom highlight selector) */}
+        {activeSubmenu === 'highlight' && (
+          <div 
+            className="absolute top-full left-0 mt-2 p-2 rounded-2xl border shadow-2xl z-[100000] animate-in fade-in zoom-in-95 duration-100"
+            style={{
+              backgroundColor: isNotionLight ? '#ffffff' : '#1e293b',
+              borderColor: isNotionLight ? '#cbd5e1' : '#475569',
+              color: isNotionLight ? '#0f172a' : '#f8fafc'
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <div className="grid grid-cols-6 gap-2">
+              {/* Tanpa Highlight */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onApplyHighlight('transparent', 'default');
+                  closeSubmenu();
+                }}
+                className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-transparent relative overflow-hidden"
+                title="Tanpa Highlight"
+              >
+                <span className="w-full h-[1.5px] bg-rose-500 rotate-45 transform" />
+              </button>
+
+              {/* 9 Notion Highlight Pastel Colors */}
+              {(['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'] as const).map((key) => {
+                const conf = NOTION_HIGHLIGHT_COLORS[key];
+                if (!conf) return null;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      onApplyHighlight(conf.hex, key);
+                      closeSubmenu();
+                    }}
+                    className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center"
+                    style={{ backgroundColor: conf.hex }}
+                    title={conf.label}
+                  />
+                );
+              })}
+
+              {/* +1 Selector Warna Highlight Custom */}
+              <label
+                className="relative w-6 h-6 rounded-full p-[1.5px] hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-gradient-to-tr from-amber-400 via-rose-400 to-teal-400"
+                title="Highlight Kustom..."
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <span 
+                  className="w-full h-full rounded-full border border-white/60 dark:border-slate-900/60 flex items-center justify-center text-[10px] font-bold text-slate-800 shadow-inner"
+                  style={{ backgroundColor: customHighlightColor }}
+                >
+                  +
+                </span>
+                <input
+                  type="color"
+                  value={customHighlightColor}
+                  onChange={(e) => {
+                    const newCol = e.target.value;
+                    setCustomHighlightColor(newCol);
+                    onApplyHighlight(newCol, newCol);
+                    closeSubmenu();
+                  }}
+                  className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                />
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       <div 
@@ -455,17 +612,23 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         <LinkIcon className="w-3.5 h-3.5" />
       </button>
 
-      {/* Bullet List */}
-      <button
-        type="button"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => onExecCmd('insertUnorderedList')}
-        className="p-1 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
-        style={{ color: isNotionLight ? '#0f172a' : '#f8fafc' }}
-        title="Daftar Bullet (Poin •)"
-      >
-        <List className="w-3.5 h-3.5" />
-      </button>
+      {/* Bullet List (Only for multiline / rich containers) */}
+      {onToggleBullet && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onToggleBullet}
+          className={`p-1 rounded-lg cursor-pointer transition-all ${
+            isBulletActive 
+              ? 'bg-teal-500 text-white shadow-xs' 
+              : 'hover:opacity-80'
+          }`}
+          style={{ color: isBulletActive ? '#ffffff' : (isNotionLight ? '#0f172a' : '#f8fafc') }}
+          title={isBulletActive ? "Hapus Bullet (Jadikan Baris Biasa)" : "Daftar Bullet (Poin •)"}
+        >
+          <List className="w-3.5 h-3.5" />
+        </button>
+      )}
 
       {/* Code */}
       <button
@@ -622,47 +785,195 @@ const NotionTasklistInlineEditor: React.FC<{
       sel.addRange(range);
     }
 
+    let colorAncestor: HTMLElement | null = null;
+    let node: Node | null = range.commonAncestorContainer;
+    while (node && node !== containerRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.tagName === 'SPAN' && (el.hasAttribute('data-color') || el.style.color)) {
+          colorAncestor = el;
+          break;
+        }
+      }
+      node = node.parentNode;
+    }
+
     if (colorKey === 'default') {
-      try {
-        const contents = range.extractContents();
-        // Remove nested color attributes
-        if (contents.querySelectorAll) {
-          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+      if (colorAncestor && colorAncestor.textContent?.trim() === range.toString().trim()) {
+        colorAncestor.removeAttribute('data-color');
+        colorAncestor.style.color = '';
+        if (!colorAncestor.getAttribute('style')?.trim() && !colorAncestor.getAttribute('data-bg')) {
+          const parent = colorAncestor.parentNode;
+          while (colorAncestor.firstChild) {
+            parent?.insertBefore(colorAncestor.firstChild, colorAncestor);
+          }
+          parent?.removeChild(colorAncestor);
+        }
+      } else {
+        try {
+          const contents = range.extractContents();
+          contents.querySelectorAll?.('span[data-color], span[style*="color"]').forEach((el) => {
             (el as HTMLElement).removeAttribute('data-color');
             (el as HTMLElement).style.color = '';
           });
+          range.insertNode(contents);
+        } catch (e) {
+          document.execCommand('removeFormat');
         }
-        range.insertNode(contents);
-      } catch (e) {
-        document.execCommand('removeFormat');
       }
     } else {
-      const span = document.createElement('span');
-      span.style.color = hex;
-      span.setAttribute('data-color', colorKey);
-
-      try {
-        const contents = range.extractContents();
-        // Strip any existing color inside to prevent nested tags
-        if (contents.querySelectorAll) {
-          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
-            (el as HTMLElement).removeAttribute('data-color');
-            (el as HTMLElement).style.color = '';
-          });
-        }
-        span.appendChild(contents);
-        range.insertNode(span);
-
+      if (colorAncestor && colorAncestor.textContent?.trim() === range.toString().trim()) {
+        colorAncestor.style.color = hex;
+        colorAncestor.setAttribute('data-color', colorKey);
         if (sel) {
           const newRange = document.createRange();
-          newRange.selectNodeContents(span);
+          newRange.selectNodeContents(colorAncestor);
           sel.removeAllRanges();
           sel.addRange(newRange);
           lastSavedRangeRef.current = newRange.cloneRange();
         }
-      } catch (err) {
-        document.execCommand('styleWithCSS', false, 'true');
-        document.execCommand('foreColor', false, hex);
+      } else {
+        const span = document.createElement('span');
+        span.style.color = hex;
+        span.setAttribute('data-color', colorKey);
+
+        try {
+          const contents = range.extractContents();
+          if (contents.querySelectorAll) {
+            contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+              (el as HTMLElement).removeAttribute('data-color');
+              (el as HTMLElement).style.color = '';
+              if (!el.getAttribute('style')?.trim() && !el.getAttribute('data-bg')) {
+                const parent = el.parentNode;
+                while (el.firstChild) {
+                  parent?.insertBefore(el.firstChild, el);
+                }
+                parent?.removeChild(el);
+              }
+            });
+          }
+          span.appendChild(contents);
+          range.insertNode(span);
+
+          if (sel) {
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            lastSavedRangeRef.current = newRange.cloneRange();
+          }
+        } catch (err) {
+          document.execCommand('styleWithCSS', false, 'true');
+          document.execCommand('foreColor', false, hex);
+        }
+      }
+    }
+
+    setIsColorMenuOpen(false);
+  };
+
+  const handleApplyHighlight = (hex: string, highlightKey: string) => {
+    const sel = window.getSelection();
+    let range: Range | null = null;
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      range = sel.getRangeAt(0);
+    } else if (lastSavedRangeRef.current) {
+      range = lastSavedRangeRef.current;
+    }
+
+    if (!range) return;
+
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    let bgAncestor: HTMLElement | null = null;
+    let node: Node | null = range.commonAncestorContainer;
+    while (node && node !== containerRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.tagName === 'SPAN' && (el.hasAttribute('data-bg') || el.style.backgroundColor)) {
+          bgAncestor = el;
+          break;
+        }
+      }
+      node = node.parentNode;
+    }
+
+    if (highlightKey === 'default' || hex === 'transparent') {
+      if (bgAncestor && bgAncestor.textContent?.trim() === range.toString().trim()) {
+        bgAncestor.removeAttribute('data-bg');
+        bgAncestor.style.backgroundColor = '';
+        bgAncestor.style.padding = '';
+        bgAncestor.style.borderRadius = '';
+        if (!bgAncestor.getAttribute('style')?.trim() && !bgAncestor.getAttribute('data-color')) {
+          const parent = bgAncestor.parentNode;
+          while (bgAncestor.firstChild) {
+            parent?.insertBefore(bgAncestor.firstChild, bgAncestor);
+          }
+          parent?.removeChild(bgAncestor);
+        }
+      } else {
+        try {
+          const contents = range.extractContents();
+          contents.querySelectorAll?.('span[data-bg], span[style*="background"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-bg');
+            (el as HTMLElement).style.backgroundColor = '';
+            (el as HTMLElement).style.padding = '';
+            (el as HTMLElement).style.borderRadius = '';
+          });
+          range.insertNode(contents);
+        } catch (e) {}
+      }
+    } else {
+      if (bgAncestor && bgAncestor.textContent?.trim() === range.toString().trim()) {
+        bgAncestor.style.backgroundColor = hex;
+        bgAncestor.style.padding = '1px 3px';
+        bgAncestor.style.borderRadius = '3px';
+        bgAncestor.setAttribute('data-bg', highlightKey);
+        if (sel) {
+          const newRange = document.createRange();
+          newRange.selectNodeContents(bgAncestor);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          lastSavedRangeRef.current = newRange.cloneRange();
+        }
+      } else {
+        const span = document.createElement('span');
+        span.style.backgroundColor = hex;
+        span.style.padding = '1px 3px';
+        span.style.borderRadius = '3px';
+        span.setAttribute('data-bg', highlightKey);
+
+        try {
+          const contents = range.extractContents();
+          if (contents.querySelectorAll) {
+            contents.querySelectorAll('span[data-bg], span[style*="background"]').forEach((el) => {
+              (el as HTMLElement).removeAttribute('data-bg');
+              (el as HTMLElement).style.backgroundColor = '';
+              (el as HTMLElement).style.padding = '';
+              (el as HTMLElement).style.borderRadius = '';
+              if (!el.getAttribute('style')?.trim() && !el.getAttribute('data-color')) {
+                const parent = el.parentNode;
+                while (el.firstChild) {
+                  parent?.insertBefore(el.firstChild, el);
+                }
+                parent?.removeChild(el);
+              }
+            });
+          }
+          span.appendChild(contents);
+          range.insertNode(span);
+
+          if (sel) {
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            lastSavedRangeRef.current = newRange.cloneRange();
+          }
+        } catch (err) {}
       }
     }
 
@@ -714,9 +1025,11 @@ const NotionTasklistInlineEditor: React.FC<{
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       const target = e.target as Node;
+      if (isColorMenuOpen) return;
       if (
         containerRef.current && !containerRef.current.contains(target) &&
-        (!bubbleRef.current || !bubbleRef.current.contains(target))
+        (!bubbleRef.current || !bubbleRef.current.contains(target)) &&
+        !(target instanceof Element && target.closest('[data-notion-bubble-toolbar="true"]'))
       ) {
         const md = serializeToMarkdown();
         onSave(md);
@@ -726,7 +1039,7 @@ const NotionTasklistInlineEditor: React.FC<{
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [serializeToMarkdown, onSave]);
+  }, [serializeToMarkdown, onSave, isColorMenuOpen]);
 
   const toggleCheck = (idx: number) => {
     setItems((prev) => {
@@ -980,6 +1293,7 @@ const NotionTasklistInlineEditor: React.FC<{
         isColorMenuOpen={isColorMenuOpen}
         setIsColorMenuOpen={setIsColorMenuOpen}
         onApplyColor={handleApplyColor}
+        onApplyHighlight={handleApplyHighlight}
         onExecCmd={execCmd}
         onClearFormat={handleClearFormat}
         onInsertLink={handleInsertLink}
@@ -1109,9 +1423,11 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       const target = e.target as Node;
+      if (isColorMenuOpen) return;
       if (
         containerRef.current && !containerRef.current.contains(target) &&
-        (!bubbleRef.current || !bubbleRef.current.contains(target))
+        (!bubbleRef.current || !bubbleRef.current.contains(target)) &&
+        !(target instanceof Element && target.closest('[data-notion-bubble-toolbar="true"]'))
       ) {
         const finalMd = getCleanMarkdown();
         onSave(finalMd);
@@ -1122,7 +1438,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [getCleanMarkdown, onSave]);
+  }, [getCleanMarkdown, onSave, isColorMenuOpen]);
 
   // Apply rich text formatting
   const execCmd = (cmd: string, val: string | undefined = undefined) => {
@@ -1136,7 +1452,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
     updateBubblePosition();
   };
 
-  // Apply Notion Color Tag to selected text
+  // Apply Notion Color Tag to selected text (Non-nesting)
   const handleApplyColor = (hex: string, colorKey: string) => {
     const sel = window.getSelection();
     let range: Range | null = null;
@@ -1153,47 +1469,196 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       sel.addRange(range);
     }
 
+    let colorAncestor: HTMLElement | null = null;
+    let node: Node | null = range.commonAncestorContainer;
+    while (node && node !== editorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.tagName === 'SPAN' && (el.hasAttribute('data-color') || el.style.color)) {
+          colorAncestor = el;
+          break;
+        }
+      }
+      node = node.parentNode;
+    }
+
     if (colorKey === 'default') {
-      try {
-        const contents = range.extractContents();
-        // Remove nested color attributes
-        if (contents.querySelectorAll) {
-          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+      if (colorAncestor && colorAncestor.textContent?.trim() === range.toString().trim()) {
+        colorAncestor.removeAttribute('data-color');
+        colorAncestor.style.color = '';
+        if (!colorAncestor.getAttribute('style')?.trim() && !colorAncestor.getAttribute('data-bg')) {
+          const parent = colorAncestor.parentNode;
+          while (colorAncestor.firstChild) {
+            parent?.insertBefore(colorAncestor.firstChild, colorAncestor);
+          }
+          parent?.removeChild(colorAncestor);
+        }
+      } else {
+        try {
+          const contents = range.extractContents();
+          contents.querySelectorAll?.('span[data-color], span[style*="color"]').forEach((el) => {
             (el as HTMLElement).removeAttribute('data-color');
             (el as HTMLElement).style.color = '';
           });
+          range.insertNode(contents);
+        } catch (e) {
+          document.execCommand('removeFormat');
         }
-        range.insertNode(contents);
-      } catch (e) {
-        document.execCommand('removeFormat');
       }
     } else {
-      const span = document.createElement('span');
-      span.style.color = hex;
-      span.setAttribute('data-color', colorKey);
-
-      try {
-        const contents = range.extractContents();
-        // Strip any existing color inside to prevent nested tags
-        if (contents.querySelectorAll) {
-          contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
-            (el as HTMLElement).removeAttribute('data-color');
-            (el as HTMLElement).style.color = '';
-          });
-        }
-        span.appendChild(contents);
-        range.insertNode(span);
-
+      if (colorAncestor && colorAncestor.textContent?.trim() === range.toString().trim()) {
+        colorAncestor.style.color = hex;
+        colorAncestor.setAttribute('data-color', colorKey);
         if (sel) {
           const newRange = document.createRange();
-          newRange.selectNodeContents(span);
+          newRange.selectNodeContents(colorAncestor);
           sel.removeAllRanges();
           sel.addRange(newRange);
           lastSavedRangeRef.current = newRange.cloneRange();
         }
-      } catch (err) {
-        document.execCommand('styleWithCSS', false, 'true');
-        document.execCommand('foreColor', false, hex);
+      } else {
+        const span = document.createElement('span');
+        span.style.color = hex;
+        span.setAttribute('data-color', colorKey);
+
+        try {
+          const contents = range.extractContents();
+          if (contents.querySelectorAll) {
+            contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+              (el as HTMLElement).removeAttribute('data-color');
+              (el as HTMLElement).style.color = '';
+              if (!el.getAttribute('style')?.trim() && !el.getAttribute('data-bg')) {
+                const parent = el.parentNode;
+                while (el.firstChild) {
+                  parent?.insertBefore(el.firstChild, el);
+                }
+                parent?.removeChild(el);
+              }
+            });
+          }
+          span.appendChild(contents);
+          range.insertNode(span);
+
+          if (sel) {
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            lastSavedRangeRef.current = newRange.cloneRange();
+          }
+        } catch (err) {
+          document.execCommand('styleWithCSS', false, 'true');
+          document.execCommand('foreColor', false, hex);
+        }
+      }
+    }
+
+    setIsColorMenuOpen(false);
+  };
+
+  // Apply Notion Highlight Tag to selected text (Non-nesting)
+  const handleApplyHighlight = (hex: string, highlightKey: string) => {
+    const sel = window.getSelection();
+    let range: Range | null = null;
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      range = sel.getRangeAt(0);
+    } else if (lastSavedRangeRef.current) {
+      range = lastSavedRangeRef.current;
+    }
+
+    if (!range) return;
+
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    let bgAncestor: HTMLElement | null = null;
+    let node: Node | null = range.commonAncestorContainer;
+    while (node && node !== editorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.tagName === 'SPAN' && (el.hasAttribute('data-bg') || el.style.backgroundColor)) {
+          bgAncestor = el;
+          break;
+        }
+      }
+      node = node.parentNode;
+    }
+
+    if (highlightKey === 'default' || hex === 'transparent') {
+      if (bgAncestor && bgAncestor.textContent?.trim() === range.toString().trim()) {
+        bgAncestor.removeAttribute('data-bg');
+        bgAncestor.style.backgroundColor = '';
+        bgAncestor.style.padding = '';
+        bgAncestor.style.borderRadius = '';
+        if (!bgAncestor.getAttribute('style')?.trim() && !bgAncestor.getAttribute('data-color')) {
+          const parent = bgAncestor.parentNode;
+          while (bgAncestor.firstChild) {
+            parent?.insertBefore(bgAncestor.firstChild, bgAncestor);
+          }
+          parent?.removeChild(bgAncestor);
+        }
+      } else {
+        try {
+          const contents = range.extractContents();
+          contents.querySelectorAll?.('span[data-bg], span[style*="background"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-bg');
+            (el as HTMLElement).style.backgroundColor = '';
+            (el as HTMLElement).style.padding = '';
+            (el as HTMLElement).style.borderRadius = '';
+          });
+          range.insertNode(contents);
+        } catch (e) {}
+      }
+    } else {
+      if (bgAncestor && bgAncestor.textContent?.trim() === range.toString().trim()) {
+        bgAncestor.style.backgroundColor = hex;
+        bgAncestor.style.padding = '1px 3px';
+        bgAncestor.style.borderRadius = '3px';
+        bgAncestor.setAttribute('data-bg', highlightKey);
+        if (sel) {
+          const newRange = document.createRange();
+          newRange.selectNodeContents(bgAncestor);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          lastSavedRangeRef.current = newRange.cloneRange();
+        }
+      } else {
+        const span = document.createElement('span');
+        span.style.backgroundColor = hex;
+        span.style.padding = '1px 3px';
+        span.style.borderRadius = '3px';
+        span.setAttribute('data-bg', highlightKey);
+
+        try {
+          const contents = range.extractContents();
+          if (contents.querySelectorAll) {
+            contents.querySelectorAll('span[data-bg], span[style*="background"]').forEach((el) => {
+              (el as HTMLElement).removeAttribute('data-bg');
+              (el as HTMLElement).style.backgroundColor = '';
+              (el as HTMLElement).style.padding = '';
+              (el as HTMLElement).style.borderRadius = '';
+              if (!el.getAttribute('style')?.trim() && !el.getAttribute('data-color')) {
+                const parent = el.parentNode;
+                while (el.firstChild) {
+                  parent?.insertBefore(el.firstChild, el);
+                }
+                parent?.removeChild(el);
+              }
+            });
+          }
+          span.appendChild(contents);
+          range.insertNode(span);
+
+          if (sel) {
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            lastSavedRangeRef.current = newRange.cloneRange();
+          }
+        } catch (err) {}
       }
     }
 
@@ -1214,6 +1679,15 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       execCmd('createLink', url);
     }
   };
+
+  // Bullet toggle function
+  const handleToggleBullet = () => {
+    execCmd('insertUnorderedList');
+  };
+
+  const isBulletActive = Boolean(
+    typeof document !== 'undefined' && document.queryCommandState && document.queryCommandState('insertUnorderedList')
+  );
 
   // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1257,7 +1731,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       const isAlreadyList = Boolean(insideLi) || document.queryCommandState('insertUnorderedList');
 
       if (isAlreadyList) {
-        const currentText = (insideLi?.textContent || sel?.anchorNode?.textContent || '').replace(/^[•\-\*]\s*/, '').trim();
+        const currentText = (insideLi?.textContent || sel?.anchorNode?.textContent || '').replace(/^(\s*[•\-])+\s*/, '').trim();
         if (!currentText) {
           // Bullet saat ini kosong -> tekan enter untuk keluar dari mode bullet jadi baris biasa
           e.preventDefault();
@@ -1270,7 +1744,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       // Jika bukan dalam bullet list: biarkan Enter biasa membuat baris baru biasa (jangan dipaksa jadi bullet!)
     }
 
-    // Backspace pada bullet kosong: hapus bullet dan kembali ke baris biasa
+    // Backspace pada bullet: jika kosong atau kursor berada di paling awal bullet, ubah jadi baris biasa
     if (e.key === 'Backspace' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       let insideLi: HTMLElement | null = null;
       const sel = window.getSelection();
@@ -1286,10 +1760,10 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
       }
 
       if (insideLi) {
-        const currentText = (insideLi.textContent || '').replace(/^[•\-\*]\s*/, '').trim();
-        if (!currentText) {
+        const currentText = (insideLi.textContent || '').replace(/^(\s*[•\-])+\s*/, '').trim();
+        if (!currentText || isCursorAtStartOfListItem(insideLi)) {
           e.preventDefault();
-          document.execCommand('insertUnorderedList');
+          removeBulletFromLi(insideLi, editorRef.current || undefined);
           return;
         }
       }
@@ -1325,11 +1799,6 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
         suppressContentEditableWarning
         onKeyDown={handleKeyDown}
         onMouseUp={updateBubblePosition}
-        onBlur={(e) => {
-          if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node) && !isColorMenuOpen) {
-            onSave(getCleanMarkdown());
-          }
-        }}
         className="outline-none min-h-[36px] max-h-[360px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-sans selection:bg-[#cce2ff] p-1.5"
         style={{
           color: isNotionLight ? '#0f172a' : '#f8fafc',
@@ -1345,9 +1814,12 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
         isColorMenuOpen={isColorMenuOpen}
         setIsColorMenuOpen={setIsColorMenuOpen}
         onApplyColor={handleApplyColor}
+        onApplyHighlight={handleApplyHighlight}
         onExecCmd={execCmd}
         onClearFormat={handleClearFormat}
         onInsertLink={handleInsertLink}
+        onToggleBullet={handleToggleBullet}
+        isBulletActive={isBulletActive}
         isNotionLight={isNotionLight}
       />
     </div>

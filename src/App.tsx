@@ -105,9 +105,9 @@ const LeaderboardScreen = lazyWithRetry(() => import('./components/LeaderboardSc
 const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game').then(m => ({ default: m.EasterEggGame })));
 const FinanceScreen = lazyWithRetry(() => import('./components/FinanceScreen').then(m => ({ default: m.FinanceScreen || m.default })));
 const ModulesScreen = lazyWithRetry(() => import('./components/modules-screen').then(m => ({ default: m.ModulesScreen })));
-const LogbookScreen = lazyWithRetry(() => import('./components/logbook-screen').then(m => ({ default: m.LogbookScreen })));
 const ClinicScreen = lazyWithRetry(() => import('./components/clinic-screen').then(m => ({ default: m.ClinicScreen })));
 const XrfCalibrationScreen = lazyWithRetry(() => import('./components/xrf-calibration/XrfCalibrationScreen').then(m => ({ default: m.XrfCalibrationScreen })));
+const ScreenTestSmelterScreen = lazyWithRetry(() => import('./components/screen-test/ScreenTestSmelterScreen').then(m => ({ default: m.ScreenTestSmelterScreen })));
 const GuestMonitoringScreen = lazyWithRetry(() => import('./components/GuestMonitoringScreen').then(m => ({ default: m.GuestMonitoringScreen })));
 import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
@@ -772,6 +772,16 @@ export default function App() {
         navigate('/');
         return;
       }
+    }
+
+    if (cleanTab === 'logbook') {
+      const activeUniv = localStorage.getItem('bulletin_active_universe');
+      const targetUniverse = isDeveloper
+        ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
+        : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
+      const userSec = userProfile?.department || userProfile?.seksi || 'Preparasi';
+      navigate(`/bulletin/${targetUniverse}?sectionLogbook=${encodeURIComponent(userSec)}`);
+      return;
     }
 
     if (tab === 'home' || tab === '' || tab === '/') {
@@ -1898,11 +1908,13 @@ export default function App() {
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/finance" element={<FinanceScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="/leaderboard" element={<LeaderboardScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} userProfile={userProfile} onBack={() => handleNav('home')} />} />
-  <Route path="/logbook" element={<LogbookScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} onSelectBulletinPost={(postId) => navigate(`/bulletin/${userProfile?.pt === 'GTS' ? 'GTS' : 'TBP'}?postId=${postId}`)} />} />
+  <Route path="/logbook" element={<Navigate to={`/bulletin/${isDeveloper ? (localStorage.getItem('bulletin_active_universe') === 'GTS' ? 'GTS' : 'TBP') : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP')}?sectionLogbook=${encodeURIComponent(userProfile?.department || userProfile?.seksi || 'Preparasi')}`} replace />} />
   <Route path="/clinic" element={<ClinicScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} />} />
   <Route path="/kunjungan-klinik" element={<Navigate to="/clinic" replace />} />
   <Route path="/xrf-calibration" element={<XrfCalibrationScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onBack={() => handleNav('home')} />} />
   <Route path="/kalibrasi-xrf" element={<Navigate to="/xrf-calibration" replace />} />
+  <Route path="/screen-test-smelter" element={<ScreenTestSmelterScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
+  <Route path="/screen-test" element={<Navigate to="/screen-test-smelter" replace />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>

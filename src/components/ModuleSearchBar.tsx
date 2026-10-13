@@ -316,6 +316,18 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     tags: ['panduan', 'tutorial', 'manual', 'user guide', 'cara pakai', 'bantuan', 'walkthrough'],
     actionType: 'nav',
     target: 'manual'
+  },
+  {
+    id: 'screen-test-smelter',
+    title: 'Screen Test Sample Smelter HPL',
+    desc: 'Grafik & peta kendali mutu uji ayakan 200 mesh sample smelter HPL',
+    category: 'K3 & Operasional',
+    icon: <TrendingUp className="w-5 h-5" />,
+    iconBg: 'bg-teal-500/15 border-teal-500/25',
+    iconColor: 'text-teal-600 dark:text-teal-400',
+    tags: ['screen test', 'smelter', 'hpl', '200 mesh', 'ayakan', 'qc', 'grafik', 'sample', 'timbangan', 'lolos', 'tertahan'],
+    actionType: 'nav',
+    target: 'screen-test-smelter'
   }
 ];
 
