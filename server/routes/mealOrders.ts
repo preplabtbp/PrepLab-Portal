@@ -9,7 +9,7 @@ import { and, asc, eq, sql, desc, inArray, notInArray } from "drizzle-orm";
 import { mealOrders, employees, roster } from "../../src/db/schema.js";
 import { drive } from "../../google-services.js";
 import { getTrainingAccess } from "./training.js";
-import { computeMealOrderByRoster, getPossibleRosterDateStrings } from "../../src/utils/meal-roster-sync.js";
+import { computeMealOrderByRoster, getPossibleRosterDateStrings, type MealChoice, type MealPreference } from "../../src/utils/meal-roster-sync.js";
 import { fetchRosterSheetForDate } from "../../src/syncRoster.js";
 import { isResignedOrNonActiveStatus } from "./employees.js";
 
@@ -22,7 +22,7 @@ export const mealOrdersRouter = Router();
 const EDITABLE_FIELDS = [
   'sortNo', 'nama', 'statusMess', 'pt', 'shift', 'section', 'statusKerja', 'sahur', 'tidakPuasa', 'tempatTinggal', 'shiftKerja',
   'pagiKantin', 'pagiLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan', 'takjilLapangan', 'malamLapangan',
-  'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan',
+  'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan', 'pilihanPagi', 'pilihanSore',
 ] as const;
 type EditableField = typeof EDITABLE_FIELDS[number];
 const BOOL_FIELDS: EditableField[] = [];
@@ -67,7 +67,9 @@ export function ensureMealOrdersTable(): Promise<void> {
         ADD COLUMN IF NOT EXISTS batch_sore TEXT,
         ADD COLUMN IF NOT EXISTS status TEXT,
         ADD COLUMN IF NOT EXISTS keterangan_lapor TEXT,
-        ADD COLUMN IF NOT EXISTS catatan TEXT`);
+        ADD COLUMN IF NOT EXISTS catatan TEXT,
+        ADD COLUMN IF NOT EXISTS pilihan_pagi TEXT,
+        ADD COLUMN IF NOT EXISTS pilihan_sore TEXT`);
       // Seed sekali: data Meal_Order.csv (Rabu, 14 Okt 2026). Penanda di app_settings agar data yang sudah diedit tidak tertimpa.
       try {
         await seedMealOrdersOnce();
@@ -104,7 +106,10 @@ async function bulkUpsertMealOrders(date: string, rows: ParsedMealOrderRow[], up
     const res = await db.insert(mealOrders).values(chunk)
       .onConflictDoUpdate({
         target: [mealOrders.orderDate, mealOrders.nik],
-        set: Object.fromEntries([...EDITABLE_FIELDS, 'updatedBy', 'updatedAt'].map(f => [f, sql.raw(`excluded.${toSnake(f)}`)])),
+        // Pilihan Catatan tidak ada di file/sheet → yang lama dipertahankan
+        set: Object.fromEntries([...EDITABLE_FIELDS, 'updatedBy', 'updatedAt'].map(f => [f, f.startsWith('pilihan')
+          ? sql.raw(`COALESCE(excluded.${toSnake(f)}, meal_orders.${toSnake(f)})`)
+          : sql.raw(`excluded.${toSnake(f)}`)])),
       })
       .returning({ id: mealOrders.id });
     saved += res.length;
@@ -454,6 +459,28 @@ async function requireMealManager(req: any, res: any, next: any) {
 type RosterSource = 'sheet' | 'database';
 interface RosterEmp { nik: string; name: string; statusMess: string | null; pt: string | null; shift: string | null; section: string | null; gol: string | null; tempatTinggal: string | null; status: string }
 
+// Pilihan Pagi/Sore terakhir per karyawan (tanggal <= date) — berlaku seterusnya sampai diubah lagi di kolom Catatan
+async function loadMealPreferences(date: string, nik?: string): Promise<Map<string, MealPreference>> {
+  const rows = await db.select({ nik: mealOrders.nik, pilihanPagi: mealOrders.pilihanPagi, pilihanSore: mealOrders.pilihanSore })
+    .from(mealOrders)
+    .where(and(
+      sql`${mealOrders.orderDate} <= ${date}`,
+      sql`(${mealOrders.pilihanPagi} IS NOT NULL OR ${mealOrders.pilihanSore} IS NOT NULL)`,
+      nik ? sql`UPPER(${mealOrders.nik}) = ${nik.toUpperCase()}` : undefined,
+    ))
+    .orderBy(desc(mealOrders.orderDate));
+  const prefs = new Map<string, MealPreference>();
+  const asChoice = (v: string | null): MealChoice | null => (v === 'kantin' || v === 'lapangan' ? v : null);
+  for (const r of rows) {
+    const k = r.nik.toUpperCase().trim();
+    const p = prefs.get(k) || {};
+    if (p.pagi === undefined && asChoice(r.pilihanPagi)) p.pagi = asChoice(r.pilihanPagi);
+    if (p.sore === undefined && asChoice(r.pilihanSore)) p.sore = asChoice(r.pilihanSore);
+    prefs.set(k, p);
+  }
+  return prefs;
+}
+
 async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; source: RosterSource }> {
   const dateFormats = getPossibleRosterDateStrings(date);
   // Tempat tinggal (Nirwana dsb.) tidak ada di sheet roster → ambil dari orderan terakhir karyawan tsb, lalu alamat domisili.
@@ -535,13 +562,14 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
 
   const rowsToSave: any[] = [];
   let sortIndex = 1;
+  const prefs = await loadMealPreferences(date);
 
   for (const emp of activeEmps) {
     const nik = emp.nik.toUpperCase().trim();
     if (!overwrite && existingNiks.has(nik)) {
       continue;
     }
-    const computed = computeMealOrderByRoster(emp, emp.status, date);
+    const computed = computeMealOrderByRoster(emp, emp.status, date, prefs.get(nik));
 
     rowsToSave.push({
       orderDate: date,
@@ -617,7 +645,11 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const [emp] = await db.select().from(employees).where(sql`UPPER(${employees.nik}) = ${cleanNik}`).limit(1);
     if (!emp) return;
 
-    const computed = computeMealOrderByRoster(emp, rosterStatus, ymd);
+    // Tempat tinggal dari orderan tanggal tsb (Nirwana dsb.) + pilihan Catatan terakhir
+    const [current] = await db.select({ tempatTinggal: mealOrders.tempatTinggal }).from(mealOrders)
+      .where(and(eq(mealOrders.orderDate, ymd), eq(mealOrders.nik, emp.nik))).limit(1);
+    const prefs = await loadMealPreferences(ymd, cleanNik);
+    const computed = computeMealOrderByRoster({ ...emp, tempatTinggal: current?.tempatTinggal || null }, rosterStatus, ymd, prefs.get(cleanNik));
 
     const updateValues = {
       statusKerja: computed.statusKerja,

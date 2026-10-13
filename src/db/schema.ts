@@ -851,6 +851,9 @@ export const mealOrders = pgTable('meal_orders', {
   status: text('status'),
   keteranganLapor: text('keterangan_lapor'), // "Keterangan (Belum Lapor)"
   catatan: text('catatan'), // catatan tambahan, mis. DINAS / PHK
+  // Pilihan di kolom Catatan (Mess CR + Nirwana): 'kantin' | 'lapangan' — dipakai terus di tanggal berikutnya
+  pilihanPagi: text('pilihan_pagi'),
+  pilihanSore: text('pilihan_sore'),
   updatedBy: text('updated_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

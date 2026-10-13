@@ -66,13 +66,51 @@ export interface EmployeeProfileLike {
   section?: string | null;
 }
 
+// Pilihan Pagi/Sore di kolom Catatan (Mess CR + Nirwana) — disimpan & dipakai terus di tanggal berikutnya
+export type MealChoice = 'kantin' | 'lapangan';
+export interface MealPreference { pagi?: MealChoice | null; sore?: MealChoice | null }
+
+/** Karyawan yang punya pilihan Pagi/Sore di kolom Catatan: Mess CR atau tempat tinggal Nirwana */
+export function isMealChoiceEmployee(emp: { statusMess?: string | null; tempatTinggal?: string | null; alamatDomisili?: string | null }): boolean {
+  const sm = String(emp.statusMess || '').trim().toUpperCase();
+  return sm === 'CR' || sm === 'MESS' || `${emp.tempatTinggal || ''} ${emp.alamatDomisili || ''}`.toLowerCase().includes('nirwana');
+}
+
+/**
+ * Isi sel satu waktu makan sesuai pilihan. Kantin = "K" (Mess CR) atau 1 Bungkusan Kantin + batch 1 (NR Nirwana);
+ * Lapangan/Bungkusan = 1 di kolom Lapangan.
+ */
+export function mealChoicePatch(
+  emp: { statusMess?: string | null; tempatTinggal?: string | null; alamatDomisili?: string | null },
+  time: 'pagi' | 'sore',
+  choice: MealChoice,
+): Partial<Record<'pagiKantin' | 'pagiLapangan' | 'soreKantin' | 'soreLapangan' | 'batchPagi' | 'batchSore', string | null>> {
+  const sm = String(emp.statusMess || '').trim().toUpperCase();
+  const isNRNirwana = sm === 'NR' && `${emp.tempatTinggal || ''} ${emp.alamatDomisili || ''}`.toLowerCase().includes('nirwana');
+  const [k, l, b] = time === 'pagi' ? ['pagiKantin', 'pagiLapangan', 'batchPagi'] as const : ['soreKantin', 'soreLapangan', 'batchSore'] as const;
+  return choice === 'kantin'
+    ? { [k]: isNRNirwana ? '1' : 'K', [l]: null, [b]: isNRNirwana ? '1' : null }
+    : { [k]: null, [l]: '1', [b]: null };
+}
+
+/**
+ * Pilihan Catatan berlaku seterusnya di shift Siang / Nonshift / Longshift (roster D / LS).
+ * Shift Malam (N) & tidak hadir: pilihan mati → kolom mengikuti aturan roster (Kantin).
+ */
+function applyMealPreference(res: RosterMealCalculation, emp: EmployeeProfileLike, code: string, pref: MealPreference) {
+  if (!['D', 'LS'].includes(code) || !isMealChoiceEmployee(emp)) return;
+  if (pref.pagi) Object.assign(res, mealChoicePatch(emp, 'pagi', pref.pagi));
+  if (pref.sore) Object.assign(res, mealChoicePatch(emp, 'sore', pref.sore));
+}
+
 /**
  * Menghitung order makanan karyawan berdasarkan status roster dan profil mess / tempat tinggal.
  */
 export function computeMealOrderByRoster(
   emp: EmployeeProfileLike,
   rosterStatus: string | null | undefined,
-  orderDate: string
+  orderDate: string,
+  pref: MealPreference = {}
 ): RosterMealCalculation {
   const code = String(rosterStatus || '').trim().toUpperCase();
   const sm = String(emp.statusMess || '').trim().toUpperCase();
@@ -116,7 +154,7 @@ export function computeMealOrderByRoster(
   if (isCR && isNirwana && ['D', 'N', 'LS'].includes(code)) {
     // ==========================================
     // LOGIKA MESS CR (Gol II-V) + tempat tinggal Nirwana
-    // Pagi (D/N/LS) & Sore (D/N) bisa dipilih Kantin/Lapangan lewat dropdown di kolom Catatan — awalan "K" di Kantin
+    // Pagi & Sore awalan "K" di Kantin — bisa diganti lewat pilihan di kolom Catatan (lihat applyMealPreference)
     // ==========================================
     res.pagiKantin = 'K';
     if (code === 'D') {
@@ -125,7 +163,7 @@ export function computeMealOrderByRoster(
       res.siangLapangan = '1';
       res.soreKantin = 'K';
     } else if (code === 'N') {
-      // Siang = Kantin, Sore = pilihan (awal Kantin), Malam = Lapangan 1
+      // Siang = Kantin, Sore = Kantin, Malam = Lapangan 1
       res.shiftKerja = 'MALAM';
       res.siangKantin = 'K';
       res.soreKantin = 'K';
@@ -289,5 +327,6 @@ export function computeMealOrderByRoster(
     }
   }
 
+  applyMealPreference(res, emp, code, pref);
   return res;
 }

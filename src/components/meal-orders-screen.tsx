@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input, Select, Button } from './ui';
 import { todayWit } from '../utils/training-import';
 import { parseMealOrderSheet, type ParsedMealOrderRow } from '../utils/meal-order-import';
-import { isTuesdayWednesdaySaturday } from '../utils/meal-roster-sync';
+import { isTuesdayWednesdaySaturday, mealChoicePatch } from '../utils/meal-roster-sync';
 import { BungkusRecapSheet, buildBungkusRecap, printBungkusRecap, recapTitle } from './meal-bungkus-recap';
 
 // ===== Orderan Makanan harian =====
@@ -42,6 +42,8 @@ interface MealOrder {
   status: string | null;
   keteranganLapor: string | null; // "Keterangan (Belum Lapor)"
   catatan: string | null; // mis. DINAS / PHK
+  pilihanPagi: string | null; // pilihan Catatan 'kantin' | 'lapangan' — berlaku seterusnya
+  pilihanSore: string | null;
 }
 type BatchKey = 'batchPagi' | 'batchSore';
 interface MealPayload { date: string; data: MealOrder[]; dates: { date: string; count: number }[]; access: { canManage: boolean } }
@@ -579,38 +581,35 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     return ['pagi', 'sore'];
   };
 
+  // Pilihan disimpan (pilihanPagi / pilihanSore) → dipakai seterusnya saat sinkron tanggal lain, kecuali shift Malam
   const setMealChoice = (r: MealOrder, time: 'pagi' | 'sore', choice: 'kantin' | 'lapangan') => {
-    const kantinKey: KantinKey = time === 'pagi' ? 'pagiKantin' : 'soreKantin';
-    const lapanganKey: LapanganKey = time === 'pagi' ? 'pagiLapangan' : 'soreLapangan';
-    const batchKey: BatchKey = time === 'pagi' ? 'batchPagi' : 'batchSore';
-    const isNR = (r.statusMess || '').toUpperCase() === 'NR';
-    const isNirwana = (r.tempatTinggal || '').toLowerCase().includes('nirwana');
-    const isNRNirwana = isNR && isNirwana;
-    const kantinVal = isNRNirwana ? '1' : 'K';
-
-    if (choice === 'kantin') {
-      saveCell(r, {
-        [kantinKey]: kantinVal,
-        [lapanganKey]: null,
-        [batchKey]: isNRNirwana ? '1' : null,
-      });
-      toast.success(`${r.nama}: ${time.toUpperCase()} diganti ke ${time === 'pagi' ? 'Pagi' : 'Sore'} Kantin`);
-    } else {
-      if (time === 'sore' && isTuesdayWednesdaySaturday(date) && ['CR', 'MESS'].includes((r.statusMess || '').toUpperCase())) {
-        toast.info(`Catatan: Hari ${dayName(date)} untuk Mess CR jadwal sore biasanya Kantin.`);
-      }
-      saveCell(r, {
-        [kantinKey]: null,
-        [lapanganKey]: '1',
-        [batchKey]: null,
-      });
-      toast.success(`${r.nama}: ${time.toUpperCase()} diganti ke ${time === 'pagi' ? 'Pagi' : 'Sore'} Bungkusan`);
+    const label = time === 'pagi' ? 'Pagi' : 'Sore';
+    const pilihan: Partial<MealOrder> = time === 'pagi' ? { pilihanPagi: choice } : { pilihanSore: choice };
+    if (choice === 'lapangan' && time === 'sore' && isTuesdayWednesdaySaturday(date) && ['CR', 'MESS'].includes((r.statusMess || '').toUpperCase())) {
+      toast.info(`Catatan: Hari ${dayName(date)} untuk Mess CR jadwal sore biasanya Kantin.`);
     }
+    saveCell(r, { ...mealChoicePatch(r, time, choice), ...pilihan });
+    toast.success(`${r.nama}: ${label} ${choice === 'kantin' ? 'Kantin' : 'Bungkusan'} — berlaku seterusnya (kecuali shift Malam)`);
+  };
+
+  // Ganti Shift manual: Malam → Pagi & Sore kembali Kantin; Siang / Nonshift / Longshift → ikut pilihan Catatan
+  const changeShiftKerja = (r: MealOrder, shiftKerja: string | null) => {
+    const patch: Partial<MealOrder> = { shiftKerja };
+    if (mealChoiceSlots(r).length > 0) {
+      const isMalam = shiftKerja === 'MALAM';
+      for (const time of ['pagi', 'sore'] as const) {
+        const saved = (time === 'pagi' ? r.pilihanPagi : r.pilihanSore) as 'kantin' | 'lapangan' | null;
+        if (isMalam || saved) Object.assign(patch, mealChoicePatch(r, time, isMalam ? 'kantin' : saved!));
+      }
+    }
+    saveCell(r, patch);
   };
 
   const renderMealChoices = (r: MealOrder) => {
     const slots = mealChoiceSlots(r);
     if (slots.length === 0) return null;
+    // Shift Malam: pilihan Catatan mati — Pagi & Sore otomatis Kantin
+    const isMalam = r.shiftKerja === 'MALAM';
     return (
       <div className="flex items-center gap-1 shrink-0">
         {slots.map(time => {
@@ -620,13 +619,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             <select
               key={time}
               value={value}
+              disabled={isMalam}
               onChange={e => setMealChoice(r, time, e.target.value as 'kantin' | 'lapangan')}
-              className={`rounded-md text-xs font-semibold px-1.5 py-1 cursor-pointer focus:outline-none border transition-colors ${
+              className={`rounded-md text-xs font-semibold px-1.5 py-1 focus:outline-none border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isMalam ? '' : 'cursor-pointer'} ${
                 value === 'kantin'
                   ? 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100'
                   : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
               }`}
-              title={`Pilih ${label}: ${label} Kantin atau ${label} Bungkusan`}
+              title={isMalam ? 'Shift Malam: pilihan tidak berlaku — Pagi & Sore otomatis Kantin' : `Pilih ${label}: ${label} Kantin atau ${label} Bungkusan (berlaku seterusnya)`}
             >
               <option value="kantin">{label} Kantin</option>
               <option value="lapangan">{label} Bungkusan</option>
@@ -1209,7 +1209,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                           {canManage ? (
                             <select
                               value={r.shiftKerja || ''}
-                              onChange={e => saveCell(r, { shiftKerja: e.target.value || null })}
+                              onChange={e => changeShiftKerja(r, e.target.value || null)}
                               className="w-full rounded-md bg-emerald-100 text-emerald-900 text-xs font-semibold px-1 py-1 cursor-pointer focus:outline-none"
                             >
                               <option value="">-</option>
