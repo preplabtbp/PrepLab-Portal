@@ -55,6 +55,45 @@ export function isTuesdayWednesdaySaturday(ymdDate: string): boolean {
   return day === 2 || day === 3 || day === 6;
 }
 
+/**
+ * Dapatkan tanggal sebelumnya dalam format YYYY-MM-DD
+ */
+export function getPreviousDateString(ymdDate: string): string {
+  if (!ymdDate || !/^\d{4}-\d{2}-\d{2}$/.test(ymdDate)) return ymdDate;
+  const [y, m, d] = ymdDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return dt.toISOString().slice(0, 10);
+}
+
+/**
+ * Cek apakah status roster/kerja tanggal sebelumnya adalah Cuti, Travel, atau Izin:
+ * C, CE, CT, CS, TRV, I (beserta variasi Cuti / Izin / Travel)
+ */
+export function isLeaveOrPermissionRosterStatus(val: string | null | undefined): boolean {
+  if (!val) return false;
+  const s = val.trim().toUpperCase();
+  if (['C', 'CE', 'CT', 'CS', 'TRV', 'I', 'CI', 'TV', 'XP', 'CUTI', 'IZIN', 'TRAVEL'].includes(s)) return true;
+  if (s.startsWith('CUTI') || s.startsWith('IZIN')) return true;
+  const prefixes = ['CE', 'CT', 'CS', 'TRV', 'CI', 'TV', 'XP', 'C', 'I'];
+  return prefixes.some(p => s === p || s.startsWith(p + ' ') || s.startsWith(p + '-') || s.startsWith(p + '(') || s.startsWith(p + '/'));
+}
+
+/**
+ * Cek apakah keterangan/status roster tanggal saat ini adalah kerja atau off:
+ * D, N, LS, Atau OFF
+ */
+export function isWorkOrOffRosterStatus(val: string | null | undefined): boolean {
+  if (!val) return false;
+  const s = val.trim().toUpperCase();
+  if (['D', 'N', 'LS', 'OFF'].includes(s)) return true;
+  if (s === 'DS' || s === 'DAY' || s.startsWith('D ') || s.startsWith('D-') || s.startsWith('D(')) return true;
+  if (s === 'NS' || s === 'NIGHT' || s.startsWith('N ') || s.startsWith('N-') || s.startsWith('N(')) return true;
+  if (s === 'LONGSHIFT' || s.startsWith('LS ') || s.startsWith('LS-') || s.startsWith('LS(')) return true;
+  if (s.startsWith('OFF ') || s.startsWith('OFF-') || s.startsWith('OFF(')) return true;
+  return false;
+}
+
 export interface EmployeeProfileLike {
   nik?: string | null;
   name?: string | null;
@@ -110,7 +149,8 @@ export function computeMealOrderByRoster(
   emp: EmployeeProfileLike,
   rosterStatus: string | null | undefined,
   orderDate: string,
-  pref: MealPreference = {}
+  pref: MealPreference = {},
+  prevRosterStatus?: string | null
 ): RosterMealCalculation {
   const code = String(rosterStatus || '').trim().toUpperCase();
   const sm = String(emp.statusMess || '').trim().toUpperCase();
@@ -333,6 +373,12 @@ export function computeMealOrderByRoster(
       res.soreKantin = bungkusanKantinSore;
       res.batchSore = batchSoreNirwana;
     }
+  }
+
+  // Jika Tanggal sebelumnya "C,CE,CT,CS,TRV,I" dan Tanggal berikutnya keterangannya "D, N, LS Atau OFF"
+  // maka Keterangan belum lapor Otomatis Aktif
+  if (isLeaveOrPermissionRosterStatus(prevRosterStatus) && isWorkOrOffRosterStatus(code)) {
+    res.keteranganLapor = 'Belum Lapor';
   }
 
   applyMealPreference(res, emp, code, pref);

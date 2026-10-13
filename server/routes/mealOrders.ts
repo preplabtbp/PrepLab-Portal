@@ -9,7 +9,15 @@ import { and, asc, eq, sql, desc, inArray, notInArray } from "drizzle-orm";
 import { mealOrders, employees, roster } from "../../src/db/schema.js";
 import { drive } from "../../google-services.js";
 import { getTrainingAccess } from "./training.js";
-import { computeMealOrderByRoster, getPossibleRosterDateStrings, type MealChoice, type MealPreference } from "../../src/utils/meal-roster-sync.js";
+import {
+  computeMealOrderByRoster,
+  getPossibleRosterDateStrings,
+  getPreviousDateString,
+  isLeaveOrPermissionRosterStatus,
+  isWorkOrOffRosterStatus,
+  type MealChoice,
+  type MealPreference,
+} from "../../src/utils/meal-roster-sync.js";
 import { fetchRosterSheetForDate } from "../../src/syncRoster.js";
 import { isResignedOrNonActiveStatus } from "./employees.js";
 
@@ -504,6 +512,79 @@ async function loadNonshiftNiks(date: string, nik?: string): Promise<Set<string>
   return new Set(Array.from(latest).filter(([, s]) => s === 'NONSHIFT').map(([k]) => k));
 }
 
+// Status roster / kerja hari sebelumnya (H-1) per karyawan:
+// Dipakai untuk aturan: Jika kemarin C, CE, CT, CS, TRV, I dan hari ini D, N, LS, OFF -> otomatis Belum Lapor
+async function loadPreviousRosterStatuses(date: string, nik?: string): Promise<Map<string, string>> {
+  const prevDate = getPreviousDateString(date);
+  const map = new Map<string, string>();
+
+  // 1. Ambil dari tabel roster untuk tanggal kemarin (status roster resmi)
+  try {
+    const prevDateFormats = getPossibleRosterDateStrings(prevDate);
+    const rosterRows = await db.select({ nik: roster.nik, status: roster.status })
+      .from(roster).where(and(
+        inArray(roster.date, prevDateFormats),
+        nik ? sql`UPPER(${roster.nik}) = ${nik.toUpperCase()}` : undefined
+      ));
+    for (const r of rosterRows) {
+      if (r.nik && r.status) {
+        map.set(r.nik.toUpperCase().trim(), r.status.trim());
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[MealOrders] Gagal load previous roster rows:`, err?.message);
+  }
+
+  // 2. Ambil dari tabel meal_orders untuk tanggal kemarin (pelengkap / jika sudah ada data kemarin)
+  try {
+    const prevOrders = await db.select({
+      nik: mealOrders.nik,
+      status: mealOrders.status,
+      statusKerja: mealOrders.statusKerja,
+      catatan: mealOrders.catatan
+    }).from(mealOrders).where(and(
+      eq(mealOrders.orderDate, prevDate),
+      nik ? sql`UPPER(${mealOrders.nik}) = ${nik.toUpperCase()}` : undefined
+    ));
+
+    for (const m of prevOrders) {
+      const k = m.nik.toUpperCase().trim();
+      const candidate = m.status || m.statusKerja || m.catatan || '';
+      if (candidate) {
+        if (!map.has(k) || map.get(k) === '-') {
+          map.set(k, candidate.trim());
+        } else {
+          const currentInMap = map.get(k) || '';
+          if (!isLeaveOrPermissionRosterStatus(currentInMap) && isLeaveOrPermissionRosterStatus(candidate)) {
+            map.set(k, candidate.trim());
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[MealOrders] Gagal load previous meal orders:`, err?.message);
+  }
+
+  // 3. Cadangan: jika map masih kosong (misal roster belum di-sync ke DB), coba baca dari sheet
+  if (map.size === 0) {
+    try {
+      const prevDateFormats = getPossibleRosterDateStrings(prevDate);
+      const sheet = await fetchRosterSheetForDate(prevDateFormats);
+      if (sheet.dateFound && sheet.entries.length > 0) {
+        for (const e of sheet.entries) {
+          if (e.nik && e.status) {
+            map.set(e.nik.toUpperCase().trim(), e.status.trim());
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[MealOrders] Gagal fetch previous roster sheet:`, err?.message);
+    }
+  }
+
+  return map;
+}
+
 async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; source: RosterSource }> {
   const dateFormats = getPossibleRosterDateStrings(date);
   // Tempat tinggal (Nirwana dsb.) tidak ada di sheet roster → ambil dari orderan terakhir karyawan tsb, lalu alamat domisili.
@@ -587,13 +668,15 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   let sortIndex = 1;
   const prefs = await loadMealPreferences(date);
   const nonshift = await loadNonshiftNiks(date);
+  const prevStatuses = await loadPreviousRosterStatuses(date);
 
   for (const emp of activeEmps) {
     const nik = emp.nik.toUpperCase().trim();
     if (!overwrite && existingNiks.has(nik)) {
       continue;
     }
-    const computed = computeMealOrderByRoster(emp, emp.status, date, prefs.get(nik));
+    const prevStatus = prevStatuses.get(nik);
+    const computed = computeMealOrderByRoster(emp, emp.status, date, prefs.get(nik), prevStatus);
     if (computed.shiftKerja === 'SIANG' && nonshift.has(nik)) computed.shiftKerja = 'Nonshift';
 
     rowsToSave.push({
@@ -674,7 +757,9 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const [current] = await db.select({ tempatTinggal: mealOrders.tempatTinggal }).from(mealOrders)
       .where(and(eq(mealOrders.orderDate, ymd), eq(mealOrders.nik, emp.nik))).limit(1);
     const prefs = await loadMealPreferences(ymd, cleanNik);
-    const computed = computeMealOrderByRoster({ ...emp, tempatTinggal: current?.tempatTinggal || null }, rosterStatus, ymd, prefs.get(cleanNik));
+    const prevStatuses = await loadPreviousRosterStatuses(ymd, cleanNik);
+    const prevStatus = prevStatuses.get(cleanNik);
+    const computed = computeMealOrderByRoster({ ...emp, tempatTinggal: current?.tempatTinggal || null }, rosterStatus, ymd, prefs.get(cleanNik), prevStatus);
     if (computed.shiftKerja === 'SIANG' && (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik)) computed.shiftKerja = 'Nonshift';
 
     const updateValues = {
