@@ -14,7 +14,8 @@ import {
   ArrowRight, 
   Search, 
   Filter, 
-  PenTool 
+  PenTool,
+  Pin 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
@@ -23,7 +24,8 @@ import {
   getTodayDDMMYYYY, 
   formatToDDMMYYYY, 
   TableRowData, 
-  generateTaskCode 
+  generateTaskCode,
+  cleanFrontEndText 
 } from './logbook-section-utils';
 
 interface LogbookTaskRecommendationModalProps {
@@ -203,16 +205,23 @@ export function LogbookTaskRecommendationModal({
     const todayStr = getTodayDDMMYYYY();
     const tempRows = [...existingRows];
 
-    const newRows: TableRowData[] = selectedRecs.map((rec) => {
+    const newRows: TableRowData[] = [];
+
+    selectedRecs.forEach((rec) => {
       const code = generateTaskCode(sectionName, tempRows);
-      const rowItem: TableRowData = {
+      
+      // Keterangan contains ONLY narrative notes (e.g. progress / trials / blockers), NEVER duplicates child subtasks
+      const ketDescription = rec.description || '';
+
+      const parentItem: TableRowData = {
+        id: code,
         taskCode: code,
         'Task ID': code,
         'ID Task': code,
         number: code,
-        'Jenis kegiatan': rec.title,
-        'Jenis Kegiatan': rec.title,
-        Keterangan: rec.description || '',
+        'Jenis kegiatan': cleanFrontEndText(rec.title),
+        'Jenis Kegiatan': cleanFrontEndText(rec.title),
+        Keterangan: ketDescription,
         'Created Time': todayStr,
         'Created time': todayStr,
         'Tanggal Selesai': '-',
@@ -230,8 +239,45 @@ export function LogbookTaskRecommendationModal({
         _originRowIndex: String(rec.originRowIndex),
         _isLogbookAggregated: 'true'
       };
-      tempRows.push(rowItem);
-      return rowItem;
+
+      if (rec.isPinned) {
+        parentItem.isPinned = 'true';
+        (parentItem as any)._pinned = 'true';
+      }
+
+      tempRows.push(parentItem);
+      newRows.push(parentItem);
+
+      // Generate child subtask rows locked to parent Task ID
+      if (rec.subtasks && rec.subtasks.length > 0) {
+        rec.subtasks.forEach((sub, sIdx) => {
+          const subRowItem: TableRowData = {
+            id: `sub_${code}_${sIdx + 1}`,
+            parentId: code,
+            parentRowId: code,
+            isSubItem: 'true',
+            number: '',
+            'Jenis kegiatan': `↳ ${sub.checked ? '[x]' : '[ ]'} ${sub.text}`,
+            'Jenis Kegiatan': `↳ ${sub.checked ? '[x]' : '[ ]'} ${sub.text}`,
+            Keterangan: '',
+            'Created Time': todayStr,
+            'Created time': todayStr,
+            'Tanggal Selesai': sub.checked ? todayStr : '-',
+            'Tanggal selesai': sub.checked ? todayStr : '-',
+            Status: sub.checked ? 'Closed' : 'Open',
+            status: sub.checked ? 'Closed' : 'Open',
+            isCompleted: sub.checked ? 'true' : 'false',
+            PIC: rec.pic || '',
+            Priority: rec.priority || 'Normal',
+            'Activity (routine/non routine)': rec.type,
+            Aktivitas: rec.type,
+            period: rec.cadence || (rec.type === 'Routine' ? 'Daily' : 'Non-Routine'),
+            'Asal Halaman': rec.originPostTitle,
+          };
+          tempRows.push(subRowItem);
+          newRows.push(subRowItem);
+        });
+      }
     });
 
     onAddSelectedTasks(newRows);
@@ -244,14 +290,18 @@ export function LogbookTaskRecommendationModal({
     const tempRows = [...existingRows];
     const code = generateTaskCode(sectionName, tempRows);
 
-    const rowItem: TableRowData = {
+    // Keterangan contains ONLY narrative notes (e.g. progress / trials / blockers), NEVER duplicates child subtasks
+    const ketDescription = rec.description || '';
+
+    const parentItem: TableRowData = {
+      id: code,
       taskCode: code,
       'Task ID': code,
       'ID Task': code,
       number: code,
-      'Jenis kegiatan': rec.title,
-      'Jenis Kegiatan': rec.title,
-      Keterangan: rec.description || '',
+      'Jenis kegiatan': cleanFrontEndText(rec.title),
+      'Jenis Kegiatan': cleanFrontEndText(rec.title),
+      Keterangan: ketDescription,
       'Created Time': todayStr,
       'Created time': todayStr,
       'Tanggal Selesai': '-',
@@ -270,7 +320,43 @@ export function LogbookTaskRecommendationModal({
       _isLogbookAggregated: 'true'
     };
 
-    onAddSelectedTasks([rowItem]);
+    if (rec.isPinned) {
+      parentItem.isPinned = 'true';
+      (parentItem as any)._pinned = 'true';
+    }
+
+    const newRows: TableRowData[] = [parentItem];
+
+    // Generate child subtask rows locked to parent Task ID
+    if (rec.subtasks && rec.subtasks.length > 0) {
+      rec.subtasks.forEach((sub, sIdx) => {
+        newRows.push({
+          id: `sub_${code}_${sIdx + 1}`,
+          parentId: code,
+          parentRowId: code,
+          isSubItem: 'true',
+          number: '',
+          'Jenis kegiatan': `↳ ${sub.checked ? '[x]' : '[ ]'} ${sub.text}`,
+          'Jenis Kegiatan': `↳ ${sub.checked ? '[x]' : '[ ]'} ${sub.text}`,
+          Keterangan: '',
+          'Created Time': todayStr,
+          'Created time': todayStr,
+          'Tanggal Selesai': sub.checked ? todayStr : '-',
+          'Tanggal selesai': sub.checked ? todayStr : '-',
+          Status: sub.checked ? 'Closed' : 'Open',
+          status: sub.checked ? 'Closed' : 'Open',
+          isCompleted: sub.checked ? 'true' : 'false',
+          PIC: rec.pic || '',
+          Priority: rec.priority || 'Normal',
+          'Activity (routine/non routine)': rec.type,
+          Aktivitas: rec.type,
+          period: rec.cadence || (rec.type === 'Routine' ? 'Daily' : 'Non-Routine'),
+          'Asal Halaman': rec.originPostTitle,
+        });
+      });
+    }
+
+    onAddSelectedTasks(newRows);
     onClose();
   };
 
@@ -608,8 +694,18 @@ export function LogbookTaskRecommendationModal({
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                          {rec.isPinned && (
+                            <span 
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 select-none shrink-0 shadow-2xs"
+                              title="Tugas ini telah disematkan (PINNED) di Labnote"
+                            >
+                              <Pin className="w-3 h-3 fill-amber-500 text-amber-600 dark:text-amber-400 rotate-45" />
+                              <span>PINNED</span>
+                            </span>
+                          )}
+
                           <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                            {rec.title}
+                            {cleanFrontEndText(rec.title)}
                           </span>
 
                           <span
@@ -638,6 +734,19 @@ export function LogbookTaskRecommendationModal({
                             </span>
                           )}
 
+                          {rec.activeSubtaskCount !== undefined && rec.activeSubtaskCount > 0 && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-xs">
+                              <Layers className="w-3 h-3 text-teal-500" />
+                              <span>{rec.activeSubtaskCount} Subtask Aktif</span>
+                            </span>
+                          )}
+
+                          {rec.closedSubtaskCount !== undefined && rec.closedSubtaskCount > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                              ✓ {rec.closedSubtaskCount} Selesai
+                            </span>
+                          )}
+
                           {isPlanned && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-white">
                               Sudah Masuk Rencana
@@ -645,10 +754,38 @@ export function LogbookTaskRecommendationModal({
                           )}
                         </div>
 
-                        {rec.description && (
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                            {rec.description.replace(/- \[[ xX]\]/g, '•')}
-                          </p>
+                        {(() => {
+                          const cleanDesc = cleanFrontEndText(rec.description || '').replace(/- \[[ xX]\]/g, '•');
+                          if (!cleanDesc || cleanDesc === '-' || cleanDesc === '•' || cleanDesc === '---') return null;
+                          return (
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                              {cleanDesc}
+                            </p>
+                          );
+                        })()}
+
+                        {rec.subtasks && rec.subtasks.length > 0 && (
+                          <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-col gap-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                              <CheckSquare className="w-3 h-3 text-teal-600 dark:text-teal-400" />
+                              Subtask Terikat ({rec.activeSubtaskCount || 0} aktif / {rec.subtasks.length} total):
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {rec.subtasks.map((st, sIdx) => (
+                                <span
+                                  key={sIdx}
+                                  className={`text-[11px] px-2 py-0.5 rounded-md border flex items-center gap-1.5 transition-colors ${
+                                    st.checked
+                                      ? 'bg-slate-50 dark:bg-slate-900/60 text-slate-400 dark:text-slate-500 border-slate-200/50 dark:border-slate-800 line-through'
+                                      : 'bg-teal-50/70 dark:bg-teal-950/40 text-slate-700 dark:text-slate-200 border-teal-200/60 dark:border-teal-800/60 font-medium'
+                                  }`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${st.checked ? 'bg-slate-300 dark:bg-slate-600' : 'bg-teal-500'}`} />
+                                  <span className="truncate max-w-[240px]">{st.text}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         )}
 
                         <div className="flex items-center gap-3 sm:gap-4 mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">

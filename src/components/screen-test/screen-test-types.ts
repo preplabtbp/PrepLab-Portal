@@ -13,6 +13,17 @@ export interface ScreenTestRecord {
   isPass: boolean;         // passedPercentage >= minPassed
 }
 
+export interface ScreenTestDataset {
+  id: string;              // unique key, e.g. 'hpl', 'rkef', 'msp', 'custom-123'
+  name: string;            // Display title, e.g. 'Sample Smelter HPL', 'Sample Smelter RKEF'
+  code: string;            // Short badge, e.g. 'HPL', 'RKEF', 'MSP'
+  specLimit: number;       // Minimum pass threshold, e.g. 95.00
+  meshSize?: string;       // e.g. '200 mesh (74 µm)'
+  description?: string;    // e.g. 'Pengujian ayakan proses pelindian bertekanan tinggi'
+  records: ScreenTestRecord[];
+  isDefault?: boolean;
+}
+
 export interface ScreenTestStats {
   totalCount: number;
   passCount: number;
@@ -50,6 +61,7 @@ export interface ScreenTestFilter {
   searchQuery: string;
   status: 'all' | 'pass' | 'fail';
   operator: string;
+  period: string; // 'all' | 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'month_YYYY-MM' | 'week_YYYY-WXX' | 'custom'
   startDate: string;
   endDate: string;
 }

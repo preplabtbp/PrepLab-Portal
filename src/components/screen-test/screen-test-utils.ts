@@ -1,5 +1,11 @@
 import * as XLSX from 'xlsx';
-import { ScreenTestRecord, ScreenTestStats, OperatorStat, HistogramBin } from './screen-test-types';
+import { 
+  ScreenTestRecord, 
+  ScreenTestStats, 
+  OperatorStat, 
+  HistogramBin, 
+  ScreenTestDataset 
+} from './screen-test-types';
 
 /**
  * Clean numeric string from commas, percent signs, and currency/spaces
@@ -13,26 +19,69 @@ export function cleanNumeric(val: any, fallback = 0): number {
 }
 
 /**
- * Normalize Date string to DD/MM/YYYY or readable date
+ * Parse Date string to standard JavaScript Date
+ * Tolerates DD/MM/YYYY, D/M/YYYY, YYYY-MM-DD, etc.
  */
-export function normalizeDate(val: any): string {
-  if (!val) return new Date().toLocaleDateString('id-ID');
-  if (val instanceof Date) {
-    const day = String(val.getDate()).padStart(2, '0');
-    const month = String(val.getMonth() + 1).padStart(2, '0');
-    const year = val.getFullYear();
-    return `${day}/${month}/${year}`;
-  }
+export function parseDateString(val: any): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
   const s = String(val).trim();
-  // If Excel serial number date
+
+  // Excel serial number date
   if (/^\d{5}$/.test(s)) {
     const excelEpoch = new Date(1899, 11, 30);
-    const parsed = new Date(excelEpoch.getTime() + parseInt(s, 10) * 86400000);
-    const day = String(parsed.getDate()).padStart(2, '0');
-    const month = String(parsed.getMonth() + 1).padStart(2, '0');
-    return `${day}/${month}/${parsed.getFullYear()}`;
+    return new Date(excelEpoch.getTime() + parseInt(s, 10) * 86400000);
   }
-  return s;
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    const d = new Date(year, month, day);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // YYYY-MM-DD
+  const ymdMatch = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = parseInt(ymdMatch[3], 10);
+    const d = new Date(year, month, day);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  const parsed = new Date(s);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Standard ISO 8601 week number calculator
+ */
+export function getISOWeekNumber(d: Date): number {
+  const target = new Date(d.valueOf());
+  const dayNr = (d.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+}
+
+/**
+ * Normalize Date string to DD/MM/YYYY format
+ */
+export function normalizeDate(val: any): string {
+  const parsed = parseDateString(val);
+  if (!parsed) return new Date().toLocaleDateString('id-ID');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const year = parsed.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 /**
@@ -98,7 +147,6 @@ export function parseExcelClipboardData(rawText: string, defaultMinPassed = 95.0
 
   if (hasHeaderRow) {
     startIndex = 1;
-    // Map headers dynamically
     headerTokens.forEach((token, idx) => {
       if (token === 'no' || token === 'no.' || token === 'nomor') colIndex.no = idx;
       else if (token.includes('date') || token.includes('tgl') || token.includes('tanggal')) colIndex.date = idx;
@@ -111,7 +159,6 @@ export function parseExcelClipboardData(rawText: string, defaultMinPassed = 95.0
       else if (token.includes('by') || token.includes('oleh') || token.includes('analis') || token.includes('operator')) colIndex.operator = idx;
     });
 
-    // Also check if second row is subheader (e.g. "A | B | C = (A-B) | % | Min | By")
     if (lines.length > 1) {
       const secondTokens = lines[1].split(delimiter).map(t => t.trim().toLowerCase());
       const isSubheader = secondTokens.some(t => t === 'a' || t === 'b' || t.includes('a - b') || t.includes('c =') || t.includes('c=(a-b)'));
@@ -121,8 +168,7 @@ export function parseExcelClipboardData(rawText: string, defaultMinPassed = 95.0
     }
   }
 
-  // If columns not fully found by name, fallback to standard positional matching:
-  // [0: No, 1: Date, 2: ID Sample, 3: Orig Wt, 4: Unpassed, 5: Passed, 6: Passed %, 7: Min Passed, 8: By]
+  // Fallback positional matching
   if (colIndex.sampleId === -1 && colIndex.unpassedWeight === -1) {
     colIndex = {
       no: 0,
@@ -144,7 +190,6 @@ export function parseExcelClipboardData(rawText: string, defaultMinPassed = 95.0
     const cells = rawLine.split(delimiter).map(c => c.trim().replace(/^["']|["']$/g, ''));
     if (cells.length === 0 || (cells.length === 1 && !cells[0])) continue;
 
-    // Extract values based on mapped column or positional fallback
     const rawNo = colIndex.no >= 0 && colIndex.no < cells.length ? cells[colIndex.no] : (i + 1).toString();
     const rawDate = colIndex.date >= 0 && colIndex.date < cells.length ? cells[colIndex.date] : '';
     const rawSampleId = colIndex.sampleId >= 0 && colIndex.sampleId < cells.length ? cells[colIndex.sampleId] : '';
@@ -155,27 +200,22 @@ export function parseExcelClipboardData(rawText: string, defaultMinPassed = 95.0
     const rawMin = colIndex.minPassed >= 0 && colIndex.minPassed < cells.length ? cells[colIndex.minPassed] : '';
     const rawBy = colIndex.operator >= 0 && colIndex.operator < cells.length ? cells[colIndex.operator] : '';
 
-    // Ignore empty lines
     if (!rawSampleId && !rawUnpassed && !rawDate) continue;
 
     const noNum = parseInt(rawNo, 10) || (records.length + 1);
     const dateStr = normalizeDate(rawDate);
     const sampleId = rawSampleId || `SMP-${String(records.length + 1).padStart(3, '0')}`;
     
-    // Original weight [A] default 20.00 gr
     let origWeight = cleanNumeric(rawOrig, 20.00);
     if (origWeight <= 0) origWeight = 20.00;
 
-    // Unpassed [B]
     const unpassedWeight = cleanNumeric(rawUnpassed, 0);
 
-    // Passed [C] = A - B
     let passedWeight = cleanNumeric(rawPassed, 0);
     if (passedWeight === 0 && unpassedWeight >= 0) {
       passedWeight = Math.max(0, +(origWeight - unpassedWeight).toFixed(3));
     }
 
-    // Passed (%) = (C / A) * 100
     let passedPct = cleanNumeric(rawPct, 0);
     if (passedPct === 0 && origWeight > 0) {
       passedPct = +((passedWeight / origWeight) * 100).toFixed(2);
@@ -183,7 +223,6 @@ export function parseExcelClipboardData(rawText: string, defaultMinPassed = 95.0
       passedPct = +passedPct.toFixed(2);
     }
 
-    // Min Passed standard
     let minPassed = cleanNumeric(rawMin, defaultMinPassed);
     if (minPassed <= 0) minPassed = defaultMinPassed;
 
@@ -213,6 +252,127 @@ export function parseExcelClipboardData(rawText: string, defaultMinPassed = 95.0
 }
 
 /**
+ * Filter Records by Week / Month / Date Period
+ */
+export function filterRecordsByPeriod(
+  records: ScreenTestRecord[],
+  period: string,
+  customStart?: string,
+  customEnd?: string
+): ScreenTestRecord[] {
+  if (!period || period === 'all') return records;
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentIsoWeek = getISOWeekNumber(now);
+
+  return records.filter((r) => {
+    const d = parseDateString(r.date);
+    if (!d) return true; // Keep if date cannot be parsed
+
+    const rYear = d.getFullYear();
+    const rMonth = d.getMonth();
+    const rIsoWeek = getISOWeekNumber(d);
+
+    if (period === 'this_week') {
+      return rYear === currentYear && rIsoWeek === currentIsoWeek;
+    }
+
+    if (period === 'last_week') {
+      const prevWeek = currentIsoWeek === 1 ? 52 : currentIsoWeek - 1;
+      const targetYear = currentIsoWeek === 1 ? currentYear - 1 : currentYear;
+      return rYear === targetYear && rIsoWeek === prevWeek;
+    }
+
+    if (period === 'this_month') {
+      return rYear === currentYear && rMonth === currentMonth;
+    }
+
+    if (period === 'last_month') {
+      const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const targetYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      return rYear === targetYear && rMonth === prevMonth;
+    }
+
+    // Specific Month, e.g. "month_2026-10"
+    if (period.startsWith('month_')) {
+      const monthPart = period.replace('month_', ''); // "2026-10"
+      const [y, m] = monthPart.split('-').map(Number);
+      return rYear === y && rMonth === (m - 1);
+    }
+
+    // Specific ISO Week, e.g. "week_2026-W41"
+    if (period.startsWith('week_')) {
+      const weekPart = period.replace('week_', ''); // "2026-W41"
+      const [yStr, wStr] = weekPart.split('-W');
+      const targetY = parseInt(yStr, 10);
+      const targetW = parseInt(wStr, 10);
+      return rYear === targetY && rIsoWeek === targetW;
+    }
+
+    // Custom Date Range
+    if (period === 'custom' && (customStart || customEnd)) {
+      const t = d.getTime();
+      if (customStart) {
+        const s = parseDateString(customStart);
+        if (s && t < s.getTime()) return false;
+      }
+      if (customEnd) {
+        const e = parseDateString(customEnd);
+        if (e && t > (e.getTime() + 86400000)) return false;
+      }
+      return true;
+    }
+
+    return true;
+  });
+}
+
+/**
+ * Extract available distinct months and weeks from dataset
+ */
+export function getDistinctPeriodOptions(records: ScreenTestRecord[]): {
+  months: Array<{ value: string; label: string }>;
+  weeks: Array<{ value: string; label: string }>;
+} {
+  const monthMap = new Map<string, string>();
+  const weekMap = new Map<string, string>();
+
+  const monthNames = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+
+  records.forEach((r) => {
+    const d = parseDateString(r.date);
+    if (!d) return;
+
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const w = getISOWeekNumber(d);
+
+    const mKey = `month_${y}-${String(m + 1).padStart(2, '0')}`;
+    const mLabel = `${monthNames[m]} ${y}`;
+    monthMap.set(mKey, mLabel);
+
+    const wKey = `week_${y}-W${String(w).padStart(2, '0')}`;
+    const wLabel = `Minggu ${String(w).padStart(2, '0')} (${monthNames[m]} ${y})`;
+    weekMap.set(wKey, wLabel);
+  });
+
+  const months = Array.from(monthMap.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => b.value.localeCompare(a.value));
+
+  const weeks = Array.from(weekMap.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => b.value.localeCompare(a.value));
+
+  return { months, weeks };
+}
+
+/**
  * Parse uploaded .xlsx / .xls / .csv file using SheetJS (xlsx)
  */
 export async function parseUploadedExcelFile(file: File, defaultMinPassed = 95.00): Promise<{
@@ -229,7 +389,6 @@ export async function parseUploadedExcelFile(file: File, defaultMinPassed = 95.0
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         
-        // Convert to TSV string then reuse clipboard parser for consistent logic
         const tsvText = XLSX.utils.sheet_to_csv(worksheet, { FS: '\t' });
         const result = parseExcelClipboardData(tsvText, defaultMinPassed);
         resolve({
@@ -286,15 +445,12 @@ export function calculateScreenTestStats(records: ScreenTestRecord[], specLimit 
   const failRate = +((failCount / totalCount) * 100).toFixed(1);
   const meanPassed = +(sum / totalCount).toFixed(2);
 
-  // Standard deviation
   let varianceSum = 0;
   records.forEach((r) => {
     varianceSum += Math.pow(r.passedPercentage - meanPassed, 2);
   });
   const stdDev = totalCount > 1 ? +(Math.sqrt(varianceSum / (totalCount - 1))).toFixed(3) : 0;
 
-  // Process Capability Index Cpk for lower specification limit (LSL)
-  // Cpk = (Mean - LSL) / (3 * stdDev)
   let cpk = 0;
   if (stdDev > 0) {
     cpk = +((meanPassed - specLimit) / (3 * stdDev)).toFixed(2);
@@ -346,7 +502,6 @@ export function calculateOperatorStats(records: ScreenTestRecord[]): OperatorSta
     });
   });
 
-  // Sort by highest sample volume
   return list.sort((a, b) => b.total - a.total);
 }
 
@@ -356,7 +511,6 @@ export function calculateOperatorStats(records: ScreenTestRecord[]): OperatorSta
 export function calculateHistogram(records: ScreenTestRecord[], specLimit = 95.00): HistogramBin[] {
   if (records.length === 0) return [];
 
-  // Fixed buckets standard for metallurgical screen test
   const bins: HistogramBin[] = [
     { rangeLabel: '< 85.0%', min: 0, max: 85.0, count: 0, isFailBin: true },
     { rangeLabel: '85.0 - 87.9%', min: 85.0, max: 88.0, count: 0, isFailBin: true },
@@ -473,6 +627,78 @@ export function getSampleMockData(): ScreenTestRecord[] {
 }
 
 /**
+ * Standard Default Multi-Datasets (HPL, RKEF, MSP)
+ */
+export function getDefaultDatasets(): ScreenTestDataset[] {
+  const hplData = getSampleMockData();
+
+  const rkefData: ScreenTestRecord[] = [
+    { id: 'rkef-1', no: 101, date: '05/10/2026', sampleId: 'RKEF20261005-K1', originalWeight: 20.00, unpassedWeight: 1.40, passedWeight: 18.60, passedPercentage: 93.00, minPassed: 90.00, operator: 'FAJAR', isPass: true },
+    { id: 'rkef-2', no: 102, date: '06/10/2026', sampleId: 'RKEF20261006-K2', originalWeight: 20.00, unpassedWeight: 1.10, passedWeight: 18.90, passedPercentage: 94.50, minPassed: 90.00, operator: 'FAJAR', isPass: true },
+    { id: 'rkef-3', no: 103, date: '08/10/2026', sampleId: 'RKEF20261008-C1', originalWeight: 20.00, unpassedWeight: 2.25, passedWeight: 17.75, passedPercentage: 88.75, minPassed: 90.00, operator: 'ANDI', isPass: false },
+    { id: 'rkef-4', no: 104, date: '09/10/2026', sampleId: 'RKEF20261009-C2', originalWeight: 20.00, unpassedWeight: 1.60, passedWeight: 18.40, passedPercentage: 92.00, minPassed: 90.00, operator: 'ANDI', isPass: true },
+    { id: 'rkef-5', no: 105, date: '11/10/2026', sampleId: 'RKEF20261011-F1', originalWeight: 20.00, unpassedWeight: 0.95, passedWeight: 19.05, passedPercentage: 95.25, minPassed: 90.00, operator: 'FAJAR', isPass: true },
+    { id: 'rkef-6', no: 106, date: '12/10/2026', sampleId: 'RKEF20261012-F2', originalWeight: 20.00, unpassedWeight: 1.80, passedWeight: 18.20, passedPercentage: 91.00, minPassed: 90.00, operator: 'BAYU', isPass: true },
+    { id: 'rkef-7', no: 107, date: '14/10/2026', sampleId: 'RKEF20261014-K1', originalWeight: 20.00, unpassedWeight: 2.40, passedWeight: 17.60, passedPercentage: 88.00, minPassed: 90.00, operator: 'BAYU', isPass: false },
+    { id: 'rkef-8', no: 108, date: '15/10/2026', sampleId: 'RKEF20261015-K2', originalWeight: 20.00, unpassedWeight: 1.35, passedWeight: 18.65, passedPercentage: 93.25, minPassed: 90.00, operator: 'ANDI', isPass: true },
+    { id: 'rkef-9', no: 109, date: '17/10/2026', sampleId: 'RKEF20261017-C1', originalWeight: 20.00, unpassedWeight: 1.20, passedWeight: 18.80, passedPercentage: 94.00, minPassed: 90.00, operator: 'FAJAR', isPass: true },
+    { id: 'rkef-10', no: 110, date: '18/10/2026', sampleId: 'RKEF20261018-C2', originalWeight: 20.00, unpassedWeight: 1.55, passedWeight: 18.45, passedPercentage: 92.25, minPassed: 90.00, operator: 'BAYU', isPass: true },
+    { id: 'rkef-11', no: 111, date: '20/10/2026', sampleId: 'RKEF20261020-F1', originalWeight: 20.00, unpassedWeight: 1.05, passedWeight: 18.95, passedPercentage: 94.75, minPassed: 90.00, operator: 'ANDI', isPass: true },
+    { id: 'rkef-12', no: 112, date: '22/10/2026', sampleId: 'RKEF20261022-F2', originalWeight: 20.00, unpassedWeight: 2.10, passedWeight: 17.90, passedPercentage: 89.50, minPassed: 90.00, operator: 'FAJAR', isPass: false },
+    { id: 'rkef-13', no: 113, date: '24/10/2026', sampleId: 'RKEF20261024-K1', originalWeight: 20.00, unpassedWeight: 1.30, passedWeight: 18.70, passedPercentage: 93.50, minPassed: 90.00, operator: 'BAYU', isPass: true },
+    { id: 'rkef-14', no: 114, date: '25/10/2026', sampleId: 'RKEF20261025-K2', originalWeight: 20.00, unpassedWeight: 0.85, passedWeight: 19.15, passedPercentage: 95.75, minPassed: 90.00, operator: 'ANDI', isPass: true },
+  ];
+
+  const mspData: ScreenTestRecord[] = [
+    { id: 'msp-1', no: 201, date: '04/10/2026', sampleId: 'MSP20261004-P1', originalWeight: 20.00, unpassedWeight: 0.80, passedWeight: 19.20, passedPercentage: 96.00, minPassed: 92.00, operator: 'HADI', isPass: true },
+    { id: 'msp-2', no: 202, date: '06/10/2026', sampleId: 'MSP20261006-P2', originalWeight: 20.00, unpassedWeight: 1.90, passedWeight: 18.10, passedPercentage: 90.50, minPassed: 92.00, operator: 'HADI', isPass: false },
+    { id: 'msp-3', no: 203, date: '07/10/2026', sampleId: 'MSP20261007-D1', originalWeight: 20.00, unpassedWeight: 0.70, passedWeight: 19.30, passedPercentage: 96.50, minPassed: 92.00, operator: 'RIZKI', isPass: true },
+    { id: 'msp-4', no: 204, date: '09/10/2026', sampleId: 'MSP20261009-D2', originalWeight: 20.00, unpassedWeight: 1.20, passedWeight: 18.80, passedPercentage: 94.00, minPassed: 92.00, operator: 'RIZKI', isPass: true },
+    { id: 'msp-5', no: 205, date: '11/10/2026', sampleId: 'MSP20261011-P1', originalWeight: 20.00, unpassedWeight: 0.95, passedWeight: 19.05, passedPercentage: 95.25, minPassed: 92.00, operator: 'DEDI', isPass: true },
+    { id: 'msp-6', no: 206, date: '13/10/2026', sampleId: 'MSP20261013-P2', originalWeight: 20.00, unpassedWeight: 1.75, passedWeight: 18.25, passedPercentage: 91.25, minPassed: 92.00, operator: 'DEDI', isPass: false },
+    { id: 'msp-7', no: 207, date: '15/10/2026', sampleId: 'MSP20261015-D1', originalWeight: 20.00, unpassedWeight: 0.65, passedWeight: 19.35, passedPercentage: 96.75, minPassed: 92.00, operator: 'HADI', isPass: true },
+    { id: 'msp-8', no: 208, date: '17/10/2026', sampleId: 'MSP20261017-D2', originalWeight: 20.00, unpassedWeight: 1.10, passedWeight: 18.90, passedPercentage: 94.50, minPassed: 92.00, operator: 'RIZKI', isPass: true },
+    { id: 'msp-9', no: 209, date: '19/10/2026', sampleId: 'MSP20261019-P1', originalWeight: 20.00, unpassedWeight: 0.85, passedWeight: 19.15, passedPercentage: 95.75, minPassed: 92.00, operator: 'HADI', isPass: true },
+    { id: 'msp-10', no: 210, date: '21/10/2026', sampleId: 'MSP20261021-P2', originalWeight: 20.00, unpassedWeight: 1.80, passedWeight: 18.20, passedPercentage: 91.00, minPassed: 92.00, operator: 'DEDI', isPass: false },
+    { id: 'msp-11', no: 211, date: '23/10/2026', sampleId: 'MSP20261023-D1', originalWeight: 20.00, unpassedWeight: 0.75, passedWeight: 19.25, passedPercentage: 96.25, minPassed: 92.00, operator: 'RIZKI', isPass: true },
+    { id: 'msp-12', no: 212, date: '24/10/2026', sampleId: 'MSP20261024-D2', originalWeight: 20.00, unpassedWeight: 1.00, passedWeight: 19.00, passedPercentage: 95.00, minPassed: 92.00, operator: 'HADI', isPass: true },
+  ];
+
+  return [
+    {
+      id: 'hpl',
+      name: 'Sample Smelter HPL',
+      code: 'HPL',
+      specLimit: 95.00,
+      meshSize: '200 mesh (74 µm)',
+      description: 'Pengujian ayakan proses pelindian bijih nikel bertekanan tinggi (HPAL)',
+      records: hplData,
+      isDefault: true,
+    },
+    {
+      id: 'rkef',
+      name: 'Sample Smelter RKEF',
+      code: 'RKEF',
+      specLimit: 90.00,
+      meshSize: '200 mesh (74 µm)',
+      description: 'Pengujian ayakan tanur putar & tungku listrik peleburan nikel pirometalurgi',
+      records: rkefData,
+      isDefault: true,
+    },
+    {
+      id: 'msp',
+      name: 'Sample Smelter MSP',
+      code: 'MSP',
+      specLimit: 92.00,
+      meshSize: '200 mesh (74 µm)',
+      description: 'Pengujian ayakan produk presipitat sulfida nikel-kobalt',
+      records: mspData,
+      isDefault: true,
+    },
+  ];
+}
+
+/**
  * Generate TSV Template for Copying to Clipboard
  */
 export function generateTemplateTsv(): string {
@@ -491,9 +717,9 @@ export function generateTemplateTsv(): string {
 /**
  * Export Records to formatted Excel file (.xlsx)
  */
-export function exportToExcel(records: ScreenTestRecord[], fileName = 'Screen_Test_Sample_Smelter_HPL.xlsx') {
+export function exportToExcel(records: ScreenTestRecord[], fileName = 'Screen_Test_Sample_Smelter.xlsx') {
   const data = [
-    ['Screen Test Sample Smelter HPL'],
+    ['Screen Test Sample Smelter Report'],
     [],
     ['No', 'Date', 'ID Sample', 'Original Weight (gr)', 'Unpassed (gr)', 'Passed (gr)', 'Passed (%)', 'Min Passed', 'By', 'Status'],
     ...records.map(r => [
@@ -512,7 +738,6 @@ export function exportToExcel(records: ScreenTestRecord[], fileName = 'Screen_Te
 
   const ws = XLSX.utils.aoa_to_sheet(data);
 
-  // Column widths
   ws['!cols'] = [
     { wch: 8 },  // No
     { wch: 14 }, // Date
@@ -527,6 +752,6 @@ export function exportToExcel(records: ScreenTestRecord[], fileName = 'Screen_Te
   ];
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Screen Test HPL');
+  XLSX.utils.book_append_sheet(wb, ws, 'Screen Test Data');
   XLSX.writeFile(wb, fileName);
 }

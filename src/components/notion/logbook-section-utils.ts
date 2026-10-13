@@ -58,6 +58,19 @@ export function getYesterdayDDMMYYYY(): string {
   return `${d}-${m}-${y}`;
 }
 
+/**
+ * Strips all internal HTML comments (e.g. <!--task-id:...-->, <!--pin-->, <!pin>, etc.)
+ * ensuring clean, human-readable text on the frontend without leaking code.
+ */
+export function cleanFrontEndText(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+    .replace(/<!--.*$/g, '')
+    .trim();
+}
+
 export interface TaskRecommendation {
   id: string;
   title: string;
@@ -71,6 +84,14 @@ export interface TaskRecommendation {
   originRowIndex: number;
   rawRow: TableRowData;
   isAlreadyPlanned?: boolean;
+  isPinned?: boolean;
+  subtasks?: {
+    id: string;
+    text: string;
+    checked: boolean;
+  }[];
+  activeSubtaskCount?: number;
+  closedSubtaskCount?: number;
 }
 
 export const KNOWN_SECTIONS = [
@@ -270,16 +291,16 @@ function parseRowLine(line: string, headers: string[]): TableRowData | null {
   const cellValues = parts.slice(1, parts.length - 1);
   if (cellValues.length === 0) return null;
 
-  const rowObj: TableRowData = { number: '' };
-  headers.forEach((h, idx) => {
-    rowObj[h] = cellValues[idx] || '';
-  });
-
   const rowStr = cellValues.join(' ');
   const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
   const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
   const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
-  const isPin = rowStr.includes('<!--pin-->') || rowStr.includes('<!--pinned-->');
+  const isPin = rowStr.includes('<!--pin') || rowStr.includes('<!pin') || rowStr.includes('<!--pinned');
+
+  const rowObj: TableRowData = { number: '' };
+  headers.forEach((h, idx) => {
+    rowObj[h] = cleanFrontEndText(cellValues[idx] || '');
+  });
 
   if (taskMatch) rowObj.id = taskMatch[1].trim();
   if (parentMatch) {
@@ -609,8 +630,15 @@ export function getSectionActiveRecommendations(
       // Must be active (not closed or completed in origin)
       if (!isRowActive(row)) return;
 
+      // 🛑 CRITICAL ENTERPRISE FIX: Skip subtask rows so they NEVER leak as top-level task recommendations!
+      if (isSubItemRow(row)) return;
+
       const titleKey = Object.keys(row).find(k => k.toLowerCase().includes('kegiatan') || k.toLowerCase() === 'title');
-      const title = titleKey ? String(row[titleKey] || '').trim() : '';
+      const rawTitle = titleKey ? String(row[titleKey] || '').trim() : '';
+      if (!rawTitle) return;
+
+      // Clean title from any internal HTML comments
+      const title = cleanFrontEndText(rawTitle);
       if (!title) return;
 
       // Check if already completed today
@@ -627,6 +655,71 @@ export function getSectionActiveRecommendations(
 
       const isPlanned = plannedSet.has(title.toLowerCase());
       const recId = `rec_${post.id}_${idx}_${title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+
+      // Check if pinned in Labnote
+      const isPinned = row.isPinned === 'true' || 
+        (row as any)._pinned === 'true' || 
+        JSON.stringify(row).includes('<!--pin') || 
+        JSON.stringify(row).includes('<!pin');
+
+      // Extract subtasks belonging to this parent task
+      const subtasks: { id: string; text: string; checked: boolean }[] = [];
+      const seenSubTexts = new Set<string>();
+
+      // 1. From row.Keterangan (markdown checklists: - [ ] or - [x])
+      const ketStr = String(row.Keterangan || row.keterangan || row.uraian || '');
+      const checklistMatches = ketStr.matchAll(/- \[([ xX])\]\s*([^\n\r]+)/g);
+      for (const match of checklistMatches) {
+        const isChecked = match[1].toLowerCase() === 'x';
+        const itemText = cleanFrontEndText(match[2].trim());
+        if (itemText && !seenSubTexts.has(itemText.toLowerCase())) {
+          seenSubTexts.add(itemText.toLowerCase());
+          subtasks.push({
+            id: `sub_${subtasks.length + 1}`,
+            text: itemText,
+            checked: isChecked,
+          });
+        }
+      }
+
+      // 2. From subsequent sub-item rows belonging to this parent row in source table
+      for (let j = idx + 1; j < parsed.rows.length; j++) {
+        const nextR = parsed.rows[j];
+        if (!isSubItemRow(nextR)) break; // Stop when hitting next parent task
+        const nextTitle = String(nextR['Jenis kegiatan'] || nextR['Jenis Kegiatan'] || nextR['Name'] || '').trim();
+        const cleanSubTitle = cleanFrontEndText(nextTitle.replace(/^[↳↪]\s*/, '').replace(/\[[ xX]\]\s*/, '').trim());
+        const isSubDone = nextR.Status === 'Closed' || nextR.Status === 'Selesai' || nextR.isCompleted === 'true' || nextTitle.includes('[x]');
+
+        if (cleanSubTitle && !seenSubTexts.has(cleanSubTitle.toLowerCase())) {
+          seenSubTexts.add(cleanSubTitle.toLowerCase());
+          subtasks.push({
+            id: `sub_${subtasks.length + 1}`,
+            text: cleanSubTitle,
+            checked: isSubDone,
+          });
+        }
+      }
+
+      const activeSubtasks = subtasks.filter(s => !s.checked);
+      const closedSubtasks = subtasks.filter(s => s.checked);
+
+      // Clean description: strip any checklist lines (which are now extracted into subtasks) and HTML comments
+      const nonChecklistLines = ketStr
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(l => {
+          if (!l) return false;
+          // Filter out markdown/bullet checklist lines (- [ ], • [x], etc.)
+          if (/^[-*•]?\s*\[[ xX]\]/i.test(l)) return false;
+          // Filter out legacy done/open tags
+          if (/\*\*\(?(Done|Closed|Selesai|Open|OP)\)?\*\*/i.test(l)) return false;
+          return true;
+        });
+
+      let cleanDescription = cleanFrontEndText(nonChecklistLines.join('\n'));
+      if (cleanDescription === '-' || cleanDescription === '•' || cleanDescription === '---') {
+        cleanDescription = '';
+      }
 
       // Determine cadence & routine / non-routine from row or post
       let rowCadence = defaultCadence;
@@ -653,7 +746,7 @@ export function getSectionActiveRecommendations(
       recommendations.push({
         id: recId,
         title,
-        description: String(row.Keterangan || row.keterangan || row.uraian || ''),
+        description: cleanDescription,
         pic: String(row.PIC || row.pic || ''),
         priority: String(row.Priority || row.priority || 'Normal'),
         type: isRowNonRoutine ? 'Non-Routine' : 'Routine',
@@ -662,7 +755,11 @@ export function getSectionActiveRecommendations(
         originPostTitle: postTitle,
         originRowIndex: idx,
         rawRow: row,
-        isAlreadyPlanned: isPlanned
+        isAlreadyPlanned: isPlanned,
+        isPinned,
+        subtasks,
+        activeSubtaskCount: activeSubtasks.length,
+        closedSubtaskCount: closedSubtasks.length,
       });
     });
   });
@@ -921,6 +1018,23 @@ export function getYesterdayDateWithData(allRows: TableRowData[], todayStr: stri
   return sortedDates[0] || getYesterdayDDMMYYYY();
 }
 
+/**
+ * Returns a list of all distinct dates (DD-MM-YYYY) present in the table, sorted descending.
+ */
+export function getAvailableLogbookDates(allRows: TableRowData[]): string[] {
+  const dates = new Set<string>();
+  allRows.forEach(r => {
+    const d = getRowDateDDMMYYYY(r);
+    if (d) dates.add(d);
+  });
+  const parse = (s: string) => {
+    const parts = s.split('-').map(Number);
+    if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+    return 0;
+  };
+  return Array.from(dates).sort((a, b) => parse(b) - parse(a));
+}
+
 export interface ChangelogItem {
   id: string;
   title: string;
@@ -957,7 +1071,6 @@ export function buildLogbookChangelogData(
   // Filter rows belonging to target date
   const dateRows = allRows.filter(r => {
     const rowDate = getRowDateDDMMYYYY(r);
-    // If target date is found, match it. If row date is empty, fallback to today
     return rowDate === dateStr;
   });
 
@@ -966,8 +1079,7 @@ export function buildLogbookChangelogData(
 
   // Helper to check if row is a subtask
   const isSubtaskRow = (r: TableRowData): boolean => {
-    const num = String(r.number || '').trim();
-    return num.includes('.') || Boolean(r._parentRowIndex || r.parentNumber);
+    return isSubItemRow(r);
   };
 
   // Group subtasks with parents
@@ -975,7 +1087,9 @@ export function buildLogbookChangelogData(
     if (isSubtaskRow(row)) return;
 
     const titleKey = Object.keys(row).find(k => k.toLowerCase().includes('kegiatan') || k.toLowerCase() === 'title');
-    const title = titleKey ? String(row[titleKey] || '').trim() : '';
+    const rawTitle = titleKey ? String(row[titleKey] || '').trim() : '';
+    if (!rawTitle) return;
+    const title = cleanFrontEndText(rawTitle);
     if (!title) return;
 
     const pic = String(row.PIC || row.pic || '').trim();
@@ -983,22 +1097,42 @@ export function buildLogbookChangelogData(
     const status = String(row.Status || row.status || 'Open').trim();
     const statusLower = status.toLowerCase();
 
-    // Parse subtasks from Keterangan checklist or adjacent rows
+    // Parse subtasks from Keterangan checklist or relational child rows
     const rawKeterangan = String(row.Keterangan || row.keterangan || '').trim();
     const subtasks: Array<{ title: string; completed: boolean }> = [];
     const notesLines: string[] = [];
 
-    // Split markdown lines in Keterangan
+    // 1. Split markdown lines in Keterangan
     rawKeterangan.split('\n').forEach(line => {
       const trimmed = line.trim();
       const checklistMatch = trimmed.match(/^-\s*\[([ xX])\]\s*(.*)$/);
       if (checklistMatch) {
         subtasks.push({
           completed: checklistMatch[1].toLowerCase() === 'x',
-          title: checklistMatch[2].trim()
+          title: cleanFrontEndText(checklistMatch[2].trim())
         });
       } else if (trimmed) {
         notesLines.push(trimmed);
+      }
+    });
+
+    // 2. Collect relational subtask child rows
+    const parentCode = row.id || row.taskCode || row['Task ID'] || row['ID Task'] || row.number;
+    dateRows.forEach(child => {
+      if (isSubItemRow(child)) {
+        const matchesParent = (parentCode && (child.parentId === parentCode || child.parentRowId === parentCode)) ||
+          child._parentRowIndex === String(idx);
+        if (matchesParent) {
+          const childTitle = String(child['Jenis kegiatan'] || child['Jenis Kegiatan'] || child['Name'] || '').trim();
+          const cleanChildTitle = cleanFrontEndText(childTitle.replace(/^[↳↪]\s*/, '').replace(/\[[ xX]\]\s*/, '').trim());
+          const isDone = child.Status === 'Closed' || child.Status === 'Selesai' || child.isCompleted === 'true' || childTitle.includes('[x]');
+          if (cleanChildTitle && !subtasks.some(s => s.title.toLowerCase() === cleanChildTitle.toLowerCase())) {
+            subtasks.push({
+              title: cleanChildTitle,
+              completed: isDone
+            });
+          }
+        }
       }
     });
 
@@ -1019,7 +1153,7 @@ export function buildLogbookChangelogData(
       progressPercent = 50;
     }
 
-    const cleanNotes = notesLines.join('\n');
+    const cleanNotes = cleanFrontEndText(notesLines.join('\n'));
 
     mainItems.push({
       id: String(row.id || idx),

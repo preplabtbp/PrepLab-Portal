@@ -1080,11 +1080,16 @@ export default function App() {
     );
   }
 
+  // Check if opened in Embed / Presentation mode (e.g. PowerPoint Web Viewer)
+  const isEmbedMode = typeof window !== 'undefined' && (
+    new URLSearchParams(window.location.search).get('embed') === 'true'
+  );
+
   // TIER 2: Inspektor Login (Kiosk mode) & Google Login
-  if (isGoogleLoading) {
+  if (isGoogleLoading && !isEmbedMode) {
     return <div className="min-h-screen bg-[#F4F7F6] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-700"></div></div>;
   }
-  if (!inspectorNik && !inspectorName) {
+  if (!inspectorNik && !inspectorName && !isEmbedMode) {
     return (
       <div className="min-h-screen w-full bg-[#080c14] text-slate-100 flex flex-col items-center justify-center p-4 relative overflow-hidden selection:bg-teal-500 selection:text-white font-sans">
         
@@ -1466,8 +1471,8 @@ export default function App() {
         />
       )}
 
-      {/* 1. Left Sidebar: Full-height past the header, unified navigation rail (Desktop only, strictly hidden on mobile) */}
-      {!isCrewRole && (
+      {/* 1. Left Sidebar: Full-height past the header, unified navigation rail (Desktop only, strictly hidden on mobile and in embed mode) */}
+      {!isCrewRole && !isEmbedMode && (
         <aside 
           onMouseEnter={() => {
             if (isAutoHide) setIsSidebarPeeked(true);
@@ -1743,7 +1748,7 @@ export default function App() {
       {/* Header */}
       <header 
         className={`px-4 md:px-6 lg:px-8 py-3 sticky top-0 z-40 backdrop-blur-md border-b w-full flex justify-center transition-all duration-300 ${
-          (isBulletin && bulletinFocusMode) || isEmployeeDatabase ? 'hidden' : ''
+          (isBulletin && bulletinFocusMode) || isEmployeeDatabase || isEmbedMode ? 'hidden' : ''
         }`}
         style={{
           backgroundColor: 'var(--header-bg, var(--card-bg, #FFFFFF))',
@@ -1916,7 +1921,7 @@ export default function App() {
   <Route path="/kunjungan-klinik" element={<Navigate to="/clinic" replace />} />
   <Route path="/xrf-calibration" element={<XrfCalibrationScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onBack={() => handleNav('home')} />} />
   <Route path="/kalibrasi-xrf" element={<Navigate to="/xrf-calibration" replace />} />
-  <Route path="/screen-test-smelter" element={<ScreenTestSmelterScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
+  <Route path="/screen-test-smelter" element={<ScreenTestSmelterScreen inspectorName={inspectorName || 'Tamu Presentasi'} inspectorNik={inspectorNik || 'guest'} onBack={() => handleNav('home')} />} />
   <Route path="/screen-test" element={<Navigate to="/screen-test-smelter" replace />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
