@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
-  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight,
+  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { Input, Select, Button } from './ui';
 import { todayWit } from '../utils/training-import';
 import { parseMealOrderSheet, type ParsedMealOrderRow } from '../utils/meal-order-import';
 import { isTuesdayWednesdaySaturday } from '../utils/meal-roster-sync';
+import { BungkusRecapSheet, buildBungkusRecap, printBungkusRecap, recapTitle } from './meal-bungkus-recap';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
@@ -94,6 +95,7 @@ interface Props { inspectorNik?: string; inspectorName?: string; onBack?: () => 
 export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => todayWit());
+  const [view, setView] = useState<'orders' | 'recap'>('orders');
   const [search, setSearch] = useState('');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; row?: MealOrder } | null>(null);
@@ -137,13 +139,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const rows = data?.data ?? [];
   const canManage = !!data?.access?.canManage;
 
-  // Master karyawan untuk isi otomatis form (dimuat saat form dibuka)
-  const { data: employees = [] } = useQuery({
+  // Master karyawan untuk isi otomatis form & golongan di Rekapan Bungkusan (dimuat saat dibutuhkan)
+  const { data: employees = [], isLoading: employeesLoading } = useQuery({
     queryKey: ['employees-master-lite'],
     queryFn: async (): Promise<any[]> => { const r = await fetch('/api/employees'); const j = await r.json(); return Array.isArray(j) ? j : []; },
-    enabled: !!modal,
+    enabled: !!modal || view === 'recap',
     staleTime: 10 * 60 * 1000,
   });
+  const recapBlocks = useMemo(() => (view === 'recap' ? buildBungkusRecap(rows, employees) : []), [view, rows, employees]);
 
   const sections = useMemo(() => Array.from(new Set(rows.map(r => r.section).filter(Boolean) as string[])).sort(), [rows]);
   const filtered = useMemo(() => {
@@ -600,6 +603,50 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           </div>
         </div>
 
+        {/* Tab: Orderan Makanan / Rekapan Bungkusan */}
+        <div className="flex items-center gap-1 rounded-full bg-white p-1 w-fit shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          {([['orders', 'Orderan Makanan', Utensils], ['recap', 'Rekapan Bungkusan', Package]] as const).map(([key, label, Icon]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setView(key)}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer transition-colors ${view === key ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              <Icon className="w-4 h-4" /> {label}
+            </button>
+          ))}
+        </div>
+
+        {view === 'recap' && (
+          <div className="rounded-3xl bg-white p-3 sm:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] space-y-3 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-bold text-slate-900">Rekapan Bungkusan · {dayName(date)}, {longDate(date)}</p>
+                <p className="text-[11px] text-slate-500">Dihitung otomatis dari porsi Lapangan & kolom 1 (B.Pagi)/1 (B.Sore). Gol IV-V yang pesan bungkusan Pagi/Siang/Sore tampil sebagai Kotakan.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { if (!printBungkusRecap(date, recapBlocks)) toast.error('Popup diblokir browser — izinkan popup untuk download PDF'); }}
+                disabled={rows.length === 0 || employeesLoading}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+                title="Buka dialog cetak — pilih 'Simpan sebagai PDF'"
+              >
+                <Download className="w-4 h-4" /> Download PDF
+              </button>
+            </div>
+            {isLoading || employeesLoading ? (
+              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 rounded-xl bg-slate-100 animate-pulse" />)}</div>
+            ) : rows.length === 0 ? (
+              <p className="p-8 text-center text-xs text-slate-500 rounded-2xl border border-dashed border-slate-300">Belum ada orderan untuk {dayName(date)}, {longDate(date)}</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl">
+                <BungkusRecapSheet title={recapTitle(date)} blocks={recapBlocks} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === 'orders' && <>
         {/* Ringkasan total per waktu makan */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
           <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -827,6 +874,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             </>
           )}
         </div>
+        </>}
       </div>
 
       {/* Modal tambah / edit */}
