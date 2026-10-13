@@ -47,6 +47,8 @@ interface MealPayload { date: string; data: MealOrder[]; dates: { date: string; 
 type KantinKey = 'pagiKantin' | 'siangKantin' | 'soreKantin';
 type LapanganKey = 'pagiLapangan' | 'siangLapangan' | 'soreLapangan' | 'takjilLapangan' | 'malamLapangan';
 type MealCellKey = KantinKey | LapanganKey;
+type Company = 'TBP' | 'GPS';
+const COMPANIES: Company[] = ['TBP', 'GPS'];
 
 // Grup kolom makan (urut sesuai sheet)
 const MEAL_GROUPS: { label: string; cells: { key: MealCellKey; label: string; kind: 'kantin' | 'lapangan' }[] }[] = [
@@ -311,21 +313,48 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     }
   };
 
-  const exportExcel = async () => {
+  // Export per perusahaan (kolom PT): No, NIK, Nama, Shift, Jenis Meal, Status, Kantin (Pagi/Siang/Sore), Bungkusan (Pagi/Siang/Sore/Malam)
+  const companyRows = (company: Company) => filtered.filter(r => String(r.pt || '').toUpperCase().includes(company));
+  const exportCompany = async (company: Company) => {
+    const list = companyRows(company);
+    if (list.length === 0) { toast.error(`Tidak ada karyawan ${company} untuk diexport`); return; }
     const XLSX = await import('xlsx');
-    const header1 = ['NO', 'NAMA KARYAWAN', 'NIK', 'Status Mess', 'PT', 'Shift', 'Section', 'Status Kerja Karyawan', 'Keterangan', '', 'Tempat Tinggal', 'Shift (SIANG/MALAM)',
-      ...MEAL_GROUPS.flatMap(g => g.cells.map((_, i) => (i === 0 ? g.label : ''))), dayName(date), longDate(date), 'STATUS', 'Keterangan (Belum Lapor)', 'Catatan'];
-    const header2 = ['', '', '', '', '', '', '', '', 'Sahur', 'Tidak Puasa', '', '', ...MEAL_CELLS.map(c => c.label), '1 (B.Pagi)', '1 (B. Sore)', '', '', ''];
-    const body = filtered.map((r, i) => [
-      i + 1, r.nama, r.nik, r.statusMess || '', r.pt || '', r.shift || '', r.section || '', r.statusKerja || '-', r.sahur || '-', r.tidakPuasa || '-',
-      r.tempatTinggal || '', r.shiftKerja || '', ...MEAL_CELLS.map(c => r[c.key] || ''), r.batchPagi || '', r.batchSore || '',
-      r.status || '', r.keteranganLapor || '', r.catatan || '',
-    ]);
-    const totalRow = ['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', ...MEAL_CELLS.map(c => totals[c.key] || ''), confirmed.pagi, confirmed.sore, '', confirmed.belumLapor || '', ''];
+    const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
+    const kantinKeys: KantinKey[] = ['pagiKantin', 'siangKantin', 'soreKantin'];
+    // Takjil hanya ditampilkan bila ada porsinya (mis. bulan puasa)
+    const withTakjil = list.some(r => portions(r.takjilLapangan) > 0);
+    const bungkusCols: { key: LapanganKey; label: string }[] = [
+      { key: 'pagiLapangan', label: 'Pagi' }, { key: 'siangLapangan', label: 'Siang' }, { key: 'soreLapangan', label: 'Sore' },
+      ...(withTakjil ? [{ key: 'takjilLapangan' as LapanganKey, label: 'Takjil' }] : []),
+      { key: 'malamLapangan', label: 'Malam' },
+    ];
+    const fixed = ['No', 'NIK', 'Nama', 'Shift', 'Jenis Meal', 'Status'];
+    const header1 = [...fixed, 'Kantin', '', '', 'Bungkusan', ...bungkusCols.slice(1).map(() => '')];
+    const header2 = [...fixed.map(() => ''), 'Pagi', 'Siang', 'Sore', ...bungkusCols.map(c => c.label)];
+    const body = list.map((r, i) => {
+      const kantin = kantinKeys.map(k => (String(r[k] || '').trim() ? 1 : 0));
+      const bungkus = bungkusCols.map(c => portions(r[c.key]));
+      const jenisMeal = kantin.some(Boolean) || !bungkus.some(Boolean) ? 'Kantin' : 'Bungkusan';
+      const statusKerja = String(r.statusKerja || '').trim();
+      return [
+        i + 1, r.nik, r.nama, r.shiftKerja ? titleCase(r.shiftKerja) : '-', jenisMeal,
+        statusKerja && statusKerja !== '-' ? titleCase(statusKerja) : 'On Duty', ...kantin, ...bungkus,
+      ];
+    });
+    const sum = (c: number) => body.reduce((s, row) => s + (Number(row[c]) || 0), 0);
+    const totalRow = ['', '', 'TOTAL', '', '', '', ...header2.slice(fixed.length).map((_, i) => sum(fixed.length + i))];
     const ws = XLSX.utils.aoa_to_sheet([header1, header2, ...body, totalRow]);
+    const lastCol = header1.length - 1;
+    ws['!merges'] = [
+      ...fixed.map((_, c) => ({ s: { r: 0, c }, e: { r: 1, c } })),
+      { s: { r: 0, c: fixed.length }, e: { r: 0, c: fixed.length + 2 } },
+      { s: { r: 0, c: fixed.length + 3 }, e: { r: 0, c: lastCol } },
+    ];
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 1, c: 0 }, e: { r: body.length + 1, c: lastCol } }) };
+    ws['!cols'] = [{ wch: 5 }, { wch: 14 }, { wch: 34 }, { wch: 9 }, { wch: 12 }, { wch: 10 }, ...header2.slice(fixed.length).map(() => ({ wch: 7 }))];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Orderan Makanan');
-    XLSX.writeFile(wb, `Orderan_Makanan_${date}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, `Meal ${company}`);
+    XLSX.writeFile(wb, `Orderan_Makanan_${company}_${date}.xlsx`);
   };
 
   // ===== Render sel =====
@@ -414,9 +443,21 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             {date !== todayWit() && (
               <button type="button" onClick={() => setDate(todayWit())} className="px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer">Hari ini</button>
             )}
-            <button type="button" onClick={exportExcel} disabled={filtered.length === 0} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-800 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
-              <Download className="w-4 h-4" /> Export
-            </button>
+            {COMPANIES.map(company => {
+              const count = companyRows(company).length;
+              return (
+                <button
+                  key={company}
+                  type="button"
+                  onClick={() => exportCompany(company)}
+                  disabled={count === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-800 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                  title={`Export Excel orderan karyawan ${company} (${count} orang)`}
+                >
+                  <Download className="w-4 h-4" /> Export {company}
+                </button>
+              );
+            })}
             {canManage && <button
               type="button"
               onClick={openGoogleSheet}
