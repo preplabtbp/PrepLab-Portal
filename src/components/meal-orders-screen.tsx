@@ -296,7 +296,12 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const json = await res.json();
       if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal membuka Google Sheets');
       if (!json.url) throw new Error('Google Sheets "Meal Order" belum dibuat oleh Admin');
-      if (canManage) toast.success('Google Sheets "Meal Order" diperbarui');
+      if (canManage) {
+        toast.success(json.pulled
+          ? `${json.pulled} perubahan dari Google Sheets disimpan ke portal`
+          : 'Google Sheets "Meal Order" diperbarui');
+        if (json.pulled) queryClient.invalidateQueries({ queryKey: ['meal-orders'] });
+      }
       if (win) win.location.href = json.url; else window.open(json.url, '_blank', 'noopener');
     } catch (e: any) {
       win?.close();
@@ -412,15 +417,15 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             <button type="button" onClick={exportExcel} disabled={filtered.length === 0} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-800 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
               <Download className="w-4 h-4" /> Export
             </button>
-            <button
+            {canManage && <button
               type="button"
               onClick={openGoogleSheet}
               disabled={syncingSheet}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer disabled:opacity-60"
-              title={canManage ? 'Perbarui & buka Google Sheets "Meal Order" (folder Administration)' : 'Buka Google Sheets "Meal Order"'}
+              title='Sinkron & buka Google Sheets "Meal Order" (folder Administration) — hanya Section Administrasi yang bisa mengedit'
             >
               {syncingSheet ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Google Sheets
-            </button>
+            </button>}
             {canManage && (
               <>
                 <button

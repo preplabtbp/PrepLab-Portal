@@ -222,41 +222,182 @@ async function findMealSheet(): Promise<{ id: string; url: string } | null> {
   return sheetFile;
 }
 
-let syncRunning: Promise<{ id: string; url: string }> | null = null;
+// ----- Status sinkron (disimpan di app_settings agar konsisten antar instance server) -----
+// pushedModified: modifiedTime file setelah portal terakhir menulis ke sheet → bila file berubah setelahnya,
+// berarti ada edit langsung di Google Sheets yang harus ditarik ke portal dulu.
+const SHEET_STATE_KEY = 'meal_order_sheet_state';
+interface SheetState { fileId?: string; pushedModified?: string; pushedAt?: string; permKey?: string }
+async function readSheetState(): Promise<SheetState> {
+  const r = await db.execute(sql`SELECT setting_value FROM app_settings WHERE setting_key = ${SHEET_STATE_KEY} LIMIT 1`);
+  try { return JSON.parse(String((r.rows?.[0] as any)?.setting_value || '{}')); } catch { return {}; }
+}
+async function writeSheetState(state: SheetState) {
+  await db.execute(sql`INSERT INTO app_settings (setting_key, setting_value, description)
+    VALUES (${SHEET_STATE_KEY}, ${JSON.stringify(state)}, 'Status sinkron Google Sheets Meal Order')
+    ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW();`);
+}
+
+// ----- Hak akses: hanya Section Administrasi yang bisa mengedit -----
+// Akses "siapa saja yang punya link" warisan folder dimatikan; editor = email karyawan Section Administration.
+async function adminEditorEmails(): Promise<string[]> {
+  const rows = await db.select({ email: employees.email }).from(employees)
+    .where(sql`LOWER(COALESCE(${employees.section}, '') || ' ' || COALESCE(${employees.department}, '')) LIKE '%admin%'`);
+  return Array.from(new Set(rows.map(r => String(r.email || '').trim().toLowerCase()).filter(e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)))).sort();
+}
+
+export async function applyMealSheetPermissions(fileId: string): Promise<{ editors: string[]; publicRemoved: boolean }> {
+  const editors = await adminEditorEmails();
+  // 1. Putus akses warisan folder (termasuk "anyone with the link")
+  try {
+    await drive.files.update({ fileId, requestBody: { inheritedPermissionsDisabled: true }, supportsAllDrives: true });
+  } catch (e: any) {
+    console.warn('[MealOrders] Gagal menonaktifkan akses warisan folder:', e.message);
+  }
+  const list = await drive.permissions.list({
+    fileId, fields: 'permissions(id,type,role,emailAddress,permissionDetails)', supportsAllDrives: true,
+  });
+  const perms = list.data.permissions || [];
+  const isInheritedOnly = (p: typeof perms[number]) => !!p.permissionDetails?.length && p.permissionDetails.every(d => d.inherited);
+  // 2. Hapus akses langsung yang bukan Section Administrasi (owner tidak disentuh)
+  for (const p of perms) {
+    if (p.role === 'owner' || isInheritedOnly(p)) continue;
+    const email = String(p.emailAddress || '').toLowerCase();
+    const keep = p.type === 'user' && editors.includes(email) && p.role === 'writer';
+    if (!keep && p.id) {
+      await drive.permissions.delete({ fileId, permissionId: p.id, supportsAllDrives: true }).catch(e => console.warn('[MealOrders] Hapus akses gagal:', e.message));
+    }
+  }
+  // 3. Tambah editor Section Administrasi yang belum punya akses
+  const existing = new Set(perms.filter(p => p.type === 'user' && p.role === 'writer' && !isInheritedOnly(p)).map(p => String(p.emailAddress || '').toLowerCase()));
+  for (const email of editors) {
+    if (existing.has(email)) continue;
+    await drive.permissions.create({
+      fileId, sendNotificationEmail: false, supportsAllDrives: true,
+      requestBody: { type: 'user', role: 'writer', emailAddress: email },
+    }).catch(e => console.warn(`[MealOrders] Beri akses edit ke ${email} gagal:`, e.message));
+  }
+  const after = await drive.permissions.list({ fileId, fields: 'permissions(type)', supportsAllDrives: true });
+  return { editors, publicRemoved: !(after.data.permissions || []).some(p => p.type === 'anyone') };
+}
+
+// ----- Tarik edit langsung dari Google Sheets ke portal -----
+// Tiap tab "YYYY-MM-DD ..." dibaca dengan parser yang sama dengan Import. Baris yang diubah di portal setelah
+// sinkron terakhir tidak ditimpa (perubahan portal menang untuk baris tsb).
+async function pullSheetEdits(fileId: string, state: SheetState): Promise<number> {
+  if (!state.pushedModified) return 0;
+  const meta = await drive.files.get({ fileId, fields: 'modifiedTime', supportsAllDrives: true });
+  if (!meta.data.modifiedTime || meta.data.modifiedTime <= state.pushedModified) return 0;
+
+  const exported = await drive.files.export({ fileId, mimeType: XLSX_MIME }, { responseType: 'arraybuffer' });
+  const wb = XLSX.read(Buffer.from(exported.data as ArrayBuffer), { type: 'buffer' });
+  const pushedAt = state.pushedAt ? new Date(state.pushedAt) : new Date(0);
+  let changed = 0;
+  for (const name of wb.SheetNames) {
+    const date = name.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    if (!date) continue;
+    const parsed = parseMealOrderSheet(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: false, defval: '' }));
+    if (!parsed) continue;
+    const current = await db.select().from(mealOrders).where(eq(mealOrders.orderDate, date));
+    const portalTouched = new Set(current.filter(r => r.updatedAt && r.updatedAt > pushedAt).map(r => r.nik));
+    const fromSheet = parsed.rows.filter(r => !portalTouched.has(r.nik));
+    if (fromSheet.length) {
+      const full = fromSheet.map(r => ({ ...Object.fromEntries(EDITABLE_FIELDS.map(f => [f, null])), ...r })) as ParsedMealOrderRow[];
+      changed += await bulkUpsertMealOrders(date, full, 'google-sheets');
+    }
+    // Baris yang dihapus dari sheet ikut dihapus (kecuali baru ditambah/diubah di portal)
+    const inSheet = new Set(parsed.rows.map(r => r.nik));
+    const toDelete = current.filter(r => !inSheet.has(r.nik) && !portalTouched.has(r.nik)).map(r => r.id);
+    if (toDelete.length) {
+      await db.delete(mealOrders).where(inArray(mealOrders.id, toDelete));
+      changed += toDelete.length;
+    }
+  }
+  if (changed) console.log(`[MealOrders] ${changed} baris diperbarui dari edit langsung di Google Sheets`);
+  return changed;
+}
+
+let syncRunning: Promise<{ id: string; url: string; pulled: number }> | null = null;
 let syncAgain = false;
-// Buat (bila belum ada) lalu timpa isi Google Sheets "Meal Order" dengan data terbaru
-export async function syncMealOrderSheet(): Promise<{ id: string; url: string }> {
+// Sinkron 2 arah: (1) tarik edit langsung di Google Sheets, (2) tulis ulang sheet dari data portal,
+// (3) pastikan hanya Section Administrasi yang bisa mengedit.
+export async function syncMealOrderSheet(options: { forcePermissions?: boolean } = {}): Promise<{ id: string; url: string; pulled: number }> {
   if (syncRunning) { syncAgain = true; return syncRunning; }
   syncRunning = (async () => {
     try {
+      const state = await readSheetState();
+      let file = await findMealSheet().catch(() => null);
+      let pulled = 0;
+      if (file) {
+        try {
+          pulled = await pullSheetEdits(file.id, state);
+        } catch (e: any) {
+          if (e?.code === 404) { sheetFile = null; file = null; }
+          else console.error('[MealOrders] Tarik edit Google Sheets gagal:', e.message);
+        }
+      }
+
       const buffer = await buildMealWorkbook();
       const media = () => ({ mimeType: XLSX_MIME, body: Readable.from(buffer) });
-      const existing = await findMealSheet().catch(() => null);
-      if (existing) {
+      let modifiedTime: string | null | undefined;
+      let created = false;
+      if (file) {
         try {
-          await drive.files.update({ fileId: existing.id, media: media(), supportsAllDrives: true });
-          return existing;
+          const upd = await drive.files.update({ fileId: file.id, media: media(), fields: 'modifiedTime', supportsAllDrives: true });
+          modifiedTime = upd.data.modifiedTime;
         } catch (e: any) {
           // File dihapus/dipindah manual → buat ulang
           if (e?.code !== 404) throw e;
           sheetFile = null;
+          file = null;
         }
       }
-      const created = await drive.files.create({
-        requestBody: { name: MEAL_SHEET_NAME, mimeType: GSHEET_MIME, parents: [ADMIN_FOLDER_ID] },
-        media: media(),
-        fields: 'id, webViewLink',
-        supportsAllDrives: true,
-      });
-      sheetFile = { id: created.data.id!, url: created.data.webViewLink || `https://docs.google.com/spreadsheets/d/${created.data.id}/edit` };
-      console.log(`[MealOrders] Google Sheets "${MEAL_SHEET_NAME}" dibuat di folder Administration (${sheetFile.id})`);
-      return sheetFile;
+      if (!file) {
+        const res = await drive.files.create({
+          requestBody: { name: MEAL_SHEET_NAME, mimeType: GSHEET_MIME, parents: [ADMIN_FOLDER_ID] },
+          media: media(),
+          fields: 'id, webViewLink, modifiedTime',
+          supportsAllDrives: true,
+        });
+        sheetFile = file = { id: res.data.id!, url: res.data.webViewLink || `https://docs.google.com/spreadsheets/d/${res.data.id}/edit` };
+        modifiedTime = res.data.modifiedTime;
+        created = true;
+        console.log(`[MealOrders] Google Sheets "${MEAL_SHEET_NAME}" dibuat di folder Administration (${file.id})`);
+      }
+
+      // Hak akses diterapkan saat file baru / daftar Section Administrasi berubah / diminta
+      const editors = await adminEditorEmails();
+      const permKey = `${file.id}:${editors.join(',')}`;
+      let nextPermKey = state.permKey;
+      if (created || options.forcePermissions || state.permKey !== permKey) {
+        const res = await applyMealSheetPermissions(file.id);
+        nextPermKey = permKey;
+        // Akses lihat publik warisan folder Administration tidak bisa diputus per file (Drive pribadi)
+        if (!res.publicRemoved) console.warn('[MealOrders] Akses lihat "anyone with the link" warisan folder Administration masih aktif pada Google Sheets Meal Order');
+      }
+      // modifiedTime diambil ulang setelah perubahan akses agar tidak terbaca sebagai "edit di sheet"
+      const latest = await drive.files.get({ fileId: file.id, fields: 'modifiedTime', supportsAllDrives: true }).catch(() => null);
+      await writeSheetState({ fileId: file.id, pushedModified: latest?.data.modifiedTime || modifiedTime || undefined, pushedAt: new Date().toISOString(), permKey: nextPermKey });
+      return { ...file, pulled };
     } finally {
       syncRunning = null;
       if (syncAgain) { syncAgain = false; scheduleSheetSync(); }
     }
   })();
   return syncRunning;
+}
+
+// Cek edit di Google Sheets secara berkala saat modul dibuka (maks. 1x per menit)
+let lastPullCheck = 0;
+function maybePullFromSheet() {
+  if (Date.now() - lastPullCheck < 60 * 1000) return;
+  lastPullCheck = Date.now();
+  (async () => {
+    const state = await readSheetState();
+    const file = await findMealSheet();
+    if (!file || !state.pushedModified) return;
+    const meta = await drive.files.get({ fileId: file.id, fields: 'modifiedTime', supportsAllDrives: true });
+    if (meta.data.modifiedTime && meta.data.modifiedTime > state.pushedModified) await syncMealOrderSheet();
+  })().catch((e: any) => console.warn('[MealOrders] Cek edit Google Sheets gagal:', e.message));
 }
 
 // Sinkron otomatis setelah ada perubahan (digabung tiap 20 detik agar tidak membebani Drive API)
@@ -301,6 +442,8 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
     await ensureMealOrdersTable();
     const date = isDate(req.query.date) ? req.query.date : new Date().toISOString().slice(0, 10);
     const access = await getTrainingAccess((req as any).user);
+    // Edit langsung di Google Sheets (oleh Section Administrasi) ditarik ke portal di background
+    maybePullFromSheet();
     const rows = await db.select().from(mealOrders)
       .where(eq(mealOrders.orderDate, date))
       .orderBy(sql`${mealOrders.sortNo} ASC NULLS LAST`, asc(mealOrders.nama));
@@ -440,8 +583,8 @@ mealOrdersRouter.delete("/api/meal-orders/:id", requireMealManager, async (req, 
   }
 });
 
-// 6. GET /api/meal-orders/sheet — link Google Sheets "Meal Order" (bila sudah dibuat)
-mealOrdersRouter.get("/api/meal-orders/sheet", async (_req, res) => {
+// 6. GET /api/meal-orders/sheet — link Google Sheets "Meal Order" (hanya Section Administrasi / Developer)
+mealOrdersRouter.get("/api/meal-orders/sheet", requireMealManager, async (_req, res) => {
   try {
     const f = await findMealSheet();
     res.json({ status: "success", url: f?.url || null });
@@ -454,8 +597,8 @@ mealOrdersRouter.get("/api/meal-orders/sheet", async (_req, res) => {
 mealOrdersRouter.post("/api/meal-orders/sync-sheet", requireMealManager, async (_req, res) => {
   try {
     await ensureMealOrdersTable();
-    const f = await syncMealOrderSheet();
-    res.json({ status: "success", url: f.url });
+    const f = await syncMealOrderSheet({ forcePermissions: true });
+    res.json({ status: "success", url: f.url, pulled: f.pulled });
   } catch (error: any) {
     console.error("[MealOrders SYNC] Error:", error);
     res.status(500).json({ status: "error", message: `Gagal sinkron ke Google Sheets: ${error.message}` });
