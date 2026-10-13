@@ -16,6 +16,7 @@ import {
 } from "../utils.js";
 import webpush from 'web-push';
 import path from "path";
+import { syncSingleEmployeeMealOrder } from "./mealOrders.js";
 
 export const router = Router();
 
@@ -398,6 +399,14 @@ router.post("/api/roster/cell", async (req, res) => {
       await db.insert(roster).values({ nik: nik, date: properDate, status: status || '-' });
     }
     invalidateRosterCache();
+
+    // Otomatis sinkronkan orderan makanan karyawan jika baris order makan tanggal ini sudah ada
+    try {
+      syncSingleEmployeeMealOrder(nik, properDate, status || '-', reqNik as string);
+    } catch (mealErr) {
+      console.warn('[Auto-sync Meal Order on Roster Cell Change Warning]:', mealErr);
+    }
+
     res.json({ success: true, nik, date: properDate, status });
   } catch (e: any) {
     console.error("Error updating roster cell:", e);
@@ -437,6 +446,14 @@ router.post("/api/roster/izin", async (req, res) => {
         await db.insert(roster).values({ nik: nik, date: properDate, status: type });
       }
       invalidateRosterCache();
+
+      // Otomatis sinkronkan orderan makanan karyawan
+      try {
+        syncSingleEmployeeMealOrder(nik, properDate, type, reqNik as string);
+      } catch (mealErr) {
+        console.warn('[Auto-sync Meal Order on Roster Izin Change Warning]:', mealErr);
+      }
+
       res.json({ success: true });
     } catch (e) {
       console.error(e);

@@ -1,12 +1,13 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
-  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload,
+  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input, Select, Button } from './ui';
 import { todayWit } from '../utils/training-import';
 import { parseMealOrderSheet, type ParsedMealOrderRow } from '../utils/meal-order-import';
+import { isTuesdayWednesdaySaturday } from '../utils/meal-roster-sync';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
@@ -99,7 +100,28 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [syncingRoster, setSyncingRoster] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<MealOrder | null>(null);
+
+  const handleSyncRoster = async () => {
+    if (!canManage) return;
+    setSyncingRoster(true);
+    try {
+      const res = await fetch('/api/meal-orders/sync-roster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal menyinkronkan dengan Roster');
+      toast.success(json.message || `Berhasil menyinkronkan ${json.synced} orderan dari Roster & Cuti`);
+      queryClient.invalidateQueries({ queryKey: ['meal-orders'] });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSyncingRoster(false);
+    }
+  };
 
   const queryKey = ['meal-orders', inspectorNik.trim().toUpperCase(), date];
   const { data, isLoading, isFetching } = useQuery({
@@ -364,13 +386,32 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const renderMealCell = (r: MealOrder, key: MealCellKey, kind: 'kantin' | 'lapangan') => {
     const v = r[key] || '';
     if (kind === 'kantin') {
+      const handleToggleKantin = () => {
+        if (!canManage) return;
+        if (v) {
+          // Matikan Kantin
+          const patch: Partial<MealOrder> = { [key]: null };
+          if (key === 'pagiKantin') patch.batchPagi = null;
+          if (key === 'soreKantin') patch.batchSore = null;
+          saveCell(r, patch);
+        } else {
+          // Aktifkan Kantin, otomatis matikan Lapangan di slot waktu yang sama
+          const isNirwana = (r.tempatTinggal || '').toLowerCase().includes('nirwana');
+          const patch: Partial<MealOrder> = { [key]: 'K' };
+          if (key === 'pagiKantin') { patch.pagiLapangan = null; patch.batchPagi = isNirwana ? '1' : null; }
+          if (key === 'siangKantin') { patch.siangLapangan = null; }
+          if (key === 'soreKantin') { patch.soreLapangan = null; patch.batchSore = isNirwana ? '1' : null; }
+          saveCell(r, patch);
+        }
+      };
+
       return (
         <button
           type="button"
           disabled={!canManage}
-          onClick={() => saveCell(r, { [key]: v ? null : 'K' } as Partial<MealOrder>)}
-          className={`w-full h-7 rounded-md text-xs font-black ${v ? 'bg-sky-100 text-sky-800' : 'text-slate-300'} ${canManage ? 'cursor-pointer hover:ring-2 hover:ring-sky-300' : 'cursor-default'}`}
-          title={canManage ? 'Klik untuk tandai / hapus Kantin (K)' : undefined}
+          onClick={handleToggleKantin}
+          className={`w-full h-7 rounded-md text-xs font-black transition-colors ${v ? 'bg-sky-100 text-sky-800' : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'} ${canManage ? 'cursor-pointer hover:ring-2 hover:ring-sky-300' : 'cursor-default'}`}
+          title={canManage ? 'Klik untuk pilih Kantin (K)' : undefined}
         >
           {v || '·'}
         </button>
@@ -391,7 +432,33 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         inputMode="numeric"
         defaultValue={v}
         key={`${r.id}-${key}-${v}`}
-        onBlur={e => { const nv = e.target.value.trim(); if (nv !== v) saveCell(r, { [key]: nv || null } as Partial<MealOrder>); }}
+        onBlur={e => {
+          const nv = e.target.value.trim();
+          if (nv !== v) {
+            const patch: Partial<MealOrder> = { [key]: nv || null };
+            // Jika porsi Lapangan diisi > 0, otomatis kosongkan Kantin di waktu yang sama agar tidak dobel
+            if (nv && portions(nv) > 0) {
+              if (key === 'pagiLapangan') {
+                patch.pagiKantin = null;
+                patch.batchPagi = null;
+              }
+              if (key === 'siangLapangan') {
+                patch.siangKantin = null;
+              }
+              if (key === 'soreLapangan') {
+                const sm = (r.statusMess || '').toUpperCase();
+                const isCR = sm === 'CR' || sm === 'MESS';
+                const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift';
+                if (isTuesdayWednesdaySaturday(date) && isCR && isDayShift) {
+                  toast.info(`Catatan: Hari ${dayName(date)} untuk karyawan Mess CR jadwal sore adalah Kantin.`);
+                }
+                patch.soreKantin = null;
+                patch.batchSore = null;
+              }
+            }
+            saveCell(r, patch);
+          }
+        }}
         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         className={`w-14 h-7 rounded-md text-center text-xs font-black border ${v ? filled : 'border-transparent hover:border-slate-200 text-slate-900'} focus:outline-none focus:ring-2 ${tone === 'amber' ? 'focus:ring-amber-300' : 'focus:ring-emerald-300'}`}
         aria-label={label}
@@ -401,6 +468,41 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const renderConfirm = (r: MealOrder, key: BatchKey) =>
     renderNumberCell(r, key, 'emerald', key === 'batchPagi' ? '1 (B.Pagi)' : '1 (B.Sore)');
+
+  const switchMealType = (r: MealOrder, time: 'pagi' | 'sore') => {
+    if (!canManage) return;
+    const kantinKey: KantinKey = time === 'pagi' ? 'pagiKantin' : 'soreKantin';
+    const lapanganKey: LapanganKey = time === 'pagi' ? 'pagiLapangan' : 'soreLapangan';
+    const batchKey: BatchKey = time === 'pagi' ? 'batchPagi' : 'batchSore';
+    const isNirwana = (r.tempatTinggal || '').toLowerCase().includes('nirwana');
+
+    const hasKantin = Boolean(r[kantinKey]);
+    const hasLapangan = portions(r[lapanganKey]) > 0;
+
+    if (hasKantin) {
+      // Pindah ke Lapangan
+      const sm = (r.statusMess || '').toUpperCase();
+      const isCR = sm === 'CR' || sm === 'MESS';
+      const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift';
+      if (time === 'sore' && isTuesdayWednesdaySaturday(date) && isCR && isDayShift) {
+        toast.info(`Catatan: Hari ${dayName(date)} untuk Mess CR jadwal sore adalah Kantin.`);
+      }
+      saveCell(r, {
+        [kantinKey]: null,
+        [lapanganKey]: '1',
+        [batchKey]: null,
+      });
+      toast.success(`${r.nama}: ${time.toUpperCase()} diganti ke Bungkusan Lapangan`);
+    } else {
+      // Pindah ke Kantin
+      saveCell(r, {
+        [kantinKey]: 'K',
+        [lapanganKey]: null,
+        [batchKey]: isNirwana ? '1' : null,
+      });
+      toast.success(`${r.nama}: ${time.toUpperCase()} diganti ke Kantin`);
+    }
+  };
 
   const summaryCards = [
     ...MEAL_GROUPS.map(g => ({
@@ -427,7 +529,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">Orderan Makanan</h1>
                 {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
               </div>
-              <p className="text-[11px] sm:text-xs font-medium text-slate-500">Order harian Pagi/Sahur, Siang, Sore, Takjil & Malam · Kantin (K) & Lapangan</p>
+              <p className="text-[11px] sm:text-xs font-medium text-slate-500">Order harian Pagi/Sahur, Siang, Sore, Takjil & Malam · Sinkron otomatis dengan Roster & Cuti</p>
             </div>
           </div>
 
@@ -442,6 +544,17 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             </div>
             {date !== todayWit() && (
               <button type="button" onClick={() => setDate(todayWit())} className="px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer">Hari ini</button>
+            )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={handleSyncRoster}
+                disabled={syncingRoster}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-indigo-200 bg-indigo-50 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 cursor-pointer disabled:opacity-60 active:scale-95 transition-all shadow-sm"
+                title="Sinkronkan orderan makanan hari ini dengan data Roster & Cuti karyawan"
+              >
+                {syncingRoster ? <Loader2 className="w-4 h-4 animate-spin text-indigo-600" /> : <RefreshCw className="w-4 h-4 text-indigo-600" />} Sinkron Roster
+              </button>
             )}
             {COMPANIES.map(company => {
               const count = companyRows(company).length;
@@ -553,8 +666,12 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               )}
               {canManage ? (
                 <div className="flex flex-wrap justify-center gap-2 mt-3">
+                  <Button onClick={handleSyncRoster} disabled={syncingRoster} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white">
+                    {syncingRoster ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    <span className="ml-1.5">Sinkronkan dari Roster & Cuti</span>
+                  </Button>
                   {previousDate && (
-                    <Button onClick={copyFromPrevious} disabled={copying} className="text-xs">
+                    <Button variant="outline" onClick={copyFromPrevious} disabled={copying} className="text-xs">
                       {copying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
                       <span className="ml-1.5">Salin dari {dayName(previousDate)}, {longDate(previousDate)}</span>
                     </Button>
