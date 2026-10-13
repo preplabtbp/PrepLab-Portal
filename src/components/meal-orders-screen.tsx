@@ -142,6 +142,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   });
 
   const [showColMenu, setShowColMenu] = useState(false);
+  const [summaryCompanyView, setSummaryCompanyView] = useState<'split' | 'TBP' | 'GPS' | 'all'>('split');
 
   const updateColVisibility = (patch: Partial<typeof columnVisibility>) => {
     setColumnVisibility(prev => {
@@ -201,11 +202,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const rows = data?.data ?? [];
   const canManage = !!data?.access?.canManage;
 
-  // Master karyawan untuk isi otomatis form & golongan di Rekapan Bungkusan (dimuat saat dibutuhkan)
+  // Master karyawan untuk isi otomatis form, golongan di Rekapan, & pemetaan PT TBP/GPS
   const { data: employees = [], isLoading: employeesLoading } = useQuery({
     queryKey: ['employees-master-lite'],
     queryFn: async (): Promise<any[]> => { const r = await fetch('/api/employees'); const j = await r.json(); return Array.isArray(j) ? j : []; },
-    enabled: !!modal || view === 'recap',
+    enabled: true,
     staleTime: 10 * 60 * 1000,
   });
   const recapBlocks = useMemo(() => (view === 'recap' ? buildBungkusRecap(rows, employees, date) : []), [view, rows, employees, date]);
@@ -401,7 +402,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   };
 
   // Export per perusahaan (kolom PT): No, NIK, Nama, Shift, Jenis Meal, Status, Kantin (Pagi/Siang/Sore), Bungkusan (Pagi/Siang/Sore/Malam)
-  const companyRows = (company: Company) => filtered.filter(r => String(r.pt || '').toUpperCase().includes(company));
+  const companyRows = (company: Company) => filtered.filter(r => getRowCompany(r) === company);
   const exportCompany = async (company: Company) => {
     const list = companyRows(company);
     if (list.length === 0) { toast.error(`Tidak ada karyawan ${company} untuk diexport`); return; }
@@ -707,41 +708,57 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const isCRRow = (r: MealOrder) => ['CR', 'MESS'].includes(String(r.statusMess || '').trim().toUpperCase());
 
-  const summaryCards = useMemo(() => {
+  const empByNikMap = useMemo(() => {
+    return new Map<string, any>(employees.map((e: any) => [String(e.nik || '').trim().toUpperCase(), e]));
+  }, [employees]);
+
+  const getRowCompany = useMemo(() => {
+    return (r: MealOrder): Company => {
+      const ptStr = String(r.pt || '').trim().toUpperCase();
+      if (ptStr.includes('GPS')) return 'GPS';
+      if (ptStr.includes('TBP')) return 'TBP';
+      const emp = empByNikMap.get(String(r.nik || '').trim().toUpperCase());
+      const empPt = String(emp?.pt || emp?.company || '').trim().toUpperCase();
+      if (empPt.includes('GPS')) return 'GPS';
+      return 'TBP';
+    };
+  }, [empByNikMap]);
+
+  const buildSummaryCards = (list: MealOrder[]) => {
     return activeMealGroups.map(g => {
       let lap = 0;
       let bungkusKantin = 0;
       let makanKantin = 0;
 
       if (g.label === 'Pagi') {
-        lap = filtered.reduce((s, r) => s + portions(r.pagiLapangan), 0);
-        bungkusKantin = filtered.reduce((s, r) => {
+        lap = list.reduce((s, r) => s + portions(r.pagiLapangan), 0);
+        bungkusKantin = list.reduce((s, r) => {
           if (isCRRow(r)) return s;
           return s + (portions(r.batchPagi) || (r.pagiKantin === '1' ? 1 : 0));
         }, 0);
-        makanKantin = filtered.reduce((s, r) => s + (isCRRow(r) && r.pagiKantin ? 1 : 0), 0);
+        makanKantin = list.reduce((s, r) => s + (isCRRow(r) && r.pagiKantin ? 1 : 0), 0);
       } else if (g.label === 'Siang') {
-        lap = filtered.reduce((s, r) => s + portions(r.siangLapangan), 0);
-        bungkusKantin = filtered.reduce((s, r) => {
+        lap = list.reduce((s, r) => s + portions(r.siangLapangan), 0);
+        bungkusKantin = list.reduce((s, r) => {
           if (isCRRow(r)) return s;
           return s + (r.siangKantin && r.siangKantin !== '-' ? 1 : 0);
         }, 0);
-        makanKantin = filtered.reduce((s, r) => s + (isCRRow(r) && r.siangKantin ? 1 : 0), 0);
+        makanKantin = list.reduce((s, r) => s + (isCRRow(r) && r.siangKantin ? 1 : 0), 0);
       } else if (g.label === 'Sore') {
-        lap = filtered.reduce((s, r) => s + portions(r.soreLapangan), 0);
-        bungkusKantin = filtered.reduce((s, r) => {
+        lap = list.reduce((s, r) => s + portions(r.soreLapangan), 0);
+        bungkusKantin = list.reduce((s, r) => {
           if (isCRRow(r)) return s;
           return s + (portions(r.batchSore) || (r.soreKantin === '1' ? 1 : 0));
         }, 0);
-        makanKantin = filtered.reduce((s, r) => s + (isCRRow(r) && r.soreKantin ? 1 : 0), 0);
+        makanKantin = list.reduce((s, r) => s + (isCRRow(r) && r.soreKantin ? 1 : 0), 0);
       } else if (g.label === 'Sahur') {
-        lap = filtered.reduce((s, r) => s + portions(r.sahurLapangan), 0);
-        bungkusKantin = filtered.reduce((s, r) => s + (!isCRRow(r) && r.sahurKantin === '1' ? 1 : 0), 0);
-        makanKantin = filtered.reduce((s, r) => s + (isCRRow(r) && r.sahurKantin ? 1 : 0), 0);
+        lap = list.reduce((s, r) => s + portions(r.sahurLapangan), 0);
+        bungkusKantin = list.reduce((s, r) => s + (!isCRRow(r) && r.sahurKantin === '1' ? 1 : 0), 0);
+        makanKantin = list.reduce((s, r) => s + (isCRRow(r) && r.sahurKantin ? 1 : 0), 0);
       } else if (g.label === 'Takjil') {
-        lap = filtered.reduce((s, r) => s + portions(r.takjilLapangan), 0);
+        lap = list.reduce((s, r) => s + portions(r.takjilLapangan), 0);
       } else if (g.label === 'Malam') {
-        lap = filtered.reduce((s, r) => s + portions(r.malamLapangan), 0);
+        lap = list.reduce((s, r) => s + portions(r.malamLapangan), 0);
       }
 
       const totalBungkus = lap + bungkusKantin;
@@ -763,7 +780,24 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         detail: details.join(' · '),
       };
     });
-  }, [activeMealGroups, filtered]);
+  };
+
+  const getConfirmedSummary = (list: MealOrder[]) => ({
+    pagi: list.reduce((s, r) => s + portions(r.batchPagi), 0),
+    sore: list.reduce((s, r) => s + portions(r.batchSore), 0),
+    belumLapor: list.filter(r => r.keteranganLapor && r.keteranganLapor.trim() !== '-').length,
+  });
+
+  const tbpFiltered = useMemo(() => filtered.filter(r => getRowCompany(r) === 'TBP'), [filtered, getRowCompany]);
+  const gpsFiltered = useMemo(() => filtered.filter(r => getRowCompany(r) === 'GPS'), [filtered, getRowCompany]);
+
+  const summaryCardsAll = useMemo(() => buildSummaryCards(filtered), [activeMealGroups, filtered]);
+  const summaryCardsTbp = useMemo(() => buildSummaryCards(tbpFiltered), [activeMealGroups, tbpFiltered]);
+  const summaryCardsGps = useMemo(() => buildSummaryCards(gpsFiltered), [activeMealGroups, gpsFiltered]);
+
+  const confirmedAll = useMemo(() => getConfirmedSummary(filtered), [filtered]);
+  const confirmedTbp = useMemo(() => getConfirmedSummary(tbpFiltered), [tbpFiltered]);
+  const confirmedGps = useMemo(() => getConfirmedSummary(gpsFiltered), [gpsFiltered]);
 
   return (
     <div className="min-h-screen pb-24 bg-[#f3f6f4]">
@@ -907,32 +941,181 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
         {view === 'orders' && <>
         {/* Ringkasan total per waktu makan */}
+        {/* Ringkasan total per waktu makan (TBP & GPS dipisahkan) */}
         {columnVisibility.summary && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-            <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1"><Users className="w-3 h-3" />Karyawan</p>
-              <p className="text-2xl font-semibold text-slate-900">{filtered.length}</p>
-              <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
-            </div>
-            {summaryCards.map(c => (
-              <div key={c.label} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]" title={`${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
-                <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
-                <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
+          <div className="space-y-3">
+            {/* Toolbar switcher ringkasan */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Ringkasan Bungkusan</span>
+                <span className="text-xs text-slate-400">({dayName(date)}, {longDate(date)})</span>
               </div>
-            ))}
-            {columnVisibility.batches && (
-              <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
-                <p className="text-2xl font-semibold text-emerald-700">{confirmed.pagi}<span className="text-sm text-slate-400"> · {confirmed.sore}</span></p>
-                <p className="text-[10px] text-slate-500">total {dayName(date)}</p>
+              <div className="inline-flex items-center gap-1 p-1 bg-white border border-slate-200/80 rounded-full shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setSummaryCompanyView('split')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+                    summaryCompanyView === 'split'
+                      ? 'bg-emerald-700 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                  title="Tampilkan terpisah: PT TBP dan PT GPS masing-masing baris kartu tersendiri"
+                >
+                  Pisahkan (TBP & GPS)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSummaryCompanyView('TBP')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+                    summaryCompanyView === 'TBP'
+                      ? 'bg-blue-700 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                  title="Hanya ringkasan PT Trimegah Bangun Persada"
+                >
+                  PT TBP ({tbpFiltered.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSummaryCompanyView('GPS')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+                    summaryCompanyView === 'GPS'
+                      ? 'bg-emerald-700 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                  title="Hanya ringkasan PT Gane Permai Sentosa"
+                >
+                  PT GPS ({gpsFiltered.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSummaryCompanyView('all')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
+                    summaryCompanyView === 'all'
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                  title="Total gabungan semua karyawan"
+                >
+                  Total Gabungan ({filtered.length})
+                </button>
+              </div>
+            </div>
+
+            {/* Kartu Ringkasan TBP */}
+            {(summaryCompanyView === 'split' || summaryCompanyView === 'TBP') && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-blue-50 text-blue-800 border-blue-200">
+                    PT Trimegah Bangun Persada (TBP) · {tbpFiltered.length} Karyawan
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
+                  <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1"><Users className="w-3 h-3 text-blue-600" />Karyawan</p>
+                    <p className="text-2xl font-semibold text-slate-900">{tbpFiltered.length}</p>
+                    <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
+                  </div>
+                  {summaryCardsTbp.map(c => (
+                    <div key={`tbp-${c.label}`} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`TBP ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
+                      <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
+                      <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
+                    </div>
+                  ))}
+                  {columnVisibility.batches && (
+                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
+                      <p className="text-2xl font-semibold text-emerald-700">{confirmedTbp.pagi}<span className="text-sm text-slate-400"> · {confirmedTbp.sore}</span></p>
+                      <p className="text-[10px] text-slate-500">TBP {dayName(date)}</p>
+                    </div>
+                  )}
+                  {columnVisibility.statusNotes && (
+                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
+                      <p className={`text-2xl font-semibold ${confirmedTbp.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmedTbp.belumLapor}</p>
+                      <p className="text-[10px] text-slate-500">karyawan</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-            {columnVisibility.statusNotes && (
-              <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
-                <p className={`text-2xl font-semibold ${confirmed.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmed.belumLapor}</p>
-                <p className="text-[10px] text-slate-500">karyawan</p>
+
+            {/* Kartu Ringkasan GPS */}
+            {(summaryCompanyView === 'split' || summaryCompanyView === 'GPS') && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-800 border-emerald-200">
+                    PT Gane Permai Sentosa (GPS) · {gpsFiltered.length} Karyawan
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
+                  <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1"><Users className="w-3 h-3 text-emerald-600" />Karyawan</p>
+                    <p className="text-2xl font-semibold text-slate-900">{gpsFiltered.length}</p>
+                    <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
+                  </div>
+                  {summaryCardsGps.map(c => (
+                    <div key={`gps-${c.label}`} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`GPS ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
+                      <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
+                      <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
+                    </div>
+                  ))}
+                  {columnVisibility.batches && (
+                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
+                      <p className="text-2xl font-semibold text-emerald-700">{confirmedGps.pagi}<span className="text-sm text-slate-400"> · {confirmedGps.sore}</span></p>
+                      <p className="text-[10px] text-slate-500">GPS {dayName(date)}</p>
+                    </div>
+                  )}
+                  {columnVisibility.statusNotes && (
+                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
+                      <p className={`text-2xl font-semibold ${confirmedGps.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmedGps.belumLapor}</p>
+                      <p className="text-[10px] text-slate-500">karyawan</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Total Gabungan (bila dipilih mode 'all') */}
+            {summaryCompanyView === 'all' && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-slate-100 text-slate-800 border-slate-300">
+                    Total Gabungan (TBP & GPS) · {filtered.length} Karyawan
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
+                  <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1"><Users className="w-3 h-3" />Karyawan</p>
+                    <p className="text-2xl font-semibold text-slate-900">{filtered.length}</p>
+                    <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
+                  </div>
+                  {summaryCardsAll.map(c => (
+                    <div key={`all-${c.label}`} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`Total ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
+                      <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
+                      <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
+                    </div>
+                  ))}
+                  {columnVisibility.batches && (
+                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
+                      <p className="text-2xl font-semibold text-emerald-700">{confirmedAll.pagi}<span className="text-sm text-slate-400"> · {confirmedAll.sore}</span></p>
+                      <p className="text-[10px] text-slate-500">total {dayName(date)}</p>
+                    </div>
+                  )}
+                  {columnVisibility.statusNotes && (
+                    <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
+                      <p className={`text-2xl font-semibold ${confirmedAll.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmedAll.belumLapor}</p>
+                      <p className="text-[10px] text-slate-500">karyawan</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
