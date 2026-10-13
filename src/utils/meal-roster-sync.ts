@@ -182,15 +182,12 @@ export function computeMealOrderByRoster(
     // ==========================================
     // LOGIKA MESS NR (Gol I-V)
     // ==========================================
+    // Keterangan: "Bungkusan Kantin" = 1 di kolom Kantin, "Bungkusan" (Lapangan) = 1 di kolom Lapangan.
     // Tempat tinggal Nirwana -> Bungkusan Kantin
-    // Sesuai aturan: Gol I-II status mess NR dan tempat tinggal Nirwana -> Kantin pagi = 1 (Bungkusan kantin) dan Sore = 1 (Bungkusan kantin)
-    const golStr = String(emp.gol || '').trim().toUpperCase();
-    const isGol12 = !golStr || golStr === 'I' || golStr === 'II' || golStr === '1' || golStr === '2';
-    const isNirwanaBungkus = isNirwana && isGol12;
-
-    const bungkusanKantinPagi = isNirwanaBungkus ? '1' : (isNirwana ? 'K' : null);
-    const bungkusanKantinSiang = isNirwana ? 'K' : null;
-    const bungkusanKantinSore = isNirwanaBungkus ? '1' : (isNirwana ? 'K' : null);
+    const BUNGKUS_KANTIN = '1';
+    const bungkusanKantinPagi = isNirwana ? BUNGKUS_KANTIN : null;
+    const bungkusanKantinSiang = isNirwana ? BUNGKUS_KANTIN : null;
+    const bungkusanKantinSore = isNirwana ? BUNGKUS_KANTIN : null;
     const batchPagiNirwana = isNirwana ? '1' : null;
     const batchSoreNirwana = isNirwana ? '1' : null;
 
@@ -235,10 +232,10 @@ export function computeMealOrderByRoster(
       res.statusKerja = code === 'S' ? 'Sakit' : 'Izin';
       res.status = code === 'S' ? 'SAKIT' : 'IZIN';
       res.keteranganLapor = 'Belum Lapor';
-      res.pagiKantin = isNirwanaBungkus ? '1' : 'K';
+      res.pagiKantin = BUNGKUS_KANTIN;
       res.batchPagi = '1';
-      res.siangKantin = 'K';
-      res.soreKantin = isNirwanaBungkus ? '1' : 'K';
+      res.siangKantin = BUNGKUS_KANTIN;
+      res.soreKantin = BUNGKUS_KANTIN;
       res.batchSore = '1';
     } else if (code === 'CS') {
       // 6. CS: Pagi, Siang, Sore = Kosong (Nirwana: Bungkusan Kantin), Malam = Kosongkan
