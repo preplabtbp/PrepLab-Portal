@@ -105,6 +105,61 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const [syncingRoster, setSyncingRoster] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<MealOrder | null>(null);
 
+  // Pengaturan visibilitas kolom & header
+  const [columnVisibility, setColumnVisibility] = useState<{
+    profile: boolean;     // Status Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal
+    ramadan: boolean;     // Keterangan Sahur, Tidak Puasa, Takjil
+    batches: boolean;     // 1 (B.Pagi) & 1 (B.Sore)
+    statusNotes: boolean; // Status, Belum Lapor, Catatan
+    summary: boolean;     // Ringkasan Total Card di atas tabel
+  }>(() => {
+    try {
+      const saved = localStorage.getItem('preplab_meal_column_vis');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          profile: parsed.profile ?? true,
+          ramadan: parsed.ramadan ?? false,
+          batches: parsed.batches ?? true,
+          statusNotes: parsed.statusNotes ?? true,
+          summary: parsed.summary ?? true,
+        };
+      }
+    } catch (e) {}
+    return {
+      profile: true,
+      ramadan: false,
+      batches: true,
+      statusNotes: true,
+      summary: true,
+    };
+  });
+
+  const [showColMenu, setShowColMenu] = useState(false);
+
+  const updateColVisibility = (patch: Partial<typeof columnVisibility>) => {
+    setColumnVisibility(prev => {
+      const next = { ...prev, ...patch };
+      try {
+        localStorage.setItem('preplab_meal_column_vis', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const activeMealGroups = useMemo(() => {
+    if (columnVisibility.ramadan) return MEAL_GROUPS;
+    return MEAL_GROUPS.filter(g => g.label !== 'Takjil');
+  }, [columnVisibility.ramadan]);
+
+  const activeMealCells = useMemo(() => {
+    return activeMealGroups.flatMap(g => g.cells.map(c => ({ ...c, group: g.label })));
+  }, [activeMealGroups]);
+
+  const leadingColSpan = useMemo(() => {
+    return 4 + (columnVisibility.profile ? 6 : 0) + (columnVisibility.ramadan ? 2 : 0);
+  }, [columnVisibility.profile, columnVisibility.ramadan]);
+
   const handleSyncRoster = async () => {
     if (!canManage) return;
     setSyncingRoster(true);
@@ -156,7 +211,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       && (!q || [r.nama, r.nik, r.section, r.tempatTinggal].some(v => String(v || '').toLowerCase().includes(q))));
   }, [rows, search, sectionFilter]);
 
-  const totals = useMemo(() => Object.fromEntries(MEAL_CELLS.map(c => [c.key, cellTotal(filtered, c.key, c.kind)])) as Record<MealCellKey, number>, [filtered]);
+  const totals = useMemo(() => Object.fromEntries(activeMealCells.map(c => [c.key, cellTotal(filtered, c.key, c.kind)])) as Record<MealCellKey, number>, [filtered, activeMealCells]);
   // Total kolom "1 (B.Pagi)" & "1 (B.Sore)" + jumlah yang belum lapor
   const confirmed = useMemo(() => ({
     pagi: filtered.reduce((s, r) => s + portions(r.batchPagi), 0),
@@ -507,13 +562,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     }
   };
 
-  const summaryCards = [
-    ...MEAL_GROUPS.map(g => ({
+  const summaryCards = useMemo(() => [
+    ...activeMealGroups.map(g => ({
       label: g.label,
-      value: g.cells.reduce((s, c) => s + totals[c.key], 0),
-      detail: g.cells.map(c => `${c.label} ${totals[c.key]}`).join(' · '),
+      value: g.cells.reduce((s, c) => s + (totals[c.key] || 0), 0),
+      detail: g.cells.map(c => `${c.label} ${totals[c.key] || 0}`).join(' · '),
     })),
-  ];
+  ], [activeMealGroups, totals]);
 
   return (
     <div className="min-h-screen pb-24 bg-[#f3f6f4]">
@@ -648,30 +703,36 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
         {view === 'orders' && <>
         {/* Ringkasan total per waktu makan */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-          <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1"><Users className="w-3 h-3" />Karyawan</p>
-            <p className="text-2xl font-semibold text-slate-900">{filtered.length}</p>
-            <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
-          </div>
-          {summaryCards.map(c => (
-            <div key={c.label} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
-              <p className="text-2xl font-semibold text-slate-900">{c.value}</p>
-              <p className="text-[10px] text-slate-500 truncate">{c.detail}</p>
+        {columnVisibility.summary && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
+            <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1"><Users className="w-3 h-3" />Karyawan</p>
+              <p className="text-2xl font-semibold text-slate-900">{filtered.length}</p>
+              <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
             </div>
-          ))}
-          <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
-            <p className="text-2xl font-semibold text-emerald-700">{confirmed.pagi}<span className="text-sm text-slate-400"> · {confirmed.sore}</span></p>
-            <p className="text-[10px] text-slate-500">total {dayName(date)}</p>
+            {summaryCards.map(c => (
+              <div key={c.label} className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
+                <p className="text-2xl font-semibold text-slate-900">{c.value}</p>
+                <p className="text-[10px] text-slate-500 truncate">{c.detail}</p>
+              </div>
+            ))}
+            {columnVisibility.batches && (
+              <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
+                <p className="text-2xl font-semibold text-emerald-700">{confirmed.pagi}<span className="text-sm text-slate-400"> · {confirmed.sore}</span></p>
+                <p className="text-[10px] text-slate-500">total {dayName(date)}</p>
+              </div>
+            )}
+            {columnVisibility.statusNotes && (
+              <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
+                <p className={`text-2xl font-semibold ${confirmed.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmed.belumLapor}</p>
+                <p className="text-[10px] text-slate-500">karyawan</p>
+              </div>
+            )}
           </div>
-          <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
-            <p className={`text-2xl font-semibold ${confirmed.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmed.belumLapor}</p>
-            <p className="text-[10px] text-slate-500">karyawan</p>
-          </div>
-        </div>
+        )}
 
         {/* Tabel */}
         <div className="rounded-3xl bg-white p-3 sm:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] space-y-3 min-w-0">
@@ -690,7 +751,193 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               <option value="ALL">Semua Section</option>
               {sections.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+
+            {/* Quick toggle: Info Profil */}
+            <button
+              type="button"
+              onClick={() => updateColVisibility({ profile: !columnVisibility.profile })}
+              className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-full border text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
+                columnVisibility.profile
+                  ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  : 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+              }`}
+              title={columnVisibility.profile ? 'Sembunyikan kolom info profil (Status Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal)' : 'Tampilkan kolom info profil'}
+            >
+              {columnVisibility.profile ? <EyeOff className="w-3.5 h-3.5 text-slate-500" /> : <Eye className="w-3.5 h-3.5 text-emerald-600" />}
+              <span>{columnVisibility.profile ? 'Sembunyikan Profil' : 'Tampilkan Profil'}</span>
+            </button>
+
+            {/* Menu Popover: Atur Kolom */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowColMenu(v => !v)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-full border text-xs font-semibold cursor-pointer transition-colors ${
+                  showColMenu ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Atur Kolom</span>
+                {showColMenu ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+
+              {showColMenu && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowColMenu(false)} />
+                  <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white p-3 shadow-xl border border-slate-200 z-40 space-y-2 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <p className="text-xs font-bold text-slate-900">Visibilitas Kolom & Tampilan</p>
+                      <button type="button" onClick={() => setShowColMenu(false)} className="p-1 rounded-md text-slate-400 hover:text-slate-600">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-1 text-xs">
+                      <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
+                        <div>
+                          <p className="font-semibold text-slate-800">Info Profil Karyawan</p>
+                          <p className="text-[10px] text-slate-500">Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={columnVisibility.profile}
+                          onChange={e => updateColVisibility({ profile: e.target.checked })}
+                          className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
+                        <div>
+                          <p className="font-semibold text-slate-800">Kolom Puasa / Ramadhan</p>
+                          <p className="text-[10px] text-slate-500">Keterangan Sahur, Tidak Puasa, Takjil</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={columnVisibility.ramadan}
+                          onChange={e => updateColVisibility({ ramadan: e.target.checked })}
+                          className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
+                        <div>
+                          <p className="font-semibold text-slate-800">Kolom 1 (B.Pagi) & 1 (B.Sore)</p>
+                          <p className="text-[10px] text-slate-500">Rekap konfirmasi bungkusan pagi & sore</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={columnVisibility.batches}
+                          onChange={e => updateColVisibility({ batches: e.target.checked })}
+                          className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
+                        <div>
+                          <p className="font-semibold text-slate-800">Status, Lapor & Catatan</p>
+                          <p className="text-[10px] text-slate-500">Status, Belum Lapor, dan Catatan samping</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={columnVisibility.statusNotes}
+                          onChange={e => updateColVisibility({ statusNotes: e.target.checked })}
+                          className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
+                        <div>
+                          <p className="font-semibold text-slate-800">Kartu Ringkasan Atas</p>
+                          <p className="text-[10px] text-slate-500">Kartu total porsi di atas tabel</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={columnVisibility.summary}
+                          onChange={e => updateColVisibility({ summary: e.target.checked })}
+                          className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => updateColVisibility({ profile: true, ramadan: true, batches: true, statusNotes: true, summary: true })}
+                        className="px-2.5 py-1 text-slate-600 hover:text-emerald-700 hover:bg-slate-100 rounded-lg font-medium cursor-pointer"
+                      >
+                        Tampilkan Semua
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateColVisibility({ profile: false, ramadan: false, batches: true, statusNotes: true, summary: true })}
+                        className="px-2.5 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg font-semibold cursor-pointer"
+                      >
+                        Fokus Orderan
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Indikator kolom tersembunyi */}
+          {(!columnVisibility.profile || !columnVisibility.ramadan || !columnVisibility.batches || !columnVisibility.statusNotes) && (
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200">
+              <span className="font-semibold text-slate-500">Kolom disembunyikan:</span>
+              {!columnVisibility.profile && (
+                <button
+                  type="button"
+                  onClick={() => updateColVisibility({ profile: true })}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-700 cursor-pointer"
+                  title="Klik untuk menampilkan info profil"
+                >
+                  <Eye className="w-3 h-3 text-slate-400" />
+                  Profil Karyawan (6 kolom)
+                </button>
+              )}
+              {!columnVisibility.ramadan && (
+                <button
+                  type="button"
+                  onClick={() => updateColVisibility({ ramadan: true })}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-700 cursor-pointer"
+                  title="Klik untuk menampilkan kolom puasa"
+                >
+                  <Eye className="w-3 h-3 text-slate-400" />
+                  Puasa (Sahur/Takjil)
+                </button>
+              )}
+              {!columnVisibility.batches && (
+                <button
+                  type="button"
+                  onClick={() => updateColVisibility({ batches: true })}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-700 cursor-pointer"
+                  title="Klik untuk menampilkan kolom 1(B.Pagi) & 1(B.Sore)"
+                >
+                  <Eye className="w-3 h-3 text-slate-400" />
+                  1 (B.Pagi) / 1 (B.Sore)
+                </button>
+              )}
+              {!columnVisibility.statusNotes && (
+                <button
+                  type="button"
+                  onClick={() => updateColVisibility({ statusNotes: true })}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-700 cursor-pointer"
+                  title="Klik untuk menampilkan status & catatan"
+                >
+                  <Eye className="w-3 h-3 text-slate-400" />
+                  Status & Catatan
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => updateColVisibility({ profile: true, ramadan: true, batches: true, statusNotes: true })}
+                className="ml-auto text-emerald-700 hover:underline font-semibold cursor-pointer"
+              >
+                Tampilkan Semua Kolom
+              </button>
+            </div>
+          )}
 
           {isLoading ? (
             <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-10 rounded-xl bg-slate-100 animate-pulse" />)}</div>
@@ -746,28 +993,108 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <th rowSpan={2} className={`${thBase} text-center`}>No</th>
                       <th rowSpan={2} className={`${thBase} sticky left-0 z-20 min-w-[200px]`}>Nama Karyawan</th>
                       <th rowSpan={2} className={thBase}>NIK</th>
-                      <th rowSpan={2} className={thBase}>Status Mess</th>
-                      <th rowSpan={2} className={thBase}>PT</th>
-                      <th rowSpan={2} className={thBase}>Shift</th>
-                      <th rowSpan={2} className={thBase}>Section</th>
-                      <th rowSpan={2} className={thBase}>Status Kerja</th>
-                      <th colSpan={2} className={`${thBase} text-center`}>Keterangan</th>
-                      <th rowSpan={2} className={thBase}>Tempat Tinggal</th>
+                      {columnVisibility.profile && (
+                        <>
+                          <th rowSpan={2} className={thBase}>
+                            <div className="flex items-center justify-between gap-1">
+                              <span>Status Mess</span>
+                              <button
+                                type="button"
+                                onClick={() => updateColVisibility({ profile: false })}
+                                title="Sembunyikan kolom info profil"
+                                className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-slate-200/60 cursor-pointer"
+                              >
+                                <EyeOff className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </th>
+                          <th rowSpan={2} className={thBase}>PT</th>
+                          <th rowSpan={2} className={thBase}>Shift</th>
+                          <th rowSpan={2} className={thBase}>Section</th>
+                          <th rowSpan={2} className={thBase}>Status Kerja</th>
+                        </>
+                      )}
+                      {columnVisibility.ramadan && (
+                        <th colSpan={2} className={`${thBase} text-center`}>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span>Keterangan</span>
+                            <button
+                              type="button"
+                              onClick={() => updateColVisibility({ ramadan: false })}
+                              title="Sembunyikan kolom puasa"
+                              className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-slate-200/60 cursor-pointer"
+                            >
+                              <EyeOff className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </th>
+                      )}
+                      {columnVisibility.profile && (
+                        <th rowSpan={2} className={thBase}>Tempat Tinggal</th>
+                      )}
                       <th rowSpan={2} className={`${thBase} text-center`}>Shift<br />(Siang/Malam)</th>
-                      {MEAL_GROUPS.map(g => <th key={g.label} colSpan={g.cells.length} className={`${thBase} text-center bg-amber-50 border-amber-200/70`}>{g.label}</th>)}
-                      <th className={`${thBase} text-center bg-yellow-200 border-yellow-300`}>{dayName(date)}</th>
-                      <th className={`${thBase} text-center bg-yellow-200 border-yellow-300`}>{longDate(date)}</th>
-                      <th rowSpan={2} className={thBase}>Status</th>
-                      <th rowSpan={2} className={thBase}>Keterangan<br />(Belum Lapor)</th>
-                      <th rowSpan={2} className={thBase}>Catatan</th>
+                      {activeMealGroups.map(g => (
+                        <th key={g.label} colSpan={g.cells.length} className={`${thBase} text-center bg-amber-50 border-amber-200/70`}>
+                          {g.label}
+                        </th>
+                      ))}
+                      {columnVisibility.batches && (
+                        <>
+                          <th className={`${thBase} text-center bg-yellow-200 border-yellow-300`}>
+                            <div className="flex items-center justify-between gap-1">
+                              <span>{dayName(date)}</span>
+                              <button
+                                type="button"
+                                onClick={() => updateColVisibility({ batches: false })}
+                                title="Sembunyikan kolom 1 (B.Pagi) & 1 (B.Sore)"
+                                className="p-0.5 rounded text-slate-500 hover:text-rose-700 hover:bg-yellow-300/60 cursor-pointer"
+                              >
+                                <EyeOff className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </th>
+                          <th className={`${thBase} text-center bg-yellow-200 border-yellow-300`}>{longDate(date)}</th>
+                        </>
+                      )}
+                      {columnVisibility.statusNotes && (
+                        <>
+                          <th rowSpan={2} className={thBase}>
+                            <div className="flex items-center justify-between gap-1">
+                              <span>Status</span>
+                              <button
+                                type="button"
+                                onClick={() => updateColVisibility({ statusNotes: false })}
+                                title="Sembunyikan kolom status & catatan"
+                                className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-slate-200/60 cursor-pointer"
+                              >
+                                <EyeOff className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </th>
+                          <th rowSpan={2} className={thBase}>Keterangan<br />(Belum Lapor)</th>
+                          <th rowSpan={2} className={thBase}>Catatan</th>
+                        </>
+                      )}
                       {canManage && <th rowSpan={2} className={thBase} />}
                     </tr>
                     <tr>
-                      <th className={`${thBase} text-center`}>Sahur</th>
-                      <th className={`${thBase} text-center`}>Tidak Puasa</th>
-                      {MEAL_CELLS.map(c => <th key={c.key} className={`${thBase} text-center bg-amber-50 border-amber-200/70`}>{c.label}</th>)}
-                      <th className={`${thBase} text-center`}>1 (B.Pagi)</th>
-                      <th className={`${thBase} text-center`}>1 (B. Sore)</th>
+                      {columnVisibility.ramadan && (
+                        <>
+                          <th className={`${thBase} text-center`}>Sahur</th>
+                          <th className={`${thBase} text-center`}>Tidak Puasa</th>
+                        </>
+                      )}
+                      {activeMealCells.map(c => (
+                        <th key={c.key} className={`${thBase} text-center bg-amber-50 border-amber-200/70`}>
+                          {c.label}
+                        </th>
+                      ))}
+                      {columnVisibility.batches && (
+                        <>
+                          <th className={`${thBase} text-center`}>1 (B.Pagi)</th>
+                          <th className={`${thBase} text-center`}>1 (B. Sore)</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -776,14 +1103,24 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         <td className={`${tdBase} text-center text-slate-500`}>{i + 1}</td>
                         <td className={`${tdBase} sticky left-0 bg-white font-bold text-slate-900`}>{r.nama}</td>
                         <td className={`${tdBase} font-mono text-slate-700`}>{r.nik}</td>
-                        <td className={`${tdBase} text-center`}>{r.statusMess || '-'}</td>
-                        <td className={`${tdBase} text-center`}>{r.pt || '-'}</td>
-                        <td className={tdBase}>{r.shift || '-'}</td>
-                        <td className={tdBase}>{r.section || '-'}</td>
-                        <td className={`${tdBase} text-center`}>{r.statusKerja || '-'}</td>
-                        <td className={`${tdBase} text-center`}>{r.sahur || '-'}</td>
-                        <td className={`${tdBase} text-center`}>{r.tidakPuasa || '-'}</td>
-                        <td className={`${tdBase} text-center`}>{r.tempatTinggal || '-'}</td>
+                        {columnVisibility.profile && (
+                          <>
+                            <td className={`${tdBase} text-center`}>{r.statusMess || '-'}</td>
+                            <td className={`${tdBase} text-center`}>{r.pt || '-'}</td>
+                            <td className={tdBase}>{r.shift || '-'}</td>
+                            <td className={tdBase}>{r.section || '-'}</td>
+                            <td className={`${tdBase} text-center`}>{r.statusKerja || '-'}</td>
+                          </>
+                        )}
+                        {columnVisibility.ramadan && (
+                          <>
+                            <td className={`${tdBase} text-center`}>{r.sahur || '-'}</td>
+                            <td className={`${tdBase} text-center`}>{r.tidakPuasa || '-'}</td>
+                          </>
+                        )}
+                        {columnVisibility.profile && (
+                          <td className={`${tdBase} text-center`}>{r.tempatTinggal || '-'}</td>
+                        )}
                         <td className={`${tdBase} text-center p-1`}>
                           {canManage ? (
                             <select
@@ -798,12 +1135,22 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             </select>
                           ) : <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-semibold">{r.shiftKerja || '-'}</span>}
                         </td>
-                        {MEAL_CELLS.map(c => <td key={c.key} className={`${tdBase} text-center p-1`}>{renderMealCell(r, c.key, c.kind)}</td>)}
-                        <td className={`${tdBase} bg-slate-50 p-1 text-center`}>{renderConfirm(r, 'batchPagi')}</td>
-                        <td className={`${tdBase} bg-slate-50 p-1 text-center`}>{renderConfirm(r, 'batchSore')}</td>
-                        <td className={tdBase}>{r.status || ''}</td>
-                        <td className={`${tdBase} ${r.keteranganLapor ? 'text-rose-600 font-semibold' : ''}`}>{r.keteranganLapor || ''}</td>
-                        <td className={`${tdBase} font-semibold text-slate-700`}>{r.catatan || ''}</td>
+                        {activeMealCells.map(c => (
+                          <td key={c.key} className={`${tdBase} text-center p-1`}>{renderMealCell(r, c.key, c.kind)}</td>
+                        ))}
+                        {columnVisibility.batches && (
+                          <>
+                            <td className={`${tdBase} bg-slate-50 p-1 text-center`}>{renderConfirm(r, 'batchPagi')}</td>
+                            <td className={`${tdBase} bg-slate-50 p-1 text-center`}>{renderConfirm(r, 'batchSore')}</td>
+                          </>
+                        )}
+                        {columnVisibility.statusNotes && (
+                          <>
+                            <td className={tdBase}>{r.status || ''}</td>
+                            <td className={`${tdBase} ${r.keteranganLapor ? 'text-rose-600 font-semibold' : ''}`}>{r.keteranganLapor || ''}</td>
+                            <td className={`${tdBase} font-semibold text-slate-700`}>{r.catatan || ''}</td>
+                          </>
+                        )}
                         {canManage && (
                           <td className={`${tdBase} p-1`}>
                             <div className="flex items-center gap-1">
@@ -817,13 +1164,21 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   </tbody>
                   <tfoot>
                     <tr className="bg-slate-100 font-black">
-                      <td colSpan={12} className={`${tdBase} text-right text-[11px] uppercase tracking-wider text-slate-700`}>Total Order</td>
-                      {MEAL_CELLS.map(c => <td key={c.key} className={`${tdBase} text-center text-slate-900`}>{totals[c.key] || '-'}</td>)}
-                      <td className={`${tdBase} text-center text-emerald-700`}>{confirmed.pagi}</td>
-                      <td className={`${tdBase} text-center text-emerald-700`}>{confirmed.sore}</td>
-                      <td className={tdBase} />
-                      <td className={`${tdBase} text-rose-600`}>{confirmed.belumLapor ? `${confirmed.belumLapor} belum lapor` : ''}</td>
-                      <td className={tdBase} />
+                      <td colSpan={leadingColSpan} className={`${tdBase} text-right text-[11px] uppercase tracking-wider text-slate-700`}>Total Order</td>
+                      {activeMealCells.map(c => <td key={c.key} className={`${tdBase} text-center text-slate-900`}>{totals[c.key] || '-'}</td>)}
+                      {columnVisibility.batches && (
+                        <>
+                          <td className={`${tdBase} text-center text-emerald-700`}>{confirmed.pagi}</td>
+                          <td className={`${tdBase} text-center text-emerald-700`}>{confirmed.sore}</td>
+                        </>
+                      )}
+                      {columnVisibility.statusNotes && (
+                        <>
+                          <td className={tdBase} />
+                          <td className={`${tdBase} text-rose-600`}>{confirmed.belumLapor ? `${confirmed.belumLapor} belum lapor` : ''}</td>
+                          <td className={tdBase} />
+                        </>
+                      )}
                       {canManage && <td className={tdBase} />}
                     </tr>
                   </tfoot>
@@ -847,8 +1202,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         </div>
                       )}
                     </div>
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {MEAL_GROUPS.map(g => (
+                    <div className="grid grid-cols-5 gap-1.5" style={{ gridTemplateColumns: `repeat(${activeMealGroups.length}, minmax(0, 1fr))` }}>
+                      {activeMealGroups.map(g => (
                         <div key={g.label} className="rounded-xl bg-amber-50/60 p-1.5 text-center">
                           <p className="text-[9px] font-black uppercase text-slate-600 truncate">{g.label.replace(' / ', '/')}</p>
                           {g.cells.map(c => (
@@ -860,13 +1215,15 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         </div>
                       ))}
                     </div>
-                    <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-600">
-                      <span className="flex items-center gap-1">B.Pagi {renderConfirm(r, 'batchPagi')}</span>
-                      <span className="flex items-center gap-1">B.Sore {renderConfirm(r, 'batchSore')}</span>
-                      {(r.keteranganLapor || r.catatan) && (
-                        <span className="text-rose-600">{[r.keteranganLapor, r.catatan].filter(Boolean).join(' · ')}</span>
-                      )}
-                    </div>
+                    {columnVisibility.batches && (
+                      <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-600">
+                        <span className="flex items-center gap-1">B.Pagi {renderConfirm(r, 'batchPagi')}</span>
+                        <span className="flex items-center gap-1">B.Sore {renderConfirm(r, 'batchSore')}</span>
+                        {columnVisibility.statusNotes && (r.keteranganLapor || r.catatan) && (
+                          <span className="text-rose-600">{[r.keteranganLapor, r.catatan].filter(Boolean).join(' · ')}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
