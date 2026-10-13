@@ -8,7 +8,7 @@ import { Input, Select, Button } from './ui';
 import { todayWit } from '../utils/training-import';
 import { parseMealOrderSheet, type ParsedMealOrderRow, type MealImportField } from '../utils/meal-order-import';
 import { isTuesdayWednesdaySaturday, mealChoicePatch } from '../utils/meal-roster-sync';
-import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle } from './meal-bungkus-recap';
+import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle, type RecapBlock } from './meal-bungkus-recap';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
@@ -240,6 +240,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     staleTime: 10 * 60 * 1000,
   });
   const recapBlocks = useMemo(() => (view === 'recap' ? buildBungkusRecap(rows, employees, date) : []), [view, rows, employees, date]);
+  const [recapCustomBlocks, setRecapCustomBlocks] = useState<RecapBlock[] | null>(null);
+
+  // Reset custom rekapan jika tanggal berganti
+  useEffect(() => {
+    setRecapCustomBlocks(null);
+  }, [date]);
+
+  const activeRecapBlocks = recapCustomBlocks ?? recapBlocks;
 
   const sections = useMemo(() => Array.from(new Set(rows.map(r => r.section).filter(Boolean) as string[])).sort(), [rows]);
   const filtered = useMemo(() => {
@@ -1005,7 +1013,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 onClick={async () => {
                   setDownloadingPdf(true);
                   try {
-                    await downloadBungkusRecapPdf(date, recapBlocks);
+                    await downloadBungkusRecapPdf(date, activeRecapBlocks);
                   } catch (e: any) {
                     toast.error(`Gagal membuat PDF: ${e?.message || e}`);
                   } finally {
@@ -1025,7 +1033,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               <p className="p-8 text-center text-xs text-slate-500 rounded-2xl border border-dashed border-slate-300">Belum ada orderan untuk {dayName(date)}, {longDate(date)}</p>
             ) : (
               <div className="overflow-x-auto rounded-xl">
-                <BungkusRecapSheet title={recapTitle(date)} blocks={recapBlocks} />
+                <BungkusRecapSheet
+                  title={recapTitle(date)}
+                  blocks={activeRecapBlocks}
+                  onChangeBlocks={setRecapCustomBlocks}
+                  canManage={canManage}
+                  onReset={() => setRecapCustomBlocks(null)}
+                />
               </div>
             )}
           </div>
