@@ -662,9 +662,14 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     .returning({ id: mealOrders.id });
   const removed = removedRows.length;
 
-  // 2. Jika bukan overwrite, cek karyawan yang sudah ada di tanggal tsb
-  const existingRows = await db.select({ nik: mealOrders.nik }).from(mealOrders).where(eq(mealOrders.orderDate, date));
-  const existingNiks = new Set(existingRows.map(r => r.nik.toUpperCase().trim()));
+  // 2. Karyawan yang sudah ada di tanggal tsb: profilnya (Status Mess, PT, Shift, Section, Tempat Tinggal) tidak disinkronkan
+  //    dari roster — yang dipakai dari roster hanya kode kehadiran; aturan makan dihitung dari profil di orderan.
+  const existingRows = await db.select({
+    nik: mealOrders.nik, statusMess: mealOrders.statusMess, pt: mealOrders.pt, shift: mealOrders.shift,
+    section: mealOrders.section, tempatTinggal: mealOrders.tempatTinggal,
+  }).from(mealOrders).where(eq(mealOrders.orderDate, date));
+  const existingByNik = new Map(existingRows.map(r => [r.nik.toUpperCase().trim(), r]));
+  const existingNiks = new Set(existingByNik.keys());
 
   const rowsToSave: any[] = [];
   let sortIndex = 1;
@@ -672,11 +677,15 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   const nonshift = await loadNonshiftNiks(date);
   const prevStatuses = await loadPreviousRosterStatuses(date);
 
-  for (const emp of activeEmps) {
-    const nik = emp.nik.toUpperCase().trim();
+  for (const rosterEmp of activeEmps) {
+    const nik = rosterEmp.nik.toUpperCase().trim();
     if (!overwrite && existingNiks.has(nik)) {
       continue;
     }
+    const current = existingByNik.get(nik);
+    const emp = current
+      ? { ...rosterEmp, statusMess: current.statusMess, pt: current.pt, shift: current.shift, section: current.section, tempatTinggal: current.tempatTinggal }
+      : rosterEmp;
     const prevStatus = prevStatuses.get(nik);
     const computed = computeMealOrderByRoster(emp, emp.status, date, prefs.get(nik), prevStatus);
     if (computed.shiftKerja === 'SIANG' && nonshift.has(nik)) computed.shiftKerja = 'Nonshift';
@@ -723,14 +732,13 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     await db.insert(mealOrders).values(chunk)
       .onConflictDoUpdate({
         target: [mealOrders.orderDate, mealOrders.nik],
+        // Hanya kolom hasil roster kehadiran — profil karyawan di orderan tidak ditimpa
         set: Object.fromEntries([
-          'statusMess', 'pt', 'shift', 'section', 'statusKerja', 'tempatTinggal', 'shiftKerja',
+          'statusKerja', 'shiftKerja',
           'pagiKantin', 'pagiLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan',
           'takjilLapangan', 'malamLapangan', 'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan',
           'updatedBy', 'updatedAt'
-        ].map(f => [f, f === 'tempatTinggal'
-          ? sql.raw(`COALESCE(excluded.tempat_tinggal, meal_orders.tempat_tinggal)`)
-          : sql.raw(`excluded.${toSnake(f)}`)]))
+        ].map(f => [f, sql.raw(`excluded.${toSnake(f)}`)]))
       });
   }
 
@@ -755,13 +763,17 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const [emp] = await db.select().from(employees).where(sql`UPPER(${employees.nik}) = ${cleanNik}`).limit(1);
     if (!emp) return;
 
-    // Tempat tinggal dari orderan tanggal tsb (Nirwana dsb.) + pilihan Catatan terakhir
-    const [current] = await db.select({ tempatTinggal: mealOrders.tempatTinggal }).from(mealOrders)
+    // Profil dari orderan tanggal tsb (Status Mess, Shift, Tempat Tinggal) — dari roster hanya kode kehadiran
+    const [current] = await db.select({ statusMess: mealOrders.statusMess, shift: mealOrders.shift, tempatTinggal: mealOrders.tempatTinggal }).from(mealOrders)
       .where(and(eq(mealOrders.orderDate, ymd), eq(mealOrders.nik, emp.nik))).limit(1);
+    if (!current) return;
     const prefs = await loadMealPreferences(ymd, cleanNik);
     const prevStatuses = await loadPreviousRosterStatuses(ymd, cleanNik);
     const prevStatus = prevStatuses.get(cleanNik);
-    const computed = computeMealOrderByRoster({ ...emp, tempatTinggal: current?.tempatTinggal || null }, rosterStatus, ymd, prefs.get(cleanNik), prevStatus);
+    const computed = computeMealOrderByRoster(
+      { ...emp, statusMess: current.statusMess, shift: current.shift, tempatTinggal: current.tempatTinggal, alamatDomisili: null },
+      rosterStatus, ymd, prefs.get(cleanNik), prevStatus,
+    );
     if (computed.shiftKerja === 'SIANG' && (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik)) computed.shiftKerja = 'Nonshift';
 
     const updateValues = {
