@@ -1442,6 +1442,7 @@ export function NotionDatabaseTable({
 
   // Column templates definition
   const POPULAR_COLUMN_TEMPLATES = [
+    { name: 'Created Time', icon: '🕒', defaultValue: '-', desc: 'Tanggal pembuatan tugas (otomatis saat dibuat)' },
     { name: 'Status', icon: '🏷️', defaultValue: 'Open', desc: 'Dropdown status progress tugas' },
     { name: 'Completed Time', icon: '✓', defaultValue: '-', desc: 'Tanggal atau waktu penyelesaian tugas' },
     { name: 'Priority', icon: '⚡', defaultValue: 'Normal', desc: 'Tingkat urgensi kegiatan' },
@@ -1510,13 +1511,37 @@ export function NotionDatabaseTable({
 
     const headersWithNumber = hasNumber ? filtered : ['Number', ...filtered];
 
+    // Ensure 'Created Time' exists
+    const hasCreatedTime = headersWithNumber.some(h => {
+      const l = h.toLowerCase().trim();
+      return l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat') || l === 'dibuat';
+    });
+
+    // Place 'Created Time' right after Keterangan or Jenis Kegiatan if missing
+    let headersWithCreated = headersWithNumber;
+    if (!hasCreatedTime) {
+      const ketIdx = headersWithNumber.findIndex(h => {
+        const l = h.toLowerCase().trim();
+        return l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi');
+      });
+      if (ketIdx !== -1) {
+        headersWithCreated = [
+          ...headersWithNumber.slice(0, ketIdx + 1),
+          'Created Time',
+          ...headersWithNumber.slice(ketIdx + 1)
+        ];
+      } else {
+        headersWithCreated = [...headersWithNumber, 'Created Time'];
+      }
+    }
+
     // Ensure 'Tanggal Selesai' exists
-    const hasCompleted = headersWithNumber.some(h => {
+    const hasCompleted = headersWithCreated.some(h => {
       const l = h.toLowerCase().trim();
       return l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai');
     });
 
-    const headersWithMeta = hasCompleted ? headersWithNumber : [...headersWithNumber, 'Tanggal Selesai'];
+    const headersWithMeta = hasCompleted ? headersWithCreated : [...headersWithCreated, 'Tanggal Selesai'];
 
     // Jaga urutan custom/manual pengguna, jangan dipaksa disortir otomatis ulang
     return headersWithMeta;
