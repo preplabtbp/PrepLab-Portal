@@ -418,7 +418,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       // Hanya status tidak hadir yang dikenal; isian lain (mis. tempat tinggal "Kampung Kawasi") → On Duty
       const absent = String(r.statusKerja || '').trim().match(/^(cuti|izin|sakit|off|cs|dinas)\b/i);
       return [
-        i + 1, r.nik, r.nama, r.shiftKerja ? titleCase(r.shiftKerja) : '-', jenisMeal,
+        // Shift hanya Siang / Malam: Nonshift, Cuti, Cuti Site, dll. → Siang
+        i + 1, r.nik, r.nama, /malam/i.test(r.shiftKerja || '') ? 'Malam' : 'Siang', jenisMeal,
         absent ? (absent[1].toUpperCase() === 'CS' ? 'CS' : titleCase(absent[1])) : 'On Duty', ...kantin, ...bungkus,
       ];
     });
