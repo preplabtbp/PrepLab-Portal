@@ -457,7 +457,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         } else {
           // Aktifkan Kantin, otomatis matikan Lapangan di slot waktu yang sama
           const isNirwana = (r.tempatTinggal || '').toLowerCase().includes('nirwana');
-          const patch: Partial<MealOrder> = { [key]: 'K' };
+          const isNR = (r.statusMess || '').toUpperCase() === 'NR';
+          const kantinVal = isNirwana && isNR ? '1' : 'K';
+          const patch: Partial<MealOrder> = { [key]: kantinVal };
           if (key === 'pagiKantin') { patch.pagiLapangan = null; patch.batchPagi = isNirwana ? '1' : null; }
           if (key === 'siangKantin') { patch.siangLapangan = null; }
           if (key === 'soreKantin') { patch.soreLapangan = null; patch.batchSore = isNirwana ? '1' : null; }
@@ -555,8 +557,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       toast.success(`${r.nama}: ${time.toUpperCase()} diganti ke Bungkusan Lapangan`);
     } else {
       // Pindah ke Kantin
+      const isNR = (r.statusMess || '').toUpperCase() === 'NR';
+      const kantinVal = isNirwana && isNR ? '1' : 'K';
       saveCell(r, {
-        [kantinKey]: 'K',
+        [kantinKey]: kantinVal,
         [lapanganKey]: null,
         [batchKey]: isNirwana ? '1' : null,
       });

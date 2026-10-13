@@ -182,18 +182,23 @@ export function computeMealOrderByRoster(
     // ==========================================
     // LOGIKA MESS NR (Gol I-V)
     // ==========================================
-    // Tempat tinggal Nirwana -> Bungkusan Kantin (Kantin 'K' + batch '1' jika pagi/sore)
-    const bungkusanKantinPagi = isNirwana ? 'K' : null;
+    // Tempat tinggal Nirwana -> Bungkusan Kantin
+    // Sesuai aturan: Gol I-II status mess NR dan tempat tinggal Nirwana -> Kantin pagi = 1 (Bungkusan kantin) dan Sore = 1 (Bungkusan kantin)
+    const golStr = String(emp.gol || '').trim().toUpperCase();
+    const isGol12 = !golStr || golStr === 'I' || golStr === 'II' || golStr === '1' || golStr === '2';
+    const isNirwanaBungkus = isNirwana && isGol12;
+
+    const bungkusanKantinPagi = isNirwanaBungkus ? '1' : (isNirwana ? 'K' : null);
     const bungkusanKantinSiang = isNirwana ? 'K' : null;
-    const bungkusanKantinSore = isNirwana ? 'K' : null;
+    const bungkusanKantinSore = isNirwanaBungkus ? '1' : (isNirwana ? 'K' : null);
     const batchPagiNirwana = isNirwana ? '1' : null;
     const batchSoreNirwana = isNirwana ? '1' : null;
 
     if (code === 'D') {
       // 1. D: Nonshift dan shift siang
-      // Pagi = Kosong (Jika Tempat tinggal Nirwana maka Bungkusan Kantin)
+      // Pagi = Kosong (Jika Nirwana: 1 Bungkusan Kantin)
       // Siang = Bungkusan Lapangan
-      // Sore = Kosong (Jika Tempat tinggal Nirwana maka Bungkusan Kantin)
+      // Sore = Kosong (Jika Nirwana: 1 Bungkusan Kantin)
       // Malam = Kosongkan
       res.shiftKerja = defaultDayShiftKerja;
       res.pagiKantin = bungkusanKantinPagi;
@@ -203,9 +208,9 @@ export function computeMealOrderByRoster(
       res.batchSore = batchSoreNirwana;
     } else if (code === 'N') {
       // 2. N: Shift malam
-      // Pagi = Kosong (Nirwana: Bungkusan Kantin)
+      // Pagi = Kosong (Nirwana: 1 Bungkusan Kantin)
       // Siang = Kosong (Nirwana: Bungkusan Kantin)
-      // Sore = Kosong (Nirwana: Bungkusan Kantin)
+      // Sore = Kosong (Nirwana: 1 Bungkusan Kantin)
       // Malam = Bungkusan Lapangan
       res.shiftKerja = 'MALAM';
       res.pagiKantin = bungkusanKantinPagi;
@@ -216,7 +221,7 @@ export function computeMealOrderByRoster(
       res.malamLapangan = '1';
     } else if (code === 'LS') {
       // 3. LS: LongShift
-      // Pagi = Kosong (Nirwana: Bungkusan Kantin)
+      // Pagi = Kosong (Nirwana: 1 Bungkusan Kantin)
       // Siang = Bungkusan Lapangan, Sore = Bungkusan Lapangan, Malam = Bungkusan Lapangan
       res.shiftKerja = defaultDayShiftKerja;
       res.pagiKantin = bungkusanKantinPagi;
@@ -230,10 +235,10 @@ export function computeMealOrderByRoster(
       res.statusKerja = code === 'S' ? 'Sakit' : 'Izin';
       res.status = code === 'S' ? 'SAKIT' : 'IZIN';
       res.keteranganLapor = 'Belum Lapor';
-      res.pagiKantin = 'K';
+      res.pagiKantin = isNirwanaBungkus ? '1' : 'K';
       res.batchPagi = '1';
       res.siangKantin = 'K';
-      res.soreKantin = 'K';
+      res.soreKantin = isNirwanaBungkus ? '1' : 'K';
       res.batchSore = '1';
     } else if (code === 'CS') {
       // 6. CS: Pagi, Siang, Sore = Kosong (Nirwana: Bungkusan Kantin), Malam = Kosongkan
@@ -255,6 +260,11 @@ export function computeMealOrderByRoster(
       res.batchSore = batchSoreNirwana;
     } else {
       res.shiftKerja = defaultDayShiftKerja;
+      res.pagiKantin = bungkusanKantinPagi;
+      res.batchPagi = batchPagiNirwana;
+      res.siangLapangan = '1';
+      res.soreKantin = bungkusanKantinSore;
+      res.batchSore = batchSoreNirwana;
     }
   }
 
