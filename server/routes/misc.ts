@@ -890,9 +890,16 @@ export async function getRekapPersonnelClassification(
       return;
     }
 
-    // 3. Check official Inspection Schedule Sheet (Primary alignment with Inspeksi)
+    // 3. Check official Inspection Schedule Sheet (PRIMARY SOURCE OF TRUTH)
+    // The official weekly inspection schedule sheet is the HIGHEST PRIORITY for cuti determination.
+    // If person is explicitly listed under Cuti in the sheet, they ARE on leave - no override by roster.
+    if (matchesSheet(empName, sheetCutiNames)) {
+      onCutiSet.add(cleanNik);
+      return;
+    }
+
     // If person has an active inspection assigned in the schedule:
-    // They are on duty on site! They are NOT cuti, and are obligated for both Inspeksi and KTA/TTA!
+    // They are on duty on site! They are NOT cuti, obligated for both Inspeksi and KTA/TTA!
     if (matchesSheet(empName, sheetActiveNames)) {
       return; // Do NOT add to onCutiSet -> stays active!
     }
@@ -908,12 +915,6 @@ export async function getRekapPersonnelClassification(
 
     if (workedBeforeFriday) {
       // Worked on-site on Monday, Tuesday, Wednesday, or Thursday -> WAJIB for Inspeksi & KTA!
-      return;
-    }
-
-    // If person is explicitly listed under the Cuti section in the schedule:
-    if (matchesSheet(empName, sheetCutiNames)) {
-      onCutiSet.add(cleanNik);
       return;
     }
 
