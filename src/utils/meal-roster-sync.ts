@@ -151,6 +151,14 @@ export function computeMealOrderByRoster(
     return res;
   }
 
+  // Tempat tinggal Kampung Kawasi: Izin & CS → Pagi, Siang, Sore & Malam kosong (Cuti sudah kosong di atas)
+  if (tt.includes('kawasi') && (code === 'I' || code === 'CS')) {
+    res.statusKerja = code === 'I' ? 'Izin' : 'CS';
+    res.status = code === 'I' ? 'IZIN' : 'CS';
+    if (code === 'I' && !isCR) res.keteranganLapor = 'Belum Lapor';
+    return res;
+  }
+
   if (isCR && isNirwana && ['D', 'N', 'LS'].includes(code)) {
     // ==========================================
     // LOGIKA MESS CR (Gol II-V) + tempat tinggal Nirwana

@@ -665,7 +665,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       let bungkusKantin = 0;
       let makanKantin = 0;
 
-      if (g.label === 'Pagi / Sahur') {
+      if (g.label === 'Pagi') {
         lap = filtered.reduce((s, r) => s + portions(r.pagiLapangan), 0);
         bungkusKantin = filtered.reduce((s, r) => {
           if (isCRRow(r)) return s;
@@ -686,6 +686,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           return s + (portions(r.batchSore) || (r.soreKantin === '1' ? 1 : 0));
         }, 0);
         makanKantin = filtered.reduce((s, r) => s + (isCRRow(r) && r.soreKantin ? 1 : 0), 0);
+      } else if (g.label === 'Sahur') {
+        lap = filtered.reduce((s, r) => s + portions(r.sahurLapangan), 0);
+        bungkusKantin = filtered.reduce((s, r) => s + (!isCRRow(r) && r.sahurKantin === '1' ? 1 : 0), 0);
+        makanKantin = filtered.reduce((s, r) => s + (isCRRow(r) && r.sahurKantin ? 1 : 0), 0);
       } else if (g.label === 'Takjil') {
         lap = filtered.reduce((s, r) => s + portions(r.takjilLapangan), 0);
       } else if (g.label === 'Malam') {
