@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp,
 } from 'lucide-react';
@@ -97,11 +97,41 @@ const emptyForm = (): FormState => ({ nik: '', nama: '', shiftKerja: 'Nonshift' 
 
 interface Props { inspectorNik?: string; inspectorName?: string; onBack?: () => void }
 
+// Scrollbar horizontal mengambang: menempel di bawah layar selama tabel terlihat, sinkron dua arah dengan tabel
+function FloatingScrollbar({ targetRef }: { targetRef: React.RefObject<HTMLDivElement | null> }) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ scroll: 0, client: 0 });
+  useEffect(() => {
+    const el = targetRef.current;
+    if (!el) return;
+    const measure = () => setSize({ scroll: el.scrollWidth, client: el.clientWidth });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    const onScroll = () => { if (barRef.current && barRef.current.scrollLeft !== el.scrollLeft) barRef.current.scrollLeft = el.scrollLeft; };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => { ro.disconnect(); el.removeEventListener('scroll', onScroll); };
+  }, [targetRef]);
+  if (size.scroll <= size.client + 1) return null;
+  return (
+    <div
+      ref={barRef}
+      onScroll={e => { const el = targetRef.current; if (el && el.scrollLeft !== e.currentTarget.scrollLeft) el.scrollLeft = e.currentTarget.scrollLeft; }}
+      className="hidden md:block sticky bottom-3 z-30 -mt-1 overflow-x-auto overflow-y-hidden h-4 rounded-full bg-white/90 backdrop-blur border border-slate-200 shadow-[0_4px_16px_rgba(15,23,42,0.12)]"
+      title="Geser tabel ke kiri / kanan"
+    >
+      <div style={{ width: size.scroll, height: 1 }} />
+    </div>
+  );
+}
+
 export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => todayWit());
   const [view, setView] = useState<'orders' | 'recap'>('orders');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; row?: MealOrder } | null>(null);
@@ -456,16 +486,30 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     const st = String(r.status || '').trim().toLowerCase();
     const cat = String(r.catatan || '').trim().toLowerCase();
 
-    if (sk.includes('cuti') || st.includes('cuti') || cat.includes('cuti') || r.pagiKantin === 'C') {
+    const sh = String(r.shiftKerja || '').trim().toLowerCase();
+    if (sk.includes('cuti') || st.includes('cuti') || cat.includes('cuti') || sh.includes('cuti') || r.pagiKantin === 'C') {
       return 'cuti';
     }
-    if (sk === 'izin' || sk.includes('izin') || st === 'izin' || st.includes('izin') || cat.includes('izin') || sk === 'i' || st === 'i') {
+    if (sk === 'izin' || sk.includes('izin') || st === 'izin' || st.includes('izin') || cat.includes('izin') || sh.includes('izin') || sk === 'i' || st === 'i') {
       return 'izin';
     }
     if (sk === 'alpa' || sk.includes('alpa') || st === 'alpa' || st.includes('alpa') || cat.includes('alpa') || sk === 'a' || st === 'a') {
       return 'alpa';
     }
     return null;
+  };
+
+  const getShiftBadgeStyle = (shift: string | null | undefined) => {
+    const s = String(shift || '').trim().toUpperCase();
+    if (s === 'CUTI') return 'bg-purple-100 text-purple-900 border-purple-300';
+    if (s === 'CUTI SITE' || s === 'CS') return 'bg-indigo-100 text-indigo-900 border-indigo-300';
+    if (s === 'IZIN') return 'bg-amber-100 text-amber-900 border-amber-300';
+    if (s === 'OFF') return 'bg-slate-200 text-slate-800 border-slate-300';
+    if (s === 'MALAM') return 'bg-blue-100 text-blue-900 border-blue-300';
+    if (s === 'LONGSHIFT') return 'bg-orange-100 text-orange-900 border-orange-300';
+    if (s === 'NONSHIFT') return 'bg-teal-100 text-teal-900 border-teal-300';
+    if (s === 'SIANG') return 'bg-emerald-100 text-emerald-900 border-emerald-300';
+    return 'bg-slate-100 text-slate-600 border-slate-200';
   };
 
   const getStatusBadgeKind = (text: string | null | undefined): 'cuti' | 'izin' | 'alpa' | null => {
@@ -655,6 +699,54 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   // Ganti Shift manual: Malam → Pagi & Sore kembali Kantin; Siang / Nonshift / Longshift → ikut pilihan Catatan
   const changeShiftKerja = (r: MealOrder, shiftKerja: string | null) => {
     const patch: Partial<MealOrder> = { shiftKerja };
+    if (shiftKerja === 'CUTI') {
+      patch.statusKerja = 'Cuti';
+      patch.status = 'CUTI';
+      patch.pagiKantin = null; patch.pagiLapangan = null; patch.batchPagi = null;
+      patch.siangKantin = null; patch.siangLapangan = null;
+      patch.soreKantin = null; patch.soreLapangan = null; patch.batchSore = null;
+      patch.malamLapangan = null;
+    } else if (shiftKerja === 'Cuti Site') {
+      patch.statusKerja = 'CS';
+      patch.status = 'CS';
+      patch.pagiKantin = null; patch.pagiLapangan = null; patch.batchPagi = null;
+      patch.siangKantin = null; patch.siangLapangan = null;
+      patch.soreKantin = null; patch.soreLapangan = null; patch.batchSore = null;
+      patch.malamLapangan = null;
+    } else if (shiftKerja === 'Izin') {
+      patch.statusKerja = 'Izin';
+      patch.status = 'IZIN';
+      patch.keteranganLapor = 'Belum Lapor';
+    } else if (shiftKerja === 'OFF') {
+      patch.statusKerja = 'Off';
+      patch.status = 'OFF';
+      patch.malamLapangan = null;
+    } else if (shiftKerja === 'SIANG' || shiftKerja === 'Nonshift') {
+      if (['CUTI', 'IZIN', 'CS', 'OFF'].includes(String(r.status || '').toUpperCase())) {
+        patch.statusKerja = '-';
+        patch.status = null;
+      }
+      if (portions(r.siangLapangan) === 0 && !r.siangKantin) {
+        patch.siangLapangan = '1';
+      }
+    } else if (shiftKerja === 'MALAM') {
+      if (['CUTI', 'IZIN', 'CS', 'OFF'].includes(String(r.status || '').toUpperCase())) {
+        patch.statusKerja = '-';
+        patch.status = null;
+      }
+      if (portions(r.malamLapangan) === 0) {
+        patch.malamLapangan = '1';
+      }
+    } else if (shiftKerja === 'LONGSHIFT') {
+      if (['CUTI', 'IZIN', 'CS', 'OFF'].includes(String(r.status || '').toUpperCase())) {
+        patch.statusKerja = '-';
+        patch.status = null;
+      }
+      patch.siangLapangan = '1';
+      patch.soreLapangan = '1';
+      patch.malamLapangan = '1';
+    }
+
     if (mealChoiceSlots(r).length > 0) {
       const isMalam = shiftKerja === 'MALAM';
       for (const time of ['pagi', 'sore'] as const) {
@@ -801,7 +893,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   return (
     <div className="min-h-screen pb-24 bg-[#f3f6f4]">
-      <div className="max-w-[1500px] mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-3 sm:space-y-4">
+      <div className="w-full max-w-[2200px] mx-auto px-3 sm:px-4 lg:px-5 py-3 sm:py-5 space-y-3 sm:space-y-4">
         {/* Header */}
         <div className="rounded-3xl bg-white px-3 sm:px-5 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div className="flex items-center gap-3 min-w-0">
@@ -1387,7 +1479,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               )}
 
               {/* Desktop / tablet: tabel seperti sheet */}
-              <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200">
+              <div ref={tableScrollRef} className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <table className="w-full border-collapse text-left">
                   <thead className="sticky top-0 z-10">
                     <tr>
@@ -1545,15 +1637,26 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             <select
                               value={r.shiftKerja || ''}
                               onChange={e => changeShiftKerja(r, e.target.value || null)}
-                              className="w-full rounded-md bg-emerald-100 text-emerald-900 text-xs font-semibold px-1 py-1 cursor-pointer focus:outline-none"
+                              className={`w-full rounded-md text-xs font-semibold px-1 py-1 cursor-pointer focus:outline-none border transition-colors ${getShiftBadgeStyle(r.shiftKerja)}`}
                             >
                               <option value="">-</option>
-                              <option value="SIANG">SIANG</option>
-                              <option value="MALAM">MALAM</option>
-                              <option value="LONGSHIFT">LONGSHIFT</option>
                               <option value="Nonshift">Nonshift</option>
+                              <option value="SIANG">Siang</option>
+                              <option value="MALAM">Malam</option>
+                              <option value="LONGSHIFT">Longshift</option>
+                              <option value="OFF">OFF</option>
+                              <option value="CUTI">CUTI</option>
+                              <option value="Cuti Site">Cuti Site</option>
+                              <option value="Izin">Izin</option>
+                              {r.shiftKerja && !['', 'Nonshift', 'SIANG', 'MALAM', 'LONGSHIFT', 'OFF', 'CUTI', 'Cuti Site', 'Izin'].includes(r.shiftKerja) && (
+                                <option value={r.shiftKerja}>{r.shiftKerja}</option>
+                              )}
                             </select>
-                          ) : <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-semibold">{r.shiftKerja || '-'}</span>}
+                          ) : (
+                            <span className={`inline-block px-2 py-0.5 rounded-md font-semibold text-xs border ${getShiftBadgeStyle(r.shiftKerja)}`}>
+                              {r.shiftKerja || '-'}
+                            </span>
+                          )}
                         </td>
                         {activeMealCells.map(c => (
                           <td key={c.key} className={`${tdBase} text-center p-1`}>{renderMealCell(r, c.key, c.kind)}</td>
@@ -1637,6 +1740,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   </tfoot>
                 </table>
               </div>
+              <FloatingScrollbar targetRef={tableScrollRef} />
 
               {/* HP: kartu per karyawan */}
               <div className="md:hidden space-y-2">
@@ -1753,12 +1857,16 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   <Input key={f.key} label={f.label} value={form[f.key] || ''} onChange={e => updateForm(f.key, e.target.value)} placeholder={f.placeholder} />
                 )
               ))}
-              <Select label="Shift (Siang/Malam/Longshift)" value={form.shiftKerja || ''} onChange={e => updateForm('shiftKerja', e.target.value)}>
+              <Select label="Shift / Status Kehadiran" value={form.shiftKerja || ''} onChange={e => updateForm('shiftKerja', e.target.value)}>
                 <option value="">-</option>
-                <option value="SIANG">SIANG</option>
-                <option value="MALAM">MALAM</option>
-                <option value="LONGSHIFT">LONGSHIFT</option>
                 <option value="Nonshift">Nonshift</option>
+                <option value="SIANG">Siang</option>
+                <option value="MALAM">Malam</option>
+                <option value="LONGSHIFT">Longshift</option>
+                <option value="OFF">OFF</option>
+                <option value="CUTI">CUTI</option>
+                <option value="Cuti Site">Cuti Site</option>
+                <option value="Izin">Izin</option>
               </Select>
             </div>
             <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 mt-4 mb-2">Order Makan</p>
