@@ -568,23 +568,51 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     }
   };
 
-  // Mess CR + tempat tinggal Nirwana yang sedang bertugas (roster D/N/LS): Pagi (dan Sore, kecuali LS) dipilih via dropdown di Catatan
+  // Pilihan Kantin & Bungkusan via dropdown di kolom Catatan (Pagi & Sore)
   const mealChoiceSlots = (r: MealOrder): ('pagi' | 'sore')[] => {
     const sm = (r.statusMess || '').toUpperCase();
-    const onDuty = !r.statusKerja || r.statusKerja === '-';
-    if (!['CR', 'MESS'].includes(sm) || !(r.tempatTinggal || '').toLowerCase().includes('nirwana') || !onDuty) return [];
-    const isLongShift = r.shiftKerja === 'LONGSHIFT' || (r.shiftKerja !== 'MALAM' && portions(r.malamLapangan) > 0);
-    return isLongShift ? ['pagi'] : ['pagi', 'sore'];
+    const isCR = ['CR', 'MESS'].includes(sm);
+    const isNirwana = (r.tempatTinggal || '').toLowerCase().includes('nirwana');
+    const sk = (r.statusKerja || '').toLowerCase();
+    const isInactive = sk.includes('cuti') || sk.includes('off') || sk.includes('resign') || sk.includes('phk');
+    if ((!isCR && !isNirwana) || isInactive) return [];
+    return ['pagi', 'sore'];
   };
+
   const setMealChoice = (r: MealOrder, time: 'pagi' | 'sore', choice: 'kantin' | 'lapangan') => {
-    const [kantinKey, lapanganKey]: [KantinKey, LapanganKey] = time === 'pagi' ? ['pagiKantin', 'pagiLapangan'] : ['soreKantin', 'soreLapangan'];
-    saveCell(r, choice === 'kantin' ? { [kantinKey]: 'K', [lapanganKey]: null } : { [kantinKey]: null, [lapanganKey]: '1' });
+    const kantinKey: KantinKey = time === 'pagi' ? 'pagiKantin' : 'soreKantin';
+    const lapanganKey: LapanganKey = time === 'pagi' ? 'pagiLapangan' : 'soreLapangan';
+    const batchKey: BatchKey = time === 'pagi' ? 'batchPagi' : 'batchSore';
+    const isNR = (r.statusMess || '').toUpperCase() === 'NR';
+    const isNirwana = (r.tempatTinggal || '').toLowerCase().includes('nirwana');
+    const isNRNirwana = isNR && isNirwana;
+    const kantinVal = isNRNirwana ? '1' : 'K';
+
+    if (choice === 'kantin') {
+      saveCell(r, {
+        [kantinKey]: kantinVal,
+        [lapanganKey]: null,
+        [batchKey]: isNRNirwana ? '1' : null,
+      });
+      toast.success(`${r.nama}: ${time.toUpperCase()} diganti ke ${time === 'pagi' ? 'Pagi' : 'Sore'} Kantin`);
+    } else {
+      if (time === 'sore' && isTuesdayWednesdaySaturday(date) && ['CR', 'MESS'].includes((r.statusMess || '').toUpperCase())) {
+        toast.info(`Catatan: Hari ${dayName(date)} untuk Mess CR jadwal sore biasanya Kantin.`);
+      }
+      saveCell(r, {
+        [kantinKey]: null,
+        [lapanganKey]: '1',
+        [batchKey]: null,
+      });
+      toast.success(`${r.nama}: ${time.toUpperCase()} diganti ke ${time === 'pagi' ? 'Pagi' : 'Sore'} Bungkusan`);
+    }
   };
+
   const renderMealChoices = (r: MealOrder) => {
     const slots = mealChoiceSlots(r);
     if (slots.length === 0) return null;
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         {slots.map(time => {
           const value = portions(r[time === 'pagi' ? 'pagiLapangan' : 'soreLapangan']) > 0 ? 'lapangan' : 'kantin';
           const label = time === 'pagi' ? 'Pagi' : 'Sore';
@@ -593,14 +621,25 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               key={time}
               value={value}
               onChange={e => setMealChoice(r, time, e.target.value as 'kantin' | 'lapangan')}
-              className={`rounded-md text-xs font-semibold px-1.5 py-1 cursor-pointer focus:outline-none border ${value === 'kantin' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-amber-50 text-amber-900 border-amber-200'}`}
-              title={`Pilih ${label}: Kantin (K) atau Lapangan (1)`}
+              className={`rounded-md text-xs font-semibold px-1.5 py-1 cursor-pointer focus:outline-none border transition-colors ${
+                value === 'kantin'
+                  ? 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100'
+                  : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+              }`}
+              title={`Pilih ${label}: ${label} Kantin atau ${label} Bungkusan`}
             >
               <option value="kantin">{label} Kantin</option>
-              <option value="lapangan">{label} Lapangan</option>
+              <option value="lapangan">{label} Bungkusan</option>
             </select>
           ) : (
-            <span key={time} className="text-xs">{label} {value === 'kantin' ? 'Kantin' : 'Lapangan'}</span>
+            <span
+              key={time}
+              className={`text-[11px] px-1.5 py-0.5 rounded font-semibold border ${
+                value === 'kantin' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-amber-50 text-amber-900 border-amber-200'
+              }`}
+            >
+              {label} {value === 'kantin' ? 'Kantin' : 'Bungkusan'}
+            </span>
           );
         })}
       </div>
