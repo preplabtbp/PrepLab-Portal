@@ -1,7 +1,10 @@
 import { Router } from "express";
+import { Readable } from "stream";
+import * as XLSX from "xlsx";
 import { db } from "../../src/db/index.js";
-import { and, asc, eq, sql, desc } from "drizzle-orm";
+import { and, asc, eq, sql, desc, inArray } from "drizzle-orm";
 import { mealOrders, employees } from "../../src/db/schema.js";
+import { drive } from "../../google-services.js";
 import { getTrainingAccess } from "./training.js";
 
 // ===== Orderan Makanan =====
@@ -62,6 +65,149 @@ export function ensureMealOrdersTable(): Promise<void> {
 }
 
 const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+// ===== Sinkron ke Google Sheets "Meal Order" (folder Administration di PrepLab Cloud) =====
+// File dibuat/diperbarui lewat Drive API: workbook Excel diunggah & dikonversi otomatis jadi Google Sheets.
+// Isi: tab "Rekap" (total per tanggal) + satu tab per tanggal dengan kolom sama seperti sheet order makan.
+const MEAL_SHEET_NAME = 'Meal Order';
+const ADMIN_FOLDER_ID = process.env.GDRIVE_ADMINISTRATION_FOLDER_ID || '1CUO6uL6VubERhfU4SPouQeY1o675zyuP';
+const GSHEET_MIME = 'application/vnd.google-apps.spreadsheet';
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const SHEET_MAX_DATES = 60; // tanggal terbaru yang ditulis ke Google Sheets
+
+const MEAL_COLUMNS: { key: keyof typeof mealOrders.$inferSelect; group: string; label: string; kind: 'kantin' | 'lapangan' }[] = [
+  { key: 'pagiKantin', group: 'Pagi / Sahur', label: 'Kantin', kind: 'kantin' },
+  { key: 'pagiLapangan', group: 'Pagi / Sahur', label: 'Lapangan', kind: 'lapangan' },
+  { key: 'siangKantin', group: 'Siang', label: 'Kantin', kind: 'kantin' },
+  { key: 'siangLapangan', group: 'Siang', label: 'Lapangan', kind: 'lapangan' },
+  { key: 'soreKantin', group: 'Sore', label: 'Kantin', kind: 'kantin' },
+  { key: 'soreLapangan', group: 'Sore', label: 'Lapangan', kind: 'lapangan' },
+  { key: 'takjilLapangan', group: 'Takjil', label: 'Lapangan', kind: 'lapangan' },
+  { key: 'malamLapangan', group: 'Malam', label: 'Lapangan', kind: 'lapangan' },
+];
+const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const ymd = (d: unknown) => String(d).slice(0, 10);
+const dayName = (d: string) => DAYS[new Date(`${d}T00:00:00Z`).getUTCDay()];
+const longDate = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return `${dd} ${MONTHS[m - 1]} ${y}`; };
+const portions = (v: unknown) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; };
+const colTotal = (rows: any[], c: typeof MEAL_COLUMNS[number]) =>
+  rows.reduce((s, r) => s + (c.kind === 'kantin' ? (String(r[c.key] || '').trim() ? 1 : 0) : portions(r[c.key])), 0);
+
+async function buildMealWorkbook(): Promise<Buffer> {
+  const dateRows = await db.select({ date: mealOrders.orderDate }).from(mealOrders)
+    .groupBy(mealOrders.orderDate).orderBy(desc(mealOrders.orderDate)).limit(SHEET_MAX_DATES);
+  const dates = dateRows.map(d => ymd(d.date));
+  const all = dates.length
+    ? await db.select().from(mealOrders).where(inArray(mealOrders.orderDate, dates))
+        .orderBy(desc(mealOrders.orderDate), sql`${mealOrders.sortNo} ASC NULLS LAST`, asc(mealOrders.nama))
+    : [];
+  const byDate = new Map<string, typeof all>();
+  all.forEach(r => { const k = ymd(r.orderDate); byDate.set(k, [...(byDate.get(k) || []), r]); });
+
+  const wb = XLSX.utils.book_new();
+  // Tab Rekap: total order per tanggal
+  const rekap: (string | number)[][] = [
+    ['Tanggal', 'Hari', 'Jumlah Karyawan', ...MEAL_COLUMNS.map(c => `${c.group} - ${c.label}`), 'Konfirmasi B.Pagi', 'Konfirmasi B.Sore'],
+    ...dates.map(d => {
+      const rows = byDate.get(d) || [];
+      return [longDate(d), dayName(d), rows.length, ...MEAL_COLUMNS.map(c => colTotal(rows, c)),
+        rows.filter(r => r.konfirmasiPagi).length, rows.filter(r => r.konfirmasiSore).length];
+    }),
+  ];
+  if (dates.length === 0) rekap.push(['Belum ada orderan makanan']);
+  const rekapWs = XLSX.utils.aoa_to_sheet(rekap);
+  rekapWs['!cols'] = [{ wch: 14 }, { wch: 9 }, { wch: 16 }, ...MEAL_COLUMNS.map(() => ({ wch: 14 })), { wch: 16 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, rekapWs, 'Rekap');
+
+  // Satu tab per tanggal (terbaru dulu), format sama dengan sheet order makan
+  for (const d of dates) {
+    const rows = byDate.get(d) || [];
+    const header1 = ['NO', 'NAMA KARYAWAN', 'NIK', 'Status Mess', 'PT', 'Shift', 'Section', 'Status Kerja Karyawan', 'Keterangan', '', 'Tempat Tinggal', 'Shift (SIANG/MALAM)',
+      ...MEAL_COLUMNS.map((c, i) => (i === 0 || MEAL_COLUMNS[i - 1].group !== c.group ? c.group : '')), dayName(d), longDate(d)];
+    const header2 = ['', '', '', '', '', '', '', '', 'Sahur', 'Tidak Puasa', '', '', ...MEAL_COLUMNS.map(c => c.label), '1 (B.Pagi)', '1 (B.Sore)'];
+    const body = rows.map((r, i) => [
+      i + 1, r.nama, r.nik, r.statusMess || '', r.pt || '', r.shift || '', r.section || '', r.statusKerja || '-', r.sahur || '-', r.tidakPuasa || '-',
+      r.tempatTinggal || '', r.shiftKerja || '', ...MEAL_COLUMNS.map(c => (r[c.key] as string | null) || ''), r.konfirmasiPagi ? '✓' : '', r.konfirmasiSore ? '✓' : '',
+    ]);
+    const total = ['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', ...MEAL_COLUMNS.map(c => colTotal(rows, c) || ''),
+      rows.filter(r => r.konfirmasiPagi).length, rows.filter(r => r.konfirmasiSore).length];
+    const ws = XLSX.utils.aoa_to_sheet([header1, header2, ...body, total]);
+    ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 14 }, { wch: 8 }, { wch: 6 }, { wch: 10 }, { wch: 22 }, { wch: 14 }, { wch: 8 }, { wch: 11 }, { wch: 14 }, { wch: 12 },
+      ...MEAL_COLUMNS.map(() => ({ wch: 9 })), { wch: 11 }, { wch: 13 }];
+    ws['!merges'] = [{ s: { r: 0, c: 8 }, e: { r: 0, c: 9 } }];
+    let col = 12;
+    for (const g of Array.from(new Set(MEAL_COLUMNS.map(c => c.group)))) {
+      const span = MEAL_COLUMNS.filter(c => c.group === g).length;
+      if (span > 1) ws['!merges'].push({ s: { r: 0, c: col }, e: { r: 0, c: col + span - 1 } });
+      col += span;
+    }
+    // Nama tab maks. 31 karakter
+    XLSX.utils.book_append_sheet(wb, ws, `${d} ${dayName(d)}`.slice(0, 31));
+  }
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+}
+
+let sheetFile: { id: string; url: string } | null = null;
+async function findMealSheet(): Promise<{ id: string; url: string } | null> {
+  if (sheetFile) return sheetFile;
+  const res = await drive.files.list({
+    q: `name = '${MEAL_SHEET_NAME}' and mimeType = '${GSHEET_MIME}' and '${ADMIN_FOLDER_ID}' in parents and trashed = false`,
+    fields: 'files(id, webViewLink)',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  const f = res.data.files?.[0];
+  if (f?.id) sheetFile = { id: f.id, url: f.webViewLink || `https://docs.google.com/spreadsheets/d/${f.id}/edit` };
+  return sheetFile;
+}
+
+let syncRunning: Promise<{ id: string; url: string }> | null = null;
+let syncAgain = false;
+// Buat (bila belum ada) lalu timpa isi Google Sheets "Meal Order" dengan data terbaru
+export async function syncMealOrderSheet(): Promise<{ id: string; url: string }> {
+  if (syncRunning) { syncAgain = true; return syncRunning; }
+  syncRunning = (async () => {
+    try {
+      const buffer = await buildMealWorkbook();
+      const media = () => ({ mimeType: XLSX_MIME, body: Readable.from(buffer) });
+      const existing = await findMealSheet().catch(() => null);
+      if (existing) {
+        try {
+          await drive.files.update({ fileId: existing.id, media: media(), supportsAllDrives: true });
+          return existing;
+        } catch (e: any) {
+          // File dihapus/dipindah manual → buat ulang
+          if (e?.code !== 404) throw e;
+          sheetFile = null;
+        }
+      }
+      const created = await drive.files.create({
+        requestBody: { name: MEAL_SHEET_NAME, mimeType: GSHEET_MIME, parents: [ADMIN_FOLDER_ID] },
+        media: media(),
+        fields: 'id, webViewLink',
+        supportsAllDrives: true,
+      });
+      sheetFile = { id: created.data.id!, url: created.data.webViewLink || `https://docs.google.com/spreadsheets/d/${created.data.id}/edit` };
+      console.log(`[MealOrders] Google Sheets "${MEAL_SHEET_NAME}" dibuat di folder Administration (${sheetFile.id})`);
+      return sheetFile;
+    } finally {
+      syncRunning = null;
+      if (syncAgain) { syncAgain = false; scheduleSheetSync(); }
+    }
+  })();
+  return syncRunning;
+}
+
+// Sinkron otomatis setelah ada perubahan (digabung tiap 20 detik agar tidak membebani Drive API)
+let syncTimer: NodeJS.Timeout | null = null;
+function scheduleSheetSync() {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    syncMealOrderSheet().catch((e: any) => console.error("[MealOrders] Sync Google Sheets gagal:", e.message));
+  }, 20 * 1000);
+}
 
 function pickFields(body: any): Partial<Record<EditableField, any>> {
   const out: Partial<Record<EditableField, any>> = {};
@@ -139,6 +285,7 @@ mealOrdersRouter.post("/api/meal-orders", requireMealManager, async (req, res) =
     const [row] = await db.insert(mealOrders).values(values)
       .onConflictDoUpdate({ target: [mealOrders.orderDate, mealOrders.nik], set: { ...fields, nama, updatedBy: values.updatedBy, updatedAt: values.updatedAt } })
       .returning();
+    scheduleSheetSync();
     res.json({ status: "success", data: row });
   } catch (error: any) {
     console.error("[MealOrders POST] Error:", error);
@@ -164,6 +311,7 @@ mealOrdersRouter.post("/api/meal-orders/copy", requireMealManager, async (req, r
     // Karyawan yang sudah ada di tanggal tujuan tidak ditimpa
     const inserted = await db.insert(mealOrders).values(values)
       .onConflictDoNothing({ target: [mealOrders.orderDate, mealOrders.nik] }).returning({ id: mealOrders.id });
+    if (inserted.length) scheduleSheetSync();
     res.json({ status: "success", inserted: inserted.length, skipped: values.length - inserted.length });
   } catch (error: any) {
     console.error("[MealOrders COPY] Error:", error);
@@ -183,6 +331,7 @@ mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res
       .set({ ...fields, updatedBy: updatedByOf(req), updatedAt: new Date() })
       .where(eq(mealOrders.id, id)).returning();
     if (!row) return res.status(404).json({ status: "error", message: "Data tidak ditemukan." });
+    scheduleSheetSync();
     res.json({ status: "success", data: row });
   } catch (error: any) {
     console.error("[MealOrders PUT] Error:", error);
@@ -197,9 +346,32 @@ mealOrdersRouter.delete("/api/meal-orders/:id", requireMealManager, async (req, 
     const id = Number(req.params.id);
     const deleted = await db.delete(mealOrders).where(and(eq(mealOrders.id, id))).returning({ id: mealOrders.id });
     if (deleted.length === 0) return res.status(404).json({ status: "error", message: "Data tidak ditemukan." });
+    scheduleSheetSync();
     res.json({ status: "success" });
   } catch (error: any) {
     console.error("[MealOrders DELETE] Error:", error);
     res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// 6. GET /api/meal-orders/sheet — link Google Sheets "Meal Order" (bila sudah dibuat)
+mealOrdersRouter.get("/api/meal-orders/sheet", async (_req, res) => {
+  try {
+    const f = await findMealSheet();
+    res.json({ status: "success", url: f?.url || null });
+  } catch (error: any) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// 7. POST /api/meal-orders/sync-sheet — buat / perbarui Google Sheets "Meal Order" sekarang juga
+mealOrdersRouter.post("/api/meal-orders/sync-sheet", requireMealManager, async (_req, res) => {
+  try {
+    await ensureMealOrdersTable();
+    const f = await syncMealOrderSheet();
+    res.json({ status: "success", url: f.url });
+  } catch (error: any) {
+    console.error("[MealOrders SYNC] Error:", error);
+    res.status(500).json({ status: "error", message: `Gagal sinkron ke Google Sheets: ${error.message}` });
   }
 });

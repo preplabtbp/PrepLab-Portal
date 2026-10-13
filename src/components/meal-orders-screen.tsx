@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, CheckCircle2, Users,
+  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, CheckCircle2, Users, FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -220,6 +220,28 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     }
   };
 
+  // Google Sheets "Meal Order" di folder Administration: admin → sinkron dulu lalu buka; lainnya → buka saja
+  const [syncingSheet, setSyncingSheet] = useState(false);
+  const openGoogleSheet = async () => {
+    const win = window.open('', '_blank'); // dibuka sebelum await agar tidak diblokir popup blocker
+    setSyncingSheet(true);
+    try {
+      const res = canManage
+        ? await fetch('/api/meal-orders/sync-sheet', { method: 'POST' })
+        : await fetch('/api/meal-orders/sheet');
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal membuka Google Sheets');
+      if (!json.url) throw new Error('Google Sheets "Meal Order" belum dibuat oleh Admin');
+      if (canManage) toast.success('Google Sheets "Meal Order" diperbarui');
+      if (win) win.location.href = json.url; else window.open(json.url, '_blank', 'noopener');
+    } catch (e: any) {
+      win?.close();
+      toast.error(e.message);
+    } finally {
+      setSyncingSheet(false);
+    }
+  };
+
   const exportExcel = async () => {
     const XLSX = await import('xlsx');
     const header1 = ['NO', 'NAMA KARYAWAN', 'NIK', 'Status Mess', 'PT', 'Shift', 'Section', 'Status Kerja Karyawan', 'Keterangan', '', 'Tempat Tinggal', 'Shift (SIANG/MALAM)',
@@ -326,6 +348,15 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             )}
             <button type="button" onClick={exportExcel} disabled={filtered.length === 0} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-800 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
               <Download className="w-4 h-4" /> Export
+            </button>
+            <button
+              type="button"
+              onClick={openGoogleSheet}
+              disabled={syncingSheet}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer disabled:opacity-60"
+              title={canManage ? 'Perbarui & buka Google Sheets "Meal Order" (folder Administration)' : 'Buka Google Sheets "Meal Order"'}
+            >
+              {syncingSheet ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Google Sheets
             </button>
             {canManage && (
               <button type="button" onClick={openCreate} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold cursor-pointer active:scale-95">
