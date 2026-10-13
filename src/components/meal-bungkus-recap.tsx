@@ -58,16 +58,41 @@ function shortName(nama: string): string {
 }
 
 const isCR = (r: RecapOrderRow) => ['CR', 'MESS'].includes(String(r.statusMess || '').trim().toUpperCase());
-// Preparasi dulu, lalu Laboratorium, lalu section lain (urut abjad)
-const sectionRank = (s: string) => (/prep/i.test(s) ? 0 : /lab/i.test(s) ? 1 : 2);
+
+export const RECAP_AREAS = ['Preparasi Krishna', 'Laboratorium Krishna'] as const;
+export type RecapArea = (typeof RECAP_AREAS)[number];
+
+export function classifyRecapArea(r: RecapOrderRow, emp?: RecapEmployee): RecapArea {
+  const sec = String(r.section || emp?.section || '').trim().toLowerCase();
+  const jab = String(emp?.jabatan || emp?.position || '').toLowerCase();
+
+  // 1. Explicit section checks
+  if (sec.includes('preparasi') || sec.includes('preparation')) return 'Preparasi Krishna';
+  if (sec.includes('laboratorium') || sec.includes('laboratory')) return 'Laboratorium Krishna';
+
+  // 2. Section di bawah Laboratorium: Maintenance, Administration, Inventory Control, QA, Manager
+  if (sec.includes('maint') || sec.includes('admin') || sec.includes('invent') || sec.includes('qa') || sec.includes('manager')) {
+    return 'Laboratorium Krishna';
+  }
+
+  // 3. Section CREW
+  if (sec.includes('crew')) {
+    if (jab.includes('maintenance')) return 'Laboratorium Krishna';
+    return 'Preparasi Krishna';
+  }
+
+  // 4. Fallback berdasarkan jabatan
+  if (jab.includes('lab') && !jab.includes('prep')) return 'Laboratorium Krishna';
+  if (jab.includes('prep')) return 'Preparasi Krishna';
+
+  return 'Laboratorium Krishna';
+}
 
 type MealSlot = { title: string; key: 'pagiLapangan' | 'siangLapangan' | 'soreLapangan' | 'takjilLapangan' | 'malamLapangan'; seroja?: (rows: RecapOrderRow[]) => number; kotakan?: boolean; kotakanNote?: string };
 
 export function buildBungkusRecap(rows: RecapOrderRow[], employees: RecapEmployee[]): RecapBlock[] {
   const empByNik = new Map(employees.map(e => [String(e.nik || '').trim().toUpperCase(), e]));
   const level = (r: RecapOrderRow) => golLevel(empByNik.get(r.nik.trim().toUpperCase()));
-  const sections = Array.from(new Set(rows.map(r => (r.section || '').trim()).filter(Boolean)))
-    .sort((a, b) => sectionRank(a) - sectionRank(b) || a.localeCompare(b));
 
   const slots: MealSlot[] = [
     { title: 'BUNGKUSAN PAGI', key: 'pagiLapangan', seroja: rs => rs.filter(r => !isCR(r)).reduce((s, r) => s + portions(r.batchPagi), 0), kotakan: true, kotakanNote: 'Healthy Breakfast' },
@@ -83,19 +108,21 @@ export function buildBungkusRecap(rows: RecapOrderRow[], employees: RecapEmploye
     // Gol IV-V dengan porsi Lapangan → baris kotakan sendiri (tidak dihitung di Staff)
     const kotakan = slot.kotakan ? rows.filter(r => level(r) >= 4 && portions(r[slot.key]) > 0) : [];
     const kotakanNik = new Set(kotakan.map(r => r.nik));
-    for (const section of sections) {
-      const inSection = rows.filter(r => (r.section || '').trim() === section && !kotakanNik.has(r.nik));
-      const sum = (pred: (lv: number) => boolean) => inSection.filter(r => pred(level(r))).reduce((s, r) => s + portions(r[slot.key]), 0);
-      lines.push({ area: section, qty: sum(lv => lv <= 1), keterangan: `Crew ${section} Dilapangan` });
-      lines.push({ area: section, qty: sum(lv => lv >= 2), keterangan: `Staff ${section} Dilapangan` });
+
+    for (const area of RECAP_AREAS) {
+      const inArea = rows.filter(r => classifyRecapArea(r, empByNik.get(r.nik.trim().toUpperCase())) === area && !kotakanNik.has(r.nik));
+      const sum = (pred: (lv: number) => boolean) => inArea.filter(r => pred(level(r))).reduce((s, r) => s + portions(r[slot.key]), 0);
+      lines.push({ area, qty: sum(lv => lv <= 1), keterangan: `Crew ${area} Dilapangan` });
+      lines.push({ area, qty: sum(lv => lv >= 2), keterangan: `Staff ${area} Dilapangan` });
     }
+
     for (const r of kotakan) {
-      const section = (r.section || '').trim() || 'Laboratorium Krishna';
       const emp = empByNik.get(r.nik.trim().toUpperCase());
+      const area = classifyRecapArea(r, emp);
       lines.push({
-        area: <>{section} (<b>{executiveTitle(emp)} - {shortName(r.nama)}</b>)</>,
+        area: <>{area} (<b>{executiveTitle(emp)} - {shortName(r.nama)}</b>)</>,
         qty: portions(r[slot.key]),
-        keterangan: slot.kotakanNote ? <>Kotakan di {section} (<b>{slot.kotakanNote}</b>)</> : `Kotakan di ${section}`,
+        keterangan: slot.kotakanNote ? <>Kotakan di {area} (<b>{slot.kotakanNote}</b>)</> : `Kotakan di ${area}`,
       });
     }
     return { title: slot.title, lines, total: lines.reduce((s, l) => s + l.qty, 0) };
