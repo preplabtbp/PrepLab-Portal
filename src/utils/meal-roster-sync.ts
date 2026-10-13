@@ -113,7 +113,31 @@ export function computeMealOrderByRoster(
     return res;
   }
 
-  if (isCR) {
+  if (isCR && isNirwana && ['D', 'N', 'LS'].includes(code)) {
+    // ==========================================
+    // LOGIKA MESS CR (Gol II-V) + tempat tinggal Nirwana
+    // Pagi (D/N/LS) & Sore (D/N) bisa dipilih Kantin/Lapangan lewat dropdown di kolom Catatan — awalan "K" di Kantin
+    // ==========================================
+    res.pagiKantin = 'K';
+    if (code === 'D') {
+      // Siang = Lapangan 1, Sore = pilihan (awal Kantin), Malam = kosong
+      res.shiftKerja = defaultDayShiftKerja;
+      res.siangLapangan = '1';
+      res.soreKantin = 'K';
+    } else if (code === 'N') {
+      // Siang = Kantin, Sore = pilihan (awal Kantin), Malam = Lapangan 1
+      res.shiftKerja = 'MALAM';
+      res.siangKantin = 'K';
+      res.soreKantin = 'K';
+      res.malamLapangan = '1';
+    } else {
+      // LS: Siang, Sore & Malam = Lapangan 1
+      res.shiftKerja = defaultDayShiftKerja;
+      res.siangLapangan = '1';
+      res.soreLapangan = '1';
+      res.malamLapangan = '1';
+    }
+  } else if (isCR) {
     // ==========================================
     // LOGIKA MESS CR (Gol II-V)
     // ==========================================

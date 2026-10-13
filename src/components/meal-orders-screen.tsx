@@ -568,6 +568,45 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     }
   };
 
+  // Mess CR + tempat tinggal Nirwana yang sedang bertugas (roster D/N/LS): Pagi (dan Sore, kecuali LS) dipilih via dropdown di Catatan
+  const mealChoiceSlots = (r: MealOrder): ('pagi' | 'sore')[] => {
+    const sm = (r.statusMess || '').toUpperCase();
+    const onDuty = !r.statusKerja || r.statusKerja === '-';
+    if (!['CR', 'MESS'].includes(sm) || !(r.tempatTinggal || '').toLowerCase().includes('nirwana') || !onDuty) return [];
+    const isLongShift = r.shiftKerja !== 'MALAM' && portions(r.malamLapangan) > 0;
+    return isLongShift ? ['pagi'] : ['pagi', 'sore'];
+  };
+  const setMealChoice = (r: MealOrder, time: 'pagi' | 'sore', choice: 'kantin' | 'lapangan') => {
+    const [kantinKey, lapanganKey]: [KantinKey, LapanganKey] = time === 'pagi' ? ['pagiKantin', 'pagiLapangan'] : ['soreKantin', 'soreLapangan'];
+    saveCell(r, choice === 'kantin' ? { [kantinKey]: 'K', [lapanganKey]: null } : { [kantinKey]: null, [lapanganKey]: '1' });
+  };
+  const renderMealChoices = (r: MealOrder) => {
+    const slots = mealChoiceSlots(r);
+    if (slots.length === 0) return null;
+    return (
+      <div className="flex items-center gap-1">
+        {slots.map(time => {
+          const value = portions(r[time === 'pagi' ? 'pagiLapangan' : 'soreLapangan']) > 0 ? 'lapangan' : 'kantin';
+          const label = time === 'pagi' ? 'Pagi' : 'Sore';
+          return canManage ? (
+            <select
+              key={time}
+              value={value}
+              onChange={e => setMealChoice(r, time, e.target.value as 'kantin' | 'lapangan')}
+              className={`rounded-md text-xs font-semibold px-1.5 py-1 cursor-pointer focus:outline-none border ${value === 'kantin' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-amber-50 text-amber-900 border-amber-200'}`}
+              title={`Pilih ${label}: Kantin (K) atau Lapangan (1)`}
+            >
+              <option value="kantin">{label} Kantin</option>
+              <option value="lapangan">{label} Lapangan</option>
+            </select>
+          ) : (
+            <span key={time} className="text-xs">{label} {value === 'kantin' ? 'Kantin' : 'Lapangan'}</span>
+          );
+        })}
+      </div>
+    );
+  };
+
   const summaryCards = useMemo(() => [
     ...activeMealGroups.map(g => ({
       label: g.label,
@@ -1184,7 +1223,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                                 </span>
                               )}
                             </td>
-                            <td className={`${tdBase} font-semibold text-slate-700`}>{r.catatan || ''}</td>
+                            <td className={`${tdBase} font-semibold text-slate-700 p-1`}>
+                              <div className="flex items-center gap-1.5">{renderMealChoices(r)}{r.catatan || ''}</div>
+                            </td>
                           </>
                         )}
                         {canManage && (
@@ -1277,6 +1318,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                                 {r.keteranganLapor && r.keteranganLapor !== '-' ? r.keteranganLapor : '-'}
                               </span>
                             )}
+                            {renderMealChoices(r)}
                             {r.catatan && <span className="text-slate-600 font-medium truncate">· {r.catatan}</span>}
                           </div>
                         )}
