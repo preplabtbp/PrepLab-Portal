@@ -208,7 +208,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     enabled: !!modal || view === 'recap',
     staleTime: 10 * 60 * 1000,
   });
-  const recapBlocks = useMemo(() => (view === 'recap' ? buildBungkusRecap(rows, employees) : []), [view, rows, employees]);
+  const recapBlocks = useMemo(() => (view === 'recap' ? buildBungkusRecap(rows, employees, date) : []), [view, rows, employees, date]);
 
   const sections = useMemo(() => Array.from(new Set(rows.map(r => r.section).filter(Boolean) as string[])).sort(), [rows]);
   const filtered = useMemo(() => {

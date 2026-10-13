@@ -1,5 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { isTuesdayWednesdaySaturday } from '../utils/meal-roster-sync';
 
 // ===== Rekapan Bungkusan harian (Dept. Preparation & Laboratory) =====
 // Satu blok per waktu makan (Pagi, Siang, Sore, [Takjil], T Malam) berisi:
@@ -91,12 +92,14 @@ export function classifyRecapArea(r: RecapOrderRow, emp?: RecapEmployee): RecapA
 
 type MealSlot = { title: string; key: 'pagiLapangan' | 'sahurLapangan' | 'siangLapangan' | 'soreLapangan' | 'takjilLapangan' | 'malamLapangan'; seroja?: (rows: RecapOrderRow[]) => number; kotakan?: boolean; kotakanNote?: string };
 
-export function buildBungkusRecap(rows: RecapOrderRow[], employees: RecapEmployee[]): RecapBlock[] {
+export function buildBungkusRecap(rows: RecapOrderRow[], employees: RecapEmployee[], date: string): RecapBlock[] {
   const empByNik = new Map(employees.map(e => [String(e.nik || '').trim().toUpperCase(), e]));
   const level = (r: RecapOrderRow) => golLevel(empByNik.get(r.nik.trim().toUpperCase()));
+  // "Healthy Breakfast" hanya di hari wajib makan (Selasa, Rabu, Sabtu)
+  const healthyBreakfast = isTuesdayWednesdaySaturday(date) ? 'Healthy Breakfast' : undefined;
 
   const slots: MealSlot[] = [
-    { title: 'BUNGKUSAN PAGI', key: 'pagiLapangan', seroja: rs => rs.filter(r => !isCR(r)).reduce((s, r) => s + portions(r.batchPagi), 0), kotakan: true, kotakanNote: 'Healthy Breakfast' },
+    { title: 'BUNGKUSAN PAGI', key: 'pagiLapangan', seroja: rs => rs.filter(r => !isCR(r)).reduce((s, r) => s + portions(r.batchPagi), 0), kotakan: true, kotakanNote: healthyBreakfast },
     ...(rows.some(r => portions(r.sahurLapangan) > 0) ? [{ title: 'BUNGKUSAN SAHUR', key: 'sahurLapangan' } as MealSlot] : []),
     { title: 'BUNGKUSAN SIANG', key: 'siangLapangan', seroja: rs => rs.filter(r => !isCR(r) && String(r.siangKantin || '').trim()).length, kotakan: true },
     { title: 'BUNGKUSAN SORE', key: 'soreLapangan', seroja: rs => rs.filter(r => !isCR(r)).reduce((s, r) => s + portions(r.batchSore), 0), kotakan: true },
@@ -127,7 +130,9 @@ export function buildBungkusRecap(rows: RecapOrderRow[], employees: RecapEmploye
         keterangan: slot.kotakanNote ? <>Kotakan di {area} (<b>{slot.kotakanNote}</b>)</> : `Kotakan di ${area}`,
       });
     }
-    return { title: slot.title, lines, total: lines.reduce((s, l) => s + l.qty, 0) };
+    // Baris dengan Qty 0 tidak ditampilkan
+    const filled = lines.filter(l => l.qty > 0);
+    return { title: slot.title, lines: filled, total: filled.reduce((s, l) => s + l.qty, 0) };
   });
 }
 
