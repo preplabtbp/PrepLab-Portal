@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   GraduationCap,
   Search,
@@ -471,13 +472,6 @@ function MyTrainingRow({ label, desc, right, sub }: { label: string; desc?: stri
 }
 
 function MyTrainingView({ record, name, onBack }: { record: TrainingRecord | null; name: string; onBack?: () => void }) {
-  const badge = (text: string, cls: string) => (
-    <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black border whitespace-nowrap ${cls}`}>{text}</span>
-  );
-  const required = record ? sapRequiredKeys(record) : [];
-  const sapValid = record ? sapDoneCount(record) : 0;
-  const p = record?.popData;
-
   return (
     <div className="min-h-screen pb-24 transition-colors duration-200" style={{ backgroundColor: DASH.bg }}>
       <div className="max-w-2xl mx-auto px-3 sm:px-6 py-4 space-y-4">
@@ -505,6 +499,39 @@ function MyTrainingView({ record, name, onBack }: { record: TrainingRecord | nul
           </div>
         ) : (
           <>
+            <TrainingAchievementDetail record={record} />
+
+            <p className="text-[11px] font-semibold text-slate-500 px-1">
+              Ada data yang tidak sesuai? Hubungi Admin Preparation & Laboratory untuk pembaruan.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ===== Pencapaian training per orang (dipakai "Training Saya" & hasil pencarian di Overview) =====
+function personAchievement(r: TrainingRecord) {
+  const parts: { id: TrainingProgram; label: string; done: number; total: number }[] = [];
+  if (r.inSap) parts.push({ id: 'sap', label: 'SAP', done: sapDoneCount(r), total: sapRequiredKeys(r).length });
+  if (r.inK3) parts.push({ id: 'k3', label: 'K3', done: k3PassCount(r), total: K3_TRAININGS.length });
+  if (r.inPop) parts.push({ id: 'pop', label: 'POP/POM', done: POP_STAGES.filter(s => s.attended(r.popData)).length, total: POP_STAGES.length });
+  const done = parts.reduce((s, p) => s + p.done, 0);
+  const total = parts.reduce((s, p) => s + p.total, 0);
+  return { parts, done, total, pct: total ? Math.round((done / total) * 100) : 0 };
+}
+const pctColor = (pct: number) => (pct >= 100 ? DASH.brand : pct >= 60 ? '#d4a017' : DASH.coral);
+
+function TrainingAchievementDetail({ record }: { record: TrainingRecord }) {
+  const badge = (text: string, cls: string) => (
+    <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black border whitespace-nowrap ${cls}`}>{text}</span>
+  );
+  const required = sapRequiredKeys(record);
+  const sapValid = sapDoneCount(record);
+  const p = record.popData;
+  return (
+    <>
             <div className="rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 grid grid-cols-2 gap-3">
               {[
                 ['NIK', record.nik],
@@ -591,12 +618,67 @@ function MyTrainingView({ record, name, onBack }: { record: TrainingRecord | nul
                 />
               </MyTrainingSection>
             )}
+    </>
+  );
+}
 
-            <p className="text-[11px] font-semibold text-slate-500 px-1">
-              Ada data yang tidak sesuai? Hubungi Admin Preparation & Laboratory untuk pembaruan.
-            </p>
-          </>
-        )}
+// Panel pencapaian training satu karyawan (dibuka dari hasil pencarian Overview)
+function PersonAchievementModal({ record, onClose }: { record: TrainingRecord; onClose: () => void }) {
+  const a = personAchievement(record);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-slate-950/45 backdrop-blur-[2px] p-0 sm:p-4" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-[28px] sm:rounded-[28px] shadow-2xl"
+        style={{ backgroundColor: DASH.bg }}
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Pencapaian training ${record.nama}`}
+      >
+        <div className="sticky top-0 z-10 flex items-center gap-3 px-4 sm:px-5 py-3 text-white" style={{ backgroundColor: DASH.brand }}>
+          <div className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+            <GraduationCap className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold text-white/70">Pencapaian Training</p>
+            <h2 className="text-sm sm:text-base font-bold leading-tight truncate">{record.nama}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="p-2 rounded-full hover:bg-white/15 cursor-pointer" title="Tutup">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-3 sm:p-5 space-y-4">
+          <div className="rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 flex items-center gap-4">
+            <ProgressRing value={a.pct} color={pctColor(a.pct)} label="Total" />
+            <div className="flex-1 min-w-0 space-y-2.5">
+              <p className="text-xs font-semibold text-slate-500">
+                <span className="text-slate-900 font-bold">{a.done}/{a.total}</span> training terpenuhi
+              </p>
+              {a.parts.map(part => {
+                const pct = part.total ? Math.round((part.done / part.total) * 100) : 0;
+                return (
+                  <div key={part.id}>
+                    <div className="flex items-center justify-between text-[11px] font-semibold mb-1">
+                      <span className="text-slate-600">{part.label}</span>
+                      <span className="text-slate-900">{part.done}/{part.total} · {pct}%</span>
+                    </div>
+                    <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: DASH.brandSoft }}>
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: pctColor(pct) }} />
+                    </div>
+                  </div>
+                );
+              })}
+              {a.parts.length === 0 && <p className="text-[11px] text-slate-500">Belum terdaftar di program training.</p>}
+            </div>
+          </div>
+          <TrainingAchievementDetail record={record} />
+        </div>
       </div>
     </div>
   );
@@ -622,6 +704,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     } catch { return 'sap'; }
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [personDetail, setPersonDetail] = useState<TrainingRecord | null>(null);
+  const closePersonDetail = useCallback(() => setPersonDetail(null), []);
   const [golFilter, setGolFilter] = useState('ALL');
   const [shiftFilter, setShiftFilter] = useState('ALL');
   const [bagianFilter, setBagianFilter] = useState('ALL');
@@ -1005,6 +1090,16 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     : 6 + (program === 'k3' ? 2 : 0) + (program === 'sap' ? SAP_TRAININGS.length : K3_TRAININGS.length) + (canManage ? 1 : 0);
 
   const activeFilterCount = [golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter].filter(f => f !== 'ALL').length;
+  // Hasil pencarian Overview: seluruh karyawan (lintas program) + pencapaian training masing-masing
+  const searchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return records
+      .filter(r => [r.nama, r.nik, r.jabatan, r.bagian].some(v => String(v || '').toLowerCase().includes(q)))
+      .slice(0, 8)
+      .map(r => ({ record: r, achievement: personAchievement(r) }));
+  }, [records, searchQuery]);
+
   const hasActiveFilter = !!searchQuery || golFilter !== 'ALL' || shiftFilter !== 'ALL' || bagianFilter !== 'ALL'
     || ptFilter !== 'ALL' || statusFilter !== 'ALL' || !!missingFilter;
 
@@ -1477,11 +1572,73 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Cari karyawan..."
-                className="w-full pl-10 pr-3 py-2.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-base sm:text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+                onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') setSearchOpen(false);
+                  if (e.key === 'Enter' && searchMatches[0]) { setPersonDetail(searchMatches[0].record); setSearchOpen(false); }
+                }}
+                placeholder="Cari karyawan — lihat pencapaian training..."
+                className="w-full pl-10 pr-9 py-2.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-base sm:text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  title="Hapus pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {searchOpen && searchQuery.trim() && (
+                <div className="absolute left-0 right-0 top-full mt-2 z-30 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl overflow-hidden">
+                  {searchMatches.length === 0 ? (
+                    <p className="px-4 py-3 text-xs font-medium text-slate-500">Karyawan tidak ditemukan</p>
+                  ) : (
+                    <ul className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                      {searchMatches.map(({ record: r, achievement: a }) => (
+                        <li key={r.nik}>
+                          <button
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => { setPersonDetail(r); setSearchOpen(false); }}
+                            className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{r.nama}</p>
+                              <p className="text-[10px] font-medium text-slate-500 truncate">{r.nik} · {r.jabatan || '-'}</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {a.parts.map(part => (
+                                  <span
+                                    key={part.id}
+                                    className="px-1.5 py-0.5 rounded-md text-[9px] font-bold"
+                                    style={{ backgroundColor: DASH.brandSoft, color: part.done >= part.total ? DASH.brand : '#64748b' }}
+                                  >
+                                    {part.label} {part.done}/{part.total}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="shrink-0 flex flex-col items-end gap-1 w-14">
+                              <span className="text-sm font-bold" style={{ color: pctColor(a.pct) }}>{a.pct}%</span>
+                              <span className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: DASH.brandSoft }}>
+                                <span className="block h-full rounded-full" style={{ width: `${a.pct}%`, backgroundColor: pctColor(a.pct) }} />
+                              </span>
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
+            {personDetail && createPortal(
+              <PersonAchievementModal record={personDetail} onClose={closePersonDetail} />,
+              document.body,
+            )}
           </DashCard>
 
           <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
