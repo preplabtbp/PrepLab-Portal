@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input, Select, Button } from './ui';
 import { todayWit } from '../utils/training-import';
-import { parseMealOrderSheet, type ParsedMealOrderRow } from '../utils/meal-order-import';
+import { parseMealOrderSheet, type ParsedMealOrderRow, type MealImportField } from '../utils/meal-order-import';
 import { isTuesdayWednesdaySaturday, mealChoicePatch } from '../utils/meal-roster-sync';
 import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle } from './meal-bungkus-recap';
 
@@ -323,7 +323,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   // ===== Import sheet order makan (CSV / Excel) =====
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ fileName: string; date: string; rows: ParsedMealOrderRow[] } | null>(null);
+  const [importPreview, setImportPreview] = useState<{ fileName: string; date: string; rows: ParsedMealOrderRow[]; fields: MealImportField[] } | null>(null);
 
   const handleImportFile = async (file: File) => {
     setImporting(true);
@@ -343,7 +343,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       }
       const parsed = parseMealOrderSheet(table);
       if (!parsed || parsed.rows.length === 0) throw new Error('Format sheet tidak dikenali — pastikan ada kolom NAMA KARYAWAN & NIK');
-      setImportPreview({ fileName: file.name, date: parsed.date || date, rows: parsed.rows });
+      setImportPreview({ fileName: file.name, date: parsed.date || date, rows: parsed.rows, fields: parsed.fields });
     } catch (e: any) {
       toast.error(e.message || 'Gagal membaca file');
     } finally {
@@ -359,7 +359,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const res = await fetch('/api/meal-orders/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderDate: importPreview.date, rows: importPreview.rows }),
+        body: JSON.stringify({ orderDate: importPreview.date, rows: importPreview.rows, fields: importPreview.fields }),
       });
       const json = await res.json();
       if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal import');
@@ -1789,7 +1789,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             <h3 className="text-base font-black text-slate-900 mb-1">Import Orderan Makanan</h3>
             <p className="text-xs text-slate-600 mb-3 truncate">{importPreview.fileName}</p>
             <div className="rounded-2xl bg-slate-50 p-3 space-y-1 text-xs text-slate-700 mb-3">
-              <p><b>{importPreview.rows.length}</b> karyawan terbaca</p>
+              <p><b>{importPreview.rows.length}</b> karyawan terbaca · <b>{importPreview.fields.length}</b> kolom disinkronkan</p>
+              <p className="text-[11px] text-slate-500">Hanya kolom yang ada di file yang menimpa orderan — kolom lain tetap seperti semula.</p>
               <p>
                 1 (B.Pagi): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchPagi), 0)}</b> ·
                 1 (B.Sore): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchSore), 0)}</b> ·

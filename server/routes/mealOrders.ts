@@ -108,16 +108,18 @@ async function getInactiveNiks(): Promise<Set<string>> {
 const isActiveRow = (inactive: Set<string>) => (r: { nik: string }) => !inactive.has(String(r.nik || '').toUpperCase().trim());
 
 // Simpan banyak baris sekaligus (import / seed) — upsert per (tanggal, NIK), per 200 baris
-async function bulkUpsertMealOrders(date: string, rows: ParsedMealOrderRow[], updatedBy: string) {
+// onlyFields: hanya kolom ini yang menimpa baris yang sudah ada (import Excel = kolom yang ada di file); kolom lain dipertahankan
+async function bulkUpsertMealOrders(date: string, rows: ParsedMealOrderRow[], updatedBy: string, onlyFields?: readonly string[]) {
   const now = new Date();
   let saved = 0;
+  const setFields = onlyFields ? EDITABLE_FIELDS.filter(f => f === 'nama' || f === 'sortNo' || onlyFields.includes(f)) : EDITABLE_FIELDS;
   for (let i = 0; i < rows.length; i += 200) {
     const chunk = rows.slice(i, i + 200).map(r => ({ ...r, orderDate: date, updatedBy, updatedAt: now }));
     const res = await db.insert(mealOrders).values(chunk)
       .onConflictDoUpdate({
         target: [mealOrders.orderDate, mealOrders.nik],
         // Pilihan Catatan tidak ada di file/sheet → yang lama dipertahankan
-        set: Object.fromEntries([...EDITABLE_FIELDS, 'updatedBy', 'updatedAt'].map(f => [f, f.startsWith('pilihan')
+        set: Object.fromEntries([...setFields, 'updatedBy', 'updatedAt'].map(f => [f, f.startsWith('pilihan')
           ? sql.raw(`COALESCE(excluded.${toSnake(f)}, meal_orders.${toSnake(f)})`)
           : sql.raw(`excluded.${toSnake(f)}`)])),
       })
@@ -925,10 +927,14 @@ mealOrdersRouter.post("/api/meal-orders/copy", requireMealManager, async (req, r
 mealOrdersRouter.post("/api/meal-orders/import", requireMealManager, async (req, res) => {
   try {
     await ensureMealOrdersTable();
-    const { orderDate, rows } = req.body || {};
+    const { orderDate, rows, fields } = req.body || {};
     if (!isDate(orderDate) || !Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ status: "error", message: "Tanggal & data import wajib diisi." });
     }
+    // Kolom yang ada di file (format sama dengan tabel Orderan Makanan) → hanya kolom ini yang disinkronkan
+    const fileFields: string[] | undefined = Array.isArray(fields)
+      ? fields.filter((f: unknown): f is string => typeof f === 'string' && (EDITABLE_FIELDS as readonly string[]).includes(f))
+      : undefined;
     const clean: ParsedMealOrderRow[] = rows
       .map((r: any, i: number) => {
         const f = pickFields(r) as Record<string, any>;
@@ -936,11 +942,11 @@ mealOrdersRouter.post("/api/meal-orders/import", requireMealManager, async (req,
       })
       .filter(r => r.nik && r.nama)
       .filter(isActiveRow(await getInactiveNiks()));
-    // Kolom yang tidak ada di file tetap terisi null (import = isi sheet tanggal tsb apa adanya)
+    // Baris baru: kolom yang tidak ada di file kosong. Baris yang sudah ada: hanya kolom file yang ditimpa.
     const full = clean.map(r => ({ ...Object.fromEntries(EDITABLE_FIELDS.map(f => [f, null])), ...r })) as ParsedMealOrderRow[];
-    const saved = await bulkUpsertMealOrders(orderDate, full, `import:${updatedByOf(req)}`);
+    const saved = await bulkUpsertMealOrders(orderDate, full, `import:${updatedByOf(req)}`, fileFields);
     scheduleSheetSync();
-    res.json({ status: "success", saved });
+    res.json({ status: "success", saved, fields: fileFields?.length ?? EDITABLE_FIELDS.length });
   } catch (error: any) {
     console.error("[MealOrders IMPORT] Error:", error);
     res.status(500).json({ status: "error", message: error.message });

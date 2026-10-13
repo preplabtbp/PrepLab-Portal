@@ -31,13 +31,22 @@ export interface ParsedMealOrderRow {
   status: string | null;
   keteranganLapor: string | null;
   catatan: string | null;
+  pilihanPagi?: string | null;
+  pilihanSore?: string | null;
 }
 
 export interface ParsedMealOrderSheet {
   /** Tanggal order yang tertulis di header sheet (YYYY-MM-DD), bila ada */
   date: string | null;
   rows: ParsedMealOrderRow[];
+  /** Kolom yang benar-benar ada di file — hanya kolom ini yang disinkronkan saat import */
+  fields: MealImportField[];
 }
+
+export type MealImportField = Exclude<keyof ParsedMealOrderRow, 'nik' | 'nama'>;
+
+// Pilihan Pagi/Sore yang tertulis di Catatan, mis. "Pagi Kantin", "Sore Bungkusan"
+const CHOICE_RE = /\b(pagi|sore)\s*(kantin|bungkusan|lapangan)\b/gi;
 
 const norm = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
 const key = (v: unknown) => norm(v).toLowerCase().replace(/[\s.()/]/g, '');
@@ -92,8 +101,25 @@ export function parseMealOrderSheet(table: unknown[][]): ParsedMealOrderSheet | 
     batchSore: find(h2, k => k.includes('bsore')),
     status: find(h1, k => k === 'status'),
     keteranganLapor: find(h1, k => k.includes('belumlapor')),
+    catatan: find(h1, k => k === 'catatan'),
   };
   if (col.nama < 0 || col.nik < 0) return null;
+  // Catatan: kolom berjudul "Catatan", atau (sheet lama) kolom tanpa judul setelah Keterangan (Belum Lapor)
+  const catatanCol = col.catatan >= 0 ? col.catatan : (col.keteranganLapor >= 0 && !h1[col.keteranganLapor + 1] ? col.keteranganLapor + 1 : -1);
+  // Lapangan = kolom sebelahnya hanya bila sub-judulnya Lapangan (tabel portal: Kantin | Lapangan)
+  const nextLapangan = (c: number) => (c >= 0 && (!h2[c + 1] || key(h2[c + 1]) === 'lapangan') ? c + 1 : -1);
+  const pagiLap = nextLapangan(col.pagi), sahurLap = nextLapangan(col.sahurMeal), siangLap = nextLapangan(col.siang), soreLap = nextLapangan(col.sore);
+
+  const present: [MealImportField, number][] = [
+    ['statusMess', col.statusMess], ['pt', col.pt], ['shift', col.shift], ['section', col.section], ['statusKerja', col.statusKerja],
+    ['sahur', col.sahur], ['tidakPuasa', col.tidakPuasa], ['tempatTinggal', col.tempatTinggal], ['shiftKerja', col.shiftKerja],
+    ['pagiKantin', col.pagi], ['pagiLapangan', pagiLap], ['sahurKantin', col.sahurMeal], ['sahurLapangan', sahurLap],
+    ['siangKantin', col.siang], ['siangLapangan', siangLap], ['soreKantin', col.sore], ['soreLapangan', soreLap],
+    ['takjilLapangan', col.takjil], ['malamLapangan', col.malam], ['batchPagi', col.batchPagi], ['batchSore', col.batchSore],
+    ['status', col.status], ['keteranganLapor', col.keteranganLapor], ['catatan', catatanCol],
+  ];
+  const fields: MealImportField[] = present.filter(([, c]) => c >= 0).map(([f]) => f);
+  let hasChoice = false;
 
   // Tanggal: sel tanggal di atas kolom batch, atau sel header mana pun yang berupa tanggal
   let date: string | null = null;
@@ -112,6 +138,17 @@ export function parseMealOrderSheet(table: unknown[][]): ParsedMealOrderSheet | 
     // Baris legenda/total di bawah tabel tidak punya NIK → dilewati
     if (!nama || !nik || seen.has(nik)) continue;
     seen.add(nik);
+    // Catatan yang berisi pilihan "Pagi Kantin" / "Sore Bungkusan" → pilihan Pagi/Sore; sisanya tetap Catatan
+    let catatan = cell(catatanCol);
+    let pilihanPagi: string | null = null, pilihanSore: string | null = null;
+    if (catatan) {
+      for (const m of catatan.matchAll(CHOICE_RE)) {
+        const choice = m[2].toLowerCase() === 'kantin' ? 'kantin' : 'lapangan';
+        if (m[1].toLowerCase() === 'pagi') pilihanPagi = choice; else pilihanSore = choice;
+        hasChoice = true;
+      }
+      catatan = norm(catatan.replace(CHOICE_RE, '').replace(/^[\s·,;-]+|[\s·,;-]+$/g, '')) || null;
+    }
     rows.push({
       sortNo: rows.length + 1,
       nik,
@@ -126,21 +163,25 @@ export function parseMealOrderSheet(table: unknown[][]): ParsedMealOrderSheet | 
       tempatTinggal: cell(col.tempatTinggal),
       shiftKerja: cell(col.shiftKerja),
       pagiKantin: cell(col.pagi),
-      pagiLapangan: cell(col.pagi >= 0 ? col.pagi + 1 : -1),
+      pagiLapangan: cell(pagiLap),
       sahurKantin: cell(col.sahurMeal),
-      sahurLapangan: cell(col.sahurMeal >= 0 ? col.sahurMeal + 1 : -1),
+      sahurLapangan: cell(sahurLap),
       siangKantin: cell(col.siang),
-      siangLapangan: cell(col.siang >= 0 ? col.siang + 1 : -1),
+      siangLapangan: cell(siangLap),
       soreKantin: cell(col.sore),
-      soreLapangan: cell(col.sore >= 0 ? col.sore + 1 : -1),
+      soreLapangan: cell(soreLap),
       takjilLapangan: cell(col.takjil),
       malamLapangan: cell(col.malam),
       batchPagi: cell(col.batchPagi),
       batchSore: cell(col.batchSore),
       status: cell(col.status),
       keteranganLapor: cell(col.keteranganLapor),
-      catatan: cell(col.keteranganLapor >= 0 ? col.keteranganLapor + 1 : -1),
+      catatan,
+      pilihanPagi,
+      pilihanSore,
     });
   }
-  return { date, rows };
+  // Pilihan Pagi/Sore ikut disinkronkan bila ada yang tertulis di Catatan
+  if (hasChoice) fields.push('pilihanPagi', 'pilihanSore');
+  return { date, rows, fields };
 }
