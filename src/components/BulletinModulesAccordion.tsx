@@ -31,6 +31,7 @@ import {
   ExternalLink, 
   UploadCloud,
   GraduationCap,
+  Award,
   X
 } from 'lucide-react';
 import { getKtaUrl } from '../sheets-api';
@@ -90,7 +91,8 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
         { id: 'ticket', group: 'Observasi & Pelaporan', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('ticket') },
         { id: 'kta', group: 'Observasi & Pelaporan', title: "KTA / TTA", desc: "Laporan Observasi KTA & TTA", icon: <AlertTriangle className="w-5 h-5" />, color: 'amber', action: () => setShowKtaConfirmation(true) },
         { id: 'general-inspection', group: 'Observasi & Pelaporan', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5" />, color: 'amber', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
-        { id: 'training-database', group: 'Training', title: "Database Training", desc: "SAP, K3 & Sertifikasi POP/POM", icon: <GraduationCap className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('training-database') },
+        { id: 'training-database', group: 'Training', title: "Training Internal", desc: "SAP (HAZID, JSA, IUT OTT, IAI, BFA, BS) & K3", icon: <GraduationCap className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('training-database') },
+        { id: 'training-external', group: 'Training', title: "Training External", desc: "Sertifikasi Pra POP, POP & POM", icon: <Award className="w-5 h-5" />, color: 'amber', action: () => handleNavigate('training-external') },
       ]
     },
     {

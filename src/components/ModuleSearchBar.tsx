@@ -163,15 +163,27 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
   },
   {
     id: 'training-database',
-    title: 'Database Training',
-    desc: 'Rekap training SAP: HAZID, JSA, IUT OTT, IAI & BFA per karyawan',
+    title: 'Training Internal',
+    desc: 'Rekap training SAP (HAZID, JSA, IUT OTT, IAI, BFA, BS) & K3 per karyawan',
     category: 'Administrasi & SDM',
     icon: <GraduationCap className="w-5 h-5" />,
     iconBg: 'bg-indigo-500/15 border-indigo-500/25',
     iconColor: 'text-indigo-600 dark:text-indigo-400',
-    tags: ['training', 'pelatihan', 'hazid', 'jsa', 'iut', 'ott', 'iai', 'bfa', 'sap', 'sertifikat'],
+    tags: ['training', 'internal', 'database training', 'pelatihan', 'hazid', 'jsa', 'iut', 'ott', 'iai', 'bfa', 'sap', 'k3', 'wah', 'loto'],
     actionType: 'nav',
     target: 'training-database'
+  },
+  {
+    id: 'training-external',
+    title: 'Training External',
+    desc: 'Rekap sertifikasi Pra POP, POP & POM per karyawan',
+    category: 'Administrasi & SDM',
+    icon: <GraduationCap className="w-5 h-5" />,
+    iconBg: 'bg-indigo-500/15 border-indigo-500/25',
+    iconColor: 'text-indigo-600 dark:text-indigo-400',
+    tags: ['training', 'external', 'eksternal', 'pop', 'pra pop', 'pom', 'pengawas operasional', 'sertifikasi'],
+    actionType: 'nav',
+    target: 'training-external'
   },
   {
     id: 'agenda',
