@@ -116,7 +116,7 @@ export function computeMealOrderByRoster(
   if (isCR && isNirwana && ['D', 'N', 'LS'].includes(code)) {
     // ==========================================
     // LOGIKA MESS CR (Gol II-V) + tempat tinggal Nirwana
-    // Pagi (D/N/LS) & Sore (D/N) bisa dipilih Kantin/Lapangan lewat dropdown di kolom Catatan — awalan "K" di Kantin
+    // Pagi (D/N/LS) & Sore (D/N) bisa dipilih Kantin/Lapangan lewat dropdown di kolom Catatan â€” awalan "K" di Kantin
     // ==========================================
     res.pagiKantin = 'K';
     if (code === 'D') {
@@ -132,7 +132,7 @@ export function computeMealOrderByRoster(
       res.malamLapangan = '1';
     } else {
       // LS: Siang, Sore & Malam = Lapangan 1
-      res.shiftKerja = defaultDayShiftKerja;
+      res.shiftKerja = 'LONGSHIFT';
       res.siangLapangan = '1';
       res.soreLapangan = '1';
       res.malamLapangan = '1';
@@ -169,7 +169,7 @@ export function computeMealOrderByRoster(
       // 3. LS: LongShift
       // Pagi = Buat agar bisa diganti (Bungkusan Lapangan atau Kantin), default Lapangan
       // Siang = Bungkusan Lapangan, Sore = Bungkusan Lapangan, Malam = Bungkusan Lapangan
-      res.shiftKerja = defaultDayShiftKerja;
+      res.shiftKerja = 'LONGSHIFT';
       res.pagiLapangan = '1';
       res.siangLapangan = '1';
       res.soreLapangan = '1';
@@ -244,7 +244,7 @@ export function computeMealOrderByRoster(
       // 3. LS: LongShift
       // Pagi = Kosong (Nirwana: 1 Bungkusan Kantin)
       // Siang = Bungkusan Lapangan, Sore = Bungkusan Lapangan, Malam = Bungkusan Lapangan
-      res.shiftKerja = defaultDayShiftKerja;
+      res.shiftKerja = 'LONGSHIFT';
       res.pagiKantin = bungkusanKantinPagi;
       res.batchPagi = batchPagiNirwana;
       res.siangLapangan = '1';

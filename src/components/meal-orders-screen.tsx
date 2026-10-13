@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+﻿import React, { useMemo, useRef, useState } from 'react';
 import {
   Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp,
 } from 'lucide-react';
@@ -37,8 +37,8 @@ interface MealOrder {
   soreLapangan: string | null;
   takjilLapangan: string | null;
   malamLapangan: string | null;
-  batchPagi: string | null; // kolom "1 (B.Pagi)" — jumlah
-  batchSore: string | null; // kolom "1 (B.Sore)" — jumlah
+  batchPagi: string | null; // kolom "1 (B.Pagi)" â€” jumlah
+  batchSore: string | null; // kolom "1 (B.Sore)" â€” jumlah
   status: string | null;
   keteranganLapor: string | null; // "Keterangan (Belum Lapor)"
   catatan: string | null; // mis. DINAS / PHK
@@ -218,7 +218,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     sore: filtered.reduce((s, r) => s + portions(r.batchSore), 0),
     belumLapor: filtered.filter(r => r.keteranganLapor && r.keteranganLapor.trim() !== '-').length,
   }), [filtered]);
-  // Tanggal sebelumnya yang punya data → sumber "Salin"
+  // Tanggal sebelumnya yang punya data â†’ sumber "Salin"
   const previousDate = useMemo(() => (data?.dates || []).map(d => String(d.date).slice(0, 10)).find(d => d < date) || null, [data, date]);
 
   // ===== Ubah data =====
@@ -289,7 +289,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const res = await fetch('/api/meal-orders/copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: previousDate, to: date }) });
       const json = await res.json();
       if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal menyalin');
-      toast.success(`${json.inserted} karyawan disalin dari ${dayName(previousDate)}, ${longDate(previousDate)}${json.skipped ? ` · ${json.skipped} sudah ada` : ''}`);
+      toast.success(`${json.inserted} karyawan disalin dari ${dayName(previousDate)}, ${longDate(previousDate)}${json.skipped ? ` Â· ${json.skipped} sudah ada` : ''}`);
       queryClient.invalidateQueries({ queryKey: ['meal-orders'] });
     } catch (e: any) {
       toast.error(e.message);
@@ -334,7 +334,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         }
       }
       const parsed = parseMealOrderSheet(table);
-      if (!parsed || parsed.rows.length === 0) throw new Error('Format sheet tidak dikenali — pastikan ada kolom NAMA KARYAWAN & NIK');
+      if (!parsed || parsed.rows.length === 0) throw new Error('Format sheet tidak dikenali â€” pastikan ada kolom NAMA KARYAWAN & NIK');
       setImportPreview({ fileName: file.name, date: parsed.date || date, rows: parsed.rows });
     } catch (e: any) {
       toast.error(e.message || 'Gagal membaca file');
@@ -366,7 +366,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     }
   };
 
-  // Google Sheets "Meal Order" di folder Administration: admin → sinkron dulu lalu buka; lainnya → buka saja
+  // Google Sheets "Meal Order" di folder Administration: admin â†’ sinkron dulu lalu buka; lainnya â†’ buka saja
   const [syncingSheet, setSyncingSheet] = useState(false);
   const openGoogleSheet = async () => {
     const win = window.open('', '_blank'); // dibuka sebelum await agar tidak diblokir popup blocker
@@ -415,11 +415,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const kantin = kantinKeys.map(k => (String(r[k] || '').trim() ? 1 : 0));
       const bungkus = bungkusCols.map(c => portions(r[c.key]));
       const jenisMeal = kantin.some(Boolean) || !bungkus.some(Boolean) ? 'Kantin' : 'Bungkusan';
-      // Hanya status tidak hadir yang dikenal; isian lain (mis. tempat tinggal "Kampung Kawasi") → On Duty
+      // Hanya status tidak hadir yang dikenal; isian lain (mis. tempat tinggal "Kampung Kawasi") â†’ On Duty
       const absent = String(r.statusKerja || '').trim().match(/^(cuti|izin|sakit|off|cs|dinas)\b/i);
       return [
-        // Shift hanya Siang / Malam: Nonshift, Cuti, Cuti Site, dll. → Siang
-        i + 1, r.nik, r.nama, /malam/i.test(r.shiftKerja || '') ? 'Malam' : 'Siang', jenisMeal,
+        // Shift hanya Siang / Malam / Longshift: Nonshift, Cuti, Cuti Site, dll. â†’ Siang
+        i + 1, r.nik, r.nama, /malam/i.test(r.shiftKerja || '') ? 'Malam' : /long/i.test(r.shiftKerja || '') ? 'Longshift' : 'Siang', jenisMeal,
         absent ? (absent[1].toUpperCase() === 'CS' ? 'CS' : titleCase(absent[1])) : 'On Duty', ...kantin, ...bungkus,
       ];
     });
@@ -475,7 +475,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           className={`w-full h-7 rounded-md text-xs font-black transition-colors ${v ? 'bg-sky-100 text-sky-800' : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'} ${canManage ? 'cursor-pointer hover:ring-2 hover:ring-sky-300' : 'cursor-default'}`}
           title={canManage ? 'Klik untuk pilih Kantin (K)' : undefined}
         >
-          {v || '·'}
+          {v || 'Â·'}
         </button>
       );
     }
@@ -510,7 +510,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               if (key === 'soreLapangan') {
                 const sm = (r.statusMess || '').toUpperCase();
                 const isCR = sm === 'CR' || sm === 'MESS';
-                const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift';
+                const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift' || r.shiftKerja === 'LONGSHIFT';
                 if (isTuesdayWednesdaySaturday(date) && isCR && isDayShift) {
                   toast.info(`Catatan: Hari ${dayName(date)} untuk karyawan Mess CR jadwal sore adalah Kantin.`);
                 }
@@ -545,7 +545,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       // Pindah ke Lapangan
       const sm = (r.statusMess || '').toUpperCase();
       const isCR = sm === 'CR' || sm === 'MESS';
-      const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift';
+      const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift' || r.shiftKerja === 'LONGSHIFT';
       if (time === 'sore' && isTuesdayWednesdaySaturday(date) && isCR && isDayShift) {
         toast.info(`Catatan: Hari ${dayName(date)} untuk Mess CR jadwal sore adalah Kantin.`);
       }
@@ -573,7 +573,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     const sm = (r.statusMess || '').toUpperCase();
     const onDuty = !r.statusKerja || r.statusKerja === '-';
     if (!['CR', 'MESS'].includes(sm) || !(r.tempatTinggal || '').toLowerCase().includes('nirwana') || !onDuty) return [];
-    const isLongShift = r.shiftKerja !== 'MALAM' && portions(r.malamLapangan) > 0;
+    const isLongShift = r.shiftKerja === 'LONGSHIFT' || (r.shiftKerja !== 'MALAM' && portions(r.malamLapangan) > 0);
     return isLongShift ? ['pagi'] : ['pagi', 'sore'];
   };
   const setMealChoice = (r: MealOrder, time: 'pagi' | 'sore', choice: 'kantin' | 'lapangan') => {
@@ -611,7 +611,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     ...activeMealGroups.map(g => ({
       label: g.label,
       value: g.cells.reduce((s, c) => s + (totals[c.key] || 0), 0),
-      detail: g.cells.map(c => `${c.label} ${totals[c.key] || 0}`).join(' · '),
+      detail: g.cells.map(c => `${c.label} ${totals[c.key] || 0}`).join(' Â· '),
     })),
   ], [activeMealGroups, totals]);
 
@@ -632,7 +632,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">Orderan Makanan</h1>
                 {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
               </div>
-              <p className="text-[11px] sm:text-xs font-medium text-slate-500">Order harian Pagi/Sahur, Siang, Sore, Takjil & Malam · Sinkron otomatis dengan Roster & Cuti</p>
+              <p className="text-[11px] sm:text-xs font-medium text-slate-500">Order harian Pagi/Sahur, Siang, Sore, Takjil & Malam Â· Sinkron otomatis dengan Roster & Cuti</p>
             </div>
           </div>
 
@@ -679,7 +679,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               onClick={openGoogleSheet}
               disabled={syncingSheet}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer disabled:opacity-60"
-              title='Sinkron & buka Google Sheets "Meal Order" (folder Administration) — hanya Section Administrasi yang bisa mengedit'
+              title='Sinkron & buka Google Sheets "Meal Order" (folder Administration) â€” hanya Section Administrasi yang bisa mengedit'
             >
               {syncingSheet ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Google Sheets
             </button>}
@@ -721,15 +721,15 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           <div className="rounded-3xl bg-white p-3 sm:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] space-y-3 min-w-0">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-bold text-slate-900">Rekapan Bungkusan · {dayName(date)}, {longDate(date)}</p>
+                <p className="text-sm font-bold text-slate-900">Rekapan Bungkusan Â· {dayName(date)}, {longDate(date)}</p>
                 <p className="text-[11px] text-slate-500">Dihitung otomatis dari porsi Lapangan & kolom 1 (B.Pagi)/1 (B.Sore). Gol IV-V yang pesan bungkusan Pagi/Siang/Sore tampil sebagai Kotakan.</p>
               </div>
               <button
                 type="button"
-                onClick={() => { if (!printBungkusRecap(date, recapBlocks)) toast.error('Popup diblokir browser — izinkan popup untuk download PDF'); }}
+                onClick={() => { if (!printBungkusRecap(date, recapBlocks)) toast.error('Popup diblokir browser â€” izinkan popup untuk download PDF'); }}
                 disabled={rows.length === 0 || employeesLoading}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
-                title="Buka dialog cetak — pilih 'Simpan sebagai PDF'"
+                title="Buka dialog cetak â€” pilih 'Simpan sebagai PDF'"
               >
                 <Download className="w-4 h-4" /> Download PDF
               </button>
@@ -764,8 +764,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             ))}
             {columnVisibility.batches && (
               <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
-                <p className="text-2xl font-semibold text-emerald-700">{confirmed.pagi}<span className="text-sm text-slate-400"> · {confirmed.sore}</span></p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) Â· 1 (B.Sore)</p>
+                <p className="text-2xl font-semibold text-emerald-700">{confirmed.pagi}<span className="text-sm text-slate-400"> Â· {confirmed.sore}</span></p>
                 <p className="text-[10px] text-slate-500">total {dayName(date)}</p>
               </div>
             )}
@@ -997,7 +997,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     const ds = String(d.date).slice(0, 10);
                     return (
                       <button key={ds} type="button" onClick={() => setDate(ds)} className="px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer">
-                        {dayName(ds)}, {longDate(ds)} · {d.count}
+                        {dayName(ds)}, {longDate(ds)} Â· {d.count}
                       </button>
                     );
                   })}
@@ -1176,6 +1176,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               <option value="">-</option>
                               <option value="SIANG">SIANG</option>
                               <option value="MALAM">MALAM</option>
+                              <option value="LONGSHIFT">LONGSHIFT</option>
                               <option value="Nonshift">Nonshift</option>
                             </select>
                           ) : <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-semibold">{r.shiftKerja || '-'}</span>}
@@ -1269,8 +1270,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-slate-900">{i + 1}. {r.nama}</p>
-                        <p className="text-[11px] text-slate-500">{r.nik} · {r.pt || '-'} · {r.section || '-'}</p>
-                        <p className="text-[11px] text-slate-500">{r.tempatTinggal || '-'} · Mess {r.statusMess || '-'} · <span className="font-semibold text-emerald-700">{r.shiftKerja || '-'}</span></p>
+                        <p className="text-[11px] text-slate-500">{r.nik} Â· {r.pt || '-'} Â· {r.section || '-'}</p>
+                        <p className="text-[11px] text-slate-500">{r.tempatTinggal || '-'} Â· Mess {r.statusMess || '-'} Â· <span className="font-semibold text-emerald-700">{r.shiftKerja || '-'}</span></p>
                       </div>
                       {canManage && (
                         <div className="flex gap-1 shrink-0">
@@ -1319,7 +1320,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               </span>
                             )}
                             {renderMealChoices(r)}
-                            {r.catatan && <span className="text-slate-600 font-medium truncate">· {r.catatan}</span>}
+                            {r.catatan && <span className="text-slate-600 font-medium truncate">Â· {r.catatan}</span>}
                           </div>
                         )}
                       </div>
@@ -1346,7 +1347,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               <button type="button" onClick={() => setModal(null)} className="p-2 rounded-full hover:bg-slate-100 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-              <Input label="NIK" value={form.nik || ''} onChange={e => updateForm('nik', e.target.value)} disabled={modal.mode === 'edit'} placeholder="Ketik NIK — profil terisi otomatis" />
+              <Input label="NIK" value={form.nik || ''} onChange={e => updateForm('nik', e.target.value)} disabled={modal.mode === 'edit'} placeholder="Ketik NIK â€” profil terisi otomatis" />
               <Input label="Nama Karyawan" value={form.nama || ''} onChange={e => updateForm('nama', e.target.value)} />
               {PROFILE_FIELDS.map(f => (
                 f.key === 'keteranganLapor' ? (
@@ -1363,22 +1364,23 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   <Input key={f.key} label={f.label} value={form[f.key] || ''} onChange={e => updateForm(f.key, e.target.value)} placeholder={f.placeholder} />
                 )
               ))}
-              <Select label="Shift (Siang/Malam)" value={form.shiftKerja || ''} onChange={e => updateForm('shiftKerja', e.target.value)}>
+              <Select label="Shift (Siang/Malam/Longshift)" value={form.shiftKerja || ''} onChange={e => updateForm('shiftKerja', e.target.value)}>
                 <option value="">-</option>
                 <option value="SIANG">SIANG</option>
                 <option value="MALAM">MALAM</option>
+                <option value="LONGSHIFT">LONGSHIFT</option>
                 <option value="Nonshift">Nonshift</option>
               </Select>
             </div>
             <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 mt-4 mb-2">Order Makan</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
               {MEAL_CELLS.map(c => c.kind === 'kantin' ? (
-                <Select key={c.key} label={`${c.group} · ${c.label}`} value={form[c.key] || ''} onChange={e => updateForm(c.key, e.target.value)}>
+                <Select key={c.key} label={`${c.group} Â· ${c.label}`} value={form[c.key] || ''} onChange={e => updateForm(c.key, e.target.value)}>
                   <option value="">-</option>
                   <option value="K">K (Kantin)</option>
                 </Select>
               ) : (
-                <Input key={c.key} label={`${c.group} · ${c.label}`} type="number" min={0} value={form[c.key] || ''} onChange={e => updateForm(c.key, e.target.value)} placeholder="Porsi" />
+                <Input key={c.key} label={`${c.group} Â· ${c.label}`} type="number" min={0} value={form[c.key] || ''} onChange={e => updateForm(c.key, e.target.value)} placeholder="Porsi" />
               ))}
               <Input label="1 (B.Pagi)" type="number" min={0} value={form.batchPagi || ''} onChange={e => updateForm('batchPagi', e.target.value)} />
               <Input label="1 (B.Sore)" type="number" min={0} value={form.batchSore || ''} onChange={e => updateForm('batchSore', e.target.value)} />
@@ -1400,14 +1402,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             <div className="rounded-2xl bg-slate-50 p-3 space-y-1 text-xs text-slate-700 mb-3">
               <p><b>{importPreview.rows.length}</b> karyawan terbaca</p>
               <p>
-                1 (B.Pagi): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchPagi), 0)}</b> ·
-                1 (B.Sore): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchSore), 0)}</b> ·
+                1 (B.Pagi): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchPagi), 0)}</b> Â·
+                1 (B.Sore): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchSore), 0)}</b> Â·
                 Belum lapor: <b>{importPreview.rows.filter(r => r.keteranganLapor).length}</b>
               </p>
             </div>
             <Input label="Tanggal order" type="date" value={importPreview.date} onChange={e => e.target.value && setImportPreview(p => (p ? { ...p, date: e.target.value } : p))} />
             <p className="text-[11px] text-slate-500 mt-1">
-              {dayName(importPreview.date)}, {longDate(importPreview.date)} — karyawan yang sudah ada di tanggal ini akan diperbarui sesuai file.
+              {dayName(importPreview.date)}, {longDate(importPreview.date)} â€” karyawan yang sudah ada di tanggal ini akan diperbarui sesuai file.
             </p>
             <div className="flex gap-2 justify-end mt-4">
               <Button variant="secondary" onClick={() => setImportPreview(null)} disabled={importing}>Batal</Button>
