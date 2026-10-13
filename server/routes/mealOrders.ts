@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { Readable } from "stream";
 import * as XLSX from "xlsx";
+import Papa from "papaparse";
+import { parseMealOrderSheet, type ParsedMealOrderRow } from "../../src/utils/meal-order-import.js";
+import { MEAL_ORDER_SEED_CSV } from "../data/mealOrderSeed.js";
 import { db } from "../../src/db/index.js";
 import { and, asc, eq, sql, desc, inArray } from "drizzle-orm";
 import { mealOrders, employees } from "../../src/db/schema.js";
@@ -16,10 +19,10 @@ export const mealOrdersRouter = Router();
 const EDITABLE_FIELDS = [
   'sortNo', 'nama', 'statusMess', 'pt', 'shift', 'section', 'statusKerja', 'sahur', 'tidakPuasa', 'tempatTinggal', 'shiftKerja',
   'pagiKantin', 'pagiLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan', 'takjilLapangan', 'malamLapangan',
-  'konfirmasiPagi', 'konfirmasiSore',
+  'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan',
 ] as const;
 type EditableField = typeof EDITABLE_FIELDS[number];
-const BOOL_FIELDS: EditableField[] = ['konfirmasiPagi', 'konfirmasiSore'];
+const BOOL_FIELDS: EditableField[] = [];
 
 let ensurePromise: Promise<void> | null = null;
 export function ensureMealOrdersTable(): Promise<void> {
@@ -55,6 +58,19 @@ export function ensureMealOrdersTable(): Promise<void> {
         updated_at TIMESTAMP DEFAULT NOW()
       )`);
       await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_orders_date_nik ON meal_orders (order_date, nik)`);
+      // Kolom tambahan sesuai sheet Meal_Order.csv
+      await db.execute(sql`ALTER TABLE meal_orders
+        ADD COLUMN IF NOT EXISTS batch_pagi TEXT,
+        ADD COLUMN IF NOT EXISTS batch_sore TEXT,
+        ADD COLUMN IF NOT EXISTS status TEXT,
+        ADD COLUMN IF NOT EXISTS keterangan_lapor TEXT,
+        ADD COLUMN IF NOT EXISTS catatan TEXT`);
+      // Seed sekali: data Meal_Order.csv (Rabu, 14 Okt 2026). Penanda di app_settings agar data yang sudah diedit tidak tertimpa.
+      try {
+        await seedMealOrdersOnce();
+      } catch (e: any) {
+        console.error("[MealOrders] Seed gagal:", e.message);
+      }
     })().catch((e: any) => {
       ensurePromise = null;
       console.error("[MealOrders] Ensure table failed:", e.message);
@@ -65,6 +81,48 @@ export function ensureMealOrdersTable(): Promise<void> {
 }
 
 const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+const toSnake = (s: string) => s.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
+
+// Simpan banyak baris sekaligus (import / seed) — upsert per (tanggal, NIK), per 200 baris
+async function bulkUpsertMealOrders(date: string, rows: ParsedMealOrderRow[], updatedBy: string) {
+  const now = new Date();
+  let saved = 0;
+  for (let i = 0; i < rows.length; i += 200) {
+    const chunk = rows.slice(i, i + 200).map(r => ({ ...r, orderDate: date, updatedBy, updatedAt: now }));
+    const res = await db.insert(mealOrders).values(chunk)
+      .onConflictDoUpdate({
+        target: [mealOrders.orderDate, mealOrders.nik],
+        set: Object.fromEntries([...EDITABLE_FIELDS, 'updatedBy', 'updatedAt'].map(f => [f, sql.raw(`excluded.${toSnake(f)}`)])),
+      })
+      .returning({ id: mealOrders.id });
+    saved += res.length;
+  }
+  return saved;
+}
+
+const MEAL_SEED_MARKER = 'seed_meal_orders_2026_10_14';
+async function seedMealOrdersOnce() {
+  const claimed = await db.execute(sql`INSERT INTO app_settings (setting_key, setting_value, description)
+    VALUES (${MEAL_SEED_MARKER}, 'running', 'Seed Orderan Makanan dari Meal_Order.csv')
+    ON CONFLICT (setting_key) DO NOTHING RETURNING id;`);
+  if (!claimed.rows?.length) return;
+  try {
+    const parsed = parseMealOrderSheet(Papa.parse<unknown[]>(MEAL_ORDER_SEED_CSV, { skipEmptyLines: true }).data);
+    if (parsed?.date && parsed.rows.length) {
+      // Jangan timpa tanggal yang sudah diisi manual
+      const [{ count }] = await db.select({ count: sql<number>`COUNT(*)::int` }).from(mealOrders).where(eq(mealOrders.orderDate, parsed.date));
+      if (count === 0) {
+        const saved = await bulkUpsertMealOrders(parsed.date, parsed.rows, 'seed:Meal_Order.csv');
+        console.log(`[MealOrders] Seeded ${saved} baris untuk ${parsed.date}`);
+      }
+    }
+    await db.execute(sql`UPDATE app_settings SET setting_value = 'done', updated_at = NOW() WHERE setting_key = ${MEAL_SEED_MARKER};`);
+  } catch (e) {
+    await db.execute(sql`DELETE FROM app_settings WHERE setting_key = ${MEAL_SEED_MARKER};`);
+    throw e;
+  }
+}
 
 // ===== Sinkron ke Google Sheets "Meal Order" (folder Administration di PrepLab Cloud) =====
 // File dibuat/diperbarui lewat Drive API: workbook Excel diunggah & dikonversi otomatis jadi Google Sheets.
@@ -91,6 +149,7 @@ const ymd = (d: unknown) => String(d).slice(0, 10);
 const dayName = (d: string) => DAYS[new Date(`${d}T00:00:00Z`).getUTCDay()];
 const longDate = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return `${dd} ${MONTHS[m - 1]} ${y}`; };
 const portions = (v: unknown) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; };
+const sumOf = (rows: any[], k: string) => rows.reduce((s, r) => s + portions(r[k]), 0);
 const colTotal = (rows: any[], c: typeof MEAL_COLUMNS[number]) =>
   rows.reduce((s, r) => s + (c.kind === 'kantin' ? (String(r[c.key] || '').trim() ? 1 : 0) : portions(r[c.key])), 0);
 
@@ -108,33 +167,34 @@ async function buildMealWorkbook(): Promise<Buffer> {
   const wb = XLSX.utils.book_new();
   // Tab Rekap: total order per tanggal
   const rekap: (string | number)[][] = [
-    ['Tanggal', 'Hari', 'Jumlah Karyawan', ...MEAL_COLUMNS.map(c => `${c.group} - ${c.label}`), 'Konfirmasi B.Pagi', 'Konfirmasi B.Sore'],
+    ['Tanggal', 'Hari', 'Jumlah Karyawan', ...MEAL_COLUMNS.map(c => `${c.group} - ${c.label}`), '1 (B.Pagi)', '1 (B.Sore)', 'Belum Lapor'],
     ...dates.map(d => {
       const rows = byDate.get(d) || [];
       return [longDate(d), dayName(d), rows.length, ...MEAL_COLUMNS.map(c => colTotal(rows, c)),
-        rows.filter(r => r.konfirmasiPagi).length, rows.filter(r => r.konfirmasiSore).length];
+        sumOf(rows, 'batchPagi'), sumOf(rows, 'batchSore'), rows.filter(r => r.keteranganLapor).length];
     }),
   ];
   if (dates.length === 0) rekap.push(['Belum ada orderan makanan']);
   const rekapWs = XLSX.utils.aoa_to_sheet(rekap);
-  rekapWs['!cols'] = [{ wch: 14 }, { wch: 9 }, { wch: 16 }, ...MEAL_COLUMNS.map(() => ({ wch: 14 })), { wch: 16 }, { wch: 16 }];
+  rekapWs['!cols'] = [{ wch: 14 }, { wch: 9 }, { wch: 16 }, ...MEAL_COLUMNS.map(() => ({ wch: 14 })), { wch: 11 }, { wch: 11 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, rekapWs, 'Rekap');
 
   // Satu tab per tanggal (terbaru dulu), format sama dengan sheet order makan
   for (const d of dates) {
     const rows = byDate.get(d) || [];
     const header1 = ['NO', 'NAMA KARYAWAN', 'NIK', 'Status Mess', 'PT', 'Shift', 'Section', 'Status Kerja Karyawan', 'Keterangan', '', 'Tempat Tinggal', 'Shift (SIANG/MALAM)',
-      ...MEAL_COLUMNS.map((c, i) => (i === 0 || MEAL_COLUMNS[i - 1].group !== c.group ? c.group : '')), dayName(d), longDate(d)];
-    const header2 = ['', '', '', '', '', '', '', '', 'Sahur', 'Tidak Puasa', '', '', ...MEAL_COLUMNS.map(c => c.label), '1 (B.Pagi)', '1 (B.Sore)'];
+      ...MEAL_COLUMNS.map((c, i) => (i === 0 || MEAL_COLUMNS[i - 1].group !== c.group ? c.group : '')), dayName(d), longDate(d), 'STATUS', 'Keterangan (Belum Lapor)', 'Catatan'];
+    const header2 = ['', '', '', '', '', '', '', '', 'Sahur', 'Tidak Puasa', '', '', ...MEAL_COLUMNS.map(c => c.label), '1 (B.Pagi)', '1 (B.Sore)', '', '', ''];
     const body = rows.map((r, i) => [
       i + 1, r.nama, r.nik, r.statusMess || '', r.pt || '', r.shift || '', r.section || '', r.statusKerja || '-', r.sahur || '-', r.tidakPuasa || '-',
-      r.tempatTinggal || '', r.shiftKerja || '', ...MEAL_COLUMNS.map(c => (r[c.key] as string | null) || ''), r.konfirmasiPagi ? '✓' : '', r.konfirmasiSore ? '✓' : '',
+      r.tempatTinggal || '', r.shiftKerja || '', ...MEAL_COLUMNS.map(c => (r[c.key] as string | null) || ''), r.batchPagi || '', r.batchSore || '',
+      r.status || '', r.keteranganLapor || '', r.catatan || '',
     ]);
     const total = ['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', ...MEAL_COLUMNS.map(c => colTotal(rows, c) || ''),
-      rows.filter(r => r.konfirmasiPagi).length, rows.filter(r => r.konfirmasiSore).length];
+      sumOf(rows, 'batchPagi'), sumOf(rows, 'batchSore'), '', rows.filter(r => r.keteranganLapor).length || '', ''];
     const ws = XLSX.utils.aoa_to_sheet([header1, header2, ...body, total]);
     ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 14 }, { wch: 8 }, { wch: 6 }, { wch: 10 }, { wch: 22 }, { wch: 14 }, { wch: 8 }, { wch: 11 }, { wch: 14 }, { wch: 12 },
-      ...MEAL_COLUMNS.map(() => ({ wch: 9 })), { wch: 11 }, { wch: 13 }];
+      ...MEAL_COLUMNS.map(() => ({ wch: 9 })), { wch: 11 }, { wch: 13 }, { wch: 10 }, { wch: 22 }, { wch: 12 }];
     ws['!merges'] = [{ s: { r: 0, c: 8 }, e: { r: 0, c: 9 } }];
     let col = 12;
     for (const g of Array.from(new Set(MEAL_COLUMNS.map(c => c.group)))) {
@@ -305,8 +365,9 @@ mealOrdersRouter.post("/api/meal-orders/copy", requireMealManager, async (req, r
 
     const by = updatedByOf(req);
     const now = new Date();
-    const values = source.map(({ id, createdAt, updatedAt, updatedBy, orderDate, konfirmasiPagi, konfirmasiSore, ...rest }) => ({
-      ...rest, orderDate: to, konfirmasiPagi: false, konfirmasiSore: false, updatedBy: by, updatedAt: now,
+    // Konfirmasi batch & keterangan lapor direset untuk hari baru
+    const values = source.map(({ id, createdAt, updatedAt, updatedBy, orderDate, ...rest }) => ({
+      ...rest, orderDate: to, batchPagi: null, batchSore: null, keteranganLapor: null, updatedBy: by, updatedAt: now,
     }));
     // Karyawan yang sudah ada di tanggal tujuan tidak ditimpa
     const inserted = await db.insert(mealOrders).values(values)
@@ -315,6 +376,31 @@ mealOrdersRouter.post("/api/meal-orders/copy", requireMealManager, async (req, r
     res.json({ status: "success", inserted: inserted.length, skipped: values.length - inserted.length });
   } catch (error: any) {
     console.error("[MealOrders COPY] Error:", error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// 3b. POST /api/meal-orders/import — simpan hasil import sheet (CSV / Excel) untuk satu tanggal
+mealOrdersRouter.post("/api/meal-orders/import", requireMealManager, async (req, res) => {
+  try {
+    await ensureMealOrdersTable();
+    const { orderDate, rows } = req.body || {};
+    if (!isDate(orderDate) || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ status: "error", message: "Tanggal & data import wajib diisi." });
+    }
+    const clean: ParsedMealOrderRow[] = rows
+      .map((r: any, i: number) => {
+        const f = pickFields(r) as Record<string, any>;
+        return { ...f, sortNo: f.sortNo ?? i + 1, nik: String(r.nik || '').trim().toUpperCase(), nama: String(r.nama || '').trim() } as ParsedMealOrderRow;
+      })
+      .filter(r => r.nik && r.nama);
+    // Kolom yang tidak ada di file tetap terisi null (import = isi sheet tanggal tsb apa adanya)
+    const full = clean.map(r => ({ ...Object.fromEntries(EDITABLE_FIELDS.map(f => [f, null])), ...r })) as ParsedMealOrderRow[];
+    const saved = await bulkUpsertMealOrders(orderDate, full, `import:${updatedByOf(req)}`);
+    scheduleSheetSync();
+    res.json({ status: "success", saved });
+  } catch (error: any) {
+    console.error("[MealOrders IMPORT] Error:", error);
     res.status(500).json({ status: "error", message: error.message });
   }
 });

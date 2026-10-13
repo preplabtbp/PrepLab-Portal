@@ -1,15 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
-  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, CheckCircle2, Users, FileSpreadsheet,
+  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input, Select, Button } from './ui';
 import { todayWit } from '../utils/training-import';
+import { parseMealOrderSheet, type ParsedMealOrderRow } from '../utils/meal-order-import';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
-// lalu konfirmasi Batch Pagi & Batch Sore. Kantin ditandai 'K', Lapangan berisi jumlah porsi.
+// lalu kolom 1 (B.Pagi) & 1 (B.Sore), Status, Keterangan (Belum Lapor) & Catatan. Kantin ditandai 'K', Lapangan berisi jumlah porsi.
 
 interface MealOrder {
   id: number;
@@ -34,9 +35,13 @@ interface MealOrder {
   soreLapangan: string | null;
   takjilLapangan: string | null;
   malamLapangan: string | null;
-  konfirmasiPagi: boolean | null;
-  konfirmasiSore: boolean | null;
+  batchPagi: string | null; // kolom "1 (B.Pagi)" — jumlah
+  batchSore: string | null; // kolom "1 (B.Sore)" — jumlah
+  status: string | null;
+  keteranganLapor: string | null; // "Keterangan (Belum Lapor)"
+  catatan: string | null; // mis. DINAS / PHK
 }
+type BatchKey = 'batchPagi' | 'batchSore';
 interface MealPayload { date: string; data: MealOrder[]; dates: { date: string; count: number }[]; access: { canManage: boolean } }
 
 type KantinKey = 'pagiKantin' | 'siangKantin' | 'soreKantin';
@@ -73,6 +78,9 @@ const PROFILE_FIELDS: { key: keyof MealOrder; label: string; placeholder?: strin
   { key: 'sahur', label: 'Keterangan: Sahur', placeholder: '-' },
   { key: 'tidakPuasa', label: 'Keterangan: Tidak Puasa', placeholder: '-' },
   { key: 'tempatTinggal', label: 'Tempat Tinggal', placeholder: 'mis. Nirwana' },
+  { key: 'status', label: 'Status' },
+  { key: 'keteranganLapor', label: 'Keterangan (Belum Lapor)', placeholder: 'mis. Belum Lapor 1' },
+  { key: 'catatan', label: 'Catatan', placeholder: 'mis. DINAS / PHK' },
 ];
 
 type FormState = Record<string, string>;
@@ -122,9 +130,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   }, [rows, search, sectionFilter]);
 
   const totals = useMemo(() => Object.fromEntries(MEAL_CELLS.map(c => [c.key, cellTotal(filtered, c.key, c.kind)])) as Record<MealCellKey, number>, [filtered]);
+  // Total kolom "1 (B.Pagi)" & "1 (B.Sore)" + jumlah yang belum lapor
   const confirmed = useMemo(() => ({
-    pagi: filtered.filter(r => r.konfirmasiPagi).length,
-    sore: filtered.filter(r => r.konfirmasiSore).length,
+    pagi: filtered.reduce((s, r) => s + portions(r.batchPagi), 0),
+    sore: filtered.reduce((s, r) => s + portions(r.batchSore), 0),
+    belumLapor: filtered.filter(r => r.keteranganLapor).length,
   }), [filtered]);
   // Tanggal sebelumnya yang punya data → sumber "Salin"
   const previousDate = useMemo(() => (data?.dates || []).map(d => String(d.date).slice(0, 10)).find(d => d < date) || null, [data, date]);
@@ -172,8 +182,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     if (!form.nik?.trim() || !form.nama?.trim()) { toast.error('NIK dan Nama wajib diisi'); return; }
     setSaving(true);
     try {
-      // Hanya kolom form (konfirmasi batch diubah lewat centang di tabel)
-      const keys = ['nik', 'nama', 'shiftKerja', ...PROFILE_FIELDS.map(f => f.key as string), ...MEAL_CELLS.map(c => c.key as string)];
+      // Hanya kolom form
+      const keys = ['nik', 'nama', 'shiftKerja', 'batchPagi', 'batchSore', ...PROFILE_FIELDS.map(f => f.key as string), ...MEAL_CELLS.map(c => c.key as string)];
       const body: Record<string, unknown> = { ...Object.fromEntries(keys.map(k => [k, form[k] ?? ''])), orderDate: date };
       const res = modal.mode === 'create'
         ? await fetch('/api/meal-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -220,6 +230,60 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     }
   };
 
+  // ===== Import sheet order makan (CSV / Excel) =====
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ fileName: string; date: string; rows: ParsedMealOrderRow[] } | null>(null);
+
+  const handleImportFile = async (file: File) => {
+    setImporting(true);
+    try {
+      let table: unknown[][] = [];
+      if (/\.csv$/i.test(file.name)) {
+        const Papa = (await import('papaparse')).default;
+        table = Papa.parse<unknown[]>(await file.text(), { skipEmptyLines: true }).data;
+      } else {
+        const XLSX = await import('xlsx');
+        const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+        // Sheet pertama yang formatnya dikenali
+        for (const name of wb.SheetNames) {
+          const t = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: true, defval: '' });
+          if (parseMealOrderSheet(t)?.rows.length) { table = t; break; }
+        }
+      }
+      const parsed = parseMealOrderSheet(table);
+      if (!parsed || parsed.rows.length === 0) throw new Error('Format sheet tidak dikenali — pastikan ada kolom NAMA KARYAWAN & NIK');
+      setImportPreview({ fileName: file.name, date: parsed.date || date, rows: parsed.rows });
+    } catch (e: any) {
+      toast.error(e.message || 'Gagal membaca file');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    try {
+      const res = await fetch('/api/meal-orders/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderDate: importPreview.date, rows: importPreview.rows }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal import');
+      toast.success(`${json.saved} karyawan diimport ke ${dayName(importPreview.date)}, ${longDate(importPreview.date)}`);
+      setDate(importPreview.date);
+      setImportPreview(null);
+      queryClient.invalidateQueries({ queryKey: ['meal-orders'] });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // Google Sheets "Meal Order" di folder Administration: admin → sinkron dulu lalu buka; lainnya → buka saja
   const [syncingSheet, setSyncingSheet] = useState(false);
   const openGoogleSheet = async () => {
@@ -245,13 +309,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const exportExcel = async () => {
     const XLSX = await import('xlsx');
     const header1 = ['NO', 'NAMA KARYAWAN', 'NIK', 'Status Mess', 'PT', 'Shift', 'Section', 'Status Kerja Karyawan', 'Keterangan', '', 'Tempat Tinggal', 'Shift (SIANG/MALAM)',
-      ...MEAL_GROUPS.flatMap(g => g.cells.map((_, i) => (i === 0 ? g.label : ''))), dayName(date), longDate(date)];
-    const header2 = ['', '', '', '', '', '', '', '', 'Sahur', 'Tidak Puasa', '', '', ...MEAL_CELLS.map(c => c.label), '1 (B.Pagi)', '1 (B.Sore)'];
+      ...MEAL_GROUPS.flatMap(g => g.cells.map((_, i) => (i === 0 ? g.label : ''))), dayName(date), longDate(date), 'STATUS', 'Keterangan (Belum Lapor)', 'Catatan'];
+    const header2 = ['', '', '', '', '', '', '', '', 'Sahur', 'Tidak Puasa', '', '', ...MEAL_CELLS.map(c => c.label), '1 (B.Pagi)', '1 (B. Sore)', '', '', ''];
     const body = filtered.map((r, i) => [
       i + 1, r.nama, r.nik, r.statusMess || '', r.pt || '', r.shift || '', r.section || '', r.statusKerja || '-', r.sahur || '-', r.tidakPuasa || '-',
-      r.tempatTinggal || '', r.shiftKerja || '', ...MEAL_CELLS.map(c => r[c.key] || ''), r.konfirmasiPagi ? '✓' : '', r.konfirmasiSore ? '✓' : '',
+      r.tempatTinggal || '', r.shiftKerja || '', ...MEAL_CELLS.map(c => r[c.key] || ''), r.batchPagi || '', r.batchSore || '',
+      r.status || '', r.keteranganLapor || '', r.catatan || '',
     ]);
-    const totalRow = ['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', ...MEAL_CELLS.map(c => totals[c.key] || ''), confirmed.pagi, confirmed.sore];
+    const totalRow = ['', 'TOTAL', '', '', '', '', '', '', '', '', '', '', ...MEAL_CELLS.map(c => totals[c.key] || ''), confirmed.pagi, confirmed.sore, '', confirmed.belumLapor || '', ''];
     const ws = XLSX.utils.aoa_to_sheet([header1, header2, ...body, totalRow]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Orderan Makanan');
@@ -277,6 +342,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         </button>
       );
     }
+    return renderNumberCell(r, key as LapanganKey, 'amber', 'Jumlah porsi lapangan');
+  };
+
+  // Sel angka yang bisa langsung diketik (porsi Lapangan, kolom 1 (B.Pagi) / 1 (B.Sore))
+  const renderNumberCell = (r: MealOrder, key: LapanganKey | BatchKey, tone: 'amber' | 'emerald', label: string) => {
+    const v = r[key] || '';
+    const filled = tone === 'amber' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-emerald-50 border-emerald-200 text-emerald-800';
     if (!canManage) return <span className="block text-center text-xs font-black text-slate-900">{v}</span>;
     return (
       <input
@@ -287,23 +359,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         key={`${r.id}-${key}-${v}`}
         onBlur={e => { const nv = e.target.value.trim(); if (nv !== v) saveCell(r, { [key]: nv || null } as Partial<MealOrder>); }}
         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        className={`w-14 h-7 rounded-md text-center text-xs font-black border ${v ? 'bg-amber-50 border-amber-200 text-amber-900' : 'border-transparent hover:border-slate-200 text-slate-900'} focus:outline-none focus:ring-2 focus:ring-amber-300`}
-        aria-label="Jumlah porsi lapangan"
+        className={`w-14 h-7 rounded-md text-center text-xs font-black border ${v ? filled : 'border-transparent hover:border-slate-200 text-slate-900'} focus:outline-none focus:ring-2 ${tone === 'amber' ? 'focus:ring-amber-300' : 'focus:ring-emerald-300'}`}
+        aria-label={label}
       />
     );
   };
 
-  const renderConfirm = (r: MealOrder, key: 'konfirmasiPagi' | 'konfirmasiSore') => (
-    <button
-      type="button"
-      disabled={!canManage}
-      onClick={() => saveCell(r, { [key]: !r[key] } as Partial<MealOrder>)}
-      className={`mx-auto w-7 h-7 rounded-md flex items-center justify-center ${r[key] ? 'text-emerald-600' : 'text-slate-300'} ${canManage ? 'cursor-pointer hover:bg-emerald-50' : 'cursor-default'}`}
-      title={key === 'konfirmasiPagi' ? 'Konfirmasi Batch Pagi' : 'Konfirmasi Batch Sore'}
-    >
-      {r[key] ? <CheckCircle2 className="w-5 h-5" /> : <span className="w-4 h-4 rounded border-2 border-slate-300" />}
-    </button>
-  );
+  const renderConfirm = (r: MealOrder, key: BatchKey) =>
+    renderNumberCell(r, key, 'emerald', key === 'batchPagi' ? '1 (B.Pagi)' : '1 (B.Sore)');
 
   const summaryCards = [
     ...MEAL_GROUPS.map(g => ({
@@ -359,9 +422,21 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               {syncingSheet ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Google Sheets
             </button>
             {canManage && (
-              <button type="button" onClick={openCreate} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold cursor-pointer active:scale-95">
-                <Plus className="w-4 h-4" /> Tambah Karyawan
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-800 hover:bg-slate-50 cursor-pointer disabled:opacity-60"
+                  title="Import sheet Orderan Makanan (Excel / CSV)"
+                >
+                  {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import
+                </button>
+                <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }} />
+                <button type="button" onClick={openCreate} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold cursor-pointer active:scale-95">
+                  <Plus className="w-4 h-4" /> Tambah Karyawan
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -381,14 +456,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             </div>
           ))}
           <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Batch Pagi</p>
-            <p className="text-2xl font-semibold text-emerald-700">{confirmed.pagi}<span className="text-sm text-slate-400">/{filtered.length}</span></p>
-            <p className="text-[10px] text-slate-500">terkonfirmasi</p>
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
+            <p className="text-2xl font-semibold text-emerald-700">{confirmed.pagi}<span className="text-sm text-slate-400"> · {confirmed.sore}</span></p>
+            <p className="text-[10px] text-slate-500">total {dayName(date)}</p>
           </div>
           <div className="rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Batch Sore</p>
-            <p className="text-2xl font-semibold text-emerald-700">{confirmed.sore}<span className="text-sm text-slate-400">/{filtered.length}</span></p>
-            <p className="text-[10px] text-slate-500">terkonfirmasi</p>
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
+            <p className={`text-2xl font-semibold ${confirmed.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmed.belumLapor}</p>
+            <p className="text-[10px] text-slate-500">karyawan</p>
           </div>
         </div>
 
@@ -417,6 +492,19 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             <div className="p-8 text-center rounded-2xl border border-dashed border-slate-300">
               <Utensils className="w-8 h-8 mx-auto text-slate-400 mb-2" />
               <p className="text-sm font-bold text-slate-900 mb-1">Belum ada orderan untuk {dayName(date)}, {longDate(date)}</p>
+              {(data?.dates?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap justify-center gap-1.5 mt-2">
+                  <span className="text-[11px] text-slate-500 w-full">Tanggal yang sudah ada orderannya:</span>
+                  {data!.dates.slice(0, 5).map(d => {
+                    const ds = String(d.date).slice(0, 10);
+                    return (
+                      <button key={ds} type="button" onClick={() => setDate(ds)} className="px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer">
+                        {dayName(ds)}, {longDate(ds)} · {d.count}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               {canManage ? (
                 <div className="flex flex-wrap justify-center gap-2 mt-3">
                   {previousDate && (
@@ -459,6 +547,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       {MEAL_GROUPS.map(g => <th key={g.label} colSpan={g.cells.length} className={`${thBase} text-center bg-amber-50 border-amber-200/70`}>{g.label}</th>)}
                       <th className={`${thBase} text-center bg-yellow-200 border-yellow-300`}>{dayName(date)}</th>
                       <th className={`${thBase} text-center bg-yellow-200 border-yellow-300`}>{longDate(date)}</th>
+                      <th rowSpan={2} className={thBase}>Status</th>
+                      <th rowSpan={2} className={thBase}>Keterangan<br />(Belum Lapor)</th>
+                      <th rowSpan={2} className={thBase}>Catatan</th>
                       {canManage && <th rowSpan={2} className={thBase} />}
                     </tr>
                     <tr>
@@ -466,7 +557,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <th className={`${thBase} text-center`}>Tidak Puasa</th>
                       {MEAL_CELLS.map(c => <th key={c.key} className={`${thBase} text-center bg-amber-50 border-amber-200/70`}>{c.label}</th>)}
                       <th className={`${thBase} text-center`}>1 (B.Pagi)</th>
-                      <th className={`${thBase} text-center`}>1 (B.Sore)</th>
+                      <th className={`${thBase} text-center`}>1 (B. Sore)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -498,8 +589,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                           ) : <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-semibold">{r.shiftKerja || '-'}</span>}
                         </td>
                         {MEAL_CELLS.map(c => <td key={c.key} className={`${tdBase} text-center p-1`}>{renderMealCell(r, c.key, c.kind)}</td>)}
-                        <td className={`${tdBase} bg-slate-50 p-1`}>{renderConfirm(r, 'konfirmasiPagi')}</td>
-                        <td className={`${tdBase} bg-slate-50 p-1`}>{renderConfirm(r, 'konfirmasiSore')}</td>
+                        <td className={`${tdBase} bg-slate-50 p-1 text-center`}>{renderConfirm(r, 'batchPagi')}</td>
+                        <td className={`${tdBase} bg-slate-50 p-1 text-center`}>{renderConfirm(r, 'batchSore')}</td>
+                        <td className={tdBase}>{r.status || ''}</td>
+                        <td className={`${tdBase} ${r.keteranganLapor ? 'text-rose-600 font-semibold' : ''}`}>{r.keteranganLapor || ''}</td>
+                        <td className={`${tdBase} font-semibold text-slate-700`}>{r.catatan || ''}</td>
                         {canManage && (
                           <td className={`${tdBase} p-1`}>
                             <div className="flex items-center gap-1">
@@ -517,6 +611,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       {MEAL_CELLS.map(c => <td key={c.key} className={`${tdBase} text-center text-slate-900`}>{totals[c.key] || '-'}</td>)}
                       <td className={`${tdBase} text-center text-emerald-700`}>{confirmed.pagi}</td>
                       <td className={`${tdBase} text-center text-emerald-700`}>{confirmed.sore}</td>
+                      <td className={tdBase} />
+                      <td className={`${tdBase} text-rose-600`}>{confirmed.belumLapor ? `${confirmed.belumLapor} belum lapor` : ''}</td>
+                      <td className={tdBase} />
                       {canManage && <td className={tdBase} />}
                     </tr>
                   </tfoot>
@@ -554,8 +651,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       ))}
                     </div>
                     <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-600">
-                      <span className="flex items-center gap-1">B.Pagi {renderConfirm(r, 'konfirmasiPagi')}</span>
-                      <span className="flex items-center gap-1">B.Sore {renderConfirm(r, 'konfirmasiSore')}</span>
+                      <span className="flex items-center gap-1">B.Pagi {renderConfirm(r, 'batchPagi')}</span>
+                      <span className="flex items-center gap-1">B.Sore {renderConfirm(r, 'batchSore')}</span>
+                      {(r.keteranganLapor || r.catatan) && (
+                        <span className="text-rose-600">{[r.keteranganLapor, r.catatan].filter(Boolean).join(' · ')}</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -600,10 +700,38 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               ) : (
                 <Input key={c.key} label={`${c.group} · ${c.label}`} type="number" min={0} value={form[c.key] || ''} onChange={e => updateForm(c.key, e.target.value)} placeholder="Porsi" />
               ))}
+              <Input label="1 (B.Pagi)" type="number" min={0} value={form.batchPagi || ''} onChange={e => updateForm('batchPagi', e.target.value)} />
+              <Input label="1 (B.Sore)" type="number" min={0} value={form.batchSore || ''} onChange={e => updateForm('batchSore', e.target.value)} />
             </div>
             <div className="flex gap-2 justify-end mt-5">
               <Button variant="secondary" onClick={() => setModal(null)} disabled={saving}>Batal</Button>
               <Button onClick={submitForm} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pratinjau import */}
+      {importPreview && (
+        <div className="fixed inset-0 z-[80] bg-slate-950/50 flex items-center justify-center p-4" onClick={() => !importing && setImportPreview(null)}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-black text-slate-900 mb-1">Import Orderan Makanan</h3>
+            <p className="text-xs text-slate-600 mb-3 truncate">{importPreview.fileName}</p>
+            <div className="rounded-2xl bg-slate-50 p-3 space-y-1 text-xs text-slate-700 mb-3">
+              <p><b>{importPreview.rows.length}</b> karyawan terbaca</p>
+              <p>
+                1 (B.Pagi): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchPagi), 0)}</b> ·
+                1 (B.Sore): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchSore), 0)}</b> ·
+                Belum lapor: <b>{importPreview.rows.filter(r => r.keteranganLapor).length}</b>
+              </p>
+            </div>
+            <Input label="Tanggal order" type="date" value={importPreview.date} onChange={e => e.target.value && setImportPreview(p => (p ? { ...p, date: e.target.value } : p))} />
+            <p className="text-[11px] text-slate-500 mt-1">
+              {dayName(importPreview.date)}, {longDate(importPreview.date)} — karyawan yang sudah ada di tanggal ini akan diperbarui sesuai file.
+            </p>
+            <div className="flex gap-2 justify-end mt-4">
+              <Button variant="secondary" onClick={() => setImportPreview(null)} disabled={importing}>Batal</Button>
+              <Button onClick={confirmImport} disabled={importing}>{importing ? <Loader2 className="w-4 h-4 animate-spin" /> : `Import ${importPreview.rows.length} Data`}</Button>
             </div>
           </div>
         </div>

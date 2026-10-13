@@ -843,8 +843,14 @@ export const mealOrders = pgTable('meal_orders', {
   soreLapangan: text('sore_lapangan'),
   takjilLapangan: text('takjil_lapangan'),
   malamLapangan: text('malam_lapangan'),
+  // (lama, tidak dipakai lagi — diganti batch_pagi / batch_sore yang berisi jumlah)
   konfirmasiPagi: boolean('konfirmasi_pagi').default(false),
   konfirmasiSore: boolean('konfirmasi_sore').default(false),
+  batchPagi: text('batch_pagi'), // kolom "1 (B.Pagi)" — jumlah
+  batchSore: text('batch_sore'), // kolom "1 (B.Sore)" — jumlah
+  status: text('status'),
+  keteranganLapor: text('keterangan_lapor'), // "Keterangan (Belum Lapor)"
+  catatan: text('catatan'), // catatan tambahan, mis. DINAS / PHK
   updatedBy: text('updated_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
