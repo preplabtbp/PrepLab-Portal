@@ -17,6 +17,7 @@ export interface RecapOrderRow {
   pagiLapangan: string | null;
   siangLapangan: string | null;
   soreLapangan: string | null;
+  sahurLapangan?: string | null;
   takjilLapangan: string | null;
   malamLapangan: string | null;
   batchPagi: string | null;
@@ -88,7 +89,7 @@ export function classifyRecapArea(r: RecapOrderRow, emp?: RecapEmployee): RecapA
   return 'Laboratorium Krishna';
 }
 
-type MealSlot = { title: string; key: 'pagiLapangan' | 'siangLapangan' | 'soreLapangan' | 'takjilLapangan' | 'malamLapangan'; seroja?: (rows: RecapOrderRow[]) => number; kotakan?: boolean; kotakanNote?: string };
+type MealSlot = { title: string; key: 'pagiLapangan' | 'sahurLapangan' | 'siangLapangan' | 'soreLapangan' | 'takjilLapangan' | 'malamLapangan'; seroja?: (rows: RecapOrderRow[]) => number; kotakan?: boolean; kotakanNote?: string };
 
 export function buildBungkusRecap(rows: RecapOrderRow[], employees: RecapEmployee[]): RecapBlock[] {
   const empByNik = new Map(employees.map(e => [String(e.nik || '').trim().toUpperCase(), e]));
@@ -96,6 +97,7 @@ export function buildBungkusRecap(rows: RecapOrderRow[], employees: RecapEmploye
 
   const slots: MealSlot[] = [
     { title: 'BUNGKUSAN PAGI', key: 'pagiLapangan', seroja: rs => rs.filter(r => !isCR(r)).reduce((s, r) => s + portions(r.batchPagi), 0), kotakan: true, kotakanNote: 'Healthy Breakfast' },
+    ...(rows.some(r => portions(r.sahurLapangan) > 0) ? [{ title: 'BUNGKUSAN SAHUR', key: 'sahurLapangan' } as MealSlot] : []),
     { title: 'BUNGKUSAN SIANG', key: 'siangLapangan', seroja: rs => rs.filter(r => !isCR(r) && String(r.siangKantin || '').trim()).length, kotakan: true },
     { title: 'BUNGKUSAN SORE', key: 'soreLapangan', seroja: rs => rs.filter(r => !isCR(r)).reduce((s, r) => s + portions(r.batchSore), 0), kotakan: true },
     ...(rows.some(r => portions(r.takjilLapangan) > 0) ? [{ title: 'BUNGKUSAN TAKJIL', key: 'takjilLapangan' } as MealSlot] : []),

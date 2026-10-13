@@ -837,6 +837,8 @@ export const mealOrders = pgTable('meal_orders', {
   shiftKerja: text('shift_kerja'), // SIANG / MALAM / Nonshift
   pagiKantin: text('pagi_kantin'),
   pagiLapangan: text('pagi_lapangan'),
+  sahurKantin: text('sahur_kantin'), // terpisah dari Pagi (dulu header "Pagi / Sahur")
+  sahurLapangan: text('sahur_lapangan'),
   siangKantin: text('siang_kantin'),
   siangLapangan: text('siang_lapangan'),
   soreKantin: text('sore_kantin'),

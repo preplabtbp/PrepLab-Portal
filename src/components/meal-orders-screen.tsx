@@ -31,6 +31,8 @@ interface MealOrder {
   shiftKerja: string | null;
   pagiKantin: string | null;
   pagiLapangan: string | null;
+  sahurKantin: string | null;
+  sahurLapangan: string | null;
   siangKantin: string | null;
   siangLapangan: string | null;
   soreKantin: string | null;
@@ -48,15 +50,16 @@ interface MealOrder {
 type BatchKey = 'batchPagi' | 'batchSore';
 interface MealPayload { date: string; data: MealOrder[]; dates: { date: string; count: number }[]; access: { canManage: boolean } }
 
-type KantinKey = 'pagiKantin' | 'siangKantin' | 'soreKantin';
-type LapanganKey = 'pagiLapangan' | 'siangLapangan' | 'soreLapangan' | 'takjilLapangan' | 'malamLapangan';
+type KantinKey = 'pagiKantin' | 'sahurKantin' | 'siangKantin' | 'soreKantin';
+type LapanganKey = 'pagiLapangan' | 'sahurLapangan' | 'siangLapangan' | 'soreLapangan' | 'takjilLapangan' | 'malamLapangan';
 type MealCellKey = KantinKey | LapanganKey;
 type Company = 'TBP' | 'GPS';
 const COMPANIES: Company[] = ['TBP', 'GPS'];
 
 // Grup kolom makan (urut sesuai sheet)
 const MEAL_GROUPS: { label: string; cells: { key: MealCellKey; label: string; kind: 'kantin' | 'lapangan' }[] }[] = [
-  { label: 'Pagi / Sahur', cells: [{ key: 'pagiKantin', label: 'Kantin', kind: 'kantin' }, { key: 'pagiLapangan', label: 'Lapangan', kind: 'lapangan' }] },
+  { label: 'Pagi', cells: [{ key: 'pagiKantin', label: 'Kantin', kind: 'kantin' }, { key: 'pagiLapangan', label: 'Lapangan', kind: 'lapangan' }] },
+  { label: 'Sahur', cells: [{ key: 'sahurKantin', label: 'Kantin', kind: 'kantin' }, { key: 'sahurLapangan', label: 'Lapangan', kind: 'lapangan' }] },
   { label: 'Siang', cells: [{ key: 'siangKantin', label: 'Kantin', kind: 'kantin' }, { key: 'siangLapangan', label: 'Lapangan', kind: 'lapangan' }] },
   { label: 'Sore', cells: [{ key: 'soreKantin', label: 'Kantin', kind: 'kantin' }, { key: 'soreLapangan', label: 'Lapangan', kind: 'lapangan' }] },
   { label: 'Takjil', cells: [{ key: 'takjilLapangan', label: 'Lapangan', kind: 'lapangan' }] },
@@ -150,8 +153,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   };
 
   const activeMealGroups = useMemo(() => {
+    // Sahur & Takjil hanya saat mode Puasa
     if (columnVisibility.ramadan) return MEAL_GROUPS;
-    return MEAL_GROUPS.filter(g => g.label !== 'Takjil');
+    return MEAL_GROUPS.filter(g => g.label !== 'Takjil' && g.label !== 'Sahur');
   }, [columnVisibility.ramadan]);
 
   const activeMealCells = useMemo(() => {
@@ -403,10 +407,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     const XLSX = await import('xlsx');
     const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
     const kantinKeys: KantinKey[] = ['pagiKantin', 'siangKantin', 'soreKantin'];
-    // Takjil hanya ditampilkan bila ada porsinya (mis. bulan puasa)
+    // Sahur & Takjil hanya ditampilkan bila ada porsinya (mis. bulan puasa)
     const withTakjil = list.some(r => portions(r.takjilLapangan) > 0);
+    const withSahur = list.some(r => portions(r.sahurLapangan) > 0);
     const bungkusCols: { key: LapanganKey; label: string }[] = [
-      { key: 'pagiLapangan', label: 'Pagi' }, { key: 'siangLapangan', label: 'Siang' }, { key: 'soreLapangan', label: 'Sore' },
+      { key: 'pagiLapangan', label: 'Pagi' },
+      ...(withSahur ? [{ key: 'sahurLapangan' as LapanganKey, label: 'Sahur' }] : []),
+      { key: 'siangLapangan', label: 'Siang' }, { key: 'soreLapangan', label: 'Sore' },
       ...(withTakjil ? [{ key: 'takjilLapangan' as LapanganKey, label: 'Takjil' }] : []),
       { key: 'malamLapangan', label: 'Malam' },
     ];
@@ -463,6 +470,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           const kantinVal = isNirwana && isNR ? '1' : 'K';
           const patch: Partial<MealOrder> = { [key]: kantinVal };
           if (key === 'pagiKantin') { patch.pagiLapangan = null; patch.batchPagi = isNirwana ? '1' : null; }
+          if (key === 'sahurKantin') { patch.sahurLapangan = null; }
           if (key === 'siangKantin') { patch.siangLapangan = null; }
           if (key === 'soreKantin') { patch.soreLapangan = null; patch.batchSore = isNirwana ? '1' : null; }
           saveCell(r, patch);
@@ -505,6 +513,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               if (key === 'pagiLapangan') {
                 patch.pagiKantin = null;
                 patch.batchPagi = null;
+              }
+              if (key === 'sahurLapangan') {
+                patch.sahurKantin = null;
               }
               if (key === 'siangLapangan') {
                 patch.siangKantin = null;
@@ -671,7 +682,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">Orderan Makanan</h1>
                 {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
               </div>
-              <p className="text-[11px] sm:text-xs font-medium text-slate-500">Order harian Pagi/Sahur, Siang, Sore, Takjil & Malam · Sinkron otomatis dengan Roster & Cuti</p>
+              <p className="text-[11px] sm:text-xs font-medium text-slate-500">Order harian Pagi, Sahur, Siang, Sore, Takjil & Malam · Sinkron otomatis dengan Roster & Cuti</p>
             </div>
           </div>
 

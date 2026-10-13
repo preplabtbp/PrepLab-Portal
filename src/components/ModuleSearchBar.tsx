@@ -177,7 +177,7 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
   {
     id: 'meal-orders',
     title: 'Orderan Makanan',
-    desc: 'Order makan harian Pagi/Sahur, Siang, Sore, Takjil & Malam (Kantin & Lapangan)',
+    desc: 'Order makan harian Pagi, Sahur, Siang, Sore, Takjil & Malam (Kantin & Lapangan)',
     category: 'Administrasi & SDM',
     icon: <Utensils className="w-5 h-5" />,
     iconBg: 'bg-indigo-500/15 border-indigo-500/25',

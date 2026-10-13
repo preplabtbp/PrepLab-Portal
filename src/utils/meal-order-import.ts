@@ -18,6 +18,8 @@ export interface ParsedMealOrderRow {
   shiftKerja: string | null;
   pagiKantin: string | null;
   pagiLapangan: string | null;
+  sahurKantin: string | null;
+  sahurLapangan: string | null;
   siangKantin: string | null;
   siangLapangan: string | null;
   soreKantin: string | null;
@@ -80,6 +82,8 @@ export function parseMealOrderSheet(table: unknown[][]): ParsedMealOrderSheet | 
     tempatTinggal: find(h1, k => k === 'tempattinggal'),
     shiftKerja: find(h1, k => k.startsWith('shift') && k.includes('siang')),
     pagi: find(h1, k => k.startsWith('pagi')),
+    // Grup "Sahur" terpisah (sheet lama memakai "Pagi / Sahur" → masuk Pagi)
+    sahurMeal: find(h1, k => k === 'sahur'),
     siang: find(h1, k => k === 'siang'),
     sore: find(h1, k => k === 'sore'),
     takjil: find(h1, k => k === 'takjil'),
@@ -123,6 +127,8 @@ export function parseMealOrderSheet(table: unknown[][]): ParsedMealOrderSheet | 
       shiftKerja: cell(col.shiftKerja),
       pagiKantin: cell(col.pagi),
       pagiLapangan: cell(col.pagi >= 0 ? col.pagi + 1 : -1),
+      sahurKantin: cell(col.sahurMeal),
+      sahurLapangan: cell(col.sahurMeal >= 0 ? col.sahurMeal + 1 : -1),
       siangKantin: cell(col.siang),
       siangLapangan: cell(col.siang >= 0 ? col.siang + 1 : -1),
       soreKantin: cell(col.sore),

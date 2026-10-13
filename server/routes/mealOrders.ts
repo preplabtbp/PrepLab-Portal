@@ -21,7 +21,7 @@ export const mealOrdersRouter = Router();
 // Kolom yang boleh diisi dari form / edit sel
 const EDITABLE_FIELDS = [
   'sortNo', 'nama', 'statusMess', 'pt', 'shift', 'section', 'statusKerja', 'sahur', 'tidakPuasa', 'tempatTinggal', 'shiftKerja',
-  'pagiKantin', 'pagiLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan', 'takjilLapangan', 'malamLapangan',
+  'pagiKantin', 'pagiLapangan', 'sahurKantin', 'sahurLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan', 'takjilLapangan', 'malamLapangan',
   'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan', 'pilihanPagi', 'pilihanSore',
 ] as const;
 type EditableField = typeof EDITABLE_FIELDS[number];
@@ -69,7 +69,9 @@ export function ensureMealOrdersTable(): Promise<void> {
         ADD COLUMN IF NOT EXISTS keterangan_lapor TEXT,
         ADD COLUMN IF NOT EXISTS catatan TEXT,
         ADD COLUMN IF NOT EXISTS pilihan_pagi TEXT,
-        ADD COLUMN IF NOT EXISTS pilihan_sore TEXT`);
+        ADD COLUMN IF NOT EXISTS pilihan_sore TEXT,
+        ADD COLUMN IF NOT EXISTS sahur_kantin TEXT,
+        ADD COLUMN IF NOT EXISTS sahur_lapangan TEXT`);
       // Seed sekali: data Meal_Order.csv (Rabu, 14 Okt 2026). Penanda di app_settings agar data yang sudah diedit tidak tertimpa.
       try {
         await seedMealOrdersOnce();
@@ -150,8 +152,10 @@ const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 const SHEET_MAX_DATES = 60; // tanggal terbaru yang ditulis ke Google Sheets
 
 const MEAL_COLUMNS: { key: keyof typeof mealOrders.$inferSelect; group: string; label: string; kind: 'kantin' | 'lapangan' }[] = [
-  { key: 'pagiKantin', group: 'Pagi / Sahur', label: 'Kantin', kind: 'kantin' },
-  { key: 'pagiLapangan', group: 'Pagi / Sahur', label: 'Lapangan', kind: 'lapangan' },
+  { key: 'pagiKantin', group: 'Pagi', label: 'Kantin', kind: 'kantin' },
+  { key: 'pagiLapangan', group: 'Pagi', label: 'Lapangan', kind: 'lapangan' },
+  { key: 'sahurKantin', group: 'Sahur', label: 'Kantin', kind: 'kantin' },
+  { key: 'sahurLapangan', group: 'Sahur', label: 'Lapangan', kind: 'lapangan' },
   { key: 'siangKantin', group: 'Siang', label: 'Kantin', kind: 'kantin' },
   { key: 'siangLapangan', group: 'Siang', label: 'Lapangan', kind: 'lapangan' },
   { key: 'soreKantin', group: 'Sore', label: 'Kantin', kind: 'kantin' },
