@@ -546,6 +546,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   // ===== Render sel =====
   const thBase = 'px-2 py-1.5 text-[10px] font-black uppercase tracking-wide text-center align-middle text-slate-700 border border-emerald-200/70 bg-emerald-50 whitespace-nowrap';
+  const thSticky1 = `${thBase} sticky top-0 z-20`;
+  const thSticky2 = `${thBase} sticky top-[28px] z-20`;
   const tdBase = 'px-2 py-1.5 text-xs text-center align-middle border border-slate-200 whitespace-nowrap';
 
   const renderMealCell = (r: MealOrder, key: MealCellKey, kind: 'kantin' | 'lapangan') => {
@@ -1492,17 +1494,20 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 </button>
               )}
 
-              {/* Desktop / tablet: tabel seperti sheet */}
-              <div ref={tableScrollRef} className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {/* Desktop / tablet: tabel seperti sheet dengan Freeze Pane Header & Kolom */}
+              <div
+                ref={tableScrollRef}
+                className="hidden md:block overflow-auto max-h-[74vh] min-h-[460px] rounded-xl border border-slate-200 bg-white shadow-xs relative [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400"
+              >
                 <table className="w-full border-collapse text-center">
-                  <thead className="sticky top-0 z-10">
+                  <thead className="sticky top-0 z-20 bg-emerald-50 shadow-sm">
                     <tr>
-                      <th rowSpan={2} className={`${thBase} text-center`}>No</th>
-                      <th rowSpan={2} className={`${thBase} sticky left-0 z-20 min-w-[200px]`}>Nama Karyawan</th>
-                      <th rowSpan={2} className={thBase}>NIK</th>
+                      <th rowSpan={2} className={`${thBase} sticky top-0 left-0 z-40 w-12 min-w-[48px] max-w-[48px] bg-emerald-50 text-center shadow-[1px_0_0_0_#a7f3d0]`}>No</th>
+                      <th rowSpan={2} className={`${thBase} sticky top-0 left-[48px] z-40 min-w-[200px] bg-emerald-50 text-left shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)]`}>Nama Karyawan</th>
+                      <th rowSpan={2} className={thSticky1}>NIK</th>
                       {columnVisibility.profile && (
                         <>
-                          <th rowSpan={2} className={thBase}>
+                          <th rowSpan={2} className={thSticky1}>
                             <div className="flex items-center justify-between gap-1">
                               <span>Status Mess</span>
                               <button
@@ -1515,14 +1520,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               </button>
                             </div>
                           </th>
-                          <th rowSpan={2} className={thBase}>PT</th>
-                          <th rowSpan={2} className={thBase}>Shift</th>
-                          <th rowSpan={2} className={thBase}>Section</th>
-                          <th rowSpan={2} className={thBase}>Status Kerja</th>
+                          <th rowSpan={2} className={thSticky1}>PT</th>
+                          <th rowSpan={2} className={thSticky1}>Shift</th>
+                          <th rowSpan={2} className={thSticky1}>Section</th>
+                          <th rowSpan={2} className={thSticky1}>Status Kerja</th>
                         </>
                       )}
                       {columnVisibility.ramadan && (
-                        <th colSpan={2} className={`${thBase} text-center`}>
+                        <th colSpan={2} className={`${thSticky1} text-center`}>
                           <div className="flex items-center justify-center gap-1.5">
                             <span>Keterangan</span>
                             <button
@@ -1537,17 +1542,17 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         </th>
                       )}
                       {columnVisibility.profile && (
-                        <th rowSpan={2} className={thBase}>Tempat Tinggal</th>
+                        <th rowSpan={2} className={thSticky1}>Tempat Tinggal</th>
                       )}
-                      <th rowSpan={2} className={`${thBase} text-center`}>Shift<br />(Siang/Malam)</th>
+                      <th rowSpan={2} className={`${thSticky1} text-center`}>Shift<br />(Siang/Malam)</th>
                       {activeMealGroups.map(g => (
-                        <th key={g.label} colSpan={g.cells.length} className={`${thBase} text-center bg-amber-50 border-amber-200/70`}>
+                        <th key={g.label} colSpan={g.cells.length} className={`${thSticky1} text-center bg-amber-50 border-amber-200/70`}>
                           {g.label}
                         </th>
                       ))}
                       {columnVisibility.batches && (
                         <>
-                          <th className={`${thBase} text-center bg-yellow-200 border-yellow-300`}>
+                          <th className={`${thSticky1} text-center bg-yellow-200 border-yellow-300`}>
                             <div className="flex items-center justify-between gap-1">
                               <span>{dayName(date)}</span>
                               <button
@@ -1560,12 +1565,12 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               </button>
                             </div>
                           </th>
-                          <th className={`${thBase} text-center bg-yellow-200 border-yellow-300`}>{longDate(date)}</th>
+                          <th className={`${thSticky1} text-center bg-yellow-200 border-yellow-300`}>{longDate(date)}</th>
                         </>
                       )}
                       {columnVisibility.statusNotes && (
                         <>
-                          <th rowSpan={2} className={thBase}>
+                          <th rowSpan={2} className={thSticky1}>
                             <div className="flex items-center justify-between gap-1">
                               <span>Status</span>
                               <button
@@ -1578,28 +1583,28 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               </button>
                             </div>
                           </th>
-                          <th rowSpan={2} className={thBase}>Keterangan<br />(Belum Lapor)</th>
-                          <th rowSpan={2} className={thBase}>Catatan</th>
+                          <th rowSpan={2} className={thSticky1}>Keterangan<br />(Belum Lapor)</th>
+                          <th rowSpan={2} className={thSticky1}>Catatan</th>
                         </>
                       )}
-                      {canManage && <th rowSpan={2} className={thBase} />}
+                      {canManage && <th rowSpan={2} className={thSticky1} />}
                     </tr>
                     <tr>
                       {columnVisibility.ramadan && (
                         <>
-                          <th className={`${thBase} text-center`}>Sahur</th>
-                          <th className={`${thBase} text-center`}>Tidak Puasa</th>
+                          <th className={`${thSticky2} text-center`}>Sahur</th>
+                          <th className={`${thSticky2} text-center`}>Tidak Puasa</th>
                         </>
                       )}
                       {activeMealCells.map(c => (
-                        <th key={c.key} className={`${thBase} text-center bg-amber-50 border-amber-200/70`}>
+                        <th key={c.key} className={`${thSticky2} text-center bg-amber-50 border-amber-200/70`}>
                           {c.label}
                         </th>
                       ))}
                       {columnVisibility.batches && (
                         <>
-                          <th className={`${thBase} text-center`}>1 (B.Pagi)</th>
-                          <th className={`${thBase} text-center`}>1 (B. Sore)</th>
+                          <th className={`${thSticky2} text-center bg-yellow-200 border-yellow-300`}>1 (B.Pagi)</th>
+                          <th className={`${thSticky2} text-center bg-yellow-200 border-yellow-300`}>1 (B. Sore)</th>
                         </>
                       )}
                     </tr>
@@ -1623,10 +1628,18 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         ? 'bg-[#fff1f2] text-rose-950 font-bold'
                         : 'bg-white text-slate-900 font-bold';
 
+                      const stickyNoBg = attKind === 'cuti'
+                        ? 'bg-[#faf5ff] text-purple-900 font-semibold'
+                        : attKind === 'izin'
+                        ? 'bg-[#fffbeb] text-amber-900 font-semibold'
+                        : attKind === 'alpa'
+                        ? 'bg-[#fff1f2] text-rose-900 font-semibold'
+                        : 'bg-white text-slate-500 font-semibold';
+
                       return (
                       <tr key={r.id} className={`${rowBg} transition-colors`}>
-                        <td className={`${tdBase} text-center text-slate-500`}>{i + 1}</td>
-                        <td className={`${tdBase} sticky left-0 ${stickyNamaBg}`}>{r.nama}</td>
+                        <td className={`${tdBase} sticky left-0 z-10 w-12 min-w-[48px] max-w-[48px] ${stickyNoBg} text-center shadow-[1px_0_0_0_#e2e8f0]`}>{i + 1}</td>
+                        <td className={`${tdBase} sticky left-[48px] z-10 min-w-[200px] ${stickyNamaBg} text-left shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]`}>{r.nama}</td>
                         <td className={`${tdBase} font-mono text-slate-700`}>{r.nik}</td>
                         {columnVisibility.profile && (
                           <>
