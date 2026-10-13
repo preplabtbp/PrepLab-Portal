@@ -43,6 +43,8 @@ import {
   SAP_TRAININGS,
   K3_TRAININGS,
   sapRequiredKeys as sapRequiredKeysForGol,
+  k3RequiredKeys as k3RequiredKeysFor,
+  K3_RULES,
   parseTrainingSheet,
   guessTrainingFromFileName,
   ALL_TRAININGS,
@@ -299,18 +301,28 @@ const isSapComplete = (r: TrainingRecord) => sapDoneCount(r) === sapRequiredKeys
 const sapHasState = (r: TrainingRecord, states: SapState[]) => SAP_TRAININGS.some(t => states.includes(sapState(r, t.key, t.statusKey)));
 
 // ===== Aturan Training K3 =====
-// Tidak ada masa berlaku (WARNING / EXPIRED) — cukup dihitung siapa yang telah mengikuti
-type K3State = 'PASS' | 'Pending' | 'FAIL' | 'none';
+// Tidak ada masa berlaku (WARNING / EXPIRED). Wajib per section & GOL I–III (lihat K3_RULES):
+// WAH → Preparation & Maintenance · LOTO & Confined Space → Maintenance · Fire Fighting → semua kecuali QA, Administration & Inventory Control
+type K3State = 'PASS' | 'Pending' | 'FAIL' | 'none' | 'exempt';
+const k3RequiredFor = (r: TrainingRecord): K3DateKey[] => k3RequiredKeysFor(r.bagian, r.gol);
 function k3State(r: TrainingRecord, key: K3DateKey, statusKey: K3StatusKey): K3State {
   const status = r[statusKey];
   if (status === 'Pending') return 'Pending';
   if (status === 'FAIL') return 'FAIL';
   if (r[key] || status === 'PASS') return 'PASS';
-  return 'none';
+  return k3RequiredFor(r).includes(key) ? 'none' : 'exempt';
 }
 const k3IsValid = (s: K3State) => s === 'PASS';
 const k3PassCount = (r: TrainingRecord) => K3_TRAININGS.filter(t => k3IsValid(k3State(r, t.key, t.statusKey))).length;
 const k3HasPending = (r: TrainingRecord) => K3_TRAININGS.some(t => k3State(r, t.key, t.statusKey) === 'Pending');
+// Training K3 wajib yang sudah diikuti (PASS)
+const k3DoneCount = (r: TrainingRecord) =>
+  k3RequiredFor(r).filter(k => k3IsValid(k3State(r, k, K3_TRAININGS.find(t => t.key === k)!.statusKey))).length;
+const isK3Complete = (r: TrainingRecord) => k3DoneCount(r) === k3RequiredFor(r).length;
+const k3BadgeOf = (s: K3State) =>
+  s === 'none' ? { text: 'Belum', cls: 'bg-rose-50 text-rose-700 border-rose-200' }
+  : s === 'exempt' ? { text: 'Tidak Wajib', cls: 'bg-slate-100 text-slate-500 border-slate-200' }
+  : { text: s === 'PASS' ? 'Telah Mengikuti' : s, cls: STATUS_BADGE[s] };
 
 // ===== Sertifikasi Pengawas Operasional (Pra POP / POP / POM) =====
 // Tidak ada masa berlaku — dihitung jumlah karyawan yang telah mengikuti tiap tahap
@@ -525,7 +537,7 @@ function MyTrainingView({ record, name, onBack, scope }: { record: TrainingRecor
 function personAchievement(r: TrainingRecord, scope?: TrainingScope) {
   let parts: { id: TrainingProgram; label: string; done: number; total: number }[] = [];
   if (r.inSap) parts.push({ id: 'sap', label: 'SAP', done: sapDoneCount(r), total: sapRequiredKeys(r).length });
-  if (r.inK3) parts.push({ id: 'k3', label: 'K3', done: k3PassCount(r), total: K3_TRAININGS.length });
+  if (r.inK3 && k3RequiredFor(r).length) parts.push({ id: 'k3', label: 'K3', done: k3DoneCount(r), total: k3RequiredFor(r).length });
   if (r.inPop) parts.push({ id: 'pop', label: 'POP/POM', done: POP_STAGES.filter(s => s.attended(r.popData)).length, total: POP_STAGES.length });
   if (scope) parts = parts.filter(p => SCOPE_PROGRAMS[scope].includes(p.id));
   const done = parts.reduce((s, p) => s + p.done, 0);
@@ -583,18 +595,21 @@ function TrainingAchievementDetail({ record, scope }: { record: TrainingRecord; 
             )}
 
             {record.inK3 && show('k3') && (
-              <MyTrainingSection title="Training K3" subtitle="Tanpa masa berlaku" icon={<HardHat className="w-4 h-4" />}>
+              <MyTrainingSection
+                title="Training K3"
+                subtitle={`${k3DoneCount(record)}/${k3RequiredFor(record).length} training wajib diikuti · tanpa masa berlaku`}
+                icon={<HardHat className="w-4 h-4" />}
+              >
                 {K3_TRAININGS.map(t => {
                   const state = k3State(record, t.key, t.statusKey);
+                  const b = k3BadgeOf(state);
                   return (
                     <MyTrainingRow
                       key={t.key}
                       label={t.label}
                       desc={t.desc}
-                      sub={record[t.key] ? formatTrainingDate(record[t.key]) : undefined}
-                      right={state === 'none'
-                        ? badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')
-                        : badge(state === 'PASS' ? 'Telah Mengikuti' : state, STATUS_BADGE[state])}
+                      sub={record[t.key] ? formatTrainingDate(record[t.key]) : state === 'exempt' ? `Wajib: ${K3_RULES[t.key]}` : undefined}
+                      right={badge(b.text, b.cls)}
                     />
                   );
                 })}
@@ -661,7 +676,7 @@ function personTrainingRows(r: TrainingRecord, scope?: TrainingScope): PersonTra
       const state = k3State(r, t.key, t.statusKey);
       rows.push({
         program: 'K3', label: t.label, desc: t.desc, date: r[t.key], until: null,
-        badge: state === 'none' ? { text: 'Belum', cls: belum } : { text: state === 'PASS' ? 'Telah Mengikuti' : state, cls: STATUS_BADGE[state] },
+        badge: k3BadgeOf(state),
         ok: k3IsValid(state),
       });
     });
@@ -1021,7 +1036,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   const programLabel = PROGRAM_LABEL[program];
   // K3 & POP tidak punya target/masa berlaku → tampilkan jumlah yang telah mengikuti saja
-  const countOnly = program !== 'sap';
+  // (K3 kini punya target wajib per section & GOL, tetap tanpa masa berlaku)
+  const countOnly = program === 'pop';
 
   const fetchRecords = () => queryClient.invalidateQueries({ queryKey: TRAINING_QUERY_KEY });
 
@@ -1122,22 +1138,25 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     }
 
     const coverage = K3_TRAININGS.map(t => {
-      const states = programRecords.map(r => k3State(r, t.key, t.statusKey));
+      // Hanya personel yang WAJIB training ini (section & GOL I–III) yang dihitung ke target
+      const states = programRecords
+        .filter(r => k3RequiredFor(r).includes(t.key))
+        .map(r => k3State(r, t.key, t.statusKey));
       return {
         key: t.key as string,
         label: t.label,
-        desc: t.desc,
+        desc: `${t.desc} — wajib: ${K3_RULES[t.key]}`,
         done: states.filter(k3IsValid).length,
         warning: 0,
         expired: states.filter(s => s === 'FAIL').length,
         pending: states.filter(s => s === 'Pending').length,
-        target: total,
-        exempt: 0,
+        target: states.length,
+        exempt: total - states.length,
       };
     });
-    const sudahTraining = programRecords.filter(r => k3PassCount(r) > 0).length;
-    const pending = programRecords.filter(k3HasPending).length;
-    return { total, latest, coverage, cardA: sudahTraining, cardB: pending };
+    const wajib = programRecords.filter(r => k3RequiredFor(r).length > 0);
+    const lengkap = wajib.filter(isK3Complete).length;
+    return { total, latest, coverage, cardA: lengkap, cardB: wajib.length - lengkap };
   }, [programRecords, program]);
 
   // ===== Pencapaian Training SAP (%) — berlaku (PASS/WARNING) dibanding personel yang WAJIB (aturan per GOL) =====
@@ -1184,7 +1203,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     const sapComplete = sapPeople.filter(isSapComplete).length;
     const sapWarningPeople = sapPeople.filter(r => sapHasState(r, ['warning'])).length;
     const sapExpiredPeople = sapPeople.filter(r => sapHasState(r, ['expired', 'failed'])).length;
-    const k3Attended = k3People.filter(r => k3PassCount(r) > 0).length;
+    const k3Wajib = k3People.filter(r => k3RequiredFor(r).length > 0);
+    const k3Complete = k3Wajib.filter(isK3Complete).length;
     const popWajib = popPeople.filter(r => r.popData?.popKeterangan !== 'TIDAK_WAJIB');
     const popDone = popWajib.filter(r => popAttendedPop(r.popData)).length;
     const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
@@ -1218,11 +1238,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         ? POP_STAGES.map(s => ({ key: s.key as string, label: `${s.label} Diikuti`, value: pct(stageCount(s), popPeople.length), color: stageColor[s.key] }))
         : [
           { key: 'sap', label: 'SAP Lengkap', value: pct(sapComplete, sapPeople.length), color: DASH.brand },
-          { key: 'k3', label: 'K3 Diikuti', value: pct(k3Attended, k3People.length), color: DASH.yellow },
+          { key: 'k3', label: 'K3 Lengkap', value: pct(k3Complete, k3Wajib.length), color: DASH.yellow },
         ],
       programs: [
         { key: 'sap' as const, label: 'Training SAP', sub: '6 jenis training · berlaku 2 th', count: sapPeople.length, metric: `${sapComplete} lengkap`, spark: spark(sapDates), latest: latestOf(sapDates) },
-        { key: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · CS · Fire Fighting', count: k3People.length, metric: `${k3Attended} telah ikut`, spark: spark(k3Dates), latest: latestOf(k3Dates) },
+        { key: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · CS · Fire Fighting · per section', count: k3People.length, metric: `${k3Complete}/${k3Wajib.length} lengkap`, spark: spark(k3Dates), latest: latestOf(k3Dates) },
       ],
       // Training External: satu kartu per tahap sertifikasi
       stageCards: POP_STAGES.map(s => ({
@@ -1272,6 +1292,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           { label: 'Telah mengikuti', data: cov.map(c => c.done), backgroundColor: '#10b981' },
           { label: 'Pending', data: cov.map(c => c.pending), backgroundColor: '#60a5fa' },
           { label: 'FAIL', data: cov.map(c => c.expired), backgroundColor: CHART_EXPIRED },
+          { label: 'Belum', data: cov.map(c => c.target - c.done - c.pending - c.expired), backgroundColor: CHART_BELUM },
+          { label: 'Tidak Wajib', data: cov.map(c => c.exempt), backgroundColor: '#cbd5e1' },
         ]
       : [{ label: 'Telah mengikuti', data: cov.map(c => c.done), backgroundColor: '#7c3aed' }];
     return {
@@ -1355,12 +1377,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         }
       } else if (program === 'k3') {
         if (statusFilter === 'PENDING' && !k3HasPending(r)) return false;
-        if (statusFilter === 'SUDAH' && k3PassCount(r) === 0) return false;
-        if (statusFilter === 'BELUM' && (k3PassCount(r) > 0 || k3HasPending(r))) return false;
+        if (statusFilter === 'SUDAH' && (k3RequiredFor(r).length === 0 || !isK3Complete(r))) return false;
+        if (statusFilter === 'BELUM' && (k3RequiredFor(r).length === 0 || isK3Complete(r))) return false;
+        if (statusFilter === 'TIDAK_WAJIB' && k3RequiredFor(r).length > 0) return false;
         if (missingFilter) {
-          // Klik kartu cakupan → tampilkan yang TELAH mengikuti training tsb
+          // Klik kartu cakupan → tampilkan yang WAJIB tapi belum mengikuti training tsb
           const t = K3_TRAININGS.find(x => x.key === missingFilter);
-          if (t && !k3IsValid(k3State(r, t.key, t.statusKey))) return false;
+          if (t && (!k3RequiredFor(r).includes(t.key) || k3IsValid(k3State(r, t.key, t.statusKey)))) return false;
         }
       } else {
         const p = r.popData;
@@ -1675,7 +1698,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   const renderK3Cell = (r: TrainingRecord, key: K3DateKey, statusKey: K3StatusKey) => {
     const state = k3State(r, key, statusKey);
-    if (state === 'none') return <span className="text-[11px] font-bold text-slate-300">-</span>;
+    if (state === 'exempt') {
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap" title={`Wajib: ${K3_RULES[key]}`}>Tidak Wajib</span>;
+    }
+    if (state === 'none') return <span className="inline-flex px-1.5 py-px rounded text-[9px] font-black border bg-rose-50 text-rose-700 border-rose-200" title={`Wajib: ${K3_RULES[key]}`}>Belum</span>;
     const date = r[key];
     return (
       <div className="inline-flex flex-col items-center gap-0.5">
@@ -1742,14 +1768,20 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         </span>
       );
     }
-    const pass = k3PassCount(r);
+    // K3: training wajib (per section & GOL I–III) yang sudah diikuti
+    const target = k3RequiredFor(r).length;
+    if (target === 0) {
+      return <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap">Tidak Wajib</span>;
+    }
+    const done = k3DoneCount(r);
     const pending = k3HasPending(r);
+    const full = done === target;
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${
-        pending ? 'bg-amber-50 text-amber-800 border-amber-200' : pass > 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+        full ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : pending ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-amber-50 text-amber-800 border-amber-200'
       }`}>
-        {pending ? <Clock className="w-3 h-3" /> : pass > 0 ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-        {pass} PASS{pending ? ' · Pending' : ''}
+        {full ? <CheckCircle2 className="w-3 h-3" /> : pending ? <Clock className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+        {done}/{target}{pending && !full ? ' · Pending' : ''}
       </span>
     );
   };
@@ -2294,7 +2326,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
             <DashTitle
               title={countOnly ? 'Jumlah Peserta per Training' : 'Cakupan per Training'}
-              sub={countOnly ? 'Klik untuk melihat pesertanya' : 'Klik untuk melihat yang belum berlaku'}
+              sub={countOnly ? 'Klik untuk melihat pesertanya' : program === 'k3' ? 'Wajib per section & GOL I–III · klik untuk melihat yang belum ikut' : 'Klik untuk melihat yang belum berlaku'}
             />
             <div className="space-y-2">
               {stats.coverage.map(c => {
@@ -2321,7 +2353,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       </div>
                     )}
                     <div className="mt-1 flex flex-wrap gap-x-2.5 text-[10px] font-semibold text-slate-500">
-                      {!countOnly && c.target - c.done > 0 && <span className="text-rose-600">{c.target - c.done} belum berlaku</span>}
+                      {!countOnly && c.target - c.done > 0 && <span className="text-rose-600">{c.target - c.done} {program === 'k3' ? 'belum ikut' : 'belum berlaku'}</span>}
                       {c.warning > 0 && <span className="text-yellow-600">{c.warning} warning</span>}
                       {!countOnly && c.expired > 0 && <span className="text-red-600">{c.expired} expired/fail</span>}
                       {c.pending > 0 && <span className="text-sky-600">{c.pending} pending</span>}
@@ -2455,9 +2487,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       </>
                     ) : program === 'k3' ? (
                       <>
-                        <option value="SUDAH">Sudah Training (PASS)</option>
+                        <option value="SUDAH">Lengkap (semua K3 wajib)</option>
+                        <option value="BELUM">Belum Lengkap</option>
                         <option value="PENDING">Ada Pending</option>
-                        <option value="BELUM">Belum Training</option>
+                        <option value="TIDAK_WAJIB">Tidak Wajib K3</option>
                       </>
                     ) : (
                       <>
@@ -2738,7 +2771,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <div className="space-y-1">
                   {K3_TRAININGS.map(t => (
                     <div key={t.key} className="grid grid-cols-2 gap-x-4">
-                      <Input label={t.label} type="date" value={form[t.key]} onChange={e => updateForm(t.key, e.target.value)} title={t.desc} />
+                      <Input
+                        label={k3RequiredKeysFor(form.bagian, form.gol).includes(t.key) ? t.label : `${t.label} (tidak wajib)`}
+                        type="date"
+                        value={form[t.key]}
+                        onChange={e => updateForm(t.key, e.target.value)}
+                        title={`${t.desc} — wajib: ${K3_RULES[t.key]}`}
+                      />
                       <Select label={`Status ${t.label}`} value={form[t.statusKey]} onChange={e => updateForm(t.statusKey, e.target.value)}>
                         <option value="">-</option>
                         {K3_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}

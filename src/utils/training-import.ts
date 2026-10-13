@@ -47,6 +47,31 @@ export function sapRequiredKeys(gol: string | null | undefined): SapDateKey[] {
 }
 export const isBfaExempt = (gol: string | null | undefined) => !sapRequiredKeys(gol).includes('bfa');
 
+// Training K3 wajib per section (bagian) & golongan — hanya GOL I–III:
+//  - WAH            : Section Preparation (termasuk Wet/Dry) & Maintenance
+//  - LOTO           : Section Maintenance
+//  - Confined Space : Section Maintenance
+//  - Fire Fighting  : semua section, kecuali QA, Administration & Inventory Control
+export const K3_RULES: Record<K3DateKey, string> = {
+  wah: 'Section Preparation & Maintenance · GOL I–III',
+  loto: 'Section Maintenance · GOL I–III',
+  confinedSpace: 'Section Maintenance · GOL I–III',
+  fireFighting: 'Semua section GOL I–III, kecuali QA, Administration & Inventory Control',
+};
+export function k3RequiredKeys(bagian: string | null | undefined, gol: string | null | undefined): K3DateKey[] {
+  const g = String(gol || '').trim().toUpperCase();
+  if (g !== 'I' && g !== 'II' && g !== 'III') return [];
+  const b = String(bagian || '').toLowerCase();
+  const isPrep = b.includes('prep');
+  const isMaint = b.includes('maint');
+  const noFireFighting = /\bqa\b|quality|admin|inventory/.test(b);
+  const keys: K3DateKey[] = [];
+  if (isPrep || isMaint) keys.push('wah');
+  if (isMaint) keys.push('loto', 'confinedSpace');
+  if (!noFireFighting) keys.push('fireFighting');
+  return keys;
+}
+
 // ===== Masa berlaku training (dihitung dari tanggal training) =====
 // ≥ 1 tahun 6 bulan → WARNING (kuning), ≥ 2 tahun → EXPIRED (merah)
 export const TRAINING_WARNING_MONTHS = 18;
