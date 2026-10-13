@@ -22,7 +22,7 @@ export interface RecapOrderRow {
   batchPagi: string | null;
   batchSore: string | null;
 }
-export interface RecapEmployee { nik?: string | null; gol?: string | null; jobGrade?: string | null; jabatan?: string | null; position?: string | null }
+export interface RecapEmployee { nik?: string | null; gol?: string | null; jobGrade?: string | null; jabatan?: string | null; position?: string | null; section?: string | null }
 
 interface RecapLine { area: React.ReactNode; qty: number; keterangan: React.ReactNode }
 interface RecapBlock { title: string; lines: RecapLine[]; total: number }

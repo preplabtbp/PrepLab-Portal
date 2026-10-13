@@ -5,12 +5,13 @@ import Papa from "papaparse";
 import { parseMealOrderSheet, type ParsedMealOrderRow } from "../../src/utils/meal-order-import.js";
 import { MEAL_ORDER_SEED_CSV } from "../data/mealOrderSeed.js";
 import { db } from "../../src/db/index.js";
-import { and, asc, eq, sql, desc, inArray } from "drizzle-orm";
+import { and, asc, eq, sql, desc, inArray, notInArray } from "drizzle-orm";
 import { mealOrders, employees, roster } from "../../src/db/schema.js";
 import { drive } from "../../google-services.js";
 import { getTrainingAccess } from "./training.js";
 import { computeMealOrderByRoster, getPossibleRosterDateStrings } from "../../src/utils/meal-roster-sync.js";
 import { fetchRosterSheetForDate } from "../../src/syncRoster.js";
+import { isResignedOrNonActiveStatus } from "./employees.js";
 
 // ===== Orderan Makanan =====
 // Satu baris per karyawan per tanggal. Kantin ditandai 'K', Lapangan berisi jumlah porsi.
@@ -86,6 +87,14 @@ const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{
 
 const toSnake = (s: string) => s.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
 
+// Karyawan Nonaktif / Resign / PHK / Mutasi di Database Karyawan dikeluarkan dari Orderan Makanan.
+// Baris lamanya tidak dihapus — cukup disaring, sehingga muncul lagi bila statusnya diaktifkan kembali.
+async function getInactiveNiks(): Promise<Set<string>> {
+  const rows = await db.select({ nik: employees.nik, statusKaryawan: employees.statusKaryawan, section: employees.section }).from(employees);
+  return new Set(rows.filter(e => e.nik && isResignedOrNonActiveStatus(e)).map(e => e.nik.toUpperCase().trim()));
+}
+const isActiveRow = (inactive: Set<string>) => (r: { nik: string }) => !inactive.has(String(r.nik || '').toUpperCase().trim());
+
 // Simpan banyak baris sekaligus (import / seed) — upsert per (tanggal, NIK), per 200 baris
 async function bulkUpsertMealOrders(date: string, rows: ParsedMealOrderRow[], updatedBy: string) {
   const now = new Date();
@@ -159,10 +168,11 @@ async function buildMealWorkbook(): Promise<Buffer> {
   const dateRows = await db.select({ date: mealOrders.orderDate }).from(mealOrders)
     .groupBy(mealOrders.orderDate).orderBy(desc(mealOrders.orderDate)).limit(SHEET_MAX_DATES);
   const dates = dateRows.map(d => ymd(d.date));
-  const all = dates.length
+  const inactive = await getInactiveNiks();
+  const all = (dates.length
     ? await db.select().from(mealOrders).where(inArray(mealOrders.orderDate, dates))
         .orderBy(desc(mealOrders.orderDate), sql`${mealOrders.sortNo} ASC NULLS LAST`, asc(mealOrders.nama))
-    : [];
+    : []).filter(isActiveRow(inactive));
   const byDate = new Map<string, typeof all>();
   all.forEach(r => { const k = ymd(r.orderDate); byDate.set(k, [...(byDate.get(k) || []), r]); });
 
@@ -454,19 +464,25 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
   const sectionByNik = new Map<string, string>();
   for (const r of lastOrders) {
     const k = r.nik.toUpperCase().trim();
-    if (r.tempatTinggal?.trim() && !placeByNik.has(k)) placeByNik.set(k, r.tempatTinggal);
+    if (r.tempatTinggal?.trim()) {
+      if (!placeByNik.has(k) || r.tempatTinggal.toLowerCase().includes('nirwana')) {
+        placeByNik.set(k, r.tempatTinggal);
+      }
+    }
     if (r.section?.trim() && !sectionByNik.has(k)) sectionByNik.set(k, r.section);
   }
   const dbEmps = await db.select().from(employees);
   const dbByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
   const placeOf = (nik: string): string | null => placeByNik.get(nik) || dbByNik.get(nik)?.alamatDomisili || null;
+  // Karyawan Nonaktif di Database Karyawan tidak ikut walau masih ada di sheet roster
+  const isInactive = (nik: string) => { const e = dbByNik.get(nik); return !!e && isResignedOrNonActiveStatus(e); };
 
   try {
     const sheet = await fetchRosterSheetForDate(dateFormats);
     if (sheet.dateFound && sheet.entries.length > 0) {
       return {
         source: 'sheet',
-        emps: sheet.entries.map(e => {
+        emps: sheet.entries.filter(e => !isInactive(e.nik.toUpperCase())).map(e => {
           const nik = e.nik.toUpperCase();
           return { nik: e.nik, name: e.name, statusMess: e.statusMess || null, pt: e.pt || null, shift: e.shift || null, section: sectionByNik.get(nik) || e.section || null, gol: e.gol || null, tempatTinggal: placeOf(nik), status: e.status };
         }),
@@ -482,11 +498,10 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
   const emps = dbEmps.filter(emp => {
     const nik = (emp.nik || '').toUpperCase().trim();
     const name = (emp.name || '').toLowerCase().trim();
-    const st = (emp.statusKaryawan || '').toUpperCase().trim();
     const sm = (emp.statusMess || '').toUpperCase().trim();
     if (!nik || !emp.name) return false;
     if (nik.includes('DEMO') || name.includes('demo') || nik === 'PREPLABADMIN' || nik.includes('#N/A') || name.includes('#N/A')) return false;
-    if (st.includes('RESIGN') || st.includes('PHK') || st.includes('KELUAR') || sm.includes('RESIGN')) return false;
+    if (isResignedOrNonActiveStatus(emp) || sm.includes('RESIGN')) return false;
     return true;
   });
   return {
@@ -634,18 +649,19 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
     const access = await getTrainingAccess((req as any).user);
     // Edit langsung di Google Sheets (oleh Section Administrasi) ditarik ke portal di background
     maybePullFromSheet();
-    let rows = await db.select().from(mealOrders)
+    const inactive = await getInactiveNiks();
+    let rows = (await db.select().from(mealOrders)
       .where(eq(mealOrders.orderDate, date))
-      .orderBy(sql`${mealOrders.sortNo} ASC NULLS LAST`, asc(mealOrders.nama));
+      .orderBy(sql`${mealOrders.sortNo} ASC NULLS LAST`, asc(mealOrders.nama))).filter(isActiveRow(inactive));
 
     // Jika belum ada data orderan makanan sama sekali pada tanggal tsb, otomatis sinkronkan dari data Roster & Cuti!
     if (rows.length === 0) {
       try {
         const { synced: syncedCount } = await syncMealOrdersFromRoster(date, 'auto-roster-sync', false);
         if (syncedCount > 0) {
-          rows = await db.select().from(mealOrders)
+          rows = (await db.select().from(mealOrders)
             .where(eq(mealOrders.orderDate, date))
-            .orderBy(sql`${mealOrders.sortNo} ASC NULLS LAST`, asc(mealOrders.nama));
+            .orderBy(sql`${mealOrders.sortNo} ASC NULLS LAST`, asc(mealOrders.nama))).filter(isActiveRow(inactive));
         }
       } catch (syncErr: any) {
         console.warn("[MealOrders auto-sync warning]:", syncErr?.message);
@@ -653,7 +669,9 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
     }
 
     const dates = await db.select({ date: mealOrders.orderDate, count: sql<number>`COUNT(*)::int` })
-      .from(mealOrders).groupBy(mealOrders.orderDate).orderBy(desc(mealOrders.orderDate)).limit(60);
+      .from(mealOrders)
+      .where(inactive.size ? notInArray(sql`UPPER(TRIM(${mealOrders.nik}))`, Array.from(inactive)) : undefined)
+      .groupBy(mealOrders.orderDate).orderBy(desc(mealOrders.orderDate)).limit(60);
     res.json({ status: "success", date, data: rows, dates, access: { canManage: access.canManage } });
   } catch (error: any) {
     console.error("[MealOrders GET] Error:", error);
@@ -687,6 +705,9 @@ mealOrdersRouter.post("/api/meal-orders", requireMealManager, async (req, res) =
     if (!isDate(date) || !nik) return res.status(400).json({ status: "error", message: "Tanggal dan NIK wajib diisi." });
 
     const [emp] = await db.select().from(employees).where(sql`UPPER(${employees.nik}) = ${nik}`).limit(1);
+    if (emp && isResignedOrNonActiveStatus(emp)) {
+      return res.status(400).json({ status: "error", message: `${emp.name} berstatus ${emp.statusKaryawan || 'Nonaktif'} di Database Karyawan — tidak bisa ditambahkan ke Orderan Makanan.` });
+    }
     const fields = pickFields(req.body);
     const nama = fields.nama || emp?.name;
     if (!nama) return res.status(400).json({ status: "error", message: "Nama karyawan wajib diisi (NIK tidak ditemukan di Database Karyawan)." });
@@ -725,7 +746,7 @@ mealOrdersRouter.post("/api/meal-orders/copy", requireMealManager, async (req, r
     const { from, to } = req.body || {};
     if (!isDate(from) || !isDate(to) || from === to) return res.status(400).json({ status: "error", message: "Tanggal sumber & tujuan tidak valid." });
 
-    const source = await db.select().from(mealOrders).where(eq(mealOrders.orderDate, from));
+    const source = (await db.select().from(mealOrders).where(eq(mealOrders.orderDate, from))).filter(isActiveRow(await getInactiveNiks()));
     if (source.length === 0) return res.status(400).json({ status: "error", message: "Tanggal sumber belum memiliki data." });
 
     const by = updatedByOf(req);
@@ -758,7 +779,8 @@ mealOrdersRouter.post("/api/meal-orders/import", requireMealManager, async (req,
         const f = pickFields(r) as Record<string, any>;
         return { ...f, sortNo: f.sortNo ?? i + 1, nik: String(r.nik || '').trim().toUpperCase(), nama: String(r.nama || '').trim() } as ParsedMealOrderRow;
       })
-      .filter(r => r.nik && r.nama);
+      .filter(r => r.nik && r.nama)
+      .filter(isActiveRow(await getInactiveNiks()));
     // Kolom yang tidak ada di file tetap terisi null (import = isi sheet tanggal tsb apa adanya)
     const full = clean.map(r => ({ ...Object.fromEntries(EDITABLE_FIELDS.map(f => [f, null])), ...r })) as ParsedMealOrderRow[];
     const saved = await bulkUpsertMealOrders(orderDate, full, `import:${updatedByOf(req)}`);
