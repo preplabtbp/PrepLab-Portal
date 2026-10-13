@@ -622,6 +622,190 @@ function TrainingAchievementDetail({ record }: { record: TrainingRecord }) {
   );
 }
 
+// ===== Dashboard per orang: kartu-kartu di samping Overview berganti ke data training karyawan terpilih =====
+const SAP_STATE_COLOR: Record<SapState, string> = {
+  done: DASH.brand, warning: DASH.yellow, expired: DASH.coral, failed: '#dc2626', none: '#cbd5e1', exempt: '#e2e8f0',
+};
+
+type PersonTrainingRow = { program: string; label: string; desc?: string; date: string | null; until: string | null; badge: { text: string; cls: string }; ok: boolean };
+function personTrainingRows(r: TrainingRecord): PersonTrainingRow[] {
+  const rows: PersonTrainingRow[] = [];
+  const belum = 'bg-slate-100 text-slate-500 border-slate-200';
+  if (r.inSap) {
+    SAP_TRAININGS.forEach(t => {
+      const state = sapState(r, t.key, t.statusKey);
+      const date = r[t.key];
+      rows.push({
+        program: 'SAP', label: t.label, desc: t.desc, date,
+        until: date ? trainingValidity(date, TODAY).expiryDate : null,
+        badge: { text: SAP_STATE_META[state].label, cls: SAP_STATE_META[state].cls },
+        ok: sapIsValid(state),
+      });
+    });
+  }
+  if (r.inK3) {
+    K3_TRAININGS.forEach(t => {
+      const state = k3State(r, t.key, t.statusKey);
+      rows.push({
+        program: 'K3', label: t.label, desc: t.desc, date: r[t.key], until: null,
+        badge: state === 'none' ? { text: 'Belum', cls: belum } : { text: state === 'PASS' ? 'Telah Mengikuti' : state, cls: STATUS_BADGE[state] },
+        ok: k3IsValid(state),
+      });
+    });
+  }
+  if (r.inPop) {
+    POP_STAGES.forEach(s => {
+      const ok = s.attended(r.popData);
+      rows.push({
+        program: 'POP/POM', label: s.label, desc: s.desc,
+        date: s.key === 'praPop' ? r.popData?.praPop ?? null : null, until: null,
+        badge: ok ? { text: s.key === 'pop' && r.popData?.popBatch ? r.popData.popBatch : 'Telah Mengikuti', cls: STATUS_BADGE.PASS } : { text: 'Belum', cls: belum },
+        ok,
+      });
+    });
+  }
+  return rows;
+}
+
+function PersonSapCard({ record, className }: { record: TrainingRecord; className: string }) {
+  const rows = SAP_TRAININGS.map(t => ({ t, state: sapState(record, t.key, t.statusKey) }));
+  const counts = (Object.keys(SAP_STATE_META) as SapState[])
+    .map(s => ({ state: s, value: rows.filter(r => r.state === s).length }))
+    .filter(c => c.value > 0);
+  return (
+    <DashCard className={className}>
+      <DashTitle title="Status Training SAP" sub={record.inSap ? `GOL ${record.gol || '-'} · wajib: ${sapGolRule(record.gol)}` : 'Tidak terdaftar di Training SAP'} />
+      {record.inSap ? (
+        <div className="flex items-center gap-4">
+          <div className="w-[120px] h-[120px] shrink-0">
+            <Doughnut
+              data={{
+                labels: counts.map(c => SAP_STATE_META[c.state].label),
+                datasets: [{ data: counts.map(c => c.value), backgroundColor: counts.map(c => SAP_STATE_COLOR[c.state]), borderColor: '#ffffff', borderWidth: 3, hoverOffset: 6 }],
+              }}
+              options={{ cutout: '0%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }}
+            />
+          </div>
+          <ul className="space-y-1.5 min-w-0 flex-1">
+            {rows.map(({ t, state }) => (
+              <li key={t.key} className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: SAP_STATE_COLOR[state] }} />
+                  <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{t.label}</span>
+                </span>
+                <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold border whitespace-nowrap ${SAP_STATE_META[state].cls}`}>{SAP_STATE_META[state].label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500 py-6 text-center">Karyawan ini tidak memiliki kewajiban Training SAP.</p>
+      )}
+    </DashCard>
+  );
+}
+
+function PersonRingsCard({ record, className }: { record: TrainingRecord; className: string }) {
+  const a = personAchievement(record);
+  return (
+    <DashCard className={className}>
+      <DashTitle title="Pencapaian Program" sub={`${a.done}/${a.total} training terpenuhi · total ${a.pct}%`} />
+      {a.parts.length ? (
+        <div className="grid grid-cols-3 gap-2 pt-1">
+          {a.parts.map(p => {
+            const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+            return <ProgressRing key={p.id} value={pct} color={pctColor(pct)} label={`${p.label} · ${p.done}/${p.total}`} />;
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500 py-6 text-center">Belum terdaftar di program training.</p>
+      )}
+    </DashCard>
+  );
+}
+
+function PersonProgramCards({ record }: { record: TrainingRecord }) {
+  const a = personAchievement(record);
+  const rows = personTrainingRows(record);
+  const icon = (id: TrainingProgram) => (id === 'sap' ? <ClipboardCheck className="w-4 h-4" /> : id === 'k3' ? <HardHat className="w-4 h-4" /> : <Award className="w-4 h-4" />);
+  const programLabel: Record<TrainingProgram, string> = { sap: 'SAP', k3: 'K3', pop: 'POP/POM' };
+  const all: { id: TrainingProgram; title: string }[] = [
+    { id: 'sap', title: 'Training SAP' }, { id: 'k3', title: 'Training K3' }, { id: 'pop', title: 'Sertifikasi POP/POM' },
+  ];
+  return (
+    <div className="lg:col-span-4 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
+      {all.map(p => {
+        const part = a.parts.find(x => x.id === p.id);
+        const latest = rows.filter(r => r.program === programLabel[p.id] && r.date).map(r => r.date!).sort().pop() || null;
+        const pct = part && part.total ? Math.round((part.done / part.total) * 100) : 0;
+        return (
+          <div key={p.id} className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 p-3 lg:p-5 border-2 border-white dark:border-slate-800">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center shrink-0" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>{icon(p.id)}</span>
+              <p className="text-[11px] lg:text-[13px] font-semibold text-slate-900 dark:text-slate-100 leading-tight truncate">{p.title}</p>
+            </div>
+            <div className="mt-2 lg:mt-4 flex items-end justify-between gap-2">
+              <div>
+                <p className="text-2xl lg:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{part ? `${part.done}/${part.total}` : '-'}</p>
+                <p className="text-[10px] lg:text-xs text-slate-500">{part ? `${pct}% terpenuhi` : 'Tidak terdaftar'}</p>
+              </div>
+              <div className="hidden lg:flex flex-col items-end gap-1">
+                <span className="text-[10px] text-slate-500">Terakhir</span>
+                <span className="text-[11px] font-semibold text-slate-700">{latest ? formatTrainingDate(latest) : '-'}</span>
+              </div>
+            </div>
+            {part && (
+              <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: DASH.brandSoft }}>
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: pctColor(pct) }} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PersonTrainingTableCard({ record, className }: { record: TrainingRecord; className: string }) {
+  const rows = personTrainingRows(record);
+  return (
+    <DashCard className={className}>
+      <DashTitle title="Riwayat Training" sub={`${record.nama} · ${rows.filter(r => r.ok).length}/${rows.length} training terpenuhi`} />
+      {rows.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-xs font-medium text-slate-500 py-10">Belum ada data training</div>
+      ) : (
+        <div className="overflow-x-auto -mx-1">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-slate-500">
+                <th className="px-2 py-2 font-semibold">Program</th>
+                <th className="px-2 py-2 font-semibold">Training</th>
+                <th className="px-2 py-2 font-semibold whitespace-nowrap">Tgl Training</th>
+                <th className="px-2 py-2 font-semibold whitespace-nowrap">Berlaku s/d</th>
+                <th className="px-2 py-2 font-semibold text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {rows.map(r => (
+                <tr key={`${r.program}-${r.label}`}>
+                  <td className="px-2 py-2"><span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>{r.program}</span></td>
+                  <td className="px-2 py-2">
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">{r.label}</p>
+                    {r.desc && <p className="text-[10px] text-slate-500 hidden sm:block">{r.desc}</p>}
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{r.date ? formatTrainingDate(r.date) : '-'}</td>
+                  <td className="px-2 py-2 whitespace-nowrap text-slate-700">{r.until ? formatTrainingDate(r.until) : '-'}</td>
+                  <td className="px-2 py-2 text-right"><span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap ${r.badge.cls}`}>{r.badge.text}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </DashCard>
+  );
+}
+
 // Panel pencapaian training satu karyawan (dibuka dari hasil pencarian Overview)
 function PersonAchievementModal({ record, onClose }: { record: TrainingRecord; onClose: () => void }) {
   const a = personAchievement(record);
@@ -707,6 +891,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [searchOpen, setSearchOpen] = useState(false);
   const [personDetail, setPersonDetail] = useState<TrainingRecord | null>(null);
   const closePersonDetail = useCallback(() => setPersonDetail(null), []);
+  // Karyawan terpilih dari pencarian Overview → kartu dashboard di sampingnya menampilkan data karyawan ini
+  const [selectedNik, setSelectedNik] = useState<string | null>(null);
   const [golFilter, setGolFilter] = useState('ALL');
   const [shiftFilter, setShiftFilter] = useState('ALL');
   const [bagianFilter, setBagianFilter] = useState('ALL');
@@ -1100,11 +1286,21 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       .map(r => ({ record: r, achievement: personAchievement(r) }));
   }, [records, searchQuery]);
 
+  const selectedPerson = useMemo(() => (selectedNik ? records.find(r => r.nik === selectedNik) ?? null : null), [records, selectedNik]);
+  const selectPerson = (r: TrainingRecord) => {
+    setSelectedNik(r.nik);
+    setSearchQuery(r.nama);
+    setSearchOpen(false);
+    setShowCharts(true);
+  };
+  const clearPerson = () => { setSelectedNik(null); setSearchQuery(''); setSearchOpen(false); };
+
   const hasActiveFilter = !!searchQuery || golFilter !== 'ALL' || shiftFilter !== 'ALL' || bagianFilter !== 'ALL'
     || ptFilter !== 'ALL' || statusFilter !== 'ALL' || !!missingFilter;
 
   const resetFilters = () => {
     setSearchQuery('');
+    setSelectedNik(null);
     setGolFilter('ALL');
     setShiftFilter('ALL');
     setBagianFilter('ALL');
@@ -1561,31 +1757,34 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 ))}
               </div>
             </div>
-            <p className="mt-3 text-xs font-semibold flex flex-wrap gap-x-3 gap-y-1">
-              <span style={{ color: DASH.brand }}>{dashboard.sap.complete} Lengkap</span>
-              <span className="text-yellow-600">{dashboard.sap.warning} Warning</span>
-              <span style={{ color: DASH.coral }}>{dashboard.sap.expired} Expired</span>
-              <span className="text-slate-500">{dashboard.sap.pct}% SAP terpenuhi</span>
-            </p>
+            {!selectedPerson && (
+              <p className="mt-3 text-xs font-semibold flex flex-wrap gap-x-3 gap-y-1">
+                <span style={{ color: DASH.brand }}>{dashboard.sap.complete} Lengkap</span>
+                <span className="text-yellow-600">{dashboard.sap.warning} Warning</span>
+                <span style={{ color: DASH.coral }}>{dashboard.sap.expired} Expired</span>
+                <span className="text-slate-500">{dashboard.sap.pct}% SAP terpenuhi</span>
+              </p>
+            )}
             <div className="relative mt-3">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+                onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true); setSelectedNik(null); }}
                 onFocus={() => setSearchOpen(true)}
                 onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
                 onKeyDown={e => {
                   if (e.key === 'Escape') setSearchOpen(false);
-                  if (e.key === 'Enter' && searchMatches[0]) { setPersonDetail(searchMatches[0].record); setSearchOpen(false); }
+                  if (e.key === 'Enter' && searchMatches[0]) selectPerson(searchMatches[0].record);
                 }}
+                title={searchQuery}
                 placeholder="Cari karyawan — lihat pencapaian training..."
                 className="w-full pl-10 pr-9 py-2.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-base sm:text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
               />
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
+                  onClick={clearPerson}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
                   title="Hapus pencarian"
                 >
@@ -1603,11 +1802,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                           <button
                             type="button"
                             onMouseDown={e => e.preventDefault()}
-                            onClick={() => { setPersonDetail(r); setSearchOpen(false); }}
+                            onClick={() => selectPerson(r)}
                             className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                           >
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{r.nama}</p>
+                              <p className="text-xs font-bold text-slate-900 dark:text-slate-100 break-words">{r.nama}</p>
                               <p className="text-[10px] font-medium text-slate-500 truncate">{r.nik} · {r.jabatan || '-'}</p>
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {a.parts.map(part => (
@@ -1635,12 +1834,55 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </div>
               )}
             </div>
+            {selectedPerson && (() => {
+              const a = personAchievement(selectedPerson);
+              return (
+                <div className="mt-3 rounded-2xl p-3.5" style={{ backgroundColor: DASH.brandSoft }}>
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: DASH.brand }}>Karyawan Terpilih</p>
+                      <p className="text-sm font-bold text-slate-900 leading-snug break-words">{selectedPerson.nama}</p>
+                      <p className="text-[11px] font-medium text-slate-600 break-words">
+                        {selectedPerson.nik} · {selectedPerson.jabatan || '-'} · GOL {selectedPerson.gol || '-'} · Shift {selectedPerson.shift || '-'}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-2xl font-semibold leading-none" style={{ color: pctColor(a.pct) }}>{a.pct}%</p>
+                      <p className="text-[10px] text-slate-500 mt-1">{a.done}/{a.total} training</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPersonDetail(selectedPerson)}
+                      className="flex-1 px-3 py-2 rounded-full text-[11px] font-semibold text-white cursor-pointer hover:opacity-90"
+                      style={{ backgroundColor: DASH.brand }}
+                    >
+                      Lihat Detail
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearPerson}
+                      className="flex-1 px-3 py-2 rounded-full text-[11px] font-semibold bg-white text-slate-700 border border-slate-200 cursor-pointer hover:bg-slate-50"
+                    >
+                      Kembali ke Semua Data
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
             {personDetail && createPortal(
               <PersonAchievementModal record={personDetail} onClose={closePersonDetail} />,
               document.body,
             )}
           </DashCard>
 
+          {selectedPerson ? (
+            <>
+              <PersonSapCard record={selectedPerson} className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`} />
+              <PersonRingsCard record={selectedPerson} className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`} />
+            </>
+          ) : (<>
           <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
             <DashTitle title="Status Training SAP" sub="Seluruh training wajib (per GOL)" />
             <div className="flex items-center gap-4">
@@ -1692,6 +1934,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               {dashboard.rings.map(r => <ProgressRing key={r.key} value={r.value} color={r.color} label={r.label} />)}
             </div>
           </DashCard>
+          </>)}
         </div>
 
         {/* HP: tombol buka/tutup diagram */}
@@ -1707,6 +1950,12 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
         {/* ===== Baris 2: Kartu program · Analitik ===== */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
+          {selectedPerson ? (
+            <>
+              <PersonProgramCards record={selectedPerson} />
+              <PersonTrainingTableCard record={selectedPerson} className={`lg:col-span-8 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`} />
+            </>
+          ) : (<>
           <div className="lg:col-span-4 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
             {dashboard.programs.map(p => {
               const active = program === p.key;
@@ -1858,6 +2107,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </div>
             </div>
           </DashCard>
+          </>)}
         </div>
 
         {/* ===== Baris 3: Cakupan · Daftar Karyawan ===== */}
