@@ -197,15 +197,26 @@ export function recapTitle(date: string): string {
   return `BUNGKUSAN DEPT. PREPARATION & LABORATORY ${DAYS[dt.getUTCDay()]}, ${d} ${MONTHS[m - 1]} ${y}`;
 }
 
-// PDF lewat dialog cetak browser (A4 landscape) → "Simpan sebagai PDF"
-export function printBungkusRecap(date: string, blocks: RecapBlock[]): boolean {
-  const win = window.open('', '_blank');
-  if (!win) return false;
-  const markup = renderToStaticMarkup(<BungkusRecapSheet title={recapTitle(date)} blocks={blocks} />);
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Rekap_Bungkusan_${date}</title>
-<style>@page{size:A4 landscape;margin:8mm}html,body{margin:0;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}
-body>div{min-width:0!important;zoom:.92}</style></head><body>${markup}
-<script>window.onload=function(){setTimeout(function(){window.print()},150)};window.onafterprint=function(){window.close()}</script></body></html>`);
-  win.document.close();
-  return true;
+// Download langsung file PDF (A4 landscape, satu halaman): sheet dirender di luar layar → gambar → PDF
+export async function downloadBungkusRecapPdf(date: string, blocks: RecapBlock[]): Promise<void> {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:1400px;background:#fff';
+  host.innerHTML = renderToStaticMarkup(<BungkusRecapSheet title={recapTitle(date)} blocks={blocks} />);
+  document.body.appendChild(host);
+  try {
+    const canvas = await html2canvas(host.firstElementChild as HTMLElement, { scale: 2, backgroundColor: '#ffffff', logging: false });
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const margin = 8;
+    const pageW = pdf.internal.pageSize.getWidth() - margin * 2;
+    const pageH = pdf.internal.pageSize.getHeight() - margin * 2;
+    // Muat di satu halaman dengan rasio tetap
+    const ratio = Math.min(pageW / canvas.width, pageH / canvas.height);
+    const w = canvas.width * ratio;
+    const h = canvas.height * ratio;
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin + (pageW - w) / 2, margin, w, h);
+    pdf.save(`Rekap_Bungkusan_${date}.pdf`);
+  } finally {
+    host.remove();
+  }
 }

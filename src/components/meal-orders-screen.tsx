@@ -8,7 +8,7 @@ import { Input, Select, Button } from './ui';
 import { todayWit } from '../utils/training-import';
 import { parseMealOrderSheet, type ParsedMealOrderRow } from '../utils/meal-order-import';
 import { isTuesdayWednesdaySaturday, mealChoicePatch } from '../utils/meal-roster-sync';
-import { BungkusRecapSheet, buildBungkusRecap, printBungkusRecap, recapTitle } from './meal-bungkus-recap';
+import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle } from './meal-bungkus-recap';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
@@ -101,6 +101,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => todayWit());
   const [view, setView] = useState<'orders' | 'recap'>('orders');
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [search, setSearch] = useState('');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; row?: MealOrder } | null>(null);
@@ -448,6 +449,48 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     XLSX.writeFile(wb, `Orderan_Makanan_${company}_${date}.xlsx`);
   };
 
+  // ===== Status Kehadiran Styling (Cuti = Ungu, Izin = Kuning, Alpa = Merah) =====
+  const getAttendanceStatusKind = (r: MealOrder): 'cuti' | 'izin' | 'alpa' | null => {
+    const sk = String(r.statusKerja || '').trim().toLowerCase();
+    const st = String(r.status || '').trim().toLowerCase();
+    const cat = String(r.catatan || '').trim().toLowerCase();
+
+    if (sk.includes('cuti') || st.includes('cuti') || cat.includes('cuti') || r.pagiKantin === 'C') {
+      return 'cuti';
+    }
+    if (sk === 'izin' || sk.includes('izin') || st === 'izin' || st.includes('izin') || cat.includes('izin') || sk === 'i' || st === 'i') {
+      return 'izin';
+    }
+    if (sk === 'alpa' || sk.includes('alpa') || st === 'alpa' || st.includes('alpa') || cat.includes('alpa') || sk === 'a' || st === 'a') {
+      return 'alpa';
+    }
+    return null;
+  };
+
+  const getStatusBadgeKind = (text: string | null | undefined): 'cuti' | 'izin' | 'alpa' | null => {
+    const s = String(text || '').trim().toLowerCase();
+    if (s.includes('cuti')) return 'cuti';
+    if (s.includes('izin') || s === 'i') return 'izin';
+    if (s.includes('alpa') || s === 'a') return 'alpa';
+    return null;
+  };
+
+  const renderStatusBadge = (val: string | null | undefined, fallbackKind?: 'cuti' | 'izin' | 'alpa' | null) => {
+    const text = String(val || '').trim();
+    if (!text || text === '-') return <span className="text-slate-400">-</span>;
+    const kind = getStatusBadgeKind(text) || fallbackKind;
+    if (kind === 'cuti') {
+      return <span className="inline-block px-2 py-0.5 rounded-md text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300">{text}</span>;
+    }
+    if (kind === 'izin') {
+      return <span className="inline-block px-2 py-0.5 rounded-md text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">{text}</span>;
+    }
+    if (kind === 'alpa') {
+      return <span className="inline-block px-2 py-0.5 rounded-md text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">{text}</span>;
+    }
+    return <span>{text}</span>;
+  };
+
   // ===== Render sel =====
   const thBase = 'px-2 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-700 border border-emerald-200/70 bg-emerald-50 whitespace-nowrap';
   const tdBase = 'px-2 py-1.5 text-xs border border-slate-200 whitespace-nowrap';
@@ -477,13 +520,18 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         }
       };
 
+      const isCutiCell = v === 'C';
+      const cellBg = isCutiCell
+        ? 'bg-purple-100 text-purple-800 border border-purple-300'
+        : v ? 'bg-sky-100 text-sky-800' : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100';
+
       return (
         <button
           type="button"
-          disabled={!canManage}
+          disabled={!canManage || isCutiCell}
           onClick={handleToggleKantin}
-          className={`w-full h-7 rounded-md text-xs font-black transition-colors ${v ? 'bg-sky-100 text-sky-800' : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100'} ${canManage ? 'cursor-pointer hover:ring-2 hover:ring-sky-300' : 'cursor-default'}`}
-          title={canManage ? 'Klik untuk pilih Kantin (K)' : undefined}
+          className={`w-full h-7 rounded-md text-xs font-black transition-colors ${cellBg} ${canManage && !isCutiCell ? 'cursor-pointer hover:ring-2 hover:ring-sky-300' : 'cursor-default'}`}
+          title={isCutiCell ? 'Karyawan Cuti' : canManage ? 'Klik untuk pilih Kantin (K)' : undefined}
         >
           {v || '·'}
         </button>
@@ -828,12 +876,21 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               </div>
               <button
                 type="button"
-                onClick={() => { if (!printBungkusRecap(date, recapBlocks)) toast.error('Popup diblokir browser — izinkan popup untuk download PDF'); }}
-                disabled={rows.length === 0 || employeesLoading}
+                onClick={async () => {
+                  setDownloadingPdf(true);
+                  try {
+                    await downloadBungkusRecapPdf(date, recapBlocks);
+                  } catch (e: any) {
+                    toast.error(`Gagal membuat PDF: ${e?.message || e}`);
+                  } finally {
+                    setDownloadingPdf(false);
+                  }
+                }}
+                disabled={rows.length === 0 || employeesLoading || downloadingPdf}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
-                title="Buka dialog cetak — pilih 'Simpan sebagai PDF'"
+                title="Download file PDF Rekapan Bungkusan (A4 landscape)"
               >
-                <Download className="w-4 h-4" /> Download PDF
+                {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Download PDF
               </button>
             </div>
             {isLoading || employeesLoading ? (
@@ -1026,6 +1083,20 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 </>
               )}
             </div>
+          </div>
+
+          {/* Indikator status kehadiran (Cuti Ungu, Izin Kuning, Alpa Merah) */}
+          <div className="flex flex-wrap items-center gap-2 px-1 text-xs">
+            <span className="text-[11px] font-semibold text-slate-500">Status Kehadiran:</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+              <span className="w-2 h-2 rounded-full bg-purple-600" /> Cuti (Ungu)
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+              <span className="w-2 h-2 rounded-full bg-amber-500" /> Izin (Kuning)
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+              <span className="w-2 h-2 rounded-full bg-rose-500" /> Alpa (Merah)
+            </span>
           </div>
 
           {/* Indikator kolom tersembunyi */}
@@ -1245,10 +1316,28 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((r, i) => (
-                      <tr key={r.id} className="hover:bg-slate-50/70">
+                    {filtered.map((r, i) => {
+                      const attKind = getAttendanceStatusKind(r);
+                      const rowBg = attKind === 'cuti'
+                        ? 'bg-purple-50/50 hover:bg-purple-100/60'
+                        : attKind === 'izin'
+                        ? 'bg-amber-50/60 hover:bg-amber-100/70'
+                        : attKind === 'alpa'
+                        ? 'bg-rose-50/60 hover:bg-rose-100/70'
+                        : 'hover:bg-slate-50/70';
+
+                      const stickyNamaBg = attKind === 'cuti'
+                        ? 'bg-[#faf5ff] text-purple-950 font-bold'
+                        : attKind === 'izin'
+                        ? 'bg-[#fffbeb] text-amber-950 font-bold'
+                        : attKind === 'alpa'
+                        ? 'bg-[#fff1f2] text-rose-950 font-bold'
+                        : 'bg-white text-slate-900 font-bold';
+
+                      return (
+                      <tr key={r.id} className={`${rowBg} transition-colors`}>
                         <td className={`${tdBase} text-center text-slate-500`}>{i + 1}</td>
-                        <td className={`${tdBase} sticky left-0 bg-white font-bold text-slate-900`}>{r.nama}</td>
+                        <td className={`${tdBase} sticky left-0 ${stickyNamaBg}`}>{r.nama}</td>
                         <td className={`${tdBase} font-mono text-slate-700`}>{r.nik}</td>
                         {columnVisibility.profile && (
                           <>
@@ -1256,7 +1345,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             <td className={`${tdBase} text-center`}>{r.pt || '-'}</td>
                             <td className={tdBase}>{r.shift || '-'}</td>
                             <td className={tdBase}>{r.section || '-'}</td>
-                            <td className={`${tdBase} text-center`}>{r.statusKerja || '-'}</td>
+                            <td className={`${tdBase} text-center`}>{renderStatusBadge(r.statusKerja, attKind)}</td>
                           </>
                         )}
                         {columnVisibility.ramadan && (
@@ -1294,7 +1383,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         )}
                         {columnVisibility.statusNotes && (
                           <>
-                            <td className={tdBase}>{r.status || ''}</td>
+                            <td className={`${tdBase} text-center`}>{renderStatusBadge(r.status, attKind)}</td>
                             <td className={`${tdBase} text-center p-1`}>
                               {canManage ? (
                                 <select
@@ -1340,7 +1429,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                           </td>
                         )}
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="bg-slate-100 font-black">
@@ -1367,11 +1457,24 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
               {/* HP: kartu per karyawan */}
               <div className="md:hidden space-y-2">
-                {filtered.map((r, i) => (
-                  <div key={r.id} className="rounded-2xl border border-slate-200 p-3 space-y-2">
+                {filtered.map((r, i) => {
+                  const attKind = getAttendanceStatusKind(r);
+                  const cardBorder = attKind === 'cuti'
+                    ? 'border-purple-300 bg-purple-50/30'
+                    : attKind === 'izin'
+                    ? 'border-amber-300 bg-amber-50/30'
+                    : attKind === 'alpa'
+                    ? 'border-rose-300 bg-rose-50/30'
+                    : 'border-slate-200 bg-white';
+
+                  return (
+                  <div key={r.id} className={`rounded-2xl border ${cardBorder} p-3 space-y-2 transition-colors`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-slate-900">{i + 1}. {r.nama}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-bold text-slate-900">{i + 1}. {r.nama}</p>
+                          {attKind && renderStatusBadge(attKind.toUpperCase(), attKind)}
+                        </div>
                         <p className="text-[11px] text-slate-500">{r.nik} · {r.pt || '-'} · {r.section || '-'}</p>
                         <p className="text-[11px] text-slate-500">{r.tempatTinggal || '-'} · Mess {r.statusMess || '-'} · <span className="font-semibold text-emerald-700">{r.shiftKerja || '-'}</span></p>
                       </div>
@@ -1428,7 +1531,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       </div>
                     )}
                   </div>
-                ))}
+                );
+                })}
               </div>
               {filtered.length === 0 && <p className="text-center text-xs text-slate-500 py-6">Tidak ada karyawan yang cocok dengan pencarian.</p>}
             </>
