@@ -72,6 +72,7 @@ export function LogbookTaskRecommendationModal({
   const [manualPriority, setManualPriority] = useState<string>('Normal');
   const [manualType, setManualType] = useState<'Routine' | 'Non-Routine'>('Routine');
   const [manualCadence, setManualCadence] = useState<string>('Daily');
+  const [manualDueDate, setManualDueDate] = useState<string>(getTodayDDMMYYYY());
   const [isPicDropdownOpen, setIsPicDropdownOpen] = useState<boolean>(false);
 
   React.useEffect(() => {
@@ -87,6 +88,7 @@ export function LogbookTaskRecommendationModal({
       setManualPriority('Normal');
       setManualType('Routine');
       setManualCadence('Daily');
+      setManualDueDate(getTodayDDMMYYYY());
       setIsPicDropdownOpen(false);
     }
   }, [isOpen, currentUserName]);
@@ -226,6 +228,8 @@ export function LogbookTaskRecommendationModal({
         'Created time': todayStr,
         'Tanggal Selesai': '-',
         'Tanggal selesai': '-',
+        'Due Date': todayStr,
+        'due date': todayStr,
         Status: 'Open',
         status: 'Open',
         PIC: rec.pic || '',
@@ -264,6 +268,8 @@ export function LogbookTaskRecommendationModal({
             'Created time': todayStr,
             'Tanggal Selesai': sub.checked ? todayStr : '-',
             'Tanggal selesai': sub.checked ? todayStr : '-',
+            'Due Date': todayStr,
+            'due date': todayStr,
             Status: sub.checked ? 'Closed' : 'Open',
             status: sub.checked ? 'Closed' : 'Open',
             isCompleted: sub.checked ? 'true' : 'false',
@@ -273,6 +279,11 @@ export function LogbookTaskRecommendationModal({
             Aktivitas: rec.type,
             period: rec.cadence || (rec.type === 'Routine' ? 'Daily' : 'Non-Routine'),
             'Asal Halaman': rec.originPostTitle,
+            _originPostId: String(rec.originPostId),
+            _originPostTitle: rec.originPostTitle,
+            _originRowIndex: String(rec.originRowIndex),
+            _parentTitle: rec.title,
+            _isLogbookAggregated: 'true'
           };
           tempRows.push(subRowItem);
           newRows.push(subRowItem);
@@ -306,6 +317,8 @@ export function LogbookTaskRecommendationModal({
       'Created time': todayStr,
       'Tanggal Selesai': '-',
       'Tanggal selesai': '-',
+      'Due Date': todayStr,
+      'due date': todayStr,
       Status: 'Open',
       status: 'Open',
       PIC: rec.pic || '',
@@ -343,6 +356,8 @@ export function LogbookTaskRecommendationModal({
           'Created time': todayStr,
           'Tanggal Selesai': sub.checked ? todayStr : '-',
           'Tanggal selesai': sub.checked ? todayStr : '-',
+          'Due Date': todayStr,
+          'due date': todayStr,
           Status: sub.checked ? 'Closed' : 'Open',
           status: sub.checked ? 'Closed' : 'Open',
           isCompleted: sub.checked ? 'true' : 'false',
@@ -352,6 +367,11 @@ export function LogbookTaskRecommendationModal({
           Aktivitas: rec.type,
           period: rec.cadence || (rec.type === 'Routine' ? 'Daily' : 'Non-Routine'),
           'Asal Halaman': rec.originPostTitle,
+          _originPostId: String(rec.originPostId),
+          _originPostTitle: rec.originPostTitle,
+          _originRowIndex: String(rec.originRowIndex),
+          _parentTitle: rec.title,
+          _isLogbookAggregated: 'true'
         });
       });
     }
@@ -384,6 +404,8 @@ export function LogbookTaskRecommendationModal({
       'Created time': todayStr,
       'Tanggal Selesai': '-',
       'Tanggal selesai': '-',
+      'Due Date': manualDueDate || todayStr,
+      'due date': manualDueDate || todayStr,
       Status: 'Open',
       status: 'Open',
       PIC: manualPic.trim(),
@@ -1044,6 +1066,48 @@ export function LogbookTaskRecommendationModal({
                   </div>
                 </div>
               )}
+
+              {/* 6. Due Date (Batas Waktu - Parameter KPI Wajib) */}
+              <div>
+                <label className="block text-xs font-bold text-teal-600 dark:text-teal-400 mb-1 flex items-center justify-between">
+                  <span>Due Date (Batas Waktu Penyelesaian)</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-700">
+                    Parameter Wajib KPI SLA
+                  </span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={(() => {
+                      if (!manualDueDate || manualDueDate === '-') return '';
+                      const dmy = manualDueDate.match(/^(\d{2})-(\d{2})-(\d{4})/);
+                      if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+                      return manualDueDate;
+                    })()}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        setManualDueDate(getTodayDDMMYYYY());
+                        return;
+                      }
+                      const parts = val.split('-');
+                      if (parts.length === 3) {
+                        setManualDueDate(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                      } else {
+                        setManualDueDate(val);
+                      }
+                    }}
+                    className="flex-1 px-3 py-2.5 rounded-xl border border-teal-300 dark:border-teal-700 bg-white dark:bg-slate-800 text-xs font-mono focus:border-teal-500 outline-none text-slate-900 dark:text-slate-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setManualDueDate(getTodayDDMMYYYY())}
+                    className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium cursor-pointer"
+                  >
+                    Hari Ini
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Footer for Tab 2 */}

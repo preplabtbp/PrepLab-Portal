@@ -108,7 +108,7 @@ const ACTIVITY_OPTIONS: DropdownOption[] = [
   }
 ];
 
-const PRIORITY_OPTIONS: DropdownOption[] = [
+export const PRIORITY_OPTIONS: DropdownOption[] = [
   {
     value: 'Low',
     label: 'LOW',
@@ -118,14 +118,14 @@ const PRIORITY_OPTIONS: DropdownOption[] = [
   {
     value: 'Normal',
     label: 'NORMAL',
-    bgColor: '#D3E5EF',
-    textColor: '#235A80'
+    bgColor: '#DBEDDB',
+    textColor: '#286641'
   },
   {
     value: 'Medium',
     label: 'MEDIUM',
-    bgColor: '#FDECC8',
-    textColor: '#8F6B12'
+    bgColor: '#D3E5EF',
+    textColor: '#235A80'
   },
   {
     value: 'High',

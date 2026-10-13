@@ -13,6 +13,7 @@ import {
   CheckCircle2, 
   Clock, 
   AlertCircle, 
+  AlertTriangle, 
   User, 
   Tag, 
   Calendar, 
@@ -71,13 +72,15 @@ import { uploadPhotoToDrive } from '../sheets-api';
 import { ImageModal } from './image-modal';
 import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress, markdownToVisualHtml, migrateLegacySubtaskText } from './notion/tasklist-utils';
 import { NotionTasklistView } from './notion/NotionTasklistView';
-import { NotionDropdownCell } from './notion/NotionDropdownCell';
+import { NotionDropdownCell, STATUS_OPTIONS, PRIORITY_OPTIONS } from './notion/NotionDropdownCell';
+import { NotionDueDateCell, calculateTaskKpiStatus } from './notion/NotionDueDateCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import { 
   syncLogbookRowBackToOrigin, 
+  syncLogbookRowsGroupToOrigin,
   formatToDDMMYYYY, 
   getTodayDDMMYYYY,
   getYesterdayDDMMYYYY,
@@ -470,6 +473,8 @@ export const CANONICAL_NOTION_COLUMNS = [
   'Priority',
   'Status',
   'Created Time',
+  'Tanggal Selesai',
+  'Due Date',
   'Activity (routine/non routine)',
   'period'
 ] as const;
@@ -525,6 +530,14 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (fallbackVal === undefined) fallbackVal = val;
     }
     if (targetLower === 'created time' && (keyLower.includes('created') || keyLower.includes('tanggal dibuat') || keyLower.includes('waktu dibuat') || keyLower === 'dibuat')) {
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
+    }
+    if ((targetLower === 'due date' || targetLower === 'target selesai' || targetLower === 'deadline' || targetLower === 'batas waktu') && (keyLower.includes('due') || keyLower.includes('target') || keyLower.includes('deadline') || keyLower.includes('jatuh tempo') || keyLower.includes('batas waktu'))) {
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
+    }
+    if ((targetLower === 'tanggal selesai' || targetLower === 'completed time') && (keyLower.includes('completed') || keyLower.includes('aktual selesai') || keyLower === 'selesai' || keyLower.includes('waktu selesai') || keyLower.includes('tanggal selesai'))) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -1477,7 +1490,7 @@ export function NotionDatabaseTable({
     { name: 'PIC', icon: '👤', defaultValue: '', desc: 'Personil penanggung jawab' },
     { name: 'Activity (routine/non routine)', icon: '🔄', defaultValue: 'Routine', desc: 'Klasifikasi aktivitas rutin/non-rutin' },
     { name: 'period', icon: '⏱️', defaultValue: 'Weekly', desc: 'Periode waktu kegiatan' },
-    { name: 'Deadline', icon: '📅', defaultValue: '-', desc: 'Batas tanggal penyelesaian tugas' },
+    { name: 'Due Date', icon: '🎯', defaultValue: '-', desc: 'Batas tanggal penyelesaian tugas (Parameter Wajib KPI SLA)' },
     { name: 'Lokasi / Area', icon: '📍', defaultValue: 'Site Obi', desc: 'Lokasi fisik pelaksanaan tugas' },
     { name: 'Departemen', icon: '🏢', defaultValue: 'Laboratorium', desc: 'Seksi atau departemen pelaksana' },
     { name: 'Catatan Tambahan', icon: '📝', defaultValue: '-', desc: 'Rincian atau catatan ekstra' },
@@ -1492,38 +1505,51 @@ export function NotionDatabaseTable({
     if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian') || l.includes('notes')) return 2;
     if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 3;
     if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
-    if (l.includes('status')) return 5;
-    if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 6;
-    if (l.includes('priority') || l.includes('prioritas')) return 7;
-    if (l.includes('activity') || l.includes('aktivitas')) return 8;
-    if (l.includes('period') || l.includes('periode')) return 9;
-    if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 10;
+    if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) return 5;
+    if (l.includes('status')) return 6;
+    if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 7;
+    if (l.includes('priority') || l.includes('prioritas')) return 8;
+    if (l.includes('activity') || l.includes('aktivitas')) return 9;
+    if (l.includes('period') || l.includes('periode')) return 10;
+    if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 11;
     return 20; // other custom columns
   };
 
   // Helper to normalize headers while preserving user-defined column order
   const normalizeAndOrderHeaders = useCallback((inputHeaders: string[]): string[] => {
-    // 1. Remove redundant 'Progress' / 'progres' and 'Target Selesai' / 'target' column
+    // 1. Remove redundant 'Progress' / 'progres' column and standardize aliases
     const filtered = (inputHeaders || []).filter(h => {
       const l = h.toLowerCase().trim();
       if (l.includes('progress') || l.includes('progres') || l.includes('capaian')) return false;
-      if (l.includes('target') || l.includes('deadline') || l.includes('jatuh tempo')) return false;
       return true;
     }).map(h => {
       const l = h.toLowerCase().trim();
       if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai')) {
         return 'Tanggal Selesai';
       }
+      if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) {
+        return 'Due Date';
+      }
       return h;
     });
 
-    if (filtered.length === 0) {
+    // Deduplicate headers
+    const uniqueFiltered: string[] = [];
+    filtered.forEach(h => {
+      const hl = h.toLowerCase().trim();
+      if (!uniqueFiltered.some(u => u.toLowerCase().trim() === hl)) {
+        uniqueFiltered.push(h);
+      }
+    });
+
+    if (uniqueFiltered.length === 0) {
       return [
         'Number',
         'Jenis kegiatan',
         'Keterangan',
         'Created Time',
         'Tanggal Selesai',
+        'Due Date',
         'Status',
         'PIC',
         'Priority',
@@ -1532,12 +1558,12 @@ export function NotionDatabaseTable({
     }
 
     // Ensure 'Number' exists at the beginning
-    const hasNumber = filtered.some(h => {
+    const hasNumber = uniqueFiltered.some(h => {
       const l = h.toLowerCase().trim();
       return l === 'number' || l === 'no' || l === 'no.' || l === '#';
     });
 
-    const headersWithNumber = hasNumber ? filtered : ['Number', ...filtered];
+    const headersWithNumber = hasNumber ? uniqueFiltered : ['Number', ...uniqueFiltered];
 
     // Ensure 'Created Time' exists
     const hasCreatedTime = headersWithNumber.some(h => {
@@ -1569,10 +1595,54 @@ export function NotionDatabaseTable({
       return l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai');
     });
 
-    const headersWithMeta = hasCompleted ? headersWithCreated : [...headersWithCreated, 'Tanggal Selesai'];
+    let headersWithCompleted = headersWithCreated;
+    if (!hasCompleted) {
+      const createdIdx = headersWithCreated.findIndex(h => h.toLowerCase().includes('created'));
+      if (createdIdx !== -1) {
+        headersWithCompleted = [
+          ...headersWithCreated.slice(0, createdIdx + 1),
+          'Tanggal Selesai',
+          ...headersWithCreated.slice(createdIdx + 1)
+        ];
+      } else {
+        headersWithCompleted = [...headersWithCreated, 'Tanggal Selesai'];
+      }
+    }
+
+    // Ensure 'Due Date' exists (Mandatory column for KPI parameter)
+    const hasDueDate = headersWithCompleted.some(h => {
+      const l = h.toLowerCase().trim();
+      return l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu');
+    });
+
+    let finalHeaders = headersWithCompleted;
+    if (!hasDueDate) {
+      const compIdx = headersWithCompleted.findIndex(h => {
+        const l = h.toLowerCase().trim();
+        return l.includes('selesai') || l.includes('completed');
+      });
+      if (compIdx !== -1) {
+        finalHeaders = [
+          ...headersWithCompleted.slice(0, compIdx + 1),
+          'Due Date',
+          ...headersWithCompleted.slice(compIdx + 1)
+        ];
+      } else {
+        const createdIdx = headersWithCompleted.findIndex(h => h.toLowerCase().includes('created'));
+        if (createdIdx !== -1) {
+          finalHeaders = [
+            ...headersWithCompleted.slice(0, createdIdx + 1),
+            'Due Date',
+            ...headersWithCompleted.slice(createdIdx + 1)
+          ];
+        } else {
+          finalHeaders = [...headersWithCompleted, 'Due Date'];
+        }
+      }
+    }
 
     // Jaga urutan custom/manual pengguna, jangan dipaksa disortir otomatis ulang
-    return headersWithMeta;
+    return finalHeaders;
   }, []);
 
   // Dynamic Table Headers State (Allows Adding, Deleting, and Reordering Columns)
@@ -1680,13 +1750,14 @@ export function NotionDatabaseTable({
     };
   };
 
-  // Ensure Progress, Target Selesai, redundant Kategori, and hiddenColumns are never rendered in displayHeaders
+  // Ensure Progress, redundant Kategori, and hiddenColumns are never rendered in displayHeaders
+  // (Due Date is mandatory and always visible for KPI SLA tracking)
   const displayHeaders = useMemo(() => {
     return tableHeaders.filter(h => {
       const l = h.toLowerCase().trim();
       if (hiddenColumns.some(hc => hc.toLowerCase().trim() === l)) return false;
+      if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) return true;
       return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
-             !l.includes('target') && !l.includes('deadline') && !l.includes('jatuh tempo') &&
              !l.includes('kategori') && !l.includes('category');
     });
   }, [tableHeaders, hiddenColumns]);
@@ -1916,11 +1987,16 @@ export function NotionDatabaseTable({
         cl === 'pic' || cl === 'assignee' ||
         cl === 'priority' || cl === 'prioritas' ||
         cl.includes('routine') || cl === 'activity' || cl === 'period' ||
-        cl.includes('created') || cl.includes('selesai') || cl.includes('modified')
+        cl.includes('created') || cl.includes('selesai') || cl.includes('modified') ||
+        cl.includes('due') || cl.includes('deadline') || cl.includes('target') || cl.includes('jatuh tempo') || cl.includes('batas waktu')
       );
     };
 
     if (isMandatoryCol(colName)) {
+      if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) {
+        toast.error('Kolom "Due Date" adalah kolom wajib dan parameter KPI SLA. Tidak dapat dihapus.');
+        return;
+      }
       handleToggleHideColumn(colName);
       toast.info(`Kolom wajib "${colName}" disembunyikan (bukan dihapus) agar data detail task tetap aman.`);
       return;
@@ -2048,6 +2124,16 @@ export function NotionDatabaseTable({
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
+      if ((targetLower === 'due date' || targetLower === 'target selesai' || targetLower === 'deadline' || targetLower === 'batas waktu') && 
+          (cleanKey.includes('due') || cleanKey.includes('deadline') || cleanKey.includes('target') || cleanKey.includes('jatuh tempo') || cleanKey.includes('batas waktu'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if ((targetLower === 'tanggal selesai' || targetLower === 'completed time') && 
+          (cleanKey.includes('completed') || cleanKey.includes('aktual selesai') || cleanKey === 'selesai' || cleanKey.includes('waktu selesai') || cleanKey.includes('tanggal selesai'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
       if (targetLower === 'kategori' && (cleanKey.includes('kategori') || cleanKey.includes('category') || cleanKey === 'dept')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
@@ -2085,6 +2171,45 @@ export function NotionDatabaseTable({
       }
     });
     return { active, closed, total };
+  }, [localRows, getRowVal]);
+
+  // Task & KPI Delivery Metrics (KPI SLA & On-time performance)
+  const kpiMetrics = useMemo(() => {
+    let totalPlanned = 0;
+    let onTimeCount = 0;
+    let overdueCount = 0;
+    let dueTodayCount = 0;
+    let unsetDueCount = 0;
+
+    localRows.forEach(r => {
+      if (!isSubItemRow(r)) {
+        const title = (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || getRowVal(r, 'Judul') || '').trim();
+        if (title.length > 0) {
+          totalPlanned++;
+          const dueVal = getRowVal(r, 'Due Date') || getRowVal(r, 'Deadline') || getRowVal(r, 'Target Selesai');
+          const compVal = getRowVal(r, 'Tanggal Selesai') || getRowVal(r, 'Completed Time');
+          const statusVal = getRowVal(r, 'Status');
+          const calc = calculateTaskKpiStatus(dueVal, compVal, statusVal);
+
+          if (calc.status === 'ON_TIME') onTimeCount++;
+          else if (calc.status === 'OVERDUE') overdueCount++;
+          else if (calc.status === 'DUE_TODAY') dueTodayCount++;
+          else if (calc.status === 'UNSET') unsetDueCount++;
+        }
+      }
+    });
+
+    const evaluatedTasks = onTimeCount + overdueCount;
+    const onTimeRate = evaluatedTasks > 0 ? Math.round((onTimeCount / evaluatedTasks) * 100) : 100;
+
+    return {
+      totalPlanned,
+      onTimeCount,
+      overdueCount,
+      dueTodayCount,
+      unsetDueCount,
+      onTimeRate
+    };
   }, [localRows, getRowVal]);
 
   // Fetch comments from backend
@@ -2545,7 +2670,21 @@ export function NotionDatabaseTable({
       // Two-way live sync for any rows aggregated from origin posts (Logbook Unified View)
       const rowsWithOrigin = normalizedRows.filter(r => r._originPostId);
       if (rowsWithOrigin.length > 0 && allPosts && allPosts.length > 0) {
-        Promise.all(rowsWithOrigin.map(r => syncLogbookRowBackToOrigin(r, allPosts))).catch(err => {
+        // Group by _originPostId to eliminate race conditions and synchronize parent & subtasks in batch
+        const originGroups = new Map<string, TableRowData[]>();
+        for (const row of rowsWithOrigin) {
+          const originId = String(row._originPostId);
+          if (!originGroups.has(originId)) {
+            originGroups.set(originId, []);
+          }
+          originGroups.get(originId)!.push(row);
+        }
+
+        Promise.all(
+          Array.from(originGroups.entries()).map(([originId, groupedRows]) =>
+            syncLogbookRowsGroupToOrigin(originId, groupedRows, allPosts)
+          )
+        ).catch(err => {
           console.warn('[Logbook Sync] Error syncing back to origin posts:', err);
         });
       }
@@ -2947,6 +3086,7 @@ export function NotionDatabaseTable({
       Status: 'Open',
       'Created Time': createdStr,
       'Tanggal Selesai': '-',
+      'Due Date': formatToDDMMYYYY(now),
       Kategori: targetCat,
       'Activity (routine/non routine)': inheritedCadence,
       period: inheritedPeriod
@@ -3017,6 +3157,9 @@ export function NotionDatabaseTable({
 
     const subId = `sub_${parentId}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const formattedTitle = `↳ [ ] ${cleanTitle}`;
+    const parentRawTitle = getRowVal(parentRow, 'Jenis kegiatan') || getRowVal(parentRow, 'Jenis Kegiatan') || getRowVal(parentRow, 'Name') || getRowVal(parentRow, 'Judul') || '';
+    const cleanParentTitle = getDisplayTitle(parentRawTitle);
+
     const newSubRow: TableRowData = {
       number: '',
       id: subId,
@@ -3031,11 +3174,18 @@ export function NotionDatabaseTable({
       isCompleted: 'false',
       'Created Time': createdStr,
       'Tanggal Selesai': '-',
+      'Due Date': getRowVal(parentRow, 'Due Date') || '-',
       Kategori: parentCat,
       'Activity (routine/non routine)': parentAct,
       period: parentPeriod,
       isSubItem: 'true',
-      'Last Modified': nowIso
+      'Last Modified': nowIso,
+      // Inherit origin tracking metadata from parent so subtask can sync back to origin Labnote table
+      _originPostId: parentRow._originPostId,
+      _originPostTitle: parentRow._originPostTitle,
+      _originRowIndex: parentRow._originRowIndex,
+      _parentTitle: cleanParentTitle,
+      _isLogbookAggregated: parentRow._isLogbookAggregated
     };
 
     // Cari posisi sisip: tepat setelah sub-item terakhir dari parent ini
@@ -3112,6 +3262,8 @@ export function NotionDatabaseTable({
         status: 'In Progress',
         'Tanggal Selesai': '-',
         'Tanggal selesai': '-',
+        'Due Date': todayStr,
+        'due date': todayStr,
         completed: '-',
         'Aktual Selesai': '-',
       };
@@ -3127,6 +3279,8 @@ export function NotionDatabaseTable({
         isCompleted: 'false',
         'Tanggal Selesai': '-',
         'Tanggal selesai': '-',
+        'Due Date': todayStr,
+        'due date': todayStr,
         completed: '-',
       }));
 
@@ -3418,6 +3572,18 @@ export function NotionDatabaseTable({
       updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
       updatedRow['Last Modified'] = nowIso;
 
+      // Inherit origin tracking metadata from parent if missing
+      if (parentIdx !== -1 && localRows[parentIdx]) {
+        const pRow = localRows[parentIdx];
+        if (pRow._originPostId && !updatedRow._originPostId) {
+          updatedRow._originPostId = pRow._originPostId;
+          updatedRow._originPostTitle = pRow._originPostTitle;
+          updatedRow._originRowIndex = pRow._originRowIndex;
+          updatedRow._parentTitle = getDisplayTitle(getRowVal(pRow, 'Jenis kegiatan') || getRowVal(pRow, 'Jenis Kegiatan') || '');
+          updatedRow._isLogbookAggregated = pRow._isLogbookAggregated;
+        }
+      }
+
       // Also update sub-item title prefix ↳ [x] vs ↳ [ ]
       const currentTitle = getRowVal(subRow, 'Jenis kegiatan') || getRowVal(subRow, 'Jenis Kegiatan') || '';
       if (currentTitle) {
@@ -3690,6 +3856,7 @@ export function NotionDatabaseTable({
       isCompleted: 'false',
       'Created Time': createdStr,
       'Tanggal Selesai': '-',
+      'Due Date': formatToDDMMYYYY(now),
       Kategori: targetCat,
       'Activity (routine/non routine)': inheritedCadence,
       period: inheritedCadence,
@@ -4866,6 +5033,7 @@ export function NotionDatabaseTable({
     if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     if (colLower.includes('created') || colLower.includes('tanggal dibuat') || colLower.includes('waktu dibuat')) return <span className="text-slate-400 mr-1 text-xs">📅</span>;
     if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')) return <span className="text-emerald-500 mr-1 text-xs">✓</span>;
+    if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) return <span className="text-amber-500 mr-1 text-xs">🎯</span>;
     if (colLower.includes('status')) return <span className="text-slate-400 mr-1 text-xs">⭕</span>;
     if (colLower.includes('pic') || colLower.includes('assignee')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     if (colLower.includes('priority') || colLower.includes('prioritas')) return <span className="text-slate-400 mr-1 text-xs">↓</span>;
@@ -5206,12 +5374,40 @@ export function NotionDatabaseTable({
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {[
-                        { key: 'ALL', label: 'Semua', count: stats.total },
-                        { key: 'ACTIVE', label: 'Aktif', count: stats.total - stats.closed - stats.canceled },
-                        { key: 'ON PROGRESS', label: 'On Progress', count: stats.onProgress },
-                        { key: 'OPEN', label: 'Open', count: stats.open },
-                        { key: 'CLOSE', label: 'Selesai', count: stats.closed },
-                        { key: 'CANCELED', label: 'Batal', count: stats.canceled },
+                        { key: 'ALL', label: 'Semua', count: stats.total, isMeta: true },
+                        { key: 'ACTIVE', label: 'Aktif', count: stats.total - stats.closed - stats.canceled, isMeta: true },
+                        { 
+                          key: 'ON PROGRESS', 
+                          label: 'On Progress', 
+                          count: stats.onProgress, 
+                          bgColor: '#FDECC8', 
+                          textColor: '#8F6B12',
+                          icon: <RotateCcw className="w-2.5 h-2.5 shrink-0" style={{ color: '#8F6B12' }} /> 
+                        },
+                        { 
+                          key: 'OPEN', 
+                          label: 'Open', 
+                          count: stats.open, 
+                          bgColor: '#E3E2E0', 
+                          textColor: '#5A5A58',
+                          icon: <Clock className="w-2.5 h-2.5 shrink-0" style={{ color: '#5A5A58' }} /> 
+                        },
+                        { 
+                          key: 'CLOSE', 
+                          label: 'Selesai', 
+                          count: stats.closed, 
+                          bgColor: '#D3E5EF', 
+                          textColor: '#235A80',
+                          icon: <CheckCircle2 className="w-2.5 h-2.5 shrink-0" style={{ color: '#235A80' }} /> 
+                        },
+                        { 
+                          key: 'CANCELED', 
+                          label: 'Batal', 
+                          count: stats.canceled, 
+                          bgColor: '#FFE2DD', 
+                          textColor: '#9B3E37',
+                          icon: <AlertCircle className="w-2.5 h-2.5 shrink-0" style={{ color: '#9B3E37' }} /> 
+                        },
                       ].map((st) => {
                         const isSelected = st.key === 'ALL'
                           ? (selectedStatuses.length === 0 || selectedStatuses.includes('ALL'))
@@ -5241,16 +5437,26 @@ export function NotionDatabaseTable({
                                 setSelectedStatuses([...cleaned, st.key]);
                               }
                             }}
-                            className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
-                              isSelected
-                                ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
-                                : isNotionLight
-                                ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
-                                : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
+                            style={!st.isMeta ? { backgroundColor: st.bgColor, color: st.textColor } : undefined}
+                            className={`px-2 py-1 rounded-md text-[11px] transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                              st.isMeta
+                                ? isSelected
+                                  ? 'bg-[#37352f] text-white border border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs font-semibold'
+                                  : isNotionLight
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#e9e9e7] opacity-80 hover:opacity-100 font-medium'
+                                  : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border border-slate-700 opacity-80 hover:opacity-100 font-medium'
+                                : isSelected
+                                ? 'font-semibold ring-2 ring-slate-800/80 dark:ring-white/80 ring-offset-1 shadow-xs scale-[1.02] border border-transparent opacity-100'
+                                : 'font-medium border border-transparent opacity-65 hover:opacity-100 hover:shadow-2xs'
                             }`}
                           >
+                            {isSelected ? (
+                              <Check className="w-3 h-3 stroke-[2.5] shrink-0" style={!st.isMeta ? { color: st.textColor } : undefined} />
+                            ) : (
+                              st.icon
+                            )}
                             <span>{st.label}</span>
-                            <span className="text-[10px] opacity-75 font-mono">({st.count})</span>
+                            <span className="text-[10px] opacity-80 font-mono font-normal">({st.count})</span>
                           </button>
                         );
                       })}
@@ -5265,12 +5471,47 @@ export function NotionDatabaseTable({
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {[
-                        { key: 'ALL', label: 'Semua Prioritas', count: stats.total },
-                        { key: 'URGENT', label: '🚨 Urgent', count: stats.urgent || 0 },
-                        { key: 'HIGH', label: '🔴 High', count: stats.high || 0 },
-                        { key: 'MEDIUM', label: '🔵 Medium', count: stats.medium || 0 },
-                        { key: 'NORMAL', label: '🟢 Normal', count: stats.normal || 0 },
-                        { key: 'LOW', label: '⚪ Low', count: stats.low || 0 },
+                        { key: 'ALL', label: 'Semua Prioritas', count: stats.total, isMeta: true },
+                        { 
+                          key: 'URGENT', 
+                          label: 'Urgent', 
+                          count: stats.urgent || 0, 
+                          bgColor: '#FFE2DD', 
+                          textColor: '#9B3E37',
+                          icon: <AlertCircle className="w-2.5 h-2.5 shrink-0" style={{ color: '#9B3E37' }} />
+                        },
+                        { 
+                          key: 'HIGH', 
+                          label: 'High', 
+                          count: stats.high || 0, 
+                          bgColor: '#FADEC9', 
+                          textColor: '#9A5826',
+                          icon: <AlertTriangle className="w-2.5 h-2.5 shrink-0" style={{ color: '#9A5826' }} />
+                        },
+                        { 
+                          key: 'MEDIUM', 
+                          label: 'Medium', 
+                          count: stats.medium || 0, 
+                          bgColor: '#D3E5EF', 
+                          textColor: '#235A80',
+                          icon: <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#235A80' }} />
+                        },
+                        { 
+                          key: 'NORMAL', 
+                          label: 'Normal', 
+                          count: stats.normal || 0, 
+                          bgColor: '#DBEDDB', 
+                          textColor: '#286641',
+                          icon: <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#286641' }} />
+                        },
+                        { 
+                          key: 'LOW', 
+                          label: 'Low', 
+                          count: stats.low || 0, 
+                          bgColor: '#E3E2E0', 
+                          textColor: '#5A5A58',
+                          icon: <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#5A5A58' }} />
+                        },
                       ].map((p) => {
                         const isSelected = p.key === 'ALL'
                           ? selectedPriorities.length === 0
@@ -5291,16 +5532,26 @@ export function NotionDatabaseTable({
                                 setSelectedPriorities([...cleaned, p.key]);
                               }
                             }}
-                            className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer border ${
-                              isSelected
-                                ? 'bg-[#37352f] text-white border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs'
-                                : isNotionLight
-                                ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border-[#e9e9e7]'
-                                : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border-slate-700'
+                            style={!p.isMeta ? { backgroundColor: p.bgColor, color: p.textColor } : undefined}
+                            className={`px-2 py-1 rounded-md text-[11px] transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                              p.isMeta
+                                ? isSelected
+                                  ? 'bg-[#37352f] text-white border border-[#37352f] dark:bg-teal-600 dark:border-teal-500 shadow-2xs font-semibold'
+                                  : isNotionLight
+                                  ? 'bg-[#f7f7f5] hover:bg-[#efefed] text-[#37352f] border border-[#e9e9e7] opacity-80 hover:opacity-100 font-medium'
+                                  : 'bg-[#282828] hover:bg-[#333333] text-slate-300 border border-slate-700 opacity-80 hover:opacity-100 font-medium'
+                                : isSelected
+                                ? 'font-semibold ring-2 ring-slate-800/80 dark:ring-white/80 ring-offset-1 shadow-xs scale-[1.02] border border-transparent opacity-100'
+                                : 'font-medium border border-transparent opacity-65 hover:opacity-100 hover:shadow-2xs'
                             }`}
                           >
+                            {isSelected ? (
+                              <Check className="w-3 h-3 stroke-[2.5] shrink-0" style={!p.isMeta ? { color: p.textColor } : undefined} />
+                            ) : (
+                              p.icon
+                            )}
                             <span>{p.label}</span>
-                            <span className="text-[10px] opacity-75 font-mono">({p.count})</span>
+                            <span className="text-[10px] opacity-80 font-mono font-normal">({p.count})</span>
                           </button>
                         );
                       })}
@@ -6090,6 +6341,25 @@ export function NotionDatabaseTable({
                     {logbookTaskCounts.closed}
                   </span>
                 </button>
+
+                {/* KPI On-Time Delivery Indicator */}
+                <div 
+                  className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border select-none ${
+                    kpiMetrics.overdueCount > 0
+                      ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800/60'
+                      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800/60'
+                  }`}
+                  title={`Parameter KPI SLA Logbook: ${kpiMetrics.onTimeCount} tepat waktu, ${kpiMetrics.overdueCount} terlambat (${kpiMetrics.onTimeRate}% on-time rate)`}
+                >
+                  <Target className="w-3.5 h-3.5 shrink-0" />
+                  <span>KPI SLA:</span>
+                  <span className="font-mono font-bold">{kpiMetrics.onTimeRate}%</span>
+                  {kpiMetrics.overdueCount > 0 && (
+                    <span className="text-[10px] px-1 py-0.2 rounded bg-rose-500 text-white font-mono font-bold">
+                      {kpiMetrics.overdueCount} Overdue
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -6225,6 +6495,7 @@ export function NotionDatabaseTable({
                     else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[22%] px-2.5 py-2.5';
                     else if (colLower.includes('created')) widthClass = 'w-[9%] px-1.5 py-2.5';
                     else if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('tanggal selesai')) widthClass = 'w-[9%] px-1.5 py-2.5';
+                    else if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) widthClass = 'w-[10%] px-1.5 py-2.5';
                     else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2.5';
                     else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[11%] px-1.5 py-2.5';
                     else if (colLower.includes('priority') || colLower.includes('prioritas')) widthClass = 'w-[6%] px-1.5 py-2.5';
@@ -6234,6 +6505,7 @@ export function NotionDatabaseTable({
                     if (isNum) widthClass = 'w-16 text-center px-3.5 py-3 whitespace-nowrap';
                     else if (isJudul) widthClass = 'min-w-[260px] px-3.5 py-3 whitespace-nowrap';
                     else if (colLower.includes('keterangan')) widthClass = 'w-[360px] min-w-[280px] max-w-[450px] px-3.5 py-3 overflow-hidden';
+                    else if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) widthClass = 'min-w-[145px] px-3.5 py-3 whitespace-nowrap';
                     else widthClass = 'px-3.5 py-3 whitespace-nowrap';
                   }
 
@@ -6255,6 +6527,8 @@ export function NotionDatabaseTable({
                           <span className={`truncate font-semibold ${isNotionLight ? 'text-[#37352f]' : 'text-slate-300'}`}>
                             {colLower.includes('tanggal selesai') || colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')
                               ? 'Tanggal Selesai'
+                              : (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu'))
+                              ? 'Due Date'
                               : colHeader}
                           </span>
                           {isSorted && (
@@ -7137,6 +7411,32 @@ export function NotionDatabaseTable({
                                           -
                                         </span>
                                       )}
+                                    </td>
+                                  );
+                                }
+
+                                // 4b. Due Date Column (Batas Waktu / Parameter Wajib KPI)
+                                if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) {
+                                  const compVal = getRowVal(row, 'Tanggal Selesai') || getRowVal(row, 'Completed Time');
+                                  const statusVal = getRowVal(row, 'Status');
+
+                                  return (
+                                    <td key={colName} style={getColStyle(colName)} className={`font-sans border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${
+                                      fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'
+                                    }`}>
+                                      <NotionDueDateCell
+                                        value={val}
+                                        completedDate={compVal}
+                                        status={statusVal}
+                                        isSubItem={isSubItem}
+                                        compact={fitPageMode}
+                                        isNotionLight={isNotionLight}
+                                        onChange={(newDate) => {
+                                          handleUpdateCellDirect(actualRowIndex, colName, newDate);
+                                        }}
+                                      />
                                     </td>
                                   );
                                 }
@@ -9245,23 +9545,44 @@ export function NotionDatabaseTable({
                 </div>
               </div>
 
-              {/* 6. Created Time */}
-              <div>
-                <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                  Created Time
-                </label>
-                <input
-                  type="text"
-                  value={rowFormData['Created Time'] || ''}
-                  onChange={(e) => setRowFormData({ ...rowFormData, 'Created Time': e.target.value })}
-                  className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-mono text-[11px]"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #141414)',
-                    borderColor: 'var(--border-main, #334155)',
-                    color: 'var(--text-main, #f1f5f9)'
-                  }}
-                  placeholder="YYYY-MM-DD HH:mm"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                {/* 6. Created Time */}
+                <div>
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
+                    Created Time
+                  </label>
+                  <input
+                    type="text"
+                    value={rowFormData['Created Time'] || ''}
+                    onChange={(e) => setRowFormData({ ...rowFormData, 'Created Time': e.target.value })}
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-mono text-[11px]"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
+                    placeholder="YYYY-MM-DD"
+                  />
+                </div>
+
+                {/* 7. Due Date (Batas Waktu KPI) */}
+                <div>
+                  <label className="block font-bold uppercase tracking-wider mb-1 text-[10px] text-teal-600 dark:text-teal-400">
+                    Due Date (Parameter KPI Wajib)
+                  </label>
+                  <input
+                    type="text"
+                    value={rowFormData['Due Date'] || rowFormData['Target Selesai'] || rowFormData['Deadline'] || ''}
+                    onChange={(e) => setRowFormData({ ...rowFormData, 'Due Date': e.target.value })}
+                    className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none font-mono text-[11px]"
+                    style={{
+                      backgroundColor: 'var(--input-bg, #141414)',
+                      borderColor: 'var(--border-main, #334155)',
+                      color: 'var(--text-main, #f1f5f9)'
+                    }}
+                    placeholder="DD-MM-YYYY"
+                  />
+                </div>
               </div>
 
               {/* Modal Footer Buttons */}
