@@ -1,5 +1,13 @@
 import { Readable } from 'stream';
 process.env.TZ = 'Asia/Jayapura';
+
+// Guard against unhandled DB errors / transient connection spikes crashing the whole server
+process.on('unhandledRejection', (reason: any) => {
+  console.error('⚠️ [Server Safety] Unhandled Rejection captured:', reason?.message || reason);
+});
+process.on('uncaughtException', (err: any) => {
+  console.error('⚠️ [Server Safety] Uncaught Exception captured:', err?.message || err);
+});
 import PDFDocument from 'pdfkit-table';
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';

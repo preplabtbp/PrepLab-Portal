@@ -117,7 +117,11 @@ export function parseTasklist(text?: string | null): TasklistProgress {
       }
 
       // Strip any other HTML comments or dangling comment brackets from title
-      rawContent = rawContent.replace(/<!--[\s\S]*?-->/gi, '').replace(/<!--.*$/gi, '').trim();
+      rawContent = rawContent
+        .replace(/<!--[\s\S]*?-->/gi, '')
+        .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/gi, '')
+        .replace(/<!--.*$/gi, '')
+        .trim();
 
       // If we have legacy note and notes is empty, synthesize into notes array
       if (note && notes.length === 0) {
@@ -151,7 +155,14 @@ export function parseTasklist(text?: string | null): TasklistProgress {
         checkedDate: checkedDate || undefined
       });
     } else if (trimmed) {
-      nonTaskLines.push(trimmed);
+      const cleanedLine = trimmed
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+        .replace(/<!--.*$/g, '')
+        .trim();
+      if (cleanedLine && cleanedLine !== '-' && cleanedLine !== '•') {
+        nonTaskLines.push(cleanedLine);
+      }
     }
   }
 
@@ -525,7 +536,12 @@ export function removeTasklistItem(text: string, targetIndex: number): string {
  */
 export function updateTasklistItemTitle(text: string, targetIndex: number, newTitle: string): string {
   if (!text) return '';
-  const sanitized = newTitle.replace(/[\r\n]+/g, ' ').replace(/<!--[\s\S]*?-->/gi, '').trim();
+  const sanitized = newTitle
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/<!--[\s\S]*?-->/gi, '')
+    .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/gi, '')
+    .replace(/<!--.*$/gi, '')
+    .trim();
   if (!sanitized) return text;
   const hasBr = /<br\s*\/?>/i.test(text);
   const delimiter = hasBr ? '<br/>' : '\n';
@@ -739,8 +755,14 @@ export function applyColorToText(text: string, colorKey: string): string {
 export function markdownToVisualHtml(text?: string | null): string {
   if (!text || typeof text !== 'string') return '';
 
+  // 0. Strip internal HTML comments and dangling comment tags early so users never see code in rich text
+  let html = text
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+    .replace(/<!--.*$/g, '');
+
   // 1. Normalize line endings and <br/> tags to newlines
-  let html = text.replace(/\r\n/g, '\n').replace(/<br\s*\/?>/gi, '\n');
+  html = html.replace(/\r\n/g, '\n').replace(/<br\s*\/?>/gi, '\n');
 
   // 2. Separate inline bullet points and numbered points into individual lines
   html = html.replace(/([^\n])\s*•\s*/g, '$1\n• ');

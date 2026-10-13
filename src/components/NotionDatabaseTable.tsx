@@ -60,7 +60,9 @@ import {
   TableProperties,
   GripVertical,
   Pin,
-  Lock
+  Lock,
+  Target,
+  ClipboardCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -454,6 +456,8 @@ export const getDisplayTitle = (title: string): string => {
     .replace(/^[↳↪\s]+/, '')
     .replace(/^\[[ xX]\]\s*/, '')
     .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+    .replace(/<!--.*$/g, '')
     .trim();
 };
 
@@ -679,6 +683,22 @@ export function migrateChecklistsInRows(
           migratedCount++;
         }
       });
+
+      // Enterprise Best Practice: Clean extracted checklists from parent's Keterangan so they do not duplicate
+      const nonChecklist = ketVal
+        .split('\n')
+        .filter(l => !l.trim().match(/^[-*•]\s*\[([ xX])\]/))
+        .join('\n')
+        .trim();
+      row['Keterangan'] = nonChecklist || '-';
+    } else if (hasExistingSubRows && taskProg.hasTasklist && taskProg.items.length > 0) {
+      // Subtasks already exist as relational rows; sanitize parent's Keterangan from duplicate checklist lines
+      const nonChecklist = ketVal
+        .split('\n')
+        .filter(l => !l.trim().match(/^[-*•]\s*\[([ xX])\]/))
+        .join('\n')
+        .trim();
+      row['Keterangan'] = nonChecklist || '-';
     }
   }
 
@@ -736,8 +756,13 @@ export function extractMarkdownTableFromContent(content: string): {
         const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
         const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
 
-        const isPin = rowStr.includes('<!--pin-->') || rowStr.includes('<!--pinned-->');
-        const cleanTitle = (rowObj['Jenis kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '').replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+        const isPin = rowStr.includes('<!--pin') || rowStr.includes('<!pin') || rowStr.includes('<!--pinned');
+        const cleanTitle = (rowObj['Jenis kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '')
+          .replace(/^↳\s*/, '')
+          .replace(/<!--[\s\S]*?-->/g, '')
+          .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+          .replace(/<!--.*$/g, '')
+          .trim();
         const safeTitle = cleanTitle.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
         rowObj.id = taskMatch ? taskMatch[1].trim() : `task_${i}_${safeTitle}`;
@@ -853,7 +878,10 @@ export function NotionDatabaseTable({
   }, [title, section]);
 
   // Logbook Dynamic Meta & Date View Filter State
+  const [logbookActiveTab, setLogbookActiveTab] = useState<'changelog' | 'planning'>('changelog');
   const [logbookDateFilter, setLogbookDateFilter] = useState<'today' | 'yesterday' | 'all'>('today');
+  const [logbookFilterMode, setLogbookFilterMode] = useState<'focus' | 'all' | 'completed'>('focus');
+  const [expandedCompletedSubtasks, setExpandedCompletedSubtasks] = useState<Record<string, boolean>>({});
   const [logbookMeta, setLogbookMeta] = useState<LogbookMeta>(() => extractLogbookMeta(beforeText || '').meta);
 
   useEffect(() => {
@@ -1227,9 +1255,9 @@ export function NotionDatabaseTable({
     if (!row) return false;
     if (String(row.isPinned) === 'true' || (row as any).isPinned === true || String((row as any)._pinned) === 'true' || (row as any)._pinned === true) return true;
     const ket = typeof row['Keterangan'] === 'string' ? row['Keterangan'] : String(row['Keterangan'] || '');
-    if (ket.includes('<!--pin-->') || ket.includes('<!--pinned-->')) return true;
+    if (ket.includes('<!--pin') || ket.includes('<!pin') || ket.includes('<!--pinned')) return true;
     const jk = typeof row['Jenis kegiatan'] === 'string' ? row['Jenis kegiatan'] : String(row['Jenis kegiatan'] || '');
-    if (jk.includes('<!--pin-->') || jk.includes('<!--pinned-->')) return true;
+    if (jk.includes('<!--pin') || jk.includes('<!pin') || jk.includes('<!--pinned')) return true;
     const rowId = row.id ? String(row.id) : '';
     if (rowId && pinnedRowKeys.includes(rowId)) return true;
     const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
@@ -1249,7 +1277,7 @@ export function NotionDatabaseTable({
         if (!isSubItemRow(r)) {
           const ket = r['Keterangan'] || '';
           const jk = r['Jenis kegiatan'] || '';
-          const isPinTag = ket.includes('<!--pin-->') || ket.includes('<!--pinned-->') || jk.includes('<!--pin-->') || r.isPinned === 'true';
+          const isPinTag = ket.includes('<!--pin') || ket.includes('<!pin') || ket.includes('<!--pinned') || jk.includes('<!--pin') || jk.includes('<!pin') || r.isPinned === 'true';
           const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
           const key = r.id ? String(r.id) : cleanTitle;
           if (isPinTag && key && !nextKeys.includes(key)) {
@@ -2035,6 +2063,29 @@ export function NotionDatabaseTable({
     }
     return fallbackVal ?? row[colName] ?? '';
   }, []);
+
+  // Logbook Parent Task Metrics for Enterprise Focus Mode
+  const logbookTaskCounts = useMemo(() => {
+    let active = 0;
+    let closed = 0;
+    let total = 0;
+    localRows.forEach(r => {
+      if (!isSubItemRow(r)) {
+        const title = (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || getRowVal(r, 'Judul') || '').trim();
+        if (title.length > 0) {
+          total++;
+          const status = (getRowVal(r, 'Status') || '').toUpperCase().trim();
+          const isClosed = status.includes('CLOSE') || status.includes('SELESAI') || status.includes('DONE') || status.includes('RESOLVED');
+          if (isClosed) {
+            closed++;
+          } else {
+            active++;
+          }
+        }
+      }
+    });
+    return { active, closed, total };
+  }, [localRows, getRowVal]);
 
   // Fetch comments from backend
   const fetchComments = useCallback(async () => {
@@ -2954,11 +3005,15 @@ export function NotionDatabaseTable({
     const nowIso = new Date().toISOString();
     parentRow['Last Modified'] = nowIso;
 
-    // Sync subtask into parent row's Keterangan checklist so Discussion Modal stays 100% synchronized
+    // Enterprise Best Practice: Subtasks exist strictly as relational child rows (parentId: parentId).
+    // Clean any legacy checklist lines from parent's Keterangan if present so it remains strictly narrative.
     const currentKet = getRowVal(parentRow, 'Keterangan') || '';
-    const newChecklistLine = `- [ ] ${cleanTitle}`;
-    const updatedKet = currentKet.trim() ? `${currentKet.trim()}\n${newChecklistLine}` : newChecklistLine;
-    parentRow['Keterangan'] = updatedKet;
+    const cleanKet = currentKet
+      .split('\n')
+      .filter(l => !l.trim().match(/^[-*•]\s*\[([ xX])\]/))
+      .join('\n')
+      .trim();
+    parentRow['Keterangan'] = cleanKet || '-';
 
     const subId = `sub_${parentId}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const formattedTitle = `↳ [ ] ${cleanTitle}`;
@@ -3087,6 +3142,7 @@ export function NotionDatabaseTable({
       await saveTableToBackend(nextRows);
       toast.success(`Tugas "${carriedTask['Jenis kegiatan'] || carriedTask['Jenis Kegiatan'] || 'Tugas'}" berhasil dilanjutkan ke hari ini!`);
       setLogbookDateFilter('today');
+      setLogbookActiveTab('planning');
     } catch (err: any) {
       console.error('Error carry over task:', err);
       toast.error('Gagal melanjutkan tugas: ' + (err?.message || 'Error'));
@@ -3230,7 +3286,12 @@ export function NotionDatabaseTable({
 
     const parentId = parentRow.id || `task_${Date.now()}_${parentIdx}_${Math.random().toString(36).substr(2, 6)}`;
     const updatedParentRow: TableRowData = { ...parentRow, id: parentId };
-    updatedParentRow['Keterangan'] = newKetVal;
+    const cleanKet = (newKetVal || '')
+      .split('\n')
+      .filter(l => !l.trim().match(/^[-*•]\s*\[([ xX])\]/))
+      .join('\n')
+      .trim();
+    updatedParentRow['Keterangan'] = cleanKet || '-';
     updatedParentRow['Last Modified'] = nowIso;
 
     // Temukan range sub-items lama di bawah parentIdx
@@ -3408,17 +3469,26 @@ export function NotionDatabaseTable({
           }
         }
 
-        // Rebuild the parent row's Keterangan checklists so it mirrors the table rows exactly
+        // Enterprise Best Practice: Subtasks exist strictly as child rows, NEVER duplicated into Keterangan.
+        // Clean any legacy checklist lines from parent's Keterangan so it stays strictly narrative.
         const existingKet = getRowVal(parentRow, 'Keterangan') || '';
-        const nonChecklistLines = existingKet.split('\n').filter(line => !line.trim().match(/^[-*]\s*\[([ xX])\]/));
-        const subChecklistLines = siblingSubIndices.map(sIdx => {
-          const sRow = nextRows[sIdx];
-          const sComp = isSubItemCompleted(sRow);
-          const sTitle = getDisplayTitle(getRowVal(sRow, 'Jenis kegiatan') || getRowVal(sRow, 'Jenis Kegiatan') || '');
-          return `- [${sComp ? 'x' : ' '}] ${sTitle}`;
-        });
-        parentRow['Keterangan'] = [...nonChecklistLines, ...subChecklistLines].join('\n').trim();
+        const cleanKet = existingKet
+          .split('\n')
+          .filter(line => !line.trim().match(/^[-*•]\s*\[([ xX])\]/))
+          .join('\n')
+          .trim();
+        parentRow['Keterangan'] = cleanKet || '-';
         nextRows[parentIdx] = parentRow;
+
+        // Auto-expand completed subtasks drawer so user has instant visual confirmation (no "disappearing shock")
+        if (nextCompleted) {
+          const pKey = parentRow.id || String(parentIdx);
+          setExpandedCompletedSubtasks(prev => ({
+            ...prev,
+            [pKey]: true,
+            [parentIdx]: true
+          }));
+        }
 
         if (selectedRow && (selectedRow === localRows[parentIdx] || (selectedRow.id && selectedRow.id === parentRow.id))) {
           setSelectedRow(parentRow);
@@ -3478,12 +3548,20 @@ export function NotionDatabaseTable({
       data.isPinned = 'true';
       (data as any)._pinned = 'true';
     }
-    // Clean <!--pin--> from the textarea so user gets clean text without comment tags
+    // Clean comments and pin tags from the textarea so user gets clean text without comment tags
     if (typeof data['Keterangan'] === 'string') {
-      data['Keterangan'] = data['Keterangan'].replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
+      data['Keterangan'] = data['Keterangan']
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+        .replace(/<!--.*$/g, '')
+        .trim();
     }
-    // Ensure both casing variants of title are explicitly populated
-    const titleVal = getRowVal(row, 'Jenis Kegiatan') || getRowVal(row, 'Jenis kegiatan') || '';
+    // Ensure both casing variants of title are explicitly populated and clean of comments
+    const titleVal = (getRowVal(row, 'Jenis Kegiatan') || getRowVal(row, 'Jenis kegiatan') || '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+      .replace(/<!--.*$/g, '')
+      .trim();
     data['Jenis Kegiatan'] = titleVal;
     data['Jenis kegiatan'] = titleVal;
     setRowFormData(data);
@@ -3714,6 +3792,59 @@ export function NotionDatabaseTable({
       return false;
     };
 
+    // 0. Logbook Focus Mode Filter (Focus Area vs All vs Completed)
+    if (isLogbookTable) {
+      if (logbookFilterMode === 'focus') {
+        const passingParentRows = new Set<TableRowData>();
+        localRows.forEach(r => {
+          if (isPinnedOrChildOfPinned(r)) {
+            passingParentRows.add(r);
+            return;
+          }
+          if (!isSubItemRow(r)) {
+            const status = (getRowVal(r, 'Status') || '').toUpperCase().trim();
+            const isClosed = status.includes('CLOSE') || status.includes('SELESAI') || status.includes('DONE') || status.includes('RESOLVED');
+            if (!isClosed) {
+              passingParentRows.add(r);
+            }
+          }
+        });
+
+        result = result.filter(row => {
+          if (isPinnedOrChildOfPinned(row)) return true;
+          if (!isSubItemRow(row)) {
+            return passingParentRows.has(row);
+          }
+          const parent = rowToParentMap.get(row);
+          return parent ? passingParentRows.has(parent) : false;
+        });
+      } else if (logbookFilterMode === 'completed') {
+        const passingParentRows = new Set<TableRowData>();
+        localRows.forEach(r => {
+          if (isPinnedOrChildOfPinned(r)) {
+            passingParentRows.add(r);
+            return;
+          }
+          if (!isSubItemRow(r)) {
+            const status = (getRowVal(r, 'Status') || '').toUpperCase().trim();
+            const isClosed = status.includes('CLOSE') || status.includes('SELESAI') || status.includes('DONE') || status.includes('RESOLVED');
+            if (isClosed) {
+              passingParentRows.add(r);
+            }
+          }
+        });
+
+        result = result.filter(row => {
+          if (isPinnedOrChildOfPinned(row)) return true;
+          if (!isSubItemRow(row)) {
+            return passingParentRows.has(row);
+          }
+          const parent = rowToParentMap.get(row);
+          return parent ? passingParentRows.has(parent) : false;
+        });
+      }
+    }
+
     // 1. Search Query Filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -3906,7 +4037,7 @@ export function NotionDatabaseTable({
     });
 
     return result;
-  }, [localRows, searchQuery, selectedStatuses, selectedPriorities, selectedPics, sortColumn, sortDirection, getRowVal, isRowPinned, rowToParentMap]);
+  }, [localRows, searchQuery, selectedStatuses, selectedPriorities, selectedPics, sortColumn, sortDirection, getRowVal, isRowPinned, rowToParentMap, isLogbookTable, logbookFilterMode]);
 
   // Grouped rows for Notion Database Sections (e.g. 'Non Routine Lainnya (22)', 'PTK GTS (2)')
   const groupedRowsData = useMemo(() => {
@@ -4779,7 +4910,15 @@ export function NotionDatabaseTable({
     if (!text || text === '-' || text === '•') return <span className="font-sans text-xs text-slate-400">-</span>;
     // Normalize <br/>, <br>, <br /> to newlines
     const normalized = text.replace(/<br\s*\/?>/gi, '\n');
-    const cleanText = normalized.trim();
+    const cleanText = normalized
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+      .replace(/<!--.*$/g, '')
+      .trim();
+
+    if (!cleanText || cleanText === '-' || cleanText === '•' || cleanText === '---') {
+      return <span className="font-sans text-xs text-slate-400">-</span>;
+    }
 
     return (
       <div 
@@ -4930,7 +5069,10 @@ export function NotionDatabaseTable({
             {isLogbookTable && (
               <button
                 type="button"
-                onClick={() => setShowLogbookRecModal(true)}
+                onClick={() => {
+                  setLogbookActiveTab('planning');
+                  setShowLogbookRecModal(true);
+                }}
                 className="h-7 px-2.5 rounded-lg bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-teal-400/30 mr-1"
                 title="Buka Rekomendasi Rencana Tugas Hari Ini (Routine & Non-Routine yang Aktif)"
               >
@@ -5806,10 +5948,158 @@ export function NotionDatabaseTable({
         </div>
       )}
 
+      {/* Logbook Unified 2-Tab Navigation (Changelog Harian vs Planning Hari Ini) */}
+      {isLogbookTable && (
+        <div className="mb-4 space-y-3">
+          {/* Top Segmented Control Tab Switcher */}
+          <div className={`p-1.5 rounded-2xl border flex flex-wrap items-center justify-between gap-3 shadow-2xs ${
+            isNotionLight ? 'bg-slate-100/90 border-slate-200/90' : 'bg-slate-900/90 border-slate-800'
+          }`}>
+            <div className="flex items-center gap-1.5 flex-1 max-w-xl">
+              <button
+                type="button"
+                onClick={() => setLogbookActiveTab('changelog')}
+                className={`flex-1 py-2 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  logbookActiveTab === 'changelog'
+                    ? 'bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-300 shadow-sm border border-slate-200/70 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+              >
+                <ClipboardCheck className={`w-4 h-4 ${logbookActiveTab === 'changelog' ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`} />
+                <span>Changelog & Evaluasi Harian</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-500/20">
+                  Audit
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setLogbookActiveTab('planning')}
+                className={`flex-1 py-2 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  logbookActiveTab === 'planning'
+                    ? 'bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-300 shadow-sm border border-slate-200/70 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+              >
+                <Target className={`w-4 h-4 ${logbookActiveTab === 'planning' ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400'}`} />
+                <span>Planning Hari Ini (Focus Area)</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                  {logbookTaskCounts.active} Aktif
+                </span>
+              </button>
+            </div>
+
+            <div className="hidden lg:flex items-center gap-2 pr-2 text-xs text-slate-500 dark:text-slate-400">
+              <span className="inline-block w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+              <span>{logbookActiveTab === 'changelog' ? 'Review & salin laporan evaluasi kinerja' : 'Kelola rencana & eksekusi tugas hari ini'}</span>
+            </div>
+          </div>
+
+          {/* TAB 1: Changelog Harian with Interactive Date Filter */}
+          {logbookActiveTab === 'changelog' && (
+            <LogbookChangelogCard
+              sectionName={section || title || 'Prep & Lab'}
+              allRows={localRows}
+              generalNotes={logbookMeta.generalNotes || {}}
+              onCarryOverTask={handleCarryOverTask}
+              onSwitchToPlanning={() => setLogbookActiveTab('planning')}
+              onViewRawTable={() => {
+                setLogbookActiveTab('planning');
+                setLogbookFilterMode('all');
+              }}
+              isNotionLight={isNotionLight}
+            />
+          )}
+
+          {/* TAB 2: Planning Hari Ini Focus Area View Switcher Bar */}
+          {logbookActiveTab === 'planning' && (
+            <div className={`px-3 py-2 rounded-xl border flex flex-wrap items-center justify-between gap-2 text-xs transition-all ${
+              isNotionLight 
+                ? 'bg-slate-50/90 border-slate-200/80 text-slate-700 shadow-2xs' 
+                : 'bg-slate-900/60 border-slate-800 text-slate-300 shadow-2xs'
+            }`}>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold shrink-0">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900 dark:text-slate-100">Mode Focus Area:</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:inline">
+                    {logbookFilterMode === 'focus' 
+                      ? '🎯 Focus Area — Menampilkan tugas & subtask aktif, subtask selesai otomatis diringkas'
+                      : logbookFilterMode === 'completed'
+                      ? '✅ Arsip Selesai — Menampilkan riwayat tugas yang telah selesai'
+                      : '📋 Semua Tugas — Menampilkan seluruh tugas aktif dan selesai'}
+                  </span>
+                </div>
+              </div>
+
+              <div className={`flex items-center p-0.5 rounded-lg border ${
+                isNotionLight ? 'bg-white border-slate-200' : 'bg-slate-800/80 border-slate-700'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => setLogbookFilterMode('focus')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    logbookFilterMode === 'focus'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                  title="Tampilkan hanya tugas yang belum selesai"
+                >
+                  <span>🎯 Focus Area</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                    logbookFilterMode === 'focus' ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    {logbookTaskCounts.active}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLogbookFilterMode('all')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    logbookFilterMode === 'all'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                  title="Tampilkan seluruh tugas"
+                >
+                  <span>Semua Tugas</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                    logbookFilterMode === 'all' ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    {logbookTaskCounts.total}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLogbookFilterMode('completed')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    logbookFilterMode === 'completed'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                  title="Tampilkan tugas yang sudah selesai"
+                >
+                  <span>Selesai</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                    logbookFilterMode === 'completed' ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    {logbookTaskCounts.closed}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* 1. TABLE VIEW (Exact Notion Column Hierarchy & Zoom / Fit Page)            */}
       {/* ========================================================================= */}
-      {viewMode === 'table' && (
+      {(!isLogbookTable || logbookActiveTab === 'planning') && viewMode === 'table' && (
         <div 
           ref={tableScrollRef}
           onScroll={handleTableScroll}
@@ -6732,7 +7022,11 @@ export function NotionDatabaseTable({
                                     >
                                       {isEditingThis ? (
                                         <NotionInlineEditor
-                                          initialValue={val}
+                                          initialValue={val
+                                            .replace(/<!--[\s\S]*?-->/g, '')
+                                            .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+                                            .replace(/<!--.*$/g, '')
+                                            .trim()}
                                           fieldLabel="Keterangan"
                                           multiline={true}
                                           isNotionLight={isNotionLight}
@@ -6748,7 +7042,12 @@ export function NotionDatabaseTable({
                                           className="relative group/cell flex items-start justify-between gap-1 cursor-pointer font-sans w-full min-w-0 overflow-hidden"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
+                                            const cleanInitial = val
+                                              .replace(/<!--[\s\S]*?-->/g, '')
+                                              .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+                                              .replace(/<!--.*$/g, '')
+                                              .trim();
+                                            setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: cleanInitial, multiline: true });
                                           }}
                                         >
                                           <div className={`flex-1 min-w-0 overflow-hidden font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
@@ -6758,7 +7057,12 @@ export function NotionDatabaseTable({
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: val, multiline: true });
+                                              const cleanInitial = val
+                                                .replace(/<!--[\s\S]*?-->/g, '')
+                                                .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+                                                .replace(/<!--.*$/g, '')
+                                                .trim();
+                                              setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: cleanInitial, multiline: true });
                                             }}
                                             title="Edit keterangan langsung"
                                             className="opacity-0 group-hover/cell:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-teal-400 transition-all shrink-0 cursor-pointer"
@@ -7475,39 +7779,105 @@ export function NotionDatabaseTable({
 
                               {/* Render Sub-items if Parent is expanded */}
                               {isParentExpanded && (() => {
-                                // Subtask yang sudah terceklis (selesai) otomatis bergabung di bagian atas
-                                const sortedSubItems = [...hItem.subItems].sort((a, b) => {
-                                  const aComp = isSubItemCompleted(a.row);
-                                  const bComp = isSubItemCompleted(b.row);
-                                  if (aComp && !bComp) return -1;
-                                  if (!aComp && bComp) return 1;
-                                  return 0;
-                                });
+                                const activeSubItems = hItem.subItems.filter(sub => !isSubItemCompleted(sub.row));
+                                const completedSubItems = hItem.subItems.filter(sub => isSubItemCompleted(sub.row));
+                                const isCompletedCollapsed = isLogbookTable && logbookFilterMode === 'focus' && !expandedCompletedSubtasks[parentKey];
 
-                                return sortedSubItems.map((sub) => {
-                                  const subKey = sub.row.id || `${sub.actualIndex}-${sub.row['Jenis kegiatan'] || ''}`;
-                                  const isSubExpanded = Boolean(expandedParents[`sub-${sub.actualIndex}`] || expandedParents[`sub-${subKey}`]);
-                                  return (
-                                    <React.Fragment key={`sub-${subKey}`}>
-                                      {renderRowItem(
-                                        sub.row, 
-                                        sub.actualIndex, 
-                                        true, 
-                                        false, 
-                                        isSubExpanded, 
-                                        undefined,
-                                        (e) => {
+                                return (
+                                  <>
+                                    {/* 1. Active (Unfinished) Subtasks - Always on top for Focus */}
+                                    {activeSubItems.map((sub) => {
+                                      const subKey = sub.row.id || `${sub.actualIndex}-${sub.row['Jenis kegiatan'] || ''}`;
+                                      const isSubExpanded = Boolean(expandedParents[`sub-${sub.actualIndex}`] || expandedParents[`sub-${subKey}`]);
+                                      return (
+                                        <React.Fragment key={`sub-${subKey}`}>
+                                          {renderRowItem(
+                                            sub.row, 
+                                            sub.actualIndex, 
+                                            true, 
+                                            false, 
+                                            isSubExpanded, 
+                                            undefined,
+                                            (e) => {
+                                              e.stopPropagation();
+                                              setExpandedParents(prev => ({
+                                                ...prev,
+                                                [`sub-${sub.actualIndex}`]: !isSubExpanded,
+                                                [`sub-${subKey}`]: !isSubExpanded
+                                              }));
+                                            }
+                                          )}
+                                        </React.Fragment>
+                                      );
+                                    })}
+
+                                    {/* 2. Completed Subtasks Collapsible Summary / Divider in Focus Mode */}
+                                    {completedSubItems.length > 0 && isLogbookTable && logbookFilterMode === 'focus' && (
+                                      <tr
+                                        key={`toggle-completed-${parentKey}`}
+                                        className={`border-b text-xs transition-colors cursor-pointer select-none ${
+                                          isNotionLight
+                                            ? 'hover:bg-slate-100/80 bg-slate-50/60 text-slate-500 border-[#e9e9e8]'
+                                            : 'hover:bg-slate-800/60 bg-slate-900/40 text-slate-400 border-[#2d2d2d]'
+                                        }`}
+                                        onClick={(e) => {
                                           e.stopPropagation();
-                                          setExpandedParents(prev => ({
+                                          setExpandedCompletedSubtasks(prev => ({
                                             ...prev,
-                                            [`sub-${sub.actualIndex}`]: !isSubExpanded,
-                                            [`sub-${subKey}`]: !isSubExpanded
+                                            [parentKey]: !prev[parentKey]
                                           }));
-                                        }
-                                      )}
-                                    </React.Fragment>
-                                  );
-                                });
+                                        }}
+                                        title={isCompletedCollapsed ? "Klik untuk melihat subtask yang sudah selesai" : "Klik untuk meringkas subtask selesai"}
+                                      >
+                                        {(isSelectionModeActive || selectedRowIndices.size > 0) && (
+                                          <td className={`px-2 py-1 text-center border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                        )}
+                                        <td className={`px-3 py-1 text-center font-mono text-slate-400 text-xs border-r ${isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'}`} />
+                                        <td colSpan={displayHeaders.length + 1} className="px-6 py-1.5">
+                                          <div className="flex items-center gap-2 text-[11px] font-medium">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-semibold shadow-2xs">
+                                              <Check className="w-3 h-3 text-emerald-500" />
+                                              <span>{completedSubItems.length} Subtask Selesai</span>
+                                            </span>
+                                            <span className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-1 font-sans">
+                                              {isCompletedCollapsed ? (
+                                                <><span>(Klik untuk lihat {completedSubItems.length} subtask)</span><ChevronDown className="w-3 h-3" /></>
+                                              ) : (
+                                                <><span>(Klik untuk ringkas)</span><ChevronUp className="w-3 h-3" /></>
+                                              )}
+                                            </span>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+
+                                    {/* 3. Completed Subtasks (Shown when expanded or outside Focus mode) */}
+                                    {(!isCompletedCollapsed || !isLogbookTable || logbookFilterMode !== 'focus') && completedSubItems.map((sub) => {
+                                      const subKey = sub.row.id || `${sub.actualIndex}-${sub.row['Jenis kegiatan'] || ''}`;
+                                      const isSubExpanded = Boolean(expandedParents[`sub-${sub.actualIndex}`] || expandedParents[`sub-${subKey}`]);
+                                      return (
+                                        <React.Fragment key={`sub-${subKey}`}>
+                                          {renderRowItem(
+                                            sub.row, 
+                                            sub.actualIndex, 
+                                            true, 
+                                            false, 
+                                            isSubExpanded, 
+                                            undefined,
+                                            (e) => {
+                                              e.stopPropagation();
+                                              setExpandedParents(prev => ({
+                                                ...prev,
+                                                [`sub-${sub.actualIndex}`]: !isSubExpanded,
+                                                [`sub-${subKey}`]: !isSubExpanded
+                                              }));
+                                            }
+                                          )}
+                                        </React.Fragment>
+                                      );
+                                    })}
+                                  </>
+                                );
                               })()}
 
                               {/* + New sub-item row if Parent is expanded */}
@@ -7719,7 +8089,7 @@ export function NotionDatabaseTable({
       )}
 
       {/* Floating Horizontal Viewport Scrollbar (Pinned to bottom of viewport, transparent when idle, appears on bottom hover) */}
-      {viewMode === 'table' && hasHorizontalOverflow && isTableVisible && (
+      {(!isLogbookTable || logbookActiveTab === 'planning') && viewMode === 'table' && hasHorizontalOverflow && isTableVisible && (
         <div
           className="fixed bottom-0 left-0 right-0 z-40 group/floating-scroll py-1 px-4 flex justify-center pointer-events-none transition-all duration-300"
           style={{ zIndex: 45 }}
@@ -7744,7 +8114,7 @@ export function NotionDatabaseTable({
       {/* ========================================================================= */}
       {/* 2. BOARD VIEW (Kanban by Status)                                          */}
       {/* ========================================================================= */}
-      {viewMode === 'board' && (
+      {(!isLogbookTable || logbookActiveTab === 'planning') && viewMode === 'board' && (
         <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" style={{ backgroundColor: 'var(--bg-main, #141414)' }}>
           {['Open', 'On Progress', 'Closed', 'Canceled'].map((laneStatus) => {
             const laneRows = filteredRows.filter((r) => {
@@ -7845,7 +8215,7 @@ export function NotionDatabaseTable({
       {/* ========================================================================= */}
       {/* 3. CARDS / LIST VIEW                                                      */}
       {/* ========================================================================= */}
-      {viewMode === 'list' && (
+      {(!isLogbookTable || logbookActiveTab === 'planning') && viewMode === 'list' && (
         <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5" style={{ backgroundColor: 'var(--bg-main, #141414)' }}>
           {filteredRows.map((row, idx) => (
             <div

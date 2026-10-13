@@ -981,7 +981,7 @@ export function BulletinBoard({
         const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
         const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
         const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
-        const isPin = rowStr.includes('<!--pin-->') || rowStr.includes('<!--pinned-->');
+        const isPin = rowStr.includes('<!--pin') || rowStr.includes('<!pin') || rowStr.includes('<!--pinned');
 
         if (taskMatch) rowObj.id = taskMatch[1].trim();
         if (parentMatch) {

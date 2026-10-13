@@ -20,6 +20,8 @@ interface ScreenTestTableProps {
   onClearAll: () => void;
   onAddRecord: (record: ScreenTestRecord) => void;
   specLimit?: number;
+  datasetName?: string;
+  datasetCode?: string;
 }
 
 export const ScreenTestTable: React.FC<ScreenTestTableProps> = ({
@@ -28,6 +30,8 @@ export const ScreenTestTable: React.FC<ScreenTestTableProps> = ({
   onClearAll,
   onAddRecord,
   specLimit = 95.00,
+  datasetName = 'Sample Smelter HPL',
+  datasetCode = 'HPL',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pass' | 'fail'>('all');
@@ -143,14 +147,14 @@ export const ScreenTestTable: React.FC<ScreenTestTableProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-              Screen Test Sample Smelter HPL
+              Tabel Rekapitulasi: Screen Test {datasetName}
             </h3>
             <span className="text-xs font-mono font-semibold text-slate-600 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-md">
               {filteredRecords.length} Baris Data
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            Tabel rekapitulasi pengujian ayakan 200 mesh (standar kelulusan min: {specLimit.toFixed(2)}%)
+            Tabel rekapitulasi pengujian ayakan {datasetCode ? `[${datasetCode}]` : ''} 200 mesh (standar kelulusan min: {specLimit.toFixed(2)}%)
           </p>
         </div>
 

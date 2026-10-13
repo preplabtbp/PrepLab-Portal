@@ -6,9 +6,9 @@ import * as schema from './schema';
 
 export const createPool = () => {
   const poolConfig: any = {
-    connectionTimeoutMillis: 30000,
-    idleTimeoutMillis: 30000,
-    max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 10,
+    connectionTimeoutMillis: 15000,
+    idleTimeoutMillis: 10000,
+    max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 6,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
     allowExitOnIdle: true,
