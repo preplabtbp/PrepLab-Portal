@@ -75,6 +75,25 @@ const longDate = (d: string) => { const x = parseYmd(d); return `${x.getUTCDate(
 const shiftDate = (d: string, days: number) => { const x = parseYmd(d); x.setUTCDate(x.getUTCDate() + days); return x.toISOString().slice(0, 10); };
 
 const portions = (v: string | null | undefined) => { const n = Number(String(v || '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; };
+// Hitungan per baris per waktu makan — SATU sumber untuk kartu ringkasan modul & Export TBP/GPS agar angkanya selalu sama.
+//  lapangan      = porsi kolom Lapangan (Bungkus Lapangan)
+//  bungkusKantin = Bungkus Kantin karyawan non-CR (NR): Pagi/Sore dari 1 (B.Pagi)/1 (B.Sore) atau "1" di Kantin; Siang/Sahur dari kolom Kantin
+//  makanKantin   = makan di kantin (karyawan Mess CR yang kolom Kantin-nya terisi)
+type MealSlot = 'pagi' | 'sahur' | 'siang' | 'sore' | 'takjil' | 'malam';
+const MEAL_SLOT_BY_GROUP: Record<string, MealSlot> = { Pagi: 'pagi', Sahur: 'sahur', Siang: 'siang', Sore: 'sore', Takjil: 'takjil', Malam: 'malam' };
+const isCRMess = (r: { statusMess: string | null }) => ['CR', 'MESS'].includes(String(r.statusMess || '').trim().toUpperCase());
+function mealCounts(r: MealOrder, slot: MealSlot): { lapangan: number; bungkusKantin: number; makanKantin: number } {
+  const lapangan = portions(r[`${slot}Lapangan` as LapanganKey]);
+  if (slot === 'takjil' || slot === 'malam') return { lapangan, bungkusKantin: 0, makanKantin: 0 };
+  const kantin = String(r[`${slot}Kantin` as KantinKey] || '').trim();
+  if (isCRMess(r)) return { lapangan, bungkusKantin: 0, makanKantin: kantin && kantin !== '-' ? 1 : 0 };
+  let bungkusKantin = 0;
+  if (slot === 'pagi' || slot === 'sore') bungkusKantin = portions(slot === 'pagi' ? r.batchPagi : r.batchSore) || (kantin === '1' ? 1 : 0);
+  else if (slot === 'siang') bungkusKantin = kantin && kantin !== '-' ? 1 : 0;
+  else bungkusKantin = kantin === '1' ? 1 : 0;
+  return { lapangan, bungkusKantin, makanKantin: 0 };
+}
+
 const cellTotal = (rows: MealOrder[], key: MealCellKey, kind: 'kantin' | 'lapangan') =>
   rows.reduce((s, r) => s + (kind === 'kantin' ? (String(r[key] || '').trim() ? 1 : 0) : portions(r[key])), 0);
 
@@ -459,23 +478,25 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     if (list.length === 0) { toast.error(`Tidak ada karyawan ${company} untuk diexport`); return; }
     const XLSX = await import('xlsx');
     const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase());
-    const kantinKeys: KantinKey[] = ['pagiKantin', 'siangKantin', 'soreKantin'];
-    // Sahur & Takjil hanya ditampilkan bila ada porsinya (mis. bulan puasa)
-    const withTakjil = list.some(r => portions(r.takjilLapangan) > 0);
-    const withSahur = list.some(r => portions(r.sahurLapangan) > 0);
-    const bungkusCols: { key: LapanganKey; label: string }[] = [
-      { key: 'pagiLapangan', label: 'Pagi' },
-      ...(withSahur ? [{ key: 'sahurLapangan' as LapanganKey, label: 'Sahur' }] : []),
-      { key: 'siangLapangan', label: 'Siang' }, { key: 'soreLapangan', label: 'Sore' },
-      ...(withTakjil ? [{ key: 'takjilLapangan' as LapanganKey, label: 'Takjil' }] : []),
-      { key: 'malamLapangan', label: 'Malam' },
+    // Kantin = makan di kantin (Mess CR); Bungkusan = Bungkus Lapangan + Bungkus Kantin (NR) — sama dengan kartu ringkasan modul
+    const kantinSlots: MealSlot[] = ['pagi', 'siang', 'sore'];
+    const bungkusOf = (r: MealOrder, slot: MealSlot) => { const c = mealCounts(r, slot); return c.lapangan + c.bungkusKantin; };
+    // Sahur & Takjil hanya ditampilkan bila ada bungkusnya (mis. bulan puasa)
+    const withTakjil = list.some(r => bungkusOf(r, 'takjil') > 0);
+    const withSahur = list.some(r => bungkusOf(r, 'sahur') > 0);
+    const bungkusCols: { slot: MealSlot; label: string }[] = [
+      { slot: 'pagi', label: 'Pagi' },
+      ...(withSahur ? [{ slot: 'sahur' as MealSlot, label: 'Sahur' }] : []),
+      { slot: 'siang', label: 'Siang' }, { slot: 'sore', label: 'Sore' },
+      ...(withTakjil ? [{ slot: 'takjil' as MealSlot, label: 'Takjil' }] : []),
+      { slot: 'malam', label: 'Malam' },
     ];
     const fixed = ['No', 'NIK', 'Nama', 'Shift', 'Jenis Meal', 'Status'];
     const header1 = [...fixed, 'Kantin', '', '', 'Bungkusan', ...bungkusCols.slice(1).map(() => '')];
     const header2 = [...fixed.map(() => ''), 'Pagi', 'Siang', 'Sore', ...bungkusCols.map(c => c.label)];
     const body = list.map((r, i) => {
-      const kantin = kantinKeys.map(k => (String(r[k] || '').trim() ? 1 : 0));
-      const bungkus = bungkusCols.map(c => portions(r[c.key]));
+      const kantin = kantinSlots.map(s => mealCounts(r, s).makanKantin);
+      const bungkus = bungkusCols.map(c => bungkusOf(r, c.slot));
       const jenisMeal = kantin.some(Boolean) || !bungkus.some(Boolean) ? 'Kantin' : 'Bungkusan';
       // Status CS (Cuti Site) dianggap tetap On Duty di site, tidak ditaruh CS lagi di kolom Status
       const sk = String(r.statusKerja || '').trim();
@@ -908,7 +929,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     );
   };
 
-  const isCRRow = (r: MealOrder) => ['CR', 'MESS'].includes(String(r.statusMess || '').trim().toUpperCase());
 
   const empByNikMap = useMemo(() => {
     return new Map<string, any>(employees.map((e: any) => [String(e.nik || '').trim().toUpperCase(), e]));
@@ -928,40 +948,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const buildSummaryCards = (list: MealOrder[]) => {
     return activeMealGroups.map(g => {
-      let lap = 0;
-      let bungkusKantin = 0;
-      let makanKantin = 0;
-
-      if (g.label === 'Pagi') {
-        lap = list.reduce((s, r) => s + portions(r.pagiLapangan), 0);
-        bungkusKantin = list.reduce((s, r) => {
-          if (isCRRow(r)) return s;
-          return s + (portions(r.batchPagi) || (r.pagiKantin === '1' ? 1 : 0));
-        }, 0);
-        makanKantin = list.reduce((s, r) => s + (isCRRow(r) && r.pagiKantin ? 1 : 0), 0);
-      } else if (g.label === 'Siang') {
-        lap = list.reduce((s, r) => s + portions(r.siangLapangan), 0);
-        bungkusKantin = list.reduce((s, r) => {
-          if (isCRRow(r)) return s;
-          return s + (r.siangKantin && r.siangKantin !== '-' ? 1 : 0);
-        }, 0);
-        makanKantin = list.reduce((s, r) => s + (isCRRow(r) && r.siangKantin ? 1 : 0), 0);
-      } else if (g.label === 'Sore') {
-        lap = list.reduce((s, r) => s + portions(r.soreLapangan), 0);
-        bungkusKantin = list.reduce((s, r) => {
-          if (isCRRow(r)) return s;
-          return s + (portions(r.batchSore) || (r.soreKantin === '1' ? 1 : 0));
-        }, 0);
-        makanKantin = list.reduce((s, r) => s + (isCRRow(r) && r.soreKantin ? 1 : 0), 0);
-      } else if (g.label === 'Sahur') {
-        lap = list.reduce((s, r) => s + portions(r.sahurLapangan), 0);
-        bungkusKantin = list.reduce((s, r) => s + (!isCRRow(r) && r.sahurKantin === '1' ? 1 : 0), 0);
-        makanKantin = list.reduce((s, r) => s + (isCRRow(r) && r.sahurKantin ? 1 : 0), 0);
-      } else if (g.label === 'Takjil') {
-        lap = list.reduce((s, r) => s + portions(r.takjilLapangan), 0);
-      } else if (g.label === 'Malam') {
-        lap = list.reduce((s, r) => s + portions(r.malamLapangan), 0);
-      }
+      const slot = MEAL_SLOT_BY_GROUP[g.label];
+      const sum = (k: keyof ReturnType<typeof mealCounts>) => (slot ? list.reduce((s, r) => s + mealCounts(r, slot)[k], 0) : 0);
+      const lap = sum('lapangan');
+      const bungkusKantin = sum('bungkusKantin');
+      const makanKantin = sum('makanKantin');
 
       const totalBungkus = lap + bungkusKantin;
 
