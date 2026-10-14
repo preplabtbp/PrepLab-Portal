@@ -261,7 +261,37 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     },
     staleTime: 30 * 1000,
   });
-  const rows = data?.data ?? [];
+  const rawRows = data?.data ?? [];
+  const isRowBelumLapor = (r: { keteranganLapor?: string | null }) => {
+    const v = String(r.keteranganLapor || '').trim();
+    return v === 'Belum Lapor' || /belum\s*lapor/i.test(v);
+  };
+
+  // Selama status "Belum Lapor" aktif dan belum dimatikan, seluruh orderan makanan, batch, dan catatan dijamin tetap kosong
+  const rows = useMemo(() => {
+    return rawRows.map(r => {
+      if (isRowBelumLapor(r)) {
+        return {
+          ...r,
+          keteranganLapor: 'Belum Lapor',
+          pagiKantin: null,
+          pagiLapangan: null,
+          sahurKantin: null,
+          sahurLapangan: null,
+          siangKantin: null,
+          siangLapangan: null,
+          soreKantin: null,
+          soreLapangan: null,
+          takjilLapangan: null,
+          malamLapangan: null,
+          batchPagi: null,
+          batchSore: null,
+          catatan: null,
+        };
+      }
+      return r;
+    });
+  }, [rawRows]);
   const canManage = !!data?.access?.canManage;
 
   // Master karyawan untuk isi otomatis form, golongan di Rekapan, & pemetaan PT TBP/GPS
@@ -305,6 +335,25 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const saveCell = async (row: MealOrder, patch: Partial<MealOrder>) => {
     if (!canManage) return;
+
+    // Jika row berstatus Belum Lapor dan aksi ini bukan mematikan status Belum Lapor:
+    // seluruh porsi makanan, batch, dan catatan dijamin tetap kosong
+    if (isRowBelumLapor(row) && patch.keteranganLapor === undefined) {
+      patch.pagiKantin = null;
+      patch.pagiLapangan = null;
+      patch.sahurKantin = null;
+      patch.sahurLapangan = null;
+      patch.siangKantin = null;
+      patch.siangLapangan = null;
+      patch.soreKantin = null;
+      patch.soreLapangan = null;
+      patch.takjilLapangan = null;
+      patch.malamLapangan = null;
+      patch.batchPagi = null;
+      patch.batchSore = null;
+      patch.catatan = null;
+    }
+
     const before: Partial<MealOrder> = Object.fromEntries(Object.keys(patch).map(k => [k, row[k as keyof MealOrder]]));
     patchLocal(row.id, patch);
     try {
@@ -343,8 +392,28 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     setSaving(true);
     try {
       // Hanya kolom form
+      const isBL = form.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(form.keteranganLapor || ''));
       const keys = ['nik', 'nama', 'shiftKerja', 'batchPagi', 'batchSore', ...PROFILE_FIELDS.map(f => f.key as string), ...MEAL_CELLS.map(c => c.key as string)];
       const body: Record<string, unknown> = { ...Object.fromEntries(keys.map(k => [k, form[k] ?? ''])), orderDate: date };
+
+      // Jika Belum Lapor dipilih aktif, seluruh porsi makan, batch, dan catatan wajib dikosongkan
+      if (isBL) {
+        body.keteranganLapor = 'Belum Lapor';
+        body.pagiKantin = null;
+        body.pagiLapangan = null;
+        body.sahurKantin = null;
+        body.sahurLapangan = null;
+        body.siangKantin = null;
+        body.siangLapangan = null;
+        body.soreKantin = null;
+        body.soreLapangan = null;
+        body.takjilLapangan = null;
+        body.malamLapangan = null;
+        body.batchPagi = null;
+        body.batchSore = null;
+        body.catatan = null;
+      }
+
       const res = modal.mode === 'create'
         ? await fetch('/api/meal-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         : await fetch(`/api/meal-orders/${modal.row!.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -601,10 +670,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const tdBase = 'px-2.5 py-2 text-xs text-slate-700 text-center align-middle border border-slate-100 whitespace-nowrap';
 
   const renderMealCell = (r: MealOrder, key: MealCellKey, kind: 'kantin' | 'lapangan') => {
-    const v = r[key] || '';
+    const isBL = isRowBelumLapor(r);
+    const v = isBL ? '' : (r[key] || '');
     if (kind === 'kantin') {
       const handleToggleKantin = () => {
-        if (!canManage) return;
+        if (!canManage || isBL) return;
         if (v) {
           // Matikan Kantin
           const patch: Partial<MealOrder> = { [key]: null };
@@ -626,17 +696,19 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       };
 
       const isCutiCell = v === 'C';
-      const cellBg = isCutiCell
+      const cellBg = isBL
+        ? 'text-slate-300 bg-slate-50/60'
+        : isCutiCell
         ? 'bg-purple-100 text-purple-800 border border-purple-300'
         : v ? 'bg-sky-100 text-sky-800' : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100';
 
       return (
         <button
           type="button"
-          disabled={!canManage || isCutiCell}
+          disabled={!canManage || isCutiCell || isBL}
           onClick={handleToggleKantin}
-          className={`w-full h-7 rounded-md text-xs font-black transition-colors ${cellBg} ${canManage && !isCutiCell ? 'cursor-pointer hover:ring-2 hover:ring-sky-300' : 'cursor-default'}`}
-          title={isCutiCell ? 'Karyawan Cuti' : canManage ? 'Klik untuk pilih Kantin (K)' : undefined}
+          className={`w-full h-7 rounded-md text-xs font-black transition-colors ${cellBg} ${canManage && !isCutiCell && !isBL ? 'cursor-pointer hover:ring-2 hover:ring-sky-300' : 'cursor-not-allowed opacity-60'}`}
+          title={isBL ? 'Status "Belum Lapor" aktif — matikan status Belum Lapor terlebih dahulu agar orderan dapat diisi' : isCutiCell ? 'Karyawan Cuti' : canManage ? 'Klik untuk pilih Kantin (K)' : undefined}
         >
           {v || '·'}
         </button>
@@ -647,9 +719,19 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   // Sel angka yang bisa langsung diketik (porsi Lapangan, kolom 1 (B.Pagi) / 1 (B.Sore))
   const renderNumberCell = (r: MealOrder, key: LapanganKey | BatchKey, tone: 'amber' | 'emerald', label: string) => {
-    const v = r[key] || '';
+    const isBL = isRowBelumLapor(r);
+    const v = isBL ? '' : (r[key] || '');
     const filled = tone === 'amber' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-emerald-50 border-emerald-200 text-emerald-800';
-    if (!canManage) return <span className="block text-center text-xs font-black text-slate-900">{v}</span>;
+    if (!canManage || isBL) {
+      return (
+        <span
+          className="block text-center text-xs font-black text-slate-400 cursor-not-allowed"
+          title={isBL ? 'Status "Belum Lapor" aktif — matikan status Belum Lapor terlebih dahulu agar orderan dapat diisi' : undefined}
+        >
+          {v || '·'}
+        </span>
+      );
+    }
     return (
       <input
         type="number"
@@ -698,7 +780,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     renderNumberCell(r, key, 'emerald', key === 'batchPagi' ? '1 (B.Pagi)' : '1 (B.Sore)');
 
   const switchMealType = (r: MealOrder, time: 'pagi' | 'sore') => {
-    if (!canManage) return;
+    if (!canManage || isRowBelumLapor(r)) return;
     const kantinKey: KantinKey = time === 'pagi' ? 'pagiKantin' : 'soreKantin';
     const lapanganKey: LapanganKey = time === 'pagi' ? 'pagiLapangan' : 'soreLapangan';
     const batchKey: BatchKey = time === 'pagi' ? 'batchPagi' : 'batchSore';
@@ -758,6 +840,30 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   // Ganti Shift manual: mengkalkulasi ulang meal order sesuai aturan CSV tabel acuan operasional
   const changeShiftKerja = (r: MealOrder, shiftKerja: string | null) => {
+    // Jika status "Belum Lapor" masih aktif: shift tetap diperbarui namun seluruh orderan makanan WAJIB TETAP KOSONG
+    if (isRowBelumLapor(r)) {
+      const patch: Partial<MealOrder> = {
+        shiftKerja: shiftKerja || null,
+        keteranganLapor: 'Belum Lapor',
+        pagiKantin: null,
+        pagiLapangan: null,
+        sahurKantin: null,
+        sahurLapangan: null,
+        siangKantin: null,
+        siangLapangan: null,
+        soreKantin: null,
+        soreLapangan: null,
+        takjilLapangan: null,
+        malamLapangan: null,
+        batchPagi: null,
+        batchSore: null,
+        catatan: null,
+      };
+      saveCell(r, patch);
+      toast.info(`${r.nama}: Shift diubah ke "${shiftKerja || '-'}", namun orderan makanan tetap kosong karena status "Belum Lapor" masih aktif.`);
+      return;
+    }
+
     let rosterCode = shiftKerja || 'SIANG';
     if (shiftKerja === 'Cuti Site') rosterCode = 'CS';
     else if (shiftKerja === 'Izin') rosterCode = 'I';
@@ -1068,49 +1174,75 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     );
   };
 
+  // Klik kartu → tabel di bawah hanya menampilkan karyawan yang dihitung kartu tsb (klik lagi = tampilkan semua)
+  const isActiveCard = (f: CardFilter) => !!cardFilter && cardFilter.company === f.company && cardFilter.kind === f.kind && cardFilter.slot === f.slot;
+  const pickCard = (f: CardFilter) => {
+    const next = isActiveCard(f) ? null : f;
+    setCardFilter(next);
+    if (next) setTimeout(() => tableAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+  const cardBtn = (f: CardFilter, base: string = UI.stat) =>
+    `${base} w-full cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${isActiveCard(f) ? 'ring-2 ring-emerald-500 ring-offset-2' : ''}`;
+
   // Satu baris kartu ringkasan (dipakai TBP, GPS & Gabungan) agar tampilannya identik
   const renderSummaryRow = (opts: {
-    key: string; title: string; dot: string; scope: string;
+    key: string; company: Company | 'all'; title: string; dot: string; scope: string;
     list: MealOrder[]; cards: { label: string; value: number; detail: string }[];
     confirmed: { pagi: number; sore: number; belumLapor: number };
-  }) => (
-    <div key={opts.key} className="space-y-2">
-      <div className="flex items-center gap-2 px-1">
-        <span className={`w-2 h-2 rounded-full ${opts.dot}`} />
-        <span className="text-xs font-semibold text-slate-800">{opts.title}</span>
-        <span className="text-xs text-slate-400">· {opts.list.length} karyawan</span>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-        <div className={UI.stat}>
-          <p className={UI.statLabel}><Users className="w-3 h-3" />Karyawan</p>
-          <p className={UI.statValue}>{opts.list.length}</p>
-          <p className={UI.statHint}>{dayName(date)}, {longDate(date)}</p>
+  }) => {
+    const f = (kind: CardFilter['kind'], label: string, slot?: MealSlot): CardFilter => ({ company: opts.company, kind, slot, label: `${opts.scope} · ${label}` });
+    const totalCard = f('total', 'Total Bungkusan');
+    return (
+      <div key={opts.key} className="space-y-2">
+        <div className="flex items-center gap-2 px-1">
+          <span className={`w-2 h-2 rounded-full ${opts.dot}`} />
+          <span className="text-xs font-semibold text-slate-800">{opts.title}</span>
+          <span className="text-xs text-slate-400">· {opts.list.length} karyawan · klik kartu untuk melihat daftar karyawan</span>
         </div>
-        {opts.cards.map(c => (
-          <div key={`${opts.key}-${c.label}`} className={UI.stat} title={`${opts.scope} ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
-            <p className={UI.statLabel}>{c.label}</p>
-            <p className={UI.statValue}>{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
-            <p className={UI.statHint} title={c.detail}>{c.detail}</p>
-          </div>
-        ))}
-        {renderTotalBungkusCard(opts.cards, opts.scope)}
-        {columnVisibility.batches && (
-          <div className={UI.stat}>
-            <p className={UI.statLabel}>B.Pagi · B.Sore</p>
-            <p className={`${UI.statValue} !text-emerald-700`}>{opts.confirmed.pagi}<span className="text-sm font-medium text-slate-400"> · {opts.confirmed.sore}</span></p>
-            <p className={UI.statHint}>konfirmasi kantin</p>
-          </div>
-        )}
-        {columnVisibility.statusNotes && (
-          <div className={UI.stat}>
-            <p className={UI.statLabel}>Belum Lapor</p>
-            <p className={`${UI.statValue} ${opts.confirmed.belumLapor ? '!text-rose-600' : ''}`}>{opts.confirmed.belumLapor}</p>
-            <p className={UI.statHint}>karyawan</p>
-          </div>
-        )}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
+          <button type="button" onClick={() => pickCard(f('karyawan', 'Semua Karyawan'))} className={cardBtn(f('karyawan', ''))} title="Tampilkan semua karyawan di tabel">
+            <p className={UI.statLabel}><Users className="w-3 h-3" />Karyawan</p>
+            <p className={UI.statValue}>{opts.list.length}</p>
+            <p className={UI.statHint}>{dayName(date)}, {longDate(date)}</p>
+          </button>
+          {opts.cards.map(c => {
+            const slot = MEAL_SLOT_BY_GROUP[c.label];
+            const cf = f('slot', `Bungkusan ${c.label}`, slot);
+            return (
+              <button type="button" key={`${opts.key}-${c.label}`} onClick={() => pickCard(cf)} className={cardBtn(cf)} title={`${opts.scope} ${c.label}: Total ${c.value} Bungkusan (${c.detail}) — klik untuk melihat karyawannya`}>
+                <p className={UI.statLabel}>{c.label}</p>
+                <p className={UI.statValue}>{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
+                <p className={UI.statHint} title={c.detail}>{c.detail}</p>
+              </button>
+            );
+          })}
+          <button type="button" onClick={() => pickCard(totalCard)} className={`w-full cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md rounded-xl focus:outline-none ${isActiveCard(totalCard) ? 'ring-2 ring-emerald-500 ring-offset-2' : ''}`}>
+            {renderTotalBungkusCard(opts.cards, opts.scope)}
+          </button>
+          {columnVisibility.batches && (() => {
+            const cf = f('batch', 'B.Pagi · B.Sore');
+            return (
+              <button type="button" onClick={() => pickCard(cf)} className={cardBtn(cf)} title="Klik untuk melihat karyawan dengan 1 (B.Pagi) / 1 (B.Sore)">
+                <p className={UI.statLabel}>B.Pagi · B.Sore</p>
+                <p className={`${UI.statValue} !text-emerald-700`}>{opts.confirmed.pagi}<span className="text-sm font-medium text-slate-400"> · {opts.confirmed.sore}</span></p>
+                <p className={UI.statHint}>konfirmasi kantin</p>
+              </button>
+            );
+          })()}
+          {columnVisibility.statusNotes && (() => {
+            const cf = f('belumLapor', 'Belum Lapor');
+            return (
+              <button type="button" onClick={() => pickCard(cf)} className={cardBtn(cf)} title="Klik untuk melihat karyawan yang belum lapor">
+                <p className={UI.statLabel}>Belum Lapor</p>
+                <p className={`${UI.statValue} ${opts.confirmed.belumLapor ? '!text-rose-600' : ''}`}>{opts.confirmed.belumLapor}</p>
+                <p className={UI.statHint}>karyawan</p>
+              </button>
+            );
+          })()}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const confirmedAll = useMemo(() => getConfirmedSummary(filtered), [filtered]);
   const confirmedTbp = useMemo(() => getConfirmedSummary(tbpFiltered), [tbpFiltered]);

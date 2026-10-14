@@ -694,6 +694,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     section: mealOrders.section, tempatTinggal: mealOrders.tempatTinggal,
     pilihanPagi: mealOrders.pilihanPagi, pilihanSore: mealOrders.pilihanSore, pagiLapangan: mealOrders.pagiLapangan, soreLapangan: mealOrders.soreLapangan,
     shiftKerja: mealOrders.shiftKerja,
+    keteranganLapor: mealOrders.keteranganLapor,
   }).from(mealOrders).where(eq(mealOrders.orderDate, date));
   const existingByNik = new Map(existingRows.map(r => [r.nik.toUpperCase().trim(), r]));
   const existingNiks = new Set(existingByNik.keys());
@@ -711,7 +712,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     }
     const current = existingByNik.get(nik);
     const emp = current
-      ? { ...rosterEmp, statusMess: current.statusMess, pt: current.pt, shift: current.shift, section: current.section, tempatTinggal: current.tempatTinggal }
+      ? { ...rosterEmp, statusMess: current.statusMess, pt: current.pt, shift: current.shift, section: current.section, tempatTinggal: current.tempatTinggal, keteranganLapor: current.keteranganLapor }
       : rosterEmp;
     const prevStatus = prevStatuses.get(nik);
     const computed = computeMealOrderByRoster(emp, emp.status, date, withCurrentChoice(prefs.get(nik), current), prevStatus);
@@ -789,11 +790,12 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const [emp] = await db.select().from(employees).where(sql`UPPER(${employees.nik}) = ${cleanNik}`).limit(1);
     if (!emp) return;
 
-    // Profil dari orderan tanggal tsb (Status Mess, Shift, Tempat Tinggal) — dari roster hanya kode kehadiran
+    // Profil dari orderan tanggal tsb (Status Mess, Shift, Tempat Tinggal, Keterangan Lapor) — dari roster hanya kode kehadiran
     const [current] = await db.select({
       statusMess: mealOrders.statusMess, shift: mealOrders.shift, tempatTinggal: mealOrders.tempatTinggal,
       pilihanPagi: mealOrders.pilihanPagi, pilihanSore: mealOrders.pilihanSore, pagiLapangan: mealOrders.pagiLapangan, soreLapangan: mealOrders.soreLapangan,
       shiftKerja: mealOrders.shiftKerja,
+      keteranganLapor: mealOrders.keteranganLapor,
     }).from(mealOrders)
       .where(and(eq(mealOrders.orderDate, ymd), eq(mealOrders.nik, emp.nik))).limit(1);
     if (!current) return;
@@ -801,7 +803,7 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const prevStatuses = await loadPreviousRosterStatuses(ymd, cleanNik);
     const prevStatus = prevStatuses.get(cleanNik);
     const computed = computeMealOrderByRoster(
-      { ...emp, statusMess: current.statusMess, shift: current.shift, tempatTinggal: current.tempatTinggal, alamatDomisili: null },
+      { ...emp, statusMess: current.statusMess, shift: current.shift, tempatTinggal: current.tempatTinggal, alamatDomisili: null, keteranganLapor: current.keteranganLapor },
       rosterStatus, ymd, withCurrentChoice(prefs.get(cleanNik), current), prevStatus,
     );
     if (computed.shiftKerja === 'SIANG' && (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik)) computed.shiftKerja = 'Nonshift';
@@ -866,6 +868,39 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
       }
     }
 
+    // Sanitasi status Belum Lapor:
+    // Selama "Belum Lapor" belum dimatikan, seluruh porsi orderan makanan, batch, dan catatan WAJIB tetap kosong
+    let hasStaleBelumLaporInDb = false;
+    rows = rows.map(r => {
+      const isBelumLapor = r.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(r.keteranganLapor || ''));
+      if (isBelumLapor) {
+        const hasMeals = r.pagiKantin || r.pagiLapangan || r.sahurKantin || r.sahurLapangan ||
+          r.siangKantin || r.siangLapangan || r.soreKantin || r.soreLapangan ||
+          r.takjilLapangan || r.malamLapangan || r.batchPagi || r.batchSore || r.catatan;
+        if (hasMeals) hasStaleBelumLaporInDb = true;
+        return {
+          ...r,
+          keteranganLapor: 'Belum Lapor',
+          pagiKantin: null, pagiLapangan: null, sahurKantin: null, sahurLapangan: null,
+          siangKantin: null, siangLapangan: null, soreKantin: null, soreLapangan: null,
+          takjilLapangan: null, malamLapangan: null, batchPagi: null, batchSore: null, catatan: null,
+        };
+      }
+      return r;
+    });
+
+    if (hasStaleBelumLaporInDb) {
+      db.update(mealOrders).set({
+        keteranganLapor: 'Belum Lapor',
+        pagiKantin: null, pagiLapangan: null, sahurKantin: null, sahurLapangan: null,
+        siangKantin: null, siangLapangan: null, soreKantin: null, soreLapangan: null,
+        takjilLapangan: null, malamLapangan: null, batchPagi: null, batchSore: null, catatan: null,
+      }).where(and(
+        eq(mealOrders.orderDate, date),
+        sql`(${mealOrders.keteranganLapor} = 'Belum Lapor' OR LOWER(${mealOrders.keteranganLapor}) LIKE '%belum lapor%')`
+      )).catch(e => console.warn('[Clean stale belum lapor DB warning]:', e?.message));
+    }
+
     const dates = await db.select({ date: mealOrders.orderDate, count: sql<number>`COUNT(*)::int` })
       .from(mealOrders)
       .where(inactive.size ? notInArray(sql`UPPER(TRIM(${mealOrders.nik}))`, Array.from(inactive)) : undefined)
@@ -910,6 +945,23 @@ mealOrdersRouter.post("/api/meal-orders", requireMealManager, async (req, res) =
     const fields = pickFields(req.body);
     const nama = fields.nama || emp?.name;
     if (!nama) return res.status(400).json({ status: "error", message: "Nama karyawan wajib diisi (NIK tidak ditemukan di Database Karyawan)." });
+
+    if (fields.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(fields.keteranganLapor || ''))) {
+      fields.keteranganLapor = 'Belum Lapor';
+      fields.pagiKantin = null;
+      fields.pagiLapangan = null;
+      fields.sahurKantin = null;
+      fields.sahurLapangan = null;
+      fields.siangKantin = null;
+      fields.siangLapangan = null;
+      fields.soreKantin = null;
+      fields.soreLapangan = null;
+      fields.takjilLapangan = null;
+      fields.malamLapangan = null;
+      fields.batchPagi = null;
+      fields.batchSore = null;
+      fields.catatan = null;
+    }
 
     const [{ maxNo }] = await db.select({ maxNo: sql<number>`COALESCE(MAX(${mealOrders.sortNo}), 0)::int` })
       .from(mealOrders).where(eq(mealOrders.orderDate, date));
@@ -1003,6 +1055,25 @@ mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res
     const fields = pickFields(req.body);
     if (!id || Object.keys(fields).length === 0) return res.status(400).json({ status: "error", message: "Tidak ada perubahan." });
     if ('nama' in fields && !fields.nama) return res.status(400).json({ status: "error", message: "Nama tidak boleh kosong." });
+
+    // Jika Belum Lapor diset aktif, seluruh porsi makanan, batch, dan catatan wajib dikosongkan
+    if (fields.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(fields.keteranganLapor || ''))) {
+      fields.keteranganLapor = 'Belum Lapor';
+      fields.pagiKantin = null;
+      fields.pagiLapangan = null;
+      fields.sahurKantin = null;
+      fields.sahurLapangan = null;
+      fields.siangKantin = null;
+      fields.siangLapangan = null;
+      fields.soreKantin = null;
+      fields.soreLapangan = null;
+      fields.takjilLapangan = null;
+      fields.malamLapangan = null;
+      fields.batchPagi = null;
+      fields.batchSore = null;
+      fields.catatan = null;
+    }
+
     const [row] = await db.update(mealOrders)
       .set({ ...fields, updatedBy: updatedByOf(req), updatedAt: new Date() })
       .where(eq(mealOrders.id, id)).returning();

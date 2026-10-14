@@ -104,6 +104,7 @@ export interface EmployeeProfileLike {
   alamatDomisili?: string | null;
   section?: string | null;
   status?: string | null; // status/keterangan roster (mis. "Belum Lapor")
+  keteranganLapor?: string | null; // status keterangan Belum Lapor
 }
 
 // Pilihan Pagi/Sore di kolom Catatan (Mess CR + Nirwana) — disimpan & dipakai terus di tanggal berikutnya
@@ -462,15 +463,19 @@ export function computeMealOrderByRoster(
   // Aturan status Belum Lapor:
   // 1. Jika Tanggal sebelumnya "C,CE,CT,CS,TRV,I,BELUM LAPOR" dan Tanggal berikutnya keterangannya "D, N, LS Atau OFF"
   //    maka Keterangan belum lapor Otomatis Aktif
+  // 2. Atau jika karyawan saat ini memang masih berstatus Belum Lapor (belum dimatikan oleh admin)
   if (isLeaveOrPermissionRosterStatus(prevRosterStatus) && isWorkOrOffRosterStatus(code)) {
     res.keteranganLapor = 'Belum Lapor';
   } else if (/belum\s*lapor|\bBL\b/i.test(rawCode) || /belum\s*lapor/i.test(String(emp.status || ''))) {
+    res.keteranganLapor = 'Belum Lapor';
+  } else if (emp.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(emp.keteranganLapor || ''))) {
     res.keteranganLapor = 'Belum Lapor';
   }
 
   // JIKA STATUS BELUM LAPOR AKTIF:
   // Selama "Belum Lapor" belum dimatikan, seluruh porsi orderan makanan AKAN TETAP KOSONG
-  if (res.keteranganLapor === 'Belum Lapor') {
+  if (res.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(res.keteranganLapor || ''))) {
+    res.keteranganLapor = 'Belum Lapor';
     res.pagiKantin = null;
     res.pagiLapangan = null;
     res.sahurKantin = null;
