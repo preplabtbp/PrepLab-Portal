@@ -31,6 +31,32 @@ const SEED: { certType: CertType; nama: string; jabatan: string; pt: string; tan
   { certType: 'juru_las_3', nama: 'Christian Anggawijaya', jabatan: 'Lab Maintenance Supervisor', pt: 'GPS', tanggal: '2024-09-09', keterangan: 'Lulus', expired: null },
 ];
 
+// Peserta Pelatihan ISO 17025 : 2017 Sistem Manajemen Laboratorium (Pelaksanaan 24-Jul-25)
+const ISO_17025_NAMES = [
+  'Deni Nugraha Perdiana',
+  'Tigwa Anggawikara',
+  'Arif Maulana Lessy',
+  'Arthur Paul Marnix Souisa',
+  'Khaufi Wirawan A',
+  'Muhammad Amran Selang',
+  'Sukarman A. Akil, ST',
+  'Junjunan Muhammad Syukur',
+  'Ryan M Rusli',
+  'Subrandi',
+  'Christian Anggawijaya',
+  'Moch. Siswanto',
+  'Muhammad Reza Satria',
+  'Kemal Maulana',
+  'M. Harits Asyardy',
+  'Ahmad Jusma Azhari Annur',
+  'Fachmi Amarullah',
+  'Herwin Predianto',
+  'Rizal Zaelani',
+  'Muhammad Fandy Septiawan',
+  'Murti Tamisari Harun',
+  'Valdi Pratama',
+];
+
 // Cocokkan nama ke Database Karyawan: nama tanpa gelar/tanda baca; cocok penuh, atau 2 kata depan + kata terakhir/inisial
 const nameTokens = (s: string) => s.split(',')[0].toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
 function matchEmployeeNik(nama: string, emps: { nik: string; name: string }[]): string | null {
@@ -77,6 +103,33 @@ export function ensureTrainingCertificationsTable(): Promise<void> {
           ...s, note: s.note || null, nik: matchEmployeeNik(s.nama, emps), updatedBy: 'seed', updatedAt: new Date(),
         })));
         console.log(`[TrainingCert] Seed ${SEED.length} sertifikasi K3 & kompetensi`);
+      }
+
+      // Seed ISO 17025 : 2017 Sistem Manajemen Laboratorium
+      const claimedIso = await db.execute(sql`INSERT INTO app_settings (setting_key, setting_value, description)
+        VALUES ('seed_training_iso_17025_2025', 'done', 'Seed ISO 17025 : 2017 Sistem Manajemen Laboratorium')
+        ON CONFLICT (setting_key) DO NOTHING RETURNING id;`);
+      if (claimedIso.rows?.length) {
+        const emps = (await db.select({ nik: employees.nik, name: employees.name, position: employees.position, pt: employees.pt }).from(employees)).filter(e => e.nik && e.name);
+        const isoRows = ISO_17025_NAMES.map(nama => {
+          const matchedNik = matchEmployeeNik(nama, emps);
+          const emp = emps.find(e => e.nik === matchedNik);
+          return {
+            certType: 'iso_17025' as CertType,
+            nama: emp?.name || nama,
+            nik: matchedNik,
+            jabatan: emp?.position || null,
+            pt: emp?.pt ? (emp.pt.toUpperCase().includes('GPS') ? 'GPS' : 'TBP') : 'TBP',
+            tanggal: '2025-07-24',
+            keterangan: 'Lulus',
+            expired: '2028-07-24',
+            note: null,
+            updatedBy: 'seed',
+            updatedAt: new Date()
+          };
+        });
+        await db.insert(trainingCertifications).values(isoRows);
+        console.log(`[TrainingCert] Seed ${isoRows.length} peserta ISO 17025 : 2017`);
       }
     })().catch((e: any) => {
       ensurePromise = null;

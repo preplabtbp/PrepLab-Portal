@@ -1,6 +1,6 @@
 // Sertifikasi K3 & Kompetensi (Training External) — jenis sertifikat, masa berlaku & status expired.
 
-export type CertType = 'ahli_k3_kimia' | 'petugas_k3_kimia' | 'proteksi_radiasi' | 'teknisi_k3_listrik' | 'juru_las_3';
+export type CertType = 'iso_17025' | 'ahli_k3_kimia' | 'petugas_k3_kimia' | 'proteksi_radiasi' | 'teknisi_k3_listrik' | 'juru_las_3';
 
 export interface CertMeta {
   type: CertType;
@@ -13,6 +13,7 @@ export interface CertMeta {
 }
 
 export const CERT_TYPES: CertMeta[] = [
+  { type: 'iso_17025', title: 'ISO 17025 : 2017 Sistem Manajemen Laboratorium', validYears: 3, issuer: 'BSN / KAN', color: '#fef08a' },
   { type: 'ahli_k3_kimia', title: 'Ahli K3 Kimia', validYears: 3, issuer: 'Kemenaker', color: '#fefce8' },
   { type: 'petugas_k3_kimia', title: 'Petugas K3 Kimia', validYears: 5, issuer: 'Kemenaker', color: '#e5e7eb' },
   { type: 'proteksi_radiasi', title: 'Petugas Proteksi Radiasi', validYears: 5, issuer: 'BAPETEN', color: '#a5f3fc' },
