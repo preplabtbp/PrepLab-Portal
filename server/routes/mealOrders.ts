@@ -16,6 +16,7 @@ import {
   getPreviousDateString,
   isCatatanDisabledForEmployee,
   isLeaveOrPermissionRosterStatus,
+  isTuesdayWednesdaySaturday,
   isWorkOrOffRosterStatus,
   type MealChoice,
   type MealPreference,
@@ -980,7 +981,17 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
 
     // Kolom Catatan dikunci: pertahankan catatan yang sudah ada di tanggal ini atau dari master catatan (Bungkusan Pagi, dll.)
     const currentCatatan = current?.catatan && current.catatan !== '-' && !current.catatan.startsWith('Cuti') ? current.catatan : null;
-    const lockedCatatan = currentCatatan || master?.catatan || null;
+    let lockedCatatan = currentCatatan || master?.catatan || null;
+
+    const isTueWedSat = isTuesdayWednesdaySaturday(date);
+    const isCR = ['CR', 'MESS'].includes(String(lockedStatusMess || rosterEmp.statusMess || '').trim().toUpperCase());
+    if (isCR && isTueWedSat) {
+      if (lockedCatatan === 'Bungkusan Sore') {
+        lockedCatatan = null;
+      } else if (lockedCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
+        lockedCatatan = 'Bungkusan Pagi';
+      }
+    }
 
     const emp = {
       ...rosterEmp,
@@ -1011,9 +1022,24 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     if (computed.shiftKerja === 'SIANG' && (nonshift.has(nik) || lockedShift === 'Nonshift')) computed.shiftKerja = 'Nonshift';
 
     // Kolom Catatan TIDAK BOLEH diganti menjadi kode cuti atau null bila karyawan punya catatan
-    const finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
+    let finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
       ? null
       : (lockedCatatan || computed.catatan || null);
+
+    if (isCR && isTueWedSat) {
+      const sk = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
+      const isAbsent = ['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sk);
+      if (!isAbsent && computed.keteranganLapor !== 'Belum Lapor') {
+        computed.soreKantin = 'K';
+        computed.soreLapangan = null;
+        computed.batchSore = null;
+      }
+      if (finalCatatan === 'Bungkusan Sore') {
+        finalCatatan = null;
+      } else if (finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
+        finalCatatan = 'Bungkusan Pagi';
+      }
+    }
 
     rowsToSave.push({
       orderDate: date,
@@ -1111,7 +1137,17 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const lockedSection = master?.section || emp.section;
     const lockedTt = (current.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || master?.tempatTinggal || null;
     const currentCatatan = current.catatan && current.catatan !== '-' && !current.catatan.startsWith('Cuti') ? current.catatan : null;
-    const lockedCatatan = currentCatatan || master?.catatan || null;
+    let lockedCatatan = currentCatatan || master?.catatan || null;
+
+    const isTueWedSat = isTuesdayWednesdaySaturday(ymd);
+    const isCR = ['CR', 'MESS'].includes(String(lockedStatusMess || emp.statusMess || '').trim().toUpperCase());
+    if (isCR && isTueWedSat) {
+      if (lockedCatatan === 'Bungkusan Sore') {
+        lockedCatatan = null;
+      } else if (lockedCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
+        lockedCatatan = 'Bungkusan Pagi';
+      }
+    }
 
     const empPref = withCurrentChoice(prefs.get(cleanNik), { ...current, catatan: lockedCatatan });
     if (lockedCatatan === 'Bungkusan Pagi') {
@@ -1131,9 +1167,24 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     );
     if (computed.shiftKerja === 'SIANG' && (lockedShift === 'Nonshift' || (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik))) computed.shiftKerja = 'Nonshift';
 
-    const finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
+    let finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
       ? null
       : (lockedCatatan || computed.catatan || null);
+
+    if (isCR && isTueWedSat) {
+      const sk = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
+      const isAbsent = ['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sk);
+      if (!isAbsent && computed.keteranganLapor !== 'Belum Lapor') {
+        computed.soreKantin = 'K';
+        computed.soreLapangan = null;
+        computed.batchSore = null;
+      }
+      if (finalCatatan === 'Bungkusan Sore') {
+        finalCatatan = null;
+      } else if (finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
+        finalCatatan = 'Bungkusan Pagi';
+      }
+    }
 
     const updateValues: any = {
       ...(master?.sortNo != null ? { sortNo: master.sortNo } : {}),
@@ -1223,7 +1274,22 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
         }
         // Kolom Catatan dikunci: jika belum ada / kosong / terisi kode Cuti salah, kembalikan ke catatan master
         const currentCat = r.catatan && r.catatan !== '-' && !r.catatan.startsWith('Cuti') ? r.catatan : null;
-        const targetCat = currentCat || m.catatan || null;
+        let targetCat = currentCat || m.catatan || null;
+
+        const isTueWedSat = isTuesdayWednesdaySaturday(date);
+        const sm = String(r.statusMess || '').trim().toUpperCase();
+        const isCR = sm === 'CR' || sm === 'MESS';
+
+        // Pada hari Selasa, Rabu, dan Sabtu untuk Status Mess CR:
+        // Tidak ada yang Bungkusan Sore (semua Kantin dan tidak bisa diganti)
+        if (isCR && isTueWedSat) {
+          if (targetCat === 'Bungkusan Sore') {
+            targetCat = null;
+          } else if (targetCat === 'Bungkusan Pagi dan Bungkusan Sore') {
+            targetCat = 'Bungkusan Pagi';
+          }
+        }
+
         if (targetCat && (!r.catatan || r.catatan === '-' || r.catatan.startsWith('Cuti'))) {
           const tt = `${r.tempatTinggal || ''}`.toLowerCase();
           const isKawasi = tt.includes('kawasi');
@@ -1247,6 +1313,24 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
               if (!r.pagiLapangan) { r.pagiLapangan = '1'; r.pagiKantin = null; r.batchPagi = null; }
               if (!r.soreLapangan) { r.soreLapangan = '1'; r.soreKantin = null; r.batchSore = null; }
             }
+          }
+        }
+
+        if (isCR && isTueWedSat) {
+          const sk = String(r.statusKerja || '').trim().toUpperCase();
+          const sh = String(r.shiftKerja || '').trim().toUpperCase();
+          const isAbsent = ['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sk) ||
+                           ['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sh) ||
+                           r.keteranganLapor === 'Belum Lapor';
+          if (!isAbsent) {
+            r.soreKantin = 'K';
+            r.soreLapangan = null;
+            r.batchSore = null;
+          }
+          if (r.catatan === 'Bungkusan Sore') {
+            r.catatan = null;
+          } else if (r.catatan === 'Bungkusan Pagi dan Bungkusan Sore') {
+            r.catatan = 'Bungkusan Pagi';
           }
         }
       }
@@ -1524,6 +1608,46 @@ mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res
       fields.batchPagi = null;
       fields.batchSore = null;
       fields.catatan = null;
+    }
+
+    // Proteksi: Hari Selasa, Rabu, dan Sabtu untuk Karyawan Status Mess CR (Gol II-V):
+    // Tidak ada yang Bungkusan Sore, semua kantin dan tidak bisa diganti!
+    const [existing] = await db.select({
+      orderDate: mealOrders.orderDate,
+      statusMess: mealOrders.statusMess,
+    }).from(mealOrders).where(eq(mealOrders.id, id)).limit(1);
+
+    if (existing) {
+      const isTueWedSat = isTuesdayWednesdaySaturday(String(existing.orderDate));
+      const sm = String(fields.statusMess || existing.statusMess || '').trim().toUpperCase();
+      const isCR = sm === 'CR' || sm === 'MESS';
+      if (isTueWedSat && isCR) {
+        if ('soreLapangan' in fields && fields.soreLapangan && portions(fields.soreLapangan) > 0) {
+          return res.status(400).json({
+            status: "error",
+            message: "Hari Selasa, Rabu, dan Sabtu untuk Status Mess CR wajib Kantin dan tidak bisa Bungkusan Sore."
+          });
+        }
+        if ('catatan' in fields && fields.catatan) {
+          if (fields.catatan === 'Bungkusan Sore') {
+            return res.status(400).json({
+              status: "error",
+              message: "Hari Selasa, Rabu, dan Sabtu untuk Status Mess CR tidak ada Bungkusan Sore (semua Kantin)."
+            });
+          }
+          if (fields.catatan === 'Bungkusan Pagi dan Bungkusan Sore') {
+            fields.catatan = 'Bungkusan Pagi';
+          }
+        }
+        if ('pilihanSore' in fields && fields.pilihanSore === 'lapangan') {
+          fields.pilihanSore = 'kantin';
+        }
+        if ('soreLapangan' in fields) {
+          fields.soreLapangan = null;
+          fields.soreKantin = 'K';
+          fields.batchSore = null;
+        }
+      }
     }
 
     const [row] = await db.update(mealOrders)

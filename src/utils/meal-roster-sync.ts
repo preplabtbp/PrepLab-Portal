@@ -296,6 +296,7 @@ export function computeMealOrderByRoster(
   }
   // 2. KELOMPOK: CR, NIRWANA
   else if (isCR) {
+    const isTueWedSat = isTuesdayWednesdaySaturday(orderDate);
     if (code === 'D') {
       res.shiftKerja = defaultDayShiftKerja;
       res.siangLapangan = '1';
@@ -305,13 +306,19 @@ export function computeMealOrderByRoster(
       } else {
         res.pagiKantin = 'K';
       }
-      // Sore
-      if (pref.sore === 'lapangan') {
+      // Sore: Hari Selasa, Rabu, dan Sabtu: Karyawan Mess CR wajib Kantin (tidak ada Bungkusan Sore)
+      if (isTueWedSat) {
+        res.soreKantin = 'K';
+        res.soreLapangan = null;
+        res.batchSore = null;
+      } else if (pref.sore === 'lapangan') {
         res.soreLapangan = '1';
       } else {
         res.soreKantin = 'K';
       }
-      res.catatan = getCatatanString(pref);
+      res.catatan = isTueWedSat
+        ? (pref.pagi === 'lapangan' ? 'Bungkusan Pagi' : null)
+        : getCatatanString(pref);
     } else if (code === 'N') {
       res.shiftKerja = 'Malam';
       res.pagiKantin = 'K';
@@ -322,7 +329,13 @@ export function computeMealOrderByRoster(
     } else if (code === 'LS') {
       res.shiftKerja = 'Longshift';
       res.siangLapangan = '1';
-      res.soreLapangan = '1';
+      if (isTueWedSat) {
+        res.soreKantin = 'K';
+        res.soreLapangan = null;
+        res.batchSore = null;
+      } else {
+        res.soreLapangan = '1';
+      }
       res.malamLapangan = '1';
       // Pagi
       if (pref.pagi === 'lapangan') {
@@ -330,7 +343,9 @@ export function computeMealOrderByRoster(
       } else {
         res.pagiKantin = 'K';
       }
-      res.catatan = getCatatanString(pref);
+      res.catatan = isTueWedSat
+        ? (pref.pagi === 'lapangan' ? 'Bungkusan Pagi' : null)
+        : getCatatanString(pref);
     } else if (code === 'CUTI') {
       res.shiftKerja = 'CUTI';
       res.statusKerja = 'Cuti';
@@ -460,6 +475,23 @@ export function computeMealOrderByRoster(
   // Jika karyawan termasuk yang dinonaktifkan catatannya (Kampung Kawasi, Cuti, Cuti Site, Izin, Off, Sakit, Malam)
   if (isCatatanDisabledForEmployee({ tempatTinggal: emp.tempatTinggal, alamatDomisili: emp.alamatDomisili, shiftKerja: res.shiftKerja, statusKerja: res.statusKerja, status: res.status })) {
     res.catatan = null;
+  }
+
+  // Aturan Khusus: Hari Selasa, Rabu, dan Sabtu untuk Karyawan Status Mess CR (Gol II-V):
+  // Tidak ada yang Bungkusan Sore, semua kantin dan tidak bisa diganti!
+  if (isCR && isTuesdayWednesdaySaturday(orderDate)) {
+    const sk = String(res.shiftKerja || res.statusKerja || res.status || '').trim().toUpperCase();
+    const isAbsent = ['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sk);
+    if (!isAbsent && res.keteranganLapor !== 'Belum Lapor') {
+      res.soreKantin = 'K';
+      res.soreLapangan = null;
+      res.batchSore = null;
+    }
+    if (res.catatan === 'Bungkusan Sore') {
+      res.catatan = null;
+    } else if (res.catatan === 'Bungkusan Pagi dan Bungkusan Sore') {
+      res.catatan = 'Bungkusan Pagi';
+    }
   }
 
   // Aturan status Belum Lapor:

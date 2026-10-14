@@ -714,6 +714,21 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         </span>
       );
     }
+    const sm = (r.statusMess || '').toUpperCase();
+    const isCR = sm === 'CR' || sm === 'MESS';
+    const isLockedSore = key === 'soreLapangan' && isTuesdayWednesdaySaturday(date) && isCR;
+
+    if (isLockedSore) {
+      return (
+        <span
+          className="block text-center text-xs font-black text-slate-300 cursor-not-allowed select-none"
+          title={`Hari ${dayName(date)}: Karyawan Status Mess CR tidak ada Bungkusan Sore (wajib Kantin dan tidak bisa diganti).`}
+        >
+          -
+        </span>
+      );
+    }
+
     return (
       <input
         type="number"
@@ -738,11 +753,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 patch.siangKantin = null;
               }
               if (key === 'soreLapangan') {
-                const sm = (r.statusMess || '').toUpperCase();
-                const isCR = sm === 'CR' || sm === 'MESS';
-                const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift' || r.shiftKerja === 'LONGSHIFT';
-                if (isTuesdayWednesdaySaturday(date) && isCR && isDayShift) {
-                  toast.info(`Catatan: Hari ${dayName(date)} untuk karyawan Mess CR jadwal sore adalah Kantin.`);
+                if (isLockedSore) {
+                  toast.error(`Hari ${dayName(date)} untuk Status Mess CR wajib Kantin dan tidak bisa Bungkusan Sore.`);
+                  e.target.value = '';
+                  return;
                 }
                 patch.soreKantin = null;
                 patch.batchSore = null;
@@ -773,9 +787,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       // Pindah ke Lapangan
       const sm = (r.statusMess || '').toUpperCase();
       const isCR = sm === 'CR' || sm === 'MESS';
-      const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift' || r.shiftKerja === 'LONGSHIFT';
-      if (time === 'sore' && isTuesdayWednesdaySaturday(date) && isCR && isDayShift) {
-        toast.info(`Catatan: Hari ${dayName(date)} untuk Mess CR jadwal sore adalah Kantin.`);
+      if (time === 'sore' && isTuesdayWednesdaySaturday(date) && isCR) {
+        toast.error(`Hari ${dayName(date)} untuk Status Mess CR tidak ada Bungkusan Sore (wajib Kantin dan tidak dapat diganti).`);
+        return;
       }
       saveCell(r, {
         [kantinKey]: null,
@@ -809,11 +823,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   // Pilihan disimpan (pilihanPagi / pilihanSore) → dipakai seterusnya saat sinkron tanggal lain, kecuali shift Malam
   const setMealChoice = (r: MealOrder, time: 'pagi' | 'sore', choice: 'kantin' | 'lapangan') => {
+    const sm = (r.statusMess || '').toUpperCase();
+    const isCR = ['CR', 'MESS'].includes(sm);
+    if (choice === 'lapangan' && time === 'sore' && isTuesdayWednesdaySaturday(date) && isCR) {
+      toast.error(`Hari ${dayName(date)} untuk Status Mess CR tidak ada Bungkusan Sore (wajib Kantin dan tidak dapat diganti).`);
+      return;
+    }
     const label = time === 'pagi' ? 'Pagi' : 'Sore';
     const pilihan: Partial<MealOrder> = time === 'pagi' ? { pilihanPagi: choice } : { pilihanSore: choice };
-    if (choice === 'lapangan' && time === 'sore' && isTuesdayWednesdaySaturday(date) && ['CR', 'MESS'].includes((r.statusMess || '').toUpperCase())) {
-      toast.info(`Catatan: Hari ${dayName(date)} untuk Mess CR jadwal sore biasanya Kantin.`);
-    }
     saveCell(r, { ...mealChoicePatch(r, time, choice), ...pilihan });
     toast.success(`${r.nama}: ${label} ${choice === 'kantin' ? 'Kantin' : 'Bungkusan'} — berlaku seterusnya (kecuali shift Malam)`);
   };
@@ -884,16 +901,20 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const getRowCatatanValue = (r: MealOrder): CatatanOption => {
     if (isCatatanDisabledForEmployee(r)) return '-';
+    const sm = (r.statusMess || '').toUpperCase();
+    const isCR = sm === 'CR' || sm === 'MESS';
+    const isLockedSore = isTuesdayWednesdaySaturday(date) && isCR;
+
     const c = String(r.catatan || '').trim();
-    if (c === 'Bungkusan Pagi dan Bungkusan Sore') return c;
+    if (c === 'Bungkusan Pagi dan Bungkusan Sore') return isLockedSore ? 'Bungkusan Pagi' : c;
     if (c === 'Bungkusan Pagi') return c;
-    if (c === 'Bungkusan Sore') return c;
+    if (c === 'Bungkusan Sore') return isLockedSore ? '-' : c;
     // Deteksi fallback dari porsi lapangan
     const p = portions(r.pagiLapangan) > 0;
     const s = portions(r.soreLapangan) > 0 && String(r.shiftKerja || '').toUpperCase() !== 'LONGSHIFT';
-    if (p && s) return 'Bungkusan Pagi dan Bungkusan Sore';
+    if (p && s && !isLockedSore) return 'Bungkusan Pagi dan Bungkusan Sore';
     if (p) return 'Bungkusan Pagi';
-    if (s) return 'Bungkusan Sore';
+    if (s && !isLockedSore) return 'Bungkusan Sore';
     return '-';
   };
 
@@ -907,6 +928,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       return;
     }
     const sm = String(r.statusMess || '').trim().toUpperCase();
+    const isCR = sm === 'CR' || sm === 'MESS';
+    const isLockedSore = isTuesdayWednesdaySaturday(date) && isCR;
+
+    if (isLockedSore && (val === 'Bungkusan Sore' || val === 'Bungkusan Pagi dan Bungkusan Sore')) {
+      toast.error(`Hari ${dayName(date)} untuk Status Mess CR tidak ada Bungkusan Sore (wajib Kantin dan tidak dapat diganti).`);
+      return;
+    }
     const isNR = sm === 'NR';
     const isNirwana = `${r.tempatTinggal || ''}`.toLowerCase().includes('nirwana');
     const kantinVal = isNR && isNirwana ? '1' : 'K';
@@ -1047,6 +1075,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       );
     }
 
+    const sm = String(r.statusMess || '').trim().toUpperCase();
+    const isCR = sm === 'CR' || sm === 'MESS';
+    const isLockedSore = isTuesdayWednesdaySaturday(date) && isCR;
+
     return (
       <div className="flex items-center justify-center gap-1">
         <select
@@ -1057,8 +1089,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         >
           <option value="-">-</option>
           <option value="Bungkusan Pagi">Bungkusan Pagi</option>
-          <option value="Bungkusan Sore">Bungkusan Sore</option>
-          <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
+          {!isLockedSore && <option value="Bungkusan Sore">Bungkusan Sore</option>}
+          {!isLockedSore && <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>}
           {isCustomCatatan && <option value={rawCatatan}>{rawCatatan}</option>}
         </select>
         {isCustomCatatan && <span className="text-[11px] text-slate-500 font-medium">{rawCatatan}</span>}
@@ -2038,11 +2070,17 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     {!isCatatanDisabledForEmployee(form) && (
                       <>
                         <option value="Bungkusan Pagi">Bungkusan Pagi</option>
-                        <option value="Bungkusan Sore">Bungkusan Sore</option>
-                        <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
+                        {!(isTuesdayWednesdaySaturday(date) && ['CR', 'MESS'].includes(String(form.statusMess || '').trim().toUpperCase())) && (
+                          <>
+                            <option value="Bungkusan Sore">Bungkusan Sore</option>
+                            <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
+                          </>
+                        )}
                       </>
                     )}
                   </Select>
+                ) : f.key === 'soreLapangan' && isTuesdayWednesdaySaturday(date) && ['CR', 'MESS'].includes(String(form.statusMess || '').trim().toUpperCase()) ? (
+                  <Input key={f.key} label={f.label} value="Kantin (Terkunci)" disabled />
                 ) : (
                   <Input key={f.key} label={f.label} value={form[f.key] || ''} onChange={e => updateForm(f.key, e.target.value)} placeholder={f.placeholder} />
                 )
