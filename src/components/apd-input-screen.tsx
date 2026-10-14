@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
-import React, { useState, useEffect } from 'react';
-import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { Button, Input, Select } from './ui';
 
@@ -73,6 +73,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
 
   // State untuk jendela mengambang detail APD
   const [selectedApdModal, setSelectedApdModal] = useState<string | null>(null);
+  const pcScrollRef = useRef<HTMLDivElement>(null);
 
 
 
@@ -408,7 +409,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-500 pb-12 max-w-5xl mx-auto px-2 sm:px-4">
+    <div className="space-y-5 animate-in fade-in duration-500 pb-12 max-w-7xl mx-auto px-2 sm:px-4">
       {/* Sub-module Navigation Bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
@@ -587,17 +588,41 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <div>
-                <h4 className="font-bold text-slate-800 text-sm">Status & Riwayat Pengambilan APD</h4>
+                <h4 className="font-bold text-slate-800 text-sm sm:text-base">Status & Riwayat Pengambilan APD</h4>
                 <p className="text-xs text-slate-500">Klik kartu APD untuk melihat detail riwayat dan menambah ke draft form input.</p>
               </div>
-              <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400">
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-400" /> Belum ada pengambilan</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" /> Sudah pernah diambil</span>
+              <div className="hidden sm:flex items-center gap-3">
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-400" /> Belum ada pengambilan</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" /> Sudah pernah diambil</span>
+                </div>
+                {/* Tombol Geser Horizontal untuk PC */}
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => pcScrollRef.current?.scrollBy({ left: -320, behavior: 'smooth' })}
+                    className="p-1 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+                    title="Geser ke kiri"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => pcScrollRef.current?.scrollBy({ left: 320, behavior: 'smooth' })}
+                    className="p-1 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+                    title="Geser ke kanan"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Versi PC (Desktop): Memanjang seperti Foto */}
-            <div className="hidden sm:flex items-stretch gap-3 overflow-x-auto pb-3 pt-1 px-1 snap-x scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+            {/* Versi PC (Desktop): Memanjang seperti Foto dengan ukuran lebih lebar & lega */}
+            <div
+              ref={pcScrollRef}
+              className="hidden sm:flex items-stretch gap-3.5 overflow-x-auto pb-3 pt-1 px-1 snap-x scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
+            >
               {APD_TYPES.map(apd => {
                 const historyList = getHistoryIgnoreCase(employeeData.history, apd) || [];
                 const totalTakes = historyList.length;
@@ -623,7 +648,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                   <div
                     key={apd}
                     onClick={() => setSelectedApdModal(apd)}
-                    className={`min-w-[145px] max-w-[180px] flex-1 shrink-0 rounded-2xl p-4 border transition-all cursor-pointer select-none flex flex-col justify-between snap-start hover:-translate-y-0.5 ${
+                    className={`min-w-[210px] md:min-w-[230px] lg:min-w-[250px] flex-1 shrink-0 rounded-2xl p-4 sm:p-5 border transition-all cursor-pointer select-none flex flex-col justify-between snap-start hover:-translate-y-1 ${
                       isEmpty
                         ? 'bg-rose-50/85 border-rose-300 text-rose-950 hover:bg-rose-100/90 hover:border-rose-400 hover:shadow-md shadow-xs'
                         : 'bg-white border-slate-200/90 text-slate-800 hover:border-purple-300 hover:shadow-md shadow-xs'
@@ -631,35 +656,36 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                     title="Klik untuk membuka jendela mengambang keterangan & aksi"
                   >
                     <div>
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className={`text-[11px] font-bold uppercase tracking-wider truncate ${isEmpty ? 'text-rose-800' : 'text-slate-600'}`}>
+                      <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                        <span className={`text-xs font-bold uppercase tracking-wider truncate ${isEmpty ? 'text-rose-800' : 'text-slate-700'}`}>
                           {apd}
                         </span>
                         {isEmpty && (
-                          <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 animate-pulse" title="Belum pernah diambil" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 animate-pulse" title="Belum pernah diambil" />
                         )}
                       </div>
 
-                      <div className="my-1.5 flex items-baseline gap-1">
-                        <span className={`text-3xl font-black tracking-tight ${isEmpty ? 'text-rose-900' : 'text-slate-900'}`}>
+                      <div className="my-2 flex items-baseline gap-1.5">
+                        <span className={`text-3xl sm:text-4xl font-black tracking-tight ${isEmpty ? 'text-rose-900' : 'text-slate-900'}`}>
                           {totalTakes}
                         </span>
-                        <span className={`text-xs font-semibold ${isEmpty ? 'text-rose-600' : 'text-slate-500'}`}>
+                        <span className={`text-xs sm:text-sm font-semibold ${isEmpty ? 'text-rose-600' : 'text-slate-500'}`}>
                           kali
                         </span>
                       </div>
                     </div>
 
-                    <div className="mt-2 pt-2 border-t border-slate-100/80">
+                    <div className="mt-3 pt-2.5 border-t border-slate-100/90">
                       {isEmpty ? (
-                        <div className="text-[11px] font-bold text-rose-700 flex items-center gap-1">
-                          <span className="truncate">Belum diambil</span>
+                        <div className="text-xs font-bold text-rose-700 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                          <span className="truncate">Belum ada pengambilan</span>
                         </div>
                       ) : (
-                        <div className="text-[11px] font-medium text-slate-500 flex items-center justify-between">
-                          <span className="truncate">{lastDateDisplay ? `Tgl: ${lastDateDisplay}` : `${totalTakes} data`}</span>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isEligible ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {isEligible ? 'Bisa' : 'Tunggu'}
+                        <div className="text-xs font-medium text-slate-500 flex items-center justify-between gap-1">
+                          <span className="truncate">{lastDateDisplay ? `Tgl: ${lastDateDisplay}` : `${totalTakes} data riwayat`}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${isEligible ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                            {isEligible ? 'Bisa diambil' : 'Belum waktunya'}
                           </span>
                         </div>
                       )}
