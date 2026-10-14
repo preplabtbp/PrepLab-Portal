@@ -177,29 +177,40 @@ export function buildBungkusRecap(rows: RecapOrderRow[], employees: RecapEmploye
   });
 }
 
-// ===== Tampilan (inline style Excel) =====
-const C = { green: '#00B050', light: '#92D050', yellow: '#FFD966', border: '#000', grid: '#bfbfbf' };
-const font = "Tahoma, 'Segoe UI', Verdana, sans-serif";
-const cell: React.CSSProperties = { borderBottom: `1px solid ${C.grid}`, padding: '4px 8px', minHeight: 24, fontSize: 13, whiteSpace: 'nowrap' };
-const vline = `1px solid ${C.border}`;
+// ===== Tampilan Modern Rekap Bungkusan =====
+const C = {
+  emeraldDark: '#065f46',
+  emeraldHeader: '#059669',
+  emeraldSub: '#ecfdf5',
+  emeraldBorder: '#a7f3d0',
+  border: '#cbd5e1',
+  grid: '#e2e8f0',
+  amberBg: '#fef3c7',
+  amberBorder: '#fde68a',
+  amberText: '#78350f',
+};
+
+const cellBase: React.CSSProperties = {
+  borderBottom: `1px solid ${C.grid}`,
+  padding: '8px 12px',
+  fontSize: 13,
+  whiteSpace: 'nowrap',
+};
 
 // Komponen Tabel Satu Blok untuk Editor Web
 function EditableBlockTable({
   block,
-  rowCount,
   canManage,
   onUpdateBlock,
   onToggleHideBlock,
 }: {
   block: RecapBlock;
-  rowCount: number;
   canManage?: boolean;
   onUpdateBlock: (updated: RecapBlock) => void;
   onToggleHideBlock: () => void;
 }) {
   const visibleLines = block.lines.filter(l => !l.hidden);
   const hiddenCount = block.lines.filter(l => l.hidden).length;
-  const pad = Math.max(0, rowCount - visibleLines.length);
 
   const updateLine = (lineId: string, patch: Partial<RecapLine>) => {
     const nextLines = block.lines.map(l => (l.id === lineId ? { ...l, ...patch } : l));
@@ -235,137 +246,149 @@ function EditableBlockTable({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg shadow-xs overflow-hidden border border-slate-300">
-      <table style={{ width: '100%', borderCollapse: 'collapse', border: `2px solid ${C.border}`, fontFamily: font, color: '#000' }}>
+    <div className="flex flex-col bg-white rounded-xl shadow-xs hover:shadow-md transition-all overflow-hidden border border-slate-200">
+      <table className="w-full border-collapse text-left">
         <colgroup>
-          <col style={{ width: '47%' }} />
-          <col style={{ width: '6%' }} />
-          <col style={{ width: canManage ? '42%' : '47%' }} />
-          {canManage && <col style={{ width: '5%' }} />}
+          <col style={{ width: canManage ? '40%' : '44%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: canManage ? '38%' : '44%' }} />
+          {canManage && <col style={{ width: '10%' }} />}
         </colgroup>
         <thead>
           <tr>
-            <th colSpan={canManage ? 4 : 3} style={{ background: C.green, color: '#fff', fontSize: 13, fontWeight: 700, padding: '6px 8px', borderBottom: vline, letterSpacing: 0.3 }}>
+            <th
+              colSpan={canManage ? 4 : 3}
+              className="bg-emerald-600 text-white font-bold text-sm px-4 py-2.5 tracking-wide"
+            >
               <div className="flex items-center justify-between gap-2">
                 <input
                   type="text"
                   value={block.title}
                   disabled={!canManage}
                   onChange={e => onUpdateBlock({ ...block, title: e.target.value })}
-                  className="bg-transparent text-white font-bold text-center w-full focus:outline-none focus:bg-emerald-800/60 rounded px-1"
+                  className="bg-transparent text-white font-bold text-center w-full focus:outline-none focus:bg-emerald-700/60 rounded px-2 py-0.5 tracking-wide uppercase text-sm sm:text-base"
                   title="Klik untuk mengedit judul blok"
                 />
                 {canManage && (
                   <button
                     type="button"
                     onClick={onToggleHideBlock}
-                    className="p-1 rounded text-white/80 hover:text-white hover:bg-emerald-800/80 cursor-pointer shrink-0"
+                    className="p-1.5 rounded-lg text-emerald-100 hover:text-white hover:bg-emerald-700/80 cursor-pointer shrink-0 transition-colors"
                     title={`Sembunyikan ${block.title}`}
                   >
-                    <EyeOff className="w-3.5 h-3.5" />
+                    <EyeOff className="w-4 h-4" />
                   </button>
                 )}
               </div>
             </th>
           </tr>
-          <tr style={{ background: C.light, fontSize: 10, fontWeight: 700 }}>
-            <th style={{ padding: '3px 4px', borderRight: vline, borderBottom: `2px solid ${C.border}` }}>Area</th>
-            <th style={{ padding: '3px 4px', borderRight: vline, borderBottom: `2px solid ${C.border}` }}>Qty</th>
-            <th style={{ padding: '3px 4px', borderRight: canManage ? vline : 'none', borderBottom: `2px solid ${C.border}` }}>Keterangan</th>
-            {canManage && <th style={{ padding: '3px 2px', borderBottom: `2px solid ${C.border}` }}>Aksi</th>}
+          <tr className="bg-emerald-50 text-emerald-900 text-xs font-bold uppercase tracking-wider border-b border-emerald-200">
+            <th className="py-2.5 px-3 border-r border-emerald-200/70">Area</th>
+            <th className="py-2.5 px-3 border-r border-emerald-200/70 text-center">Qty</th>
+            <th className="py-2.5 px-3 border-r border-emerald-200/70">Keterangan</th>
+            {canManage && <th className="py-2.5 px-2 text-center">Aksi</th>}
           </tr>
         </thead>
-        <tbody>
-          {visibleLines.map((l) => (
-            <tr key={l.id} className="group hover:bg-emerald-50/40 transition-colors">
-              <td style={{ ...cell, borderRight: vline }}>
-                {canManage ? (
-                  <input
-                    type="text"
-                    value={l.area}
-                    onChange={e => updateLine(l.id, { area: e.target.value })}
-                    className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1 text-slate-900"
-                    title="Klik untuk mengedit Area"
-                  />
-                ) : (
-                  <span>{l.area}</span>
-                )}
+        <tbody className="divide-y divide-slate-100">
+          {visibleLines.length === 0 ? (
+            <tr>
+              <td colSpan={canManage ? 4 : 3} className="text-center py-6 text-xs text-slate-400 italic">
+                Tidak ada pesanan di waktu ini
               </td>
-              <td style={{ ...cell, borderRight: vline, textAlign: 'center', fontWeight: 700 }}>
-                {canManage ? (
-                  <input
-                    type="number"
-                    min={0}
-                    value={l.qty}
-                    onChange={e => updateLine(l.id, { qty: portions(e.target.value) })}
-                    className="w-full text-center font-bold bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded text-slate-900"
-                    title="Klik untuk mengedit Qty"
-                  />
-                ) : (
-                  <span>{l.qty}</span>
-                )}
-              </td>
-              <td style={{ ...cell, borderRight: canManage ? vline : 'none' }}>
-                {canManage ? (
-                  <input
-                    type="text"
-                    value={l.keterangan}
-                    onChange={e => updateLine(l.id, { keterangan: e.target.value })}
-                    className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1 text-slate-900"
-                    title="Klik untuk mengedit Keterangan"
-                  />
-                ) : (
-                  <span>{l.keterangan}</span>
-                )}
-              </td>
-              {canManage && (
-                <td style={{ ...cell, textAlign: 'center', padding: '2px' }}>
-                  <div className="flex items-center justify-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={() => updateLine(l.id, { hidden: true })}
-                      className="p-1 rounded text-slate-500 hover:text-amber-600 hover:bg-amber-50 cursor-pointer"
-                      title="Sembunyikan baris ini"
-                    >
-                      <EyeOff className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeLine(l.id)}
-                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-                      title="Hapus baris ini"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+            </tr>
+          ) : (
+            visibleLines.map(l => (
+              <tr key={l.id} className="group hover:bg-emerald-50/40 transition-colors">
+                <td style={{ ...cellBase, borderRight: `1px solid ${C.grid}` }}>
+                  {canManage ? (
+                    <input
+                      type="text"
+                      value={l.area}
+                      onChange={e => updateLine(l.id, { area: e.target.value })}
+                      className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1.5 py-0.5 text-slate-900 font-medium"
+                      title="Klik untuk mengedit Area"
+                    />
+                  ) : (
+                    <span className="font-medium text-slate-900">{l.area}</span>
+                  )}
                 </td>
-              )}
-            </tr>
-          ))}
+                <td style={{ ...cellBase, borderRight: `1px solid ${C.grid}`, textAlign: 'center' }}>
+                  {canManage ? (
+                    <input
+                      type="number"
+                      min={0}
+                      value={l.qty}
+                      onChange={e => updateLine(l.id, { qty: portions(e.target.value) })}
+                      className="w-full text-center font-extrabold text-sm bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded text-slate-900"
+                      title="Klik untuk mengedit Qty"
+                    />
+                  ) : (
+                    <span className="font-extrabold text-sm text-slate-900">{l.qty}</span>
+                  )}
+                </td>
+                <td style={{ ...cellBase, borderRight: canManage ? `1px solid ${C.grid}` : 'none' }}>
+                  {canManage ? (
+                    <input
+                      type="text"
+                      value={l.keterangan}
+                      onChange={e => updateLine(l.id, { keterangan: e.target.value })}
+                      className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1.5 py-0.5 text-slate-700"
+                      title="Klik untuk mengedit Keterangan"
+                    />
+                  ) : (
+                    <span className="text-slate-700">{l.keterangan}</span>
+                  )}
+                </td>
+                {canManage && (
+                  <td style={{ ...cellBase, textAlign: 'center', padding: '4px' }}>
+                    <div className="flex items-center justify-center gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => updateLine(l.id, { hidden: true })}
+                        className="p-1 rounded-md text-slate-500 hover:text-amber-600 hover:bg-amber-50 cursor-pointer transition-colors"
+                        title="Sembunyikan baris ini"
+                      >
+                        <EyeOff className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeLine(l.id)}
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
+                        title="Hapus baris ini"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))
+          )}
 
-          {Array.from({ length: pad }).map((_, i) => (
-            <tr key={`pad-${i}`}>
-              <td style={{ ...cell, borderRight: vline }} />
-              <td style={{ ...cell, borderRight: vline }} />
-              <td style={{ ...cell, borderRight: canManage ? vline : 'none' }} />
-              {canManage && <td style={cell} />}
-            </tr>
-          ))}
-
-          <tr style={{ background: C.yellow, fontWeight: 700 }}>
-            <td style={{ padding: '5px', textAlign: 'center', fontSize: 12, borderTop: `2px solid ${C.border}`, borderRight: vline }}>TOTAL</td>
-            <td style={{ padding: '5px', textAlign: 'center', fontSize: 14, borderTop: `2px solid ${C.border}`, borderRight: vline }}>{block.total}</td>
-            <td colSpan={canManage ? 2 : 1} style={{ padding: '5px', textAlign: 'center', fontSize: 14, borderTop: `2px solid ${C.border}` }}>Bungkus</td>
+          {/* Baris Total: Menggunakan aksen amber lembut & font tebal */}
+          <tr className="bg-amber-100/90 font-bold border-t-2 border-amber-300">
+            <td className="py-2.5 px-3 text-center text-xs font-black uppercase tracking-wider text-amber-900 border-r border-amber-200">
+              TOTAL
+            </td>
+            <td className="py-2.5 px-3 text-center text-base font-black text-amber-950 border-r border-amber-200">
+              {block.total}
+            </td>
+            <td
+              colSpan={canManage ? 2 : 1}
+              className="py-2.5 px-3 text-center text-xs font-bold uppercase tracking-wider text-amber-900"
+            >
+              Bungkus
+            </td>
           </tr>
         </tbody>
       </table>
 
       {canManage && (
-        <div className="flex items-center justify-between gap-2 px-2 py-1.5 bg-slate-50 border-t border-slate-200 text-[11px]">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-50/80 border-t border-slate-200/80 text-xs">
           <button
             type="button"
             onClick={addLine}
-            className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-semibold cursor-pointer py-0.5 px-1.5 rounded hover:bg-emerald-100/60 transition-colors"
+            className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-900 font-semibold cursor-pointer py-1 px-2.5 rounded-lg hover:bg-emerald-100/70 border border-emerald-200/60 transition-colors"
             title="Tambah baris kustom di blok ini"
           >
             <Plus className="w-3.5 h-3.5" /> Tambah Baris
@@ -374,7 +397,7 @@ function EditableBlockTable({
             <button
               type="button"
               onClick={unhideAllLines}
-              className="inline-flex items-center gap-1 text-amber-700 hover:text-amber-900 font-medium cursor-pointer py-0.5 px-1.5 rounded hover:bg-amber-100/60 transition-colors"
+              className="inline-flex items-center gap-1 text-amber-700 hover:text-amber-900 font-medium cursor-pointer py-1 px-2.5 rounded-lg hover:bg-amber-100/70 border border-amber-200/60 transition-colors"
               title="Tampilkan kembali baris yang disembunyikan di blok ini"
             >
               <Eye className="w-3.5 h-3.5" /> {hiddenCount} baris tersembunyi
@@ -393,50 +416,55 @@ export function BungkusRecapPrintSheet({ title, blocks }: { title: string; block
   for (let i = 0; i < visibleBlocks.length; i += 2) pairs.push(visibleBlocks.slice(i, i + 2));
 
   return (
-    <div style={{ fontFamily: font, background: '#fff', color: '#000', border: `1px solid ${C.border}`, minWidth: 1100, padding: 8 }}>
-      <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 700, padding: '8px 4px', borderBottom: `2px solid ${C.border}`, letterSpacing: 0.2 }}>{title}</div>
-      {pairs.map((pair, i) => {
-        const rowCount = Math.max(...pair.map(b => b.lines.filter(l => !l.hidden).length));
-        return (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: pair.length === 1 ? '1fr' : '1fr 1fr', gap: 10, padding: '8px 0', breakInside: 'avoid' }}>
-            {pair.map(b => {
-              const activeLines = b.lines.filter(l => !l.hidden);
-              const pad = Math.max(0, rowCount - activeLines.length);
-              const total = activeLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
-              return (
-                <table key={b.id || b.title} style={{ width: '100%', borderCollapse: 'collapse', border: `2px solid ${C.border}`, fontFamily: font, color: '#000' }}>
-                  <colgroup><col style={{ width: '47%' }} /><col style={{ width: '6%' }} /><col style={{ width: '47%' }} /></colgroup>
+    <div style={{ fontFamily: "Inter, -apple-system, 'Segoe UI', Roboto, sans-serif", background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', minWidth: 1100, padding: 16 }}>
+      <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 800, padding: '12px 4px', borderBottom: '2px solid #059669', letterSpacing: 0.5, color: '#0f172a' }}>
+        {title}
+      </div>
+      {pairs.map((pair, i) => (
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: pair.length === 1 ? '1fr' : '1fr 1fr', gap: 14, padding: '10px 0', breakInside: 'avoid', alignItems: 'start' }}>
+          {pair.map(b => {
+            const activeLines = b.lines.filter(l => !l.hidden);
+            const total = activeLines.reduce((s, l) => s + (Number(l.qty) || 0), 0);
+            return (
+              <div key={b.id || b.title} style={{ border: '1px solid #cbd5e1', borderRadius: 8, overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', color: '#0f172a' }}>
+                  <colgroup>
+                    <col style={{ width: '44%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '44%' }} />
+                  </colgroup>
                   <thead>
-                    <tr><th colSpan={3} style={{ background: C.green, color: '#fff', fontSize: 13, fontWeight: 700, padding: '7px 4px', borderBottom: vline, letterSpacing: 0.3 }}>{b.title}</th></tr>
-                    <tr style={{ background: C.light, fontSize: 10, fontWeight: 700 }}>
-                      <th style={{ padding: '3px 4px', borderRight: vline, borderBottom: `2px solid ${C.border}` }}>Area</th>
-                      <th style={{ padding: '3px 4px', borderRight: vline, borderBottom: `2px solid ${C.border}` }}>Qty</th>
-                      <th style={{ padding: '3px 4px', borderBottom: `2px solid ${C.border}` }}>Keterangan</th>
+                    <tr>
+                      <th colSpan={3} style={{ background: '#059669', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 10px', letterSpacing: 0.4, textAlign: 'center' }}>
+                        {b.title}
+                      </th>
+                    </tr>
+                    <tr style={{ background: '#ecfdf5', fontSize: 11, fontWeight: 700, color: '#065f46', borderBottom: '1px solid #a7f3d0' }}>
+                      <th style={{ padding: '6px 10px', borderRight: '1px solid #cbd5e1', textAlign: 'left' }}>Area</th>
+                      <th style={{ padding: '6px 10px', borderRight: '1px solid #cbd5e1', textAlign: 'center' }}>Qty</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left' }}>Keterangan</th>
                     </tr>
                   </thead>
                   <tbody>
                     {activeLines.map((l, idx) => (
-                      <tr key={idx}>
-                        <td style={{ ...cell, borderRight: vline }}>{l.area}</td>
-                        <td style={{ ...cell, borderRight: vline, textAlign: 'center', fontWeight: 700 }}>{l.qty}</td>
-                        <td style={cell}>{l.keterangan}</td>
+                      <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '6px 10px', borderRight: '1px solid #e2e8f0', fontSize: 12, fontWeight: 600 }}>{l.area}</td>
+                        <td style={{ padding: '6px 10px', borderRight: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 800, fontSize: 13 }}>{l.qty}</td>
+                        <td style={{ padding: '6px 10px', fontSize: 12 }}>{l.keterangan}</td>
                       </tr>
                     ))}
-                    {Array.from({ length: pad }).map((_, idx) => (
-                      <tr key={`pad-${idx}`}><td style={{ ...cell, borderRight: vline }} /><td style={{ ...cell, borderRight: vline }} /><td style={cell} /></tr>
-                    ))}
-                    <tr style={{ background: C.yellow, fontWeight: 700 }}>
-                      <td style={{ padding: '5px', textAlign: 'center', fontSize: 12, borderTop: `2px solid ${C.border}`, borderRight: vline }}>TOTAL</td>
-                      <td style={{ padding: '5px', textAlign: 'center', fontSize: 14, borderTop: `2px solid ${C.border}`, borderRight: vline }}>{total}</td>
-                      <td style={{ padding: '5px', textAlign: 'center', fontSize: 14, borderTop: `2px solid ${C.border}` }}>Bungkus</td>
+                    <tr style={{ background: '#fef3c7', fontWeight: 700, borderTop: '2px solid #fde68a' }}>
+                      <td style={{ padding: '7px 10px', textAlign: 'center', fontSize: 11, fontWeight: 800, color: '#78350f', borderRight: '1px solid #fde68a' }}>TOTAL</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'center', fontSize: 14, fontWeight: 800, color: '#78350f', borderRight: '1px solid #fde68a' }}>{total}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#78350f' }}>Bungkus</td>
                     </tr>
                   </tbody>
                 </table>
-              );
-            })}
-          </div>
-        );
-      })}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -485,10 +513,10 @@ export function BungkusRecapSheet({
   for (let i = 0; i < visibleBlocks.length; i += 2) pairs.push(visibleBlocks.slice(i, i + 2));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Toolbar Kontrol Blok & Edit */}
       {canManage && (
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+        <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Tampilan Blok Rekapan</span>
@@ -499,7 +527,7 @@ export function BungkusRecapSheet({
                 <button
                   type="button"
                   onClick={showAllBlocksAndLines}
-                  className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer shadow-xs transition-colors"
                   title="Tampilkan kembali semua blok dan baris yang disembunyikan"
                 >
                   <Eye className="w-3.5 h-3.5 text-emerald-600" /> Tampilkan Semua
@@ -509,7 +537,7 @@ export function BungkusRecapSheet({
                 <button
                   type="button"
                   onClick={onReset}
-                  className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer shadow-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer shadow-xs transition-colors"
                   title="Kembalikan semua teks, baris, dan blok ke hitungan otomatis database"
                 >
                   <RotateCcw className="w-3.5 h-3.5 text-blue-600" /> Reset ke Otomatis
@@ -534,7 +562,7 @@ export function BungkusRecapSheet({
               >
                 {b.hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5 text-emerald-600" />}
                 <span>{b.title}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${b.hidden ? 'bg-slate-300 text-slate-600' : 'bg-emerald-100 text-emerald-900'}`}>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${b.hidden ? 'bg-slate-300 text-slate-600' : 'bg-emerald-100 text-emerald-900'}`}>
                   {b.total}
                 </span>
               </button>
@@ -543,10 +571,12 @@ export function BungkusRecapSheet({
         </div>
       )}
 
-      {/* Lembar Tabel Rekapan */}
-      <div style={{ fontFamily: font, background: '#fff', color: '#000', border: `1px solid ${C.border}`, minWidth: 1100, padding: 8 }}>
-        <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 700, padding: '8px 4px', borderBottom: `2px solid ${C.border}`, letterSpacing: 0.2 }}>
-          {title}
+      {/* Lembar Tabel Rekapan Modern */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm p-4 sm:p-6 space-y-4 min-w-[1000px]">
+        <div className="text-center py-2 border-b-2 border-emerald-600/70">
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
+            {title}
+          </h2>
         </div>
         
         {visibleBlocks.length === 0 ? (
@@ -554,23 +584,19 @@ export function BungkusRecapSheet({
             Semua blok bungkusan sedang disembunyikan. Klik tombol "Tampilkan Semua" di atas untuk menampilkannya kembali.
           </div>
         ) : (
-          pairs.map((pair, i) => {
-            const rowCount = Math.max(...pair.map(b => b.lines.filter(l => !l.hidden).length));
-            return (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: pair.length === 1 ? '1fr' : '1fr 1fr', gap: 10, padding: '8px 0', breakInside: 'avoid' }}>
-                {pair.map(b => (
-                  <EditableBlockTable
-                    key={b.id || b.title}
-                    block={b}
-                    rowCount={rowCount}
-                    canManage={canManage}
-                    onUpdateBlock={updated => updateBlock(b.id, updated)}
-                    onToggleHideBlock={() => toggleHideBlock(b.id)}
-                  />
-                ))}
-              </div>
-            );
-          })
+          pairs.map((pair, i) => (
+            <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {pair.map(b => (
+                <EditableBlockTable
+                  key={b.id || b.title}
+                  block={b}
+                  canManage={canManage}
+                  onUpdateBlock={updated => updateBlock(b.id, updated)}
+                  onToggleHideBlock={() => toggleHideBlock(b.id)}
+                />
+              ))}
+            </div>
+          ))
         )}
       </div>
     </div>
