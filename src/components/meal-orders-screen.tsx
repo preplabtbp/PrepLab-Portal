@@ -11,6 +11,7 @@ import { isTuesdayWednesdaySaturday, mealChoicePatch, computeMealOrderByRoster, 
 import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle, type RecapBlock } from './meal-bungkus-recap';
 import { mealCounts, bungkusCount, MEAL_SLOT_BY_GROUP, type MealSlot } from '../utils/meal-bungkus-counts';
 import { MealBungkusStats } from './meal-bungkus-stats';
+import { MealBungkusRecipientsTable } from './meal-bungkus-recipients';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
@@ -149,8 +150,8 @@ function FloatingScrollbar({ targetRef }: { targetRef: React.RefObject<HTMLDivEl
 export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => todayWit());
-  // orders = Orderan Makanan · recap = List Pengiriman Ke GA (lembar per tanggal) · stats = Rekapan Bungkusan (harian/mingguan/bulanan)
-  const [view, setView] = useState<'orders' | 'recap' | 'stats'>('orders');
+  // orders = Orderan Makanan · recipients = Daftar Penerima Bungkusan · recap = List Pengiriman Ke GA · stats = Rekapan Bungkusan
+  const [view, setView] = useState<'orders' | 'recipients' | 'recap' | 'stats'>('orders');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const tableAnchorRef = useRef<HTMLDivElement>(null);
@@ -1354,9 +1355,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           </div>
         </div>
 
-        {/* Tab: Orderan Makanan / Rekapan Bungkusan */}
+        {/* Tab: Orderan Makanan / Daftar Penerima Bungkusan / List Pengiriman Ke GA / Rekapan Bungkusan */}
         <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {([['orders', 'Orderan Makanan', Utensils], ['recap', 'List Pengiriman Ke GA', Truck], ['stats', 'Rekapan Bungkusan', BarChart3]] as const).map(([key, label, Icon]) => (
+          {([
+            ['orders', 'Orderan Makanan', Utensils],
+            ['recipients', 'Daftar Penerima Bungkusan', Users],
+            ['recap', 'List Pengiriman Ke GA', Truck],
+            ['stats', 'Rekapan Bungkusan', BarChart3]
+          ] as const).map(([key, label, Icon]) => (
             <button
               key={key}
               type="button"
@@ -1367,6 +1373,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             </button>
           ))}
         </div>
+
+        {view === 'recipients' && (
+          <MealBungkusRecipientsTable date={date} rows={rows} />
+        )}
 
         {view === 'stats' && (
           <MealBungkusStats date={date} onOpenDate={d => { setDate(d); setView('orders'); }} />
