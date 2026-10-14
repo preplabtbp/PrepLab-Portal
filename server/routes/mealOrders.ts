@@ -194,6 +194,8 @@ const MEAL_COLUMNS: { key: keyof typeof mealOrders.$inferSelect; group: string; 
 const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const ymd = (d: unknown) => String(d).slice(0, 10);
+const parseYmd = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)); };
+const shiftDate = (d: string, days: number) => { const x = parseYmd(d); x.setUTCDate(x.getUTCDate() + days); return x.toISOString().slice(0, 10); };
 const dayName = (d: string) => DAYS[new Date(`${d}T00:00:00Z`).getUTCDay()];
 const longDate = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return `${dd} ${MONTHS[m - 1]} ${y}`; };
 const portions = (v: unknown) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; };
@@ -747,30 +749,89 @@ async function loadMasterTempatTinggalMap(): Promise<Map<string, string>> {
   return map;
 }
 
-// Membaca master pilihan Catatan resmi per karyawan (Bungkusan Pagi, Bungkusan Sore, dll.)
-// agar pilihan Catatan karyawan tidak hilang/berubah saat pindah tanggal atau saat sinkronisasi roster.
-export async function loadMasterCatatanMap(): Promise<Map<string, string>> {
-  const rows = await db.select({ nik: mealOrders.nik, catatan: mealOrders.catatan })
-    .from(mealOrders)
-    .where(sql`(${mealOrders.catatan} IS NOT NULL AND ${mealOrders.catatan} <> '' AND ${mealOrders.catatan} <> '-' AND NOT (${mealOrders.catatan} LIKE 'Cuti%')) OR ${mealOrders.orderDate} = '2026-10-14'`)
-    .orderBy(
-      sql`CASE WHEN ${mealOrders.orderDate} = '2026-10-14' THEN 0 ELSE 1 END`,
-      sql`ABS(${mealOrders.orderDate} - '2026-10-14'::date)`
-    );
+// Menghitung tanggal acuan sumber Catatan berdasarkan aturan hari:
+// - Kamis: kembali ke Catatan Hari Senin (melewati Selasa & Rabu yang wajib Kantin untuk Mess CR)
+// - Jumat: pakai Catatan Hari Kamis
+// - Sabtu: pakai Catatan Hari Jumat (khusus Mess CR sore ditiadakan / wajib Kantin)
+// - Minggu: kembali ke Catatan Hari Jumat (melewati Sabtu yang wajib Kantin untuk Mess CR)
+// - Senin: pakai Catatan Hari Minggu
+// - Selasa & Rabu: pakai Catatan Hari Senin (khusus Mess CR sore ditiadakan / wajib Kantin)
+export function getReferenceCatatanDate(targetDate: string): string {
+  const d = parseYmd(targetDate);
+  const day = d.getUTCDay(); // 0 = Minggu, 1 = Senin, 2 = Selasa, 3 = Rabu, 4 = Kamis, 5 = Jumat, 6 = Sabtu
+
+  if (day === 4) return shiftDate(targetDate, -3); // Kamis -> kembali ke Senin
+  if (day === 5) return shiftDate(targetDate, -1); // Jumat -> pakai Kamis
+  if (day === 6) return shiftDate(targetDate, -1); // Sabtu -> pakai Jumat
+  if (day === 0) return shiftDate(targetDate, -2); // Minggu -> kembali ke Jumat
+  if (day === 1) return shiftDate(targetDate, -1); // Senin -> pakai Minggu
+  if (day === 2) return shiftDate(targetDate, -1); // Selasa -> pakai Senin
+  if (day === 3) return shiftDate(targetDate, -2); // Rabu -> pakai Senin
+  return shiftDate(targetDate, -1);
+}
+
+// Membaca Catatan resmi per karyawan dari tanggal acuan yang tepat:
+// Jika karyawan pada tanggal acuan tsb TIDAK MEMILIKI catatan (null/'-'),
+// maka karyawan tsb TIDAK BOLEH tiba-tiba diberi catatan (tetap kosong).
+export async function loadReferenceCatatanMap(targetDate: string): Promise<Map<string, string>> {
+  const refDate = getReferenceCatatanDate(targetDate);
+  const isTueWedSat = isTuesdayWednesdaySaturday(targetDate);
+
+  let rows = await db.select({
+    nik: mealOrders.nik,
+    catatan: mealOrders.catatan,
+    statusMess: mealOrders.statusMess,
+  }).from(mealOrders)
+    .where(eq(mealOrders.orderDate, refDate));
+
+  // Jika tanggal acuan belum punya data sama sekali (mis. tanggal baru belum di-init),
+  // cari mundur ke tanggal sebelumnya yang sudah memiliki data orderan valid
+  const hasValidData = rows.some(r => r.catatan && r.catatan !== '-' && !r.catatan.startsWith('Cuti'));
+  if (!hasValidData) {
+    const priorDates = await db.select({ orderDate: mealOrders.orderDate })
+      .from(mealOrders)
+      .where(and(
+        sql`${mealOrders.orderDate} < ${targetDate}`,
+        sql`${mealOrders.catatan} IS NOT NULL AND ${mealOrders.catatan} <> '' AND ${mealOrders.catatan} <> '-' AND NOT (${mealOrders.catatan} LIKE 'Cuti%')`
+      ))
+      .groupBy(mealOrders.orderDate)
+      .orderBy(desc(mealOrders.orderDate))
+      .limit(1);
+
+    if (priorDates.length > 0) {
+      rows = await db.select({
+        nik: mealOrders.nik,
+        catatan: mealOrders.catatan,
+        statusMess: mealOrders.statusMess,
+      }).from(mealOrders)
+        .where(eq(mealOrders.orderDate, priorDates[0].orderDate));
+    }
+  }
 
   const map = new Map<string, string>();
   for (const r of rows) {
     const k = r.nik.toUpperCase().trim();
-    const c = String(r.catatan || '').trim();
-    if (!map.has(k) && c && c !== '-' && !c.startsWith('Cuti')) {
-      map.set(k, c);
+    let c = String(r.catatan || '').trim();
+    if (!c || c === '-' || c.startsWith('Cuti')) continue;
+
+    const sm = String(r.statusMess || '').toUpperCase();
+    const isCR = sm === 'CR' || sm === 'MESS';
+
+    if (isCR && isTueWedSat) {
+      if (c === 'Bungkusan Sore') {
+        continue;
+      } else if (c === 'Bungkusan Pagi dan Bungkusan Sore') {
+        c = 'Bungkusan Pagi';
+      }
     }
+    map.set(k, c);
   }
+
   return map;
 }
 
 // Master profil identitas resmi karyawan di Orderan Makanan:
-// No Urut, Nama, Status Mess, PT, Shift Reguler, Section, Tempat Tinggal, Catatan.
+// No Urut, Nama, Status Mess, PT, Shift Reguler, Section, Residence.
 // Bagian ini dikunci permanen dan tidak boleh berubah saat pindah tanggal atau saat sinkronisasi roster.
 export type MasterEmployeeProfile = {
   sortNo: number;
@@ -784,7 +845,6 @@ export type MasterEmployeeProfile = {
 };
 
 export async function loadMasterEmployeeProfileMap(): Promise<Map<string, MasterEmployeeProfile>> {
-  const masterCatatan = await loadMasterCatatanMap();
   // Prioritaskan baris tanggal acuan resmi 2026-10-14, disusul baris dengan section resmi operasional
   const rows = await db.select({
     nik: mealOrders.nik,
@@ -808,7 +868,6 @@ export async function loadMasterEmployeeProfileMap(): Promise<Map<string, Master
   for (const r of rows) {
     const k = r.nik.toUpperCase().trim();
     if (!map.has(k)) {
-      const c = masterCatatan.get(k) || (r.catatan && r.catatan !== '-' && !r.catatan.startsWith('Cuti') ? r.catatan : null);
       map.set(k, {
         sortNo: r.sortNo ?? 9999,
         nama: r.nama,
@@ -817,7 +876,7 @@ export async function loadMasterEmployeeProfileMap(): Promise<Map<string, Master
         shift: r.shift || null,
         section: r.section || null,
         tempatTinggal: r.tempatTinggal || null,
-        catatan: c || null,
+        catatan: null,
       });
     }
   }
@@ -974,6 +1033,8 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     return a.name.localeCompare(b.name);
   });
 
+  const refCatatanMap = await loadReferenceCatatanMap(date);
+
   for (const rosterEmp of activeEmps) {
     const nik = rosterEmp.nik.toUpperCase().trim();
     if (!overwrite && existingNiks.has(nik)) {
@@ -982,16 +1043,17 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     const current = existingByNik.get(nik);
     const master = masterProfiles.get(nik);
     const sortNo = master?.sortNo ?? getSortNo(nik, current?.sortNo);
-    // Kolom Profil (Status Mess, PT, Shift, Section, Tempat Tinggal) dikunci sesuai Master Profile:
+    // Kolom Profil (Status Mess, PT, Shift, Section, Residence) dikunci sesuai Master Profile:
     const lockedStatusMess = master?.statusMess || current?.statusMess || rosterEmp.statusMess || null;
     const lockedPt = master?.pt || current?.pt || rosterEmp.pt || null;
     const lockedShift = master?.shift || current?.shift || rosterEmp.shift || null;
     const lockedSection = master?.section || current?.section || rosterEmp.section || null;
     const lockedTt = (current?.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || master?.tempatTinggal || masterTtByNik.get(nik) || rosterEmp.tempatTinggal || null;
 
-    // Kolom Catatan dikunci: pertahankan catatan yang sudah ada di tanggal ini atau dari master catatan (Bungkusan Pagi, dll.)
+    // Kolom Catatan dikunci mengikuti aturan tanggal acuan:
+    // Kamis kembali ke Senin, Jumat pakai Kamis, dst.
     const currentCatatan = current?.catatan && current.catatan !== '-' && !current.catatan.startsWith('Cuti') ? current.catatan : null;
-    let lockedCatatan = currentCatatan || master?.catatan || null;
+    let lockedCatatan = currentCatatan || refCatatanMap.get(nik) || null;
 
     const isTueWedSat = isTuesdayWednesdaySaturday(date);
     const isCR = ['CR', 'MESS'].includes(String(lockedStatusMess || rosterEmp.statusMess || '').trim().toUpperCase());
@@ -1154,12 +1216,13 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const prefs = await loadMealPreferences(ymd, cleanNik);
     const prevStatuses = await loadPreviousRosterStatuses(ymd, cleanNik);
     const prevStatus = prevStatuses.get(cleanNik);
+    const refCatatanMap = await loadReferenceCatatanMap(ymd);
     const lockedStatusMess = master?.statusMess || current.statusMess;
     const lockedShift = master?.shift || current.shift;
     const lockedSection = master?.section || emp.section;
     const lockedTt = (current.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || master?.tempatTinggal || null;
     const currentCatatan = current.catatan && current.catatan !== '-' && !current.catatan.startsWith('Cuti') ? current.catatan : null;
-    let lockedCatatan = currentCatatan || master?.catatan || null;
+    let lockedCatatan = currentCatatan || refCatatanMap.get(cleanNik) || null;
 
     const isTueWedSat = isTuesdayWednesdaySaturday(ymd);
     const isCR = ['CR', 'MESS'].includes(String(lockedStatusMess || emp.statusMess || '').trim().toUpperCase());
@@ -1287,9 +1350,10 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
       }
     }
 
-    // Selaraskan identitas profil karyawan (No, Nama, Status Mess, PT, Shift, Section, Tempat Tinggal, Catatan)
-    // agar selalu konsisten dan terkunci mengikuti Master Profile saat berpindah tanggal
+    // Selaraskan identitas profil karyawan (No, Nama, Status Mess, PT, Shift, Section, Residence)
+    // serta sinkronkan Catatan mengikuti aturan rantai hari acuan
     const masterProfiles = await loadMasterEmployeeProfileMap();
+    const refCatatanMap = await loadReferenceCatatanMap(date);
     rows = rows.map(r => {
       const clean = r.nik.toUpperCase().trim();
       const m = masterProfiles.get(clean);
@@ -1306,9 +1370,10 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
         if (m.shift === 'Nonshift' && (r.shiftKerja === 'SIANG' || r.shiftKerja === 'Siang')) {
           r.shiftKerja = 'Nonshift';
         }
-        // Kolom Catatan dikunci: jika belum ada / kosong / terisi kode Cuti salah, kembalikan ke catatan master
+        // Kolom Catatan dikunci mengikuti aturan tanggal acuan:
+        // Kamis kembali ke Senin, Jumat pakai Kamis, dst.
         const currentCat = r.catatan && r.catatan !== '-' && !r.catatan.startsWith('Cuti') ? r.catatan : null;
-        let targetCat = currentCat || m.catatan || null;
+        let targetCat = currentCat || refCatatanMap.get(clean) || null;
 
         const isTueWedSat = isTuesdayWednesdaySaturday(date);
         const sm = String(r.statusMess || '').trim().toUpperCase();
