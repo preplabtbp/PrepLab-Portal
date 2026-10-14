@@ -423,8 +423,8 @@ const cellP = (extra: React.CSSProperties = {}): React.CSSProperties => ({
   height: ROW_H, padding: '6px 10px', lineHeight: '15px', verticalAlign: 'middle', whiteSpace: 'normal',
   wordBreak: 'break-word', overflowWrap: 'anywhere', fontSize: 11, borderBottom: `1px solid ${P.line}`, ...extra,
 });
-// Lebar kolom Area | Qty | Keterangan (dipakai tabel & baris TOTAL agar garisnya sejajar)
-const COL_W = ['47%', '9%', '44%'] as const;
+// Lebar kolom Area | Qty | Keterangan (dipakai tabel & baris TOTAL agar garisnya 100% sejajar)
+const COL_W = ['46%', '10%', '44%'] as const;
 
 function PrintBlock({ block }: { block: RecapBlock }) {
   return (
@@ -438,9 +438,17 @@ function PrintBlock({ block }: { block: RecapBlock }) {
       height: '100%',
       boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
     }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', color: P.ink }}>
+      <table style={{
+        width: '100%',
+        height: '100%',
+        borderCollapse: 'collapse',
+        tableLayout: 'fixed',
+        color: P.ink,
+      }}>
         <colgroup>
-          {COL_W.map((w, i) => <col key={i} style={{ width: w }} />)}
+          <col style={{ width: COL_W[0] }} />
+          <col style={{ width: COL_W[1] }} />
+          <col style={{ width: COL_W[2] }} />
         </colgroup>
         <thead>
           <tr>
@@ -455,46 +463,91 @@ function PrintBlock({ block }: { block: RecapBlock }) {
           <tr style={{ background: P.greenSoft }}>
             {(['Area', 'Qty', 'Keterangan'] as const).map((h, i) => (
               <th key={h} style={{
+                width: COL_W[i],
                 height: 25, padding: '0 10px', lineHeight: '25px', verticalAlign: 'middle', fontSize: 10, fontWeight: 700,
                 textTransform: 'uppercase', letterSpacing: 0.6, color: P.green, textAlign: i === 1 ? 'center' : 'left',
                 borderBottom: `1px solid ${P.greenLine}`, borderRight: i < 2 ? `1px solid ${P.greenLine}` : 'none',
+                boxSizing: 'border-box',
               }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {block.lines.map((l, idx) => (
-            <tr key={idx} style={{ background: idx % 2 ? '#f8fafc' : '#ffffff' }}>
-              <td style={cellP({ fontWeight: 600, borderRight: `1px solid ${P.line}` })}>{l.area}</td>
-              <td style={cellP({ textAlign: 'center', fontWeight: 800, fontSize: 13, color: '#047857', borderRight: `1px solid ${P.line}` })}>{l.qty}</td>
-              <td style={cellP({ color: '#334155' })}>{l.keterangan}</td>
+            <tr key={idx} style={{ height: ROW_H, background: idx % 2 ? '#f8fafc' : '#ffffff' }}>
+              <td style={cellP({ width: COL_W[0], fontWeight: 600, borderRight: `1px solid ${P.line}` })}>{l.area}</td>
+              <td style={cellP({ width: COL_W[1], textAlign: 'center', fontWeight: 800, fontSize: 13, color: '#047857', borderRight: `1px solid ${P.line}` })}>{l.qty}</td>
+              <td style={cellP({ width: COL_W[2], color: '#334155' })}>{l.keterangan}</td>
             </tr>
           ))}
           {block.lines.length === 0 && (
-            <tr><td colSpan={3} style={cellP({ textAlign: 'center', color: P.muted, fontStyle: 'italic' })}>Tidak ada bungkusan</td></tr>
+            <tr style={{ height: ROW_H }}>
+              <td colSpan={3} style={cellP({ textAlign: 'center', color: P.muted, fontStyle: 'italic' })}>Tidak ada bungkusan</td>
+            </tr>
           )}
+          {/* Baris pengisi agar border vertikal tetap lurus ke bawah sampai ke TOTAL */}
+          <tr style={{ height: 'auto' }}>
+            <td style={{ width: COL_W[0], background: '#ffffff', borderRight: `1px solid ${P.line}`, padding: 0 }} />
+            <td style={{ width: COL_W[1], background: '#ffffff', borderRight: `1px solid ${P.line}`, padding: 0 }} />
+            <td style={{ width: COL_W[2], background: '#ffffff', padding: 0 }} />
+          </tr>
         </tbody>
+        <tfoot>
+          <tr style={{
+            background: 'linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)',
+            height: 32,
+          }}>
+            <td style={{
+              width: COL_W[0],
+              height: 32,
+              padding: '0 10px',
+              lineHeight: '32px',
+              verticalAlign: 'middle',
+              textAlign: 'center',
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: 0.6,
+              color: P.amberInk,
+              borderTop: `2px solid ${P.amberLine}`,
+              borderRight: `1px solid ${P.amberLine}`,
+              boxSizing: 'border-box',
+            }}>
+              TOTAL
+            </td>
+            <td style={{
+              width: COL_W[1],
+              height: 32,
+              padding: '0 10px',
+              lineHeight: '32px',
+              verticalAlign: 'middle',
+              textAlign: 'center',
+              fontSize: 15,
+              fontWeight: 800,
+              color: P.amberInk,
+              borderTop: `2px solid ${P.amberLine}`,
+              borderRight: `1px solid ${P.amberLine}`,
+              boxSizing: 'border-box',
+            }}>
+              {block.total}
+            </td>
+            <td style={{
+              width: COL_W[2],
+              height: 32,
+              padding: '0 10px',
+              lineHeight: '32px',
+              verticalAlign: 'middle',
+              textAlign: 'center',
+              fontSize: 11,
+              fontWeight: 700,
+              color: P.amberInk,
+              borderTop: `2px solid ${P.amberLine}`,
+              boxSizing: 'border-box',
+            }}>
+              Bungkus
+            </td>
+          </tr>
+        </tfoot>
       </table>
-
-      {/* Baris Total di bagian bawah card */}
-      <div style={{
-        marginTop: 'auto',
-        background: 'linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)',
-        borderTop: `2px solid ${P.amberLine}`,
-        display: 'flex',
-        alignItems: 'center',
-        height: 32,
-      }}>
-        <div style={{ width: COL_W[0], textAlign: 'center', fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: P.amberInk, borderRight: `1px solid ${P.amberLine}`, boxSizing: 'border-box' }}>
-          TOTAL
-        </div>
-        <div style={{ width: COL_W[1], textAlign: 'center', fontSize: 15, fontWeight: 800, color: P.amberInk, borderRight: `1px solid ${P.amberLine}`, boxSizing: 'border-box' }}>
-          {block.total}
-        </div>
-        <div style={{ width: COL_W[2], textAlign: 'center', fontSize: 11, fontWeight: 700, color: P.amberInk, boxSizing: 'border-box' }}>
-          Bungkus
-        </div>
-      </div>
     </div>
   );
 }
@@ -506,18 +559,27 @@ export function BungkusRecapPrintSheet({ title, blocks, printedAt }: { title: st
   const grandTotal = visibleBlocks.reduce((s, b) => s + b.total, 0);
 
   return (
-    <div style={{
-      fontFamily: P.font,
-      background: '#fff',
-      color: P.ink,
-      width: 1240,
-      minHeight: 856,
-      padding: '20px 26px 16px',
-      boxSizing: 'border-box',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-    }}>
+    <div
+      className="recap-print-sheet"
+      style={{
+        fontFamily: P.font,
+        background: '#fff',
+        color: P.ink,
+        width: 1240,
+        minHeight: 856,
+        padding: '20px 26px 16px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+      }}
+    >
+      <style>{`
+        .recap-print-sheet th,
+        .recap-print-sheet td {
+          vertical-align: middle !important;
+        }
+      `}</style>
       {/* Kop */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, paddingBottom: 10, borderBottom: `3px solid ${P.green}` }}>
         <div>
