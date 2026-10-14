@@ -255,9 +255,17 @@ export function MealBungkusRecipientsTable({
       <div className="overflow-x-auto bg-slate-100 p-2 sm:p-4 rounded-2xl border border-slate-200 shadow-inner">
         <div
           ref={printRef}
-          className="bg-white p-6 rounded-xl border border-slate-300 shadow-sm mx-auto"
+          className="bungkus-sheet bg-white p-6 rounded-xl border border-slate-300 shadow-sm mx-auto"
           style={{ width: 1360, minWidth: 1360, fontFamily: "Calibri, Arial, sans-serif" }}
         >
+          {/* Inject style khusus agar html2canvas dan browser merender vertical-align: middle tanpa teroverride */}
+          <style>{`
+            .bungkus-sheet table th,
+            .bungkus-sheet table td {
+              vertical-align: middle !important;
+            }
+          `}</style>
+
           {/* Judul Utama */}
           <div className="text-center font-extrabold text-[20px] text-black tracking-wide mb-3">
             {titleText}
@@ -270,114 +278,114 @@ export function MealBungkusRecipientsTable({
               <tr>
                 <th
                   colSpan={2}
-                  className="border border-black py-1.5 px-2 font-black text-center text-black text-[13px] uppercase"
-                  style={{ backgroundColor: '#ffff00' }}
+                  className="border border-black py-1.5 px-2 font-black text-center align-middle text-black text-[13px] uppercase"
+                  style={{ backgroundColor: '#ffff00', verticalAlign: 'middle' }}
                 >
                   PAGI
                 </th>
                 <th
                   colSpan={4}
-                  className="border border-black py-1.5 px-2 font-black text-center text-black text-[13px] uppercase"
-                  style={{ backgroundColor: '#fed7aa' }}
+                  className="border border-black py-1.5 px-2 font-black text-center align-middle text-black text-[13px] uppercase"
+                  style={{ backgroundColor: '#fed7aa', verticalAlign: 'middle' }}
                 >
                   SIANG
                 </th>
                 <th
                   colSpan={4}
-                  className="border border-black py-1.5 px-2 font-black text-center text-black text-[13px] uppercase"
-                  style={{ backgroundColor: '#bae6fd' }}
+                  className="border border-black py-1.5 px-2 font-black text-center align-middle text-black text-[13px] uppercase"
+                  style={{ backgroundColor: '#bae6fd', verticalAlign: 'middle' }}
                 >
                   SORE
                 </th>
                 <th
                   colSpan={4}
-                  className="border border-black py-1.5 px-2 font-black text-center text-white text-[13px] uppercase"
-                  style={{ backgroundColor: '#1d4ed8' }}
+                  className="border border-black py-1.5 px-2 font-black text-center align-middle text-white text-[13px] uppercase"
+                  style={{ backgroundColor: '#1d4ed8', verticalAlign: 'middle' }}
                 >
                   MALAM
                 </th>
               </tr>
               {/* Subheader Bagian */}
               <tr style={{ backgroundColor: '#bbf7d0' }}>
-                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center text-black">
+                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center align-middle text-black" style={{ verticalAlign: 'middle' }}>
                   Prep, Lab &amp; Maintenance
                 </th>
-                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center text-black">
+                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center align-middle text-black" style={{ verticalAlign: 'middle' }}>
                   Preparasi
                 </th>
-                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center text-black">
+                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center align-middle text-black" style={{ verticalAlign: 'middle' }}>
                   Lab &amp; Maintenance
                 </th>
-                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center text-black">
+                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center align-middle text-black" style={{ verticalAlign: 'middle' }}>
                   Preparasi
                 </th>
-                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center text-black">
+                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center align-middle text-black" style={{ verticalAlign: 'middle' }}>
                   Lab &amp; Maintenance
                 </th>
-                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center text-black">
+                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center align-middle text-black" style={{ verticalAlign: 'middle' }}>
                   Preparasi
                 </th>
-                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center text-black">
+                <th colSpan={2} className="border border-black py-1 px-2 font-bold text-center align-middle text-black" style={{ verticalAlign: 'middle' }}>
                   Lab &amp; Maintenance
                 </th>
               </tr>
             </thead>
             <tbody>
               {Array.from({ length: maxRows }).map((_, i) => (
-                <tr key={i} className="hover:bg-slate-50 transition-colors">
+                <tr key={i} className="hover:bg-slate-50 transition-colors" style={{ height: 20 }}>
                   {/* 1. PAGI */}
-                  <td className="border border-black w-6 text-center text-slate-500 font-mono text-[10px] py-0.5">
+                  <td className="border border-black w-6 text-center align-middle text-slate-500 font-mono text-[10px] py-0.5" style={{ verticalAlign: 'middle' }}>
                     {pagi[i] ? i + 1 : ''}
                   </td>
-                  <td className="border border-black px-1.5 py-0.5 text-black font-medium truncate" style={{ width: 170, maxWidth: 170 }}>
+                  <td className="border border-black px-1.5 py-0.5 text-black font-medium align-middle truncate" style={{ width: 170, maxWidth: 170, verticalAlign: 'middle' }}>
                     {pagi[i]?.nama || ''}
                   </td>
 
                   {/* 2. SIANG PREP */}
-                  <td className="border border-black w-6 text-center text-slate-500 font-mono text-[10px] py-0.5">
+                  <td className="border border-black w-6 text-center align-middle text-slate-500 font-mono text-[10px] py-0.5" style={{ verticalAlign: 'middle' }}>
                     {siangPrep[i] ? i + 1 : ''}
                   </td>
-                  <td className="border border-black px-1.5 py-0.5 text-black font-medium truncate" style={{ width: 170, maxWidth: 170 }}>
+                  <td className="border border-black px-1.5 py-0.5 text-black font-medium align-middle truncate" style={{ width: 170, maxWidth: 170, verticalAlign: 'middle' }}>
                     {siangPrep[i]?.nama || ''}
                   </td>
 
                   {/* 3. SIANG LAB & MAINT */}
-                  <td className="border border-black w-6 text-center text-slate-500 font-mono text-[10px] py-0.5">
+                  <td className="border border-black w-6 text-center align-middle text-slate-500 font-mono text-[10px] py-0.5" style={{ verticalAlign: 'middle' }}>
                     {siangLabMaint[i] ? i + 1 : ''}
                   </td>
-                  <td className="border border-black px-1.5 py-0.5 text-black font-medium truncate" style={{ width: 170, maxWidth: 170 }}>
+                  <td className="border border-black px-1.5 py-0.5 text-black font-medium align-middle truncate" style={{ width: 170, maxWidth: 170, verticalAlign: 'middle' }}>
                     {siangLabMaint[i]?.nama || ''}
                   </td>
 
                   {/* 4. SORE PREP */}
-                  <td className="border border-black w-6 text-center text-slate-500 font-mono text-[10px] py-0.5">
+                  <td className="border border-black w-6 text-center align-middle text-slate-500 font-mono text-[10px] py-0.5" style={{ verticalAlign: 'middle' }}>
                     {sorePrep[i] ? i + 1 : ''}
                   </td>
-                  <td className="border border-black px-1.5 py-0.5 text-black font-medium truncate" style={{ width: 160, maxWidth: 160 }}>
+                  <td className="border border-black px-1.5 py-0.5 text-black font-medium align-middle truncate" style={{ width: 160, maxWidth: 160, verticalAlign: 'middle' }}>
                     {sorePrep[i]?.nama || ''}
                   </td>
 
                   {/* 5. SORE LAB & MAINT */}
-                  <td className="border border-black w-6 text-center text-slate-500 font-mono text-[10px] py-0.5">
+                  <td className="border border-black w-6 text-center align-middle text-slate-500 font-mono text-[10px] py-0.5" style={{ verticalAlign: 'middle' }}>
                     {soreLabMaint[i] ? i + 1 : ''}
                   </td>
-                  <td className="border border-black px-1.5 py-0.5 text-black font-medium truncate" style={{ width: 160, maxWidth: 160 }}>
+                  <td className="border border-black px-1.5 py-0.5 text-black font-medium align-middle truncate" style={{ width: 160, maxWidth: 160, verticalAlign: 'middle' }}>
                     {soreLabMaint[i]?.nama || ''}
                   </td>
 
                   {/* 6. MALAM PREP */}
-                  <td className="border border-black w-6 text-center text-slate-500 font-mono text-[10px] py-0.5">
+                  <td className="border border-black w-6 text-center align-middle text-slate-500 font-mono text-[10px] py-0.5" style={{ verticalAlign: 'middle' }}>
                     {malamPrep[i] ? i + 1 : ''}
                   </td>
-                  <td className="border border-black px-1.5 py-0.5 text-black font-medium truncate" style={{ width: 170, maxWidth: 170 }}>
+                  <td className="border border-black px-1.5 py-0.5 text-black font-medium align-middle truncate" style={{ width: 170, maxWidth: 170, verticalAlign: 'middle' }}>
                     {malamPrep[i]?.nama || ''}
                   </td>
 
                   {/* 7. MALAM LAB & MAINT */}
-                  <td className="border border-black w-6 text-center text-slate-500 font-mono text-[10px] py-0.5">
+                  <td className="border border-black w-6 text-center align-middle text-slate-500 font-mono text-[10px] py-0.5" style={{ verticalAlign: 'middle' }}>
                     {malamLabMaint[i] ? i + 1 : ''}
                   </td>
-                  <td className="border border-black px-1.5 py-0.5 text-black font-medium truncate" style={{ width: 170, maxWidth: 170 }}>
+                  <td className="border border-black px-1.5 py-0.5 text-black font-medium align-middle truncate" style={{ width: 170, maxWidth: 170, verticalAlign: 'middle' }}>
                     {malamLabMaint[i]?.nama || ''}
                   </td>
                 </tr>
@@ -392,33 +400,33 @@ export function MealBungkusRecipientsTable({
             </div>
             <table className="border-collapse border border-black text-[11px] leading-[15px]" style={{ width: '85%' }}>
               <thead>
-                <tr className="bg-slate-100 font-extrabold text-black">
-                  <th className="border border-black px-2 py-1 text-center w-10">NO</th>
-                  <th className="border border-black px-3 py-1 text-left w-52">Nama</th>
-                  <th className="border border-black px-3 py-1 text-center w-36">Status</th>
-                  <th className="border border-black px-3 py-1 text-center w-56">Tanggal Absensi/Onsite</th>
-                  <th className="border border-black px-3 py-1 text-center w-36">Keterangan</th>
+                <tr className="bg-slate-100 font-extrabold text-black" style={{ height: 24 }}>
+                  <th className="border border-black px-2 py-1 text-center align-middle w-10" style={{ verticalAlign: 'middle' }}>NO</th>
+                  <th className="border border-black px-3 py-1 text-center align-middle w-52" style={{ verticalAlign: 'middle' }}>Nama</th>
+                  <th className="border border-black px-3 py-1 text-center align-middle w-36" style={{ verticalAlign: 'middle' }}>Status</th>
+                  <th className="border border-black px-3 py-1 text-center align-middle w-56" style={{ verticalAlign: 'middle' }}>Tanggal Absensi/Onsite</th>
+                  <th className="border border-black px-3 py-1 text-center align-middle w-36" style={{ verticalAlign: 'middle' }}>Keterangan</th>
                 </tr>
               </thead>
               <tbody>
                 {belumLaporList.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="border border-black text-center py-2 text-slate-500 italic">
+                    <td colSpan={5} className="border border-black text-center align-middle py-2 text-slate-500 italic" style={{ verticalAlign: 'middle' }}>
                       Tidak ada karyawan belum lapor pada tanggal ini.
                     </td>
                   </tr>
                 ) : (
                   belumLaporList.map((r, idx) => (
-                    <tr key={r.id || r.nik || idx} className="font-bold text-red-600">
-                      <td className="border border-black text-center py-1 font-mono">{idx + 1}</td>
-                      <td className="border border-black px-3 py-1 text-red-600">{r.nama}</td>
-                      <td className="border border-black px-3 py-1 text-center text-red-600">
+                    <tr key={r.id || r.nik || idx} className="font-bold text-red-600" style={{ height: 22 }}>
+                      <td className="border border-black text-center align-middle py-1 font-mono" style={{ verticalAlign: 'middle' }}>{idx + 1}</td>
+                      <td className="border border-black px-3 py-1 text-center align-middle text-red-600" style={{ verticalAlign: 'middle' }}>{r.nama}</td>
+                      <td className="border border-black px-3 py-1 text-center align-middle text-red-600" style={{ verticalAlign: 'middle' }}>
                         {r.statusKerja && r.statusKerja !== '-' ? r.statusKerja : (r.status || 'Cuti')}
                       </td>
-                      <td className="border border-black px-3 py-1 text-center text-red-600">
+                      <td className="border border-black px-3 py-1 text-center align-middle text-red-600" style={{ verticalAlign: 'middle' }}>
                         {dayName(date)}, {longDate(date)}
                       </td>
-                      <td className="border border-black px-3 py-1 text-center text-red-700 bg-red-100 font-extrabold">
+                      <td className="border border-black px-3 py-1 text-center align-middle text-red-700 bg-red-100 font-extrabold" style={{ verticalAlign: 'middle' }}>
                         Belum Lapor
                       </td>
                     </tr>
