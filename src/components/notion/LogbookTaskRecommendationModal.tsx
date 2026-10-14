@@ -165,7 +165,20 @@ export function LogbookTaskRecommendationModal({
       );
     }
 
-    return list;
+    const priorityWeight: Record<string, number> = {
+      urgent: 4,
+      high: 3,
+      normal: 2,
+      low: 1
+    };
+
+    return [...list].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      const wA = priorityWeight[(a.priority || '').toLowerCase()] || 2;
+      const wB = priorityWeight[(b.priority || '').toLowerCase()] || 2;
+      return wB - wA;
+    });
   }, [recommendations, categoryFilter, cadenceFilter, searchQuery]);
 
   const picSuggestions = useMemo(() => {
@@ -215,14 +228,15 @@ export function LogbookTaskRecommendationModal({
       // Keterangan contains ONLY narrative notes (e.g. progress / trials / blockers), NEVER duplicates child subtasks
       const ketDescription = rec.description || '';
 
+      const titleWithPin = `${rec.isPinned ? '<!--pin--> ' : ''}${cleanFrontEndText(rec.title)}`;
       const parentItem: TableRowData = {
         id: code,
         taskCode: code,
         'Task ID': code,
         'ID Task': code,
         number: code,
-        'Jenis kegiatan': cleanFrontEndText(rec.title),
-        'Jenis Kegiatan': cleanFrontEndText(rec.title),
+        'Jenis kegiatan': titleWithPin,
+        'Jenis Kegiatan': titleWithPin,
         Keterangan: ketDescription,
         'Created Time': todayStr,
         'Created time': todayStr,
@@ -304,14 +318,15 @@ export function LogbookTaskRecommendationModal({
     // Keterangan contains ONLY narrative notes (e.g. progress / trials / blockers), NEVER duplicates child subtasks
     const ketDescription = rec.description || '';
 
+    const titleWithPin = `${rec.isPinned ? '<!--pin--> ' : ''}${cleanFrontEndText(rec.title)}`;
     const parentItem: TableRowData = {
       id: code,
       taskCode: code,
       'Task ID': code,
       'ID Task': code,
       number: code,
-      'Jenis kegiatan': cleanFrontEndText(rec.title),
-      'Jenis Kegiatan': cleanFrontEndText(rec.title),
+      'Jenis kegiatan': titleWithPin,
+      'Jenis Kegiatan': titleWithPin,
       Keterangan: ketDescription,
       'Created Time': todayStr,
       'Created time': todayStr,

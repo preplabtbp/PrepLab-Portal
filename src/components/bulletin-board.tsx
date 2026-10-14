@@ -585,34 +585,38 @@ export function BulletinBoard({
     } catch {}
   };
 
-  // Open Unified Logbook for a specific section
+  // Open Unified Logbook for a specific section (always starts with a clean slate)
   const openSectionLogbook = useCallback((sectionName: string) => {
     const cleanSection = sectionName.replace(/^[#\s\-*]+/, '').trim();
     const logbookTitle = `Logbook ${cleanSection}`;
     const targetUniverse = selectedPtFilter !== 'ALL' ? selectedPtFilter : userUniverse;
 
-    // Check if a real post already exists in this universe with title "Logbook [Section]"
-    let target = posts.find(p => {
-      const pUniv = p.pt === 'GTS' ? 'GTS' : 'TBP';
-      if (pUniv !== targetUniverse && targetUniverse !== 'ALL') return false;
-      return (p.title || '').trim().toLowerCase() === logbookTitle.toLowerCase();
-    });
-
-    if (!target) {
-      target = {
-        id: `logbook-${cleanSection.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-        title: logbookTitle,
-        department: 'Prep & Lab',
-        category: cleanSection,
-        isLogbook: true,
-        pt: targetUniverse === 'ALL' ? 'TBP' : targetUniverse,
-        content: `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${cleanSection}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`
-      };
-    }
+    const target = {
+      id: `logbook-${cleanSection.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      title: logbookTitle,
+      department: 'Prep & Lab',
+      category: cleanSection,
+      isLogbook: true,
+      pt: targetUniverse === 'ALL' ? 'TBP' : targetUniverse,
+      content: `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${cleanSection}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`
+    };
 
     navigateToPost(target);
     setShowLogbookDropdown(false);
-  }, [posts, selectedPtFilter, userUniverse]);
+  }, [selectedPtFilter, userUniverse, navigateToPost]);
+
+  // Listen for live post updates from Logbook direct mutations
+  useEffect(() => {
+    const handlePostUpdated = (e: any) => {
+      const { postId, content } = e.detail || {};
+      if (postId && content) {
+        setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, content } : p));
+        setSelectedPost((prev: any) => (prev && String(prev.id) === String(postId)) ? { ...prev, content } : prev);
+      }
+    };
+    window.addEventListener('preplab:post-updated', handlePostUpdated);
+    return () => window.removeEventListener('preplab:post-updated', handlePostUpdated);
+  }, []);
 
   // Handle URL persistence on refresh and deep link (e.g. ?page=123 or ?postId=123)
   useEffect(() => {

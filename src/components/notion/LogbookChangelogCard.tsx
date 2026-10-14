@@ -214,6 +214,8 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
   const dayName = getDayNameIndo(activeDate);
   const isViewingToday = activeDate === todayStr;
   const isViewingYesterday = activeDate === yesterdayStr;
+  const tomorrowStr = shiftDay(todayStr, 1);
+  const isViewingTomorrow = activeDate === tomorrowStr;
 
   return (
     <div 
@@ -302,6 +304,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
             <span>{dayName ? `${dayName}, ` : ''}{activeDate}</span>
             {isViewingYesterday && <span className="text-[10px] opacity-75 font-normal">(Kemarin)</span>}
             {isViewingToday && <span className="text-[10px] opacity-75 font-normal">(Hari Ini)</span>}
+            {isViewingTomorrow && <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold">(Besok / Handover)</span>}
           </span>
         </div>
 
@@ -352,7 +355,9 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
               </span>
             </div>
             <p className="text-[11px]" style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }}>
-              Rekap eksekutif hasil pengerjaan tim seksi {sectionName} pada {dayName ? `${dayName}, ` : ''}{activeDate}
+              {isViewingTomorrow 
+                ? `Preview serah terima (handover) & rencana kelanjutan kerja tim seksi ${sectionName} untuk ${dayName ? `${dayName}, ` : ''}${activeDate}`
+                : `Rekap eksekutif hasil pengerjaan tim seksi ${sectionName} pada ${dayName ? `${dayName}, ` : ''}${activeDate}`}
             </p>
           </div>
         </div>

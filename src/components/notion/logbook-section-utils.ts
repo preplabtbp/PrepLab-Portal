@@ -701,6 +701,22 @@ export async function syncLogbookRowsGroupToOrigin(
       newOriginSubRow.isCompleted = isSubCompleted ? 'true' : 'false';
       newOriginSubRow['Last Modified'] = nowIso;
 
+      // If origin task has checklist in Keterangan matching subtask title, update its [x] / [ ]
+      if (parentRowInOrigin) {
+        const ketKey = findColKey(parentRowInOrigin, 'Keterangan', 'Uraian');
+        if (parentRowInOrigin[ketKey]) {
+          const cleanSubTitle = getCleanTitle(sub['Jenis kegiatan'] || sub['Jenis Kegiatan'] || '');
+          const lines = String(parentRowInOrigin[ketKey]).split('\n');
+          const updatedLines = lines.map(line => {
+            if (cleanFrontEndText(line).toLowerCase().includes(cleanSubTitle.toLowerCase())) {
+              return line.replace(/^([*-•]?\s*\[)[ xX](\])/, `$1${isSubCompleted ? 'x' : ' '}$2`);
+            }
+            return line;
+          });
+          parentRowInOrigin[ketKey] = updatedLines.join('\n');
+        }
+      }
+
       parsed.rows.splice(insertIdx, 0, newOriginSubRow);
       hasChanges = true;
     }
@@ -785,6 +801,11 @@ export async function syncLogbookRowsGroupToOrigin(
     });
     if (res.ok) {
       originPost.content = newContent;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('preplab:post-updated', {
+          detail: { postId: originPostId, content: newContent }
+        }));
+      }
       console.log(`[Logbook Sync] Successfully synced batch of ${updatedRows.length} row(s) to origin post #${originPostId}`);
       return true;
     }
@@ -976,6 +997,21 @@ export function getSectionActiveRecommendations(
         closedSubtaskCount: closedSubtasks.length,
       });
     });
+  });
+
+  const priorityWeight: Record<string, number> = {
+    urgent: 4,
+    high: 3,
+    normal: 2,
+    low: 1
+  };
+
+  recommendations.sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    const wA = priorityWeight[(a.priority || '').toLowerCase()] || 2;
+    const wB = priorityWeight[(b.priority || '').toLowerCase()] || 2;
+    return wB - wA;
   });
 
   return recommendations;
@@ -1286,10 +1322,39 @@ export function buildLogbookChangelogData(
   const todayStr = getTodayDDMMYYYY();
   const dateStr = targetDateStr || getYesterdayDateWithData(allRows, todayStr);
 
+  const parseDDMM = (s: string) => {
+    const parts = s.split('-').map(Number);
+    if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+    return 0;
+  };
+
+  const isTargetFuture = parseDDMM(dateStr) > parseDDMM(todayStr);
+
   // Filter rows belonging to target date
   const dateRows = allRows.filter(r => {
-    const rowDate = getRowDateDDMMYYYY(r);
-    return rowDate === dateStr;
+    if (isSubItemRow(r)) return false;
+    const createdDate = getRowDateDDMMYYYY(r);
+    const completedDate = formatToDDMMYYYY(
+      r['Tanggal Selesai'] || r['Tanggal selesai'] || r.completed || r['Aktual Selesai'] || ''
+    );
+    const isCompleted = r.Status === 'Closed' || r.Status === 'Selesai' || (r as any).isCompleted === 'true';
+
+    if (isTargetFuture) {
+      // Future / Tomorrow date: Show handover (completed today) and ongoing carry-over
+      if (completedDate === todayStr) return true;
+      if (!isCompleted) return true;
+      return false;
+    }
+
+    if (dateStr === todayStr) {
+      // Today: Show all tasks active today or completed today
+      return true;
+    }
+
+    // Past date (e.g. yesterday):
+    if (completedDate === dateStr) return true;
+    if (createdDate === dateStr) return true;
+    return false;
   });
 
   // Extract main rows and subtasks
@@ -1518,7 +1583,7 @@ export function generateLogbookChangelogWhatsappText({
 
 /**
  * Extracts pure logbook table data directly from post content.
- * Does NOT scrape or force external posts, ensuring a clean initial state.
+ * Guarantees a clean slate (empty table) on initial load, so the user manually selects today's focus tasks.
  */
 export function getLogbookTableData(
   logbookPost: any,
@@ -1530,19 +1595,6 @@ export function getLogbookTableData(
   afterText: string;
   rawTable: string;
 } {
-  const content = logbookPost?.content || '';
-  const { cleanContent } = extractLogbookMeta(content);
-  const parsed = parseTableFromMarkdown(cleanContent);
-  if (parsed && parsed.rows && parsed.rows.length > 0) {
-    return {
-      headers: parsed.headers.length > 0 ? parsed.headers : LOGBOOK_CANONICAL_HEADERS,
-      rows: parsed.rows,
-      beforeText: `> 📔 **Logbook Terpadu Seksi ${sectionName}**`,
-      afterText: '',
-      rawTable: ''
-    };
-  }
-
   return {
     headers: LOGBOOK_CANONICAL_HEADERS,
     rows: [],
@@ -1550,6 +1602,82 @@ export function getLogbookTableData(
     afterText: '',
     rawTable: ''
   };
+}
+
+/**
+ * Resolves the numeric or string ID of the origin Labnote post for a given row.
+ * Searches row metadata, 'Asal Halaman', and all section posts by title.
+ */
+export function resolveOriginPostId(
+  row: TableRowData,
+  allPosts: any[],
+  sectionName?: string
+): string | null {
+  if (!row || !allPosts || allPosts.length === 0) return null;
+  if (row._originPostId) return String(row._originPostId);
+
+  // 1. Check 'Asal Halaman' column
+  const asal = String(row['Asal Halaman'] || '').trim().toLowerCase();
+  if (asal) {
+    const postByTitle = allPosts.find(p => (p.title || '').trim().toLowerCase() === asal);
+    if (postByTitle) return String(postByTitle.id);
+  }
+
+  // 2. Check parent title in matching section posts
+  const rawTitle = row['Jenis kegiatan'] || row['Jenis Kegiatan'] || row.Name || row.Judul || '';
+  const cleanTitle = cleanFrontEndText(rawTitle.replace(/^[↳↪]\s*/, '').replace(/^\[[ xX]\]\s*/, '')).toLowerCase();
+  if (!cleanTitle) return null;
+
+  const sectionPosts = sectionName ? findSectionTaskPosts(sectionName, allPosts) : allPosts;
+  for (const post of sectionPosts) {
+    if (!post.content || !post.content.includes('|')) continue;
+    const parsed = parseTableFromMarkdown(post.content);
+    if (!parsed || !parsed.rows) continue;
+    const hasRow = parsed.rows.some(r => {
+      const rTitle = cleanFrontEndText(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.Name || '').toLowerCase();
+      return rTitle === cleanTitle || (cleanTitle.length > 5 && (rTitle.includes(cleanTitle) || cleanTitle.includes(rTitle)));
+    });
+    if (hasRow) return String(post.id);
+  }
+
+  return null;
+}
+
+/**
+ * Collects and merges all rows across all Labnote posts of a section for comprehensive Changelog reporting.
+ */
+export function getAllSectionRowsForChangelog(
+  sectionName: string,
+  localRows: TableRowData[],
+  allPosts: any[],
+  targetUniverse: string = 'TBP'
+): TableRowData[] {
+  const matchingPosts = findSectionTaskPosts(sectionName, allPosts, targetUniverse);
+  const rowsMap = new Map<string, TableRowData>();
+
+  // 1. Add rows from Labnote origin posts
+  matchingPosts.forEach(post => {
+    const parsed = parseTableFromMarkdown(post.content || '');
+    if (parsed && parsed.rows) {
+      parsed.rows.forEach((row, idx) => {
+        const id = row.id || `origin_${post.id}_${idx}`;
+        rowsMap.set(id, {
+          ...row,
+          _originPostId: String(post.id),
+          _originPostTitle: post.title,
+          _originRowIndex: String(idx)
+        });
+      });
+    }
+  });
+
+  // 2. Add / overwrite with localRows
+  localRows.forEach(r => {
+    const id = r.id || `${r['Jenis kegiatan']}_${r.number}`;
+    rowsMap.set(id, r);
+  });
+
+  return Array.from(rowsMap.values());
 }
 
 export function getTaskPrefix(categoryOrSection?: string): string {

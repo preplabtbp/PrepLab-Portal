@@ -90,7 +90,9 @@ import {
   injectLogbookMeta,
   LogbookMeta,
   generateTaskCode,
-  normalizeExistingTaskCodes
+  normalizeExistingTaskCodes,
+  resolveOriginPostId,
+  getAllSectionRowsForChangelog
 } from './notion/logbook-section-utils';
 import { LogbookTaskRecommendationModal } from './notion/LogbookTaskRecommendationModal';
 import { LogbookChangelogCard } from './notion/LogbookChangelogCard';
@@ -891,7 +893,7 @@ export function NotionDatabaseTable({
   }, [title, section]);
 
   // Logbook Dynamic Meta & Date View Filter State
-  const [logbookActiveTab, setLogbookActiveTab] = useState<'changelog' | 'planning'>('changelog');
+  const [logbookActiveTab, setLogbookActiveTab] = useState<'changelog' | 'planning'>('planning');
   const [logbookDateFilter, setLogbookDateFilter] = useState<'today' | 'yesterday' | 'all'>('today');
   const [logbookFilterMode, setLogbookFilterMode] = useState<'focus' | 'all' | 'completed'>('focus');
   const [expandedCompletedSubtasks, setExpandedCompletedSubtasks] = useState<Record<string, boolean>>({});
@@ -2233,7 +2235,7 @@ export function NotionDatabaseTable({
     fetchComments();
   }, [fetchComments]);
 
-  // Comment counts per topic title and topic ID (aggregates sub-periods to base topic as well)
+  // Comment counts per topic title, task ID, and clean title (aggregates sub-periods to base topic as well)
   const topicCommentCounts = useMemo(() => {
     const map: Record<string, number> = {};
     allComments.forEach((c) => {
@@ -2244,10 +2246,38 @@ export function NotionDatabaseTable({
           const baseKey = fullKey.split(' - ')[0].trim();
           map[baseKey] = (map[baseKey] || 0) + 1;
         }
+
+        // Extracted task-id from HTML comments in topicTitle
+        const taskMatch = c.topicTitle.match(/<!--task-id:([^>]+)-->/);
+        if (taskMatch) {
+          const tId = taskMatch[1].toLowerCase().trim();
+          map[tId] = (map[tId] || 0) + 1;
+        }
+
+        // Extracted parent-id from HTML comments in topicTitle
+        const parentMatch = c.topicTitle.match(/<!--parent-id:([^>]+)-->/);
+        if (parentMatch) {
+          const pId = parentMatch[1].toLowerCase().trim();
+          map[`parent_${pId}`] = (map[`parent_${pId}`] || 0) + 1;
+        }
+
+        // Clean display title (stripped of ↳, [ ], [x], and all HTML comments)
+        const cleanTitle = getDisplayTitle(c.topicTitle).toLowerCase().trim();
+        if (cleanTitle) {
+          map[cleanTitle] = (map[cleanTitle] || 0) + 1;
+          if (cleanTitle.includes(' - ')) {
+            const baseClean = cleanTitle.split(' - ')[0].trim();
+            map[baseClean] = (map[baseClean] || 0) + 1;
+          }
+        }
       }
       if (c.topicId) {
         const idKey = c.topicId.toLowerCase().trim();
         map[idKey] = (map[idKey] || 0) + 1;
+        const tidMatch = c.topicId.match(/task-id:([^>]+)/);
+        if (tidMatch) {
+          map[tidMatch[1].toLowerCase().trim()] = (map[tidMatch[1].toLowerCase().trim()] || 0) + 1;
+        }
       }
     });
     return map;
@@ -2560,13 +2590,37 @@ export function NotionDatabaseTable({
     const baseQ = baseTopicTitle.toLowerCase().trim();
     const selQ = selectedTopicTitle ? selectedTopicTitle.toLowerCase().trim() : '';
     const rowId = (selectedRow?.id || '').toLowerCase().trim();
+    const cleanRowTitle = getDisplayTitle(baseTopicTitle).toLowerCase().trim();
+    const cleanSelTitle = getDisplayTitle(selectedTopicTitle).toLowerCase().trim();
 
     return allComments.filter((c) => {
       const cTopic = (c.topicTitle || '').toLowerCase().trim();
       const cTopicId = (c.topicId || '').toLowerCase().trim();
-      if (rowId && cTopicId && cTopicId === rowId) return true;
+      const cCleanTitle = getDisplayTitle(c.topicTitle || '').toLowerCase().trim();
+
+      // 1. Direct Task ID match (both from explicit topicId and extracted from HTML comment <!--task-id:...-->)
+      if (rowId) {
+        if (cTopicId === rowId) return true;
+        if (cTopicId.includes(rowId)) return true;
+        const taskMatch = (c.topicTitle || '').match(/<!--task-id:([^>]+)-->/);
+        if (taskMatch && taskMatch[1].toLowerCase().trim() === rowId) return true;
+      }
+
+      // 2. Clean Title match (resilient against checkbox toggle [ ] <-> [x], ↳ prefix, and <!--last-modified:...--> changes)
+      if (cleanSelTitle && cCleanTitle === cleanSelTitle) return true;
+      if (cleanRowTitle && cCleanTitle === cleanRowTitle) return true;
+      if (cleanRowTitle && cCleanTitle.startsWith(`${cleanRowTitle} - `)) return true;
+
+      // 3. Fallback raw string match
       if (selQ && cTopic === selQ) return true;
       if (baseQ && cTopic === baseQ) return true;
+
+      // 4. If selected row is a parent item, also include comments belonging to its child subtasks
+      if (rowId && !selectedRow?.parentId) {
+        const parentMatch = (c.topicTitle || '').match(/<!--parent-id:([^>]+)-->/);
+        if (parentMatch && parentMatch[1].toLowerCase().trim() === rowId) return true;
+      }
+
       return false;
     });
   }, [allComments, selectedTopicTitle, baseTopicTitle, selectedRow]);
@@ -2668,7 +2722,13 @@ export function NotionDatabaseTable({
       });
 
       // Two-way live sync for any rows aggregated from origin posts (Logbook Unified View)
-      const rowsWithOrigin = normalizedRows.filter(r => r._originPostId);
+      const rowsWithOrigin = normalizedRows.map(r => {
+        if (!r._originPostId) {
+          const resId = resolveOriginPostId(r, allPosts || [], section);
+          if (resId) r._originPostId = resId;
+        }
+        return r;
+      }).filter(r => r._originPostId);
       if (rowsWithOrigin.length > 0 && allPosts && allPosts.length > 0) {
         // Group by _originPostId to eliminate race conditions and synchronize parent & subtasks in batch
         const originGroups = new Map<string, TableRowData[]>();
@@ -3181,7 +3241,7 @@ export function NotionDatabaseTable({
       isSubItem: 'true',
       'Last Modified': nowIso,
       // Inherit origin tracking metadata from parent so subtask can sync back to origin Labnote table
-      _originPostId: parentRow._originPostId,
+      _originPostId: parentRow._originPostId || resolveOriginPostId(parentRow, allPosts || [], section),
       _originPostTitle: parentRow._originPostTitle,
       _originRowIndex: parentRow._originRowIndex,
       _parentTitle: cleanParentTitle,
@@ -3221,6 +3281,16 @@ export function NotionDatabaseTable({
     onRowsChange?.(nextRows);
     await saveTableToBackend(nextRows);
 
+    // Direct mutation to origin Labnote post immediately
+    const originToSync = newSubRow._originPostId;
+    if (originToSync && allPosts && allPosts.length > 0) {
+      syncLogbookRowsGroupToOrigin(originToSync, [parentRow, newSubRow], allPosts).then(success => {
+        if (success) {
+          console.log(`[Logbook Direct Mutation] Subtask "${cleanTitle}" synced directly to origin post #${originToSync}`);
+        }
+      });
+    }
+
     toast.success(`Sub-kegiatan "${cleanTitle}" berhasil ditambahkan`);
   };
 
@@ -3239,6 +3309,16 @@ export function NotionDatabaseTable({
       setLocalRows(normalizedRows);
       onRowsChange?.(normalizedRows);
       await saveTableToBackend(normalizedRows);
+
+      // Prioritize pinned tasks in pinnedRowKeys so they float to the very top immediately
+      const pinnedKeys = migratedTasks
+        .filter(t => !isSubItemRow(t) && (t.isPinned === 'true' || String(t['Jenis kegiatan']).includes('<!--pin')))
+        .map(t => t.id || getDisplayTitle(t['Jenis kegiatan'] || ''));
+      if (pinnedKeys.length > 0) {
+        setPinnedRowKeys(prev => Array.from(new Set([...pinnedKeys, ...prev])));
+      }
+
+      setLogbookActiveTab('planning');
       toast.success(`🎉 Berhasil menambahkan ${tasksToAdd.length} rencana tugas ke logbook!`);
       setShowLogbookRecModal(false);
     } catch (err: any) {
@@ -3572,11 +3652,13 @@ export function NotionDatabaseTable({
       updatedRow.Status = nextCompleted ? 'Closed' : 'Open';
       updatedRow['Last Modified'] = nowIso;
 
-      // Inherit origin tracking metadata from parent if missing
-      if (parentIdx !== -1 && localRows[parentIdx]) {
-        const pRow = localRows[parentIdx];
-        if (pRow._originPostId && !updatedRow._originPostId) {
-          updatedRow._originPostId = pRow._originPostId;
+      // Inherit or resolve origin tracking metadata from parent if missing
+      const pRow = parentIdx !== -1 ? localRows[parentIdx] : null;
+      const originId = updatedRow._originPostId || pRow?._originPostId || resolveOriginPostId(pRow || updatedRow, allPosts || [], section);
+      if (originId) {
+        updatedRow._originPostId = originId;
+        if (pRow) {
+          pRow._originPostId = originId;
           updatedRow._originPostTitle = pRow._originPostTitle;
           updatedRow._originRowIndex = pRow._originRowIndex;
           updatedRow._parentTitle = getDisplayTitle(getRowVal(pRow, 'Jenis kegiatan') || getRowVal(pRow, 'Jenis Kegiatan') || '');
@@ -3669,6 +3751,16 @@ export function NotionDatabaseTable({
       setLocalRows(nextRows);
       onRowsChange?.(nextRows);
       await saveTableToBackend(nextRows);
+
+      // Direct mutation to origin Labnote post immediately
+      if (originId && allPosts && allPosts.length > 0) {
+        const parentToSync = parentIdx !== -1 ? nextRows[parentIdx] : null;
+        syncLogbookRowsGroupToOrigin(originId, parentToSync ? [parentToSync, updatedRow] : [updatedRow], allPosts).then(success => {
+          if (success) {
+            console.log(`[Logbook Direct Mutation] Subtask toggle synced directly to origin post #${originId}`);
+          }
+        });
+      }
     };
 
     // Cek apakah aksi ini akan menyelesaikan subtask TERAKHIR dan otomatis menutup task utama
@@ -4433,7 +4525,7 @@ export function NotionDatabaseTable({
           postId,
           content: finalContent,
           topicTitle: topicTitleVal,
-          topicId: topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
+          topicId: selectedRow?.id || topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
           section: activeSection,
           category: title || 'Table',
           statusUpdate: statusUpdateChoice || null,
@@ -4745,7 +4837,7 @@ export function NotionDatabaseTable({
           }]),
           fileName: file.name,
           topicTitle: topicTitleVal,
-          topicId: topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
+          topicId: selectedRow?.id || topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
           section: activeSection,
           category: getRowVal(selectedRow, 'Kategori') || 'Laboratorium',
           authorName: currentAuthorName || 'Personil',
@@ -5242,11 +5334,11 @@ export function NotionDatabaseTable({
                   setShowLogbookRecModal(true);
                 }}
                 className="h-7 px-2.5 rounded-lg bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-500 hover:to-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer shrink-0 border border-teal-400/30 mr-1"
-                title="Buka Rekomendasi Rencana Tugas Hari Ini (Routine & Non-Routine yang Aktif)"
+                title="Buka Seleksi Tugas Fokus Hari Ini dari Labnote (Routine & Non-Routine Aktif)"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                <span className="hidden sm:inline">Rekomendasi Rencana</span>
-                <span className="sm:hidden">Rekomendasi</span>
+                <span className="hidden sm:inline">+ Tambah Tugas Fokus</span>
+                <span className="sm:hidden">+ Fokus</span>
               </button>
             )}
             {/* 1. SEARCH TOOL (Expandable inline input or icon button) */}
@@ -6250,7 +6342,12 @@ export function NotionDatabaseTable({
           {logbookActiveTab === 'changelog' && (
             <LogbookChangelogCard
               sectionName={section || title || 'Prep & Lab'}
-              allRows={localRows}
+              allRows={getAllSectionRowsForChangelog(
+                section || title || 'Prep & Lab',
+                localRows,
+                allPosts || [],
+                pt === 'GTS' ? 'GTS' : 'TBP'
+              )}
               generalNotes={logbookMeta.generalNotes || {}}
               onCarryOverTask={handleCarryOverTask}
               onSwitchToPlanning={() => setLogbookActiveTab('planning')}
@@ -6804,23 +6901,60 @@ export function NotionDatabaseTable({
                 <tr>
                   <td colSpan={displayHeaders.length + 3} className="py-12 text-center text-xs" style={{ color: 'var(--text-muted, #64748b)' }}>
                     {localRows.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center gap-3 py-6">
-                        <div className="w-12 h-12 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 dark:text-teal-400">
-                          <Plus className="w-6 h-6" />
+                      isLogbookTable ? (
+                        <div className="flex flex-col items-center justify-center gap-3 py-10">
+                          <div className="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm">
+                            <Sparkles className="w-7 h-7 text-teal-500 animate-pulse" />
+                          </div>
+                          <div className="text-center max-w-md">
+                            <p className={`font-bold text-base ${isNotionLight ? 'text-slate-800' : 'text-slate-100'}`}>
+                              Belum Ada Tugas yang Difokuskan Hari Ini
+                            </p>
+                            <p className="text-xs mt-1.5 leading-relaxed text-slate-500 dark:text-slate-400">
+                              Awali hari dengan memilih tugas dari Labnote yang menjadi prioritas kerja hari ini. Tugas yang tersemat (Pinned) akan otomatis berada di posisi teratas.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2 flex-wrap justify-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLogbookActiveTab('planning');
+                                setShowLogbookRecModal(true);
+                              }}
+                              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold text-xs shadow-md shadow-teal-900/20 transition-all cursor-pointer active:scale-95"
+                            >
+                              <Sparkles className="w-4 h-4 text-amber-300" />
+                              <span>+ Tambah Tugas Fokus Hari Ini</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleOpenAddModal}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs transition-all cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Buat Tugas Manual</span>
+                            </button>
+                          </div>
                         </div>
-                        <div className="text-center">
-                          <p className={`font-semibold text-sm ${isNotionLight ? 'text-slate-800' : 'text-slate-100'}`}>Belum Ada Topik / Baris Kegiatan</p>
-                          <p className="text-xs mt-1 max-w-sm mx-auto text-slate-500">Semua topik dalam tabel ini kosong. Klik tombol di bawah untuk menambahkan topik baru ke tabel ini.</p>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center gap-3 py-6">
+                          <div className="w-12 h-12 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 dark:text-teal-400">
+                            <Plus className="w-6 h-6" />
+                          </div>
+                          <div className="text-center">
+                            <p className={`font-semibold text-sm ${isNotionLight ? 'text-slate-800' : 'text-slate-100'}`}>Belum Ada Topik / Baris Kegiatan</p>
+                            <p className="text-xs mt-1 max-w-sm mx-auto text-slate-500">Semua topik dalam tabel ini kosong. Klik tombol di bawah untuk menambahkan topik baru ke tabel ini.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleOpenAddModal}
+                            className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs shadow-md transition-all cursor-pointer active:scale-95"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>+ Tambah Baris Kegiatan Baru</span>
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={handleOpenAddModal}
-                          className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs shadow-md transition-all cursor-pointer active:scale-95"
-                        >
-                          <Plus className="w-4 h-4" />
-                          <span>+ Tambah Baris Kegiatan Baru</span>
-                        </button>
-                      </div>
+                      )
                     ) : (
                       <span className="italic">Tidak ada data yang sesuai dengan pencarian atau filter.</span>
                     )}
@@ -7021,8 +7155,13 @@ export function NotionDatabaseTable({
                           const rawTitle = (getRowVal(row, 'Jenis kegiatan') || getRowVal(row, 'Name') || getRowVal(row, 'Judul') || row['Name'] || row['= Name'] || `Baris ${actualRowIndex + 1}`).trim();
                           const displayTitle = getDisplayTitle(rawTitle);
                           const topicKey = displayTitle.toLowerCase().trim();
-                          const rowIdKey = (row.id || '').toLowerCase().trim();
-                          const cCount = topicCommentCounts[topicKey] || (rowIdKey ? topicCommentCounts[rowIdKey] : 0) || 0;
+                          const rawKey = rawTitle.toLowerCase().trim();
+                          const rowIdKey = (row.id || (rawTitle.match(/<!--task-id:([^>]+)-->/)?.[1]) || '').toLowerCase().trim();
+                          const cCount = (rowIdKey ? topicCommentCounts[rowIdKey] : 0) || 
+                                         topicCommentCounts[topicKey] || 
+                                         topicCommentCounts[rawKey] || 
+                                         (!isSubItem && rowIdKey ? topicCommentCounts[`parent_${rowIdKey}`] : 0) || 
+                                         0;
 
                           return (
                             <tr
@@ -9655,7 +9794,7 @@ export function NotionDatabaseTable({
                     <div className="truncate">
                       <div className="flex items-center gap-2">
                         <h3 className="font-black text-base sm:text-xl truncate" style={{ color: 'var(--text-main, #f1f5f9)' }}>
-                          {baseTopicTitle || 'Detail Kegiatan'}
+                          {getDisplayTitle(baseTopicTitle) || 'Detail Kegiatan'}
                         </h3>
                         {activeSubPeriod && (
                           <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-teal-500/20 text-teal-300 border border-teal-500/50 font-bold shrink-0">
@@ -9894,7 +10033,12 @@ export function NotionDatabaseTable({
                             >
                               <span>📋 Topik Umum</span>
                               {(() => {
-                                const count = topicCommentCounts[baseTopicTitle.toLowerCase().trim()] || 0;
+                                const cleanBase = getDisplayTitle(baseTopicTitle).toLowerCase().trim();
+                                const rawBase = baseTopicTitle.toLowerCase().trim();
+                                const rowId = (selectedRow?.id || '').toLowerCase().trim();
+                                const count = (rowId ? topicCommentCounts[rowId] : 0) || 
+                                              topicCommentCounts[cleanBase] || 
+                                              topicCommentCounts[rawBase] || 0;
                                 return count > 0 ? (
                                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                                     activeSubPeriod === '' ? 'bg-slate-950 text-teal-300' : 'bg-slate-800 text-slate-400'
@@ -9907,8 +10051,11 @@ export function NotionDatabaseTable({
 
                             {availableSubPeriods.map((subP) => {
                               const isSelected = activeSubPeriod === subP;
-                              const subKey = `${baseTopicTitle} - ${subP}`.toLowerCase().trim();
-                              const subCount = topicCommentCounts[subKey] || 0;
+                              const cleanBase = getDisplayTitle(baseTopicTitle).toLowerCase().trim();
+                              const rawBase = baseTopicTitle.toLowerCase().trim();
+                              const subCleanKey = `${cleanBase} - ${subP}`.toLowerCase().trim();
+                              const subKey = `${rawBase} - ${subP}`.toLowerCase().trim();
+                              const subCount = topicCommentCounts[subCleanKey] || topicCommentCounts[subKey] || 0;
 
                               return (
                                 <button
