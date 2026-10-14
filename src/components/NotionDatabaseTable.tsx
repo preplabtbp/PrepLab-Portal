@@ -1,3 +1,4 @@
+import { translateDisplayText } from './notion/logbook-section-utils';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { 
   Search, 
@@ -5249,7 +5250,7 @@ export function NotionDatabaseTable({
             <div className="flex items-center gap-2">
               <span className="text-base select-none">📋</span>
               <h3 className={`font-semibold text-sm flex items-center gap-1.5 ${isNotionLight ? 'text-[#37352f]' : 'text-slate-100'}`}>
-                <span>{title || 'Database Table'}</span>
+                <span>{translateDisplayText(title) || 'Database Table'}</span>
                 <span 
                   className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono border font-semibold ${
                     isNotionLight ? 'bg-slate-100 border-slate-200 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400'
@@ -6983,7 +6984,7 @@ export function NotionDatabaseTable({
                                 {isCollapsed ? '▶' : '▼'}
                               </span>
                               <span className={`font-semibold ${isNotionLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                                {groupName}
+                                {translateDisplayText(groupName)}
                               </span>
                               <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
                                 isNotionLight ? 'bg-slate-200/80 text-slate-700' : 'bg-slate-800 text-slate-300'

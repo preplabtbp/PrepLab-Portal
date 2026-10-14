@@ -1,3 +1,21 @@
+/**
+ * Visual display translator for Indonesian section names to English
+ */
+export function translateDisplayText(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/\bMANAJEMEN\s+MUTU\b/g, 'QUALITY ASSURANCE')
+    .replace(/\bManajemen\s+Mutu\b/gi, 'Quality Assurance')
+    .replace(/\bLABORATORIUM\b/g, 'LABORATORY')
+    .replace(/\bLaboratorium\b/gi, 'Laboratory')
+    .replace(/\bPREPARASI\b/g, 'PREPARATION')
+    .replace(/\bPreparasi\b/gi, 'Preparation')
+    .replace(/\bADMINISTRASI\b/g, 'ADMINISTRATION')
+    .replace(/\bAdministrasi\b/gi, 'Administration')
+    .replace(/\bPROSEDUR\b/g, 'PROCEDURE')
+    .replace(/\bProsedur\b/gi, 'Procedure');
+}
+
 import type { TableRowData } from '../NotionDatabaseTable';
 export type { TableRowData };
 

@@ -1,3 +1,44 @@
+// Normalize section name to English
+function normalizeSectionName(sec: string | undefined | null): string {
+  if (!sec) return '';
+  const sTrim = sec.trim();
+  const sUpper = sTrim.toUpperCase();
+  if (sUpper === 'LABORATORIUM' || sUpper === 'LABORATORY') return 'Laboratory';
+  if (sUpper === 'PREPARASI' || sUpper === 'PREPARATION') return 'Preparation';
+  if (sUpper === 'MANAJEMEN MUTU' || sUpper === 'MUTU' || sUpper === 'QUALITY ASSURANCE' || sUpper === 'QA') return 'Quality Assurance';
+  if (sUpper === 'ADMINISTRASI' || sUpper === 'ADMINISTRATION') return 'Administration';
+  if (sUpper === 'PROSEDUR' || sUpper === 'PROCEDURE') return 'Procedure';
+  return sTrim;
+}
+
+// Get shift badge configuration from employee or roster data
+function getEmployeeShiftBadge(rawShift: string | undefined | null) {
+  if (!rawShift) return null;
+  const sUpper = rawShift.trim().toUpperCase();
+  if (sUpper === 'SHIFT A' || sUpper === 'A' || sUpper.startsWith('SHIFT A') || sUpper.endsWith('SHIFT A') || sUpper.includes('SHIFT A')) {
+    return {
+      label: 'Shift A',
+      classes: 'bg-rose-50 text-rose-600 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+    };
+  }
+  if (sUpper === 'SHIFT B' || sUpper === 'B' || sUpper.startsWith('SHIFT B') || sUpper.endsWith('SHIFT B') || sUpper.includes('SHIFT B')) {
+    return {
+      label: 'Shift B',
+      classes: 'bg-blue-50 text-blue-600 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+    };
+  }
+  if (sUpper.includes('NON') || sUpper === 'NS' || sUpper === 'NONSHIFT' || sUpper === 'NON-SHIFT' || sUpper.includes('NON SHIFT')) {
+    return {
+      label: 'Nonshift',
+      classes: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+    };
+  }
+  return {
+    label: rawShift.trim(),
+    classes: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+  };
+}
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, 
@@ -1265,6 +1306,20 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     }
     return map;
   }, [rosterData]);
+
+  // Shift karyawan terpilih (Shift A = Merah, Shift B = Biru, Nonshift = Abu-abu)
+  const selectedEmployeeShift = useMemo(() => {
+    if (!selectedEmployee) return null;
+    const nik = String(selectedEmployee.nik || '').toUpperCase().trim();
+    const nameKey = String(selectedEmployee.name || '').toLowerCase().replace(/[^a-z]/g, '');
+    const entry =
+      (rosterData && rosterData.length > 0)
+        ? (rosterData.find((r: any) => String(r.nik || '').toUpperCase().trim() === nik) ||
+           (nameKey ? rosterData.find((r: any) => String(r.name || '').toLowerCase().replace(/[^a-z]/g, '') === nameKey) : undefined))
+        : null;
+    const rawShift = String(entry?.shift || selectedEmployee.shift || '').trim();
+    return getEmployeeShiftBadge(rawShift);
+  }, [selectedEmployee, rosterData]);
 
   // Jatuh Tempo Cuti karyawan terpilih: dihitung dari Modul Roster & Cuti (logika yang sama)
   const selectedRosterLeave = useMemo(() => {
@@ -3293,10 +3348,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     <span className="bg-teal-50 text-[#135864] text-[10.5px] font-black uppercase px-2.5 py-0.5 rounded-full border border-teal-300">
                       {selectedEmployee.pt || 'PT TBP'}
                     </span>
-                    <span className="text-xs text-slate-400">•</span>
+                    <span className="text-xs text-slate-400">�</span>
                     <span className="text-xs font-black text-[#135864]">
-                      {selectedEmployee.section || selectedEmployee.department || 'Preparation & Laboratory'}
+                      {normalizeSectionName(selectedEmployee.section || selectedEmployee.department || "Preparation & Laboratory")}
                     </span>
+                    {selectedEmployeeShift && (
+                      <>
+                        <span className="text-xs text-slate-400">�</span>
+                        <span className={`text-[10.5px] font-black uppercase px-2.5 py-0.5 rounded-full border shadow-2xs ${selectedEmployeeShift.classes}`}>
+                          {selectedEmployeeShift.label}
+                        </span>
+                      </>
+                    )}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">{selectedEmployee.name}</h1>
                   <p className="text-[#135864] font-black text-sm sm:text-base mt-0.5">{selectedEmployee.jabatan || 'Karyawan'}</p>

@@ -1,3 +1,4 @@
+import { translateDisplayText } from './notion/logbook-section-utils';
 import React, { useState, useMemo } from 'react';
 import { 
   Home, 
@@ -684,7 +685,7 @@ export function SectionHubDashboard({
 
         {/* Section Title */}
         <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight pt-1">
-          {sectionTitle}
+          {translateDisplayText(sectionTitle)}
         </h1>
 
         {/* Home Navigation Pill: HOME TBP & GPS + Logbook Seksi */}
@@ -711,7 +712,7 @@ export function SectionHubDashboard({
             title={`Buka Logbook Terpadu ${sectionTitle}`}
           >
             <span className="text-sm">📔</span>
-            <span>Logbook {sectionTitle}</span>
+            <span>Logbook {translateDisplayText(sectionTitle)}</span>
             <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-teal-800 text-teal-100 font-mono">
               Aktif
             </span>
@@ -755,7 +756,7 @@ export function SectionHubDashboard({
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-sm text-teal-950 group-hover:text-teal-700 truncate">
-                              {item.title}
+                              {translateDisplayText(item.title)}
                             </span>
                             <span className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-600 text-white tracking-wider uppercase shrink-0">
                               AKTIF
@@ -782,7 +783,7 @@ export function SectionHubDashboard({
                           {item.icon === '▌' ? '▌' : item.icon}
                         </span>
                         <span className="truncate group-hover:text-sky-950">
-                          {item.title}
+                          {translateDisplayText(item.title)}
                         </span>
                       </div>
                       <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
@@ -855,7 +856,7 @@ export function SectionHubDashboard({
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-sm text-teal-950 group-hover:text-teal-700 truncate">
-                            {item.title}
+                            {translateDisplayText(item.title)}
                           </span>
                           <span className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-600 text-white tracking-wider uppercase shrink-0">
                             AKTIF
@@ -882,7 +883,7 @@ export function SectionHubDashboard({
                         {item.icon}
                       </span>
                       <span className="truncate group-hover:text-sky-950 font-medium">
-                        {item.title}
+                        {translateDisplayText(item.title)}
                       </span>
                     </div>
                     <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
@@ -901,7 +902,7 @@ export function SectionHubDashboard({
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
             <div>
               <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                Agenda {sectionTitle.charAt(0) + sectionTitle.slice(1).toLowerCase()}
+                Agenda {translateDisplayText(sectionTitle.charAt(0) + sectionTitle.slice(1).toLowerCase())}
               </h2>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-sm font-semibold text-slate-700 capitalize">

@@ -1,3 +1,4 @@
+import { translateDisplayText } from './notion/logbook-section-utils';
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
@@ -1717,9 +1718,9 @@ ${aiMeetingNotes
                         border: isLast ? '1px solid var(--border-main, rgba(20, 184, 166, 0.3))' : 'none',
                         cursor: isLast ? 'default' : 'pointer'
                       }}
-                      title={crumbTitle}
+                      title={translateDisplayText(crumbTitle)}
                     >
-                      {crumbTitle}
+                      {translateDisplayText(crumbTitle)}
                     </button>
                   </React.Fragment>
                 );
@@ -2536,7 +2537,7 @@ ${aiMeetingNotes
                 <h1 
                   className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-3 text-slate-900"
                 >
-                  {getPostTitle(selectedPost)}
+                  {translateDisplayText(getPostTitle(selectedPost))}
                 </h1>
 
                 <div 
