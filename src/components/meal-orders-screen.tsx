@@ -94,7 +94,7 @@ const PROFILE_FIELDS: { key: keyof MealOrder; label: string; placeholder?: strin
   { key: 'statusKerja', label: 'Status Kerja Karyawan', placeholder: 'mis. Cuti / Dinas / -' },
   { key: 'sahur', label: 'Keterangan: Sahur', placeholder: '-' },
   { key: 'tidakPuasa', label: 'Keterangan: Tidak Puasa', placeholder: '-' },
-  { key: 'tempatTinggal', label: 'Tempat Tinggal', placeholder: 'mis. Nirwana' },
+  { key: 'tempatTinggal', label: 'Residence', placeholder: 'mis. Nirwana' },
   { key: 'status', label: 'Status' },
   { key: 'keteranganLapor', label: 'Keterangan (Belum Lapor)', placeholder: 'mis. Belum Lapor 1' },
   { key: 'catatan', label: 'Catatan', placeholder: 'mis. DINAS / PHK' },
@@ -168,7 +168,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   // Pengaturan visibilitas kolom & header
   const [columnVisibility, setColumnVisibility] = useState<{
-    profile: boolean;     // Status Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal
+    profile: boolean;     // Status Mess, PT, Shift, Section, Status Kerja, Residence
     ramadan: boolean;     // Keterangan Sahur, Tidak Puasa, Takjil
     statusNotes: boolean; // Status, Belum Lapor, Catatan
     summary: boolean;     // Ringkasan Total Card di atas tabel
@@ -1522,7 +1522,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Cari nama, NIK, section, tempat tinggal..."
+                placeholder="Cari nama, NIK, section, residence..."
                 className={`${UI.input} w-full pl-9 pr-3`}
               />
             </div>
@@ -1536,7 +1536,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               type="button"
               onClick={() => updateColVisibility({ profile: !columnVisibility.profile })}
               className={`${UI.btn} !h-10 shrink-0 ${columnVisibility.profile ? '' : '!border-emerald-300 !bg-emerald-50 !text-emerald-800'}`}
-              title={columnVisibility.profile ? 'Sembunyikan kolom info profil (Status Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal)' : 'Tampilkan kolom info profil'}
+              title={columnVisibility.profile ? 'Sembunyikan kolom info profil (Status Mess, PT, Shift, Section, Status Kerja, Residence)' : 'Tampilkan kolom info profil'}
             >
               {columnVisibility.profile ? <EyeOff className="w-3.5 h-3.5 text-slate-500" /> : <Eye className="w-3.5 h-3.5 text-emerald-600" />}
               <span>{columnVisibility.profile ? 'Sembunyikan Profil' : 'Tampilkan Profil'}</span>
@@ -1569,7 +1569,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
                         <div>
                           <p className="font-semibold text-slate-800">Info Profil Karyawan</p>
-                          <p className="text-[10px] text-slate-500">Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal</p>
+                          <p className="text-[10px] text-slate-500">Mess, PT, Shift, Section, Status Kerja, Residence</p>
                         </div>
                         <input
                           type="checkbox"
@@ -1796,7 +1796,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         </th>
                       )}
                       {columnVisibility.profile && (
-                        <th rowSpan={2} className={thSticky1}>Tempat Tinggal</th>
+                        <th rowSpan={2} className={thSticky1}>Residence</th>
                       )}
                       <th rowSpan={2} className={`${thSticky1} text-center`}>Shift<br />(Siang/Malam)</th>
                       {activeMealGroups.map(g => (
