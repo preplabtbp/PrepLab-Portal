@@ -599,7 +599,7 @@ export function BulletinBoard({
       category: cleanSection,
       isLogbook: true,
       pt: targetUniverse === 'ALL' ? 'TBP' : targetUniverse,
-      content: `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${cleanSection}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`
+      content: `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${cleanSection}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Activity Name | Description | Created Time | Completion Date | Status | PIC | Priority | Activity | Period | Source Page |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`
     };
 
     navigateToPost(target);
@@ -804,7 +804,7 @@ export function BulletinBoard({
   const handleInitializeTableForPost = async () => {
     if (!selectedPost) return;
     toast.loading("Membuat tabel topik...", { id: "init-table" });
-    const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Tanggal Selesai', 'Group', 'Created Time'];
+    const defaultHeaders = ['number', 'Activity Name', 'Description', 'PIC', 'Status', 'Priority', 'Activity', 'Completion Date', 'Group', 'Created Time'];
     const headerLine = `| ${defaultHeaders.join(' | ')} |`;
     const separatorLine = `| ${defaultHeaders.map(() => '---').join(' | ')} |`;
     const tableMd = `${headerLine}\n${separatorLine}`;
