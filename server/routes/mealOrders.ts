@@ -547,11 +547,18 @@ interface RosterEmp { nik: string; name: string; statusMess: string | null; pt: 
 
 // Pilihan Pagi/Sore terakhir per karyawan (tanggal <= date) — berlaku seterusnya sampai diubah lagi di kolom Catatan
 async function loadMealPreferences(date: string, nik?: string): Promise<Map<string, MealPreference>> {
-  const rows = await db.select({ nik: mealOrders.nik, pilihanPagi: mealOrders.pilihanPagi, pilihanSore: mealOrders.pilihanSore })
+  const rows = await db.select({
+    nik: mealOrders.nik,
+    pilihanPagi: mealOrders.pilihanPagi,
+    pilihanSore: mealOrders.pilihanSore,
+    catatan: mealOrders.catatan,
+    pagiLapangan: mealOrders.pagiLapangan,
+    soreLapangan: mealOrders.soreLapangan,
+  })
     .from(mealOrders)
     .where(and(
       sql`${mealOrders.orderDate} <= ${date}`,
-      sql`(${mealOrders.pilihanPagi} IS NOT NULL OR ${mealOrders.pilihanSore} IS NOT NULL)`,
+      sql`(${mealOrders.pilihanPagi} IS NOT NULL OR ${mealOrders.pilihanSore} IS NOT NULL OR ${mealOrders.catatan} IS NOT NULL OR ${mealOrders.pagiLapangan} IS NOT NULL OR ${mealOrders.soreLapangan} IS NOT NULL)`,
       nik ? sql`UPPER(${mealOrders.nik}) = ${nik.toUpperCase()}` : undefined,
     ))
     .orderBy(desc(mealOrders.orderDate));
@@ -560,8 +567,28 @@ async function loadMealPreferences(date: string, nik?: string): Promise<Map<stri
   for (const r of rows) {
     const k = r.nik.toUpperCase().trim();
     const p = prefs.get(k) || {};
+    // 1. Cek pilihan langsung
     if (p.pagi === undefined && asChoice(r.pilihanPagi)) p.pagi = asChoice(r.pilihanPagi);
     if (p.sore === undefined && asChoice(r.pilihanSore)) p.sore = asChoice(r.pilihanSore);
+    // 2. Cek dari kolom Catatan
+    const cat = String(r.catatan || '').trim();
+    if (cat === 'Bungkusan Pagi dan Bungkusan Sore') {
+      if (p.pagi === undefined) p.pagi = 'lapangan';
+      if (p.sore === undefined) p.sore = 'lapangan';
+    } else if (cat === 'Bungkusan Pagi') {
+      if (p.pagi === undefined) p.pagi = 'lapangan';
+      if (p.sore === undefined) p.sore = 'kantin';
+    } else if (cat === 'Bungkusan Sore') {
+      if (p.pagi === undefined) p.pagi = 'kantin';
+      if (p.sore === undefined) p.sore = 'lapangan';
+    } else if (cat === '-') {
+      if (p.pagi === undefined) p.pagi = 'kantin';
+      if (p.sore === undefined) p.sore = 'kantin';
+    }
+    // 3. Fallback dari porsi lapangan
+    if (p.pagi === undefined && portions(r.pagiLapangan) > 0) p.pagi = 'lapangan';
+    if (p.sore === undefined && portions(r.soreLapangan) > 0) p.sore = 'lapangan';
+
     prefs.set(k, p);
   }
   return prefs;
@@ -703,8 +730,30 @@ async function loadMasterTempatTinggalMap(): Promise<Map<string, string>> {
   return map;
 }
 
+// Membaca master pilihan Catatan resmi per karyawan (Bungkusan Pagi, Bungkusan Sore, dll.)
+// agar pilihan Catatan karyawan tidak hilang/berubah saat pindah tanggal atau saat sinkronisasi roster.
+export async function loadMasterCatatanMap(): Promise<Map<string, string>> {
+  const rows = await db.select({ nik: mealOrders.nik, catatan: mealOrders.catatan })
+    .from(mealOrders)
+    .where(sql`(${mealOrders.catatan} IS NOT NULL AND ${mealOrders.catatan} <> '' AND ${mealOrders.catatan} <> '-' AND NOT (${mealOrders.catatan} LIKE 'Cuti%')) OR ${mealOrders.orderDate} = '2026-10-14'`)
+    .orderBy(
+      sql`CASE WHEN ${mealOrders.orderDate} = '2026-10-14' THEN 0 ELSE 1 END`,
+      sql`ABS(${mealOrders.orderDate} - '2026-10-14'::date)`
+    );
+
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    const k = r.nik.toUpperCase().trim();
+    const c = String(r.catatan || '').trim();
+    if (!map.has(k) && c && c !== '-' && !c.startsWith('Cuti')) {
+      map.set(k, c);
+    }
+  }
+  return map;
+}
+
 // Master profil identitas resmi karyawan di Orderan Makanan:
-// No Urut, Nama, Status Mess, PT, Shift Reguler, Section, Tempat Tinggal.
+// No Urut, Nama, Status Mess, PT, Shift Reguler, Section, Tempat Tinggal, Catatan.
 // Bagian ini dikunci permanen dan tidak boleh berubah saat pindah tanggal atau saat sinkronisasi roster.
 export type MasterEmployeeProfile = {
   sortNo: number;
@@ -714,9 +763,11 @@ export type MasterEmployeeProfile = {
   shift: string | null;
   section: string | null;
   tempatTinggal: string | null;
+  catatan: string | null;
 };
 
 export async function loadMasterEmployeeProfileMap(): Promise<Map<string, MasterEmployeeProfile>> {
+  const masterCatatan = await loadMasterCatatanMap();
   // Prioritaskan baris tanggal acuan resmi 2026-10-14, disusul baris dengan section resmi operasional
   const rows = await db.select({
     nik: mealOrders.nik,
@@ -728,6 +779,7 @@ export async function loadMasterEmployeeProfileMap(): Promise<Map<string, Master
     shift: mealOrders.shift,
     section: mealOrders.section,
     tempatTinggal: mealOrders.tempatTinggal,
+    catatan: mealOrders.catatan,
   }).from(mealOrders)
     .where(sql`${mealOrders.section} IN ('Laboratorium Krishna', 'Preparasi Krishna', 'Maintenance') OR ${mealOrders.orderDate} = '2026-10-14'`)
     .orderBy(
@@ -739,6 +791,7 @@ export async function loadMasterEmployeeProfileMap(): Promise<Map<string, Master
   for (const r of rows) {
     const k = r.nik.toUpperCase().trim();
     if (!map.has(k)) {
+      const c = masterCatatan.get(k) || (r.catatan && r.catatan !== '-' && !r.catatan.startsWith('Cuti') ? r.catatan : null);
       map.set(k, {
         sortNo: r.sortNo ?? 9999,
         nama: r.nama,
@@ -747,6 +800,7 @@ export async function loadMasterEmployeeProfileMap(): Promise<Map<string, Master
         shift: r.shift || null,
         section: r.section || null,
         tempatTinggal: r.tempatTinggal || null,
+        catatan: c || null,
       });
     }
   }
@@ -872,6 +926,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     pilihanPagi: mealOrders.pilihanPagi, pilihanSore: mealOrders.pilihanSore, pagiLapangan: mealOrders.pagiLapangan, soreLapangan: mealOrders.soreLapangan,
     shiftKerja: mealOrders.shiftKerja,
     keteranganLapor: mealOrders.keteranganLapor,
+    catatan: mealOrders.catatan,
   }).from(mealOrders).where(eq(mealOrders.orderDate, date));
   const existingByNik = new Map(existingRows.map(r => [r.nik.toUpperCase().trim(), r]));
   const existingNiks = new Set(existingByNik.keys());
@@ -917,6 +972,10 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     const lockedSection = master?.section || current?.section || rosterEmp.section || null;
     const lockedTt = (current?.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || master?.tempatTinggal || masterTtByNik.get(nik) || rosterEmp.tempatTinggal || null;
 
+    // Kolom Catatan dikunci: pertahankan catatan yang sudah ada di tanggal ini atau dari master catatan (Bungkusan Pagi, dll.)
+    const currentCatatan = current?.catatan && current.catatan !== '-' && !current.catatan.startsWith('Cuti') ? current.catatan : null;
+    const lockedCatatan = currentCatatan || master?.catatan || null;
+
     const emp = {
       ...rosterEmp,
       nama: master?.nama || rosterEmp.name,
@@ -928,8 +987,28 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       keteranganLapor: current?.keteranganLapor,
     };
     const prevStatus = prevStatuses.get(nik);
-    const computed = computeMealOrderByRoster(emp, emp.status, date, withCurrentChoice(prefs.get(nik), current), prevStatus);
+
+    // Preferensi makan: sinkronkan dengan Catatan yang terkunci
+    const empPref = withCurrentChoice(prefs.get(nik), { ...current, catatan: lockedCatatan });
+    if (lockedCatatan === 'Bungkusan Pagi') {
+      empPref.pagi = 'lapangan';
+      if (!empPref.sore) empPref.sore = 'kantin';
+    } else if (lockedCatatan === 'Bungkusan Sore') {
+      empPref.sore = 'lapangan';
+      if (!empPref.pagi) empPref.pagi = 'kantin';
+    } else if (lockedCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
+      empPref.pagi = 'lapangan';
+      empPref.sore = 'lapangan';
+    }
+
+    const computed = computeMealOrderByRoster(emp, emp.status, date, empPref, prevStatus);
     if (computed.shiftKerja === 'SIANG' && (nonshift.has(nik) || lockedShift === 'Nonshift')) computed.shiftKerja = 'Nonshift';
+
+    // Kolom Catatan TIDAK BOLEH diganti menjadi kode cuti atau null bila karyawan punya catatan
+    const finalCatatan = (isCatatanDisabledForEmployee(emp) || computed.keteranganLapor === 'Belum Lapor')
+      ? null
+      : (lockedCatatan || computed.catatan || null);
+
     rowsToSave.push({
       orderDate: date,
       sortNo,
@@ -956,7 +1035,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       batchSore: computed.batchSore,
       status: computed.status,
       keteranganLapor: computed.keteranganLapor,
-      catatan: computed.catatan,
+      catatan: finalCatatan,
       updatedBy,
       updatedAt: new Date(),
     });
@@ -979,7 +1058,9 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
           'pagiKantin', 'pagiLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan',
           'takjilLapangan', 'malamLapangan', 'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan',
           'updatedBy', 'updatedAt'
-        ].map(f => [f, sql.raw(`excluded.${toSnake(f)}`)]))
+        ].map(f => [f, f === 'catatan'
+          ? sql.raw(`COALESCE(NULLIF(TRIM(excluded.catatan), ''), meal_orders.catatan)`)
+          : sql.raw(`excluded.${toSnake(f)}`)]))
       });
   }
 
@@ -1004,12 +1085,13 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const [emp] = await db.select().from(employees).where(sql`UPPER(${employees.nik}) = ${cleanNik}`).limit(1);
     if (!emp) return;
 
-    // Profil dari orderan tanggal tsb (Status Mess, Shift, Tempat Tinggal, Keterangan Lapor) — dari roster hanya kode kehadiran
+    // Profil dari orderan tanggal tsb (Status Mess, Shift, Tempat Tinggal, Keterangan Lapor, Catatan) — dari roster hanya kode kehadiran
     const [current] = await db.select({
       statusMess: mealOrders.statusMess, shift: mealOrders.shift, tempatTinggal: mealOrders.tempatTinggal,
       pilihanPagi: mealOrders.pilihanPagi, pilihanSore: mealOrders.pilihanSore, pagiLapangan: mealOrders.pagiLapangan, soreLapangan: mealOrders.soreLapangan,
       shiftKerja: mealOrders.shiftKerja,
       keteranganLapor: mealOrders.keteranganLapor,
+      catatan: mealOrders.catatan,
     }).from(mealOrders)
       .where(and(eq(mealOrders.orderDate, ymd), eq(mealOrders.nik, emp.nik))).limit(1);
     if (!current) return;
@@ -1022,11 +1104,30 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const lockedShift = master?.shift || current.shift;
     const lockedSection = master?.section || emp.section;
     const lockedTt = (current.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || master?.tempatTinggal || null;
+    const currentCatatan = current.catatan && current.catatan !== '-' && !current.catatan.startsWith('Cuti') ? current.catatan : null;
+    const lockedCatatan = currentCatatan || master?.catatan || null;
+
+    const empPref = withCurrentChoice(prefs.get(cleanNik), { ...current, catatan: lockedCatatan });
+    if (lockedCatatan === 'Bungkusan Pagi') {
+      empPref.pagi = 'lapangan';
+      if (!empPref.sore) empPref.sore = 'kantin';
+    } else if (lockedCatatan === 'Bungkusan Sore') {
+      empPref.sore = 'lapangan';
+      if (!empPref.pagi) empPref.pagi = 'kantin';
+    } else if (lockedCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
+      empPref.pagi = 'lapangan';
+      empPref.sore = 'lapangan';
+    }
+
     const computed = computeMealOrderByRoster(
       { ...emp, name: master?.nama || emp.name, statusMess: lockedStatusMess, shift: lockedShift, section: lockedSection, tempatTinggal: lockedTt, alamatDomisili: null, keteranganLapor: current.keteranganLapor },
-      rosterStatus, ymd, withCurrentChoice(prefs.get(cleanNik), current), prevStatus,
+      rosterStatus, ymd, empPref, prevStatus,
     );
     if (computed.shiftKerja === 'SIANG' && (lockedShift === 'Nonshift' || (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik))) computed.shiftKerja = 'Nonshift';
+
+    const finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
+      ? null
+      : (lockedCatatan || computed.catatan || null);
 
     const updateValues: any = {
       ...(master?.sortNo != null ? { sortNo: master.sortNo } : {}),
@@ -1050,7 +1151,7 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
       batchSore: computed.batchSore,
       status: computed.status,
       keteranganLapor: computed.keteranganLapor,
-      catatan: computed.catatan,
+      catatan: finalCatatan,
       updatedBy,
       updatedAt: new Date(),
     };
@@ -1095,7 +1196,7 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
       }
     }
 
-    // Selaraskan identitas profil karyawan (No, Nama, Status Mess, PT, Shift, Section, Tempat Tinggal)
+    // Selaraskan identitas profil karyawan (No, Nama, Status Mess, PT, Shift, Section, Tempat Tinggal, Catatan)
     // agar selalu konsisten dan terkunci mengikuti Master Profile saat berpindah tanggal
     const masterProfiles = await loadMasterEmployeeProfileMap();
     rows = rows.map(r => {
@@ -1113,6 +1214,34 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
         }
         if (m.shift === 'Nonshift' && (r.shiftKerja === 'SIANG' || r.shiftKerja === 'Siang')) {
           r.shiftKerja = 'Nonshift';
+        }
+        // Kolom Catatan dikunci: jika belum ada / kosong / terisi kode Cuti salah, kembalikan ke catatan master
+        const currentCat = r.catatan && r.catatan !== '-' && !r.catatan.startsWith('Cuti') ? r.catatan : null;
+        const targetCat = currentCat || m.catatan || null;
+        if (targetCat && (!r.catatan || r.catatan === '-' || r.catatan.startsWith('Cuti'))) {
+          const tt = `${r.tempatTinggal || ''}`.toLowerCase();
+          const isKawasi = tt.includes('kawasi');
+          const sk = String(r.statusKerja || '').trim().toUpperCase();
+          const sh = String(r.shiftKerja || '').trim().toUpperCase();
+          const isAbsent = ['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sk) ||
+                           ['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sh) ||
+                           r.keteranganLapor === 'Belum Lapor';
+
+          if (!isKawasi && !isAbsent) {
+            r.catatan = targetCat;
+            if (targetCat === 'Bungkusan Pagi' && !r.pagiLapangan && portions(r.pagiLapangan) === 0) {
+              r.pagiLapangan = '1';
+              r.pagiKantin = null;
+              r.batchPagi = null;
+            } else if (targetCat === 'Bungkusan Sore' && !r.soreLapangan && portions(r.soreLapangan) === 0) {
+              r.soreLapangan = '1';
+              r.soreKantin = null;
+              r.batchSore = null;
+            } else if (targetCat === 'Bungkusan Pagi dan Bungkusan Sore') {
+              if (!r.pagiLapangan) { r.pagiLapangan = '1'; r.pagiKantin = null; r.batchPagi = null; }
+              if (!r.soreLapangan) { r.soreLapangan = '1'; r.soreKantin = null; r.batchSore = null; }
+            }
+          }
         }
       }
       return r;
