@@ -73,8 +73,8 @@ export function getPreviousDateString(ymdDate: string): string {
 export function isLeaveOrPermissionRosterStatus(val: string | null | undefined): boolean {
   if (!val) return false;
   const s = val.trim().toUpperCase();
-  if (['C', 'CE', 'CT', 'CS', 'TRV', 'I', 'CI', 'TV', 'XP', 'CUTI', 'IZIN', 'TRAVEL'].includes(s)) return true;
-  if (s.startsWith('CUTI') || s.startsWith('IZIN')) return true;
+  if (['C', 'CE', 'CT', 'CS', 'TRV', 'I', 'CI', 'TV', 'XP', 'CUTI', 'IZIN', 'TRAVEL', 'BELUM LAPOR'].includes(s)) return true;
+  if (s.startsWith('CUTI') || s.startsWith('IZIN') || s.startsWith('BELUM LAPOR') || s.includes('BELUM LAPOR')) return true;
   const prefixes = ['CE', 'CT', 'CS', 'TRV', 'CI', 'TV', 'XP', 'C', 'I'];
   return prefixes.some(p => s === p || s.startsWith(p + ' ') || s.startsWith(p + '-') || s.startsWith(p + '(') || s.startsWith(p + '/'));
 }
@@ -135,14 +135,16 @@ export function parseCatatanToPreference(catatan: string | null | undefined): Me
   return { pagi: 'kantin', sore: 'kantin' };
 }
 
-/** Cek apakah catatan bungkusan pagi/sore dinonaktifkan (Kampung Kawasi, Cuti, Cuti Site, Izin, Off, Sakit, Malam) */
+/** Cek apakah catatan bungkusan pagi/sore dinonaktifkan (Belum Lapor, Kampung Kawasi, Cuti, Cuti Site, Izin, Off, Sakit, Malam) */
 export function isCatatanDisabledForEmployee(emp: {
   tempatTinggal?: string | null;
   alamatDomisili?: string | null;
   shiftKerja?: string | null;
   statusKerja?: string | null;
   status?: string | null;
+  keteranganLapor?: string | null;
 }): boolean {
+  if (emp.keteranganLapor === 'Belum Lapor') return true;
   const tt = `${emp.tempatTinggal || ''} ${emp.alamatDomisili || ''}`.toLowerCase();
   if (tt.includes('kawasi')) return true;
   const sk = String(emp.shiftKerja || emp.statusKerja || emp.status || '').trim().toUpperCase();
@@ -458,12 +460,30 @@ export function computeMealOrderByRoster(
   }
 
   // Aturan status Belum Lapor:
-  // 1. Jika Tanggal sebelumnya "C,CE,CT,CS,TRV,I" dan Tanggal berikutnya keterangannya "D, N, LS Atau OFF"
+  // 1. Jika Tanggal sebelumnya "C,CE,CT,CS,TRV,I,BELUM LAPOR" dan Tanggal berikutnya keterangannya "D, N, LS Atau OFF"
   //    maka Keterangan belum lapor Otomatis Aktif
   if (isLeaveOrPermissionRosterStatus(prevRosterStatus) && isWorkOrOffRosterStatus(code)) {
     res.keteranganLapor = 'Belum Lapor';
   } else if (/belum\s*lapor|\bBL\b/i.test(rawCode) || /belum\s*lapor/i.test(String(emp.status || ''))) {
     res.keteranganLapor = 'Belum Lapor';
+  }
+
+  // JIKA STATUS BELUM LAPOR AKTIF:
+  // Selama "Belum Lapor" belum dimatikan, seluruh porsi orderan makanan AKAN TETAP KOSONG
+  if (res.keteranganLapor === 'Belum Lapor') {
+    res.pagiKantin = null;
+    res.pagiLapangan = null;
+    res.sahurKantin = null;
+    res.sahurLapangan = null;
+    res.siangKantin = null;
+    res.siangLapangan = null;
+    res.soreKantin = null;
+    res.soreLapangan = null;
+    res.takjilLapangan = null;
+    res.malamLapangan = null;
+    res.batchPagi = null;
+    res.batchSore = null;
+    res.catatan = null;
   }
 
   return res;

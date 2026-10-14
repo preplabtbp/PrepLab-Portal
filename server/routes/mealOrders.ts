@@ -543,7 +543,8 @@ async function loadPreviousRosterStatuses(date: string, nik?: string): Promise<M
       nik: mealOrders.nik,
       status: mealOrders.status,
       statusKerja: mealOrders.statusKerja,
-      catatan: mealOrders.catatan
+      catatan: mealOrders.catatan,
+      keteranganLapor: mealOrders.keteranganLapor,
     }).from(mealOrders).where(and(
       eq(mealOrders.orderDate, prevDate),
       nik ? sql`UPPER(${mealOrders.nik}) = ${nik.toUpperCase()}` : undefined
@@ -551,9 +552,10 @@ async function loadPreviousRosterStatuses(date: string, nik?: string): Promise<M
 
     for (const m of prevOrders) {
       const k = m.nik.toUpperCase().trim();
-      const candidate = m.status || m.statusKerja || m.catatan || '';
+      const isBelumLapor = m.keteranganLapor === 'Belum Lapor' || String(m.keteranganLapor || '').toLowerCase().includes('belum lapor');
+      const candidate = isBelumLapor ? 'Belum Lapor' : (m.status || m.statusKerja || m.catatan || '');
       if (candidate) {
-        if (!map.has(k) || map.get(k) === '-') {
+        if (!map.has(k) || map.get(k) === '-' || isBelumLapor) {
           map.set(k, candidate.trim());
         } else {
           const currentInMap = map.get(k) || '';

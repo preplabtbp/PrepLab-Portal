@@ -877,15 +877,82 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     toast.success(`${r.nama}: Catatan diubah ke "${val}"`);
   };
 
+  const handleToggleBelumLapor = (r: MealOrder, rawVal: string) => {
+    if (!canManage) return;
+    const isBelumLapor = rawVal === 'Belum Lapor';
+
+    if (isBelumLapor) {
+      // Jika Belum Lapor aktif: seluruh orderan makanan KOSONG sampai status Belum Lapor dimatikan
+      const patch: Partial<MealOrder> = {
+        keteranganLapor: 'Belum Lapor',
+        pagiKantin: null,
+        pagiLapangan: null,
+        sahurKantin: null,
+        sahurLapangan: null,
+        siangKantin: null,
+        siangLapangan: null,
+        soreKantin: null,
+        soreLapangan: null,
+        takjilLapangan: null,
+        malamLapangan: null,
+        batchPagi: null,
+        batchSore: null,
+        catatan: null,
+      };
+      saveCell(r, patch);
+      toast.info(`${r.nama}: Status "Belum Lapor" aktif — seluruh orderan makanan dikosongkan.`);
+    } else {
+      // Jika Belum Lapor dimatikan: hitung ulang orderan makanan sesuai shift & profil
+      let rosterCode = r.shiftKerja || 'SIANG';
+      if (r.shiftKerja === 'Cuti Site') rosterCode = 'CS';
+      else if (r.shiftKerja === 'Izin') rosterCode = 'I';
+      else if (r.shiftKerja === 'OFF') rosterCode = 'OFF';
+      else if (r.shiftKerja === 'Sakit') rosterCode = 'SS';
+      else if (r.shiftKerja === 'CUTI') rosterCode = 'CUTI';
+      else if (r.shiftKerja === 'MALAM') rosterCode = 'N';
+      else if (r.shiftKerja === 'LONGSHIFT') rosterCode = 'LS';
+      else if (r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift') rosterCode = 'D';
+
+      const pref: MealPreference = {
+        pagi: (r.pilihanPagi as MealChoice) || null,
+        sore: (r.pilihanSore as MealChoice) || null,
+      };
+      const computed = computeMealOrderByRoster(r, rosterCode, date, pref, 'D');
+      if (r.shiftKerja === 'Nonshift') computed.shiftKerja = 'Nonshift';
+
+      const patch: Partial<MealOrder> = {
+        keteranganLapor: null,
+        shiftKerja: computed.shiftKerja,
+        statusKerja: computed.statusKerja,
+        status: computed.status,
+        pagiKantin: computed.pagiKantin,
+        pagiLapangan: computed.pagiLapangan,
+        siangKantin: computed.siangKantin,
+        siangLapangan: computed.siangLapangan,
+        soreKantin: computed.soreKantin,
+        soreLapangan: computed.soreLapangan,
+        malamLapangan: computed.malamLapangan,
+        batchPagi: computed.batchPagi,
+        batchSore: computed.batchSore,
+        catatan: computed.catatan,
+      };
+      saveCell(r, patch);
+      toast.success(`${r.nama}: Belum Lapor telah dimatikan — orderan makanan aktif kembali.`);
+    }
+  };
+
   const renderCatatanCell = (r: MealOrder) => {
     const isKawasi = isKawasiRow(r);
-    const isDisabled = isCatatanDisabledForEmployee(r) || !canManage;
+    const isBelumLapor = r.keteranganLapor === 'Belum Lapor';
+    const isDisabled = isCatatanDisabledForEmployee(r) || isBelumLapor || !canManage;
 
     const currentVal = getRowCatatanValue(r);
     const rawCatatan = String(r.catatan || '').trim();
     const isCustomCatatan = rawCatatan && !['-', 'Bungkusan Pagi', 'Bungkusan Sore', 'Bungkusan Pagi dan Bungkusan Sore'].includes(rawCatatan);
 
-    const disabledTitle = isKawasi
+    const disabledTitle = isBelumLapor
+      ? 'Belum Lapor: Matikan status Belum Lapor terlebih dahulu agar orderan & catatan aktif'
+      : isKawasi
       ? 'Matikan Catatan ini atau tidak bisa di Pilih (Kampung Kawasi)'
       : !canManage
       ? 'Hanya Admin yang dapat mengubah Catatan'
@@ -1719,16 +1786,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               {canManage ? (
                                 <select
                                   value={r.keteranganLapor && r.keteranganLapor !== '-' ? 'Belum Lapor' : '-'}
-                                  onChange={e => {
-                                    const val = e.target.value === '-' ? null : e.target.value;
-                                    saveCell(r, { keteranganLapor: val });
-                                  }}
+                                  onChange={e => handleToggleBelumLapor(r, e.target.value)}
                                   className={`rounded-md text-xs font-semibold px-2 py-1 cursor-pointer focus:outline-none transition-all ${
                                     r.keteranganLapor && r.keteranganLapor !== '-'
                                       ? 'bg-rose-100 text-rose-700 font-bold border border-rose-300 hover:bg-rose-200'
                                       : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'
                                   }`}
-                                  title="Pilih Keterangan Belum Lapor"
+                                  title="Pilih Keterangan Belum Lapor (jika Belum Lapor aktif, orderan makan otomatis kosong)"
                                 >
                                   <option value="-">-</option>
                                   <option value="Belum Lapor">Belum Lapor</option>
@@ -1840,10 +1904,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             {canManage ? (
                               <select
                                 value={r.keteranganLapor && r.keteranganLapor !== '-' ? 'Belum Lapor' : '-'}
-                                onChange={e => {
-                                  const val = e.target.value === '-' ? null : e.target.value;
-                                  saveCell(r, { keteranganLapor: val });
-                                }}
+                                onChange={e => handleToggleBelumLapor(r, e.target.value)}
                                 className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
                                   r.keteranganLapor && r.keteranganLapor !== '-' ? 'bg-rose-100 text-rose-700 font-bold' : 'bg-slate-100 text-slate-500'
                                 }`}
