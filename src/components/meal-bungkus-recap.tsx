@@ -417,63 +417,136 @@ const P = {
   green: '#047857', greenSoft: '#ecfdf5', greenLine: '#a7f3d0',
   amber: '#fef3c7', amberLine: '#fcd34d', amberInk: '#78350f',
 };
-const ROW_H = 30; // tinggi seragam setiap baris isi
+const ROW_H = 29; // tinggi minimum setiap baris isi (baris memanjang bila teks perlu 2 baris)
+// Teks panjang (mis. "Laboratorium Krishna (Manager - Deni Nugraha P)") dibungkus ke baris berikutnya — tidak dipotong "…"
 const cellP = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-  height: ROW_H, padding: '0 10px', lineHeight: '16px', verticalAlign: 'middle', whiteSpace: 'nowrap',
-  overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 12, borderBottom: `1px solid ${P.line}`, ...extra,
+  height: ROW_H, padding: '6px 10px', lineHeight: '15px', verticalAlign: 'middle', whiteSpace: 'normal',
+  wordBreak: 'break-word', overflowWrap: 'anywhere', fontSize: 11, borderBottom: `1px solid ${P.line}`, ...extra,
 });
+// Lebar kolom Area | Qty | Keterangan (dipakai tabel & baris TOTAL agar garisnya 100% sejajar)
+const COL_W = ['46%', '10%', '44%'] as const;
 
-function PrintBlock({ block, rows }: { block: RecapBlock; rows: number }) {
-  const pad = Math.max(0, rows - block.lines.length);
+function PrintBlock({ block }: { block: RecapBlock }) {
   return (
-    <div style={{ border: `1px solid ${P.frame}`, borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', color: P.ink }}>
+    <div style={{
+      border: `1px solid ${P.frame}`,
+      borderRadius: 8,
+      overflow: 'hidden',
+      background: '#fff',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+    }}>
+      <table style={{
+        width: '100%',
+        height: '100%',
+        borderCollapse: 'collapse',
+        tableLayout: 'fixed',
+        color: P.ink,
+      }}>
         <colgroup>
-          <col style={{ width: '47%' }} />
-          <col style={{ width: '9%' }} />
-          <col style={{ width: '44%' }} />
+          <col style={{ width: COL_W[0] }} />
+          <col style={{ width: COL_W[1] }} />
+          <col style={{ width: COL_W[2] }} />
         </colgroup>
         <thead>
           <tr>
-            <th colSpan={3} style={{ height: 34, padding: '0 10px', lineHeight: '18px', verticalAlign: 'middle', background: P.green, color: '#fff', fontSize: 13, fontWeight: 700, letterSpacing: 0.6, textAlign: 'center' }}>
+            <th colSpan={3} style={{
+              height: 32, padding: '0 10px', lineHeight: '32px', verticalAlign: 'middle',
+              background: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
+              color: '#fff', fontSize: 12, fontWeight: 800, letterSpacing: 0.8, textAlign: 'center',
+            }}>
               {block.title}
             </th>
           </tr>
           <tr style={{ background: P.greenSoft }}>
             {(['Area', 'Qty', 'Keterangan'] as const).map((h, i) => (
               <th key={h} style={{
-                height: 26, padding: '0 10px', lineHeight: '14px', verticalAlign: 'middle', fontSize: 10, fontWeight: 700,
+                width: COL_W[i],
+                height: 25, padding: '0 10px', lineHeight: '25px', verticalAlign: 'middle', fontSize: 10, fontWeight: 700,
                 textTransform: 'uppercase', letterSpacing: 0.6, color: P.green, textAlign: i === 1 ? 'center' : 'left',
                 borderBottom: `1px solid ${P.greenLine}`, borderRight: i < 2 ? `1px solid ${P.greenLine}` : 'none',
+                boxSizing: 'border-box',
               }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {block.lines.map((l, idx) => (
-            <tr key={idx} style={{ background: idx % 2 ? '#f8fafc' : '#fff' }}>
-              <td style={cellP({ fontWeight: 600, borderRight: `1px solid ${P.line}` })}>{l.area}</td>
-              <td style={cellP({ textAlign: 'center', fontWeight: 800, fontSize: 13, borderRight: `1px solid ${P.line}` })}>{l.qty}</td>
-              <td style={cellP({ color: '#334155' })}>{l.keterangan}</td>
+            <tr key={idx} style={{ height: ROW_H, background: idx % 2 ? '#f8fafc' : '#ffffff' }}>
+              <td style={cellP({ width: COL_W[0], fontWeight: 600, borderRight: `1px solid ${P.line}` })}>{l.area}</td>
+              <td style={cellP({ width: COL_W[1], textAlign: 'center', fontWeight: 800, fontSize: 13, color: '#047857', borderRight: `1px solid ${P.line}` })}>{l.qty}</td>
+              <td style={cellP({ width: COL_W[2], color: '#334155' })}>{l.keterangan}</td>
             </tr>
           ))}
-          {/* Baris kosong agar dua blok bersebelahan sama tinggi */}
-          {Array.from({ length: pad }).map((_, i) => (
-            <tr key={`pad-${i}`}>
-              <td style={cellP({ borderRight: `1px solid ${P.line}` })} />
-              <td style={cellP({ borderRight: `1px solid ${P.line}` })} />
-              <td style={cellP()} />
+          {block.lines.length === 0 && (
+            <tr style={{ height: ROW_H }}>
+              <td colSpan={3} style={cellP({ textAlign: 'center', color: P.muted, fontStyle: 'italic' })}>Tidak ada bungkusan</td>
             </tr>
-          ))}
-          {block.lines.length === 0 && pad === 0 && (
-            <tr><td colSpan={3} style={cellP({ textAlign: 'center', color: P.muted, fontStyle: 'italic' })}>Tidak ada bungkusan</td></tr>
           )}
-          <tr style={{ background: P.amber }}>
-            <td style={{ height: 32, padding: '0 10px', lineHeight: '16px', verticalAlign: 'middle', textAlign: 'center', fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: P.amberInk, borderTop: `2px solid ${P.amberLine}`, borderRight: `1px solid ${P.amberLine}` }}>TOTAL</td>
-            <td style={{ height: 32, padding: '0 10px', lineHeight: '16px', verticalAlign: 'middle', textAlign: 'center', fontSize: 15, fontWeight: 800, color: P.amberInk, borderTop: `2px solid ${P.amberLine}`, borderRight: `1px solid ${P.amberLine}` }}>{block.total}</td>
-            <td style={{ height: 32, padding: '0 10px', lineHeight: '16px', verticalAlign: 'middle', textAlign: 'center', fontSize: 12, fontWeight: 700, color: P.amberInk, borderTop: `2px solid ${P.amberLine}` }}>Bungkus</td>
+          {/* Baris pengisi agar border vertikal tetap lurus ke bawah sampai ke TOTAL */}
+          <tr style={{ height: 'auto' }}>
+            <td style={{ width: COL_W[0], background: '#ffffff', borderRight: `1px solid ${P.line}`, padding: 0 }} />
+            <td style={{ width: COL_W[1], background: '#ffffff', borderRight: `1px solid ${P.line}`, padding: 0 }} />
+            <td style={{ width: COL_W[2], background: '#ffffff', padding: 0 }} />
           </tr>
         </tbody>
+        <tfoot>
+          <tr style={{
+            background: 'linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)',
+            height: 32,
+          }}>
+            <td style={{
+              width: COL_W[0],
+              height: 32,
+              padding: '0 10px',
+              lineHeight: '32px',
+              verticalAlign: 'middle',
+              textAlign: 'center',
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: 0.6,
+              color: P.amberInk,
+              borderTop: `2px solid ${P.amberLine}`,
+              borderRight: `1px solid ${P.amberLine}`,
+              boxSizing: 'border-box',
+            }}>
+              TOTAL
+            </td>
+            <td style={{
+              width: COL_W[1],
+              height: 32,
+              padding: '0 10px',
+              lineHeight: '32px',
+              verticalAlign: 'middle',
+              textAlign: 'center',
+              fontSize: 15,
+              fontWeight: 800,
+              color: P.amberInk,
+              borderTop: `2px solid ${P.amberLine}`,
+              borderRight: `1px solid ${P.amberLine}`,
+              boxSizing: 'border-box',
+            }}>
+              {block.total}
+            </td>
+            <td style={{
+              width: COL_W[2],
+              height: 32,
+              padding: '0 10px',
+              lineHeight: '32px',
+              verticalAlign: 'middle',
+              textAlign: 'center',
+              fontSize: 11,
+              fontWeight: 700,
+              color: P.amberInk,
+              borderTop: `2px solid ${P.amberLine}`,
+              boxSizing: 'border-box',
+            }}>
+              Bungkus
+            </td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );
@@ -486,42 +559,95 @@ export function BungkusRecapPrintSheet({ title, blocks, printedAt }: { title: st
   const grandTotal = visibleBlocks.reduce((s, b) => s + b.total, 0);
 
   return (
-    <div style={{ fontFamily: P.font, background: '#fff', color: P.ink, width: 1400, padding: '22px 26px 18px', boxSizing: 'border-box' }}>
+    <div
+      className="recap-print-sheet"
+      style={{
+        fontFamily: P.font,
+        background: '#fff',
+        color: P.ink,
+        width: 1240,
+        minHeight: 856,
+        padding: '20px 26px 16px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+      }}
+    >
+      <style>{`
+        .recap-print-sheet th,
+        .recap-print-sheet td {
+          vertical-align: middle !important;
+        }
+      `}</style>
       {/* Kop */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, paddingBottom: 10, borderBottom: `3px solid ${P.green}` }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: P.green, lineHeight: '14px' }}>PREP & LAB TBP · REKAPAN BUNGKUSAN</div>
-          <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: 0.3, lineHeight: '28px', marginTop: 2 }}>{title}</div>
+          <div style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, color: P.green, background: P.greenSoft, border: `1px solid ${P.greenLine}`, padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase' }}>
+            PREP & LAB TBP · REKAPAN BUNGKUSAN
+          </div>
+          <div style={{ fontSize: 21, fontWeight: 900, letterSpacing: 0.3, lineHeight: '26px', marginTop: 5, color: '#0f172a' }}>
+            {title}
+          </div>
         </div>
-        <div style={{ textAlign: 'right', lineHeight: '16px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, color: P.muted }}>TOTAL SELURUH BUNGKUSAN</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: P.green, lineHeight: '32px' }}>{grandTotal} <span style={{ fontSize: 13, fontWeight: 600, color: P.muted }}>bungkus</span></div>
+        <div style={{ textAlign: 'right', background: '#f8fafc', border: `1px solid ${P.line}`, borderRadius: 8, padding: '6px 16px' }}>
+          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.8, color: P.muted, textTransform: 'uppercase' }}>TOTAL SELURUH BUNGKUSAN</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: P.green, lineHeight: '28px' }}>
+            {grandTotal} <span style={{ fontSize: 12, fontWeight: 700, color: P.muted }}>bungkus</span>
+          </div>
         </div>
       </div>
 
       {/* Ringkasan per waktu makan */}
-      <div style={{ display: 'flex', gap: 8, margin: '12px 0 4px' }}>
-        {visibleBlocks.map(b => (
-          <div key={b.id || b.title} style={{ flex: 1, border: `1px solid ${P.line}`, borderRadius: 6, padding: '6px 10px', background: '#f8fafc', lineHeight: '14px' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: P.muted }}>{b.title.replace(/^BUNGKUSAN\s+/i, '')}</div>
-            <div style={{ fontSize: 16, fontWeight: 800, lineHeight: '22px' }}>{b.total}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${visibleBlocks.length}, 1fr)`, gap: 10, margin: '10px 0 6px' }}>
+        {visibleBlocks.map((b, idx) => {
+          const colors = [
+            { bg: '#f0fdf4', border: '#bbf7d0', accent: '#16a34a' },
+            { bg: '#eff6ff', border: '#bfdbfe', accent: '#2563eb' },
+            { bg: '#fffbeb', border: '#fde68a', accent: '#d97706' },
+            { bg: '#f5f3ff', border: '#ddd6fe', accent: '#7c3aed' },
+            { bg: '#ecfeff', border: '#a5f3fc', accent: '#0891b2' },
+          ];
+          const c = colors[idx % colors.length];
+          return (
+            <div key={b.id || b.title} style={{
+              border: `1px solid ${c.border}`,
+              borderRadius: 6,
+              padding: '6px 12px',
+              background: c.bg,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: c.accent, textTransform: 'uppercase' }}>
+                  {b.title.replace(/^BUNGKUSAN\s+/i, '')}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: P.ink, lineHeight: '22px' }}>
+                  {b.total} <span style={{ fontSize: 10, fontWeight: 600, color: P.muted }}>bungkus</span>
+                </div>
+              </div>
+              <div style={{ width: 4, height: 22, borderRadius: 2, background: c.accent }} />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Grid 2x2 pasangan tabel */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, margin: '6px 0' }}>
+        {pairs.map((pair, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: pair.length === 1 ? '1fr 1fr' : '1fr 1fr', gap: 14, flex: 1 }}>
+            {pair.map(b => <PrintBlock key={b.id || b.title} block={b} />)}
           </div>
         ))}
       </div>
 
-      {pairs.map((pair, i) => {
-        const rows = Math.max(...pair.map(b => b.lines.length), 1);
-        return (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: pair.length === 1 ? '1fr 1fr' : '1fr 1fr', gap: 16, marginTop: 14 }}>
-            {pair.map(b => <PrintBlock key={b.id || b.title} block={b} rows={rows} />)}
-          </div>
-        );
-      })}
-
       {/* Footer */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, paddingTop: 8, borderTop: `1px solid ${P.line}`, fontSize: 10, color: P.muted, lineHeight: '14px' }}>
-        <span>Kantin Seroja = bungkusan kantin NR Mess · Crew = Gol I · Staff = Gol II–III · Kotakan = Gol IV–V</span>
-        <span>{printedAt ? `Dicetak ${printedAt} · PrepLab Portal` : 'PrepLab Portal'}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 6, borderTop: `1px solid ${P.line}`, fontSize: 9.5, color: P.muted, lineHeight: '14px' }}>
+        <span>
+          <strong style={{ color: P.ink }}>Kantin Seroja</strong> = bungkusan kantin NR Mess · <strong style={{ color: P.ink }}>Crew</strong> = Gol I · <strong style={{ color: P.ink }}>Staff</strong> = Gol II–III · <strong style={{ color: P.ink }}>Kotakan</strong> = Gol IV–V
+        </span>
+        <span style={{ fontWeight: 600 }}>{printedAt ? `Dicetak ${printedAt} · PrepLab Portal` : 'PrepLab Portal'}</span>
       </div>
     </div>
   );
@@ -674,7 +800,7 @@ export async function downloadBungkusRecapPdf(date: string, blocks: RecapBlock[]
   // @ts-ignore
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
   const host = document.createElement('div');
-  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:1400px;background:#fff';
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:1240px;background:#fff';
   const now = new Date();
   const pad2 = (n: number) => String(n).padStart(2, '0');
   const printedAt = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
@@ -693,7 +819,12 @@ export async function downloadBungkusRecapPdf(date: string, blocks: RecapBlock[]
   host.innerHTML = renderToStaticMarkup(<BungkusRecapPrintSheet title={recapTitle(date)} blocks={visibleBlocks} printedAt={printedAt} />);
   document.body.appendChild(host);
   try {
-    const canvas = await html2canvas(host.firstElementChild as HTMLElement, { scale: 2, backgroundColor: '#ffffff', logging: false });
+    const canvas = await html2canvas(host.firstElementChild as HTMLElement, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true,
+    });
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const margin = 8;
     const pageW = pdf.internal.pageSize.getWidth() - margin * 2;
@@ -701,9 +832,9 @@ export async function downloadBungkusRecapPdf(date: string, blocks: RecapBlock[]
     const ratio = Math.min(pageW / canvas.width, pageH / canvas.height);
     const w = canvas.width * ratio;
     const h = canvas.height * ratio;
-    // Lebar penuh halaman, rata atas (tanpa ruang kosong besar di atas)
+    // Posisikan presisi dan seimbang di tengah halaman A4 landscape
     pdf.setProperties({ title: `Rekap Bungkusan ${date}`, subject: 'Rekapan Bungkusan Dept. Preparation & Laboratory', creator: 'PrepLab Portal' });
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin + (pageW - w) / 2, margin, w, h, undefined, 'FAST');
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin + (pageW - w) / 2, margin + (pageH - h) / 2, w, h, undefined, 'FAST');
     pdf.save(`Rekap_Bungkusan_${date}.pdf`);
   } finally {
     host.remove();

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
+import { TrainingCertificationsPanel } from './training-certifications-panel';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Chart as ChartJS,
@@ -1000,6 +1001,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const access: TrainingAccess = payload?.access ?? { viewAll: false, canManage: false, nik: '' };
   const scopePrograms = SCOPE_PROGRAMS[scope];
   const isExternal = scope === 'external';
+  // Training External: tab Sertifikasi POP/POM (data training_records) | Sertifikasi K3 & Kompetensi (training_certifications)
+  const [externalTab, setExternalTab] = useState<'pop' | 'cert'>('pop');
 
   const [program, setProgram] = useState<TrainingProgram>(() => {
     if (scope === 'external') return 'pop';
@@ -1856,7 +1859,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {canManage && (
+            {canManage && !(isExternal && externalTab === 'cert') && (
               <>
                 <button
                   type="button"
@@ -1889,6 +1892,24 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
         </div>
 
+        {/* ===== Training External: Sertifikasi POP/POM | Sertifikasi K3 & Kompetensi ===== */}
+        {isExternal && (
+          <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            {([['pop', 'Sertifikasi POP/POM', Award], ['cert', 'Sertifikasi K3 & Kompetensi', HardHat]] as const).map(([key, label, Icon]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setExternalTab(key)}
+                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${externalTab === key ? 'text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                style={externalTab === key ? { backgroundColor: DASH.brand } : undefined}
+              >
+                <Icon className="w-4 h-4" /> {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {isExternal && externalTab === 'cert' ? <TrainingCertificationsPanel /> : (<>
         {/* ===== Baris 1: Overview · Status SAP · Ring program ===== */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
           <DashCard className="lg:col-span-4">
@@ -2701,6 +2722,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
           </div>
         </div>
+        </>)}
       </div>
 
       {/* Modal Tambah / Edit */}

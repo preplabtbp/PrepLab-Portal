@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
-import React, { useState, useEffect } from 'react';
-import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { Button, Input, Select } from './ui';
 
@@ -70,6 +70,10 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
     employeeName: string;
     nik: string;
   } | null>(null);
+
+  // State untuk jendela mengambang detail APD
+  const [selectedApdModal, setSelectedApdModal] = useState<string | null>(null);
+  const pcScrollRef = useRef<HTMLDivElement>(null);
 
 
 
@@ -405,7 +409,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-500 pb-12 max-w-5xl mx-auto px-2 sm:px-4">
+    <div className="space-y-5 animate-in fade-in duration-500 pb-12 max-w-7xl mx-auto px-2 sm:px-4">
       {/* Sub-module Navigation Bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
@@ -580,128 +584,397 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {APD_TYPES.map(apd => {
-              const historyList = getHistoryIgnoreCase(employeeData.history, apd) || [];
-              const totalTakes = historyList.length;
-              
-              // Calculate eligibility status
-              const warningMsg = getIntervalWarning(apd, format(new Date(), 'yyyy-MM-dd'), employeeData.history);
-              const isEligible = !warningMsg;
+          {/* Daftar APD: Versi PC dibuat memanjang (horizontal scroll), Versi Mobile Phone dibuat Portrait */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <div>
+                <h4 className="font-bold text-slate-800 text-sm sm:text-base">Status & Riwayat Pengambilan APD</h4>
+                <p className="text-xs text-slate-500">Klik kartu APD untuk melihat detail riwayat dan menambah ke draft form input.</p>
+              </div>
+              <div className="hidden sm:flex items-center gap-3">
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-400" /> Belum ada pengambilan</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" /> Sudah pernah diambil</span>
+                </div>
+                {/* Tombol Geser Horizontal untuk PC */}
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => pcScrollRef.current?.scrollBy({ left: -320, behavior: 'smooth' })}
+                    className="p-1 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+                    title="Geser ke kiri"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => pcScrollRef.current?.scrollBy({ left: 320, behavior: 'smooth' })}
+                    className="p-1 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
+                    title="Geser ke kanan"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
 
-              return (
-                <div key={apd} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 flex flex-col relative overflow-hidden group">
-                  <div className="flex items-start justify-between mb-4 pb-3 border-b border-slate-100 gap-2">
-                    <div>
-                      <h4 className="font-semibold text-slate-800 text-sm leading-tight">{apd}</h4>
-                      {totalTakes > 0 ? (
-                        <p className={`text-[10px] font-medium mt-1 ${isEligible ? 'text-teal-600' : 'text-amber-600'}`}>
-                          {isEligible ? 'Bisa diambil' : 'Belum waktunya'}
-                        </p>
+            {/* Versi PC (Desktop): Memanjang seperti Foto dengan tata letak profesional & presisi */}
+            <div
+              ref={pcScrollRef}
+              className="hidden sm:flex items-stretch gap-3.5 overflow-x-auto pb-3 pt-1 px-1 snap-x scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
+            >
+              {APD_TYPES.map(apd => {
+                const historyList = getHistoryIgnoreCase(employeeData.history, apd) || [];
+                const totalTakes = historyList.length;
+                const warningMsg = getIntervalWarning(apd, format(new Date(), 'yyyy-MM-dd'), employeeData.history);
+                const isEligible = !warningMsg;
+
+                let lastDateDisplay: string | null = null;
+                if (totalTakes > 0) {
+                  const lastHist = historyList[historyList.length - 1];
+                  const lastRaw = typeof lastHist === 'string' ? lastHist : lastHist?.date;
+                  if (lastRaw) {
+                    try {
+                      lastDateDisplay = format(parseISO(lastRaw), 'dd/MM/yyyy');
+                    } catch {
+                      lastDateDisplay = lastRaw;
+                    }
+                  }
+                }
+
+                const isEmpty = totalTakes === 0;
+
+                return (
+                  <div
+                    key={apd}
+                    onClick={() => setSelectedApdModal(apd)}
+                    className={`h-[148px] min-w-[210px] md:min-w-[230px] lg:min-w-[245px] flex-1 shrink-0 rounded-2xl p-4 border transition-all cursor-pointer select-none flex flex-col justify-between snap-start hover:-translate-y-1 hover:shadow-md ${
+                      isEmpty
+                        ? 'bg-rose-50/40 border-rose-200/90 hover:border-rose-300 hover:bg-rose-50/70 shadow-2xs'
+                        : 'bg-white border-slate-200/90 hover:border-purple-300 shadow-2xs'
+                    }`}
+                    title="Klik untuk membuka rincian pengambilan APD"
+                  >
+                    {/* Header: Title */}
+                    <div className="h-8 flex items-center justify-center text-center">
+                      <span className={`text-[11.5px] font-bold uppercase tracking-wider line-clamp-2 leading-tight ${isEmpty ? 'text-rose-800' : 'text-slate-700'}`}>
+                        {apd}
+                      </span>
+                    </div>
+
+                    {/* Middle: Prominent Number & Unit */}
+                    <div className="my-auto text-center py-1">
+                      <div className="flex items-baseline justify-center gap-1.5">
+                        <span className={`text-3xl sm:text-4xl font-black tracking-tight ${isEmpty ? 'text-rose-600' : 'text-slate-900'}`}>
+                          {totalTakes}
+                        </span>
+                        <span className={`text-xs font-semibold ${isEmpty ? 'text-rose-500' : 'text-slate-500'}`}>
+                          kali
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Footer: Status / Info */}
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-center text-center">
+                      {isEmpty ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Belum Diambil
+                        </span>
                       ) : (
-                        <p className="text-[10px] font-medium mt-1 text-teal-600">Belum pernah diambil</p>
+                        <div className="flex items-center justify-between w-full px-0.5 text-xs">
+                          <span className="text-[11px] text-slate-500 truncate font-medium">
+                            {lastDateDisplay ? `Tgl ${lastDateDisplay}` : `${totalTakes}x Data`}
+                          </span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                            isEligible 
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' 
+                              : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isEligible ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                            {isEligible ? 'Bisa Diambil' : 'Belum Waktunya'}
+                          </span>
+                        </div>
                       )}
                     </div>
-                    <span className="bg-purple-50 text-purple-600 text-[10px] font-bold px-2 py-1 rounded-md shrink-0">
-                      {totalTakes} Kali
-                    </span>
                   </div>
-                  
-                  {totalTakes > 0 ? (
-                    <div className="space-y-2 mt-auto mb-4">
-                      {historyList.map((histObj: any, idx: number) => {
+                );
+              })}
+            </div>
 
-                        const hDate = typeof histObj === 'string' ? histObj : histObj.date;
-                        const rawUrl = typeof histObj === 'string' ? null : histObj.url;
-                        const hUrl = (rawUrl && typeof rawUrl === 'string' && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('/uploads/') || rawUrl.startsWith('/api/'))) ? rawUrl.trim() : null;
-                        let displayDate = hDate;
-                        try {
-                          if (hDate.includes('T')) {
-                            displayDate = format(parseISO(hDate), 'dd-MM-yyyy HH:mm');
-                          } else {
-                            displayDate = format(parseISO(hDate), 'dd-MM-yyyy');
-                          }
-                        } catch (e) {}
-                        
-                        return (
-                        <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                          <span className="text-xs font-medium text-slate-500">
-                            Ke-{idx + 1}
-                          </span>
-                          {hUrl ? (
-                            <button 
-                              type="button" 
-                              onClick={(e) => { 
-                                e.preventDefault(); 
-                                setPreviewDoc({
-                                  url: hUrl,
-                                  title: apd,
-                                  date: displayDate,
-                                  employeeName: employeeData.nama,
-                                  nik: employeeData.nik
-                                });
-                              }} 
-                              className="flex items-center gap-1.5 text-teal-700 bg-teal-50 shadow-xs px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-teal-200 hover:bg-teal-100 hover:border-teal-300 hover:shadow-sm transition-all z-10 relative group cursor-pointer"
-                              title="Klik untuk membuka dokumen PDF"
-                            >
-                              <Calendar className="w-3.5 h-3.5 text-teal-600" />
-                              <span>{displayDate}</span>
-                              <ExternalLink className="w-3 h-3 text-teal-500 opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <div className="flex items-center gap-1.5 text-slate-700 bg-white shadow-sm px-2 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
-                                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                {displayDate}
-                              </div>
-                              <label className="cursor-pointer p-1.5 rounded-md bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200 transition-colors z-10 relative">
-                                {uploadingApd?.nik === employeeData.nik && uploadingApd?.apd === apd && uploadingApd?.date === hDate ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Upload className="w-4 h-4" />
-                                )}
-                                <input 
-                                  type="file" 
-                                  accept="application/pdf,image/*" 
-                                  className="hidden" 
-                                  onChange={(e) => handleUploadProof(employeeData.nik, apd, hDate, e)} 
-                                  disabled={!!uploadingApd}
-                                />
-                              </label>
-                            </div>
-                          )}
-                        </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-xl border border-slate-100 border-dashed text-center my-auto mb-4">
-                      Belum ada riwayat pengambilan
-                    </div>
-                  )}
+            {/* Versi Mobile Phone: Dibuat Portrait (Grid 2 Kolom Vertikal) */}
+            <div className="grid grid-cols-2 gap-2.5 sm:hidden px-0.5">
+              {APD_TYPES.map(apd => {
+                const historyList = getHistoryIgnoreCase(employeeData.history, apd) || [];
+                const totalTakes = historyList.length;
+                const warningMsg = getIntervalWarning(apd, format(new Date(), 'yyyy-MM-dd'), employeeData.history);
+                const isEligible = !warningMsg;
 
-                  <Button 
-                    type="button" 
-                    variant={isEligible ? "primary" : "secondary"}
-                    className={`w-full py-2.5 rounded-xl text-xs gap-2 mt-auto ${!isEligible && 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'}`}
-                    onClick={() => {
-                      setEntries(prev => [...prev, {
-                        id: Math.random().toString(36).substr(2, 9),
-                        apd: apd,
-                        ukuran: '-',
-                        jumlah: '1',
-                        keterangan: '',
-                        warningMessage: getIntervalWarning(apd, tanggal, employeeData.history)
-                      }]);
-                      setShowAddedPopup(apd);
-                    }}
+                let lastDateDisplay: string | null = null;
+                if (totalTakes > 0) {
+                  const lastHist = historyList[historyList.length - 1];
+                  const lastRaw = typeof lastHist === 'string' ? lastHist : lastHist?.date;
+                  if (lastRaw) {
+                    try {
+                      lastDateDisplay = format(parseISO(lastRaw), 'dd/MM/yyyy');
+                    } catch {
+                      lastDateDisplay = lastRaw;
+                    }
+                  }
+                }
+
+                const isEmpty = totalTakes === 0;
+
+                return (
+                  <div
+                    key={apd}
+                    onClick={() => setSelectedApdModal(apd)}
+                    className={`h-[135px] rounded-2xl p-3.5 border transition-all cursor-pointer active:scale-98 flex flex-col justify-between text-center ${
+                      isEmpty
+                        ? 'bg-rose-50/40 border-rose-200 text-rose-950 shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-800 shadow-2xs'
+                    }`}
                   >
-                    <Plus className="w-4 h-4" /> Tambah ke Form Input
-                  </Button>
-                </div>
-              );
-            })}
+                    <div className="h-7 flex items-center justify-center">
+                      <span className={`text-[11px] font-bold uppercase tracking-wider line-clamp-2 leading-tight ${isEmpty ? 'text-rose-800' : 'text-slate-700'}`}>
+                        {apd}
+                      </span>
+                    </div>
+
+                    <div className="my-auto py-1">
+                      <div className="flex items-baseline justify-center gap-1">
+                        <span className={`text-3xl font-black ${isEmpty ? 'text-rose-600' : 'text-slate-900'}`}>
+                          {totalTakes}
+                        </span>
+                        <span className={`text-xs font-semibold ${isEmpty ? 'text-rose-500' : 'text-slate-500'}`}>
+                          kali
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-center">
+                      {isEmpty ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                          Belum Diambil
+                        </span>
+                      ) : (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          isEligible ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isEligible ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                          {isEligible ? 'Bisa' : 'Tunggu'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Jendela Mengambang (Floating Modal) Detail APD & Keterangan */}
+          {selectedApdModal && (() => {
+            const apd = selectedApdModal;
+            const historyList = getHistoryIgnoreCase(employeeData.history, apd) || [];
+            const totalTakes = historyList.length;
+            const warningMsg = getIntervalWarning(apd, format(new Date(), 'yyyy-MM-dd'), employeeData.history);
+            const isEligible = !warningMsg;
+            const intervalMonths = getIntervalIgnoreCase(intervals, apd) || 0;
+
+            return (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+                onClick={() => setSelectedApdModal(null)}
+              >
+                <div
+                  className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[88vh] overflow-hidden animate-in zoom-in-95 duration-200"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Header Modal */}
+                  <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-800 leading-snug">{apd}</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">Detail riwayat & kelayakan pengambilan APD</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedApdModal(null)}
+                      className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                      title="Tutup"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Isi Modal: Keterangan & Riwayat Pengambilan */}
+                  <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+                    {/* Ringkasan Status 3 Kartu Mini */}
+                    <div className="grid grid-cols-3 gap-2.5 text-center">
+                      <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200/80">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Ambil</span>
+                        <div className="text-lg font-black text-slate-800 mt-0.5">{totalTakes} <span className="text-[11px] font-normal text-slate-500">kali</span></div>
+                      </div>
+                      <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200/80">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interval</span>
+                        <div className="text-lg font-black text-slate-800 mt-0.5">{intervalMonths > 0 ? `${intervalMonths} Bln` : 'Bebas'}</div>
+                      </div>
+                      <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200/80">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kelayakan</span>
+                        <div className={`text-xs font-black mt-1 ${totalTakes === 0 ? 'text-rose-600' : isEligible ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {totalTakes === 0 ? 'Belum Ada' : isEligible ? 'Bisa Ambil' : 'Menunggu'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Alert Penjelasan Jadwal */}
+                    {warningMsg ? (
+                      <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2.5 text-xs">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Perhatian Jadwal Penggantian</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed">{warningMsg}</p>
+                        </div>
+                      </div>
+                    ) : totalTakes > 0 ? (
+                      <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2.5 text-xs">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Memenuhi Syarat Pengambilan</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed">Karyawan berhak mengambil APD ini karena telah melewati masa interval penggantian resmi.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-2.5 text-xs">
+                        <Shield className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Belum Ada Pengambilan</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed">Karyawan belum memiliki catatan pengambilan untuk APD ini di sistem.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Riwayat Pengambilan */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                          Riwayat Pengambilan ({totalTakes} data tanggal)
+                        </h4>
+                      </div>
+
+                      {totalTakes > 0 ? (
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {historyList.map((histObj: any, idx: number) => {
+                            const hDate = typeof histObj === 'string' ? histObj : histObj.date;
+                            const rawUrl = typeof histObj === 'string' ? null : histObj.url;
+                            const hUrl = (rawUrl && typeof rawUrl === 'string' && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('/uploads/') || rawUrl.startsWith('/api/'))) ? rawUrl.trim() : null;
+                            let displayDate = hDate;
+                            try {
+                              if (hDate.includes('T')) {
+                                displayDate = format(parseISO(hDate), 'dd-MM-yyyy HH:mm');
+                              } else {
+                                displayDate = format(parseISO(hDate), 'dd-MM-yyyy');
+                              }
+                            } catch (e) {}
+
+                            return (
+                              <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100/60 transition-colors">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                    Ke-{idx + 1}
+                                  </span>
+                                  <div className="flex items-center gap-1.5 text-slate-700 text-xs font-medium">
+                                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                    <span>{displayDate}</span>
+                                  </div>
+                                </div>
+
+                                {hUrl ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      setPreviewDoc({
+                                        url: hUrl,
+                                        title: apd,
+                                        date: displayDate,
+                                        employeeName: employeeData.nama,
+                                        nik: employeeData.nik
+                                      });
+                                    }}
+                                    className="flex items-center gap-1.5 text-teal-700 bg-teal-50 shadow-xs px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-teal-200 hover:bg-teal-100 hover:border-teal-300 transition-all cursor-pointer"
+                                    title="Buka dokumen bukti pengambilan"
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-teal-600" />
+                                    <span>Bukti PDF</span>
+                                    <ExternalLink className="w-3 h-3 text-teal-500" />
+                                  </button>
+                                ) : (
+                                  <label className="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white text-purple-700 hover:bg-purple-50 border border-purple-200 text-xs font-semibold transition-colors">
+                                    {uploadingApd?.nik === employeeData.nik && uploadingApd?.apd === apd && uploadingApd?.date === hDate ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <Upload className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>Upload</span>
+                                    <input
+                                      type="file"
+                                      accept="application/pdf,image/*"
+                                      className="hidden"
+                                      onChange={(e) => handleUploadProof(employeeData.nik, apd, hDate, e)}
+                                      disabled={!!uploadingApd}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-rose-600 bg-rose-50/70 p-4 rounded-xl border border-rose-200 border-dashed text-center">
+                          Belum ada riwayat tanggal pengambilan sebelumnya.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Footer Modal: Tombol Tambah ke Form Input */}
+                  <div className="pt-4 border-t border-slate-100">
+                    <Button
+                      type="button"
+                      variant={isEligible ? "primary" : "secondary"}
+                      className={`w-full py-3.5 rounded-2xl text-sm font-bold gap-2 cursor-pointer shadow-sm transition-all ${
+                        !isEligible 
+                          ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200' 
+                          : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg'
+                      }`}
+                      onClick={() => {
+                        setEntries(prev => [...prev, {
+                          id: Math.random().toString(36).substr(2, 9),
+                          apd: apd,
+                          ukuran: '-',
+                          jumlah: '1',
+                          keterangan: '',
+                          warningMessage: getIntervalWarning(apd, tanggal, employeeData.history)
+                        }]);
+                        setShowAddedPopup(apd);
+                        setSelectedApdModal(null);
+                        toast.success(`${apd} berhasil ditambahkan ke draft input!`);
+                        setTimeout(() => {
+                          document.getElementById('apd-input-form')?.scrollIntoView({ behavior: 'smooth' });
+                        }, 120);
+                      }}
+                    >
+                      <Plus className="w-4 h-4" /> Tambah ke Form Input
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           <form id="apd-input-form" onSubmit={handleSaveClick} className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden mt-8">
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">

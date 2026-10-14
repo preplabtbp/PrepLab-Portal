@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp,
+  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Truck, BarChart3, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,6 +9,9 @@ import { todayWit } from '../utils/training-import';
 import { parseMealOrderSheet, type ParsedMealOrderRow, type MealImportField } from '../utils/meal-order-import';
 import { isTuesdayWednesdaySaturday, mealChoicePatch, computeMealOrderByRoster, isCatatanDisabledForEmployee, type CatatanOption, type MealPreference, type MealChoice } from '../utils/meal-roster-sync';
 import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle, type RecapBlock } from './meal-bungkus-recap';
+import { mealCounts, bungkusCount, MEAL_SLOT_BY_GROUP, type MealSlot } from '../utils/meal-bungkus-counts';
+import { MealBungkusStats } from './meal-bungkus-stats';
+import { MealBungkusRecipientsTable } from './meal-bungkus-recipients';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
@@ -75,28 +78,10 @@ const longDate = (d: string) => { const x = parseYmd(d); return `${x.getUTCDate(
 const shiftDate = (d: string, days: number) => { const x = parseYmd(d); x.setUTCDate(x.getUTCDate() + days); return x.toISOString().slice(0, 10); };
 
 const portions = (v: string | null | undefined) => { const n = Number(String(v || '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; };
-// Hitungan per baris per waktu makan — SATU sumber untuk kartu ringkasan modul & Export TBP/GPS agar angkanya selalu sama.
-//  lapangan      = porsi kolom Lapangan (Bungkus Lapangan)
-//  bungkusKantin = Bungkus Kantin karyawan non-CR (NR): Pagi/Sore dari 1 (B.Pagi)/1 (B.Sore) atau "1" di Kantin; Siang/Sahur dari kolom Kantin
-//  makanKantin   = makan di kantin (karyawan Mess CR yang kolom Kantin-nya terisi)
-type MealSlot = 'pagi' | 'sahur' | 'siang' | 'sore' | 'takjil' | 'malam';
-const MEAL_SLOT_BY_GROUP: Record<string, MealSlot> = { Pagi: 'pagi', Sahur: 'sahur', Siang: 'siang', Sore: 'sore', Takjil: 'takjil', Malam: 'malam' };
-const isCRMess = (r: { statusMess: string | null }) => ['CR', 'MESS'].includes(String(r.statusMess || '').trim().toUpperCase());
-function mealCounts(r: MealOrder, slot: MealSlot): { lapangan: number; bungkusKantin: number; makanKantin: number } {
-  const lapangan = portions(r[`${slot}Lapangan` as LapanganKey]);
-  if (slot === 'takjil' || slot === 'malam') return { lapangan, bungkusKantin: 0, makanKantin: 0 };
-  const kantin = String(r[`${slot}Kantin` as KantinKey] || '').trim();
-  if (isCRMess(r)) return { lapangan, bungkusKantin: 0, makanKantin: kantin && kantin !== '-' ? 1 : 0 };
-  let bungkusKantin = 0;
-  if (slot === 'pagi' || slot === 'sore') bungkusKantin = portions(slot === 'pagi' ? r.batchPagi : r.batchSore) || (kantin === '1' ? 1 : 0);
-  else if (slot === 'siang') bungkusKantin = kantin && kantin !== '-' ? 1 : 0;
-  else bungkusKantin = kantin === '1' ? 1 : 0;
-  return { lapangan, bungkusKantin, makanKantin: 0 };
-}
+// Hitungan bungkus per baris (mealCounts / bungkusCount) dari src/utils/meal-bungkus-counts.ts — dipakai juga oleh Rekapan Bungkusan di server
 
 // Filter tabel dari klik kartu ringkasan
-type CardFilter = { company: Company | 'all'; kind: 'karyawan' | 'slot' | 'total' | 'batch' | 'belumLapor'; slot?: MealSlot; label: string };
-const bungkusCount = (r: MealOrder, slot: MealSlot) => { const c = mealCounts(r, slot); return c.lapangan + c.bungkusKantin; };
+type CardFilter = { company: Company | 'all'; kind: 'karyawan' | 'slot' | 'total' | 'belumLapor'; slot?: MealSlot; label: string };
 
 const cellTotal = (rows: MealOrder[], key: MealCellKey, kind: 'kantin' | 'lapangan') =>
   rows.reduce((s, r) => s + (kind === 'kantin' ? (String(r[key] || '').trim() ? 1 : 0) : portions(r[key])), 0);
@@ -109,7 +94,7 @@ const PROFILE_FIELDS: { key: keyof MealOrder; label: string; placeholder?: strin
   { key: 'statusKerja', label: 'Status Kerja Karyawan', placeholder: 'mis. Cuti / Dinas / -' },
   { key: 'sahur', label: 'Keterangan: Sahur', placeholder: '-' },
   { key: 'tidakPuasa', label: 'Keterangan: Tidak Puasa', placeholder: '-' },
-  { key: 'tempatTinggal', label: 'Tempat Tinggal', placeholder: 'mis. Nirwana' },
+  { key: 'tempatTinggal', label: 'Residence', placeholder: 'mis. Nirwana' },
   { key: 'status', label: 'Status' },
   { key: 'keteranganLapor', label: 'Keterangan (Belum Lapor)', placeholder: 'mis. Belum Lapor 1' },
   { key: 'catatan', label: 'Catatan', placeholder: 'mis. DINAS / PHK' },
@@ -165,7 +150,8 @@ function FloatingScrollbar({ targetRef }: { targetRef: React.RefObject<HTMLDivEl
 export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => todayWit());
-  const [view, setView] = useState<'orders' | 'recap'>('orders');
+  // orders = Orderan Makanan · recipients = Daftar Penerima Bungkusan · recap = List Pengiriman Ke GA · stats = Rekapan Bungkusan
+  const [view, setView] = useState<'orders' | 'recipients' | 'recap' | 'stats'>('orders');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const tableAnchorRef = useRef<HTMLDivElement>(null);
@@ -182,9 +168,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   // Pengaturan visibilitas kolom & header
   const [columnVisibility, setColumnVisibility] = useState<{
-    profile: boolean;     // Status Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal
+    profile: boolean;     // Status Mess, PT, Shift, Section, Status Kerja, Residence
     ramadan: boolean;     // Keterangan Sahur, Tidak Puasa, Takjil
-    batches: boolean;     // 1 (B.Pagi) & 1 (B.Sore)
     statusNotes: boolean; // Status, Belum Lapor, Catatan
     summary: boolean;     // Ringkasan Total Card di atas tabel
   }>(() => {
@@ -195,7 +180,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         return {
           profile: parsed.profile ?? true,
           ramadan: parsed.ramadan ?? false,
-          batches: parsed.batches ?? true,
           statusNotes: parsed.statusNotes ?? true,
           summary: parsed.summary ?? true,
         };
@@ -204,7 +188,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     return {
       profile: true,
       ramadan: false,
-      batches: true,
       statusNotes: true,
       summary: true,
     };
@@ -732,6 +715,21 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         </span>
       );
     }
+    const sm = (r.statusMess || '').toUpperCase();
+    const isCR = sm === 'CR' || sm === 'MESS';
+    const isLockedSore = key === 'soreLapangan' && isTuesdayWednesdaySaturday(date) && isCR;
+
+    if (isLockedSore) {
+      return (
+        <span
+          className="block text-center text-xs font-black text-slate-300 cursor-not-allowed select-none"
+          title={`Hari ${dayName(date)}: Karyawan Status Mess CR tidak ada Bungkusan Sore (wajib Kantin dan tidak bisa diganti).`}
+        >
+          -
+        </span>
+      );
+    }
+
     return (
       <input
         type="number"
@@ -756,11 +754,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 patch.siangKantin = null;
               }
               if (key === 'soreLapangan') {
-                const sm = (r.statusMess || '').toUpperCase();
-                const isCR = sm === 'CR' || sm === 'MESS';
-                const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift' || r.shiftKerja === 'LONGSHIFT';
-                if (isTuesdayWednesdaySaturday(date) && isCR && isDayShift) {
-                  toast.info(`Catatan: Hari ${dayName(date)} untuk karyawan Mess CR jadwal sore adalah Kantin.`);
+                if (isLockedSore) {
+                  toast.error(`Hari ${dayName(date)} untuk Status Mess CR wajib Kantin dan tidak bisa Bungkusan Sore.`);
+                  e.target.value = '';
+                  return;
                 }
                 patch.soreKantin = null;
                 patch.batchSore = null;
@@ -776,8 +773,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     );
   };
 
-  const renderConfirm = (r: MealOrder, key: BatchKey) =>
-    renderNumberCell(r, key, 'emerald', key === 'batchPagi' ? '1 (B.Pagi)' : '1 (B.Sore)');
 
   const switchMealType = (r: MealOrder, time: 'pagi' | 'sore') => {
     if (!canManage || isRowBelumLapor(r)) return;
@@ -793,9 +788,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       // Pindah ke Lapangan
       const sm = (r.statusMess || '').toUpperCase();
       const isCR = sm === 'CR' || sm === 'MESS';
-      const isDayShift = r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift' || r.shiftKerja === 'LONGSHIFT';
-      if (time === 'sore' && isTuesdayWednesdaySaturday(date) && isCR && isDayShift) {
-        toast.info(`Catatan: Hari ${dayName(date)} untuk Mess CR jadwal sore adalah Kantin.`);
+      if (time === 'sore' && isTuesdayWednesdaySaturday(date) && isCR) {
+        toast.error(`Hari ${dayName(date)} untuk Status Mess CR tidak ada Bungkusan Sore (wajib Kantin dan tidak dapat diganti).`);
+        return;
       }
       saveCell(r, {
         [kantinKey]: null,
@@ -829,11 +824,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   // Pilihan disimpan (pilihanPagi / pilihanSore) → dipakai seterusnya saat sinkron tanggal lain, kecuali shift Malam
   const setMealChoice = (r: MealOrder, time: 'pagi' | 'sore', choice: 'kantin' | 'lapangan') => {
+    const sm = (r.statusMess || '').toUpperCase();
+    const isCR = ['CR', 'MESS'].includes(sm);
+    if (choice === 'lapangan' && time === 'sore' && isTuesdayWednesdaySaturday(date) && isCR) {
+      toast.error(`Hari ${dayName(date)} untuk Status Mess CR tidak ada Bungkusan Sore (wajib Kantin dan tidak dapat diganti).`);
+      return;
+    }
     const label = time === 'pagi' ? 'Pagi' : 'Sore';
     const pilihan: Partial<MealOrder> = time === 'pagi' ? { pilihanPagi: choice } : { pilihanSore: choice };
-    if (choice === 'lapangan' && time === 'sore' && isTuesdayWednesdaySaturday(date) && ['CR', 'MESS'].includes((r.statusMess || '').toUpperCase())) {
-      toast.info(`Catatan: Hari ${dayName(date)} untuk Mess CR jadwal sore biasanya Kantin.`);
-    }
     saveCell(r, { ...mealChoicePatch(r, time, choice), ...pilihan });
     toast.success(`${r.nama}: ${label} ${choice === 'kantin' ? 'Kantin' : 'Bungkusan'} — berlaku seterusnya (kecuali shift Malam)`);
   };
@@ -878,9 +876,33 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       pagi: (r.pilihanPagi as MealChoice) || null,
       sore: (r.pilihanSore as MealChoice) || null,
     };
+    const currentCat = String(r.catatan || '').trim();
+    if (currentCat === 'Bungkusan Pagi') {
+      pref.pagi = 'lapangan';
+      pref.sore = 'kantin';
+    } else if (currentCat === 'Bungkusan Sore') {
+      pref.pagi = 'kantin';
+      pref.sore = 'lapangan';
+    } else if (currentCat === 'Bungkusan Pagi dan Bungkusan Sore') {
+      pref.pagi = 'lapangan';
+      pref.sore = 'lapangan';
+    } else if (currentCat === '-') {
+      pref.pagi = 'kantin';
+      pref.sore = 'kantin';
+    }
+
     const computed = computeMealOrderByRoster(r, rosterCode, date, pref);
     // Pertahankan label shift yang dipilih user (mis. Nonshift vs Siang)
     if (shiftKerja === 'Nonshift') computed.shiftKerja = 'Nonshift';
+
+    // Jangan rubah ke Bungkusan Sore saat ganti shift atau tanggal jika tidak diganti!
+    const isExplicitSoreChange = currentCat === 'Bungkusan Sore' || currentCat === 'Bungkusan Pagi dan Bungkusan Sore' || pref.sore === 'lapangan';
+    const isKawasiLSChange = isKawasiRow(r) && String(shiftKerja || '').toUpperCase() === 'LONGSHIFT';
+    if (!isKawasiLSChange && !isExplicitSoreChange) {
+      computed.soreLapangan = null;
+      computed.soreKantin = 'K';
+      computed.batchSore = null;
+    }
 
     const patch: Partial<MealOrder> = {
       shiftKerja: computed.shiftKerja,
@@ -904,16 +926,20 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const getRowCatatanValue = (r: MealOrder): CatatanOption => {
     if (isCatatanDisabledForEmployee(r)) return '-';
+    const sm = (r.statusMess || '').toUpperCase();
+    const isCR = sm === 'CR' || sm === 'MESS';
+    const isLockedSore = isTuesdayWednesdaySaturday(date) && isCR;
+
     const c = String(r.catatan || '').trim();
-    if (c === 'Bungkusan Pagi dan Bungkusan Sore') return c;
+    if (c === 'Bungkusan Pagi dan Bungkusan Sore') return isLockedSore ? 'Bungkusan Pagi' : c;
     if (c === 'Bungkusan Pagi') return c;
-    if (c === 'Bungkusan Sore') return c;
+    if (c === 'Bungkusan Sore') return isLockedSore ? '-' : c;
     // Deteksi fallback dari porsi lapangan
     const p = portions(r.pagiLapangan) > 0;
     const s = portions(r.soreLapangan) > 0 && String(r.shiftKerja || '').toUpperCase() !== 'LONGSHIFT';
-    if (p && s) return 'Bungkusan Pagi dan Bungkusan Sore';
+    if (p && s && !isLockedSore) return 'Bungkusan Pagi dan Bungkusan Sore';
     if (p) return 'Bungkusan Pagi';
-    if (s) return 'Bungkusan Sore';
+    if (s && !isLockedSore) return 'Bungkusan Sore';
     return '-';
   };
 
@@ -927,6 +953,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       return;
     }
     const sm = String(r.statusMess || '').trim().toUpperCase();
+    const isCR = sm === 'CR' || sm === 'MESS';
+    const isLockedSore = isTuesdayWednesdaySaturday(date) && isCR;
+
+    if (isLockedSore && (val === 'Bungkusan Sore' || val === 'Bungkusan Pagi dan Bungkusan Sore')) {
+      toast.error(`Hari ${dayName(date)} untuk Status Mess CR tidak ada Bungkusan Sore (wajib Kantin dan tidak dapat diganti).`);
+      return;
+    }
     const isNR = sm === 'NR';
     const isNirwana = `${r.tempatTinggal || ''}`.toLowerCase().includes('nirwana');
     const kantinVal = isNR && isNirwana ? '1' : 'K';
@@ -1008,42 +1041,26 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       saveCell(r, patch);
       toast.info(`${r.nama}: Status "Belum Lapor" aktif — seluruh orderan makanan dikosongkan.`);
     } else {
-      // Jika Belum Lapor dimatikan: hitung ulang orderan makanan sesuai shift & profil
-      let rosterCode = r.shiftKerja || 'SIANG';
-      if (r.shiftKerja === 'Cuti Site') rosterCode = 'CS';
-      else if (r.shiftKerja === 'Izin') rosterCode = 'I';
-      else if (r.shiftKerja === 'OFF') rosterCode = 'OFF';
-      else if (r.shiftKerja === 'Sakit') rosterCode = 'SS';
-      else if (r.shiftKerja === 'CUTI') rosterCode = 'CUTI';
-      else if (r.shiftKerja === 'MALAM') rosterCode = 'N';
-      else if (r.shiftKerja === 'LONGSHIFT') rosterCode = 'LS';
-      else if (r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift') rosterCode = 'D';
+      // Belum Lapor dimatikan: kembali ke roster kerja tanggal tsb (mis. roster N → Malam) — dihitung di server dari
+      // sheet "Database Rooster Prep & Lab" agar memakai kode roster asli, bukan tebakan dari kolom Shift
+      clearBelumLapor(r);
+    }
+  };
 
-      const pref: MealPreference = {
-        pagi: (r.pilihanPagi as MealChoice) || null,
-        sore: (r.pilihanSore as MealChoice) || null,
-      };
-      const computed = computeMealOrderByRoster(r, rosterCode, date, pref, 'D');
-      if (r.shiftKerja === 'Nonshift') computed.shiftKerja = 'Nonshift';
-
-      const patch: Partial<MealOrder> = {
-        keteranganLapor: null,
-        shiftKerja: computed.shiftKerja,
-        statusKerja: computed.statusKerja,
-        status: computed.status,
-        pagiKantin: computed.pagiKantin,
-        pagiLapangan: computed.pagiLapangan,
-        siangKantin: computed.siangKantin,
-        siangLapangan: computed.siangLapangan,
-        soreKantin: computed.soreKantin,
-        soreLapangan: computed.soreLapangan,
-        malamLapangan: computed.malamLapangan,
-        batchPagi: computed.batchPagi,
-        batchSore: computed.batchSore,
-        catatan: computed.catatan,
-      };
-      saveCell(r, patch);
-      toast.success(`${r.nama}: Belum Lapor telah dimatikan — orderan makanan aktif kembali.`);
+  const clearBelumLapor = async (r: MealOrder) => {
+    patchLocal(r.id, { keteranganLapor: null });
+    try {
+      const res = await fetch(`/api/meal-orders/${r.id}/clear-belum-lapor`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal mematikan Belum Lapor');
+      patchLocal(r.id, json.data);
+      const shift = json.data?.shiftKerja ? ` · ${json.data.shiftKerja === 'MALAM' ? 'Malam' : json.data.shiftKerja === 'LONGSHIFT' ? 'Longshift' : json.data.shiftKerja}` : '';
+      toast.success(json.rosterCode
+        ? `${r.nama}: Belum Lapor dimatikan — kembali ke roster ${json.rosterCode}${shift}`
+        : `${r.nama}: Belum Lapor dimatikan — kode roster tanggal ini tidak ditemukan, orderan dihitung sebagai hari kerja biasa`);
+    } catch (e: any) {
+      patchLocal(r.id, { keteranganLapor: r.keteranganLapor });
+      toast.error(e.message);
     }
   };
 
@@ -1083,6 +1100,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       );
     }
 
+    const sm = String(r.statusMess || '').trim().toUpperCase();
+    const isCR = sm === 'CR' || sm === 'MESS';
+    const isLockedSore = isTuesdayWednesdaySaturday(date) && isCR;
+
     return (
       <div className="flex items-center justify-center gap-1">
         <select
@@ -1093,8 +1114,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         >
           <option value="-">-</option>
           <option value="Bungkusan Pagi">Bungkusan Pagi</option>
-          <option value="Bungkusan Sore">Bungkusan Sore</option>
-          <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
+          {!isLockedSore && <option value="Bungkusan Sore">Bungkusan Sore</option>}
+          {!isLockedSore && <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>}
           {isCustomCatatan && <option value={rawCatatan}>{rawCatatan}</option>}
         </select>
         {isCustomCatatan && <span className="text-[11px] text-slate-500 font-medium">{rawCatatan}</span>}
@@ -1219,16 +1240,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           <button type="button" onClick={() => pickCard(totalCard)} className={`w-full cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md rounded-xl focus:outline-none ${isActiveCard(totalCard) ? 'ring-2 ring-emerald-500 ring-offset-2' : ''}`}>
             {renderTotalBungkusCard(opts.cards, opts.scope)}
           </button>
-          {columnVisibility.batches && (() => {
-            const cf = f('batch', 'B.Pagi · B.Sore');
-            return (
-              <button type="button" onClick={() => pickCard(cf)} className={cardBtn(cf)} title="Klik untuk melihat karyawan dengan 1 (B.Pagi) / 1 (B.Sore)">
-                <p className={UI.statLabel}>B.Pagi · B.Sore</p>
-                <p className={`${UI.statValue} !text-emerald-700`}>{opts.confirmed.pagi}<span className="text-sm font-medium text-slate-400"> · {opts.confirmed.sore}</span></p>
-                <p className={UI.statHint}>konfirmasi kantin</p>
-              </button>
-            );
-          })()}
           {columnVisibility.statusNotes && (() => {
             const cf = f('belumLapor', 'Belum Lapor');
             return (
@@ -1253,7 +1264,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       switch (cardFilter.kind) {
         case 'slot': return !!cardFilter.slot && bungkusCount(r, cardFilter.slot) > 0;
         case 'total': return activeSlots.some(s => bungkusCount(r, s) > 0);
-        case 'batch': return portions(r.batchPagi) > 0 || portions(r.batchSore) > 0;
         case 'belumLapor': return !!r.keteranganLapor && r.keteranganLapor.trim() !== '-';
         default: return true;
       }
@@ -1369,9 +1379,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           </div>
         </div>
 
-        {/* Tab: Orderan Makanan / Rekapan Bungkusan */}
+        {/* Tab: Orderan Makanan / Daftar Penerima Bungkusan / List Pengiriman Ke GA / Rekapan Bungkusan */}
         <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {([['orders', 'Orderan Makanan', Utensils], ['recap', 'Rekapan Bungkusan', Package]] as const).map(([key, label, Icon]) => (
+          {([
+            ['orders', 'Orderan Makanan', Utensils],
+            ['recipients', 'Daftar Penerima Bungkusan', Users],
+            ['recap', 'List Pengiriman Ke GA', Truck],
+            ['stats', 'Rekapan Bungkusan', BarChart3]
+          ] as const).map(([key, label, Icon]) => (
             <button
               key={key}
               type="button"
@@ -1383,12 +1398,20 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           ))}
         </div>
 
+        {view === 'recipients' && (
+          <MealBungkusRecipientsTable date={date} rows={rows} />
+        )}
+
+        {view === 'stats' && (
+          <MealBungkusStats date={date} onOpenDate={d => { setDate(d); setView('orders'); }} />
+        )}
+
         {view === 'recap' && (
           <div className={`${UI.panel} p-4 sm:p-5 space-y-4 min-w-0`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
               <div>
-                <p className="text-sm font-bold text-slate-900">Rekapan Bungkusan <span className="font-medium text-slate-400">· {dayName(date)}, {longDate(date)}</span></p>
-                <p className="text-xs text-slate-500 mt-0.5">Dihitung otomatis dari porsi Lapangan & kolom 1 (B.Pagi)/1 (B.Sore). Gol IV-V yang pesan bungkusan Pagi/Siang/Sore tampil sebagai Kotakan.</p>
+                <p className="text-sm font-bold text-slate-900">List Pengiriman Ke GA <span className="font-medium text-slate-400">· {dayName(date)}, {longDate(date)}</span></p>
+                <p className="text-xs text-slate-500 mt-0.5">Dihitung otomatis dari porsi Lapangan & Bungkus Kantin NR. Gol IV-V yang pesan bungkusan Pagi/Siang/Sore tampil sebagai Kotakan.</p>
               </div>
               <button
                 type="button"
@@ -1404,7 +1427,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 }}
                 disabled={rows.length === 0 || employeesLoading || downloadingPdf}
                 className={`${UI.btnPrimary} shrink-0`}
-                title="Download file PDF Rekapan Bungkusan (A4 landscape)"
+                title="Download file PDF List Pengiriman Ke GA (A4 landscape)"
               >
                 {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Download PDF
               </button>
@@ -1499,7 +1522,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Cari nama, NIK, section, tempat tinggal..."
+                placeholder="Cari nama, NIK, section, residence..."
                 className={`${UI.input} w-full pl-9 pr-3`}
               />
             </div>
@@ -1513,7 +1536,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               type="button"
               onClick={() => updateColVisibility({ profile: !columnVisibility.profile })}
               className={`${UI.btn} !h-10 shrink-0 ${columnVisibility.profile ? '' : '!border-emerald-300 !bg-emerald-50 !text-emerald-800'}`}
-              title={columnVisibility.profile ? 'Sembunyikan kolom info profil (Status Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal)' : 'Tampilkan kolom info profil'}
+              title={columnVisibility.profile ? 'Sembunyikan kolom info profil (Status Mess, PT, Shift, Section, Status Kerja, Residence)' : 'Tampilkan kolom info profil'}
             >
               {columnVisibility.profile ? <EyeOff className="w-3.5 h-3.5 text-slate-500" /> : <Eye className="w-3.5 h-3.5 text-emerald-600" />}
               <span>{columnVisibility.profile ? 'Sembunyikan Profil' : 'Tampilkan Profil'}</span>
@@ -1546,7 +1569,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
                         <div>
                           <p className="font-semibold text-slate-800">Info Profil Karyawan</p>
-                          <p className="text-[10px] text-slate-500">Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal</p>
+                          <p className="text-[10px] text-slate-500">Mess, PT, Shift, Section, Status Kerja, Residence</p>
                         </div>
                         <input
                           type="checkbox"
@@ -1565,19 +1588,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                           type="checkbox"
                           checked={columnVisibility.ramadan}
                           onChange={e => updateColVisibility({ ramadan: e.target.checked })}
-                          className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                        />
-                      </label>
-
-                      <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
-                        <div>
-                          <p className="font-semibold text-slate-800">Kolom 1 (B.Pagi) & 1 (B.Sore)</p>
-                          <p className="text-[10px] text-slate-500">Rekap konfirmasi bungkusan pagi & sore</p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={columnVisibility.batches}
-                          onChange={e => updateColVisibility({ batches: e.target.checked })}
                           className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                         />
                       </label>
@@ -1612,14 +1622,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[11px]">
                       <button
                         type="button"
-                        onClick={() => updateColVisibility({ profile: true, ramadan: true, batches: true, statusNotes: true, summary: true })}
+                        onClick={() => updateColVisibility({ profile: true, ramadan: true, statusNotes: true, summary: true })}
                         className="px-2.5 py-1 text-slate-600 hover:text-emerald-700 hover:bg-slate-100 rounded-lg font-medium cursor-pointer"
                       >
                         Tampilkan Semua
                       </button>
                       <button
                         type="button"
-                        onClick={() => updateColVisibility({ profile: false, ramadan: false, batches: true, statusNotes: true, summary: true })}
+                        onClick={() => updateColVisibility({ profile: false, ramadan: false, statusNotes: true, summary: true })}
                         className="px-2.5 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg font-semibold cursor-pointer"
                       >
                         Fokus Orderan
@@ -1646,7 +1656,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           </div>
 
           {/* Indikator kolom tersembunyi */}
-          {(!columnVisibility.profile || !columnVisibility.ramadan || !columnVisibility.batches || !columnVisibility.statusNotes) && (
+          {(!columnVisibility.profile || !columnVisibility.ramadan || !columnVisibility.statusNotes) && (
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200">
               <span className="font-semibold text-slate-500">Kolom disembunyikan:</span>
               {!columnVisibility.profile && (
@@ -1671,17 +1681,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   Puasa (Sahur/Takjil)
                 </button>
               )}
-              {!columnVisibility.batches && (
-                <button
-                  type="button"
-                  onClick={() => updateColVisibility({ batches: true })}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-700 cursor-pointer"
-                  title="Klik untuk menampilkan kolom 1(B.Pagi) & 1(B.Sore)"
-                >
-                  <Eye className="w-3 h-3 text-slate-400" />
-                  1 (B.Pagi) / 1 (B.Sore)
-                </button>
-              )}
               {!columnVisibility.statusNotes && (
                 <button
                   type="button"
@@ -1695,7 +1694,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               )}
               <button
                 type="button"
-                onClick={() => updateColVisibility({ profile: true, ramadan: true, batches: true, statusNotes: true })}
+                onClick={() => updateColVisibility({ profile: true, ramadan: true, statusNotes: true })}
                 className="ml-auto text-emerald-700 hover:underline font-semibold cursor-pointer"
               >
                 Tampilkan Semua Kolom
@@ -1797,7 +1796,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         </th>
                       )}
                       {columnVisibility.profile && (
-                        <th rowSpan={2} className={thSticky1}>Tempat Tinggal</th>
+                        <th rowSpan={2} className={thSticky1}>Residence</th>
                       )}
                       <th rowSpan={2} className={`${thSticky1} text-center`}>Shift<br />(Siang/Malam)</th>
                       {activeMealGroups.map(g => (
@@ -1805,24 +1804,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                           {g.label}
                         </th>
                       ))}
-                      {columnVisibility.batches && (
-                        <>
-                          <th className={`${thSticky1} text-center bg-yellow-200 border-yellow-300`}>
-                            <div className="flex items-center justify-between gap-1">
-                              <span>{dayName(date)}</span>
-                              <button
-                                type="button"
-                                onClick={() => updateColVisibility({ batches: false })}
-                                title="Sembunyikan kolom 1 (B.Pagi) & 1 (B.Sore)"
-                                className="p-0.5 rounded text-slate-500 hover:text-rose-700 hover:bg-yellow-300/60 cursor-pointer"
-                              >
-                                <EyeOff className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </th>
-                          <th className={`${thSticky1} text-center bg-yellow-200 border-yellow-300`}>{longDate(date)}</th>
-                        </>
-                      )}
                       {columnVisibility.statusNotes && (
                         <>
                           <th rowSpan={2} className={thSticky1}>
@@ -1856,12 +1837,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                           {c.label}
                         </th>
                       ))}
-                      {columnVisibility.batches && (
-                        <>
-                          <th className={`${thSticky2} text-center bg-yellow-200 border-yellow-300`}>1 (B.Pagi)</th>
-                          <th className={`${thSticky2} text-center bg-yellow-200 border-yellow-300`}>1 (B. Sore)</th>
-                        </>
-                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -1943,12 +1918,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         {activeMealCells.map(c => (
                           <td key={c.key} className={`${tdBase} text-center p-1`}>{renderMealCell(r, c.key, c.kind)}</td>
                         ))}
-                        {columnVisibility.batches && (
-                          <>
-                            <td className={`${tdBase} bg-slate-50 p-1 text-center`}>{renderConfirm(r, 'batchPagi')}</td>
-                            <td className={`${tdBase} bg-slate-50 p-1 text-center`}>{renderConfirm(r, 'batchSore')}</td>
-                          </>
-                        )}
                         {columnVisibility.statusNotes && (
                           <>
                             <td className={`${tdBase} text-center`}>{renderStatusBadge(r.status, attKind)}</td>
@@ -2001,12 +1970,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-200">
                       <td colSpan={leadingColSpan} className={`${tdBase} text-[11px] uppercase tracking-wider text-slate-700`}>Total Order</td>
                       {activeMealCells.map(c => <td key={c.key} className={`${tdBase} text-center text-slate-900`}>{tableTotals[c.key] || '-'}</td>)}
-                      {columnVisibility.batches && (
-                        <>
-                          <td className={`${tdBase} text-center text-emerald-700`}>{tableConfirmed.pagi}</td>
-                          <td className={`${tdBase} text-center text-emerald-700`}>{tableConfirmed.sore}</td>
-                        </>
-                      )}
                       {columnVisibility.statusNotes && (
                         <>
                           <td className={tdBase} />
@@ -2064,11 +2027,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         </div>
                       ))}
                     </div>
-                    {columnVisibility.batches && (
+                    {columnVisibility.statusNotes && (
                       <div className="flex items-center gap-4 text-[11px] font-semibold text-slate-600">
-                        <span className="flex items-center gap-1">B.Pagi {renderConfirm(r, 'batchPagi')}</span>
-                        <span className="flex items-center gap-1">B.Sore {renderConfirm(r, 'batchSore')}</span>
-                        {columnVisibility.statusNotes && (
                           <div className="flex items-center gap-2 text-[11px]">
                             <span className="text-slate-500">Lapor:</span>
                             {canManage ? (
@@ -2089,7 +2049,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             )}
                             {renderCatatanCell(r)}
                           </div>
-                        )}
                       </div>
                     )}
                   </div>
@@ -2145,11 +2104,17 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     {!isCatatanDisabledForEmployee(form) && (
                       <>
                         <option value="Bungkusan Pagi">Bungkusan Pagi</option>
-                        <option value="Bungkusan Sore">Bungkusan Sore</option>
-                        <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
+                        {!(isTuesdayWednesdaySaturday(date) && ['CR', 'MESS'].includes(String(form.statusMess || '').trim().toUpperCase())) && (
+                          <>
+                            <option value="Bungkusan Sore">Bungkusan Sore</option>
+                            <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
+                          </>
+                        )}
                       </>
                     )}
                   </Select>
+                ) : f.key === 'soreLapangan' && isTuesdayWednesdaySaturday(date) && ['CR', 'MESS'].includes(String(form.statusMess || '').trim().toUpperCase()) ? (
+                  <Input key={f.key} label={f.label} value="Kantin (Terkunci)" disabled />
                 ) : (
                   <Input key={f.key} label={f.label} value={form[f.key] || ''} onChange={e => updateForm(f.key, e.target.value)} placeholder={f.placeholder} />
                 )
@@ -2176,8 +2141,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               ) : (
                 <Input key={c.key} label={`${c.group} · ${c.label}`} type="number" min={0} value={form[c.key] || ''} onChange={e => updateForm(c.key, e.target.value)} placeholder="Porsi" />
               ))}
-              <Input label="1 (B.Pagi)" type="number" min={0} value={form.batchPagi || ''} onChange={e => updateForm('batchPagi', e.target.value)} />
-              <Input label="1 (B.Sore)" type="number" min={0} value={form.batchSore || ''} onChange={e => updateForm('batchSore', e.target.value)} />
             </div>
             </div>
             <div className="sticky bottom-0 flex gap-2 justify-end px-5 py-3 bg-slate-50 border-t border-slate-100">
@@ -2202,11 +2165,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 space-y-1 text-xs text-slate-700 mb-3">
               <p><b>{importPreview.rows.length}</b> karyawan terbaca · <b>{importPreview.fields.length}</b> kolom disinkronkan</p>
               <p className="text-[11px] text-slate-500">Hanya kolom yang ada di file yang menimpa orderan — kolom lain tetap seperti semula.</p>
-              <p>
-                1 (B.Pagi): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchPagi), 0)}</b> ·
-                1 (B.Sore): <b>{importPreview.rows.reduce((s, r) => s + portions(r.batchSore), 0)}</b> ·
-                Belum lapor: <b>{importPreview.rows.filter(r => r.keteranganLapor).length}</b>
-              </p>
+              <p>Belum lapor: <b>{importPreview.rows.filter(r => r.keteranganLapor).length}</b></p>
             </div>
             <Input label="Tanggal order" type="date" value={importPreview.date} onChange={e => e.target.value && setImportPreview(p => (p ? { ...p, date: e.target.value } : p))} />
             <p className="text-[11px] text-slate-500 mt-1">
