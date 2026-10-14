@@ -103,6 +103,7 @@ export interface EmployeeProfileLike {
   tempatTinggal?: string | null;
   alamatDomisili?: string | null;
   section?: string | null;
+  status?: string | null; // status/keterangan roster (mis. "Belum Lapor")
 }
 
 // Pilihan Pagi/Sore di kolom Catatan (Mess CR + Nirwana) — disimpan & dipakai terus di tanggal berikutnya
