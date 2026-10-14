@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input, Select, Button } from './ui';
 import { todayWit } from '../utils/training-import';
 import { parseMealOrderSheet, type ParsedMealOrderRow, type MealImportField } from '../utils/meal-order-import';
-import { isTuesdayWednesdaySaturday, mealChoicePatch, type CatatanOption } from '../utils/meal-roster-sync';
+import { isTuesdayWednesdaySaturday, mealChoicePatch, computeMealOrderByRoster, isCatatanDisabledForEmployee, type CatatanOption, type MealPreference, type MealChoice } from '../utils/meal-roster-sync';
 import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle, type RecapBlock } from './meal-bungkus-recap';
 
 // ===== Orderan Makanan harian =====
@@ -735,71 +735,48 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     toast.success(`${r.nama}: ${label} ${choice === 'kantin' ? 'Kantin' : 'Bungkusan'} — berlaku seterusnya (kecuali shift Malam)`);
   };
 
-  // Ganti Shift manual: Malam → Pagi & Sore kembali Kantin; Siang / Nonshift / Longshift → ikut pilihan Catatan
+  // Ganti Shift manual: mengkalkulasi ulang meal order sesuai aturan CSV tabel acuan operasional
   const changeShiftKerja = (r: MealOrder, shiftKerja: string | null) => {
-    const patch: Partial<MealOrder> = { shiftKerja };
-    if (shiftKerja === 'CUTI') {
-      patch.statusKerja = 'Cuti';
-      patch.status = 'CUTI';
-      patch.pagiKantin = null; patch.pagiLapangan = null; patch.batchPagi = null;
-      patch.siangKantin = null; patch.siangLapangan = null;
-      patch.soreKantin = null; patch.soreLapangan = null; patch.batchSore = null;
-      patch.malamLapangan = null;
-    } else if (shiftKerja === 'Cuti Site') {
-      patch.statusKerja = 'CS';
-      patch.status = 'CS';
-      patch.pagiKantin = null; patch.pagiLapangan = null; patch.batchPagi = null;
-      patch.siangKantin = null; patch.siangLapangan = null;
-      patch.soreKantin = null; patch.soreLapangan = null; patch.batchSore = null;
-      patch.malamLapangan = null;
-    } else if (shiftKerja === 'Izin') {
-      patch.statusKerja = 'Izin';
-      patch.status = 'IZIN';
-      patch.keteranganLapor = 'Belum Lapor';
-    } else if (shiftKerja === 'OFF') {
-      patch.statusKerja = 'Off';
-      patch.status = 'OFF';
-      patch.malamLapangan = null;
-    } else if (shiftKerja === 'SIANG' || shiftKerja === 'Nonshift') {
-      if (['CUTI', 'IZIN', 'CS', 'OFF'].includes(String(r.status || '').toUpperCase())) {
-        patch.statusKerja = '-';
-        patch.status = null;
-      }
-      if (portions(r.siangLapangan) === 0 && !r.siangKantin) {
-        patch.siangLapangan = '1';
-      }
-    } else if (shiftKerja === 'MALAM') {
-      if (['CUTI', 'IZIN', 'CS', 'OFF'].includes(String(r.status || '').toUpperCase())) {
-        patch.statusKerja = '-';
-        patch.status = null;
-      }
-      if (portions(r.malamLapangan) === 0) {
-        patch.malamLapangan = '1';
-      }
-    } else if (shiftKerja === 'LONGSHIFT') {
-      if (['CUTI', 'IZIN', 'CS', 'OFF'].includes(String(r.status || '').toUpperCase())) {
-        patch.statusKerja = '-';
-        patch.status = null;
-      }
-      patch.siangLapangan = '1';
-      patch.soreLapangan = '1';
-      patch.malamLapangan = '1';
-    }
+    let rosterCode = shiftKerja || 'SIANG';
+    if (shiftKerja === 'Cuti Site') rosterCode = 'CS';
+    else if (shiftKerja === 'Izin') rosterCode = 'I';
+    else if (shiftKerja === 'OFF') rosterCode = 'OFF';
+    else if (shiftKerja === 'Sakit') rosterCode = 'SS';
+    else if (shiftKerja === 'CUTI') rosterCode = 'CUTI';
+    else if (shiftKerja === 'MALAM') rosterCode = 'N';
+    else if (shiftKerja === 'LONGSHIFT') rosterCode = 'LS';
+    else if (shiftKerja === 'SIANG' || shiftKerja === 'Nonshift') rosterCode = 'D';
 
-    if (mealChoiceSlots(r).length > 0) {
-      const isMalam = shiftKerja === 'MALAM';
-      for (const time of ['pagi', 'sore'] as const) {
-        const saved = (time === 'pagi' ? r.pilihanPagi : r.pilihanSore) as 'kantin' | 'lapangan' | null;
-        if (isMalam || saved) Object.assign(patch, mealChoicePatch(r, time, isMalam ? 'kantin' : saved!));
-      }
-    }
+    const pref: MealPreference = {
+      pagi: (r.pilihanPagi as MealChoice) || null,
+      sore: (r.pilihanSore as MealChoice) || null,
+    };
+    const computed = computeMealOrderByRoster(r, rosterCode, date, pref);
+    // Pertahankan label shift yang dipilih user (mis. Nonshift vs Siang)
+    if (shiftKerja === 'Nonshift') computed.shiftKerja = 'Nonshift';
+
+    const patch: Partial<MealOrder> = {
+      shiftKerja: computed.shiftKerja,
+      statusKerja: computed.statusKerja,
+      status: computed.status,
+      pagiKantin: computed.pagiKantin,
+      pagiLapangan: computed.pagiLapangan,
+      siangKantin: computed.siangKantin,
+      siangLapangan: computed.siangLapangan,
+      soreKantin: computed.soreKantin,
+      soreLapangan: computed.soreLapangan,
+      malamLapangan: computed.malamLapangan,
+      batchPagi: computed.batchPagi,
+      batchSore: computed.batchSore,
+      catatan: computed.catatan,
+    };
     saveCell(r, patch);
   };
 
   const isKawasiRow = (r: MealOrder) => `${r.tempatTinggal || ''}`.toLowerCase().includes('kawasi');
 
   const getRowCatatanValue = (r: MealOrder): CatatanOption => {
-    if (isKawasiRow(r)) return '-';
+    if (isCatatanDisabledForEmployee(r)) return '-';
     const c = String(r.catatan || '').trim();
     if (c === 'Bungkusan Pagi dan Bungkusan Sore') return c;
     if (c === 'Bungkusan Pagi') return c;
@@ -815,8 +792,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const handleSelectCatatan = (r: MealOrder, val: string) => {
     if (!canManage) return;
-    if (isKawasiRow(r)) {
-      toast.info('Karyawan Kampung Kawasi: Catatan bungkusan pagi/sore tidak berlaku.');
+    if (isCatatanDisabledForEmployee(r)) {
+      toast.info(isKawasiRow(r)
+        ? 'Karyawan Kampung Kawasi: Matikan Catatan ini atau tidak bisa di Pilih.'
+        : `Matikan Catatan ini atau tidak bisa di Pilih (${r.shiftKerja || r.status || 'Tidak Bertugas'})`
+      );
       return;
     }
     const sm = String(r.statusMess || '').trim().toUpperCase();
@@ -878,10 +858,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const renderCatatanCell = (r: MealOrder) => {
     const isKawasi = isKawasiRow(r);
-    const sk = String(r.shiftKerja || r.status || '').toUpperCase();
-    const isCuti = sk === 'CUTI' || String(r.statusKerja || '').toLowerCase().includes('cuti');
-    const isMalam = sk === 'MALAM';
-    const isDisabled = isKawasi || isCuti || isMalam || !canManage;
+    const isDisabled = isCatatanDisabledForEmployee(r) || !canManage;
 
     const currentVal = getRowCatatanValue(r);
     const rawCatatan = String(r.catatan || '').trim();
@@ -889,11 +866,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
     const disabledTitle = isKawasi
       ? 'Matikan Catatan ini atau tidak bisa di Pilih (Kampung Kawasi)'
-      : isCuti
-      ? 'Karyawan Cuti'
-      : isMalam
-      ? 'Shift Malam: Pagi, Siang & Sore otomatis Kantin'
-      : undefined;
+      : !canManage
+      ? 'Hanya Admin yang dapat mengubah Catatan'
+      : `Matikan Catatan ini atau tidak bisa di Pilih (${r.shiftKerja || r.status || 'Tidak Bertugas'})`;
 
     const badgeStyle = currentVal === 'Bungkusan Pagi dan Bungkusan Sore'
       ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold'
@@ -1940,13 +1915,18 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   <Select
                     key={f.key}
                     label={f.label}
-                    value={form.catatan || ''}
+                    disabled={isCatatanDisabledForEmployee(form)}
+                    value={isCatatanDisabledForEmployee(form) ? '' : (form.catatan || '')}
                     onChange={e => updateForm('catatan', e.target.value)}
                   >
                     <option value="">-</option>
-                    <option value="Bungkusan Pagi">Bungkusan Pagi</option>
-                    <option value="Bungkusan Sore">Bungkusan Sore</option>
-                    <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
+                    {!isCatatanDisabledForEmployee(form) && (
+                      <>
+                        <option value="Bungkusan Pagi">Bungkusan Pagi</option>
+                        <option value="Bungkusan Sore">Bungkusan Sore</option>
+                        <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
+                      </>
+                    )}
                   </Select>
                 ) : (
                   <Input key={f.key} label={f.label} value={form[f.key] || ''} onChange={e => updateForm(f.key, e.target.value)} placeholder={f.placeholder} />

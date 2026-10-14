@@ -134,12 +134,19 @@ export function parseCatatanToPreference(catatan: string | null | undefined): Me
   return { pagi: 'kantin', sore: 'kantin' };
 }
 
-/** Cek apakah catatan bungkusan pagi/sore dinonaktifkan (Kampung Kawasi, Cuti, Malam) */
-export function isCatatanDisabledForEmployee(emp: { tempatTinggal?: string | null; alamatDomisili?: string | null; shiftKerja?: string | null; status?: string | null }): boolean {
+/** Cek apakah catatan bungkusan pagi/sore dinonaktifkan (Kampung Kawasi, Cuti, Cuti Site, Izin, Off, Sakit, Malam) */
+export function isCatatanDisabledForEmployee(emp: {
+  tempatTinggal?: string | null;
+  alamatDomisili?: string | null;
+  shiftKerja?: string | null;
+  statusKerja?: string | null;
+  status?: string | null;
+}): boolean {
   const tt = `${emp.tempatTinggal || ''} ${emp.alamatDomisili || ''}`.toLowerCase();
   if (tt.includes('kawasi')) return true;
-  const sk = String(emp.shiftKerja || emp.status || '').toUpperCase();
-  if (sk === 'CUTI' || sk === 'MALAM') return true;
+  const sk = String(emp.shiftKerja || emp.statusKerja || emp.status || '').trim().toUpperCase();
+  if (['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sk)) return true;
+  if (sk.startsWith('CUTI') || sk.startsWith('CS') || sk.startsWith('IZIN') || sk.startsWith('OFF') || sk.startsWith('SAKIT') || sk.startsWith('MALAM')) return true;
   return false;
 }
 
@@ -190,23 +197,35 @@ export function computeMealOrderByRoster(
   const empShift = String(emp.shift || '').toLowerCase();
   const defaultDayShiftKerja = empShift.includes('nonshift') ? 'Nonshift' : 'Siang';
 
-  // Normalisasi kode roster
-  let code = rawCode;
-  if (['C', 'CE', 'CT', 'CI', 'TRV', 'TV', 'XP'].includes(rawCode) || rawCode.startsWith('CT') || rawCode.startsWith('CI') || rawCode.startsWith('CE') || rawCode.startsWith('TRV') || rawCode.startsWith('CUTI')) {
+  const hasBelumLapor = /belum\s*lapor|\bBL\b/i.test(rawCode) || /belum\s*lapor/i.test(String(emp.status || ''));
+  const cleanCode = rawCode.replace(/belum\s*lapor|\bBL\b/gi, '').trim().toUpperCase();
+
+  // Normalisasi kode roster sesuai acuan CSV:
+  // D, N, LS, C/CE/CI/CT/TRV, CS, I, OFF, SS, SL
+  let code = cleanCode;
+  if (
+    ['C', 'CE', 'CT', 'CI', 'TRV', 'TV', 'XP'].includes(cleanCode) ||
+    cleanCode.startsWith('CT') ||
+    cleanCode.startsWith('CI') ||
+    cleanCode.startsWith('CE') ||
+    cleanCode.startsWith('TRV') ||
+    cleanCode.startsWith('CUTI') ||
+    (cleanCode.includes('/') && /^(C|CE|CI|CT|TRV)/i.test(cleanCode))
+  ) {
     code = 'CUTI';
-  } else if (rawCode === 'CS' || rawCode.startsWith('CUTI SITE')) {
+  } else if (cleanCode === 'CS' || cleanCode.startsWith('CS') || cleanCode.startsWith('CUTI SITE') || cleanCode === 'CUTISITE') {
     code = 'CS';
-  } else if (rawCode === 'I' || rawCode.startsWith('IZIN')) {
+  } else if (cleanCode === 'I' || cleanCode.startsWith('I ') || cleanCode.startsWith('I-') || cleanCode.startsWith('IZIN') || cleanCode === 'IZN') {
     code = 'I';
-  } else if (rawCode === 'OFF' || rawCode.startsWith('OFF')) {
+  } else if (cleanCode === 'OFF' || cleanCode.startsWith('OFF')) {
     code = 'OFF';
-  } else if (['SS', 'SL', 'S'].includes(rawCode) || rawCode.startsWith('SAKIT')) {
+  } else if (['SS', 'SL', 'S'].includes(cleanCode) || cleanCode.startsWith('SAKIT') || cleanCode.startsWith('SS') || cleanCode.startsWith('SL')) {
     code = 'SAKIT';
-  } else if (['D', 'DS', 'DAY'].includes(rawCode) || rawCode.startsWith('D ') || rawCode.startsWith('D-') || rawCode.startsWith('D(')) {
+  } else if (['D', 'DS', 'DAY'].includes(cleanCode) || cleanCode.startsWith('D ') || cleanCode.startsWith('D-') || cleanCode.startsWith('D(')) {
     code = 'D';
-  } else if (['N', 'NS', 'NIGHT'].includes(rawCode) || rawCode.startsWith('N ') || rawCode.startsWith('N-') || rawCode.startsWith('N(')) {
+  } else if (['N', 'NS', 'NIGHT'].includes(cleanCode) || cleanCode.startsWith('N ') || cleanCode.startsWith('N-') || cleanCode.startsWith('N(')) {
     code = 'N';
-  } else if (['LS', 'LONGSHIFT'].includes(rawCode) || rawCode.startsWith('LS ') || rawCode.startsWith('LS-') || rawCode.startsWith('LS(')) {
+  } else if (['LS', 'LONGSHIFT'].includes(cleanCode) || cleanCode.startsWith('LS ') || cleanCode.startsWith('LS-') || cleanCode.startsWith('LS(')) {
     code = 'LS';
   }
 
@@ -229,7 +248,7 @@ export function computeMealOrderByRoster(
     catatan: null,
   };
 
-  // 1. KELOMPOK: KAMPUNG KAWASI
+  // 1. KELOMPOK: KAMPUNG KAWASI (Catatan selalu mati / tidak bisa dipilih)
   if (isKawasi) {
     if (code === 'D') {
       res.shiftKerja = defaultDayShiftKerja;
@@ -254,7 +273,6 @@ export function computeMealOrderByRoster(
       res.shiftKerja = 'Izin';
       res.statusKerja = 'Izin';
       res.status = 'IZIN';
-      res.keteranganLapor = 'Belum Lapor';
     } else if (code === 'OFF') {
       res.shiftKerja = 'Off';
       res.statusKerja = 'Off';
@@ -324,7 +342,6 @@ export function computeMealOrderByRoster(
       res.shiftKerja = 'Izin';
       res.statusKerja = 'Izin';
       res.status = 'IZIN';
-      res.keteranganLapor = 'Belum Lapor';
       res.pagiKantin = 'K';
       res.siangKantin = 'K';
       res.soreKantin = 'K';
@@ -398,7 +415,6 @@ export function computeMealOrderByRoster(
       res.shiftKerja = 'Izin';
       res.statusKerja = 'Izin';
       res.status = 'IZIN';
-      res.keteranganLapor = 'Belum Lapor';
       res.pagiKantin = '1';
       res.batchPagi = '1';
       res.siangKantin = '1';
@@ -435,10 +451,17 @@ export function computeMealOrderByRoster(
     }
   }
 
-  // Aturan transisi Belum Lapor:
-  // Jika Tanggal sebelumnya "C,CE,CT,CS,TRV,I" dan Tanggal berikutnya keterangannya "D, N, LS Atau OFF"
-  // maka Keterangan belum lapor Otomatis Aktif
+  // Jika karyawan termasuk yang dinonaktifkan catatannya (Kampung Kawasi, Cuti, Cuti Site, Izin, Off, Sakit, Malam)
+  if (isCatatanDisabledForEmployee({ tempatTinggal: emp.tempatTinggal, alamatDomisili: emp.alamatDomisili, shiftKerja: res.shiftKerja, statusKerja: res.statusKerja, status: res.status })) {
+    res.catatan = null;
+  }
+
+  // Aturan status Belum Lapor:
+  // 1. Jika Tanggal sebelumnya "C,CE,CT,CS,TRV,I" dan Tanggal berikutnya keterangannya "D, N, LS Atau OFF"
+  //    maka Keterangan belum lapor Otomatis Aktif
   if (isLeaveOrPermissionRosterStatus(prevRosterStatus) && isWorkOrOffRosterStatus(code)) {
+    res.keteranganLapor = 'Belum Lapor';
+  } else if (/belum\s*lapor|\bBL\b/i.test(rawCode) || /belum\s*lapor/i.test(String(emp.status || ''))) {
     res.keteranganLapor = 'Belum Lapor';
   }
 
