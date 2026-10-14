@@ -14,6 +14,7 @@ import {
   computeMealOrderByRoster,
   getPossibleRosterDateStrings,
   getPreviousDateString,
+  isCatatanDisabledForEmployee,
   isLeaveOrPermissionRosterStatus,
   isWorkOrOffRosterStatus,
   type MealChoice,
@@ -691,14 +692,19 @@ async function loadPreviousRosterStatuses(date: string, nik?: string): Promise<M
 // Pilihan Pagi/Sore yang sudah tertera di orderan tanggal tsb (Catatan: "Pagi/Sore Bungkusan") tidak diubah saat sinkron:
 // pilihan tersimpan di baris itu → isi sel Lapangan baris itu → pilihan terakhir dari tanggal sebelumnya
 // (Sore Lapangan pada baris Longshift adalah aturan LS, bukan pilihan → tidak dihitung)
-type CurrentChoiceRow = { pilihanPagi: string | null; pilihanSore: string | null; pagiLapangan: string | null; soreLapangan: string | null; shiftKerja: string | null };
+type CurrentChoiceRow = { pilihanPagi: string | null; pilihanSore: string | null; pagiLapangan: string | null; soreLapangan: string | null; shiftKerja: string | null; catatan?: string | null };
 function withCurrentChoice(pref: MealPreference | undefined, current: CurrentChoiceRow | undefined): MealPreference {
   const out: MealPreference = { ...(pref || {}) };
   if (!current) return out;
   const asChoice = (v: string | null): MealChoice | null => (v === 'kantin' || v === 'lapangan' ? v : null);
   const isLongShift = String(current.shiftKerja || '').toUpperCase() === 'LONGSHIFT';
-  const pagi = asChoice(current.pilihanPagi) || (portions(current.pagiLapangan) > 0 ? 'lapangan' : null);
-  const sore = asChoice(current.pilihanSore) || (!isLongShift && portions(current.soreLapangan) > 0 ? 'lapangan' : null);
+  const cat = String(current.catatan || '').toLowerCase();
+  const pagi = (cat.includes('bungkusan pagi') || cat.includes('pagi bungkusan'))
+    ? 'lapangan'
+    : (asChoice(current.pilihanPagi) || (portions(current.pagiLapangan) > 0 ? 'lapangan' : null));
+  const sore = (cat.includes('bungkusan sore') || cat.includes('sore bungkusan'))
+    ? 'lapangan'
+    : (asChoice(current.pilihanSore) || (!isLongShift && portions(current.soreLapangan) > 0 ? 'lapangan' : null));
   if (pagi) out.pagi = pagi;
   if (sore) out.sore = sore;
   return out;
@@ -1005,7 +1011,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     if (computed.shiftKerja === 'SIANG' && (nonshift.has(nik) || lockedShift === 'Nonshift')) computed.shiftKerja = 'Nonshift';
 
     // Kolom Catatan TIDAK BOLEH diganti menjadi kode cuti atau null bila karyawan punya catatan
-    const finalCatatan = (isCatatanDisabledForEmployee(emp) || computed.keteranganLapor === 'Belum Lapor')
+    const finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
       ? null
       : (lockedCatatan || computed.catatan || null);
 
