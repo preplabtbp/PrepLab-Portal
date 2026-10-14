@@ -980,9 +980,9 @@ export function ProfilePage({
             </div>
 
             <div className="px-5 sm:px-7 pb-6 relative">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-12 sm:-mt-16 md:-mt-20 mb-5 gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between pt-3 sm:pt-4 mb-5 gap-4">
                 {/* Avatar Box with Equipped Dynamic Frame Ring */}
-                <div className="relative group shrink-0 self-start">
+                <div className="relative group shrink-0 -mt-16 sm:-mt-20 md:-mt-24 z-10 self-start">
                   <DynamicAvatarFrame
                     frameId={activeAvatarFrame}
                     tierLevel={activeFrameTier}
@@ -1033,11 +1033,11 @@ export function ProfilePage({
                 </div>
 
                 {/* Quick Action Buttons Toolbar */}
-                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 self-start sm:self-center">
                   <button 
                     type="button"
                     onClick={() => setShowPromotionModal(true)}
-                    className="rounded-xl flex items-center gap-2 px-3.5 h-9 text-xs font-bold border transition-all active:scale-95 cursor-pointer bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-xs"
+                    className="inline-flex items-center justify-center gap-2 px-3.5 h-9 rounded-xl text-xs font-bold tracking-wide border transition-all duration-150 active:scale-95 cursor-pointer bg-gradient-to-r from-amber-500/15 to-orange-500/15 hover:from-amber-500/25 hover:to-orange-500/25 text-amber-700 dark:text-amber-300 border-amber-500/40 hover:border-amber-500/60 shadow-xs whitespace-nowrap"
                     title="Buka Upacara Promosi Pangkat Resmi"
                   >
                     <Award className="w-4 h-4 text-amber-500 shrink-0" />
@@ -1047,21 +1047,22 @@ export function ProfilePage({
                   <button 
                     type="button"
                     onClick={() => setIsPixelAvatarOpen(true)}
-                    className="rounded-xl flex items-center gap-2 px-3.5 h-9 text-xs font-bold border transition-all active:scale-95 cursor-pointer bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-xs"
+                    className="inline-flex items-center justify-center gap-2 px-3.5 h-9 rounded-xl text-xs font-bold tracking-wide border transition-all duration-150 active:scale-95 cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 hover:border-amber-500/60 shadow-xs whitespace-nowrap"
                     title="Buka Pixel Avatar Studio"
                   >
                     <Sparkles className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
                     <span>Pixel Avatar Studio</span>
                   </button>
 
-                  <Button 
+                  <button 
+                    type="button"
                     onClick={onLogout} 
-                    variant="danger" 
-                    className="rounded-xl flex items-center gap-2 px-3.5 h-9 text-xs font-bold cursor-pointer shadow-xs"
+                    className="inline-flex items-center justify-center gap-2 px-3.5 h-9 rounded-xl text-xs font-bold tracking-wide border transition-all duration-150 active:scale-95 cursor-pointer bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:border-rose-500/50 shadow-xs whitespace-nowrap"
+                    title="Keluar dari sesi akun saat ini"
                   >
                     <LogOut className="w-4 h-4 shrink-0" /> 
                     <span>Keluar</span>
-                  </Button>
+                  </button>
                 </div>
               </div>
               

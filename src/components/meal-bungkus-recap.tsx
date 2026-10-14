@@ -671,6 +671,7 @@ export function recapTitle(date: string): string {
 
 // Download langsung file PDF (A4 landscape): Hanya blok & baris aktif yang dicetak ke PDF
 export async function downloadBungkusRecapPdf(date: string, blocks: RecapBlock[]): Promise<void> {
+  // @ts-ignore
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:1400px;background:#fff';

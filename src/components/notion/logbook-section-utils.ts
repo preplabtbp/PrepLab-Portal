@@ -479,57 +479,252 @@ export function aggregateSectionActiveTasks(
 }
 
 /**
- * Synchronizes an updated Logbook row directly back to its origin post.
+ * Synchronizes a group of updated Logbook rows (parent tasks and child subtasks)
+ * directly back to their origin post in a single atomic update.
  */
-export async function syncLogbookRowBackToOrigin(
-  updatedRow: TableRowData,
+export async function syncLogbookRowsGroupToOrigin(
+  originPostId: string | number,
+  updatedRows: TableRowData[],
   allPosts: any[]
 ): Promise<boolean> {
-  const originPostId = updatedRow._originPostId;
-  if (!originPostId) return false;
+  if (!originPostId || !updatedRows || updatedRows.length === 0) return false;
 
-  const originPost = allPosts.find(p => p.id === originPostId);
+  const originPost = allPosts.find(p => String(p.id) === String(originPostId));
   if (!originPost || !originPost.content) return false;
 
   const parsed = parseTableFromMarkdown(originPost.content);
   if (!parsed || parsed.rows.length === 0) return false;
 
-  // Find target row index in origin post
-  let targetIdx = -1;
-  const targetTitle = String(updatedRow['Jenis kegiatan'] || updatedRow.title || '').trim().toLowerCase();
+  const todayStr = getTodayDDMMYYYY();
+  const nowIso = new Date().toISOString();
+  let hasChanges = false;
 
-  if (typeof updatedRow._originRowIndex === 'number' && parsed.rows[updatedRow._originRowIndex]) {
-    const candidateTitle = String(parsed.rows[updatedRow._originRowIndex]['Jenis kegiatan'] || '').trim().toLowerCase();
-    if (candidateTitle === targetTitle) {
-      targetIdx = updatedRow._originRowIndex;
+  // Separate parent rows from child subtask rows
+  const parentRows = updatedRows.filter(r => !isSubItemRow(r));
+  const childSubRows = updatedRows.filter(r => isSubItemRow(r));
+
+  // Helper to extract clean title
+  const getCleanTitle = (title: string): string => {
+    return cleanFrontEndText(
+      String(title || '')
+        .replace(/^[↳↪\s]+/, '')
+        .replace(/^\[[ xX]\]\s*/, '')
+        .trim()
+    );
+  };
+
+  // Helper to find column key case-insensitively
+  const findColKey = (row: TableRowData, ...candidates: string[]): string => {
+    for (const cand of candidates) {
+      const match = Object.keys(row).find(k => k.toLowerCase().trim() === cand.toLowerCase().trim());
+      if (match) return match;
+    }
+    return candidates[0];
+  };
+
+  // 1. Process Parent Task updates
+  for (const parent of parentRows) {
+    const targetTitle = getCleanTitle(parent['Jenis kegiatan'] || parent['Jenis Kegiatan'] || parent.title || parent.Name || parent.Judul || '');
+    let targetIdx = -1;
+
+    // Try matching by origin index if available
+    if (parent._originRowIndex !== undefined && parent._originRowIndex !== '') {
+      const candIdx = Number(parent._originRowIndex);
+      if (!isNaN(candIdx) && parsed.rows[candIdx]) {
+        const candTitle = getCleanTitle(parsed.rows[candIdx]['Jenis kegiatan'] || parsed.rows[candIdx]['Jenis Kegiatan'] || '');
+        if (candTitle.toLowerCase() === targetTitle.toLowerCase()) {
+          targetIdx = candIdx;
+        }
+      }
+    }
+
+    // Match by ID if set
+    if (targetIdx === -1 && parent.id) {
+      targetIdx = parsed.rows.findIndex(r => r.id === parent.id);
+    }
+
+    // Match by title
+    if (targetIdx === -1) {
+      targetIdx = parsed.rows.findIndex(r => {
+        if (isSubItemRow(r)) return false;
+        const rTitle = getCleanTitle(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.title || r.Name || r.Judul || '');
+        return rTitle.toLowerCase() === targetTitle.toLowerCase();
+      });
+    }
+
+    if (targetIdx !== -1) {
+      const rowToUpdate = parsed.rows[targetIdx];
+      const ketKey = findColKey(rowToUpdate, 'Keterangan', 'Uraian');
+      const statusKey = findColKey(rowToUpdate, 'Status');
+      const picKey = findColKey(rowToUpdate, 'PIC');
+      const dateKey = findColKey(rowToUpdate, 'Tanggal Selesai', 'Tanggal selesai', 'Completed');
+      const dueKey = findColKey(rowToUpdate, 'Due Date', 'due date', 'Deadline', 'Target Selesai');
+      const priorityKey = findColKey(rowToUpdate, 'Priority', 'Prioritas');
+
+      if (parent.Keterangan !== undefined) rowToUpdate[ketKey] = parent.Keterangan;
+      if (parent.Status !== undefined) rowToUpdate[statusKey] = parent.Status;
+      if (parent.PIC !== undefined) rowToUpdate[picKey] = parent.PIC;
+      if (parent['Tanggal Selesai'] !== undefined) rowToUpdate[dateKey] = parent['Tanggal Selesai'];
+      if (parent['Due Date'] !== undefined) rowToUpdate[dueKey] = parent['Due Date'];
+      if (parent.Priority !== undefined) rowToUpdate[priorityKey] = parent.Priority;
+      rowToUpdate['Last Modified'] = nowIso;
+      hasChanges = true;
     }
   }
 
-  if (targetIdx === -1) {
-    targetIdx = parsed.rows.findIndex(r => {
-      const rTitle = String(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.title || '').trim().toLowerCase();
-      return rTitle === targetTitle;
-    });
+  // 2. Process Child Subtask updates & insertions
+  for (const sub of childSubRows) {
+    const rawSubTitle = sub['Jenis kegiatan'] || sub['Jenis Kegiatan'] || sub.Name || sub.title || '';
+    const cleanSubTitle = getCleanTitle(rawSubTitle);
+    if (!cleanSubTitle) continue;
+
+    const isSubCompleted = 
+      sub.isCompleted === 'true' || 
+      (sub as any).isCompleted === true ||
+      sub.Status === 'Closed' || 
+      sub.Status === 'Selesai' || 
+      rawSubTitle.includes('[x]') || 
+      rawSubTitle.includes('[X]');
+
+    const subTitleWithPrefix = `↳ [${isSubCompleted ? 'x' : ' '}] ${cleanSubTitle}`;
+
+    // Determine parent title / reference
+    const parentRefTitle = getCleanTitle(
+      sub._parentTitle || 
+      sub.parentTitle || 
+      (parentRows.length === 1 ? (parentRows[0]['Jenis kegiatan'] || parentRows[0]['Jenis Kegiatan'] || '') : '')
+    );
+    const parentRefId = sub.parentId || sub.parentRowId || '';
+
+    // Check if subtask already exists in parsed.rows
+    let existingSubIdx = -1;
+    if (sub.id) {
+      existingSubIdx = parsed.rows.findIndex(r => r.id === sub.id);
+    }
+    if (existingSubIdx === -1) {
+      existingSubIdx = parsed.rows.findIndex(r => {
+        if (!isSubItemRow(r)) return false;
+        const candClean = getCleanTitle(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.Name || '');
+        return candClean.toLowerCase() === cleanSubTitle.toLowerCase();
+      });
+    }
+
+    if (existingSubIdx !== -1) {
+      // Subtask exists: update it
+      const targetSub = parsed.rows[existingSubIdx];
+      const titleKey = findColKey(targetSub, 'Jenis kegiatan', 'Jenis Kegiatan', 'Name', 'Judul');
+      const statusKey = findColKey(targetSub, 'Status');
+      const dateKey = findColKey(targetSub, 'Tanggal Selesai', 'Tanggal selesai', 'Completed');
+      const dueKey = findColKey(targetSub, 'Due Date', 'due date', 'Deadline');
+
+      targetSub[titleKey] = subTitleWithPrefix;
+      targetSub[statusKey] = isSubCompleted ? 'Closed' : 'Open';
+      targetSub.isCompleted = isSubCompleted ? 'true' : 'false';
+      if (sub['Tanggal Selesai'] && sub['Tanggal Selesai'] !== '-') {
+        targetSub[dateKey] = sub['Tanggal Selesai'];
+      } else if (isSubCompleted) {
+        targetSub[dateKey] = todayStr;
+      } else {
+        targetSub[dateKey] = '-';
+      }
+      if (sub['Due Date']) targetSub[dueKey] = sub['Due Date'];
+      targetSub['Last Modified'] = nowIso;
+      hasChanges = true;
+    } else {
+      // Subtask DOES NOT exist in origin post yet: INSERT IT!
+      // Find parent row in origin table
+      let originParentIdx = -1;
+      if (parentRefId) {
+        originParentIdx = parsed.rows.findIndex(r => r.id === parentRefId);
+      }
+      if (originParentIdx === -1 && parentRefTitle) {
+        originParentIdx = parsed.rows.findIndex(r => {
+          if (isSubItemRow(r)) return false;
+          const rClean = getCleanTitle(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.Name || r.Judul || '');
+          return rClean.toLowerCase() === parentRefTitle.toLowerCase();
+        });
+      }
+      if (originParentIdx === -1 && sub._originRowIndex !== undefined && sub._originRowIndex !== '') {
+        const candIdx = Number(sub._originRowIndex);
+        if (!isNaN(candIdx) && parsed.rows[candIdx]) {
+          originParentIdx = candIdx;
+        }
+      }
+
+      // If parent found, insert right after the last subtask of this parent
+      let insertIdx = parsed.rows.length;
+      if (originParentIdx !== -1) {
+        insertIdx = originParentIdx + 1;
+        while (insertIdx < parsed.rows.length && isSubItemRow(parsed.rows[insertIdx])) {
+          insertIdx++;
+        }
+      }
+
+      // Construct origin child row conforming to origin headers
+      const parentRowInOrigin = originParentIdx !== -1 ? parsed.rows[originParentIdx] : null;
+      const newOriginSubRow: TableRowData = { number: '' };
+
+      parsed.headers.forEach(h => {
+        const hLower = h.toLowerCase().trim();
+        if (hLower.includes('jenis kegiatan') || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama') {
+          newOriginSubRow[h] = subTitleWithPrefix;
+        } else if (hLower === 'status') {
+          newOriginSubRow[h] = isSubCompleted ? 'Closed' : 'Open';
+        } else if (hLower === 'pic') {
+          newOriginSubRow[h] = sub.PIC || (parentRowInOrigin ? parentRowInOrigin.PIC : '') || '';
+        } else if (hLower === 'priority') {
+          newOriginSubRow[h] = sub.Priority || (parentRowInOrigin ? parentRowInOrigin.Priority : 'Normal') || 'Normal';
+        } else if (hLower.includes('selesai') || hLower === 'completed') {
+          newOriginSubRow[h] = sub['Tanggal Selesai'] || (isSubCompleted ? todayStr : '-');
+        } else if (hLower.includes('due date') || hLower.includes('deadline')) {
+          newOriginSubRow[h] = sub['Due Date'] || (parentRowInOrigin ? parentRowInOrigin['Due Date'] : '-') || '-';
+        } else if (hLower.includes('keterangan') || hLower.includes('uraian')) {
+          newOriginSubRow[h] = sub.Keterangan || '-';
+        } else if (hLower.includes('created') || hLower.includes('tanggal')) {
+          newOriginSubRow[h] = sub['Created Time'] || todayStr;
+        } else if (hLower.includes('activity')) {
+          newOriginSubRow[h] = parentRowInOrigin ? (parentRowInOrigin['Activity (routine/non routine)'] || 'Routine') : 'Routine';
+        } else if (hLower === 'period') {
+          newOriginSubRow[h] = parentRowInOrigin ? (parentRowInOrigin.period || 'Daily') : 'Daily';
+        } else {
+          newOriginSubRow[h] = sub[h] || '';
+        }
+      });
+
+      const parentActualId = parentRowInOrigin ? (parentRowInOrigin.id || parentRefId) : parentRefId;
+      newOriginSubRow.id = sub.id || `sub_${parentActualId || Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      if (parentActualId) {
+        newOriginSubRow.parentId = parentActualId;
+        newOriginSubRow.parentRowId = parentActualId;
+      }
+      newOriginSubRow.isSubItem = 'true';
+      newOriginSubRow.isCompleted = isSubCompleted ? 'true' : 'false';
+      newOriginSubRow['Last Modified'] = nowIso;
+
+      // If origin task has checklist in Keterangan matching subtask title, update its [x] / [ ]
+      if (parentRowInOrigin) {
+        const ketKey = findColKey(parentRowInOrigin, 'Keterangan', 'Uraian');
+        if (parentRowInOrigin[ketKey]) {
+          const cleanSubTitle = getCleanTitle(sub['Jenis kegiatan'] || sub['Jenis Kegiatan'] || '');
+          const lines = String(parentRowInOrigin[ketKey]).split('\n');
+          const updatedLines = lines.map(line => {
+            if (cleanFrontEndText(line).toLowerCase().includes(cleanSubTitle.toLowerCase())) {
+              return line.replace(/^([*-•]?\s*\[)[ xX](\])/, `$1${isSubCompleted ? 'x' : ' '}$2`);
+            }
+            return line;
+          });
+          parentRowInOrigin[ketKey] = updatedLines.join('\n');
+        }
+      }
+
+      parsed.rows.splice(insertIdx, 0, newOriginSubRow);
+      hasChanges = true;
+    }
   }
 
-  if (targetIdx === -1) {
-    console.warn(`[Logbook Sync] Could not find row "${targetTitle}" in origin post #${originPostId}`);
-    return false;
-  }
+  if (!hasChanges) return true;
 
-  // Update fields in the origin row
-  const rowToUpdate = parsed.rows[targetIdx];
-  const ketKey = Object.keys(rowToUpdate).find(k => k.toLowerCase() === 'keterangan') || 'Keterangan';
-  const statusKey = Object.keys(rowToUpdate).find(k => k.toLowerCase() === 'status') || 'Status';
-  const picKey = Object.keys(rowToUpdate).find(k => k.toLowerCase() === 'pic') || 'PIC';
-  const dateKey = Object.keys(rowToUpdate).find(k => k.toLowerCase().includes('selesai')) || 'Tanggal Selesai';
-
-  rowToUpdate[ketKey] = updatedRow.Keterangan || '';
-  rowToUpdate[statusKey] = updatedRow.Status || 'Open';
-  if (updatedRow.PIC) rowToUpdate[picKey] = updatedRow.PIC;
-  if (updatedRow['Tanggal Selesai']) rowToUpdate[dateKey] = updatedRow['Tanggal Selesai'];
-
-  // Re-serialize origin post table
+  // Re-serialize origin post table with preservation of id and parentId metadata tags
   const lines = originPost.content.split('\n');
   let headerIdx = -1;
   let separatorIdx = -1;
@@ -563,7 +758,30 @@ export async function syncLogbookRowBackToOrigin(
   const afterLines = lines.slice(endTableIdx);
 
   const serializedRows = parsed.rows.map(r => {
-    const cells = parsed.headers.map(h => String(r[h] || '').replace(/\|/g, '\\|'));
+    const cells = parsed.headers.map(h => {
+      let val = r[h] !== undefined ? String(r[h]) : '';
+      const hLower = h.toLowerCase().trim();
+      const isTitleCol = hLower.includes('jenis kegiatan') || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama';
+      if (isTitleCol && val) {
+        const taskId = r.id || (r as any)._id;
+        const parentId = r.parentId || r.parentRowId;
+        const lastMod = r['Last Modified'] || r['Date Modified'];
+        let metaTags = '';
+        if (taskId && !val.includes('<!--task-id:')) {
+          metaTags += ` <!--task-id:${taskId}-->`;
+        }
+        if (parentId && !val.includes('<!--parent-id:')) {
+          metaTags += ` <!--parent-id:${parentId}-->`;
+        }
+        if (lastMod && !val.includes('<!--last-modified:')) {
+          metaTags += ` <!--last-modified:${lastMod}-->`;
+        }
+        if (metaTags) {
+          val = `${val.trim()}${metaTags}`;
+        }
+      }
+      return val.replace(/\|/g, '\\|').replace(/\n/g, '<br/>').trim();
+    });
     return `| ${cells.join(' | ')} |`;
   });
 
@@ -583,14 +801,31 @@ export async function syncLogbookRowBackToOrigin(
     });
     if (res.ok) {
       originPost.content = newContent;
-      console.log(`[Logbook Sync] Successfully synced row "${targetTitle}" to origin post #${originPostId}`);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('preplab:post-updated', {
+          detail: { postId: originPostId, content: newContent }
+        }));
+      }
+      console.log(`[Logbook Sync] Successfully synced batch of ${updatedRows.length} row(s) to origin post #${originPostId}`);
       return true;
     }
   } catch (err) {
-    console.error(`[Logbook Sync] Failed to sync row back to post #${originPostId}:`, err);
+    console.error(`[Logbook Sync] Failed to sync batch back to post #${originPostId}:`, err);
   }
 
   return false;
+}
+
+/**
+ * Synchronizes an updated Logbook row directly back to its origin post.
+ */
+export async function syncLogbookRowBackToOrigin(
+  updatedRow: TableRowData,
+  allPosts: any[]
+): Promise<boolean> {
+  const originPostId = updatedRow._originPostId;
+  if (!originPostId) return false;
+  return syncLogbookRowsGroupToOrigin(originPostId, [updatedRow], allPosts);
 }
 
 /**
@@ -762,6 +997,21 @@ export function getSectionActiveRecommendations(
         closedSubtaskCount: closedSubtasks.length,
       });
     });
+  });
+
+  const priorityWeight: Record<string, number> = {
+    urgent: 4,
+    high: 3,
+    normal: 2,
+    low: 1
+  };
+
+  recommendations.sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    const wA = priorityWeight[(a.priority || '').toLowerCase()] || 2;
+    const wB = priorityWeight[(b.priority || '').toLowerCase()] || 2;
+    return wB - wA;
   });
 
   return recommendations;
@@ -1046,7 +1296,11 @@ export interface ChangelogItem {
   progressPercent: number;
   totalSubtasks: number;
   completedSubtasks: number;
-  subtasks: Array<{ title: string; completed: boolean }>;
+  subtasks: Array<{
+    title: string;
+    completed: boolean;
+    completedDate?: string;
+  }>;
   rawRow: TableRowData;
 }
 
@@ -1068,10 +1322,39 @@ export function buildLogbookChangelogData(
   const todayStr = getTodayDDMMYYYY();
   const dateStr = targetDateStr || getYesterdayDateWithData(allRows, todayStr);
 
+  const parseDDMM = (s: string) => {
+    const parts = s.split('-').map(Number);
+    if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+    return 0;
+  };
+
+  const isTargetFuture = parseDDMM(dateStr) > parseDDMM(todayStr);
+
   // Filter rows belonging to target date
   const dateRows = allRows.filter(r => {
-    const rowDate = getRowDateDDMMYYYY(r);
-    return rowDate === dateStr;
+    if (isSubItemRow(r)) return false;
+    const createdDate = getRowDateDDMMYYYY(r);
+    const completedDate = formatToDDMMYYYY(
+      r['Tanggal Selesai'] || r['Tanggal selesai'] || r.completed || r['Aktual Selesai'] || ''
+    );
+    const isCompleted = r.Status === 'Closed' || r.Status === 'Selesai' || (r as any).isCompleted === 'true';
+
+    if (isTargetFuture) {
+      // Future / Tomorrow date: Show handover (completed today) and ongoing carry-over
+      if (completedDate === todayStr) return true;
+      if (!isCompleted) return true;
+      return false;
+    }
+
+    if (dateStr === todayStr) {
+      // Today: Show all tasks active today or completed today
+      return true;
+    }
+
+    // Past date (e.g. yesterday):
+    if (completedDate === dateStr) return true;
+    if (createdDate === dateStr) return true;
+    return false;
   });
 
   // Extract main rows and subtasks
@@ -1099,37 +1382,63 @@ export function buildLogbookChangelogData(
 
     // Parse subtasks from Keterangan checklist or relational child rows
     const rawKeterangan = String(row.Keterangan || row.keterangan || '').trim();
-    const subtasks: Array<{ title: string; completed: boolean }> = [];
+    const subtasks: Array<{ title: string; completed: boolean; completedDate?: string }> = [];
     const notesLines: string[] = [];
 
     // 1. Split markdown lines in Keterangan
     rawKeterangan.split('\n').forEach(line => {
       const trimmed = line.trim();
-      const checklistMatch = trimmed.match(/^-\s*\[([ xX])\]\s*(.*)$/);
+      const checklistMatch = trimmed.match(/^[-*•]\s*\[([ xX])\]\s*(.*)$/);
       if (checklistMatch) {
+        const isDone = checklistMatch[1].toLowerCase() === 'x';
+        const stTitle = cleanFrontEndText(checklistMatch[2].trim());
+        const dateInParen = stTitle.match(/\((\d{2}-\d{2}-\d{4})\)/);
         subtasks.push({
-          completed: checklistMatch[1].toLowerCase() === 'x',
-          title: cleanFrontEndText(checklistMatch[2].trim())
+          completed: isDone,
+          title: stTitle,
+          completedDate: isDone ? (dateInParen ? dateInParen[1] : undefined) : undefined
         });
       } else if (trimmed) {
         notesLines.push(trimmed);
       }
     });
 
-    // 2. Collect relational subtask child rows
+    // 2. Collect relational subtask child rows from allRows so cross-day/persisted subtasks are linked
     const parentCode = row.id || row.taskCode || row['Task ID'] || row['ID Task'] || row.number;
-    dateRows.forEach(child => {
-      if (isSubItemRow(child)) {
-        const matchesParent = (parentCode && (child.parentId === parentCode || child.parentRowId === parentCode)) ||
+    const parentTitleClean = title.toLowerCase();
+
+    allRows.forEach(child => {
+      if (isSubtaskRow(child)) {
+        const matchesParent = 
+          (parentCode && (child.parentId === parentCode || child.parentRowId === parentCode)) ||
+          (child._parentTitle && cleanFrontEndText(child._parentTitle).toLowerCase() === parentTitleClean) ||
           child._parentRowIndex === String(idx);
+
         if (matchesParent) {
-          const childTitle = String(child['Jenis kegiatan'] || child['Jenis Kegiatan'] || child['Name'] || '').trim();
+          const childTitle = String(child['Jenis kegiatan'] || child['Jenis Kegiatan'] || child['Name'] || child['Judul'] || '').trim();
           const cleanChildTitle = cleanFrontEndText(childTitle.replace(/^[↳↪]\s*/, '').replace(/\[[ xX]\]\s*/, '').trim());
-          const isDone = child.Status === 'Closed' || child.Status === 'Selesai' || child.isCompleted === 'true' || childTitle.includes('[x]');
+          const isDone = 
+            child.Status === 'Closed' || 
+            child.Status === 'Selesai' || 
+            child.isCompleted === 'true' || 
+            childTitle.includes('[x]') || 
+            childTitle.includes('[X]');
+
+          const childDoneDate = 
+            child['Tanggal Selesai'] || 
+            child['Tanggal selesai'] || 
+            child['Completed Date'] || 
+            child['Completed Time'] || 
+            '';
+          const cleanDoneDate = (childDoneDate && childDoneDate !== '-' && childDoneDate.toLowerCase() !== 'belum selesai') 
+            ? formatToDDMMYYYY(childDoneDate) 
+            : undefined;
+
           if (cleanChildTitle && !subtasks.some(s => s.title.toLowerCase() === cleanChildTitle.toLowerCase())) {
             subtasks.push({
               title: cleanChildTitle,
-              completed: isDone
+              completed: isDone,
+              completedDate: isDone ? cleanDoneDate : undefined
             });
           }
         }
@@ -1230,7 +1539,10 @@ export function generateLogbookChangelogWhatsappText({
       text += `\n`;
 
       if (task.subtasks.length > 0) {
-        text += `  - Subtask: ${task.completedSubtasks}/${task.totalSubtasks} Selesai [100%]\n`;
+        text += `  - Subtask (${task.completedSubtasks}/${task.totalSubtasks} Selesai [100%]):\n`;
+        task.subtasks.forEach(st => {
+          text += `    ✓ ${st.title} ${st.completedDate ? `_(Selesai: ${st.completedDate})_` : '_(Selesai)_'}\n`;
+        });
       }
 
       if (task.notes && task.notes.trim()) {
@@ -1250,7 +1562,14 @@ export function generateLogbookChangelogWhatsappText({
       text += ` [Progres: ${task.progressPercent}%]\n`;
 
       if (task.subtasks.length > 0) {
-        text += `  - Subtask: ${task.completedSubtasks}/${task.totalSubtasks} Selesai\n`;
+        text += `  - Subtask (${task.completedSubtasks}/${task.totalSubtasks} Selesai):\n`;
+        task.subtasks.forEach(st => {
+          if (st.completed) {
+            text += `    ✓ ${st.title} ${st.completedDate ? `_(Selesai: ${st.completedDate})_` : '_(Selesai)_'}\n`;
+          } else {
+            text += `    ⏳ ${st.title} _(Sedang Berjalan)_\n`;
+          }
+        });
       }
 
       if (task.notes && task.notes.trim()) {
@@ -1264,7 +1583,7 @@ export function generateLogbookChangelogWhatsappText({
 
 /**
  * Extracts pure logbook table data directly from post content.
- * Does NOT scrape or force external posts, ensuring a clean initial state.
+ * Guarantees a clean slate (empty table) on initial load, so the user manually selects today's focus tasks.
  */
 export function getLogbookTableData(
   logbookPost: any,
@@ -1276,19 +1595,6 @@ export function getLogbookTableData(
   afterText: string;
   rawTable: string;
 } {
-  const content = logbookPost?.content || '';
-  const { cleanContent } = extractLogbookMeta(content);
-  const parsed = parseTableFromMarkdown(cleanContent);
-  if (parsed && parsed.rows && parsed.rows.length > 0) {
-    return {
-      headers: parsed.headers.length > 0 ? parsed.headers : LOGBOOK_CANONICAL_HEADERS,
-      rows: parsed.rows,
-      beforeText: `> 📔 **Logbook Terpadu Seksi ${sectionName}**`,
-      afterText: '',
-      rawTable: ''
-    };
-  }
-
   return {
     headers: LOGBOOK_CANONICAL_HEADERS,
     rows: [],
@@ -1296,6 +1602,82 @@ export function getLogbookTableData(
     afterText: '',
     rawTable: ''
   };
+}
+
+/**
+ * Resolves the numeric or string ID of the origin Labnote post for a given row.
+ * Searches row metadata, 'Asal Halaman', and all section posts by title.
+ */
+export function resolveOriginPostId(
+  row: TableRowData,
+  allPosts: any[],
+  sectionName?: string
+): string | null {
+  if (!row || !allPosts || allPosts.length === 0) return null;
+  if (row._originPostId) return String(row._originPostId);
+
+  // 1. Check 'Asal Halaman' column
+  const asal = String(row['Asal Halaman'] || '').trim().toLowerCase();
+  if (asal) {
+    const postByTitle = allPosts.find(p => (p.title || '').trim().toLowerCase() === asal);
+    if (postByTitle) return String(postByTitle.id);
+  }
+
+  // 2. Check parent title in matching section posts
+  const rawTitle = row['Jenis kegiatan'] || row['Jenis Kegiatan'] || row.Name || row.Judul || '';
+  const cleanTitle = cleanFrontEndText(rawTitle.replace(/^[↳↪]\s*/, '').replace(/^\[[ xX]\]\s*/, '')).toLowerCase();
+  if (!cleanTitle) return null;
+
+  const sectionPosts = sectionName ? findSectionTaskPosts(sectionName, allPosts) : allPosts;
+  for (const post of sectionPosts) {
+    if (!post.content || !post.content.includes('|')) continue;
+    const parsed = parseTableFromMarkdown(post.content);
+    if (!parsed || !parsed.rows) continue;
+    const hasRow = parsed.rows.some(r => {
+      const rTitle = cleanFrontEndText(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.Name || '').toLowerCase();
+      return rTitle === cleanTitle || (cleanTitle.length > 5 && (rTitle.includes(cleanTitle) || cleanTitle.includes(rTitle)));
+    });
+    if (hasRow) return String(post.id);
+  }
+
+  return null;
+}
+
+/**
+ * Collects and merges all rows across all Labnote posts of a section for comprehensive Changelog reporting.
+ */
+export function getAllSectionRowsForChangelog(
+  sectionName: string,
+  localRows: TableRowData[],
+  allPosts: any[],
+  targetUniverse: string = 'TBP'
+): TableRowData[] {
+  const matchingPosts = findSectionTaskPosts(sectionName, allPosts, targetUniverse);
+  const rowsMap = new Map<string, TableRowData>();
+
+  // 1. Add rows from Labnote origin posts
+  matchingPosts.forEach(post => {
+    const parsed = parseTableFromMarkdown(post.content || '');
+    if (parsed && parsed.rows) {
+      parsed.rows.forEach((row, idx) => {
+        const id = row.id || `origin_${post.id}_${idx}`;
+        rowsMap.set(id, {
+          ...row,
+          _originPostId: String(post.id),
+          _originPostTitle: post.title,
+          _originRowIndex: String(idx)
+        });
+      });
+    }
+  });
+
+  // 2. Add / overwrite with localRows
+  localRows.forEach(r => {
+    const id = r.id || `${r['Jenis kegiatan']}_${r.number}`;
+    rowsMap.set(id, r);
+  });
+
+  return Array.from(rowsMap.values());
 }
 
 export function getTaskPrefix(categoryOrSection?: string): string {

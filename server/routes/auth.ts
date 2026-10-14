@@ -178,7 +178,7 @@ authRouter.post("/login", async (req, res) => {
     if (demoUser) {
       const isMeeting = demoUser.nik === 'MEETINGROOM';
       const isPasswordValid = isMeeting
-        ? password === 'preplabportal'
+        ? (password === '123' || password === 'preplabportal')
         : (password === '112233' || password === 'spvdemo123' || password === 'demo123');
 
       if (isPasswordValid) {
