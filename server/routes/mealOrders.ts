@@ -605,24 +605,29 @@ function withCurrentChoice(pref: MealPreference | undefined, current: CurrentCho
 
 async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; source: RosterSource }> {
   const dateFormats = getPossibleRosterDateStrings(date);
-  // Tempat tinggal (Nirwana dsb.) tidak ada di sheet roster → ambil dari orderan terakhir karyawan tsb, lalu alamat domisili.
-  // Section juga diambil dari orderan terakhir (mis. "Laboratorium Krishna") karena sheet memakai nama lain ("Laboratory").
-  const lastOrders = await db.select({ nik: mealOrders.nik, tempatTinggal: mealOrders.tempatTinggal, section: mealOrders.section })
-    .from(mealOrders).orderBy(desc(mealOrders.orderDate));
-  const placeByNik = new Map<string, string>();
-  const sectionByNik = new Map<string, string>();
+  // Profil karyawan (Status Mess, PT, Shift, Section, Tempat Tinggal) TIDAK diambil dari roster:
+  // disalin persis dari orderan terakhir karyawan tsb sebelum tanggal ini (bila tidak ada: orderan terdekat sesudahnya).
+  // Roster / Database Karyawan hanya untuk karyawan yang belum pernah ada di orderan.
+  const lastOrders = await db.select({
+    nik: mealOrders.nik, orderDate: mealOrders.orderDate, statusMess: mealOrders.statusMess, pt: mealOrders.pt,
+    shift: mealOrders.shift, section: mealOrders.section, tempatTinggal: mealOrders.tempatTinggal,
+  }).from(mealOrders)
+    .where(sql`${mealOrders.orderDate} <> ${date}`)
+    .orderBy(sql`CASE WHEN ${mealOrders.orderDate} < ${date} THEN 0 ELSE 1 END`, sql`ABS(${mealOrders.orderDate} - ${date}::date)`);
+  type OrderProfile = { statusMess: string | null; pt: string | null; shift: string | null; section: string | null; tempatTinggal: string | null };
+  const profileByNik = new Map<string, OrderProfile>();
   for (const r of lastOrders) {
     const k = r.nik.toUpperCase().trim();
-    if (r.tempatTinggal?.trim()) {
-      if (!placeByNik.has(k) || r.tempatTinggal.toLowerCase().includes('nirwana')) {
-        placeByNik.set(k, r.tempatTinggal);
-      }
-    }
-    if (r.section?.trim() && !sectionByNik.has(k)) sectionByNik.set(k, r.section);
+    if (!profileByNik.has(k)) profileByNik.set(k, r);
   }
   const dbEmps = await db.select().from(employees);
   const dbByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
-  const placeOf = (nik: string): string | null => placeByNik.get(nik) || dbByNik.get(nik)?.alamatDomisili || null;
+  const profileOf = (nik: string, fallback: OrderProfile): OrderProfile => {
+    const p = profileByNik.get(nik);
+    return p
+      ? { statusMess: p.statusMess, pt: p.pt, shift: p.shift, section: p.section, tempatTinggal: p.tempatTinggal }
+      : { ...fallback, tempatTinggal: fallback.tempatTinggal || dbByNik.get(nik)?.alamatDomisili || null };
+  };
   // Karyawan Nonaktif di Database Karyawan tidak ikut walau masih ada di sheet roster
   const isInactive = (nik: string) => { const e = dbByNik.get(nik); return !!e && isResignedOrNonActiveStatus(e); };
 
@@ -633,7 +638,8 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
         source: 'sheet',
         emps: sheet.entries.filter(e => !isInactive(e.nik.toUpperCase())).map(e => {
           const nik = e.nik.toUpperCase();
-          return { nik: e.nik, name: e.name, statusMess: e.statusMess || null, pt: e.pt || null, shift: e.shift || null, section: sectionByNik.get(nik) || e.section || null, gol: e.gol || null, tempatTinggal: placeOf(nik), status: e.status };
+          const profile = profileOf(nik, { statusMess: e.statusMess || null, pt: e.pt || null, shift: e.shift || null, section: e.section || null, tempatTinggal: null });
+          return { nik: e.nik, name: e.name, ...profile, gol: e.gol || null, status: e.status };
         }),
       };
     }
@@ -658,7 +664,8 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
     source: 'database',
     emps: emps.map(e => {
       const nik = e.nik.toUpperCase().trim();
-      return { nik: e.nik, name: e.name, statusMess: e.statusMess, pt: e.pt, shift: e.shift, section: sectionByNik.get(nik) || e.section, gol: e.gol, tempatTinggal: placeOf(nik), status: rosterByNik.get(nik) || '-' };
+      const profile = profileOf(nik, { statusMess: e.statusMess, pt: e.pt, shift: e.shift, section: e.section, tempatTinggal: null });
+      return { nik: e.nik, name: e.name, ...profile, gol: e.gol, status: rosterByNik.get(nik) || '-' };
     }),
   };
 }
