@@ -97,6 +97,19 @@ const emptyForm = (): FormState => ({ nik: '', nama: '', shiftKerja: 'Nonshift' 
 
 interface Props { inspectorNik?: string; inspectorName?: string; onBack?: () => void }
 
+// Gaya dasar modul Orderan Makanan — satu sumber agar tombol, panel, kartu & input seragam
+const UI = {
+  panel: 'rounded-2xl bg-white border border-slate-200/80 shadow-sm',
+  btn: 'inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+  btnPrimary: 'inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg bg-emerald-700 text-white text-xs font-semibold shadow-sm hover:bg-emerald-800 transition-colors cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed',
+  iconBtn: 'h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer',
+  input: 'h-10 rounded-lg border border-slate-200 bg-white text-sm sm:text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-600/15',
+  stat: 'rounded-xl bg-white border border-slate-200/80 px-3 py-3 text-center shadow-sm',
+  statLabel: 'text-[10px] font-semibold uppercase tracking-wider text-slate-500 flex items-center justify-center gap-1',
+  statValue: 'mt-1 text-2xl font-bold tabular-nums text-slate-900',
+  statHint: 'mt-0.5 text-[10px] text-slate-500 truncate',
+} as const;
+
 // Scrollbar horizontal mengambang: menempel di bawah layar selama tabel terlihat, sinkron dua arah dengan tabel
 function FloatingScrollbar({ targetRef }: { targetRef: React.RefObject<HTMLDivElement | null> }) {
   const barRef = useRef<HTMLDivElement>(null);
@@ -561,10 +574,10 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   };
 
   // ===== Render sel =====
-  const thBase = 'px-2 py-1.5 text-[10px] font-black uppercase tracking-wide text-center align-middle text-slate-700 border border-emerald-200/70 bg-emerald-50 whitespace-nowrap';
+  const thBase = 'px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-center align-middle text-slate-600 border border-slate-200 bg-slate-50 whitespace-nowrap';
   const thSticky1 = `${thBase} sticky top-0 z-20`;
-  const thSticky2 = `${thBase} sticky top-[28px] z-20`;
-  const tdBase = 'px-2 py-1.5 text-xs text-center align-middle border border-slate-200 whitespace-nowrap';
+  const thSticky2 = `${thBase} sticky top-[32px] z-20`; // = tinggi baris header 1 (py-2 + leading 15px + border)
+  const tdBase = 'px-2.5 py-2 text-xs text-slate-700 text-center align-middle border border-slate-100 whitespace-nowrap';
 
   const renderMealCell = (r: MealOrder, key: MealCellKey, kind: 'kantin' | 'lapangan') => {
     const v = r[key] || '';
@@ -1014,61 +1027,134 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     const total = cards.reduce((s, c) => s + c.value, 0);
     const detail = cards.filter(c => c.value > 0).map(c => `${c.label} ${c.value}`).join(' · ') || 'Belum ada bungkusan';
     return (
-      <div className="rounded-2xl bg-emerald-700 p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-emerald-800" title={`${scope}: Total ${total} Bungkusan (${detail})`}>
-        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-100 flex items-center justify-center gap-1"><Package className="w-3 h-3" />Total Bungkusan</p>
-        <p className="text-2xl font-semibold text-white">{total} <span className="text-xs font-normal text-emerald-100">bungkus</span></p>
-        <p className="text-[10px] text-emerald-100 truncate" title={detail}>{detail}</p>
+      <div className="rounded-xl bg-emerald-700 border border-emerald-800 px-3 py-3 text-center shadow-sm" title={`${scope}: Total ${total} Bungkusan (${detail})`}>
+        <p className={`${UI.statLabel} !text-emerald-100`}><Package className="w-3 h-3" />Total Bungkusan</p>
+        <p className="mt-1 text-2xl font-bold tabular-nums text-white">{total} <span className="text-xs font-normal text-emerald-100">bungkus</span></p>
+        <p className="mt-0.5 text-[10px] text-emerald-100 truncate" title={detail}>{detail}</p>
       </div>
     );
   };
+
+  // Satu baris kartu ringkasan (dipakai TBP, GPS & Gabungan) agar tampilannya identik
+  const renderSummaryRow = (opts: {
+    key: string; title: string; dot: string; scope: string;
+    list: MealOrder[]; cards: { label: string; value: number; detail: string }[];
+    confirmed: { pagi: number; sore: number; belumLapor: number };
+  }) => (
+    <div key={opts.key} className="space-y-2">
+      <div className="flex items-center gap-2 px-1">
+        <span className={`w-2 h-2 rounded-full ${opts.dot}`} />
+        <span className="text-xs font-semibold text-slate-800">{opts.title}</span>
+        <span className="text-xs text-slate-400">· {opts.list.length} karyawan</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
+        <div className={UI.stat}>
+          <p className={UI.statLabel}><Users className="w-3 h-3" />Karyawan</p>
+          <p className={UI.statValue}>{opts.list.length}</p>
+          <p className={UI.statHint}>{dayName(date)}, {longDate(date)}</p>
+        </div>
+        {opts.cards.map(c => (
+          <div key={`${opts.key}-${c.label}`} className={UI.stat} title={`${opts.scope} ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
+            <p className={UI.statLabel}>{c.label}</p>
+            <p className={UI.statValue}>{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
+            <p className={UI.statHint} title={c.detail}>{c.detail}</p>
+          </div>
+        ))}
+        {renderTotalBungkusCard(opts.cards, opts.scope)}
+        {columnVisibility.batches && (
+          <div className={UI.stat}>
+            <p className={UI.statLabel}>B.Pagi · B.Sore</p>
+            <p className={`${UI.statValue} !text-emerald-700`}>{opts.confirmed.pagi}<span className="text-sm font-medium text-slate-400"> · {opts.confirmed.sore}</span></p>
+            <p className={UI.statHint}>konfirmasi kantin</p>
+          </div>
+        )}
+        {columnVisibility.statusNotes && (
+          <div className={UI.stat}>
+            <p className={UI.statLabel}>Belum Lapor</p>
+            <p className={`${UI.statValue} ${opts.confirmed.belumLapor ? '!text-rose-600' : ''}`}>{opts.confirmed.belumLapor}</p>
+            <p className={UI.statHint}>karyawan</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   const confirmedAll = useMemo(() => getConfirmedSummary(filtered), [filtered]);
   const confirmedTbp = useMemo(() => getConfirmedSummary(tbpFiltered), [tbpFiltered]);
   const confirmedGps = useMemo(() => getConfirmedSummary(gpsFiltered), [gpsFiltered]);
 
   return (
-    <div className="min-h-screen pb-24 bg-[#f3f6f4]">
-      <div className="w-full max-w-[2200px] mx-auto px-3 sm:px-4 lg:px-5 py-3 sm:py-5 space-y-3 sm:space-y-4">
-        {/* Header */}
-        <div className="rounded-3xl bg-white px-3 sm:px-5 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="flex items-center gap-3 min-w-0">
-            {onBack && (
-              <button type="button" onClick={onBack} className="p-2 rounded-full border border-slate-200 hover:bg-slate-50 cursor-pointer active:scale-95" title="Kembali">
-                <ArrowLeft className="w-4 h-4 text-slate-700" />
-              </button>
-            )}
-            <div className="w-10 h-10 rounded-full bg-emerald-700 text-white flex items-center justify-center shrink-0"><Utensils className="w-5 h-5" /></div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">Orderan Makanan</h1>
-                {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+    <div className="min-h-screen pb-24 bg-slate-50">
+      <div className="w-full max-w-[2200px] mx-auto px-3 sm:px-4 lg:px-5 py-3 sm:py-5 space-y-4">
+        {/* Header: judul + tanggal | aksi */}
+        <div className={`${UI.panel} px-4 sm:px-5 py-4 space-y-4`}>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {onBack && (
+                <button type="button" onClick={onBack} className={UI.iconBtn} title="Kembali">
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              )}
+              <div className="w-11 h-11 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-sm"><Utensils className="w-5 h-5" /></div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-bold tracking-tight text-slate-900">Orderan Makanan</h1>
+                  {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+                </div>
+                <p className="text-xs text-slate-500">Order harian Pagi, Siang, Sore & Malam · sinkron dengan Roster & Cuti</p>
               </div>
-              <p className="text-[11px] sm:text-xs font-medium text-slate-500">Order harian Pagi, Sahur, Siang, Sore, Takjil & Malam · Sinkron otomatis dengan Roster & Cuti</p>
+            </div>
+
+            {/* Navigasi tanggal */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center rounded-xl border border-slate-200 bg-white shadow-sm">
+                <button type="button" onClick={() => setDate(d => shiftDate(d, -1))} className="h-10 w-10 flex items-center justify-center rounded-l-xl text-slate-500 hover:bg-slate-50 hover:text-slate-800 cursor-pointer" title="Hari sebelumnya"><ChevronLeft className="w-4 h-4" /></button>
+                <div className="px-3 text-center leading-tight border-x border-slate-200 min-w-[140px]">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">{dayName(date)}</p>
+                  <input type="date" value={date} onChange={e => e.target.value && setDate(e.target.value)} className="bg-transparent text-sm font-semibold text-slate-900 focus:outline-none cursor-pointer" />
+                </div>
+                <button type="button" onClick={() => setDate(d => shiftDate(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-r-xl text-slate-500 hover:bg-slate-50 hover:text-slate-800 cursor-pointer" title="Hari berikutnya"><ChevronRight className="w-4 h-4" /></button>
+              </div>
+              {date !== todayWit() && (
+                <button type="button" onClick={() => setDate(todayWit())} className={UI.btn}>Hari ini</button>
+              )}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">
-              <button type="button" onClick={() => setDate(d => shiftDate(d, -1))} className="p-1.5 rounded-full hover:bg-white cursor-pointer" title="Hari sebelumnya"><ChevronLeft className="w-4 h-4" /></button>
-              <div className="px-2 text-center leading-tight">
-                <p className="text-[10px] font-black uppercase text-emerald-700">{dayName(date)}</p>
-                <input type="date" value={date} onChange={e => e.target.value && setDate(e.target.value)} className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer" />
-              </div>
-              <button type="button" onClick={() => setDate(d => shiftDate(d, 1))} className="p-1.5 rounded-full hover:bg-white cursor-pointer" title="Hari berikutnya"><ChevronRight className="w-4 h-4" /></button>
-            </div>
-            {date !== todayWit() && (
-              <button type="button" onClick={() => setDate(todayWit())} className="px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer">Hari ini</button>
-            )}
+          {/* Toolbar aksi: Data | Export | Tambah */}
+          <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-slate-100">
             {canManage && (
-              <button
-                type="button"
-                onClick={handleSyncRoster}
-                disabled={syncingRoster}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-indigo-200 bg-indigo-50 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 cursor-pointer disabled:opacity-60 active:scale-95 transition-all shadow-sm"
-                title='Sinkronkan orderan makanan tanggal ini langsung dari Google Sheets "Database Rooster Prep & Lab" (Rooster_Staff & Rooster_Crew)'
-              >
-                {syncingRoster ? <Loader2 className="w-4 h-4 animate-spin text-indigo-600" /> : <RefreshCw className="w-4 h-4 text-indigo-600" />} Sinkron Roster
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleSyncRoster}
+                  disabled={syncingRoster}
+                  className={UI.btn}
+                  title='Sinkronkan orderan makanan tanggal ini langsung dari Google Sheets "Database Rooster Prep & Lab" (Rooster_Staff & Rooster_Crew)'
+                >
+                  {syncingRoster ? <Loader2 className="w-4 h-4 animate-spin text-indigo-600" /> : <RefreshCw className="w-4 h-4 text-indigo-600" />} Sinkron Roster
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                  className={UI.btn}
+                  title="Import sheet Orderan Makanan (Excel / CSV)"
+                >
+                  {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 text-slate-500" />} Import
+                </button>
+                <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }} />
+                <button
+                  type="button"
+                  onClick={openGoogleSheet}
+                  disabled={syncingSheet}
+                  className={UI.btn}
+                  title='Sinkron & buka Google Sheets "Meal Order" (folder Administration) — hanya Section Administrasi yang bisa mengedit'
+                >
+                  {syncingSheet ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4 text-emerald-600" />} Google Sheets
+                </button>
+                <span className="hidden sm:block w-px h-6 bg-slate-200 mx-1" />
+              </>
             )}
             {COMPANIES.map(company => {
               const count = companyRows(company).length;
@@ -1078,50 +1164,29 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   type="button"
                   onClick={() => exportCompany(company)}
                   disabled={count === 0}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-800 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                  className={UI.btn}
                   title={`Export Excel orderan karyawan ${company} (${count} orang)`}
                 >
-                  <Download className="w-4 h-4" /> Export {company}
+                  <Download className="w-4 h-4 text-slate-500" /> Export {company}
                 </button>
               );
             })}
-            {canManage && <button
-              type="button"
-              onClick={openGoogleSheet}
-              disabled={syncingSheet}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 cursor-pointer disabled:opacity-60"
-              title='Sinkron & buka Google Sheets "Meal Order" (folder Administration) — hanya Section Administrasi yang bisa mengedit'
-            >
-              {syncingSheet ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Google Sheets
-            </button>}
             {canManage && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importing}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold text-slate-800 hover:bg-slate-50 cursor-pointer disabled:opacity-60"
-                  title="Import sheet Orderan Makanan (Excel / CSV)"
-                >
-                  {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Import
-                </button>
-                <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }} />
-                <button type="button" onClick={openCreate} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold cursor-pointer active:scale-95">
-                  <Plus className="w-4 h-4" /> Tambah Karyawan
-                </button>
-              </>
+              <button type="button" onClick={openCreate} className={`${UI.btnPrimary} sm:ml-auto`}>
+                <Plus className="w-4 h-4" /> Tambah Karyawan
+              </button>
             )}
           </div>
         </div>
 
         {/* Tab: Orderan Makanan / Rekapan Bungkusan */}
-        <div className="flex items-center gap-1 rounded-full bg-white p-1 w-fit shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {([['orders', 'Orderan Makanan', Utensils], ['recap', 'Rekapan Bungkusan', Package]] as const).map(([key, label, Icon]) => (
             <button
               key={key}
               type="button"
               onClick={() => setView(key)}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer transition-colors ${view === key ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${view === key ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
             >
               <Icon className="w-4 h-4" /> {label}
             </button>
@@ -1129,11 +1194,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         </div>
 
         {view === 'recap' && (
-          <div className="rounded-3xl bg-white p-3 sm:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] space-y-3 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className={`${UI.panel} p-4 sm:p-5 space-y-4 min-w-0`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
               <div>
-                <p className="text-sm font-bold text-slate-900">Rekapan Bungkusan · {dayName(date)}, {longDate(date)}</p>
-                <p className="text-[11px] text-slate-500">Dihitung otomatis dari porsi Lapangan & kolom 1 (B.Pagi)/1 (B.Sore). Gol IV-V yang pesan bungkusan Pagi/Siang/Sore tampil sebagai Kotakan.</p>
+                <p className="text-sm font-bold text-slate-900">Rekapan Bungkusan <span className="font-medium text-slate-400">· {dayName(date)}, {longDate(date)}</span></p>
+                <p className="text-xs text-slate-500 mt-0.5">Dihitung otomatis dari porsi Lapangan & kolom 1 (B.Pagi)/1 (B.Sore). Gol IV-V yang pesan bungkusan Pagi/Siang/Sore tampil sebagai Kotakan.</p>
               </div>
               <button
                 type="button"
@@ -1148,7 +1213,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   }
                 }}
                 disabled={rows.length === 0 || employeesLoading || downloadingPdf}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+                className={`${UI.btnPrimary} shrink-0`}
                 title="Download file PDF Rekapan Bungkusan (A4 landscape)"
               >
                 {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Download PDF
@@ -1157,7 +1222,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             {isLoading || employeesLoading ? (
               <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 rounded-xl bg-slate-100 animate-pulse" />)}</div>
             ) : rows.length === 0 ? (
-              <p className="p-8 text-center text-xs text-slate-500 rounded-2xl border border-dashed border-slate-300">Belum ada orderan untuk {dayName(date)}, {longDate(date)}</p>
+              <div className="p-10 text-center rounded-xl border border-dashed border-slate-300 bg-slate-50/60">
+                <Package className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                <p className="text-sm font-semibold text-slate-700">Belum ada orderan untuk {dayName(date)}, {longDate(date)}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Rekapan muncul otomatis setelah orderan tanggal ini terisi.</p>
+              </div>
             ) : (
               <div className="overflow-x-auto rounded-xl">
                 <BungkusRecapSheet
@@ -1173,204 +1242,65 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         )}
 
         {view === 'orders' && <>
-        {/* Ringkasan total per waktu makan */}
-        {/* Ringkasan total per waktu makan (TBP & GPS dipisahkan) */}
+        {/* Ringkasan bungkusan per perusahaan (TBP & GPS dipisahkan / gabungan) */}
         {columnVisibility.summary && (
-          <div className="space-y-3">
-            {/* Toolbar switcher ringkasan */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Ringkasan Bungkusan</span>
-                <span className="text-xs text-slate-400">({dayName(date)}, {longDate(date)})</span>
+          <div className={`${UI.panel} p-4 sm:p-5 space-y-4`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-slate-900">Ringkasan Bungkusan</p>
+                <p className="text-xs text-slate-500">{dayName(date)}, {longDate(date)}</p>
               </div>
-              <div className="inline-flex items-center gap-1 p-1 bg-white border border-slate-200/80 rounded-full shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setSummaryCompanyView('split')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
-                    summaryCompanyView === 'split'
-                      ? 'bg-emerald-700 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                  title="Tampilkan terpisah: PT TBP dan PT GPS masing-masing baris kartu tersendiri"
-                >
-                  Pisahkan (TBP & GPS)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSummaryCompanyView('TBP')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
-                    summaryCompanyView === 'TBP'
-                      ? 'bg-blue-700 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                  title="Hanya ringkasan PT Trimegah Bangun Persada"
-                >
-                  PT TBP ({tbpFiltered.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSummaryCompanyView('GPS')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
-                    summaryCompanyView === 'GPS'
-                      ? 'bg-emerald-700 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                  title="Hanya ringkasan PT Gane Permai Sentosa"
-                >
-                  PT GPS ({gpsFiltered.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSummaryCompanyView('all')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-full transition-all cursor-pointer ${
-                    summaryCompanyView === 'all'
-                      ? 'bg-slate-800 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                  title="Total gabungan semua karyawan"
-                >
-                  Total Gabungan ({filtered.length})
-                </button>
+              <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                {([
+                  ['split', 'Pisahkan (TBP & GPS)', 'Tampilkan terpisah: PT TBP dan PT GPS masing-masing baris kartu tersendiri'],
+                  ['TBP', `PT TBP (${tbpFiltered.length})`, 'Hanya ringkasan PT Trimegah Bangun Persada'],
+                  ['GPS', `PT GPS (${gpsFiltered.length})`, 'Hanya ringkasan PT Gane Permai Sentosa'],
+                  ['all', `Gabungan (${filtered.length})`, 'Total gabungan semua karyawan'],
+                ] as const).map(([key, label, title]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSummaryCompanyView(key)}
+                    className={`h-8 px-3 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                      summaryCompanyView === key ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                    title={title}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Kartu Ringkasan TBP */}
-            {(summaryCompanyView === 'split' || summaryCompanyView === 'TBP') && (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 px-1">
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-blue-50 text-blue-800 border-blue-200">
-                    PT Trimegah Bangun Persada (TBP) · {tbpFiltered.length} Karyawan
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-                  <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-center gap-1"><Users className="w-3 h-3 text-blue-600" />Karyawan</p>
-                    <p className="text-2xl font-semibold text-slate-900">{tbpFiltered.length}</p>
-                    <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
-                  </div>
-                  {summaryCardsTbp.map(c => (
-                    <div key={`tbp-${c.label}`} className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`TBP ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
-                      <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
-                      <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
-                    </div>
-                  ))}
-                  {renderTotalBungkusCard(summaryCardsTbp, 'TBP')}
-                  {columnVisibility.batches && (
-                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
-                      <p className="text-2xl font-semibold text-emerald-700">{confirmedTbp.pagi}<span className="text-sm text-slate-400"> · {confirmedTbp.sore}</span></p>
-                      <p className="text-[10px] text-slate-500">TBP {dayName(date)}</p>
-                    </div>
-                  )}
-                  {columnVisibility.statusNotes && (
-                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
-                      <p className={`text-2xl font-semibold ${confirmedTbp.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmedTbp.belumLapor}</p>
-                      <p className="text-[10px] text-slate-500">karyawan</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Kartu Ringkasan GPS */}
-            {(summaryCompanyView === 'split' || summaryCompanyView === 'GPS') && (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 px-1">
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-800 border-emerald-200">
-                    PT Gane Permai Sentosa (GPS) · {gpsFiltered.length} Karyawan
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-                  <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-center gap-1"><Users className="w-3 h-3 text-emerald-600" />Karyawan</p>
-                    <p className="text-2xl font-semibold text-slate-900">{gpsFiltered.length}</p>
-                    <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
-                  </div>
-                  {summaryCardsGps.map(c => (
-                    <div key={`gps-${c.label}`} className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`GPS ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
-                      <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
-                      <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
-                    </div>
-                  ))}
-                  {renderTotalBungkusCard(summaryCardsGps, 'GPS')}
-                  {columnVisibility.batches && (
-                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
-                      <p className="text-2xl font-semibold text-emerald-700">{confirmedGps.pagi}<span className="text-sm text-slate-400"> · {confirmedGps.sore}</span></p>
-                      <p className="text-[10px] text-slate-500">GPS {dayName(date)}</p>
-                    </div>
-                  )}
-                  {columnVisibility.statusNotes && (
-                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
-                      <p className={`text-2xl font-semibold ${confirmedGps.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmedGps.belumLapor}</p>
-                      <p className="text-[10px] text-slate-500">karyawan</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Total Gabungan (bila dipilih mode 'all') */}
-            {summaryCompanyView === 'all' && (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 px-1">
-                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-slate-100 text-slate-800 border-slate-300">
-                    Total Gabungan (TBP & GPS) · {filtered.length} Karyawan
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-                  <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-center gap-1"><Users className="w-3 h-3" />Karyawan</p>
-                    <p className="text-2xl font-semibold text-slate-900">{filtered.length}</p>
-                    <p className="text-[10px] text-slate-500">{dayName(date)}, {longDate(date)}</p>
-                  </div>
-                  {summaryCardsAll.map(c => (
-                    <div key={`all-${c.label}`} className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100" title={`Total ${c.label}: Total ${c.value} Bungkusan (${c.detail})`}>
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{c.label}</p>
-                      <p className="text-2xl font-semibold text-slate-900">{c.value} <span className="text-xs font-normal text-slate-400">bungkus</span></p>
-                      <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
-                    </div>
-                  ))}
-                  {renderTotalBungkusCard(summaryCardsAll, 'Total Gabungan')}
-                  {columnVisibility.batches && (
-                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
-                      <p className="text-2xl font-semibold text-emerald-700">{confirmedAll.pagi}<span className="text-sm text-slate-400"> · {confirmedAll.sore}</span></p>
-                      <p className="text-[10px] text-slate-500">total {dayName(date)}</p>
-                    </div>
-                  )}
-                  {columnVisibility.statusNotes && (
-                    <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Belum Lapor</p>
-                      <p className={`text-2xl font-semibold ${confirmedAll.belumLapor ? 'text-rose-600' : 'text-slate-900'}`}>{confirmedAll.belumLapor}</p>
-                      <p className="text-[10px] text-slate-500">karyawan</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            {(summaryCompanyView === 'split' || summaryCompanyView === 'TBP') && renderSummaryRow({
+              key: 'tbp', title: 'PT Trimegah Bangun Persada (TBP)', dot: 'bg-blue-600', scope: 'TBP',
+              list: tbpFiltered, cards: summaryCardsTbp, confirmed: confirmedTbp,
+            })}
+            {(summaryCompanyView === 'split' || summaryCompanyView === 'GPS') && renderSummaryRow({
+              key: 'gps', title: 'PT Gane Permai Sentosa (GPS)', dot: 'bg-emerald-600', scope: 'GPS',
+              list: gpsFiltered, cards: summaryCardsGps, confirmed: confirmedGps,
+            })}
+            {summaryCompanyView === 'all' && renderSummaryRow({
+              key: 'all', title: 'Total Gabungan (TBP & GPS)', dot: 'bg-slate-600', scope: 'Total Gabungan',
+              list: filtered, cards: summaryCardsAll, confirmed: confirmedAll,
+            })}
           </div>
         )}
 
         {/* Tabel */}
-        <div className="rounded-3xl bg-white p-3 sm:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] space-y-3 min-w-0">
+        <div className={`${UI.panel} p-4 sm:p-5 space-y-4 min-w-0`}>
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Cari nama, NIK, section, tempat tinggal..."
-                className="w-full pl-10 pr-3 py-2.5 rounded-full bg-slate-50 border border-slate-100 text-base sm:text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-600/20"
+                className={`${UI.input} w-full pl-9 pr-3`}
               />
             </div>
-            <select value={sectionFilter} onChange={e => setSectionFilter(e.target.value)} className="px-3 py-2.5 rounded-full border border-slate-200 bg-slate-50 text-xs font-semibold cursor-pointer">
+            <select value={sectionFilter} onChange={e => setSectionFilter(e.target.value)} className={`${UI.input} px-3 font-semibold cursor-pointer`}>
               <option value="ALL">Semua Section</option>
               {sections.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -1379,11 +1309,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             <button
               type="button"
               onClick={() => updateColVisibility({ profile: !columnVisibility.profile })}
-              className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-full border text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
-                columnVisibility.profile
-                  ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  : 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-              }`}
+              className={`${UI.btn} !h-10 shrink-0 ${columnVisibility.profile ? '' : '!border-emerald-300 !bg-emerald-50 !text-emerald-800'}`}
               title={columnVisibility.profile ? 'Sembunyikan kolom info profil (Status Mess, PT, Shift, Section, Status Kerja, Tempat Tinggal)' : 'Tampilkan kolom info profil'}
             >
               {columnVisibility.profile ? <EyeOff className="w-3.5 h-3.5 text-slate-500" /> : <Eye className="w-3.5 h-3.5 text-emerald-600" />}
@@ -1395,9 +1321,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               <button
                 type="button"
                 onClick={() => setShowColMenu(v => !v)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-full border text-xs font-semibold cursor-pointer transition-colors ${
-                  showColMenu ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                }`}
+                className={`${UI.btn} !h-10 ${showColMenu ? '!border-emerald-500 !bg-emerald-50 !text-emerald-800' : ''}`}
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" />
                 <span>Atur Kolom</span>
@@ -1674,7 +1598,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       )}
                       <th rowSpan={2} className={`${thSticky1} text-center`}>Shift<br />(Siang/Malam)</th>
                       {activeMealGroups.map(g => (
-                        <th key={g.label} colSpan={g.cells.length} className={`${thSticky1} text-center bg-amber-50 border-amber-200/70`}>
+                        <th key={g.label} colSpan={g.cells.length} className={`${thSticky1} text-center !bg-slate-100 !text-slate-700`}>
                           {g.label}
                         </th>
                       ))}
@@ -1725,7 +1649,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         </>
                       )}
                       {activeMealCells.map(c => (
-                        <th key={c.key} className={`${thSticky2} text-center bg-amber-50 border-amber-200/70`}>
+                        <th key={c.key} className={`${thSticky2} text-center !bg-slate-100/70`}>
                           {c.label}
                         </th>
                       ))}
@@ -1874,7 +1798,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-slate-100 font-black">
+                    <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-200">
                       <td colSpan={leadingColSpan} className={`${tdBase} text-[11px] uppercase tracking-wider text-slate-700`}>Total Order</td>
                       {activeMealCells.map(c => <td key={c.key} className={`${tdBase} text-center text-slate-900`}>{totals[c.key] || '-'}</td>)}
                       {columnVisibility.batches && (
@@ -1984,15 +1908,20 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
       {/* Modal tambah / edit */}
       {modal && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => !saving && setModal(null)}>
-          <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-black text-slate-900">{modal.mode === 'create' ? 'Tambah Karyawan ke Order' : 'Edit Order Karyawan'}</h3>
-                <p className="text-xs text-slate-500">{dayName(date)}, {longDate(date)}</p>
+        <div className="fixed inset-0 z-[80] bg-slate-950/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => !saving && setModal(null)}>
+          <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl border border-slate-200" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4 bg-white border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">{modal.mode === 'create' ? <Plus className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}</div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">{modal.mode === 'create' ? 'Tambah Karyawan ke Order' : 'Edit Order Karyawan'}</h3>
+                  <p className="text-xs text-slate-500">{dayName(date)}, {longDate(date)}</p>
+                </div>
               </div>
-              <button type="button" onClick={() => setModal(null)} className="p-2 rounded-full hover:bg-slate-100 cursor-pointer"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => setModal(null)} className={UI.iconBtn} title="Tutup"><X className="w-4 h-4" /></button>
             </div>
+            <div className="px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Profil Karyawan</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
               <Input label="NIK" value={form.nik || ''} onChange={e => updateForm('nik', e.target.value)} disabled={modal.mode === 'edit'} placeholder="Ketik NIK — profil terisi otomatis" />
               <Input label="Nama Karyawan" value={form.nama || ''} onChange={e => updateForm('nama', e.target.value)} />
@@ -2035,7 +1964,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 <option value="Izin">Izin</option>
               </Select>
             </div>
-            <p className="text-[11px] font-black uppercase tracking-wider text-slate-700 mt-4 mb-2">Order Makan</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mt-5 pt-4 mb-2 border-t border-slate-100">Order Makan</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
               {MEAL_CELLS.map(c => c.kind === 'kantin' ? (
                 <Select key={c.key} label={`${c.group} · ${c.label}`} value={form[c.key] || ''} onChange={e => updateForm(c.key, e.target.value)}>
@@ -2048,7 +1977,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               <Input label="1 (B.Pagi)" type="number" min={0} value={form.batchPagi || ''} onChange={e => updateForm('batchPagi', e.target.value)} />
               <Input label="1 (B.Sore)" type="number" min={0} value={form.batchSore || ''} onChange={e => updateForm('batchSore', e.target.value)} />
             </div>
-            <div className="flex gap-2 justify-end mt-5">
+            </div>
+            <div className="sticky bottom-0 flex gap-2 justify-end px-5 py-3 bg-slate-50 border-t border-slate-100">
               <Button variant="secondary" onClick={() => setModal(null)} disabled={saving}>Batal</Button>
               <Button onClick={submitForm} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan'}</Button>
             </div>
@@ -2058,11 +1988,16 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
       {/* Pratinjau import */}
       {importPreview && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/50 flex items-center justify-center p-4" onClick={() => !importing && setImportPreview(null)}>
-          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-base font-black text-slate-900 mb-1">Import Orderan Makanan</h3>
-            <p className="text-xs text-slate-600 mb-3 truncate">{importPreview.fileName}</p>
-            <div className="rounded-2xl bg-slate-50 p-3 space-y-1 text-xs text-slate-700 mb-3">
+        <div className="fixed inset-0 z-[80] bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !importing && setImportPreview(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl border border-slate-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0"><Upload className="w-4 h-4" /></div>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-slate-900">Import Orderan Makanan</h3>
+                <p className="text-xs text-slate-500 truncate">{importPreview.fileName}</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 space-y-1 text-xs text-slate-700 mb-3">
               <p><b>{importPreview.rows.length}</b> karyawan terbaca · <b>{importPreview.fields.length}</b> kolom disinkronkan</p>
               <p className="text-[11px] text-slate-500">Hanya kolom yang ada di file yang menimpa orderan — kolom lain tetap seperti semula.</p>
               <p>
@@ -2085,10 +2020,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
       {/* Konfirmasi hapus */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-[80] bg-slate-950/50 flex items-center justify-center p-4" onClick={() => setDeleteTarget(null)}>
-          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-base font-black text-slate-900 mb-1">Hapus dari order?</h3>
-            <p className="text-xs text-slate-600 mb-4"><b>{deleteTarget.nama}</b> akan dihapus dari orderan {dayName(date)}, {longDate(date)}. Tanggal lain tidak terpengaruh.</p>
+        <div className="fixed inset-0 z-[80] bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDeleteTarget(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl border border-slate-200" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-3"><Trash2 className="w-5 h-5" /></div>
+            <h3 className="text-base font-bold text-slate-900 mb-1">Hapus dari order?</h3>
+            <p className="text-xs text-slate-600 mb-5"><b>{deleteTarget.nama}</b> akan dihapus dari orderan {dayName(date)}, {longDate(date)}. Tanggal lain tidak terpengaruh.</p>
             <div className="flex gap-2 justify-end">
               <Button variant="secondary" onClick={() => setDeleteTarget(null)}>Batal</Button>
               <Button variant="danger" onClick={confirmDelete}>Hapus</Button>
