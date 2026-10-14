@@ -703,6 +703,23 @@ async function loadMasterTempatTinggalMap(): Promise<Map<string, string>> {
   return map;
 }
 
+// Membaca master urutan resmi karyawan (sortNo) agar saat pindah tanggal atau sinkron roster,
+// urutan baris karyawan selalu konsisten dan tidak pernah berubah.
+async function loadMasterSortOrderMap(): Promise<Map<string, number>> {
+  const rows = await db.select({ nik: mealOrders.nik, sortNo: mealOrders.sortNo })
+    .from(mealOrders)
+    .where(sql`${mealOrders.sortNo} IS NOT NULL`)
+    .orderBy(asc(mealOrders.sortNo));
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const k = r.nik.toUpperCase().trim();
+    if (!map.has(k) && r.sortNo != null) {
+      map.set(k, r.sortNo);
+    }
+  }
+  return map;
+}
+
 async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; source: RosterSource }> {
   const dateFormats = getPossibleRosterDateStrings(date);
   const masterTtByNik = await loadMasterTempatTinggalMap();
@@ -804,7 +821,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   // 2. Karyawan yang sudah ada di tanggal tsb: profilnya (Status Mess, PT, Shift, Section, Tempat Tinggal) tidak disinkronkan
   //    dari roster — yang dipakai dari roster hanya kode kehadiran; aturan makan dihitung dari profil di orderan.
   const existingRows = await db.select({
-    nik: mealOrders.nik, statusMess: mealOrders.statusMess, pt: mealOrders.pt, shift: mealOrders.shift,
+    nik: mealOrders.nik, sortNo: mealOrders.sortNo, statusMess: mealOrders.statusMess, pt: mealOrders.pt, shift: mealOrders.shift,
     section: mealOrders.section, tempatTinggal: mealOrders.tempatTinggal,
     pilihanPagi: mealOrders.pilihanPagi, pilihanSore: mealOrders.pilihanSore, pagiLapangan: mealOrders.pagiLapangan, soreLapangan: mealOrders.soreLapangan,
     shiftKerja: mealOrders.shiftKerja,
@@ -814,11 +831,29 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   const existingNiks = new Set(existingByNik.keys());
 
   const rowsToSave: any[] = [];
-  let sortIndex = 1;
   const prefs = await loadMealPreferences(date);
   const nonshift = await loadNonshiftNiks(date);
   const prevStatuses = await loadPreviousRosterStatuses(date);
   const masterTtByNik = await loadMasterTempatTinggalMap();
+  const masterSortMap = await loadMasterSortOrderMap();
+  let maxSortNo = Array.from(masterSortMap.values()).reduce((max, n) => Math.max(max, n), 0);
+
+  const getSortNo = (nik: string, currentSortNo?: number | null) => {
+    if (currentSortNo != null) return currentSortNo;
+    const clean = nik.toUpperCase().trim();
+    if (masterSortMap.has(clean)) return masterSortMap.get(clean)!;
+    maxSortNo++;
+    masterSortMap.set(clean, maxSortNo);
+    return maxSortNo;
+  };
+
+  // Urutkan activeEmps secara stabil sesuai master urutan agar baris selalu konsisten antar tanggal
+  activeEmps.sort((a, b) => {
+    const noA = getSortNo(a.nik, existingByNik.get(a.nik.toUpperCase().trim())?.sortNo);
+    const noB = getSortNo(b.nik, existingByNik.get(b.nik.toUpperCase().trim())?.sortNo);
+    if (noA !== noB) return noA - noB;
+    return a.name.localeCompare(b.name);
+  });
 
   for (const rosterEmp of activeEmps) {
     const nik = rosterEmp.nik.toUpperCase().trim();
@@ -826,6 +861,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       continue;
     }
     const current = existingByNik.get(nik);
+    const sortNo = getSortNo(nik, current?.sortNo);
     // Kolom Tempat Tinggal dikunci: pertahankan nilai di orderan atau gunakan master operasional
     const lockedTt = (current?.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || masterTtByNik.get(nik) || rosterEmp.tempatTinggal || null;
     const emp = current
@@ -836,7 +872,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     if (computed.shiftKerja === 'SIANG' && nonshift.has(nik)) computed.shiftKerja = 'Nonshift';
     rowsToSave.push({
       orderDate: date,
-      sortNo: sortIndex++,
+      sortNo,
       nik: emp.nik,
       nama: emp.name,
       statusMess: emp.statusMess || null,
