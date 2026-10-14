@@ -260,7 +260,13 @@ router.post("/api/bulletin/migrate-notion", async (req, res) => {
 
 router.get("/api/bulletin/:id/comments", async (req, res) => {
     try {
-      const postId = parseInt(req.params.id);
+      const parsedParam = parseInt(req.params.id, 10);
+      const postId = !isNaN(parsedParam) ? parsedParam : null;
+
+      if (!postId) {
+        return res.json({ status: "success", data: [] });
+      }
+
       const { topicTitle, topicId } = req.query as { topicTitle?: string; topicId?: string };
 
       const data = await db
@@ -311,7 +317,17 @@ router.get("/api/bulletin/:id/comments", async (req, res) => {
 
 router.post("/api/bulletin/:id/comments", async (req, res) => {
     try {
-      const postId = parseInt(req.params.id);
+      const parsedParam = parseInt(req.params.id, 10);
+      const parsedBody = req.body?.postId ? parseInt(String(req.body.postId), 10) : NaN;
+      const postId = !isNaN(parsedParam) ? parsedParam : (!isNaN(parsedBody) ? parsedBody : null);
+
+      if (!postId) {
+        return res.status(400).json({ 
+          status: "error", 
+          message: "ID bulletin post tidak valid atau berupa halaman virtual tanpa dokumen fisik terhubung." 
+        });
+      }
+
       const {
         content,
         authorNik,

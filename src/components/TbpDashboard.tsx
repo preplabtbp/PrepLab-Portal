@@ -1,3 +1,4 @@
+import { translateDisplayText } from './notion/logbook-section-utils';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Cloud, 
@@ -598,7 +599,12 @@ export function TbpDashboard({
   }, []);
 
   const handleNav = (title: string) => {
-    const searchStr = (title || '').toLowerCase().trim();
+    let searchStr = (title || '').toLowerCase().trim();
+    if (searchStr === 'laboratory') searchStr = 'laboratorium';
+    else if (searchStr === 'administration') searchStr = 'administrasi';
+    else if (searchStr === 'preparation') searchStr = 'preparasi';
+    else if (searchStr === 'quality assurance') searchStr = 'manajemen mutu';
+    else if (searchStr === 'procedure') searchStr = 'prosedur';
     
     // 1. Exact match (cleaned of markdown formatting)
     let post = posts.find(p => {
@@ -1288,7 +1294,7 @@ export function TbpDashboard({
                           <Icon className="w-5 h-5" />
                         </div>
                         <span className="font-bold text-sm sm:text-base tracking-tight truncate group-hover:text-[var(--primary)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
-                          {item.title}
+                          {translateDisplayText(item.title)}
                         </span>
                       </div>
                       <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" style={{ color: 'var(--text-muted, #64748b)' }} />

@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   Sliders, FileSpreadsheet, LineChart, Table, ArrowLeft, 
   Activity, ShieldCheck, CheckCircle2, AlertTriangle, Layers, 
-  RefreshCw, Sparkles 
+  RefreshCw, Sparkles, ClipboardPaste 
 } from 'lucide-react';
 import { XrfDailyInputTab } from './XrfDailyInputTab';
+import { XrfDirectPasteTab } from './XrfDirectPasteTab';
 import { XrfHistoryLogsTab } from './XrfHistoryLogsTab';
 import { XrfControlChartsTab } from './XrfControlChartsTab';
 import { XrfMasterReferenceTab } from './XrfMasterReferenceTab';
@@ -23,13 +24,14 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
   inspectorNik,
   inspectorName,
 }) => {
-  const [activeTab, setActiveTab] = useState<'daily-input' | 'history-logs' | 'control-charts' | 'master-references'>('control-charts');
+  const [activeTab, setActiveTab] = useState<'daily-input' | 'direct-paste' | 'history-logs' | 'control-charts' | 'master-references'>('control-charts');
   const [instruments, setInstruments] = useState<Array<{ code: string; name: string }>>([
     { code: 'EPSILON_A', name: 'EPSILON A' },
     { code: 'EPSILON_B', name: 'EPSILON B' },
     { code: 'EPSILON_C', name: 'EPSILON C' },
     { code: 'EPSILON_D', name: 'EPSILON D' },
     { code: 'EPSILON_E', name: 'EPSILON E' },
+    { code: 'EPSILON_F', name: 'EPSILON F' },
   ]);
   const [standards, setStandards] = useState<Array<{ code: string; name: string }>>([
     { code: 'LIM01', name: 'LIM 01' },
@@ -70,6 +72,51 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
       .catch(() => {});
   }, []);
 
+  const [developerList, setDeveloperList] = useState<string[]>([]);
+
+  // Load developer list for access control
+  useEffect(() => {
+    fetch('/api/developers')
+      .then(res => res.json())
+      .then(json => {
+        const list = Array.isArray(json) ? json : (json?.data || []);
+        setDeveloperList(list.map((d: any) => d.nik));
+      })
+      .catch(() => {});
+  }, []);
+
+  // Determine Role & Site Access
+  // personil gts hanya bisa melihat milik gts saja dan personil tbpgps milik tbpgps kecuali dev dan jabatan manager
+  const userJabatan = localStorage.getItem('p2h_inspector_jabatan') || '';
+  let profileJabatan = '';
+  let profilePt = '';
+  try {
+    const profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+    profileJabatan = profile.jabatan || profile.position || '';
+    profilePt = profile.pt || profile.company || '';
+  } catch (e) {}
+
+  const combinedJabatan = `${userJabatan} ${profileJabatan}`.toLowerCase();
+  const isManager = combinedJabatan.includes('manager');
+
+  const isSuperAdmin = 
+    inspectorNik === '02D25000055' || 
+    inspectorNik === '02D24000043' || 
+    inspectorNik === '04D21001047' || 
+    inspectorNik === '04D24000042' || 
+    inspectorNik === 'M0403240177';
+  const isDev = isSuperAdmin || 
+    inspectorNik === 'preplabadmin' || 
+    (Boolean(inspectorNik) && inspectorNik!.startsWith('02D24')) || 
+    localStorage.getItem('p2h_is_developer') === 'true' ||
+    (Boolean(inspectorNik) && developerList.includes(inspectorNik!));
+
+  const isDevOrManager = Boolean(isDev || isManager);
+
+  // Default entity site based on user PT (GTS vs TBP/GPS)
+  const effectivePt = (userPt || profilePt || 'TBP').toUpperCase();
+  const assignedSite: 'GTS' | 'TBP' = effectivePt.includes('GTS') ? 'GTS' : 'TBP';
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Top Header Card */}
@@ -86,11 +133,16 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
               </button>
             )}
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
-                  PT. GANE TAMBANG SENTOSA • QA/QC
+                  {assignedSite === 'GTS' ? 'PT. GANE TAMBANG SENTOSA (GTS)' : 'PT. TRIMEGAH BANGUN PERSADA (TBP / GPS)'} • QA/QC
                 </span>
                 <span className="text-xs text-slate-400">• PrepLab Portal</span>
+                {isDevOrManager && (
+                  <span className="px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                    {isDev ? 'DEVELOPER ACCESS' : 'MANAGER ACCESS'} (SEMUA SITE)
+                  </span>
+                )}
               </div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1 flex items-center gap-2">
                 <Activity className="w-6 h-6 text-teal-500" />
@@ -115,54 +167,66 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pt-4 mt-4 border-t border-slate-200 dark:border-slate-800">
+        {/* Navigation Tabs Bar (Simplified & Streamlined) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-3 mt-3 border-t border-slate-200 dark:border-slate-800">
           <button
             onClick={() => setActiveTab('control-charts')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'control-charts'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <LineChart className="w-4 h-4" />
-            Grafik Kontrol QC Inter-Alat (Gambar 6 & 4)
+            Grafik Kontrol QC (Shewhart Chart)
           </button>
 
           <button
-            onClick={() => setActiveTab('daily-input')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'daily-input'
+            onClick={() => setActiveTab('direct-paste')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'direct-paste'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            Input Verifikasi Harian (Gambar 1)
+            <ClipboardPaste className="w-4 h-4 text-emerald-400" />
+            Direct Paste Excel
           </button>
 
           <button
             onClick={() => setActiveTab('history-logs')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'history-logs'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <Layers className="w-4 h-4" />
-            Log Riwayat Mesin (Gambar 2 & 3)
+            Riwayat Log Verifikasi
+          </button>
+
+          <button
+            onClick={() => setActiveTab('daily-input')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'daily-input'
+                ? 'bg-teal-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Input Form Harian
           </button>
 
           <button
             onClick={() => setActiveTab('master-references')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'master-references'
                 ? 'bg-teal-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <Table className="w-4 h-4" />
-            Master Acuan STDEV (Gambar 5)
+            Master Acuan STDEV
           </button>
         </div>
       </div>
@@ -173,6 +237,8 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
           <XrfControlChartsTab
             instruments={instruments}
             standards={standards}
+            assignedSite={assignedSite}
+            isDevOrManager={isDevOrManager}
           />
         )}
 
@@ -180,7 +246,17 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
           <XrfDailyInputTab
             instruments={instruments}
             standards={standards}
+            assignedSite={assignedSite}
+            isDevOrManager={isDevOrManager}
             onSuccessSave={() => setActiveTab('history-logs')}
+          />
+        )}
+
+        {activeTab === 'direct-paste' && (
+          <XrfDirectPasteTab
+            instruments={instruments}
+            standards={standards}
+            onSuccessSave={() => setActiveTab('control-charts')}
           />
         )}
 
@@ -188,6 +264,8 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
           <XrfHistoryLogsTab
             instruments={instruments}
             standards={standards}
+            assignedSite={assignedSite}
+            isDevOrManager={isDevOrManager}
           />
         )}
 

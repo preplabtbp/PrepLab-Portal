@@ -958,6 +958,8 @@ export const xrfInstruments = pgTable('xrf_instruments', {
   brandModel: text('brand_model').default('PANalytical Epsilon 4'),
   channelType: text('channel_type').default('LIMONITE'), // 'LIMONITE' | 'SAPROLITE' | 'ALL'
   colorTag: text('color_tag').default('cyan'),           // 'cyan', 'yellow', 'blue', 'green', 'purple'
+  site: text('site').default('GTS'),                     // 'GTS' | 'TBP'
+  methodType: text('method_type').default('EDXRF'),       // 'EDXRF' | 'WDXRF'
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -981,7 +983,11 @@ export const xrfStandardReferences = pgTable('xrf_standard_references', {
   standardCode: text('standard_code').notNull(), // 'LIM01', 'LIM02', dst.
   elementName: text('element_name').notNull(),   // 'Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO', 'P', 'S', etc.
   nominalValue: doublePrecision('nominal_value').notNull(), // Expected/Certified Value (Garis Tengah)
-  stdevFixed: doublePrecision('stdev_fixed').notNull(),     // Fixed STDEV dari tabel Gambar 5
+  stdevFixed: doublePrecision('stdev_fixed').notNull(),     // Fixed STDEV
+  lowerWarning: doublePrecision('lower_warning'),           // -2σ dari CSV
+  upperWarning: doublePrecision('upper_warning'),           // +2σ dari CSV
+  lowerAction: doublePrecision('lower_action'),             // -3σ dari CSV
+  upperAction: doublePrecision('upper_action'),             // +3σ dari CSV
   warningSigma: doublePrecision('warning_sigma').default(2.0), // 2.0 (Upper/Lower Warning)
   actionSigma: doublePrecision('action_sigma').default(3.0),   // 3.0 (Upper/Lower Action)
   extremeSigma: doublePrecision('extreme_sigma').default(5.0),  // 5.0 (Upper/Lower Extreme)

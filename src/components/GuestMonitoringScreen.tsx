@@ -3,8 +3,9 @@ import {
   ThermometerSun, Wind, ShieldCheck, CheckCircle2, AlertTriangle, 
   XCircle, Clock, User, Calendar, FileDown, RefreshCw, Loader2, 
   Sparkles, Info, Eye, Layers, ExternalLink, Printer, CheckSquare, 
-  Activity, ArrowRight, Filter, ChevronDown, Check, Gauge
+  Activity, ArrowRight, Filter, ChevronDown, Check, Gauge, QrCode
 } from 'lucide-react';
+import { GuestBarcodeModal } from './GuestBarcodeModal';
 import { Card, Button } from './ui';
 import { getRekapanPemantauan, buatPdfRekapan, cekPdfRekapanPeriode } from '../sheets-api';
 import { ACCEPTABLE_RANGES } from './monitoring-dashboard';
@@ -203,6 +204,7 @@ export const GuestMonitoringScreen: React.FC = () => {
   const [pdfLinks, setPdfLinks] = useState<any[]>([]);
   const [existingPdfsMap, setExistingPdfsMap] = useState<Record<string, { name: string; url: string; createdTime?: string }>>({});
   const [isCheckingPdfs, setIsCheckingPdfs] = useState<boolean>(false);
+  const [showBarcodeModal, setShowBarcodeModal] = useState<boolean>(false);
 
   // Time Range States (ISO Week, Monthly, Custom)
   const [selectedPreset, setSelectedPreset] = useState<string>('this_month');
@@ -802,6 +804,15 @@ export const GuestMonitoringScreen: React.FC = () => {
               <Sparkles className="w-3.5 h-3.5 text-teal-700" />
               <span>Akses Tamu &amp; Auditor (Read-Only)</span>
             </span>
+
+            <Button
+              onClick={() => setShowBarcodeModal(true)}
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 shadow-2xs flex items-center gap-1.5"
+              title="Cetak Barcode / QR Code untuk tamu & auditor"
+            >
+              <QrCode className="w-3.5 h-3.5 text-cyan-600" />
+              <span className="hidden sm:inline">Cetak Barcode</span>
+            </Button>
 
             <Button
               onClick={fetchData}
@@ -1693,6 +1704,12 @@ export const GuestMonitoringScreen: React.FC = () => {
           Sistem Terintegrasi Pemantauan K3 &bull; Akses Audit Tamu Terbuka &bull; Dokumen Rahasia Perusahaan Terproteksi
         </p>
       </footer>
+
+      {/* ----------------- BARCODE / QR CODE MODAL ----------------- */}
+      <GuestBarcodeModal
+        isOpen={showBarcodeModal}
+        onClose={() => setShowBarcodeModal(false)}
+      />
     </div>
   );
 };

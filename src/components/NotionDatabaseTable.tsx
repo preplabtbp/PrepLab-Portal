@@ -1,3 +1,4 @@
+import { translateDisplayText } from './notion/logbook-section-utils';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { 
   Search, 
@@ -511,7 +512,8 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if ((targetLower === 'jenis kegiatan' || targetLower === 'judul') && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
+    if ((targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'activity name' || targetLower === 'activity' || targetLower === 'nama kegiatan' || targetLower === 'task') && 
+        (keyLower.includes('jenis kegiatan') || keyLower.includes('activity name') || keyLower === 'activity' || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -539,7 +541,7 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if ((targetLower === 'tanggal selesai' || targetLower === 'completed time') && (keyLower.includes('completed') || keyLower.includes('aktual selesai') || keyLower === 'selesai' || keyLower.includes('waktu selesai') || keyLower.includes('tanggal selesai'))) {
+    if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && (keyLower.includes('completed') || keyLower.includes('aktual selesai') || keyLower === 'selesai' || keyLower.includes('waktu selesai') || keyLower.includes('tanggal selesai'))) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -572,7 +574,7 @@ export function serializeMarkdownTable(
     return `| ${cleanHeaders.map(h => {
       let val = getCellValue(row, h);
       const hLower = h.toLowerCase().trim();
-      const isTitleCol = hLower.includes('jenis kegiatan') || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama';
+      const isTitleCol = hLower.includes('jenis kegiatan') || hLower.includes('activity name') || hLower === 'activity' || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama';
       
       // Embed persistent ID metadata into the primary title cell
       if (isTitleCol && val) {
@@ -589,6 +591,21 @@ export function serializeMarkdownTable(
         }
         if (lastMod && !val.includes(`<!--last-modified:`)) {
           metaTags += ` <!--last-modified:${lastMod}-->`;
+        }
+        if (row._originPostId && !val.includes(`<!--origin-id:`)) {
+          metaTags += ` <!--origin-id:${row._originPostId}-->`;
+        }
+        if (row._originPostTitle && !val.includes(`<!--origin-title:`)) {
+          metaTags += ` <!--origin-title:${encodeURIComponent(row._originPostTitle)}-->`;
+        }
+        if (row._originRowIndex !== undefined && row._originRowIndex !== '' && !val.includes(`<!--origin-row:`)) {
+          metaTags += ` <!--origin-row:${row._originRowIndex}-->`;
+        }
+        if (row._parentTitle && !val.includes(`<!--parent-title:`)) {
+          metaTags += ` <!--parent-title:${encodeURIComponent(row._parentTitle)}-->`;
+        }
+        if (row._isLogbookAggregated && !val.includes(`<!--is-logbook:`)) {
+          metaTags += ` <!--is-logbook:true-->`;
         }
         if (metaTags) {
           val = `${val.trim()}${metaTags}`;
@@ -665,8 +682,7 @@ export function migrateChecklistsInRows(
       const parentPIC = getCellValue(row, 'PIC') || '';
       const parentAct = getCellValue(row, 'Activity (routine/non routine)') || 'Monthly';
       const parentPeriod = getCellValue(row, 'period') || 'Monthly';
-      const now = new Date();
-      const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const createdStr = getTodayDDMMYYYY();
 
       taskProg.items.forEach((item, subIdx) => {
         const safeSubText = (item.text || '').slice(0, 25).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
@@ -689,10 +705,21 @@ export function migrateChecklistsInRows(
             Status: item.checked ? 'Closed' : 'Open',
             isCompleted: item.checked ? 'true' : 'false',
             'Created Time': createdStr,
+            'Created time': createdStr,
+            'Tanggal Selesai': item.checked ? createdStr : '-',
+            'Tanggal selesai': item.checked ? createdStr : '-',
+            'Due Date': getCellValue(row, 'Due Date') || getCellValue(row, 'due date') || createdStr,
+            'due date': getCellValue(row, 'Due Date') || getCellValue(row, 'due date') || createdStr,
             Kategori: parentCat,
             'Activity (routine/non routine)': parentAct,
             period: parentPeriod,
-            isSubItem: 'true'
+            'Asal Halaman': row['Asal Halaman'] || row._originPostTitle || '',
+            isSubItem: 'true',
+            _originPostId: row._originPostId,
+            _originPostTitle: row._originPostTitle || row['Asal Halaman'] || '',
+            _originRowIndex: row._originRowIndex,
+            _parentTitle: getDisplayTitle(row['Jenis kegiatan'] || row['Jenis Kegiatan'] || row.Name || ''),
+            _isLogbookAggregated: row._isLogbookAggregated
           };
           newRows.push(subRow);
           migratedCount++;
@@ -770,6 +797,11 @@ export function extractMarkdownTableFromContent(content: string): {
         const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
         const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
         const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
+        const originIdMatch = rowStr.match(/<!--origin-id:([^>]+)-->/);
+        const originTitleMatch = rowStr.match(/<!--origin-title:([^>]+)-->/);
+        const originRowMatch = rowStr.match(/<!--origin-row:([^>]+)-->/);
+        const parentTitleMatch = rowStr.match(/<!--parent-title:([^>]+)-->/);
+        const isLogbookMatch = rowStr.match(/<!--is-logbook:([^>]+)-->/);
 
         const isPin = rowStr.includes('<!--pin') || rowStr.includes('<!pin') || rowStr.includes('<!--pinned');
         const cleanTitle = (rowObj['Jenis kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '')
@@ -794,6 +826,23 @@ export function extractMarkdownTableFromContent(content: string): {
           rowObj.isPinned = 'true';
           (rowObj as any)._pinned = 'true';
         }
+        if (originIdMatch) rowObj._originPostId = originIdMatch[1].trim();
+        if (originTitleMatch) {
+          try {
+            rowObj._originPostTitle = decodeURIComponent(originTitleMatch[1].trim());
+          } catch {
+            rowObj._originPostTitle = originTitleMatch[1].trim();
+          }
+        }
+        if (originRowMatch) rowObj._originRowIndex = originRowMatch[1].trim();
+        if (parentTitleMatch) {
+          try {
+            rowObj._parentTitle = decodeURIComponent(parentTitleMatch[1].trim());
+          } catch {
+            rowObj._parentTitle = parentTitleMatch[1].trim();
+          }
+        }
+        if (isLogbookMatch) rowObj._isLogbookAggregated = 'true';
 
         rows.push(rowObj);
       }
@@ -807,7 +856,7 @@ export function extractMarkdownTableFromContent(content: string): {
 }
 
 interface NotionDatabaseTableProps {
-  postId?: number;
+  postId?: number | string;
   headers: string[];
   rows: TableRowData[];
   title?: string;
@@ -1483,11 +1532,33 @@ export function NotionDatabaseTable({
     }, 100);
   };
 
+// Helper to translate header display labels into English cleanly without breaking backend keys
+const getDisplayHeaderLabel = (colHeader: string): string => {
+  if (!colHeader) return '';
+  const l = colHeader.toLowerCase().trim();
+  const clean = l.replace(/^[^a-z0-9]+/i, '').trim();
+
+  if (l === 'number' || l === 'nomor' || l === 'no.' || l === 'no' || l === '#') return 'Number';
+  if (clean.includes('jenis kegiatan') || clean.includes('nama kegiatan') || clean.includes('judul kegiatan') || clean === 'materi' || clean === 'activity name') return 'Activity Name';
+  if (clean.includes('keterangan') || clean.includes('deskripsi') || clean.includes('description') || clean === 'notes' || clean === 'catatan') return 'Description';
+  if (clean.includes('created') || clean.includes('tanggal dibuat') || clean.includes('waktu dibuat') || clean === 'dibuat') return 'Created Time';
+  if (clean.includes('tanggal selesai') || clean.includes('completion') || clean.includes('completed') || clean.includes('aktual selesai') || clean === 'selesai' || clean.includes('waktu selesai')) return 'Completion Date';
+  if (clean.includes('due') || clean.includes('deadline') || clean.includes('target') || clean.includes('jatuh tempo') || clean.includes('batas waktu') || clean.includes('tenggat')) return 'Due Date';
+  if (clean === 'status') return 'Status';
+  if (clean === 'pic' || clean.includes('penanggung jawab') || clean.includes('assignee')) return 'PIC';
+  if (clean === 'priority' || clean.includes('prioritas')) return 'Priority';
+  if (clean.includes('aktivitas') || clean.includes('activity')) return 'Activity';
+  if (clean === 'kategori' || clean.includes('category')) return 'Category';
+  if (clean === 'periode' || clean.includes('period')) return 'Period';
+  if (clean === 'catatan' || clean === 'notes' || clean === 'note') return 'Notes';
+  return colHeader;
+};
+
   // Column templates definition
   const POPULAR_COLUMN_TEMPLATES = [
     { name: 'Created Time', icon: '🕒', defaultValue: '-', desc: 'Tanggal pembuatan tugas (otomatis saat dibuat)' },
     { name: 'Status', icon: '🏷️', defaultValue: 'Open', desc: 'Dropdown status progress tugas' },
-    { name: 'Completed Time', icon: '✓', defaultValue: '-', desc: 'Tanggal atau waktu penyelesaian tugas' },
+    { name: 'Completion Date', icon: '✓', defaultValue: '-', desc: 'Completion date of activity' },
     { name: 'Priority', icon: '⚡', defaultValue: 'Normal', desc: 'Tingkat urgensi kegiatan' },
     { name: 'PIC', icon: '👤', defaultValue: '', desc: 'Personil penanggung jawab' },
     { name: 'Activity (routine/non routine)', icon: '🔄', defaultValue: 'Routine', desc: 'Klasifikasi aktivitas rutin/non-rutin' },
@@ -1526,8 +1597,14 @@ export function NotionDatabaseTable({
       return true;
     }).map(h => {
       const l = h.toLowerCase().trim();
-      if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai')) {
-        return 'Tanggal Selesai';
+      if (l.includes('completed') || l.includes('completion') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) {
+        return 'Completion Date';
+      }
+      if (l.includes('jenis kegiatan') || l === 'activity name') {
+        return 'Activity Name';
+      }
+      if (l.includes('keterangan') || l === 'description') {
+        return 'Description';
       }
       if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) {
         return 'Due Date';
@@ -1547,15 +1624,15 @@ export function NotionDatabaseTable({
     if (uniqueFiltered.length === 0) {
       return [
         'Number',
-        'Jenis kegiatan',
-        'Keterangan',
+        'Activity Name',
+        'Description',
         'Created Time',
-        'Tanggal Selesai',
+        'Completion Date',
         'Due Date',
         'Status',
         'PIC',
         'Priority',
-        'Aktivitas'
+        'Activity'
       ];
     }
 
@@ -1591,10 +1668,10 @@ export function NotionDatabaseTable({
       }
     }
 
-    // Ensure 'Tanggal Selesai' exists
+    // Ensure 'Completion Date' exists
     const hasCompleted = headersWithCreated.some(h => {
       const l = h.toLowerCase().trim();
-      return l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai');
+      return l.includes('completed') || l.includes('completion') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai');
     });
 
     let headersWithCompleted = headersWithCreated;
@@ -1603,11 +1680,11 @@ export function NotionDatabaseTable({
       if (createdIdx !== -1) {
         headersWithCompleted = [
           ...headersWithCreated.slice(0, createdIdx + 1),
-          'Tanggal Selesai',
+          'Completion Date',
           ...headersWithCreated.slice(createdIdx + 1)
         ];
       } else {
-        headersWithCompleted = [...headersWithCreated, 'Tanggal Selesai'];
+        headersWithCompleted = [...headersWithCreated, 'Completion Date'];
       }
     }
 
@@ -2101,12 +2178,12 @@ export function NotionDatabaseTable({
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if ((targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title') && 
-          (cleanKey.includes('jenis kegiatan') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
+      if ((targetLower === 'activity name' || targetLower === 'activity' || targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title' || targetLower === 'nama kegiatan') && 
+          (cleanKey.includes('jenis kegiatan') || cleanKey.includes('activity') || cleanKey.includes('activity name') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'keterangan' && (cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
+      if ((targetLower === 'description' || targetLower === 'keterangan' || targetLower === 'deskripsi') && (cleanKey.includes('description') || cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -2131,7 +2208,7 @@ export function NotionDatabaseTable({
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if ((targetLower === 'tanggal selesai' || targetLower === 'completed time') && 
+      if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && 
           (cleanKey.includes('completed') || cleanKey.includes('aktual selesai') || cleanKey === 'selesai' || cleanKey.includes('waktu selesai') || cleanKey.includes('tanggal selesai'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
@@ -2214,12 +2291,29 @@ export function NotionDatabaseTable({
     };
   }, [localRows, getRowVal]);
 
+  // Helper to determine real numeric post ID (fallback to row's _originPostId for aggregated/virtual views)
+  const getEffectivePostId = useCallback((targetRow?: TableRowData | null): number | null => {
+    if (typeof postId === 'number' && !isNaN(postId)) return postId;
+    if (typeof postId === 'string' && /^\d+$/.test(postId.trim())) {
+      const p = parseInt(postId.trim(), 10);
+      if (!isNaN(p)) return p;
+    }
+    const rowCandidate = targetRow || selectedRow;
+    const origin = rowCandidate?._originPostId;
+    if (origin) {
+      const p = parseInt(String(origin).trim(), 10);
+      if (!isNaN(p)) return p;
+    }
+    return null;
+  }, [postId, selectedRow]);
+
   // Fetch comments from backend
-  const fetchComments = useCallback(async () => {
-    if (!postId) return;
+  const fetchComments = useCallback(async (overridePostId?: number | null) => {
+    const targetPostId = overridePostId !== undefined ? overridePostId : getEffectivePostId();
+    if (!targetPostId) return;
     try {
       setCommentsLoading(true);
-      const res = await fetch(`/api/bulletin/${postId}/comments`);
+      const res = await fetch(`/api/bulletin/${targetPostId}/comments`);
       const json = await res.json();
       if (json.status === 'success' && Array.isArray(json.data)) {
         setAllComments(json.data);
@@ -2229,7 +2323,7 @@ export function NotionDatabaseTable({
     } finally {
       setCommentsLoading(false);
     }
-  }, [postId]);
+  }, [getEffectivePostId]);
 
   useEffect(() => {
     fetchComments();
@@ -2764,7 +2858,13 @@ export function NotionDatabaseTable({
           return true;
         }
       } else {
-        // Synthetic / virtual post ID (e.g. logbook-preparasi), notify parent state
+        // Synthetic / virtual post ID (e.g. logbook-preparasi), persist to localStorage & notify parent state
+        const postIdStr = String(postId || '');
+        if (postIdStr.startsWith('logbook-')) {
+          try {
+            localStorage.setItem(`preplab_logbook_content_${postIdStr}`, updatedMarkdown);
+          } catch {}
+        }
         onPostContentUpdate?.(updatedMarkdown);
         return true;
       }
@@ -3027,12 +3127,14 @@ export function NotionDatabaseTable({
     }
 
     // 4. Buat room diskusi awal untuk periode baru agar traceability mandiri tercatat
-    if (postId && baseTopic) {
+    const effectiveTargetPostId = getEffectivePostId();
+    if (effectiveTargetPostId && baseTopic) {
       try {
-        await fetch(`/api/bulletin/${postId}/comments`, {
+        await fetch(`/api/bulletin/${effectiveTargetPostId}/comments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            postId: effectiveTargetPostId,
             topicTitle: `${baseTopic} - ${nextPeriod}`,
             content: `🎯 Periode baru **${nextPeriod}** telah dibuka dengan target penyelesaian ${nextTargetDate}. Seluruh checklist subtask telah siap kembali.`,
             authorNik: currentAuthorNik || 'SYSTEM',
@@ -3040,7 +3142,7 @@ export function NotionDatabaseTable({
             statusUpdate: 'Open'
           })
         });
-        fetchComments();
+        fetchComments(effectiveTargetPostId);
       } catch (e) {
         console.warn('Initial period comment creation warning:', e);
       }
@@ -3126,7 +3228,7 @@ export function NotionDatabaseTable({
     const targetCat = section || 'Laboratorium';
     const autoTaskCode = generateTaskCode(targetCat, localRows);
     const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const createdStr = getTodayDDMMYYYY();
 
     const inheritedCadence = currentCadence || normalizeCadence(title) || 'Monthly';
     const inheritedPeriod = (inheritedCadence && inheritedCadence !== 'Non-Routine')
@@ -3197,8 +3299,7 @@ export function NotionDatabaseTable({
     const parentAct = getRowVal(parentRow, 'Activity (routine/non routine)') || 'Monthly';
     const parentPeriod = getRowVal(parentRow, 'period') || 'Monthly';
     
-    const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const createdStr = getTodayDDMMYYYY();
 
     const parentId = parentRow.id || `task_${Date.now()}_${actualParentIdx}_${Math.random().toString(36).substr(2, 6)}`;
     parentRow.id = parentId;
@@ -3220,6 +3321,17 @@ export function NotionDatabaseTable({
     const parentRawTitle = getRowVal(parentRow, 'Jenis kegiatan') || getRowVal(parentRow, 'Jenis Kegiatan') || getRowVal(parentRow, 'Name') || getRowVal(parentRow, 'Judul') || '';
     const cleanParentTitle = getDisplayTitle(parentRawTitle);
 
+    // Resolve origin post ID and title if not yet attached
+    const resolvedOriginId = parentRow._originPostId || resolveOriginPostId(parentRow, allPosts || [], section);
+    if (resolvedOriginId) {
+      parentRow._originPostId = resolvedOriginId;
+    }
+    const resolvedOriginTitle = parentRow._originPostTitle || parentRow['Asal Halaman'] || '';
+    if (resolvedOriginTitle) {
+      parentRow._originPostTitle = resolvedOriginTitle;
+      parentRow['Asal Halaman'] = resolvedOriginTitle;
+    }
+
     const newSubRow: TableRowData = {
       number: '',
       id: subId,
@@ -3231,18 +3343,24 @@ export function NotionDatabaseTable({
       PIC: parentPIC,
       Priority: 'Normal',
       Status: 'Open',
+      status: 'Open',
       isCompleted: 'false',
       'Created Time': createdStr,
+      'Created time': createdStr,
       'Tanggal Selesai': '-',
-      'Due Date': getRowVal(parentRow, 'Due Date') || '-',
+      'Tanggal selesai': '-',
+      'Due Date': getRowVal(parentRow, 'Due Date') || getRowVal(parentRow, 'due date') || createdStr,
+      'due date': getRowVal(parentRow, 'Due Date') || getRowVal(parentRow, 'due date') || createdStr,
       Kategori: parentCat,
       'Activity (routine/non routine)': parentAct,
+      Aktivitas: parentAct,
       period: parentPeriod,
+      'Asal Halaman': resolvedOriginTitle,
       isSubItem: 'true',
       'Last Modified': nowIso,
       // Inherit origin tracking metadata from parent so subtask can sync back to origin Labnote table
-      _originPostId: parentRow._originPostId || resolveOriginPostId(parentRow, allPosts || [], section),
-      _originPostTitle: parentRow._originPostTitle,
+      _originPostId: resolvedOriginId,
+      _originPostTitle: resolvedOriginTitle,
       _originRowIndex: parentRow._originRowIndex,
       _parentTitle: cleanParentTitle,
       _isLogbookAggregated: parentRow._isLogbookAggregated
@@ -3443,8 +3561,7 @@ export function NotionDatabaseTable({
         const parentPIC = getRowVal(row, 'PIC') || '';
         const parentAct = getRowVal(row, 'Activity (routine/non routine)') || 'Monthly';
         const parentPeriod = getRowVal(row, 'period') || 'Monthly';
-        const now = new Date();
-        const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const createdStr = getTodayDDMMYYYY();
 
         // Create a sub-item row for each checklist item
         taskProg.items.forEach(item => {
@@ -3830,19 +3947,20 @@ export function NotionDatabaseTable({
   // Save Row (Create / Edit)
   const handleSaveRow = async (e: React.FormEvent) => {
     e.preventDefault();
-    const title = (rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || '').trim();
+    const title = (rowFormData['Activity Name'] || rowFormData['Activity'] || rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || '').trim();
     if (!title) {
-      toast.error('Wajib mengisi "Jenis kegiatan"');
+      toast.error('Activity Name is required');
       return;
     }
 
     const cleanedRow = { ...rowFormData };
-    // Synchronize title across both casing keys and any matching header
+    // Synchronize title across both English and Indonesian keys and any matching header
+    cleanedRow['Activity Name'] = title;
     cleanedRow['Jenis kegiatan'] = title;
     cleanedRow['Jenis Kegiatan'] = title;
     displayHeaders.forEach(h => {
       const hLower = h.toLowerCase().trim();
-      if (hLower === 'jenis kegiatan' || hLower === 'judul' || hLower === 'task' || hLower === 'nama kegiatan') {
+      if (hLower === 'activity name' || hLower === 'activity' || hLower === 'jenis kegiatan' || hLower === 'judul' || hLower === 'task' || hLower === 'nama kegiatan') {
         cleanedRow[h] = title;
       }
     });
@@ -3927,7 +4045,7 @@ export function NotionDatabaseTable({
   // Insert Blank Row Inline directly into table (starts manual inline editing immediately at row #1)
   const handleInsertBlankRow = (_insertAtIndex: number = 0) => {
     const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const createdStr = getTodayDDMMYYYY();
     const inheritedCadence = currentCadence || 'Non Routine';
     const targetCat = section || 'Laboratorium';
     const autoTaskCode = generateTaskCode(targetCat, localRows);
@@ -3939,6 +4057,7 @@ export function NotionDatabaseTable({
       taskCode: autoTaskCode,
       'Task ID': autoTaskCode,
       number: autoTaskCode,
+      'Activity Name': '',
       'Jenis kegiatan': '',
       'Jenis Kegiatan': '',
       Keterangan: '-',
@@ -3956,8 +4075,10 @@ export function NotionDatabaseTable({
     };
 
     displayHeaders.forEach(h => {
+      const hl = h.toLowerCase().trim();
+      const isTitle = hl.includes('activity name') || hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul' || hl === 'name';
       if (blankRow[h] === undefined) {
-        blankRow[h] = '-';
+        blankRow[h] = isTitle ? '' : '-';
       }
     });
 
@@ -3969,9 +4090,14 @@ export function NotionDatabaseTable({
     saveTableToBackend(nextRows);
 
     // Immediately activate inline editor on the new empty cell at row 0
+    const titleColHeader = displayHeaders.find(h => {
+      const hl = h.toLowerCase().trim();
+      return hl.includes('activity name') || hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul';
+    }) || 'Activity Name';
+
     setActiveInlineEditor({
       rowIndex: 0,
-      colName: 'Jenis kegiatan',
+      colName: titleColHeader,
       initialValue: '',
       multiline: false
     });
@@ -4491,7 +4617,11 @@ export function NotionDatabaseTable({
     const hasFiles = selectedFiles.length > 0 || selectedFile !== null;
     const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name || 'Lampiran'}\n\n${commentFileCaption.trim()}` : (hasFiles ? `📎 Lampiran` : ''));
     if (!finalContent && !hasFiles) return;
-    if (!postId || !selectedRow) return;
+    const targetPostId = getEffectivePostId(selectedRow);
+    if (!targetPostId) {
+      toast.error('Tidak dapat mengirim update: Tugas ini berada di halaman logbook virtual dan belum memiliki dokumen fisik terhubung.');
+      return;
+    }
 
     const topicTitleVal = selectedTopicTitle || 'Topik';
     const picVal = (getRowVal(selectedRow, 'PIC') || '').trim();
@@ -4518,11 +4648,11 @@ export function NotionDatabaseTable({
 
       const fileUrlPayload = allFilesPayload ? JSON.stringify(allFilesPayload) : null;
 
-      const res = await fetch(`/api/bulletin/${postId}/comments`, {
+      const res = await fetch(`/api/bulletin/${targetPostId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          postId,
+          postId: targetPostId,
           content: finalContent,
           topicTitle: topicTitleVal,
           topicId: selectedRow?.id || topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
@@ -4567,7 +4697,7 @@ export function NotionDatabaseTable({
             await saveTableToBackend(updated);
           }
         }
-        await fetchComments();
+        await fetchComments(targetPostId);
       } else {
         toast.error('Gagal mengirim update: ' + (json.message || 'Error'));
       }
@@ -4819,14 +4949,21 @@ export function NotionDatabaseTable({
       }
 
       // Post as an attachment comment with caption for this topic
+      const targetPostId = getEffectivePostId(selectedRow);
+      if (!targetPostId) {
+        toast.dismiss('upload-gallery');
+        toast.error('Tidak dapat mengunggah: Tugas ini berada di halaman logbook virtual dan belum memiliki dokumen fisik terhubung.');
+        return;
+      }
+
       const topicTitleVal = selectedTopicTitle || 'Topik';
       const activeSection = section || getRowVal(selectedRow, 'Kategori') || 'Prep & Lab';
 
-      const cRes = await fetch(`/api/bulletin/${postId}/comments`, {
+      const cRes = await fetch(`/api/bulletin/${targetPostId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          postId,
+          postId: targetPostId,
           content: caption.trim() ? `📎 ${file.name}\n\n${caption.trim()}` : `📎 Lampiran Foto / Dokumen: ${file.name}`,
           fileUrl: JSON.stringify([{
             url: uploadedUrl,
@@ -4852,7 +4989,7 @@ export function NotionDatabaseTable({
           URL.revokeObjectURL(previewUrl);
         }
         setPendingUploadFile(null);
-        await fetchComments();
+        await fetchComments(targetPostId);
       } else {
         toast.error('Gagal menambahkan lampiran ke topik.');
       }
@@ -5249,7 +5386,7 @@ export function NotionDatabaseTable({
             <div className="flex items-center gap-2">
               <span className="text-base select-none">📋</span>
               <h3 className={`font-semibold text-sm flex items-center gap-1.5 ${isNotionLight ? 'text-[#37352f]' : 'text-slate-100'}`}>
-                <span>{title || 'Database Table'}</span>
+                <span>{translateDisplayText(title) || 'Database Table'}</span>
                 <span 
                   className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono border font-semibold ${
                     isNotionLight ? 'bg-slate-100 border-slate-200 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400'
@@ -6431,7 +6568,7 @@ export function NotionDatabaseTable({
                   }`}
                   title="Tampilkan tugas yang sudah selesai"
                 >
-                  <span>Selesai</span>
+                  <span>Completed</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
                     logbookFilterMode === 'completed' ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                   }`}>
@@ -6580,7 +6717,7 @@ export function NotionDatabaseTable({
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
                   const cleanHeader = colHeader.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
-                  const isJudul = cleanHeader.includes('jenis kegiatan') || cleanHeader === 'task' || cleanHeader === 'judul' || cleanHeader === 'name' || cleanHeader === 'title' || cleanHeader === 'nama' || cleanHeader === 'materi';
+                  const isJudul = cleanHeader.includes('activity name') || cleanHeader.includes('jenis kegiatan') || cleanHeader === 'activity' || cleanHeader === 'task' || cleanHeader === 'judul' || cleanHeader === 'name' || cleanHeader === 'title' || cleanHeader === 'nama' || cleanHeader === 'materi';
                   const colLower = colHeader.toLowerCase();
                   const colIdx = displayHeaders.indexOf(colHeader);
 
@@ -6622,11 +6759,7 @@ export function NotionDatabaseTable({
                         >
                           {getNotionColumnIcon(colHeader)}
                           <span className={`truncate font-semibold ${isNotionLight ? 'text-[#37352f]' : 'text-slate-300'}`}>
-                            {colLower.includes('tanggal selesai') || colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')
-                              ? 'Tanggal Selesai'
-                              : (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu'))
-                              ? 'Due Date'
-                              : colHeader}
+                            {getDisplayHeaderLabel(colHeader)}
                           </span>
                           {isSorted && (
                             sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
@@ -6886,7 +7019,7 @@ export function NotionDatabaseTable({
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-700 font-semibold border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 font-bold border-[#303030]'
                   }`}
                 >
-                  Aksi
+                  Action
                 </th>
               </tr>
             </thead>
@@ -6983,7 +7116,7 @@ export function NotionDatabaseTable({
                                 {isCollapsed ? '▶' : '▼'}
                               </span>
                               <span className={`font-semibold ${isNotionLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                                {groupName}
+                                {translateDisplayText(groupName)}
                               </span>
                               <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
                                 isNotionLight ? 'bg-slate-200/80 text-slate-700' : 'bg-slate-800 text-slate-300'
@@ -7152,7 +7285,18 @@ export function NotionDatabaseTable({
                           const isDirty = dirtyRowIndices.has(actualRowIndex);
                           const isSelected = selectedRowIndices.has(actualRowIndex);
                           const isSubCompleted = isSubItem ? isSubItemCompleted(row) : false;
-                          const rawTitle = (getRowVal(row, 'Jenis kegiatan') || getRowVal(row, 'Name') || getRowVal(row, 'Judul') || row['Name'] || row['= Name'] || `Baris ${actualRowIndex + 1}`).trim();
+                          const rawTitle = (
+                            getRowVal(row, 'Activity Name') || 
+                            getRowVal(row, 'Jenis kegiatan') || 
+                            getRowVal(row, 'Name') || 
+                            getRowVal(row, 'Judul') || 
+                            row['Activity Name'] || 
+                            row['Jenis kegiatan'] || 
+                            row['Jenis Kegiatan'] || 
+                            row['Name'] || 
+                            row['= Name'] || 
+                            `Baris ${actualRowIndex + 1}`
+                          ).trim();
                           const displayTitle = getDisplayTitle(rawTitle);
                           const topicKey = displayTitle.toLowerCase().trim();
                           const rawKey = rawTitle.toLowerCase().trim();
@@ -7263,7 +7407,7 @@ export function NotionDatabaseTable({
                                 }
 
                                 // 2. Jenis kegiatan Column (Judul / Name / Materi)
-                                if (cleanCol.includes('jenis kegiatan') || cleanCol === 'task' || cleanCol === 'judul' || cleanCol === 'name' || cleanCol === 'title' || cleanCol === 'nama' || cleanCol === 'materi') {
+                                if (cleanCol.includes('activity name') || cleanCol.includes('jenis kegiatan') || cleanCol === 'task' || cleanCol === 'judul' || cleanCol === 'name' || cleanCol === 'title' || cleanCol === 'nama' || cleanCol === 'materi') {
                                   const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
 
                                   return (
@@ -7368,7 +7512,7 @@ export function NotionDatabaseTable({
                                                 setSelectedRow(row);
                                                 setModalTab('details');
                                               }}
-                                              className={`ml-1 opacity-80 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
+                                              className={`ml-1 opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
                                                 isNotionLight
                                                   ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
                                                   : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
@@ -7419,7 +7563,7 @@ export function NotionDatabaseTable({
                                 }
 
                                 // 3. Keterangan Column (dengan Smart Tasklist & Pewarnaan Teks)
-                                if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) {
+                                if (colLower.includes('description') || colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) {
                                   const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
                                   const taskProgress = parseTasklist(val);
 
@@ -7798,7 +7942,7 @@ export function NotionDatabaseTable({
                                         {isSubCompleted ? (
                                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
                                             <CheckCircle2 className="w-3.5 h-3.5" />
-                                            <span>Selesai</span>
+                                            <span>Completed</span>
                                           </span>
                                         ) : (
                                           <span className="text-slate-400 font-mono text-xs">-</span>
@@ -7914,13 +8058,7 @@ export function NotionDatabaseTable({
                                 if (colLower.includes('created')) {
                                   const displayDate = (() => {
                                     if (!val || val === '-') return '-';
-                                    const trimmed = String(val).trim();
-                                    const match = trimmed.match(/^(\d{4}[-/]\d{1,2}[-/]\d{1,2})/);
-                                    if (match) return match[1];
-                                    if (trimmed.includes(' ') || trimmed.includes('T')) {
-                                      return trimmed.split(/[ T]/)[0];
-                                    }
-                                    return trimmed;
+                                    return formatToDDMMYYYY(val);
                                   })();
 
                                   return (
@@ -7975,7 +8113,7 @@ export function NotionDatabaseTable({
                                 }
 
                                 // 10. Activity Column (Interactive Dropdown)
-                                if (colLower.includes('activity') || colLower.includes('aktivitas')) {
+                                if (!colLower.includes('name') && (colLower === 'activity' || colLower.includes('routine') || colLower.includes('aktivitas'))) {
                                   if (isSubItem) {
                                     return (
                                       <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
@@ -8052,6 +8190,46 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
+                                // Tanggal Selesai Column (Format DD-MM-YYYY seragam)
+                                if (colLower.includes('selesai') || colLower.includes('completed')) {
+                                  const displayDate = (val && val !== '-') ? formatToDDMMYYYY(val) : '-';
+                                  return (
+                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#047857' : '#34d399' }} className={`font-sans border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${
+                                      fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
+                                    }`}>
+                                      {displayDate !== '-' ? (
+                                        <span className="inline-flex items-center gap-1.5 font-sans font-medium text-emerald-600 dark:text-emerald-400">
+                                          <Calendar className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                                          <span>{displayDate}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="font-mono text-slate-400">-</span>
+                                      )}
+                                    </td>
+                                  );
+                                }
+
+                                // Asal Halaman Column (Badge rapi dengan icon dokumen)
+                                if (colLower.includes('asal') && colLower.includes('halaman')) {
+                                  const asalVal = val || row['Asal Halaman'] || row._originPostTitle || '';
+                                  return (
+                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'}`}>
+                                      {asalVal && asalVal !== '-' ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
+                                          <FileText className="w-3 h-3 text-slate-400 shrink-0" />
+                                          <span className="truncate max-w-[140px]">{asalVal}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="font-mono text-slate-400">-</span>
+                                      )}
+                                    </td>
+                                  );
+                                }
+
                                 // Default custom column
                                 return (
                                   <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap border-r ${
@@ -8082,7 +8260,7 @@ export function NotionDatabaseTable({
                                            setActiveActionMenuRowIndex(activeActionMenuRowIndex === rowActionKey ? null : rowActionKey);
                                          }}
                                          className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-300 text-black dark:text-black hover:text-black transition-colors cursor-pointer"
-                                         title="Pilihan Aksi"
+                                         title="Action Options"
                                        >
                                          <MoreVertical className="w-4 h-4 text-black dark:text-black" />
                                        </button>
@@ -8110,7 +8288,7 @@ export function NotionDatabaseTable({
                                            title={isRowPinned(row) ? "Lepas sematan (unpin) task ini" : "Sematkan task ini ke posisi teratas (Maks. 10 task)"}
                                          >
                                            <Pin className={`w-3.5 h-3.5 shrink-0 ${isRowPinned(row) ? 'text-amber-500 fill-amber-500 rotate-45' : 'text-slate-400'}`} />
-                                           <span>{isRowPinned(row) ? 'Lepas Pin (Unpin Task)' : 'Pin Task ke Atas (Maks 10)'}</span>
+                                           <span>{isRowPinned(row) ? 'Unpin Task' : 'Pin Task to Top (Max 10)'}</span>
                                          </button>
                                        )}
                                        {!isSubItem && (
@@ -8124,10 +8302,10 @@ export function NotionDatabaseTable({
                                              setActiveActionMenuRowIndex(null);
                                            }}
                                            className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-medium transition-colors cursor-pointer"
-                                           title="Tambah Sub-kegiatan di bawah kegiatan ini"
+                                           title="Add subtask under this activity"
                                          >
                                            <Plus className="w-3.5 h-3.5 shrink-0 text-teal-500" />
-                                           <span>Tambah Sub-kegiatan</span>
+                                           <span>Add Subtask</span>
                                          </button>
                                        )}
                                        <button
@@ -8151,7 +8329,7 @@ export function NotionDatabaseTable({
                                          title="Pilih baris kegiatan ini (Select)"
                                        >
                                          <CheckSquare className="w-3.5 h-3.5 shrink-0 text-teal-500" />
-                                         <span>{selectedRowIndices.has(actualRowIndex) ? 'Batal Pilih Baris' : 'Pilih Baris (Select)'}</span>
+                                         <span>{selectedRowIndices.has(actualRowIndex) ? 'Deselect Row' : 'Select Row'}</span>
                                        </button>
                                        <button
                                          type="button"
@@ -8161,10 +8339,10 @@ export function NotionDatabaseTable({
                                            setActiveActionMenuRowIndex(null);
                                          }}
                                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-medium transition-colors cursor-pointer"
-                                         title="Edit Data Kegiatan Ini"
+                                         title="Edit This Activity"
                                        >
                                          <Edit2 className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                                         <span>Edit Data Kegiatan</span>
+                                         <span>Edit Activity</span>
                                        </button>
                                        <button
                                          type="button"
@@ -8174,10 +8352,10 @@ export function NotionDatabaseTable({
                                            setActiveActionMenuRowIndex(null);
                                          }}
                                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-medium transition-colors cursor-pointer"
-                                         title={isSubItem ? "Hapus Sub-kegiatan Ini" : "Hapus Baris Ini"}
+                                         title={isSubItem ? "Delete this subtask" : "Delete this row"}
                                        >
                                          <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-500" />
-                                         <span>{isSubItem ? "Hapus Sub-kegiatan" : "Hapus Baris Ini"}</span>
+                                         <span>{isSubItem ? "Delete Subtask" : "Delete Row"}</span>
                                        </button>
                                      </div>
                                    )}
@@ -9162,7 +9340,7 @@ export function NotionDatabaseTable({
                 </div>
                 <div>
                   <h3 className="font-bold text-base" style={{ color: 'var(--text-main, #f1f5f9)' }}>
-                    {editingRowIndex === null ? 'Tambah Data Kegiatan Baru' : 'Edit Data Kegiatan'}
+                    {editingRowIndex === null ? 'Add New Activity' : 'Edit Activity'}
                   </h3>
                   <p className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Struktur kolom sinkron database Weekly Notion
@@ -9184,7 +9362,7 @@ export function NotionDatabaseTable({
               <div className="relative">
                 <div className="flex items-center justify-between mb-1">
                   <label className="block font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Jenis Kegiatan <span className="text-rose-500">*</span>
+                    Activity Name <span className="text-rose-500">*</span>
                   </label>
                   {(rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan']) && (
                     <span className="text-[10px] text-teal-400 font-sans">
@@ -9264,7 +9442,7 @@ export function NotionDatabaseTable({
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                      ID Task (Kode Unik)
+                      Task ID (Unique Code)
                     </label>
                     <span className="text-[9.5px] font-mono text-teal-500 font-bold">Auto Format (L1, P1, Q1, A1, I1, M1)</span>
                   </div>
@@ -9309,11 +9487,11 @@ export function NotionDatabaseTable({
                 </div>
               </div>
 
-              {/* 3. Keterangan / Catatan Ringkas */}
+              {/* 3. Description / Summary Notes */}
               <div className="relative">
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Keterangan / Catatan Ringkas
+                    Description / Summary Notes
                   </label>
                   <span className="text-[10px] text-slate-400 font-sans">
                     (Opsional - blok teks untuk styling)
@@ -9593,12 +9771,12 @@ export function NotionDatabaseTable({
                 </div>
               </div>
 
-              {/* 5. Tipe Aktivitas & Periode (Hanya 2 pilihan utama: Routine vs Non Routine) */}
+              {/* 5. Activity Type & Periode (Hanya 2 pilihan utama: Routine vs Non Routine) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Tipe Aktivitas */}
+                {/* Activity Type */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Tipe Aktivitas
+                    Activity Type
                   </label>
                   <select
                     value={
@@ -9641,7 +9819,7 @@ export function NotionDatabaseTable({
                 {/* Cadence Periode (Pilihan lanjutan daily s/d yearly jika Routine) */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Periode / Cadence
+                    Period / Cadence
                   </label>
                   {((rowFormData['Activity (routine/non routine)'] || '').toLowerCase().includes('non') ||
                     (rowFormData['period'] || '').toLowerCase().includes('non')) ? (
@@ -9707,7 +9885,7 @@ export function NotionDatabaseTable({
                 {/* 7. Due Date (Batas Waktu KPI) */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px] text-teal-600 dark:text-teal-400">
-                    Due Date (Parameter KPI Wajib)
+                    Due Date (Mandatory KPI Parameter)
                   </label>
                   <input
                     type="text"
@@ -9740,7 +9918,7 @@ export function NotionDatabaseTable({
                   className="!w-auto text-xs px-5 bg-teal-600 hover:bg-teal-500 text-white font-bold"
                 >
                   {isSavingRow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1.5" />}
-                  <span>{editingRowIndex === null ? 'Simpan Baris Baru' : 'Simpan Perubahan'}</span>
+                  <span>{editingRowIndex === null ? 'Save New Activity' : 'Save Changes'}</span>
                 </Button>
               </div>
             </form>

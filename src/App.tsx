@@ -194,11 +194,16 @@ export default function App() {
   const [googleUser, setGoogleUser] = useState<any>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
+  // Global App State
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // Easter Egg State
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [showEasterEgg, setShowEasterEgg] = useState(false);
 
   const handleLogoClick = () => {
+    navigate('/home');
     const newCount = logoClickCount + 1;
     setLogoClickCount(newCount);
     if (newCount >= 5) {
@@ -206,11 +211,6 @@ export default function App() {
       setLogoClickCount(0);
     }
   };
-
-  // Global App State
-  
-  const navigate = useNavigate();
-  const location = useLocation();
   const activeTab = (location.pathname === '/' || location.pathname === '/home') ? 'home' : location.pathname.substring(1);
   const isAutoHide = activeTab !== 'home';
   const [isSidebarPeeked, setIsSidebarPeeked] = useState(false);
@@ -1499,14 +1499,16 @@ export default function App() {
           }}
         >
           {/* Top Branding Section with PrepLab & HARITA NICKEL */}
-          <div className="flex flex-col items-center justify-center w-full px-1 pt-1 pb-1.5 select-none">
+          <div 
+            className="flex flex-col items-center justify-center w-full px-1 pt-1 pb-1.5 select-none cursor-pointer group"
+            onClick={() => {
+              if (isAutoHide) setIsSidebarPeeked(false);
+              handleLogoClick();
+            }}
+            title="Beranda PrepLab"
+          >
             <div 
-              className="w-9 h-9 lg:w-10 lg:h-10 rounded-2xl bg-white/15 p-1.5 flex items-center justify-center border border-white/25 shadow-md mb-1.5 backdrop-blur-xs group cursor-pointer active:scale-95 transition-transform" 
-              onClick={() => {
-                if (isAutoHide) setIsSidebarPeeked(false);
-                handleLogoClick();
-              }} 
-              title="Beranda PrepLab"
+              className="w-9 h-9 lg:w-10 lg:h-10 rounded-2xl bg-white/15 p-1.5 flex items-center justify-center border border-white/25 shadow-md mb-1.5 backdrop-blur-xs group-hover:scale-105 active:scale-95 transition-transform"
             >
               <img 
                 src="/preplab-logo.png" 

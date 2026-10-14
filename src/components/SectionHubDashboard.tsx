@@ -1,3 +1,4 @@
+import { translateDisplayText } from './notion/logbook-section-utils';
 import React, { useState, useMemo } from 'react';
 import { 
   Home, 
@@ -175,14 +176,20 @@ export function SectionHubDashboard({
     }
     if (item.isLogbook || item.title.toLowerCase().startsWith('logbook')) {
       const logbookTitle = item.title;
+      const logbookId = `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      let cachedContent = '';
+      try {
+        cachedContent = localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
+      } catch {}
+      const defaultContent = `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${sectionTitle}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
       const target = findPost(item.searchKeywords || logbookTitle) || {
-        id: `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        id: logbookId,
         title: logbookTitle,
         department: 'Prep & Lab',
         category: sectionTitle,
         isLogbook: true,
         pt: currentUniverse,
-        content: `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${sectionTitle}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`
+        content: (cachedContent && cachedContent.includes('|')) ? cachedContent : defaultContent
       };
       onSelectPost(target);
       return;
@@ -215,11 +222,11 @@ export function SectionHubDashboard({
           { title: 'Logbook Prosedur', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Prosedur', 'Logbook'] },
           { title: 'SOP Preparasi', icon: '📐', searchKeywords: ['SOP Preparasi', 'Preparasi Basah', 'Preparasi Kering'] },
           { title: 'JSA', icon: '💼', searchKeywords: ['JSA', 'Job Safety Analysis'] },
-          { title: 'SOP Laboratorium', icon: '💈', searchKeywords: ['SOP Laboratorium', 'ED-XRF', 'LOI', 'Fused Bead'] },
+          { title: 'Laboratory SOP', icon: '💈', searchKeywords: ['Laboratory SOP', 'SOP Laboratorium', 'ED-XRF', 'LOI', 'Fused Bead'] },
           { title: 'SOP Smelter', icon: '🌐', searchKeywords: ['SOP Smelter', 'HJF', 'KPS'] },
           { title: 'SOP Lainnya', icon: '🔗', searchKeywords: ['SOP Lainnya', 'SOP Lain'] },
           { title: 'IK Preparasi', icon: '📐', searchKeywords: ['IK Preparasi', 'Jaw Crusher', 'Pulverizer', 'Oven'] },
-          { title: 'IK Laboratorium', icon: '💈', searchKeywords: ['IK Laboratorium', 'Zetium', 'Epsilon', 'Muffle'] },
+          { title: 'Laboratory IK', icon: '💈', searchKeywords: ['Laboratory IK', 'IK Laboratorium', 'Zetium', 'Epsilon', 'Muffle'] },
           { title: 'Flow Chart', icon: '🔀', searchKeywords: ['Flow Chart', 'Flow Sheet'] },
           { title: 'Guidance', icon: '</>', searchKeywords: ['Guidance', 'Panduan'] },
         ],
@@ -275,22 +282,22 @@ export function SectionHubDashboard({
       };
     }
 
-    // 3. LABORATORIUM (Image 3) - 2 Columns: Soft Blue INFO + Soft Cream RULES + Agenda
-    if (sectionTitle.includes('LABORATORIUM')) {
+    // 3. LABORATORIUM / LABORATORY - 2 Columns: Soft Blue INFO + Soft Cream RULES + Agenda
+    if (sectionTitle.includes('LABORATORIUM') || sectionTitle.includes('LABORATORY')) {
       return {
         icon: '🥼',
         bannerUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
-          { title: 'Logbook Laboratorium', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Laboratorium', 'Logbook Lab', 'Logbook'] },
-          { title: 'Non Routine Laboratorium', icon: '▌', searchKeywords: ['Non Routine Laboratorium', '535', '414', 'Non Routine'] },
-          { title: 'Daily Laboratorium', icon: '▌', searchKeywords: ['Daily Laboratorium', '541', '450', 'Daily'] },
-          { title: 'Routine Laboratorium (Tentative)', icon: '▌', searchKeywords: ['Routine Laboratorium (Tentative)', 'Routine Laboratorium', '538'] },
-          { title: 'Weekly Laboratorium', icon: '▌', searchKeywords: ['Weekly Laboratorium', '542', '418'] },
-          { title: 'Monthly Laboratorium', icon: '▌', searchKeywords: ['Monthly Laboratorium', '543', '413'] },
-          { title: 'Quarterly Laboratorium', icon: '▌', searchKeywords: ['Quarterly Laboratorium', '545', '415'] },
-          { title: 'Yearly Laboratorium', icon: '▌', searchKeywords: ['Yearly Laboratorium', '549', '474'] },
-          { title: 'Biannual Laboratorium', icon: '▌', searchKeywords: ['Biannual Laboratorium', '564', '473'] },
+          { title: 'Logbook Laboratory', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Laboratory', 'Logbook Laboratorium', 'Logbook Lab', 'Logbook'] },
+          { title: 'Non Routine Laboratory', icon: '▌', searchKeywords: ['Non Routine Laboratory', 'Non Routine Laboratorium', '535', '414', 'Non Routine'] },
+          { title: 'Daily Laboratory', icon: '▌', searchKeywords: ['Daily Laboratory', 'Daily Laboratorium', '541', '450', 'Daily'] },
+          { title: 'Routine Laboratory (Tentative)', icon: '▌', searchKeywords: ['Routine Laboratory (Tentative)', 'Routine Laboratorium (Tentative)', 'Routine Laboratory', 'Routine Laboratorium', '538'] },
+          { title: 'Weekly Laboratory', icon: '▌', searchKeywords: ['Weekly Laboratory', 'Weekly Laboratorium', '542', '418'] },
+          { title: 'Monthly Laboratory', icon: '▌', searchKeywords: ['Monthly Laboratory', 'Monthly Laboratorium', '543', '413'] },
+          { title: 'Quarterly Laboratory', icon: '▌', searchKeywords: ['Quarterly Laboratory', 'Quarterly Laboratorium', '545', '415'] },
+          { title: 'Yearly Laboratory', icon: '▌', searchKeywords: ['Yearly Laboratory', 'Yearly Laboratorium', '549', '474'] },
+          { title: 'Biannual Laboratory', icon: '▌', searchKeywords: ['Biannual Laboratory', 'Biannual Laboratorium', '564', '473'] },
         ],
         rulesTitle: 'RULES',
         rulesItems: [
@@ -300,7 +307,7 @@ export function SectionHubDashboard({
           { title: 'Pengiriman TLD Badge ke Gamaxindo', icon: '📋', searchKeywords: ['Pengiriman TLD Badge ke Gamaxindo', 'Gamaxindo'] },
           { title: 'Pengiriman Surveymeter & Pendose', icon: '🖊️', searchKeywords: ['Pengiriman Surveymeter & Pendose', 'Surveymeter', 'Pendose'] },
           { title: 'Penghapusan data Asset', icon: '🗑️', searchKeywords: ['Penghapusan data Asset', 'Data Asset', 'Asset'] },
-          { title: 'Information Laboratorium', icon: '📦', searchKeywords: ['Information Laboratorium', '576'] },
+          { title: 'Laboratory Information', icon: '📦', searchKeywords: ['Laboratory Information', 'Information Laboratorium', '576'] },
         ],
         showAgenda: true,
         extraLinks: []
@@ -684,7 +691,7 @@ export function SectionHubDashboard({
 
         {/* Section Title */}
         <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight pt-1">
-          {sectionTitle}
+          {translateDisplayText(sectionTitle)}
         </h1>
 
         {/* Home Navigation Pill: HOME TBP & GPS + Logbook Seksi */}
@@ -711,7 +718,7 @@ export function SectionHubDashboard({
             title={`Buka Logbook Terpadu ${sectionTitle}`}
           >
             <span className="text-sm">📔</span>
-            <span>Logbook {sectionTitle}</span>
+            <span>Logbook {translateDisplayText(sectionTitle)}</span>
             <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-teal-800 text-teal-100 font-mono">
               Aktif
             </span>
@@ -755,7 +762,7 @@ export function SectionHubDashboard({
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-sm text-teal-950 group-hover:text-teal-700 truncate">
-                              {item.title}
+                              {translateDisplayText(item.title)}
                             </span>
                             <span className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-600 text-white tracking-wider uppercase shrink-0">
                               AKTIF
@@ -782,7 +789,7 @@ export function SectionHubDashboard({
                           {item.icon === '▌' ? '▌' : item.icon}
                         </span>
                         <span className="truncate group-hover:text-sky-950">
-                          {item.title}
+                          {translateDisplayText(item.title)}
                         </span>
                       </div>
                       <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
@@ -855,7 +862,7 @@ export function SectionHubDashboard({
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-sm text-teal-950 group-hover:text-teal-700 truncate">
-                            {item.title}
+                            {translateDisplayText(item.title)}
                           </span>
                           <span className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-600 text-white tracking-wider uppercase shrink-0">
                             AKTIF
@@ -882,7 +889,7 @@ export function SectionHubDashboard({
                         {item.icon}
                       </span>
                       <span className="truncate group-hover:text-sky-950 font-medium">
-                        {item.title}
+                        {translateDisplayText(item.title)}
                       </span>
                     </div>
                     <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
@@ -901,7 +908,7 @@ export function SectionHubDashboard({
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
             <div>
               <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-                Agenda {sectionTitle.charAt(0) + sectionTitle.slice(1).toLowerCase()}
+                Agenda {translateDisplayText(sectionTitle.charAt(0) + sectionTitle.slice(1).toLowerCase())}
               </h2>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-sm font-semibold text-slate-700 capitalize">

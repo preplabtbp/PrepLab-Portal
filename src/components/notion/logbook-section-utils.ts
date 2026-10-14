@@ -1,3 +1,21 @@
+/**
+ * Visual display translator for Indonesian section names to English
+ */
+export function translateDisplayText(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/\bMANAJEMEN\s+MUTU\b/g, 'QUALITY ASSURANCE')
+    .replace(/\bManajemen\s+Mutu\b/gi, 'Quality Assurance')
+    .replace(/\bLABORATORIUM\b/g, 'LABORATORY')
+    .replace(/\bLaboratorium\b/gi, 'Laboratory')
+    .replace(/\bPREPARASI\b/g, 'PREPARATION')
+    .replace(/\bPreparasi\b/gi, 'Preparation')
+    .replace(/\bADMINISTRASI\b/g, 'ADMINISTRATION')
+    .replace(/\bAdministrasi\b/gi, 'Administration')
+    .replace(/\bPROSEDUR\b/g, 'PROCEDURE')
+    .replace(/\bProsedur\b/gi, 'Procedure');
+}
+
 import type { TableRowData } from '../NotionDatabaseTable';
 export type { TableRowData };
 
@@ -296,6 +314,11 @@ function parseRowLine(line: string, headers: string[]): TableRowData | null {
   const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
   const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
   const isPin = rowStr.includes('<!--pin') || rowStr.includes('<!pin') || rowStr.includes('<!--pinned');
+  const originIdMatch = rowStr.match(/<!--origin-id:([^>]+)-->/);
+  const originTitleMatch = rowStr.match(/<!--origin-title:([^>]+)-->/);
+  const originRowMatch = rowStr.match(/<!--origin-row:([^>]+)-->/);
+  const parentTitleMatch = rowStr.match(/<!--parent-title:([^>]+)-->/);
+  const isLogbookMatch = rowStr.match(/<!--is-logbook:([^>]+)-->/);
 
   const rowObj: TableRowData = { number: '' };
   headers.forEach((h, idx) => {
@@ -316,6 +339,23 @@ function parseRowLine(line: string, headers: string[]): TableRowData | null {
     rowObj.isPinned = 'true';
     (rowObj as any)._pinned = 'true';
   }
+  if (originIdMatch) rowObj._originPostId = originIdMatch[1].trim();
+  if (originTitleMatch) {
+    try {
+      rowObj._originPostTitle = decodeURIComponent(originTitleMatch[1].trim());
+    } catch {
+      rowObj._originPostTitle = originTitleMatch[1].trim();
+    }
+  }
+  if (originRowMatch) rowObj._originRowIndex = originRowMatch[1].trim();
+  if (parentTitleMatch) {
+    try {
+      rowObj._parentTitle = decodeURIComponent(parentTitleMatch[1].trim());
+    } catch {
+      rowObj._parentTitle = parentTitleMatch[1].trim();
+    }
+  }
+  if (isLogbookMatch) rowObj._isLogbookAggregated = 'true';
 
   return rowObj;
 }
@@ -561,11 +601,19 @@ export async function syncLogbookRowsGroupToOrigin(
       const dueKey = findColKey(rowToUpdate, 'Due Date', 'due date', 'Deadline', 'Target Selesai');
       const priorityKey = findColKey(rowToUpdate, 'Priority', 'Prioritas');
 
-      if (parent.Keterangan !== undefined) rowToUpdate[ketKey] = parent.Keterangan;
+      // Preserve origin checklists if origin row had checklist in Keterangan
+      if (parent.Keterangan !== undefined) {
+        const origKet = String(rowToUpdate[ketKey] || '');
+        if (origKet.includes('- [ ]') || origKet.includes('- [x]') || origKet.includes('- [X]')) {
+          // Keep existing checklists, do not overwrite with stripped Keterangan
+        } else {
+          rowToUpdate[ketKey] = parent.Keterangan;
+        }
+      }
       if (parent.Status !== undefined) rowToUpdate[statusKey] = parent.Status;
       if (parent.PIC !== undefined) rowToUpdate[picKey] = parent.PIC;
-      if (parent['Tanggal Selesai'] !== undefined) rowToUpdate[dateKey] = parent['Tanggal Selesai'];
-      if (parent['Due Date'] !== undefined) rowToUpdate[dueKey] = parent['Due Date'];
+      if (parent['Tanggal Selesai'] !== undefined) rowToUpdate[dateKey] = formatToDDMMYYYY(parent['Tanggal Selesai']);
+      if (parent['Due Date'] !== undefined) rowToUpdate[dueKey] = formatToDDMMYYYY(parent['Due Date']);
       if (parent.Priority !== undefined) rowToUpdate[priorityKey] = parent.Priority;
       rowToUpdate['Last Modified'] = nowIso;
       hasChanges = true;
@@ -621,14 +669,39 @@ export async function syncLogbookRowsGroupToOrigin(
       targetSub[statusKey] = isSubCompleted ? 'Closed' : 'Open';
       targetSub.isCompleted = isSubCompleted ? 'true' : 'false';
       if (sub['Tanggal Selesai'] && sub['Tanggal Selesai'] !== '-') {
-        targetSub[dateKey] = sub['Tanggal Selesai'];
+        targetSub[dateKey] = formatToDDMMYYYY(sub['Tanggal Selesai']);
       } else if (isSubCompleted) {
         targetSub[dateKey] = todayStr;
       } else {
         targetSub[dateKey] = '-';
       }
-      if (sub['Due Date']) targetSub[dueKey] = sub['Due Date'];
+      if (sub['Due Date']) targetSub[dueKey] = formatToDDMMYYYY(sub['Due Date']);
       targetSub['Last Modified'] = nowIso;
+
+      // ALSO update parent checklist in Keterangan if present in origin parent
+      if (parentRefTitle) {
+        const pIdx = parsed.rows.findIndex(r => {
+          if (isSubItemRow(r)) return false;
+          const rClean = getCleanTitle(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.Name || r.Judul || '');
+          return rClean.toLowerCase() === parentRefTitle.toLowerCase() ||
+            (parentRefTitle.length > 5 && (rClean.toLowerCase().includes(parentRefTitle.toLowerCase()) || parentRefTitle.toLowerCase().includes(rClean.toLowerCase())));
+        });
+        if (pIdx !== -1) {
+          const parentRowInOrigin = parsed.rows[pIdx];
+          const ketKey = findColKey(parentRowInOrigin, 'Keterangan', 'Uraian');
+          if (parentRowInOrigin[ketKey]) {
+            const lines = String(parentRowInOrigin[ketKey]).split('\n');
+            const updatedLines = lines.map(line => {
+              if (cleanFrontEndText(line).toLowerCase().includes(cleanSubTitle.toLowerCase())) {
+                return line.replace(/^([*-•]?\s*\[)[ xX](\])/, `$1${isSubCompleted ? 'x' : ' '}$2`);
+              }
+              return line;
+            });
+            parentRowInOrigin[ketKey] = updatedLines.join('\n');
+          }
+        }
+      }
+
       hasChanges = true;
     } else {
       // Subtask DOES NOT exist in origin post yet: INSERT IT!
@@ -641,7 +714,8 @@ export async function syncLogbookRowsGroupToOrigin(
         originParentIdx = parsed.rows.findIndex(r => {
           if (isSubItemRow(r)) return false;
           const rClean = getCleanTitle(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.Name || r.Judul || '');
-          return rClean.toLowerCase() === parentRefTitle.toLowerCase();
+          return rClean.toLowerCase() === parentRefTitle.toLowerCase() ||
+            (parentRefTitle.length > 5 && (rClean.toLowerCase().includes(parentRefTitle.toLowerCase()) || parentRefTitle.toLowerCase().includes(rClean.toLowerCase())));
         });
       }
       if (originParentIdx === -1 && sub._originRowIndex !== undefined && sub._originRowIndex !== '') {
@@ -674,18 +748,20 @@ export async function syncLogbookRowsGroupToOrigin(
           newOriginSubRow[h] = sub.PIC || (parentRowInOrigin ? parentRowInOrigin.PIC : '') || '';
         } else if (hLower === 'priority') {
           newOriginSubRow[h] = sub.Priority || (parentRowInOrigin ? parentRowInOrigin.Priority : 'Normal') || 'Normal';
+        } else if (hLower.includes('target') || hLower.includes('due date') || hLower.includes('deadline')) {
+          newOriginSubRow[h] = formatToDDMMYYYY(sub['Due Date']) || (parentRowInOrigin ? formatToDDMMYYYY(parentRowInOrigin['Due Date']) : '-') || '-';
         } else if (hLower.includes('selesai') || hLower === 'completed') {
-          newOriginSubRow[h] = sub['Tanggal Selesai'] || (isSubCompleted ? todayStr : '-');
-        } else if (hLower.includes('due date') || hLower.includes('deadline')) {
-          newOriginSubRow[h] = sub['Due Date'] || (parentRowInOrigin ? parentRowInOrigin['Due Date'] : '-') || '-';
+          newOriginSubRow[h] = formatToDDMMYYYY(sub['Tanggal Selesai']) || (isSubCompleted ? todayStr : '-');
         } else if (hLower.includes('keterangan') || hLower.includes('uraian')) {
           newOriginSubRow[h] = sub.Keterangan || '-';
         } else if (hLower.includes('created') || hLower.includes('tanggal')) {
-          newOriginSubRow[h] = sub['Created Time'] || todayStr;
+          newOriginSubRow[h] = formatToDDMMYYYY(sub['Created Time'] || sub['Created time']) || todayStr;
         } else if (hLower.includes('activity')) {
           newOriginSubRow[h] = parentRowInOrigin ? (parentRowInOrigin['Activity (routine/non routine)'] || 'Routine') : 'Routine';
         } else if (hLower === 'period') {
           newOriginSubRow[h] = parentRowInOrigin ? (parentRowInOrigin.period || 'Daily') : 'Daily';
+        } else if (hLower.includes('asal') && hLower.includes('halaman')) {
+          newOriginSubRow[h] = originPost.title || '';
         } else {
           newOriginSubRow[h] = sub[h] || '';
         }
@@ -701,19 +777,23 @@ export async function syncLogbookRowsGroupToOrigin(
       newOriginSubRow.isCompleted = isSubCompleted ? 'true' : 'false';
       newOriginSubRow['Last Modified'] = nowIso;
 
-      // If origin task has checklist in Keterangan matching subtask title, update its [x] / [ ]
+      // If origin task has checklist in Keterangan matching subtask title, update its [x] / [ ] or append if missing
       if (parentRowInOrigin) {
         const ketKey = findColKey(parentRowInOrigin, 'Keterangan', 'Uraian');
-        if (parentRowInOrigin[ketKey]) {
-          const cleanSubTitle = getCleanTitle(sub['Jenis kegiatan'] || sub['Jenis Kegiatan'] || '');
-          const lines = String(parentRowInOrigin[ketKey]).split('\n');
-          const updatedLines = lines.map(line => {
-            if (cleanFrontEndText(line).toLowerCase().includes(cleanSubTitle.toLowerCase())) {
-              return line.replace(/^([*-•]?\s*\[)[ xX](\])/, `$1${isSubCompleted ? 'x' : ' '}$2`);
-            }
-            return line;
-          });
-          parentRowInOrigin[ketKey] = updatedLines.join('\n');
+        const origKet = String(parentRowInOrigin[ketKey] || '');
+        if (origKet && origKet !== '-' && (origKet.includes('- [ ]') || origKet.includes('- [x]'))) {
+          if (origKet.toLowerCase().includes(cleanSubTitle.toLowerCase())) {
+            const lines = origKet.split('\n');
+            const updatedLines = lines.map(line => {
+              if (cleanFrontEndText(line).toLowerCase().includes(cleanSubTitle.toLowerCase())) {
+                return line.replace(/^([*-•]?\s*\[)[ xX](\])/, `$1${isSubCompleted ? 'x' : ' '}$2`);
+              }
+              return line;
+            });
+            parentRowInOrigin[ketKey] = updatedLines.join('\n');
+          } else {
+            parentRowInOrigin[ketKey] = `${origKet.trim()}\n- [${isSubCompleted ? 'x' : ' '}] ${cleanSubTitle}`;
+          }
         }
       }
 
@@ -746,16 +826,22 @@ export async function syncLogbookRowsGroupToOrigin(
   const separatorLine = lines[separatorIdx];
   const beforeLines = lines.slice(0, headerIdx);
   
-  // Find where table ends
-  let endTableIdx = lines.length;
+  // Find where table ends accurately
+  let lastTableLineIdx = separatorIdx;
   for (let i = separatorIdx + 1; i < lines.length; i++) {
     const trimmed = lines[i].trim();
-    if (!trimmed.startsWith('|') && (trimmed.startsWith('#') || trimmed.startsWith('> ') || trimmed.startsWith('```'))) {
-      endTableIdx = i;
+    if (trimmed.startsWith('|')) {
+      lastTableLineIdx = i;
+    } else if (!trimmed) {
+      const nextTableLine = lines.slice(i + 1).findIndex(l => l.trim().startsWith('|'));
+      if (nextTableLine === -1) {
+        break;
+      }
+    } else if (trimmed.startsWith('#') || trimmed.startsWith('> ') || trimmed.startsWith('```')) {
       break;
     }
   }
-  const afterLines = lines.slice(endTableIdx);
+  const afterLines = lines.slice(lastTableLineIdx + 1);
 
   const serializedRows = parsed.rows.map(r => {
     const cells = parsed.headers.map(h => {
@@ -1595,6 +1681,20 @@ export function getLogbookTableData(
   afterText: string;
   rawTable: string;
 } {
+  const content = typeof logbookPost?.content === 'string' ? logbookPost.content : '';
+  if (content && content.includes('|')) {
+    const parsed = parseTableFromMarkdown(content);
+    if (parsed && parsed.headers && parsed.headers.length > 0 && parsed.rows && parsed.rows.length > 0) {
+      return {
+        headers: parsed.headers.length > 0 ? parsed.headers : LOGBOOK_CANONICAL_HEADERS,
+        rows: parsed.rows,
+        beforeText: `> 📔 **Logbook Terpadu Seksi ${sectionName}**`,
+        afterText: '',
+        rawTable: ''
+      };
+    }
+  }
+
   return {
     headers: LOGBOOK_CANONICAL_HEADERS,
     rows: [],
@@ -1616,21 +1716,54 @@ export function resolveOriginPostId(
   if (!row || !allPosts || allPosts.length === 0) return null;
   if (row._originPostId) return String(row._originPostId);
 
-  // 1. Check 'Asal Halaman' column
-  const asal = String(row['Asal Halaman'] || '').trim().toLowerCase();
+  // 1. Check 'Asal Halaman' or '_originPostTitle' column
+  const asal = String(row['Asal Halaman'] || row._originPostTitle || '').trim().toLowerCase();
   if (asal) {
-    const postByTitle = allPosts.find(p => (p.title || '').trim().toLowerCase() === asal);
+    // 1A. Exact match on post.title
+    const exactMatch = allPosts.find(p => {
+      const pTitle = (p.title || '').trim().toLowerCase();
+      if (!pTitle) return false;
+      const cleanPTitle = cleanFrontEndText(pTitle).toLowerCase();
+      return pTitle === asal || cleanPTitle === asal;
+    });
+    if (exactMatch) return String(exactMatch.id);
+
+    // 1B. Match within matching section posts if sectionName provided
+    if (sectionName) {
+      const secNorm = sectionName.toLowerCase().trim();
+      const sectionPosts = allPosts.filter(p => {
+        const pSec = (p.category || p.department || '').toLowerCase();
+        const pTitle = (p.title || '').toLowerCase();
+        return pSec.includes(secNorm) || pTitle.includes(secNorm);
+      });
+      const secMatch = sectionPosts.find(p => {
+        const pTitle = (p.title || '').trim().toLowerCase();
+        if (!pTitle || pTitle.length < 3) return false;
+        return (asal.length > 4 && pTitle.includes(asal)) || (pTitle.length > 4 && asal.includes(pTitle));
+      });
+      if (secMatch) return String(secMatch.id);
+    }
+
+    // 1C. Substring match across all posts (guaranteeing non-empty strings)
+    const postByTitle = allPosts.find(p => {
+      const pTitle = (p.title || '').trim().toLowerCase();
+      if (!pTitle || pTitle.length < 3) return false;
+      const cleanPTitle = cleanFrontEndText(pTitle).toLowerCase();
+      return (asal.length > 4 && pTitle.includes(asal)) || (pTitle.length > 4 && asal.includes(pTitle)) ||
+             (cleanPTitle.length > 4 && cleanPTitle.includes(asal));
+    });
     if (postByTitle) return String(postByTitle.id);
   }
 
-  // 2. Check parent title in matching section posts
+  // 2. Check parent title in matching section posts, then fallback to all posts with tables
   const rawTitle = row['Jenis kegiatan'] || row['Jenis Kegiatan'] || row.Name || row.Judul || '';
   const cleanTitle = cleanFrontEndText(rawTitle.replace(/^[↳↪]\s*/, '').replace(/^\[[ xX]\]\s*/, '')).toLowerCase();
   if (!cleanTitle) return null;
 
-  const sectionPosts = sectionName ? findSectionTaskPosts(sectionName, allPosts) : allPosts;
-  for (const post of sectionPosts) {
-    if (!post.content || !post.content.includes('|')) continue;
+  const sectionPosts = sectionName ? findSectionTaskPosts(sectionName, allPosts, 'ALL') : allPosts;
+  const candidatePool = [...sectionPosts, ...allPosts];
+  for (const post of candidatePool) {
+    if (!post.content || !post.content.includes('|') || isLogbookPost(post)) continue;
     const parsed = parseTableFromMarkdown(post.content);
     if (!parsed || !parsed.rows) continue;
     const hasRow = parsed.rows.some(r => {

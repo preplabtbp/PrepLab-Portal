@@ -62,6 +62,35 @@ function getLocalISOWeekTag(d: Date = new Date()): string {
   return `W${weekNumber}`;
 }
 
+
+function parseLvTicket(ticket: any) {
+  const desc = ticket.description || '';
+  const unitMatch = desc.match(/(Unit\s+LV[^\s(:]+|LV\s*[\d]+-[\d]+|LV\s*[\d]+|Mobil\s+[^\s(:]+)/i);
+  const unitName = ticket.equipmentName || (unitMatch ? unitMatch[1].trim() : 'Unit LV');
+
+  let cleanDesc = desc;
+  const colonIdx = desc.indexOf(':');
+  if (colonIdx !== -1 && colonIdx < 60) {
+    cleanDesc = desc.slice(colonIdx + 1).trim();
+  }
+
+  let formattedDate = '-';
+  if (ticket.date) {
+    try {
+      const d = new Date(ticket.date);
+      formattedDate = `${d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} WIT`;
+    } catch {
+      formattedDate = String(ticket.date).slice(0, 10);
+    }
+  }
+
+  return {
+    unitName,
+    damageDetail: cleanDesc || desc,
+    formattedDate
+  };
+}
+
 export function ActionCenterBar({
   inspectorNik,
   inspectorName,
@@ -138,6 +167,7 @@ export function ActionCenterBar({
     return null;
   });
 
+  const [showLvDamageModal, setShowLvDamageModal] = useState<boolean>(false);
   const [openFindings, setOpenFindings] = useState<any[]>([]);
   const [lvDamageTickets, setLvDamageTickets] = useState<any[]>([]);
   const [maintenanceWorkOrders, setMaintenanceWorkOrders] = useState<any[]>(() => {
@@ -688,7 +718,7 @@ export function ActionCenterBar({
           icon: <Car className="w-4 h-4" />,
           iconColor: 'text-rose-600 dark:text-rose-400',
           bgColor: 'bg-rose-500/10 border-rose-500/25',
-          navKey: 'wo'
+          navKey: 'lv_damage'
         });
       }
     }
@@ -796,6 +826,8 @@ export function ActionCenterBar({
     } else if (destination === 'pemantauan') {
       if (onNav) onNav('pemantauan');
       else navigate('/pemantauan');
+    } else if (destination === 'lv_damage') {
+      setShowLvDamageModal(true);
     } else if (destination === 'wo') {
       if (onNav) onNav('wo-maintenance-dashboard');
       else navigate('/wo-maintenance-dashboard');
@@ -1063,7 +1095,24 @@ export function ActionCenterBar({
 
                     {/* Right: Badge Number & Arrow */}
                     <div className="flex items-center gap-2 shrink-0">
-                      {cat.isPending ? (
+                      {cat.id === 'lv_damage' ? (
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <span className="px-2 py-0.5 rounded-full text-[10.5px] font-black bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                            <span>{cat.count}</span>
+                            <span className="hidden sm:inline font-bold text-[9.5px]">Unit</span>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowLvDamageModal(true)}
+                            className="py-1 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title="Tinjau laporan kerusakan unit LV"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Tinjau Laporan</span>
+                          </button>
+                        </div>
+                      ) : cat.isPending ? (
                         <span className="px-2 py-0.5 rounded-full text-[10.5px] font-black bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-1">
                           <span>{cat.count}</span>
                           <span className="hidden sm:inline font-bold text-[9.5px]">Pending</span>
@@ -1171,6 +1220,247 @@ export function ActionCenterBar({
       </div>
 
       {/* Lightbox Modal for viewing proof screenshots */}
+      
+      {/* ── MODAL DAFTAR LAPORAN KERUSAKAN UNIT LV ── */}
+      {showLvDamageModal && (
+        <div 
+          onClick={() => setShowLvDamageModal(false)}
+          className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-xl sm:max-w-2xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-200"
+          >
+            {/* Top Accent Strip */}
+            <div className="h-2 bg-gradient-to-r from-rose-500 via-amber-500 to-rose-600 shrink-0" />
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-3 min-w-0 pr-2">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0 shadow-2xs">
+                  <Car className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                      Laporan Kerusakan Unit LV
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                      {lvDamageTickets.length} Laporan Aktif
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    Daftar laporan kerusakan sarana unit LV yang memerlukan penanganan maintenance
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowLvDamageModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                aria-label="Tutup"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content - List of LV Damage Reports */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {lvDamageTickets.map((ticket: any, idx: number) => {
+                const parsed = parseLvTicket(ticket);
+                const isHigh = (ticket.priority || '').toUpperCase() === 'HIGH' || (ticket.risk || '').toLowerCase().includes('tinggi');
+                const photoSrc = ticket.photoUrl || ticket.photo_url;
+                const formattedImg = photoSrc ? formatProofImageUrl(photoSrc) : '';
+
+                return (
+                  <div
+                    key={ticket.id || ticket.ticketId || ticket.ticket_id || idx}
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-850/70 border border-slate-200 dark:border-slate-800 hover:border-rose-400/50 dark:hover:border-rose-500/50 transition-all shadow-xs space-y-3"
+                  >
+                    {/* Top Row: Ticket ID, Status, Priority & Date */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                          {ticket.ticketId || ticket.ticket_id || `LV-${idx + 1}`}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                          {ticket.status || 'OPEN'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          isHigh 
+                            ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/35' 
+                            : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/35'
+                        }`}>
+                          Prioritas: {ticket.priority || 'Medium'}
+                        </span>
+                      </div>
+
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 font-medium ml-auto">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>{parsed.formattedDate}</span>
+                      </span>
+                    </div>
+
+                    {/* Unit Info Box */}
+                    <div className="flex items-center gap-2 bg-white dark:bg-slate-800/80 p-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-2xs">
+                      <div className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                        <Car className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">
+                          Unit / Kendaraan
+                        </span>
+                        <span className="text-xs font-black text-slate-900 dark:text-white truncate block">
+                          {parsed.unitName}
+                        </span>
+                      </div>
+                      {ticket.category && (
+                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-[180px] hidden sm:inline-block">
+                          {ticket.category}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Damage Description */}
+                    <div className="p-3 rounded-xl bg-rose-500/5 dark:bg-rose-950/25 border border-rose-500/20 space-y-1">
+                      <div className="flex items-center gap-1 text-[11px] font-black uppercase text-rose-700 dark:text-rose-300">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>Rincian Kerusakan</span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 font-semibold leading-relaxed">
+                        {parsed.damageDetail}
+                      </p>
+                    </div>
+
+                    {/* Reporter Info */}
+                    <div className="flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400 pt-0.5">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">Pelapor: <strong className="text-slate-700 dark:text-slate-300 font-semibold">{ticket.requestorName || ticket.requestor_name || '-'}</strong></span>
+                      </span>
+                    </div>
+
+                    {/* Photo Evidence if Available */}
+                    {formattedImg && (
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10.5px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <Camera className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Foto Bukti Kerusakan (Klik untuk memperbesar):</span>
+                        </span>
+                        <div 
+                          onClick={() => {
+                            setLightboxData({
+                              isOpen: true,
+                              title: `Bukti Kerusakan: ${parsed.unitName}`,
+                              subtitle: `${ticket.ticketId || ticket.ticket_id} • Pelapor: ${ticket.requestorName || ticket.requestor_name || '-'}`,
+                              images: [{
+                                url: photoSrc,
+                                label: parsed.unitName,
+                                description: parsed.damageDetail
+                              }],
+                              currentIndex: 0
+                            });
+                          }}
+                          className="relative h-44 sm:h-52 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-900/5 group cursor-pointer"
+                        >
+                          <img
+                            src={formattedImg}
+                            alt="Bukti Kerusakan"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-bold text-xs">
+                            <Eye className="w-4 h-4" />
+                            <span>Perbesar Foto</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons for this card */}
+                    <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                      {photoSrc && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLightboxData({
+                              isOpen: true,
+                              title: `Bukti Kerusakan: ${parsed.unitName}`,
+                              subtitle: `${ticket.ticketId || ticket.ticket_id} • Pelapor: ${ticket.requestorName || ticket.requestor_name || '-'}`,
+                              images: [{
+                                url: photoSrc,
+                                label: parsed.unitName,
+                                description: parsed.damageDetail
+                              }],
+                              currentIndex: 0
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Lihat Foto Penuh</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowLvDamageModal(false);
+                          try {
+                            sessionStorage.setItem('wo_selected_tool', parsed.unitName);
+                            sessionStorage.setItem('wo_filter_search', parsed.unitName);
+                          } catch {}
+                          if (onNav) onNav('wo-maintenance-dashboard');
+                          else navigate('/wo-maintenance-dashboard');
+                        }}
+                        className="ml-auto px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                        title="Tindak lanjuti dengan membuka dashboard / membuat WO"
+                      >
+                        <Wrench className="w-3.5 h-3.5" />
+                        <span>Tindak Lanjut / Buat WO</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-850 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:inline">
+                Total <strong className="text-rose-600 font-bold">{lvDamageTickets.length} laporan</strong> unit LV aktif
+              </span>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLvDamageModal(false);
+                    if (onNav) onNav('wo-maintenance-dashboard');
+                    else navigate('/wo-maintenance-dashboard');
+                  }}
+                  className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Wrench className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Buka Dashboard WO</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowLvDamageModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
       {lightboxData && lightboxData.isOpen && (
         <div 
           onClick={() => setLightboxData(null)}
