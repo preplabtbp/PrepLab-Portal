@@ -591,6 +591,21 @@ export function serializeMarkdownTable(
         if (lastMod && !val.includes(`<!--last-modified:`)) {
           metaTags += ` <!--last-modified:${lastMod}-->`;
         }
+        if (row._originPostId && !val.includes(`<!--origin-id:`)) {
+          metaTags += ` <!--origin-id:${row._originPostId}-->`;
+        }
+        if (row._originPostTitle && !val.includes(`<!--origin-title:`)) {
+          metaTags += ` <!--origin-title:${encodeURIComponent(row._originPostTitle)}-->`;
+        }
+        if (row._originRowIndex !== undefined && row._originRowIndex !== '' && !val.includes(`<!--origin-row:`)) {
+          metaTags += ` <!--origin-row:${row._originRowIndex}-->`;
+        }
+        if (row._parentTitle && !val.includes(`<!--parent-title:`)) {
+          metaTags += ` <!--parent-title:${encodeURIComponent(row._parentTitle)}-->`;
+        }
+        if (row._isLogbookAggregated && !val.includes(`<!--is-logbook:`)) {
+          metaTags += ` <!--is-logbook:true-->`;
+        }
         if (metaTags) {
           val = `${val.trim()}${metaTags}`;
         }
@@ -666,8 +681,7 @@ export function migrateChecklistsInRows(
       const parentPIC = getCellValue(row, 'PIC') || '';
       const parentAct = getCellValue(row, 'Activity (routine/non routine)') || 'Monthly';
       const parentPeriod = getCellValue(row, 'period') || 'Monthly';
-      const now = new Date();
-      const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const createdStr = getTodayDDMMYYYY();
 
       taskProg.items.forEach((item, subIdx) => {
         const safeSubText = (item.text || '').slice(0, 25).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
@@ -690,10 +704,21 @@ export function migrateChecklistsInRows(
             Status: item.checked ? 'Closed' : 'Open',
             isCompleted: item.checked ? 'true' : 'false',
             'Created Time': createdStr,
+            'Created time': createdStr,
+            'Tanggal Selesai': item.checked ? createdStr : '-',
+            'Tanggal selesai': item.checked ? createdStr : '-',
+            'Due Date': getCellValue(row, 'Due Date') || getCellValue(row, 'due date') || createdStr,
+            'due date': getCellValue(row, 'Due Date') || getCellValue(row, 'due date') || createdStr,
             Kategori: parentCat,
             'Activity (routine/non routine)': parentAct,
             period: parentPeriod,
-            isSubItem: 'true'
+            'Asal Halaman': row['Asal Halaman'] || row._originPostTitle || '',
+            isSubItem: 'true',
+            _originPostId: row._originPostId,
+            _originPostTitle: row._originPostTitle || row['Asal Halaman'] || '',
+            _originRowIndex: row._originRowIndex,
+            _parentTitle: getDisplayTitle(row['Jenis kegiatan'] || row['Jenis Kegiatan'] || row.Name || ''),
+            _isLogbookAggregated: row._isLogbookAggregated
           };
           newRows.push(subRow);
           migratedCount++;
@@ -771,6 +796,11 @@ export function extractMarkdownTableFromContent(content: string): {
         const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
         const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
         const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
+        const originIdMatch = rowStr.match(/<!--origin-id:([^>]+)-->/);
+        const originTitleMatch = rowStr.match(/<!--origin-title:([^>]+)-->/);
+        const originRowMatch = rowStr.match(/<!--origin-row:([^>]+)-->/);
+        const parentTitleMatch = rowStr.match(/<!--parent-title:([^>]+)-->/);
+        const isLogbookMatch = rowStr.match(/<!--is-logbook:([^>]+)-->/);
 
         const isPin = rowStr.includes('<!--pin') || rowStr.includes('<!pin') || rowStr.includes('<!--pinned');
         const cleanTitle = (rowObj['Jenis kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '')
@@ -795,6 +825,23 @@ export function extractMarkdownTableFromContent(content: string): {
           rowObj.isPinned = 'true';
           (rowObj as any)._pinned = 'true';
         }
+        if (originIdMatch) rowObj._originPostId = originIdMatch[1].trim();
+        if (originTitleMatch) {
+          try {
+            rowObj._originPostTitle = decodeURIComponent(originTitleMatch[1].trim());
+          } catch {
+            rowObj._originPostTitle = originTitleMatch[1].trim();
+          }
+        }
+        if (originRowMatch) rowObj._originRowIndex = originRowMatch[1].trim();
+        if (parentTitleMatch) {
+          try {
+            rowObj._parentTitle = decodeURIComponent(parentTitleMatch[1].trim());
+          } catch {
+            rowObj._parentTitle = parentTitleMatch[1].trim();
+          }
+        }
+        if (isLogbookMatch) rowObj._isLogbookAggregated = 'true';
 
         rows.push(rowObj);
       }
@@ -808,7 +855,7 @@ export function extractMarkdownTableFromContent(content: string): {
 }
 
 interface NotionDatabaseTableProps {
-  postId?: number;
+  postId?: number | string;
   headers: string[];
   rows: TableRowData[];
   title?: string;
@@ -2793,7 +2840,13 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
           return true;
         }
       } else {
-        // Synthetic / virtual post ID (e.g. logbook-preparasi), notify parent state
+        // Synthetic / virtual post ID (e.g. logbook-preparasi), persist to localStorage & notify parent state
+        const postIdStr = String(postId || '');
+        if (postIdStr.startsWith('logbook-')) {
+          try {
+            localStorage.setItem(`preplab_logbook_content_${postIdStr}`, updatedMarkdown);
+          } catch {}
+        }
         onPostContentUpdate?.(updatedMarkdown);
         return true;
       }
@@ -3155,7 +3208,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     const targetCat = section || 'Laboratorium';
     const autoTaskCode = generateTaskCode(targetCat, localRows);
     const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const createdStr = getTodayDDMMYYYY();
 
     const inheritedCadence = currentCadence || normalizeCadence(title) || 'Monthly';
     const inheritedPeriod = (inheritedCadence && inheritedCadence !== 'Non-Routine')
@@ -3226,8 +3279,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     const parentAct = getRowVal(parentRow, 'Activity (routine/non routine)') || 'Monthly';
     const parentPeriod = getRowVal(parentRow, 'period') || 'Monthly';
     
-    const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const createdStr = getTodayDDMMYYYY();
 
     const parentId = parentRow.id || `task_${Date.now()}_${actualParentIdx}_${Math.random().toString(36).substr(2, 6)}`;
     parentRow.id = parentId;
@@ -3249,6 +3301,17 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     const parentRawTitle = getRowVal(parentRow, 'Jenis kegiatan') || getRowVal(parentRow, 'Jenis Kegiatan') || getRowVal(parentRow, 'Name') || getRowVal(parentRow, 'Judul') || '';
     const cleanParentTitle = getDisplayTitle(parentRawTitle);
 
+    // Resolve origin post ID and title if not yet attached
+    const resolvedOriginId = parentRow._originPostId || resolveOriginPostId(parentRow, allPosts || [], section);
+    if (resolvedOriginId) {
+      parentRow._originPostId = resolvedOriginId;
+    }
+    const resolvedOriginTitle = parentRow._originPostTitle || parentRow['Asal Halaman'] || '';
+    if (resolvedOriginTitle) {
+      parentRow._originPostTitle = resolvedOriginTitle;
+      parentRow['Asal Halaman'] = resolvedOriginTitle;
+    }
+
     const newSubRow: TableRowData = {
       number: '',
       id: subId,
@@ -3260,18 +3323,24 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
       PIC: parentPIC,
       Priority: 'Normal',
       Status: 'Open',
+      status: 'Open',
       isCompleted: 'false',
       'Created Time': createdStr,
+      'Created time': createdStr,
       'Tanggal Selesai': '-',
-      'Due Date': getRowVal(parentRow, 'Due Date') || '-',
+      'Tanggal selesai': '-',
+      'Due Date': getRowVal(parentRow, 'Due Date') || getRowVal(parentRow, 'due date') || createdStr,
+      'due date': getRowVal(parentRow, 'Due Date') || getRowVal(parentRow, 'due date') || createdStr,
       Kategori: parentCat,
       'Activity (routine/non routine)': parentAct,
+      Aktivitas: parentAct,
       period: parentPeriod,
+      'Asal Halaman': resolvedOriginTitle,
       isSubItem: 'true',
       'Last Modified': nowIso,
       // Inherit origin tracking metadata from parent so subtask can sync back to origin Labnote table
-      _originPostId: parentRow._originPostId || resolveOriginPostId(parentRow, allPosts || [], section),
-      _originPostTitle: parentRow._originPostTitle,
+      _originPostId: resolvedOriginId,
+      _originPostTitle: resolvedOriginTitle,
       _originRowIndex: parentRow._originRowIndex,
       _parentTitle: cleanParentTitle,
       _isLogbookAggregated: parentRow._isLogbookAggregated
@@ -3472,8 +3541,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
         const parentPIC = getRowVal(row, 'PIC') || '';
         const parentAct = getRowVal(row, 'Activity (routine/non routine)') || 'Monthly';
         const parentPeriod = getRowVal(row, 'period') || 'Monthly';
-        const now = new Date();
-        const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const createdStr = getTodayDDMMYYYY();
 
         // Create a sub-item row for each checklist item
         taskProg.items.forEach(item => {
@@ -3957,7 +4025,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
   // Insert Blank Row Inline directly into table (starts manual inline editing immediately at row #1)
   const handleInsertBlankRow = (_insertAtIndex: number = 0) => {
     const now = new Date();
-    const createdStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const createdStr = getTodayDDMMYYYY();
     const inheritedCadence = currentCadence || 'Non Routine';
     const targetCat = section || 'Laboratorium';
     const autoTaskCode = generateTaskCode(targetCat, localRows);
@@ -7940,13 +8008,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                 if (colLower.includes('created')) {
                                   const displayDate = (() => {
                                     if (!val || val === '-') return '-';
-                                    const trimmed = String(val).trim();
-                                    const match = trimmed.match(/^(\d{4}[-/]\d{1,2}[-/]\d{1,2})/);
-                                    if (match) return match[1];
-                                    if (trimmed.includes(' ') || trimmed.includes('T')) {
-                                      return trimmed.split(/[ T]/)[0];
-                                    }
-                                    return trimmed;
+                                    return formatToDDMMYYYY(val);
                                   })();
 
                                   return (
@@ -8074,6 +8136,46 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                       fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
                                     }`}>
                                       {val && val !== '-' ? val : <span className="font-mono text-slate-400">-</span>}
+                                    </td>
+                                  );
+                                }
+
+                                // Tanggal Selesai Column (Format DD-MM-YYYY seragam)
+                                if (colLower.includes('selesai') || colLower.includes('completed')) {
+                                  const displayDate = (val && val !== '-') ? formatToDDMMYYYY(val) : '-';
+                                  return (
+                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#047857' : '#34d399' }} className={`font-sans border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${
+                                      fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
+                                    }`}>
+                                      {displayDate !== '-' ? (
+                                        <span className="inline-flex items-center gap-1.5 font-sans font-medium text-emerald-600 dark:text-emerald-400">
+                                          <Calendar className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                                          <span>{displayDate}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="font-mono text-slate-400">-</span>
+                                      )}
+                                    </td>
+                                  );
+                                }
+
+                                // Asal Halaman Column (Badge rapi dengan icon dokumen)
+                                if (colLower.includes('asal') && colLower.includes('halaman')) {
+                                  const asalVal = val || row['Asal Halaman'] || row._originPostTitle || '';
+                                  return (
+                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'}`}>
+                                      {asalVal && asalVal !== '-' ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
+                                          <FileText className="w-3 h-3 text-slate-400 shrink-0" />
+                                          <span className="truncate max-w-[140px]">{asalVal}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="font-mono text-slate-400">-</span>
+                                      )}
                                     </td>
                                   );
                                 }

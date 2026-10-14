@@ -176,14 +176,20 @@ export function SectionHubDashboard({
     }
     if (item.isLogbook || item.title.toLowerCase().startsWith('logbook')) {
       const logbookTitle = item.title;
+      const logbookId = `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      let cachedContent = '';
+      try {
+        cachedContent = localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
+      } catch {}
+      const defaultContent = `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${sectionTitle}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
       const target = findPost(item.searchKeywords || logbookTitle) || {
-        id: `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        id: logbookId,
         title: logbookTitle,
         department: 'Prep & Lab',
         category: sectionTitle,
         isLogbook: true,
         pt: currentUniverse,
-        content: `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${sectionTitle}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Activity Name | Description | Created Time | Completion Date | Status | PIC | Priority | Activity | Period | Source Page |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`
+        content: (cachedContent && cachedContent.includes('|')) ? cachedContent : defaultContent
       };
       onSelectPost(target);
       return;

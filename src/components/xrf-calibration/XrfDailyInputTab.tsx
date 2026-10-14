@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Save, Clipboard, RefreshCw, AlertCircle, CheckCircle2, AlertTriangle, 
-  ArrowUp, ArrowDown, Sparkles, FileSpreadsheet, Plus 
+  ArrowUp, ArrowDown, Sparkles, FileSpreadsheet, Plus, Printer, Check, X,
+  Building2, Cpu, Layers
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface XrfDailyInputTabProps {
-  instruments: Array<{ code: string; name: string }>;
+  instruments: Array<{ code: string; name: string; site?: string; methodType?: string }>;
   standards: Array<{ code: string; name: string }>;
+  assignedSite?: 'GTS' | 'TBP';
+  isDevOrManager?: boolean;
   onSuccessSave?: () => void;
 }
 
@@ -29,15 +32,52 @@ interface StandardRowInput {
   mno: string;
 }
 
-const DEFAULT_ELEMENTS = ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'P', 'S', 'Cr2O3', 'MnO'];
+// 1. Limonite 5 Standard Rows
+const DEFAULT_LIMONITE_ROWS: StandardRowInput[] = [
+  { standardCode: 'LIM01', sampleLabel: 'VER-LIM01', sequenceNo: 1, analyzedAt: '00:26', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM02', sampleLabel: 'VER-LIM02', sequenceNo: 2, analyzedAt: '01:01', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM03', sampleLabel: 'VER-LIM03', sequenceNo: 3, analyzedAt: '01:05', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM04', sampleLabel: 'VER-LIM04', sequenceNo: 4, analyzedAt: '01:08', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM05', sampleLabel: 'VER-LIM05', sequenceNo: 5, analyzedAt: '01:11', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+];
+
+// 2. Saprolite 10 Standard Rows in exact sequence
+const DEFAULT_SAPROLITE_ROWS: StandardRowInput[] = [
+  { standardCode: 'OREAS184', sampleLabel: 'VER-OREAS184', sequenceNo: 1, analyzedAt: '00:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS187', sampleLabel: 'VER-OREAS187', sequenceNo: 2, analyzedAt: '00:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS189', sampleLabel: 'VER-OREAS189', sequenceNo: 3, analyzedAt: '00:45', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS190', sampleLabel: 'VER-OREAS190', sequenceNo: 4, analyzedAt: '01:00', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM',      sampleLabel: 'VER-LIM',      sequenceNo: 5, analyzedAt: '01:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'SAP16',    sampleLabel: 'VER-SAP16',    sequenceNo: 6, analyzedAt: '01:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS193', sampleLabel: 'VER-OREAS193', sequenceNo: 7, analyzedAt: '01:45', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'SAP19',    sampleLabel: 'VER-SAP19',    sequenceNo: 8, analyzedAt: '02:00', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS194', sampleLabel: 'VER-OREAS194', sequenceNo: 9, analyzedAt: '02:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'SAP',      sampleLabel: 'VER-SAP',      sequenceNo: 10, analyzedAt: '02:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+];
 
 export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   instruments,
   standards,
+  assignedSite = 'GTS',
+  isDevOrManager = false,
   onSuccessSave,
 }) => {
+  // 1. Matrix Application State: LIMONITE (5 rows) vs SAPROLITE (10 rows)
+  const [selectedMatrix, setSelectedMatrix] = useState<'LIMONITE' | 'SAPROLITE'>('LIMONITE');
+
+  // Filter instruments based on user role and assigned site
+  const filteredInstruments = useMemo(() => {
+    if (isDevOrManager) return instruments;
+    return instruments.filter(inst => {
+      const site = inst.site || (['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(inst.code) ? 'GTS' : 'TBP');
+      return site === assignedSite;
+    });
+  }, [instruments, isDevOrManager, assignedSite]);
+
   // Batch Header State
-  const [selectedInstrument, setSelectedInstrument] = useState(instruments[0]?.code || 'EPSILON_B');
+  const [selectedInstrument, setSelectedInstrument] = useState(
+    filteredInstruments[0]?.code || (assignedSite === 'GTS' ? 'EPSILON_A' : 'EPSILON_C')
+  );
   const [verificationDate, setVerificationDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [verificationTime, setVerificationTime] = useState('00:30');
   const [shift, setShift] = useState('1');
@@ -53,14 +93,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   // Master References for Live Auto-Calculation (Expected Values & STDEV)
   const [references, setReferences] = useState<Record<string, Record<string, any>>>({});
 
-  // 5 Rows of Standard Samples (Default LIM01 s/d LIM05)
-  const [rows, setRows] = useState<StandardRowInput[]>([
-    { standardCode: 'LIM01', sampleLabel: 'VER-LIM01 D 18/02/2025', sequenceNo: 1, analyzedAt: '00:26', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-    { standardCode: 'LIM02', sampleLabel: 'VER-LIM02 D 18/02/2025', sequenceNo: 2, analyzedAt: '01:01', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-    { standardCode: 'LIM03', sampleLabel: 'VER-LIM03 D 18/02/2025', sequenceNo: 3, analyzedAt: '01:05', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-    { standardCode: 'LIM04', sampleLabel: 'VER-LIM04 E 18/02/2025', sequenceNo: 4, analyzedAt: '01:08', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-    { standardCode: 'LIM05', sampleLabel: 'VER-LIM05 A 30/01/2025', sequenceNo: 5, analyzedAt: '01:11', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  ]);
+  // Form rows
+  const [rows, setRows] = useState<StandardRowInput[]>(DEFAULT_LIMONITE_ROWS);
 
   // Load Reference Table
   useEffect(() => {
@@ -78,6 +112,30 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
       })
       .catch(err => console.warn('Load references error:', err));
   }, []);
+
+  // Update selected instrument if filtered instruments changes
+  useEffect(() => {
+    if (filteredInstruments.length > 0 && !filteredInstruments.some(i => i.code === selectedInstrument)) {
+      setSelectedInstrument(filteredInstruments[0].code);
+    }
+  }, [filteredInstruments]);
+
+  // Handle matrix application toggle
+  const handleMatrixChange = (matrix: 'LIMONITE' | 'SAPROLITE') => {
+    setSelectedMatrix(matrix);
+    if (matrix === 'LIMONITE') {
+      setRows(DEFAULT_LIMONITE_ROWS.map((r, i) => ({
+        ...r,
+        sampleLabel: `VER-LIM0${i + 1} ${verificationDate}`
+      })));
+    } else {
+      setRows(DEFAULT_SAPROLITE_ROWS.map(r => ({
+        ...r,
+        sampleLabel: `VER-${r.standardCode} ${verificationDate}`
+      })));
+    }
+    toast.success(`Form dialihkan ke Verifikasi ${matrix} (${matrix === 'LIMONITE' ? '5 Standar' : '10 Standar'}).`);
+  };
 
   // Update specific cell in row
   const handleCellChange = (rowIndex: number, field: keyof StandardRowInput, value: string) => {
@@ -111,6 +169,85 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
     };
   };
 
+  // Evaluate element cell against reference limits
+  const evaluateCell = (stdCode: string, elemKey: string, rawVal: string | number | undefined | null) => {
+    const val = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal || ''));
+    if (isNaN(val) || val <= 0) return { status: 'EMPTY', diffPct: 0, sigmaDist: 0, expected: 0 };
+
+    const ref = references[stdCode]?.[elemKey];
+    if (!ref || !ref.nominalValue || ref.nominalValue <= 0) {
+      return { status: 'NORMAL', diffPct: 0, sigmaDist: 0, expected: 0 };
+    }
+
+    const expected = ref.nominalValue;
+    const diffPct = ((val - expected) / expected) * 100;
+    const stdev = ref.stdevFixed || 0.05;
+    const sigmaDist = Math.abs((val - expected) / stdev);
+
+    const upperAction = ref.upperAction ?? (expected + 3 * stdev);
+    const lowerAction = ref.lowerAction ?? (expected - 3 * stdev);
+    const upperWarning = ref.upperWarning ?? (expected + 2 * stdev);
+    const lowerWarning = ref.lowerWarning ?? (expected - 2 * stdev);
+
+    let status = 'PASS';
+    if (val > upperAction || val < lowerAction) {
+      status = 'ACTION';
+    } else if (val > upperWarning || val < lowerWarning) {
+      status = 'WARNING';
+    }
+
+    return { status, diffPct, sigmaDist, expected };
+  };
+
+  // Evaluate entire row status
+  const evaluateRow = (r: StandardRowInput) => {
+    const elements = selectedMatrix === 'LIMONITE' 
+      ? ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO', 'P', 'S']
+      : ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO'];
+
+    let hasAction = false;
+    let hasWarning = false;
+    let hasValues = false;
+
+    for (const el of elements) {
+      const field = el.toLowerCase() as keyof StandardRowInput;
+      const raw = r[field];
+      const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw || ''));
+      if (!isNaN(parsed) && parsed > 0) {
+        hasValues = true;
+        const res = evaluateCell(r.standardCode, el, raw);
+        if (res.status === 'ACTION') hasAction = true;
+        if (res.status === 'WARNING') hasWarning = true;
+      }
+    }
+
+    if (!hasValues) return 'EMPTY';
+    if (hasAction) return 'ACTION';
+    if (hasWarning) return 'WARNING';
+    return 'PASS';
+  };
+
+  // Overall batch statistics
+  const batchStats = useMemo(() => {
+    let passCount = 0;
+    let warnCount = 0;
+    let actionCount = 0;
+    let filledCount = 0;
+
+    for (const r of rows) {
+      const st = evaluateRow(r);
+      if (st !== 'EMPTY') {
+        filledCount++;
+        if (st === 'PASS') passCount++;
+        if (st === 'WARNING') warnCount++;
+        if (st === 'ACTION') actionCount++;
+      }
+    }
+
+    const overallStatus = actionCount > 0 ? 'ACTION' : warnCount > 0 ? 'WARNING' : filledCount > 0 ? 'PASS' : 'EMPTY';
+    return { passCount, warnCount, actionCount, filledCount, overallStatus };
+  }, [rows, references, selectedMatrix]);
+
   // Quick Paste from Excel handler
   const handleApplyPaste = () => {
     if (!rawPastedText.trim()) return;
@@ -122,47 +259,27 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         .map(l => l.trim())
         .filter(Boolean);
 
+      const targetStandards = selectedMatrix === 'LIMONITE' 
+        ? ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05']
+        : ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'LIM', 'SAP16', 'OREAS193', 'SAP19', 'OREAS194', 'SAP'];
+
       const parsedRows: StandardRowInput[] = [];
 
-      for (let i = 0; i < lines.length && i < 10; i++) {
+      for (let i = 0; i < lines.length && parsedRows.length < targetStandards.length; i++) {
         const parts = lines[i].split('\t').map(p => p.trim());
-        // If line is header, skip
         if (parts.some(p => p.toLowerCase().includes('sample code') || p.toLowerCase().includes('date of'))) {
           continue;
         }
 
-        // Typical Excel column index:
-        // Col 0: No (1)
-        // Col 1: Date of Analyzed (09/10/26 0:26)
-        // Col 2: Standard Sample Code (VER-LIM01 D 18/02/2025)
-        // Col 3: Ni (1.109)
-        // Col 4: Co (0.138)
-        // Col 5: Fe (47.52)
-        // Col 6: CaO (0.020)
-        // Col 7: SiO2 (7.22)
-        // Col 8: Al2O3 (4.69)
-        // Col 9: MgO (3.51)
-        // Col 10: P (0.000)
-        // Col 11: S (0.142)
-        // Col 12: Cr2O3 (2.290)
-        // Col 13: MnO (1.110)
-
-        let offset = 0;
-        // Detect where numbers start
         const numStartIdx = parts.findIndex(p => !isNaN(parseFloat(p.replace(',', '.'))) && parseFloat(p.replace(',', '.')) > 0);
-        
-        let sampleCode = `LIM0${parsedRows.length + 1}`;
-        let sampleLabel = `VER-LIM0${parsedRows.length + 1}`;
+        const stdCode = targetStandards[parsedRows.length];
+        let sampleLabel = `VER-${stdCode}`;
         let analyzedAt = verificationTime;
 
+        let offset = 0;
         if (numStartIdx >= 2) {
           analyzedAt = parts[numStartIdx - 2] || analyzedAt;
           sampleLabel = parts[numStartIdx - 1] || sampleLabel;
-          // extract standard code like LIM01
-          const match = sampleLabel.match(/LIM\s*0?(\d)/i) || sampleLabel.match(/OREAS\s*(\d+)/i);
-          if (match) {
-            sampleCode = sampleLabel.includes('OREAS') ? `OREAS${match[1]}` : `LIM0${match[1]}`;
-          }
           offset = numStartIdx;
         } else if (numStartIdx === 1) {
           offset = 1;
@@ -177,10 +294,10 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         };
 
         parsedRows.push({
-          standardCode: sampleCode,
-          sampleLabel: sampleLabel,
+          standardCode: stdCode,
+          sampleLabel,
           sequenceNo: parsedRows.length + 1,
-          analyzedAt: analyzedAt,
+          analyzedAt,
           ni: getVal(0),
           co: getVal(1),
           fe: getVal(2),
@@ -188,41 +305,66 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           sio2: getVal(4),
           al2o3: getVal(5),
           mgo: getVal(6),
-          p: getVal(7),
-          s: getVal(8),
-          cr2o3: getVal(9),
-          mno: getVal(10),
+          cr2o3: getVal(7),
+          mno: getVal(8),
+          p: selectedMatrix === 'LIMONITE' ? getVal(9) : '',
+          s: selectedMatrix === 'LIMONITE' ? getVal(10) : '',
         });
       }
 
       if (parsedRows.length > 0) {
+        // Pad with default if needed
+        while (parsedRows.length < targetStandards.length) {
+          const stdCode = targetStandards[parsedRows.length];
+          parsedRows.push({
+            standardCode: stdCode,
+            sampleLabel: `VER-${stdCode}`,
+            sequenceNo: parsedRows.length + 1,
+            analyzedAt: verificationTime,
+            ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: ''
+          });
+        }
         setRows(parsedRows);
         setShowPasteModal(false);
         setRawPastedText('');
-        toast.success(`Berhasil mem-parsing ${parsedRows.length} baris dari Excel!`);
+        toast.success(`Berhasil mem-parsing ${parsedRows.length} baris ${selectedMatrix} dari Excel!`);
       } else {
-        toast.error("Gagal mendeteksi format data baris. Pastikan meng-copy baris data tabel Excel.");
+        toast.error("Gagal mendeteksi format data baris. Pastikan menyalin baris data tabel Excel.");
       }
     } catch (err: any) {
       toast.error("Format data clipboard tidak dapat dibaca: " + err.message);
     }
   };
 
-  // Pre-fill demo sample values (Image 1 replica)
-  const handleFillImage1Sample = () => {
-    setRows([
-      { standardCode: 'LIM01', sampleLabel: 'VER-LIM01 D 18/02/2025', sequenceNo: 1, analyzedAt: '00:26', ni: '1.109', co: '0.138', fe: '47.52', cao: '0.020', sio2: '7.22', al2o3: '4.69', mgo: '3.51', p: '0.000', s: '0.142', cr2o3: '2.290', mno: '1.110' },
-      { standardCode: 'LIM02', sampleLabel: 'VER-LIM02 D 18/02/2025', sequenceNo: 2, analyzedAt: '01:01', ni: '1.214', co: '0.129', fe: '46.05', cao: '0.060', sio2: '8.96', al2o3: '3.53', mgo: '5.28', p: '0.000', s: '0.125', cr2o3: '2.220', mno: '1.030' },
-      { standardCode: 'LIM03', sampleLabel: 'VER-LIM03 D 18/02/2025', sequenceNo: 3, analyzedAt: '01:05', ni: '1.287', co: '0.134', fe: '45.59', cao: '0.050', sio2: '8.77', al2o3: '4.22', mgo: '5.04', p: '0.000', s: '0.146', cr2o3: '2.100', mno: '1.020' },
-      { standardCode: 'LIM04', sampleLabel: 'VER-LIM04 E 18/02/2025', sequenceNo: 4, analyzedAt: '01:08', ni: '1.426', co: '0.121', fe: '43.12', cao: '0.060', sio2: '10.89', al2o3: '3.84', mgo: '7.06', p: '0.001', s: '0.128', cr2o3: '1.960', mno: '0.880' },
-      { standardCode: 'LIM05', sampleLabel: 'VER-LIM05 A 30/01/2025', sequenceNo: 5, analyzedAt: '01:11', ni: '1.527', co: '0.117', fe: '37.34', cao: '0.070', sio2: '15.77', al2o3: '3.27', mgo: '11.02', p: '0.006', s: '0.082', cr2o3: '1.830', mno: '0.850' },
-    ]);
-    toast.success("Berhasil memuat contoh data analisa Gambar 1!");
+  // Pre-fill sample values
+  const handleFillSampleValues = () => {
+    if (selectedMatrix === 'LIMONITE') {
+      setRows([
+        { standardCode: 'LIM01', sampleLabel: `VER-LIM01 ${verificationDate}`, sequenceNo: 1, analyzedAt: '00:26', ni: '1.109', co: '0.138', fe: '47.52', cao: '0.020', sio2: '6.85', al2o3: '4.45', mgo: '3.18', p: '0.003', s: '0.148', cr2o3: '2.290', mno: '1.080' },
+        { standardCode: 'LIM02', sampleLabel: `VER-LIM02 ${verificationDate}`, sequenceNo: 2, analyzedAt: '01:01', ni: '1.201', co: '0.131', fe: '45.60', cao: '0.055', sio2: '8.88', al2o3: '3.52', mgo: '4.95', p: '0.003', s: '0.121', cr2o3: '2.155', mno: '1.012' },
+        { standardCode: 'LIM03', sampleLabel: `VER-LIM03 ${verificationDate}`, sequenceNo: 3, analyzedAt: '01:05', ni: '1.290', co: '0.134', fe: '45.22', cao: '0.046', sio2: '8.52', al2o3: '4.19', mgo: '4.82', p: '0.002', s: '0.130', cr2o3: '2.042', mno: '1.005' },
+        { standardCode: 'LIM04', sampleLabel: `VER-LIM04 ${verificationDate}`, sequenceNo: 4, analyzedAt: '01:08', ni: '1.405', co: '0.123', fe: '42.61', cao: '0.058', sio2: '10.82', al2o3: '3.85', mgo: '6.90', p: '0.003', s: '0.129', cr2o3: '1.915', mno: '0.865' },
+        { standardCode: 'LIM05', sampleLabel: `VER-LIM05 ${verificationDate}`, sequenceNo: 5, analyzedAt: '01:11', ni: '1.495', co: '0.122', fe: '36.95', cao: '0.076', sio2: '15.22', al2o3: '3.53', mgo: '10.91', p: '0.003', s: '0.097', cr2o3: '1.910', mno: '0.850' },
+      ]);
+    } else {
+      setRows([
+        { standardCode: 'OREAS184', sampleLabel: `VER-OREAS184 ${verificationDate}`, sequenceNo: 1, analyzedAt: '00:15', ni: '1.018', co: '0.089', fe: '27.48', cao: '0.214', sio2: '42.20', al2o3: '4.61', mgo: '3.04', p: '', s: '', cr2o3: '1.745', mno: '0.674' },
+        { standardCode: 'OREAS187', sampleLabel: `VER-OREAS187 ${verificationDate}`, sequenceNo: 2, analyzedAt: '00:30', ni: '1.368', co: '0.063', fe: '13.58', cao: '0.339', sio2: '46.62', al2o3: '2.79', mgo: '17.96', p: '', s: '', cr2o3: '0.985', mno: '0.355' },
+        { standardCode: 'OREAS189', sampleLabel: `VER-OREAS189 ${verificationDate}`, sequenceNo: 3, analyzedAt: '00:45', ni: '1.478', co: '0.032', fe: '10.51', cao: '0.328', sio2: '46.18', al2o3: '2.08', mgo: '23.06', p: '', s: '', cr2o3: '0.758', mno: '0.229' },
+        { standardCode: 'OREAS190', sampleLabel: `VER-OREAS190 ${verificationDate}`, sequenceNo: 4, analyzedAt: '01:00', ni: '1.638', co: '0.089', fe: '24.81', cao: '0.129', sio2: '38.19', al2o3: '5.98', mgo: '6.89', p: '', s: '', cr2o3: '1.726', mno: '0.578' },
+        { standardCode: 'LIM',      sampleLabel: `VER-LIM ${verificationDate}`,      sequenceNo: 5, analyzedAt: '01:15', ni: '1.710', co: '0.244', fe: '23.86', cao: '0.011', sio2: '26.44', al2o3: '1.41', mgo: '20.75', p: '', s: '', cr2o3: '2.288', mno: '0.506' },
+        { standardCode: 'SAP16',    sampleLabel: `VER-SAP16 ${verificationDate}`,    sequenceNo: 6, analyzedAt: '01:30', ni: '1.764', co: '0.088', fe: '29.71', cao: '0.079', sio2: '21.46', al2o3: '3.41', mgo: '15.42', p: '', s: '', cr2o3: '2.524', mno: '0.702' },
+        { standardCode: 'OREAS193', sampleLabel: `VER-OREAS193 ${verificationDate}`, sequenceNo: 7, analyzedAt: '01:45', ni: '1.928', co: '0.049', fe: '13.64', cao: '0.360', sio2: '42.68', al2o3: '3.07', mgo: '20.22', p: '', s: '', cr2o3: '0.960', mno: '0.316' },
+        { standardCode: 'SAP19',    sampleLabel: `VER-SAP19 ${verificationDate}`,    sequenceNo: 8, analyzedAt: '02:00', ni: '2.028', co: '0.065', fe: '17.53', cao: '0.067', sio2: '31.51', al2o3: '1.69', mgo: '25.18', p: '', s: '', cr2o3: '1.162', mno: '0.448' },
+        { standardCode: 'OREAS194', sampleLabel: `VER-OREAS194 ${verificationDate}`, sequenceNo: 9, analyzedAt: '02:15', ni: '2.128', co: '0.042', fe: '11.51', cao: '0.309', sio2: '42.98', al2o3: '2.73', mgo: '22.80', p: '', s: '', cr2o3: '0.817', mno: '0.260' },
+        { standardCode: 'SAP',      sampleLabel: `VER-SAP ${verificationDate}`,      sequenceNo: 10, analyzedAt: '02:30', ni: '2.298', co: '0.129', fe: '9.89', cao: '0.010', sio2: '36.35', al2o3: '0.96', mgo: '30.38', p: '', s: '', cr2o3: '1.976', mno: '0.219' },
+      ]);
+    }
+    toast.success(`Berhasil memuat contoh data analisa ${selectedMatrix}!`);
   };
 
   // Submit Batch
   const handleSubmitBatch = async () => {
-    // Basic validation
     const hasAnyValue = rows.some(r => r.ni || r.fe || r.cr2o3);
     if (!hasAnyValue) {
       toast.error("Harap isi hasil analisa sebelum menyimpan.");
@@ -231,338 +373,337 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
 
     setLoading(true);
     try {
-      const instObj = instruments.find(i => i.code === selectedInstrument);
+      const instObj = filteredInstruments.find(i => i.code === selectedInstrument);
       const payload = {
         instrumentCode: selectedInstrument,
         instrumentName: instObj?.name || selectedInstrument,
         verificationDate,
         verificationTime,
         shift,
+        notes: notes || `Input Verifikasi Harian ${selectedMatrix}`,
         operatorNik: userNik,
         operatorName: userName,
-        notes,
         items: rows.map(r => ({
           standardCode: r.standardCode,
           sampleLabel: r.sampleLabel,
           sequenceNo: r.sequenceNo,
-          analyzedAt: `${verificationDate} ${r.analyzedAt}`.trim(),
-          ni: r.ni ? parseFloat(r.ni) : null,
-          co: r.co ? parseFloat(r.co) : null,
-          fe: r.fe ? parseFloat(r.fe) : null,
-          cao: r.cao ? parseFloat(r.cao) : null,
-          sio2: r.sio2 ? parseFloat(r.sio2) : null,
-          al2o3: r.al2o3 ? parseFloat(r.al2o3) : null,
-          mgo: r.mgo ? parseFloat(r.mgo) : null,
-          p: r.p ? parseFloat(r.p) : null,
-          s: r.s ? parseFloat(r.s) : null,
-          cr2o3: r.cr2o3 ? parseFloat(r.cr2o3) : null,
-          mno: r.mno ? parseFloat(r.mno) : null,
+          analyzedAt: r.analyzedAt,
+          ni: r.ni || null,
+          co: r.co || null,
+          fe: r.fe || null,
+          cao: r.cao || null,
+          sio2: r.sio2 || null,
+          al2o3: r.al2o3 || null,
+          mgo: r.mgo || null,
+          p: r.p || null,
+          s: r.s || null,
+          cr2o3: r.cr2o3 || null,
+          mno: r.mno || null,
         }))
       };
 
       const res = await fetch('/api/xrf/verifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
-      const json = await res.json();
 
+      const json = await res.json();
       if (json.success) {
-        toast.success("Data Verifikasi Harian berhasil disimpan ke sistem!");
+        toast.success("Data verifikasi harian berhasil disimpan ke database!");
         if (onSuccessSave) onSuccessSave();
       } else {
-        toast.error("Gagal menyimpan: " + (json.error || 'Terjadi kesalahan'));
+        toast.error(json.error || "Gagal menyimpan data verifikasi");
       }
     } catch (err: any) {
-      toast.error("Koneksi gagal: " + err.message);
+      toast.error("Error: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
+  const activeColumns = selectedMatrix === 'LIMONITE'
+    ? ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO', 'P', 'S']
+    : ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO'];
+
+  const companyName = assignedSite === 'GTS' ? 'PT GANE TAMBANG SENTOSA' : 'PT TRIMEGAH BANGUN PERSADA';
+
   return (
     <div className="space-y-6">
-      {/* Header Info Panel */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5 text-teal-500" />
-              Daily Verifikasi Sample Standard (XRF)
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Form penginputan batch verifikasi standar harian dengan kalkulasi deviasi & toleransi otomatis
-            </p>
+      {/* ------------------------------------------------------------- */}
+      {/* 1. TOP CONTROL BAR (SCREEN ONLY)                              */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4 no-print-area">
+        {/* Row 1: Matrix Toggle & Actions */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {/* Primary Matrix Tab Toggle */}
+            <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => handleMatrixChange('LIMONITE')}
+                className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                  selectedMatrix === 'LIMONITE'
+                    ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                LIMONITE (5 Standar)
+              </button>
+              <button
+                onClick={() => handleMatrixChange('SAPROLITE')}
+                className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                  selectedMatrix === 'SAPROLITE'
+                    ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                SAPROLITE (10 Standar)
+              </button>
+            </div>
+
+            <span className="text-xs text-slate-500 font-semibold hidden lg:inline">
+              {rows.length} Standar Terkonfigurasi
+            </span>
           </div>
 
+          {/* Quick Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => setShowPasteModal(true)}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-all"
-            >
-              <Clipboard className="w-3.5 h-3.5" />
-              Paste from Excel
-            </button>
-            <button
-              onClick={handleFillImage1Sample}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all"
+              onClick={handleFillSampleValues}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title="Isi dengan contoh hasil analisa kalibrasi"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              Isi Contoh Gambar 1
+              Contoh Data
+            </button>
+
+            <button
+              onClick={() => setShowPasteModal(true)}
+              className="px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title="Tempelkan baris data dari Excel"
+            >
+              <Clipboard className="w-3.5 h-3.5" />
+              Paste Excel
+            </button>
+
+            {/* Print A4 Button */}
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Cetak Formulir Verifikasi ke Kertas A4 (Fit 1 Halaman)"
+            >
+              <Printer className="w-4 h-4" />
+              Cetak A4 (SPV & SPT Sign)
             </button>
           </div>
         </div>
 
-        {/* Batch Metadata Fields */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3.5 mt-4">
+        {/* Row 2: Metadata Fields Form */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <div>
-            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
-              Alat XRF
-            </label>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Instrumen XRF</label>
             <select
               value={selectedInstrument}
               onChange={e => setSelectedInstrument(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 outline-none"
             >
-              {instruments.map(inst => (
-                <option key={inst.code} value={inst.code}>
-                  {inst.name}
-                </option>
+              {filteredInstruments.map(i => (
+                <option key={i.code} value={i.code}>{i.name}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
-              Tanggal Analisa
-            </label>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Tanggal Verifikasi</label>
             <input
               type="date"
               value={verificationDate}
               onChange={e => setVerificationDate(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 outline-none"
             />
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
-              Shift
-            </label>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Jam Analisa</label>
+            <input
+              type="time"
+              value={verificationTime}
+              onChange={e => setVerificationTime(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Shift Kerja</label>
             <select
               value={shift}
               onChange={e => setShift(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 outline-none"
             >
-              <option value="1">Shift 1 (Day)</option>
-              <option value="2">Shift 2 (Night)</option>
+              <option value="1">Shift 1 (Pagi)</option>
+              <option value="2">Shift 2 (Malam)</option>
+              <option value="Day">Day Shift</option>
             </select>
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
-              Operator
-            </label>
-            <input
-              type="text"
-              readOnly
-              value={userName}
-              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 cursor-not-allowed"
-            />
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Operator / Analis</label>
+            <div className="bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 truncate">
+              {userName}
+            </div>
+          </div>
+        </div>
+
+        {/* Real-time Evaluation Summary Badge (Screen View) */}
+        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 text-xs">
+          <div className="flex items-center gap-4">
+            <span className="font-bold text-slate-600 dark:text-slate-400">Status Evaluasi Live:</span>
+            {batchStats.overallStatus === 'PASS' && (
+              <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                PASS (Semua Unsur Sesuai Toleransi ≤ 2σ)
+              </span>
+            )}
+            {batchStats.overallStatus === 'WARNING' && (
+              <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                WARNING ({batchStats.warnCount} Unsur dalam batas 2σ - 3σ)
+              </span>
+            )}
+            {batchStats.overallStatus === 'ACTION' && (
+              <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500/40 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                ACTION REQUIRED ({batchStats.actionCount} Unsur Melebihi Batas &gt; 3σ)
+              </span>
+            )}
+            {batchStats.overallStatus === 'EMPTY' && (
+              <span className="text-slate-400 italic">Menunggu input hasil analisa...</span>
+            )}
           </div>
 
-          <div className="col-span-2 sm:col-span-4 md:col-span-1">
-            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
-              Catatan / Kondisi
-            </label>
-            <input
-              type="text"
-              placeholder="Normal, fluks baru..."
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500"
-            />
+          <div className="flex items-center gap-3 text-[11px] font-mono text-slate-500">
+            <span>Pass: <strong className="text-emerald-600">{batchStats.passCount}</strong></span>
+            <span>Warning: <strong className="text-amber-600">{batchStats.warnCount}</strong></span>
+            <span>Action: <strong className="text-red-600">{batchStats.actionCount}</strong></span>
           </div>
         </div>
       </div>
 
-      {/* Main Verification Input Table (Persis Format Gambar 1) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-            Tabel Pengukuran Standar Harian (5 Baris)
-          </span>
-          <span className="text-[11px] text-slate-500">
-            Kadar unsur dalam persen (%)
+      {/* ------------------------------------------------------------- */}
+      {/* 2. INTERACTIVE SCREEN TABLE (INTUITIVE & RESPONSIVE)          */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden no-print-area">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              Tabel Input Hasil Analisa Verifikasi Harian ({selectedMatrix})
+            </h3>
+          </div>
+          <span className="text-[11px] text-slate-400">
+            *Nilai acuan nominal CRM ditampilkan 3 angka di belakang koma
           </span>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-fuchsia-100/70 dark:bg-fuchsia-950/40 text-fuchsia-900 dark:text-fuchsia-200 border-b border-fuchsia-200 dark:border-fuchsia-800/50 text-[11px] font-bold">
-                <th className="py-2.5 px-2 text-center w-8">NO</th>
-                <th className="py-2.5 px-3 min-w-[130px]">Standard Sample Code</th>
-                <th className="py-2.5 px-2 text-center min-w-[70px]">Time</th>
-                <th className="py-2.5 px-2 text-right min-w-[65px] bg-fuchsia-200/50 dark:bg-fuchsia-900/30">Ni %</th>
-                <th className="py-2.5 px-2 text-right min-w-[65px]">Co %</th>
-                <th className="py-2.5 px-2 text-right min-w-[70px] bg-fuchsia-200/50 dark:bg-fuchsia-900/30">Fe %</th>
-                <th className="py-2.5 px-2 text-right min-w-[65px]">CaO %</th>
-                <th className="py-2.5 px-2 text-right min-w-[70px] bg-fuchsia-200/50 dark:bg-fuchsia-900/30">SiO2 %</th>
-                <th className="py-2.5 px-2 text-right min-w-[65px]">Al2O3 %</th>
-                <th className="py-2.5 px-2 text-right min-w-[65px]">MgO %</th>
-                <th className="py-2.5 px-2 text-right min-w-[60px]">P %</th>
-                <th className="py-2.5 px-2 text-right min-w-[65px]">S %</th>
-                <th className="py-2.5 px-2 text-right min-w-[70px] bg-fuchsia-200/50 dark:bg-fuchsia-900/30">Cr2O3 %</th>
-                <th className="py-2.5 px-2 text-right min-w-[65px]">MnO %</th>
-                <th className="py-2.5 px-2 text-right min-w-[55px] font-extrabold text-blue-700 dark:text-blue-300">BC</th>
-                <th className="py-2.5 px-2 text-right min-w-[55px] font-extrabold text-blue-700 dark:text-blue-300">FeNi</th>
-                <th className="py-2.5 px-2 text-right min-w-[65px] font-extrabold text-blue-700 dark:text-blue-300">Sum %</th>
+              <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                <th className="py-2.5 px-3 w-10 text-center">No</th>
+                <th className="py-2.5 px-3 min-w-[120px]">Standar CRM</th>
+                <th className="py-2.5 px-3 min-w-[150px]">Label Sample</th>
+                <th className="py-2.5 px-3 w-20 text-center">Jam</th>
+                {activeColumns.map(col => (
+                  <th key={`th-${col}`} className="py-2.5 px-2 text-right min-w-[85px]">{col}</th>
+                ))}
+                <th className="py-2.5 px-2 text-right min-w-[65px]">BC</th>
+                <th className="py-2.5 px-2 text-right min-w-[65px]">Fe/Ni</th>
+                <th className="py-2.5 px-2 text-right min-w-[75px]">Sum %</th>
+                <th className="py-2.5 px-3 text-center min-w-[95px]">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {rows.map((row, idx) => {
-                const calcs = computeRowCalculations(row);
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
+              {rows.map((r, idx) => {
+                const calcs = computeRowCalculations(r);
+                const rowStatus = evaluateRow(r);
+
                 return (
-                  <tr key={`row-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="py-2 px-2 text-center font-bold text-slate-500">
-                      {idx + 1}
+                  <tr key={`row-${r.standardCode}-${idx}`} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="py-2 px-3 text-center text-slate-400 font-sans">{idx + 1}</td>
+                    <td className="py-2 px-3 font-bold text-slate-800 dark:text-slate-200 font-sans">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 font-bold">
+                        {r.standardCode}
+                      </span>
                     </td>
-                    <td className="py-1.5 px-2">
+                    <td className="py-2 px-3">
                       <input
                         type="text"
-                        value={row.sampleLabel}
+                        value={r.sampleLabel}
                         onChange={e => handleCellChange(idx, 'sampleLabel', e.target.value)}
-                        className="w-full bg-transparent border-b border-transparent focus:border-teal-500 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none"
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-sans text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-teal-500 outline-none"
                       />
                     </td>
-                    <td className="py-1.5 px-2">
+                    <td className="py-2 px-3 text-center">
                       <input
                         type="text"
-                        value={row.analyzedAt}
+                        value={r.analyzedAt}
                         onChange={e => handleCellChange(idx, 'analyzedAt', e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 text-center text-xs font-mono"
+                        className="w-16 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-1.5 py-1 text-xs text-center text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-teal-500 outline-none"
                       />
                     </td>
-                    {/* Elements */}
-                    <td className="py-1.5 px-1 bg-fuchsia-50/30 dark:bg-fuchsia-950/20">
-                      <input
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        value={row.ni}
-                        onChange={e => handleCellChange(idx, 'ni', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono font-medium focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1">
-                      <input
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        value={row.co}
-                        onChange={e => handleCellChange(idx, 'co', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1 bg-fuchsia-50/30 dark:bg-fuchsia-950/20">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={row.fe}
-                        onChange={e => handleCellChange(idx, 'fe', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono font-medium focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1">
-                      <input
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        value={row.cao}
-                        onChange={e => handleCellChange(idx, 'cao', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1 bg-fuchsia-50/30 dark:bg-fuchsia-950/20">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={row.sio2}
-                        onChange={e => handleCellChange(idx, 'sio2', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono font-medium focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={row.al2o3}
-                        onChange={e => handleCellChange(idx, 'al2o3', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={row.mgo}
-                        onChange={e => handleCellChange(idx, 'mgo', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1">
-                      <input
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        value={row.p}
-                        onChange={e => handleCellChange(idx, 'p', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1">
-                      <input
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        value={row.s}
-                        onChange={e => handleCellChange(idx, 's', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1 bg-fuchsia-50/30 dark:bg-fuchsia-950/20">
-                      <input
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        value={row.cr2o3}
-                        onChange={e => handleCellChange(idx, 'cr2o3', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono font-medium focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    <td className="py-1.5 px-1">
-                      <input
-                        type="number"
-                        step="0.001"
-                        placeholder="0.000"
-                        value={row.mno}
-                        onChange={e => handleCellChange(idx, 'mno', e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-right text-xs font-mono focus:border-teal-500 outline-none"
-                      />
-                    </td>
-                    {/* Calculated Columns */}
-                    <td className="py-2 px-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/40">
-                      {calcs.bc}
-                    </td>
-                    <td className="py-2 px-2 text-right font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/40">
-                      {calcs.feNi}
-                    </td>
-                    <td className="py-2 px-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-slate-800/40">
-                      {calcs.sum}
+
+                    {/* Element Input Cells with Live Evaluation Highlighting */}
+                    {activeColumns.map(elem => {
+                      const field = elem.toLowerCase() as keyof StandardRowInput;
+                      const val = r[field];
+                      const evalResult = evaluateCell(r.standardCode, elem, val);
+
+                      let cellBg = 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700';
+                      if (evalResult.status === 'ACTION') cellBg = 'bg-red-500/15 border-red-500 text-red-700 dark:text-red-300 font-bold';
+                      else if (evalResult.status === 'WARNING') cellBg = 'bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 font-bold';
+                      else if (evalResult.status === 'PASS') cellBg = 'bg-emerald-500/10 border-emerald-500/40 text-emerald-800 dark:text-emerald-300 font-bold';
+
+                      return (
+                        <td key={`cell-${elem}-${idx}`} className="py-2 px-1 text-right">
+                          <input
+                            type="text"
+                            placeholder={evalResult.expected > 0 ? evalResult.expected.toFixed(3) : '-'}
+                            value={val}
+                            onChange={e => handleCellChange(idx, field, e.target.value)}
+                            className={`w-full text-right border rounded-lg px-2 py-1 text-xs outline-none transition-colors ${cellBg}`}
+                            title={evalResult.expected > 0 ? `Nominal Acuan: ${evalResult.expected.toFixed(3)} | Diff: ${evalResult.diffPct.toFixed(2)}% (${evalResult.sigmaDist.toFixed(1)}σ)` : undefined}
+                          />
+                        </td>
+                      );
+                    })}
+
+                    {/* Computed Ratios */}
+                    <td className="py-2 px-2 text-right text-slate-600 dark:text-slate-300">{calcs.bc}</td>
+                    <td className="py-2 px-2 text-right text-slate-600 dark:text-slate-300">{calcs.feNi}</td>
+                    <td className="py-2 px-2 text-right font-bold text-slate-800 dark:text-slate-200">{calcs.sum}</td>
+
+                    {/* Status Badge */}
+                    <td className="py-2 px-3 text-center font-sans">
+                      {rowStatus === 'PASS' && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          PASS
+                        </span>
+                      )}
+                      {rowStatus === 'WARNING' && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                          WARNING
+                        </span>
+                      )}
+                      {rowStatus === 'ACTION' && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300">
+                          ACTION
+                        </span>
+                      )}
+                      {rowStatus === 'EMPTY' && (
+                        <span className="text-slate-300 text-[10px]">-</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -570,138 +711,16 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
             </tbody>
           </table>
         </div>
-      </div>
 
-      {/* Live Deviation Evaluation Blocks (Persis Baris 15-43 di Gambar 1) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            Live Evaluasi Deviasi vs Expected Value (Gambar 1)
-          </h3>
-          <span className="text-[11px] text-slate-500">
-            Rumus Diff % = ((Measured - Expected) / Expected) * 100%
-          </span>
-        </div>
-
-        <div className="space-y-4">
-          {rows.map((row, idx) => {
-            const stdRefs = references[row.standardCode] || {};
-            const elements = [
-              { key: 'Ni', val: parseFloat(row.ni) },
-              { key: 'Co', val: parseFloat(row.co) },
-              { key: 'Fe', val: parseFloat(row.fe) },
-              { key: 'CaO', val: parseFloat(row.cao) },
-              { key: 'SiO2', val: parseFloat(row.sio2) },
-              { key: 'Al2O3', val: parseFloat(row.al2o3) },
-              { key: 'MgO', val: parseFloat(row.mgo) },
-              { key: 'P', val: parseFloat(row.p) },
-              { key: 'S', val: parseFloat(row.s) },
-              { key: 'Cr2O3', val: parseFloat(row.cr2o3) },
-              { key: 'MnO', val: parseFloat(row.mno) },
-            ];
-
-            return (
-              <div 
-                key={`eval-${idx}`}
-                className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden text-xs font-mono"
-              >
-                {/* Header Sub-table */}
-                <div className="bg-slate-100 dark:bg-slate-800 px-3 py-1.5 font-bold flex items-center justify-between text-slate-800 dark:text-slate-200 font-sans">
-                  <span>{row.sampleLabel || row.standardCode}</span>
-                  <span className="text-[11px] font-mono font-normal text-slate-500">Standar #{idx + 1}</span>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right text-[11px]">
-                    <thead>
-                      <tr className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-[10px] text-slate-500">
-                        <th className="py-1 px-3 text-left w-28">Kategori</th>
-                        {elements.map(e => (
-                          <th key={`th-${e.key}`} className="py-1 px-2 min-w-[55px]">{e.key}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                      {/* 1. Measured Value */}
-                      <tr className="bg-white dark:bg-slate-900">
-                        <td className="py-1 px-3 text-left font-sans font-semibold text-slate-700 dark:text-slate-300">
-                          Measured
-                        </td>
-                        {elements.map(e => (
-                          <td key={`meas-${e.key}`} className="py-1 px-2 font-medium">
-                            {!isNaN(e.val) ? e.val.toFixed(e.key === 'Ni' || e.key === 'Cr2O3' ? 3 : 2) : '-'}
-                          </td>
-                        ))}
-                      </tr>
-
-                      {/* 2. Expected Value */}
-                      <tr className="bg-slate-50/40 dark:bg-slate-950/30 text-slate-500">
-                        <td className="py-1 px-3 text-left font-sans text-slate-500">
-                          Expected Value
-                        </td>
-                        {elements.map(e => {
-                          const exp = stdRefs[e.key]?.nominalValue;
-                          return (
-                            <td key={`exp-${e.key}`} className="py-1 px-2">
-                              {exp !== undefined ? exp.toFixed(e.key === 'Ni' || e.key === 'Cr2O3' ? 3 : 2) : '-'}
-                            </td>
-                          );
-                        })}
-                      </tr>
-
-                      {/* 3. Diff % */}
-                      <tr className="bg-white dark:bg-slate-900">
-                        <td className="py-1 px-3 text-left font-sans font-bold text-slate-700 dark:text-slate-300">
-                          Diff. %
-                        </td>
-                        {elements.map(e => {
-                          const exp = stdRefs[e.key]?.nominalValue;
-                          if (isNaN(e.val) || !exp || exp === 0) {
-                            return <td key={`diff-${e.key}`} className="py-1 px-2 text-slate-400">-</td>;
-                          }
-
-                          const diffPct = ((e.val - exp) / exp) * 100;
-                          const stdev = stdRefs[e.key]?.stdevFixed || 0.05;
-                          const sigmaDist = Math.abs((e.val - exp) / stdev);
-
-                          const isOutCritical = sigmaDist > 3.0 || Math.abs(diffPct) > 10;
-                          const isWarning = sigmaDist > 2.0;
-
-                          const bgClass = isOutCritical
-                            ? 'bg-red-600 text-white font-extrabold px-1 rounded'
-                            : isWarning
-                            ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold px-1 rounded'
-                            : 'text-slate-700 dark:text-slate-300';
-
-                          return (
-                            <td key={`diff-${e.key}`} className="py-1 px-1">
-                              <span className={`inline-flex items-center justify-end gap-0.5 ${bgClass}`}>
-                                {diffPct > 0 ? (
-                                  <ArrowUp className="w-2.5 h-2.5 shrink-0 inline text-emerald-500" />
-                                ) : (
-                                  <ArrowDown className="w-2.5 h-2.5 shrink-0 inline text-red-500" />
-                                )}
-                                {diffPct.toFixed(2)}
-                              </span>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Submit Actions */}
-        <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-3">
+        {/* Submit Actions Bar */}
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="text-xs text-slate-500">
+            Menampilkan formulir untuk {rows.length} sampel acuan kalibrasi ({selectedMatrix}).
+          </div>
           <button
             disabled={loading}
             onClick={handleSubmitBatch}
-            className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer"
+            className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95"
           >
             {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Simpan Verifikasi Harian
@@ -709,45 +728,245 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         </div>
       </div>
 
+      {/* ------------------------------------------------------------- */}
+      {/* 3. PRINTABLE OFFICIAL DOCUMENT (FIT EXACTLY 1 A4 LANDSCAPE)   */}
+      {/* ------------------------------------------------------------- */}
+      <div className="xrf-print-only-container">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media screen {
+            .xrf-print-only-container {
+              display: none;
+            }
+          }
+          @media print {
+            @page {
+              size: A4 landscape;
+              margin: 6mm 8mm;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+              color: #000000 !important;
+              background: #ffffff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .no-print-area, header, aside, nav, button {
+              display: none !important;
+            }
+            .xrf-print-only-container {
+              display: block !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              margin: 0 auto !important;
+              page-break-inside: avoid !important;
+              page-break-after: avoid !important;
+            }
+            .print-border-table {
+              border-collapse: collapse !important;
+              width: 100% !important;
+            }
+            .print-border-table th, .print-border-table td {
+              border: 1px solid #1e293b !important;
+              padding: 2.5px 4px !important;
+              font-size: 8pt !important;
+              line-height: 1.15 !important;
+            }
+            .print-header-cell {
+              background-color: #f1f5f9 !important;
+              font-weight: bold !important;
+            }
+            .print-status-pass {
+              background-color: #dcfce7 !important;
+              font-weight: bold !important;
+            }
+            .print-status-warn {
+              background-color: #fef3c7 !important;
+              font-weight: bold !important;
+            }
+            .print-status-action {
+              background-color: #fee2e2 !important;
+              color: #991b1b !important;
+              font-weight: bold !important;
+            }
+            .sign-box {
+              height: 48px !important;
+            }
+          }
+        `}} />
+
+        {/* Official Header */}
+        <div className="border-b-2 border-slate-900 pb-2 mb-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-[13pt] font-black uppercase tracking-wider text-slate-950 leading-none">
+                {companyName}
+              </h2>
+              <div className="text-[8.5pt] font-bold text-slate-700 tracking-wide mt-0.5">
+                QUALITY ASSURANCE & QUALITY CONTROL • LABORATORY DEPARTMENT
+              </div>
+              <h1 className="text-[11pt] font-black text-slate-900 mt-1 uppercase underline underline-offset-2">
+                LEMBAR VERIFIKASI HARIAN HASIL ANALISA XRF ({selectedMatrix})
+              </h1>
+            </div>
+            <div className="text-right text-[7.5pt] font-mono leading-tight">
+              <div>No. Dokumen: <strong>FRM-LAB-QAQC-014</strong></div>
+              <div>Revisi: <strong>03</strong></div>
+              <div>Halaman: <strong>1 dari 1 (A4)</strong></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Metadata Table */}
+        <table className="w-full text-[8pt] mb-2 print-border-table">
+          <tbody>
+            <tr>
+              <td className="print-header-cell w-[14%]">Instrumen XRF:</td>
+              <td className="w-[20%] font-bold">{selectedInstrument} ({filteredInstruments.find(i => i.code === selectedInstrument)?.name})</td>
+              <td className="print-header-cell w-[14%]">Tanggal Analisa:</td>
+              <td className="w-[18%] font-bold">{verificationDate}</td>
+              <td className="print-header-cell w-[14%]">Shift / Jam:</td>
+              <td className="w-[20%] font-bold">Shift {shift} ({verificationTime})</td>
+            </tr>
+            <tr>
+              <td className="print-header-cell">Aplikasi / Matriks:</td>
+              <td className="font-bold">{selectedMatrix} ({rows.length} CRM Standard)</td>
+              <td className="print-header-cell">Analis / Operator:</td>
+              <td className="font-bold">{userName} {userNik ? `(${userNik})` : ''}</td>
+              <td className="print-header-cell">Status Verifikasi:</td>
+              <td className={`font-black ${batchStats.overallStatus === 'PASS' ? 'print-status-pass' : batchStats.overallStatus === 'WARNING' ? 'print-status-warn' : 'print-status-action'}`}>
+                {batchStats.overallStatus === 'PASS' ? 'MEMENUHI SYARAT (PASS)' : batchStats.overallStatus === 'WARNING' ? 'PERINGATAN (WARNING)' : 'TIDAK MEMENUHI (ACTION)'}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Dense Printable Results Table */}
+        <table className="w-full text-center print-border-table mb-2">
+          <thead>
+            <tr className="print-header-cell text-[8pt]">
+              <th className="w-6">No</th>
+              <th className="w-24 text-left">CRM Standar</th>
+              <th className="text-left">Label Sampel</th>
+              {activeColumns.map(c => (
+                <th key={`pr-th-${c}`} className="text-right">{c} (%)</th>
+              ))}
+              <th className="text-right w-12">BC</th>
+              <th className="text-right w-12">Fe/Ni</th>
+              <th className="text-right w-12">Sum%</th>
+              <th className="w-16">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, idx) => {
+              const calcs = computeRowCalculations(r);
+              const rowStatus = evaluateRow(r);
+              return (
+                <tr key={`pr-row-${idx}`}>
+                  <td>{idx + 1}</td>
+                  <td className="font-bold text-left">{r.standardCode}</td>
+                  <td className="text-left font-mono text-[7pt]">{r.sampleLabel}</td>
+                  {activeColumns.map(elem => {
+                    const field = elem.toLowerCase() as keyof StandardRowInput;
+                    const val = r[field];
+                    const evalResult = evaluateCell(r.standardCode, elem, val);
+                    const statusClass = evalResult.status === 'ACTION' ? 'print-status-action' : evalResult.status === 'WARNING' ? 'print-status-warn' : '';
+
+                    return (
+                      <td key={`pr-cell-${elem}-${idx}`} className={`text-right font-mono ${statusClass}`}>
+                        {val ? Number(val).toFixed(elem === 'Ni' || elem === 'Cr2O3' ? 3 : 2) : '-'}
+                      </td>
+                    );
+                  })}
+                  <td className="text-right font-mono">{calcs.bc}</td>
+                  <td className="text-right font-mono">{calcs.feNi}</td>
+                  <td className="text-right font-mono font-bold">{calcs.sum}</td>
+                  <td className={`font-bold ${rowStatus === 'PASS' ? 'print-status-pass' : rowStatus === 'WARNING' ? 'print-status-warn' : rowStatus === 'ACTION' ? 'print-status-action' : ''}`}>
+                    {rowStatus}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Nominal Reference Guidelines & Standard Notes */}
+        <div className="text-[7pt] text-slate-700 leading-tight mb-2 p-1.5 border border-slate-400 bg-slate-50">
+          <strong>Kriteria Penerimaan Verifikasi XRF:</strong> 
+          (1) Batas Peringatan (Warning) = Nilai Acuan ± 2σ (Perlu pengawasan). 
+          (2) Batas Tindakan (Action) = Nilai Acuan ± 3σ. Apabila hasil analisa berada di luar batas ± 3σ, analisa dihentikan untuk kalibrasi ulang atau pelaporan ke SPV Lab.
+          (3) Nilai Nominal CRM resmi: LIM01 s/d LIM05 dan OREAS/SAP terkalibrasi sesuai sertifikat CRM resmi terlampir (akurasi 3 desimal).
+        </div>
+
+        {/* 3 Signatures Block (Dianalisa Oleh [Operator], Diperiksa Oleh [SPV], Disetujui Oleh [SPT]) */}
+        <table className="w-full text-center print-border-table">
+          <thead>
+            <tr className="print-header-cell text-[8pt]">
+              <th className="w-1/3">Dianalisa Oleh (Operator / Analis):</th>
+              <th className="w-1/3">Diperiksa Oleh (Supervisor Laboratory):</th>
+              <th className="w-1/3">Disetujui Oleh (Superintendent Laboratory):</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="sign-box align-bottom text-[8pt] pb-1">
+                <div className="font-bold underline">{userName || 'Analis Laboratorium'}</div>
+                <div className="text-[7pt] text-slate-600">NIK: {userNik || '....................................'}</div>
+                <div className="text-[7pt] text-slate-500">Tgl: {verificationDate}</div>
+              </td>
+              <td className="sign-box align-bottom text-[8pt] pb-1">
+                <div className="font-bold underline">( .................................................... )</div>
+                <div className="text-[7pt] text-slate-600">Supervisor QC / Laboratory</div>
+                <div className="text-[7pt] text-slate-500">Tgl: ............................................</div>
+              </td>
+              <td className="sign-box align-bottom text-[8pt] pb-1">
+                <div className="font-bold underline">( .................................................... )</div>
+                <div className="text-[7pt] text-slate-600">Superintendent Laboratory</div>
+                <div className="text-[7pt] text-slate-500">Tgl: ............................................</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       {/* Modal Quick Paste from Excel */}
       {showPasteModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 no-print-area">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Clipboard className="w-4 h-4 text-emerald-500" />
-                Paste Data Tabel dari Excel (Ctrl + V)
+                Paste Data Tabel dari Excel untuk {selectedMatrix} (Ctrl + V)
               </h3>
               <button
                 onClick={() => setShowPasteModal(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg leading-none"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg leading-none cursor-pointer"
               >
                 &times;
               </button>
             </div>
 
             <p className="text-xs text-slate-500">
-              Salin (*copy*) baris data dari Excel (dari kolom Standard Sample Code hingga MnO) lalu tempelkan (*paste*) pada kotak teks di bawah ini:
+              Salin baris data tabel dari Excel (kolom Ni s/d MnO) lalu tempelkan pada kotak teks di bawah:
             </p>
 
             <textarea
               rows={8}
               value={rawPastedText}
               onChange={e => setRawPastedText(e.target.value)}
-              placeholder="Contoh format:&#10;VER-LIM01&#t1.109&#t0.138&#t47.52&#t0.020&#t7.22&#t4.69&#t3.51&#t0.000&#t0.142&#t2.290&#t1.110"
+              placeholder="Tempel baris data tabel Excel di sini..."
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-3 text-xs font-mono focus:ring-2 focus:ring-teal-500 outline-none"
             />
 
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setShowPasteModal(false)}
-                className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
               >
                 Batal
               </button>
               <button
                 onClick={handleApplyPaste}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
               >
                 Terapkan ke Tabel
               </button>

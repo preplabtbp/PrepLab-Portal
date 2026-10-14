@@ -1,5 +1,5 @@
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { translateDisplayText } from './notion/logbook-section-utils';
-import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
 import { NotionDatabaseTable, TableRowData } from "./NotionDatabaseTable";
@@ -134,6 +134,8 @@ export function BulletinBoard({
   }, [selectedPost]);
 
   const [posts, setPosts] = useState<any[]>([]);
+  // Persistent in-memory cache for virtual logbook content
+  const logbookCacheRef = useRef<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarTab, setSidebarTab] = useState<"all" | "folders">("all");
@@ -553,53 +555,69 @@ export function BulletinBoard({
 
     if (selectedPost?.id === post.id && !isEditing) return;
 
+    // Use latest post from `posts` state if available to avoid stale post closures
+    const freshPost = (posts && posts.length > 0) ? (posts.find(p => String(p.id) === String(post.id)) || post) : post;
+
     setNavHistory((prev) => {
-      const idx = prev.findIndex((h) => h?.id === post.id);
+      const idx = prev.findIndex((h) => h?.id === freshPost.id);
       if (idx !== -1) {
         // Return to earlier history point
         return prev.slice(0, idx + 1);
       }
       // If navigating directly from dashboard
       if (!selectedPost) {
-        if (isSectionHubPost(post)) {
-          return [post];
+        if (isSectionHubPost(freshPost)) {
+          return [freshPost];
         }
-        const parent = findParentPost(post);
-        if (parent && parent.id !== post.id) {
-          return [parent, post];
+        const parent = findParentPost(freshPost);
+        if (parent && parent.id !== freshPost.id) {
+          return [parent, freshPost];
         }
-        return [post];
+        return [freshPost];
       }
-      return [...prev, post];
+      return [...prev, freshPost];
     });
 
-    setSelectedPost(post);
+    setSelectedPost(freshPost);
     setIsEditing(false);
 
     try {
       const url = new URL(window.location.href);
-      if (post?.id) {
-        url.searchParams.set("page", String(post.id));
-        localStorage.setItem("preplab_active_bulletin_page", String(post.id));
+      if (freshPost?.id) {
+        url.searchParams.set("page", String(freshPost.id));
+        localStorage.setItem("preplab_active_bulletin_page", String(freshPost.id));
       }
       window.history.replaceState({}, "", url.toString());
     } catch {}
   };
 
-  // Open Unified Logbook for a specific section (always starts with a clean slate)
+  // Open Unified Logbook for a specific section (loads cached content if available)
   const openSectionLogbook = useCallback((sectionName: string) => {
     const cleanSection = sectionName.replace(/^[#\s\-*]+/, '').trim();
     const logbookTitle = `Logbook ${cleanSection}`;
     const targetUniverse = selectedPtFilter !== 'ALL' ? selectedPtFilter : userUniverse;
+    const logbookId = `logbook-${cleanSection.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
+    const defaultContent = `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${cleanSection}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
+
+    const cacheKey = `preplab_logbook_content_${logbookId}`;
+    let savedContent = logbookCacheRef.current[logbookId];
+    if (!savedContent) {
+      try {
+        savedContent = localStorage.getItem(cacheKey) || '';
+      } catch {}
+    }
+
+    const contentToUse = (savedContent && savedContent.includes('|')) ? savedContent : defaultContent;
 
     const target = {
-      id: `logbook-${cleanSection.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      id: logbookId,
       title: logbookTitle,
       department: 'Prep & Lab',
       category: cleanSection,
       isLogbook: true,
       pt: targetUniverse === 'ALL' ? 'TBP' : targetUniverse,
-      content: `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${cleanSection}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Activity Name | Description | Created Time | Completion Date | Status | PIC | Priority | Activity | Period | Source Page |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`
+      content: contentToUse
     };
 
     navigateToPost(target);
@@ -986,6 +1004,11 @@ export function BulletinBoard({
         const taskMatch = rowStr.match(/<!--task-id:([^>]+)-->/);
         const parentMatch = rowStr.match(/<!--parent-id:([^>]+)-->/);
         const modMatch = rowStr.match(/<!--last-modified:([^>]+)-->/);
+        const originIdMatch = rowStr.match(/<!--origin-id:([^>]+)-->/);
+        const originTitleMatch = rowStr.match(/<!--origin-title:([^>]+)-->/);
+        const originRowMatch = rowStr.match(/<!--origin-row:([^>]+)-->/);
+        const parentTitleMatch = rowStr.match(/<!--parent-title:([^>]+)-->/);
+        const isLogbookMatch = rowStr.match(/<!--is-logbook:([^>]+)-->/);
         const isPin = rowStr.includes('<!--pin') || rowStr.includes('<!pin') || rowStr.includes('<!--pinned');
 
         if (taskMatch) rowObj.id = taskMatch[1].trim();
@@ -1002,6 +1025,23 @@ export function BulletinBoard({
           rowObj.isPinned = 'true';
           (rowObj as any)._pinned = 'true';
         }
+        if (originIdMatch) rowObj._originPostId = originIdMatch[1].trim();
+        if (originTitleMatch) {
+          try {
+            rowObj._originPostTitle = decodeURIComponent(originTitleMatch[1].trim());
+          } catch {
+            rowObj._originPostTitle = originTitleMatch[1].trim();
+          }
+        }
+        if (originRowMatch) rowObj._originRowIndex = originRowMatch[1].trim();
+        if (parentTitleMatch) {
+          try {
+            rowObj._parentTitle = decodeURIComponent(parentTitleMatch[1].trim());
+          } catch {
+            rowObj._parentTitle = parentTitleMatch[1].trim();
+          }
+        }
+        if (isLogbookMatch) rowObj._isLogbookAggregated = 'true';
 
         rows.push(rowObj);
       }
@@ -2419,6 +2459,13 @@ ${aiMeetingNotes
                 allPosts={posts}
                 onNavigateToPost={(p: any) => navigateToPost(p)}
                 onPostContentUpdate={(newContent: string) => {
+                  if (selectedPost && String(selectedPost.id).startsWith('logbook-')) {
+                    const logbookId = String(selectedPost.id);
+                    logbookCacheRef.current[logbookId] = newContent;
+                    try {
+                      localStorage.setItem(`preplab_logbook_content_${logbookId}`, newContent);
+                    } catch {}
+                  }
                   setSelectedPost((prev: any) => (prev ? { ...prev, content: newContent } : null));
                   setPosts((prev) =>
                     prev.map((p) =>
