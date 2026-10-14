@@ -177,13 +177,10 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
       {/* 1. ENTERPRISE HEADER BAR WITH ELEMENT DROPDOWN (GAMBAR 1)      */}
       {/* ------------------------------------------------------------- */}
       <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 flex items-center justify-between gap-2 flex-wrap">
-        {/* Left: Instrument Pill & Standard CRM */}
+        {/* Left: Instrument Pill */}
         <div className="flex items-center gap-2">
           <span className={`px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider shadow-xs ${headerColorClass}`}>
             {instrumentName}
-          </span>
-          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-0.8 rounded-md">
-            {standardCode}
           </span>
         </div>
 

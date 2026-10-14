@@ -512,7 +512,8 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if ((targetLower === 'jenis kegiatan' || targetLower === 'judul') && (keyLower.includes('jenis kegiatan') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
+    if ((targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'activity name' || targetLower === 'activity' || targetLower === 'nama kegiatan' || targetLower === 'task') && 
+        (keyLower.includes('jenis kegiatan') || keyLower.includes('activity name') || keyLower === 'activity' || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -573,7 +574,7 @@ export function serializeMarkdownTable(
     return `| ${cleanHeaders.map(h => {
       let val = getCellValue(row, h);
       const hLower = h.toLowerCase().trim();
-      const isTitleCol = hLower.includes('jenis kegiatan') || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama';
+      const isTitleCol = hLower.includes('jenis kegiatan') || hLower.includes('activity name') || hLower === 'activity' || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama';
       
       // Embed persistent ID metadata into the primary title cell
       if (isTitleCol && val) {
@@ -2177,8 +2178,8 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if ((targetLower === 'activity name' || targetLower === 'activity' || targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title') && 
-          (cleanKey.includes('jenis kegiatan') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
+      if ((targetLower === 'activity name' || targetLower === 'activity' || targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title' || targetLower === 'nama kegiatan') && 
+          (cleanKey.includes('jenis kegiatan') || cleanKey.includes('activity') || cleanKey.includes('activity name') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -2290,12 +2291,29 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     };
   }, [localRows, getRowVal]);
 
+  // Helper to determine real numeric post ID (fallback to row's _originPostId for aggregated/virtual views)
+  const getEffectivePostId = useCallback((targetRow?: TableRowData | null): number | null => {
+    if (typeof postId === 'number' && !isNaN(postId)) return postId;
+    if (typeof postId === 'string' && /^\d+$/.test(postId.trim())) {
+      const p = parseInt(postId.trim(), 10);
+      if (!isNaN(p)) return p;
+    }
+    const rowCandidate = targetRow || selectedRow;
+    const origin = rowCandidate?._originPostId;
+    if (origin) {
+      const p = parseInt(String(origin).trim(), 10);
+      if (!isNaN(p)) return p;
+    }
+    return null;
+  }, [postId, selectedRow]);
+
   // Fetch comments from backend
-  const fetchComments = useCallback(async () => {
-    if (!postId) return;
+  const fetchComments = useCallback(async (overridePostId?: number | null) => {
+    const targetPostId = overridePostId !== undefined ? overridePostId : getEffectivePostId();
+    if (!targetPostId) return;
     try {
       setCommentsLoading(true);
-      const res = await fetch(`/api/bulletin/${postId}/comments`);
+      const res = await fetch(`/api/bulletin/${targetPostId}/comments`);
       const json = await res.json();
       if (json.status === 'success' && Array.isArray(json.data)) {
         setAllComments(json.data);
@@ -2305,7 +2323,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     } finally {
       setCommentsLoading(false);
     }
-  }, [postId]);
+  }, [getEffectivePostId]);
 
   useEffect(() => {
     fetchComments();
@@ -3109,12 +3127,14 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     }
 
     // 4. Buat room diskusi awal untuk periode baru agar traceability mandiri tercatat
-    if (postId && baseTopic) {
+    const effectiveTargetPostId = getEffectivePostId();
+    if (effectiveTargetPostId && baseTopic) {
       try {
-        await fetch(`/api/bulletin/${postId}/comments`, {
+        await fetch(`/api/bulletin/${effectiveTargetPostId}/comments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            postId: effectiveTargetPostId,
             topicTitle: `${baseTopic} - ${nextPeriod}`,
             content: `🎯 Periode baru **${nextPeriod}** telah dibuka dengan target penyelesaian ${nextTargetDate}. Seluruh checklist subtask telah siap kembali.`,
             authorNik: currentAuthorNik || 'SYSTEM',
@@ -3122,7 +3142,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
             statusUpdate: 'Open'
           })
         });
-        fetchComments();
+        fetchComments(effectiveTargetPostId);
       } catch (e) {
         console.warn('Initial period comment creation warning:', e);
       }
@@ -4037,6 +4057,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
       taskCode: autoTaskCode,
       'Task ID': autoTaskCode,
       number: autoTaskCode,
+      'Activity Name': '',
       'Jenis kegiatan': '',
       'Jenis Kegiatan': '',
       Keterangan: '-',
@@ -4054,8 +4075,10 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     };
 
     displayHeaders.forEach(h => {
+      const hl = h.toLowerCase().trim();
+      const isTitle = hl.includes('activity name') || hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul' || hl === 'name';
       if (blankRow[h] === undefined) {
-        blankRow[h] = '-';
+        blankRow[h] = isTitle ? '' : '-';
       }
     });
 
@@ -4067,9 +4090,14 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     saveTableToBackend(nextRows);
 
     // Immediately activate inline editor on the new empty cell at row 0
+    const titleColHeader = displayHeaders.find(h => {
+      const hl = h.toLowerCase().trim();
+      return hl.includes('activity name') || hl.includes('jenis kegiatan') || hl === 'task' || hl === 'judul';
+    }) || 'Activity Name';
+
     setActiveInlineEditor({
       rowIndex: 0,
-      colName: 'Jenis kegiatan',
+      colName: titleColHeader,
       initialValue: '',
       multiline: false
     });
@@ -4589,7 +4617,11 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     const hasFiles = selectedFiles.length > 0 || selectedFile !== null;
     const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name || 'Lampiran'}\n\n${commentFileCaption.trim()}` : (hasFiles ? `📎 Lampiran` : ''));
     if (!finalContent && !hasFiles) return;
-    if (!postId || !selectedRow) return;
+    const targetPostId = getEffectivePostId(selectedRow);
+    if (!targetPostId) {
+      toast.error('Tidak dapat mengirim update: Tugas ini berada di halaman logbook virtual dan belum memiliki dokumen fisik terhubung.');
+      return;
+    }
 
     const topicTitleVal = selectedTopicTitle || 'Topik';
     const picVal = (getRowVal(selectedRow, 'PIC') || '').trim();
@@ -4616,11 +4648,11 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
 
       const fileUrlPayload = allFilesPayload ? JSON.stringify(allFilesPayload) : null;
 
-      const res = await fetch(`/api/bulletin/${postId}/comments`, {
+      const res = await fetch(`/api/bulletin/${targetPostId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          postId,
+          postId: targetPostId,
           content: finalContent,
           topicTitle: topicTitleVal,
           topicId: selectedRow?.id || topicTitleVal.toLowerCase().replace(/\s+/g, '-'),
@@ -4665,7 +4697,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
             await saveTableToBackend(updated);
           }
         }
-        await fetchComments();
+        await fetchComments(targetPostId);
       } else {
         toast.error('Gagal mengirim update: ' + (json.message || 'Error'));
       }
@@ -4917,14 +4949,21 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
       }
 
       // Post as an attachment comment with caption for this topic
+      const targetPostId = getEffectivePostId(selectedRow);
+      if (!targetPostId) {
+        toast.dismiss('upload-gallery');
+        toast.error('Tidak dapat mengunggah: Tugas ini berada di halaman logbook virtual dan belum memiliki dokumen fisik terhubung.');
+        return;
+      }
+
       const topicTitleVal = selectedTopicTitle || 'Topik';
       const activeSection = section || getRowVal(selectedRow, 'Kategori') || 'Prep & Lab';
 
-      const cRes = await fetch(`/api/bulletin/${postId}/comments`, {
+      const cRes = await fetch(`/api/bulletin/${targetPostId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          postId,
+          postId: targetPostId,
           content: caption.trim() ? `📎 ${file.name}\n\n${caption.trim()}` : `📎 Lampiran Foto / Dokumen: ${file.name}`,
           fileUrl: JSON.stringify([{
             url: uploadedUrl,
@@ -4950,7 +4989,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
           URL.revokeObjectURL(previewUrl);
         }
         setPendingUploadFile(null);
-        await fetchComments();
+        await fetchComments(targetPostId);
       } else {
         toast.error('Gagal menambahkan lampiran ke topik.');
       }
@@ -7246,7 +7285,18 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                           const isDirty = dirtyRowIndices.has(actualRowIndex);
                           const isSelected = selectedRowIndices.has(actualRowIndex);
                           const isSubCompleted = isSubItem ? isSubItemCompleted(row) : false;
-                          const rawTitle = (getRowVal(row, 'Jenis kegiatan') || getRowVal(row, 'Name') || getRowVal(row, 'Judul') || row['Name'] || row['= Name'] || `Baris ${actualRowIndex + 1}`).trim();
+                          const rawTitle = (
+                            getRowVal(row, 'Activity Name') || 
+                            getRowVal(row, 'Jenis kegiatan') || 
+                            getRowVal(row, 'Name') || 
+                            getRowVal(row, 'Judul') || 
+                            row['Activity Name'] || 
+                            row['Jenis kegiatan'] || 
+                            row['Jenis Kegiatan'] || 
+                            row['Name'] || 
+                            row['= Name'] || 
+                            `Baris ${actualRowIndex + 1}`
+                          ).trim();
                           const displayTitle = getDisplayTitle(rawTitle);
                           const topicKey = displayTitle.toLowerCase().trim();
                           const rawKey = rawTitle.toLowerCase().trim();
@@ -7462,7 +7512,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                                 setSelectedRow(row);
                                                 setModalTab('details');
                                               }}
-                                              className={`ml-1 opacity-80 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
+                                              className={`ml-1 opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
                                                 isNotionLight
                                                   ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
                                                   : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'

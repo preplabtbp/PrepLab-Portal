@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   LineChart, Sliders, RefreshCw, Calendar, ArrowLeftRight, 
   HelpCircle, Sparkles, Filter, Check, Eye, EyeOff, 
@@ -251,6 +251,32 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   const [showStats, setShowStats] = useState<boolean>(true);
   const [compactStats, setCompactStats] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
+
+  // Horizontal scroll synchronization for side-by-side mode
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const isSyncingScroll = useRef<boolean>(false);
+
+  const handleScrollSync = useCallback((sourceEl: HTMLElement) => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+
+    const scrollLeft = sourceEl.scrollLeft;
+
+    if (headerScrollRef.current && headerScrollRef.current !== sourceEl) {
+      headerScrollRef.current.scrollLeft = scrollLeft;
+    }
+
+    const stripContainers = document.querySelectorAll<HTMLElement>('.xrf-strip-scroll');
+    stripContainers.forEach((container) => {
+      if (container !== sourceEl) {
+        container.scrollLeft = scrollLeft;
+      }
+    });
+
+    requestAnimationFrame(() => {
+      isSyncingScroll.current = false;
+    });
+  }, []);
 
   // Cached Chart Data
   const [gridData, setGridData] = useState<Record<string, Record<string, any>>>({});
@@ -589,7 +615,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             <div className="flex items-center gap-2">
               <Sliders className="w-4 h-4 text-teal-600 dark:text-teal-400" />
               <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                Availability Alat {selectedSite} • {selectedMethod} (Maks 6 Berdampingan):
+                Availability Alat {selectedSite} • {selectedMethod}:
               </span>
             </div>
             <span className="text-[11px] font-bold text-slate-500">
@@ -648,19 +674,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. MAIN COMPARISON STRIP HEADER                               */}
+      {/* 2. MAIN COMPARISON STRIP HEADER (PINNED HEADER 1)             */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-slate-100/70 dark:bg-slate-900/50 p-2 rounded-2xl border border-slate-200/80 dark:border-slate-800/80">
-        <div className="flex items-center justify-between px-3 py-1 text-xs text-slate-500 font-semibold border-b border-slate-200/50 dark:border-slate-800/50 mb-2">
-          <span>ALAT AKTIF ({selectedInstruments.length} ALAT BERDAMPINGAN)</span>
-          <span className="font-mono text-xs font-bold text-teal-600 dark:text-teal-400 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            PARAMETER AKTIF: {selectedElement}
-          </span>
-        </div>
-
+      <div className="sticky top-[57px] z-30 bg-slate-100/95 dark:bg-slate-900/95 backdrop-blur-md p-2 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
         {viewMode === 'side-by-side' ? (
-          <div className="overflow-x-auto pb-1 scrollbar-thin">
+          <div 
+            ref={headerScrollRef}
+            onScroll={(e) => handleScrollSync(e.currentTarget)}
+            className="overflow-x-auto scrollbar-none"
+          >
             <div className="flex flex-nowrap gap-4 min-w-max">
               {selectedInstruments.map((instCode, idx) => {
                 const theme = getInstrumentTheme(instCode, undefined, idx);
@@ -732,30 +754,19 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                 key={`compare-row-${stdCode}`} 
                 className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-4"
               >
-                {/* Standard CRM Section Banner */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-slate-900 text-white dark:bg-white dark:text-slate-900 tracking-wider">
-                      STANDAR: {std.name}
-                    </span>
-                    <span className="text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 px-2 py-0.5 rounded-md">
-                      Parameter Aktif: {selectedElement}
-                    </span>
-                    {stdCount > 0 && (
-                      <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-md flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                        {stdCount.toLocaleString()} Pengukuran
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] font-mono text-slate-400">
-                    {selectedInstruments.length} Alat XRF Berdampingan
-                  </div>
+                {/* Standard CRM Section Banner (PINNED HEADER 2) */}
+                <div className="sticky top-[111px] z-20 -mx-4 -mt-4 px-4 py-2.5 rounded-t-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-2xs">
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-slate-900 text-white dark:bg-white dark:text-slate-900 tracking-wider">
+                    STANDAR: {std.name}
+                  </span>
                 </div>
 
                 {/* Charts Rendering: Side-by-Side (Strip) vs Responsive Grid */}
                 {viewMode === 'side-by-side' ? (
-                  <div className="overflow-x-auto pb-4 pt-1 scrollbar-thin">
+                  <div 
+                    onScroll={(e) => handleScrollSync(e.currentTarget)}
+                    className="xrf-strip-scroll overflow-x-auto pb-4 pt-1 scrollbar-thin"
+                  >
                     <div className="flex flex-nowrap gap-4 min-w-max">
                       {selectedInstruments.map((instCode, idx) => {
                         const theme = getInstrumentTheme(instCode, undefined, idx);
