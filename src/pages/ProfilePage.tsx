@@ -980,9 +980,9 @@ export function ProfilePage({
             </div>
 
             <div className="px-5 sm:px-7 pb-6 relative">
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-12 sm:-mt-16 md:-mt-20 mb-5 gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between pt-3 sm:pt-4 mb-5 gap-4">
                 {/* Avatar Box with Equipped Dynamic Frame Ring */}
-                <div className="relative group shrink-0 self-start">
+                <div className="relative group shrink-0 -mt-16 sm:-mt-20 md:-mt-24 z-10 self-start">
                   <DynamicAvatarFrame
                     frameId={activeAvatarFrame}
                     tierLevel={activeFrameTier}
@@ -1033,7 +1033,7 @@ export function ProfilePage({
                 </div>
 
                 {/* Quick Action Buttons Toolbar */}
-                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 self-start sm:self-end pt-2 sm:pt-0">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 self-start sm:self-center">
                   <button 
                     type="button"
                     onClick={() => setShowPromotionModal(true)}
