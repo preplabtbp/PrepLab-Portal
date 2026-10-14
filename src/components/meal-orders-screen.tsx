@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input, Select, Button } from './ui';
 import { todayWit } from '../utils/training-import';
 import { parseMealOrderSheet, type ParsedMealOrderRow, type MealImportField } from '../utils/meal-order-import';
-import { isTuesdayWednesdaySaturday, mealChoicePatch } from '../utils/meal-roster-sync';
+import { isTuesdayWednesdaySaturday, mealChoicePatch, type CatatanOption } from '../utils/meal-roster-sync';
 import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle, type RecapBlock } from './meal-bungkus-recap';
 
 // ===== Orderan Makanan harian =====
@@ -767,43 +767,139 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     saveCell(r, patch);
   };
 
-  const renderMealChoices = (r: MealOrder) => {
-    const slots = mealChoiceSlots(r);
-    if (slots.length === 0) return null;
-    // Shift Malam: pilihan Catatan mati — Pagi & Sore otomatis Kantin
-    const isMalam = r.shiftKerja === 'MALAM';
+  const isKawasiRow = (r: MealOrder) => `${r.tempatTinggal || ''}`.toLowerCase().includes('kawasi');
+
+  const getRowCatatanValue = (r: MealOrder): CatatanOption => {
+    if (isKawasiRow(r)) return '-';
+    const c = String(r.catatan || '').trim();
+    if (c === 'Bungkusan Pagi dan Bungkusan Sore') return c;
+    if (c === 'Bungkusan Pagi') return c;
+    if (c === 'Bungkusan Sore') return c;
+    // Deteksi fallback dari porsi lapangan
+    const p = portions(r.pagiLapangan) > 0;
+    const s = portions(r.soreLapangan) > 0 && String(r.shiftKerja || '').toUpperCase() !== 'LONGSHIFT';
+    if (p && s) return 'Bungkusan Pagi dan Bungkusan Sore';
+    if (p) return 'Bungkusan Pagi';
+    if (s) return 'Bungkusan Sore';
+    return '-';
+  };
+
+  const handleSelectCatatan = (r: MealOrder, val: string) => {
+    if (!canManage) return;
+    if (isKawasiRow(r)) {
+      toast.info('Karyawan Kampung Kawasi: Catatan bungkusan pagi/sore tidak berlaku.');
+      return;
+    }
+    const sm = String(r.statusMess || '').trim().toUpperCase();
+    const isNR = sm === 'NR';
+    const isNirwana = `${r.tempatTinggal || ''}`.toLowerCase().includes('nirwana');
+    const kantinVal = isNR && isNirwana ? '1' : 'K';
+    const isLS = String(r.shiftKerja || '').toUpperCase() === 'LONGSHIFT';
+
+    const patch: Partial<MealOrder> = {
+      catatan: val === '-' ? '-' : val,
+    };
+
+    if (val === 'Bungkusan Pagi') {
+      patch.pilihanPagi = 'lapangan';
+      patch.pilihanSore = 'kantin';
+      patch.pagiLapangan = '1';
+      patch.pagiKantin = null;
+      patch.batchPagi = null;
+      if (!isLS) {
+        patch.soreKantin = kantinVal;
+        patch.soreLapangan = null;
+        patch.batchSore = isNR && isNirwana ? '1' : null;
+      }
+    } else if (val === 'Bungkusan Sore') {
+      patch.pilihanPagi = 'kantin';
+      patch.pilihanSore = 'lapangan';
+      patch.pagiKantin = kantinVal;
+      patch.pagiLapangan = null;
+      patch.batchPagi = isNR && isNirwana ? '1' : null;
+      patch.soreLapangan = '1';
+      patch.soreKantin = null;
+      patch.batchSore = null;
+    } else if (val === 'Bungkusan Pagi dan Bungkusan Sore') {
+      patch.pilihanPagi = 'lapangan';
+      patch.pilihanSore = 'lapangan';
+      patch.pagiLapangan = '1';
+      patch.pagiKantin = null;
+      patch.batchPagi = null;
+      patch.soreLapangan = '1';
+      patch.soreKantin = null;
+      patch.batchSore = null;
+    } else {
+      // '-' (Kantin default)
+      patch.pilihanPagi = 'kantin';
+      patch.pilihanSore = 'kantin';
+      patch.pagiKantin = kantinVal;
+      patch.pagiLapangan = null;
+      patch.batchPagi = isNR && isNirwana ? '1' : null;
+      if (!isLS) {
+        patch.soreKantin = kantinVal;
+        patch.soreLapangan = null;
+        patch.batchSore = isNR && isNirwana ? '1' : null;
+      }
+    }
+
+    saveCell(r, patch);
+    toast.success(`${r.nama}: Catatan diubah ke "${val}"`);
+  };
+
+  const renderCatatanCell = (r: MealOrder) => {
+    const isKawasi = isKawasiRow(r);
+    const sk = String(r.shiftKerja || r.status || '').toUpperCase();
+    const isCuti = sk === 'CUTI' || String(r.statusKerja || '').toLowerCase().includes('cuti');
+    const isMalam = sk === 'MALAM';
+    const isDisabled = isKawasi || isCuti || isMalam || !canManage;
+
+    const currentVal = getRowCatatanValue(r);
+    const rawCatatan = String(r.catatan || '').trim();
+    const isCustomCatatan = rawCatatan && !['-', 'Bungkusan Pagi', 'Bungkusan Sore', 'Bungkusan Pagi dan Bungkusan Sore'].includes(rawCatatan);
+
+    const disabledTitle = isKawasi
+      ? 'Matikan Catatan ini atau tidak bisa di Pilih (Kampung Kawasi)'
+      : isCuti
+      ? 'Karyawan Cuti'
+      : isMalam
+      ? 'Shift Malam: Pagi, Siang & Sore otomatis Kantin'
+      : undefined;
+
+    const badgeStyle = currentVal === 'Bungkusan Pagi dan Bungkusan Sore'
+      ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold'
+      : currentVal === 'Bungkusan Pagi'
+      ? 'bg-amber-50 text-amber-900 border-amber-300 font-bold'
+      : currentVal === 'Bungkusan Sore'
+      ? 'bg-orange-50 text-orange-900 border-orange-300 font-bold'
+      : 'bg-white text-slate-600 border-slate-200';
+
+    if (isDisabled) {
+      return (
+        <div className="flex items-center justify-center gap-1" title={disabledTitle}>
+          <span className="inline-block px-2 py-0.5 rounded text-xs text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed">
+            {isCustomCatatan ? rawCatatan : '-'}
+          </span>
+          {isCustomCatatan && <span className="text-[11px] text-slate-500 font-medium">{rawCatatan}</span>}
+        </div>
+      );
+    }
+
     return (
-      <div className="flex items-center gap-1 shrink-0">
-        {slots.map(time => {
-          const value = portions(r[time === 'pagi' ? 'pagiLapangan' : 'soreLapangan']) > 0 ? 'lapangan' : 'kantin';
-          const label = time === 'pagi' ? 'Pagi' : 'Sore';
-          return canManage ? (
-            <select
-              key={time}
-              value={value}
-              disabled={isMalam}
-              onChange={e => setMealChoice(r, time, e.target.value as 'kantin' | 'lapangan')}
-              className={`rounded-md text-xs font-semibold px-1.5 py-1 focus:outline-none border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isMalam ? '' : 'cursor-pointer'} ${
-                value === 'kantin'
-                  ? 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100'
-                  : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-              }`}
-              title={isMalam ? 'Shift Malam: pilihan tidak berlaku — Pagi & Sore otomatis Kantin' : `Pilih ${label}: ${label} Kantin atau ${label} Bungkusan (berlaku seterusnya)`}
-            >
-              <option value="kantin">{label} Kantin</option>
-              <option value="lapangan">{label} Bungkusan</option>
-            </select>
-          ) : (
-            <span
-              key={time}
-              className={`text-[11px] px-1.5 py-0.5 rounded font-semibold border ${
-                value === 'kantin' ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-amber-50 text-amber-900 border-amber-200'
-              }`}
-            >
-              {label} {value === 'kantin' ? 'Kantin' : 'Bungkusan'}
-            </span>
-          );
-        })}
+      <div className="flex items-center justify-center gap-1">
+        <select
+          value={currentVal}
+          onChange={e => handleSelectCatatan(r, e.target.value)}
+          className={`rounded-md text-xs px-2 py-1 focus:outline-none border transition-colors cursor-pointer ${badgeStyle}`}
+          title="Pilih Catatan: Bungkusan Pagi / Bungkusan Sore / Bungkusan Pagi dan Bungkusan Sore"
+        >
+          <option value="-">-</option>
+          <option value="Bungkusan Pagi">Bungkusan Pagi</option>
+          <option value="Bungkusan Sore">Bungkusan Sore</option>
+          <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
+          {isCustomCatatan && <option value={rawCatatan}>{rawCatatan}</option>}
+        </select>
+        {isCustomCatatan && <span className="text-[11px] text-slate-500 font-medium">{rawCatatan}</span>}
       </div>
     );
   };
@@ -1729,7 +1825,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               )}
                             </td>
                             <td className={`${tdBase} font-semibold text-slate-700 p-1`}>
-                              <div className="flex items-center justify-center gap-1.5">{renderMealChoices(r)}{r.catatan || ''}</div>
+                              {renderCatatanCell(r)}
                             </td>
                           </>
                         )}
@@ -1838,8 +1934,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                                 {r.keteranganLapor && r.keteranganLapor !== '-' ? r.keteranganLapor : '-'}
                               </span>
                             )}
-                            {renderMealChoices(r)}
-                            {r.catatan && <span className="text-slate-600 font-medium truncate">· {r.catatan}</span>}
+                            {renderCatatanCell(r)}
                           </div>
                         )}
                       </div>
@@ -1879,6 +1974,18 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   >
                     <option value="">-</option>
                     <option value="Belum Lapor">Belum Lapor</option>
+                  </Select>
+                ) : f.key === 'catatan' ? (
+                  <Select
+                    key={f.key}
+                    label={f.label}
+                    value={form.catatan || ''}
+                    onChange={e => updateForm('catatan', e.target.value)}
+                  >
+                    <option value="">-</option>
+                    <option value="Bungkusan Pagi">Bungkusan Pagi</option>
+                    <option value="Bungkusan Sore">Bungkusan Sore</option>
+                    <option value="Bungkusan Pagi dan Bungkusan Sore">Bungkusan Pagi dan Bungkusan Sore</option>
                   </Select>
                 ) : (
                   <Input key={f.key} label={f.label} value={form[f.key] || ''} onChange={e => updateForm(f.key, e.target.value)} placeholder={f.placeholder} />
