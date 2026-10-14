@@ -993,6 +993,19 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const summaryCardsTbp = useMemo(() => buildSummaryCards(tbpFiltered), [activeMealGroups, tbpFiltered]);
   const summaryCardsGps = useMemo(() => buildSummaryCards(gpsFiltered), [activeMealGroups, gpsFiltered]);
 
+  // Kartu Total Bungkusan: jumlah bungkus semua waktu makan (Pagi, Sahur, Siang, Sore, Takjil, Malam)
+  const renderTotalBungkusCard = (cards: { label: string; value: number }[], scope: string) => {
+    const total = cards.reduce((s, c) => s + c.value, 0);
+    const detail = cards.filter(c => c.value > 0).map(c => `${c.label} ${c.value}`).join(' · ') || 'Belum ada bungkusan';
+    return (
+      <div className="rounded-2xl bg-emerald-700 p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-emerald-800" title={`${scope}: Total ${total} Bungkusan (${detail})`}>
+        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-100 flex items-center justify-center gap-1"><Package className="w-3 h-3" />Total Bungkusan</p>
+        <p className="text-2xl font-semibold text-white">{total} <span className="text-xs font-normal text-emerald-100">bungkus</span></p>
+        <p className="text-[10px] text-emerald-100 truncate" title={detail}>{detail}</p>
+      </div>
+    );
+  };
+
   const confirmedAll = useMemo(() => getConfirmedSummary(filtered), [filtered]);
   const confirmedTbp = useMemo(() => getConfirmedSummary(tbpFiltered), [tbpFiltered]);
   const confirmedGps = useMemo(() => getConfirmedSummary(gpsFiltered), [gpsFiltered]);
@@ -1227,6 +1240,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
                     </div>
                   ))}
+                  {renderTotalBungkusCard(summaryCardsTbp, 'TBP')}
                   {columnVisibility.batches && (
                     <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
@@ -1266,6 +1280,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
                     </div>
                   ))}
+                  {renderTotalBungkusCard(summaryCardsGps, 'GPS')}
                   {columnVisibility.batches && (
                     <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
@@ -1305,6 +1320,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <p className="text-[10px] text-slate-500 truncate" title={c.detail}>{c.detail}</p>
                     </div>
                   ))}
+                  {renderTotalBungkusCard(summaryCardsAll, 'Total Gabungan')}
                   {columnVisibility.batches && (
                     <div className="rounded-2xl bg-white p-3 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-100">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">1 (B.Pagi) · 1 (B.Sore)</p>
