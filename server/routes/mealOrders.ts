@@ -6,7 +6,8 @@ import { parseMealOrderSheet, type ParsedMealOrderRow } from "../../src/utils/me
 import { MEAL_ORDER_SEED_CSV } from "../data/mealOrderSeed.js";
 import { db } from "../../src/db/index.js";
 import { and, asc, eq, sql, desc, inArray, notInArray } from "drizzle-orm";
-import { mealOrders, employees, roster } from "../../src/db/schema.js";
+import { mealOrders, employees, roster, mealBungkusDaily } from "../../src/db/schema.js";
+import { mealCounts, resolveMealCompany, MEAL_SLOTS, type MealCompany, type MealSlot } from "../../src/utils/meal-bungkus-counts.js";
 import { drive } from "../../google-services.js";
 import { getTrainingAccess } from "./training.js";
 import {
@@ -69,6 +70,19 @@ export function ensureMealOrdersTable(): Promise<void> {
         updated_at TIMESTAMP DEFAULT NOW()
       )`);
       await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_orders_date_nik ON meal_orders (order_date, nik)`);
+      // Rekapan Bungkusan harian (snapshot per tanggal × perusahaan × waktu makan)
+      await db.execute(sql`CREATE TABLE IF NOT EXISTS meal_bungkus_daily (
+        id SERIAL PRIMARY KEY,
+        order_date DATE NOT NULL,
+        company TEXT NOT NULL,
+        slot TEXT NOT NULL,
+        lapangan INTEGER NOT NULL DEFAULT 0,
+        bungkus_kantin INTEGER NOT NULL DEFAULT 0,
+        makan_kantin INTEGER NOT NULL DEFAULT 0,
+        karyawan INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT NOW()
+      )`);
+      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_bungkus_daily_key ON meal_bungkus_daily (order_date, company, slot)`);
       // Kolom tambahan sesuai sheet Meal_Order.csv
       await db.execute(sql`ALTER TABLE meal_orders
         ADD COLUMN IF NOT EXISTS batch_pagi TEXT,
@@ -440,7 +454,63 @@ function scheduleSheetSync() {
   syncTimer = setTimeout(() => {
     syncTimer = null;
     syncMealOrderSheet().catch((e: any) => console.error("[MealOrders] Sync Google Sheets gagal:", e.message));
+    // Simpan juga Rekapan Bungkusan harian untuk tanggal yang orderannya berubah
+    snapshotChangedBungkusDays().catch((e: any) => console.error("[MealOrders] Simpan rekapan bungkusan gagal:", e.message));
   }, 20 * 1000);
+}
+
+// ===== Rekapan Bungkusan harian (disimpan per tanggal × perusahaan × waktu makan) =====
+type BungkusDailyRow = { orderDate: string; company: MealCompany; slot: MealSlot; lapangan: number; bungkusKantin: number; makanKantin: number; karyawan: number };
+
+// Hitung rekapan dari orderan beberapa tanggal (rumus sama dengan kartu ringkasan modul) lalu simpan
+async function snapshotBungkusDays(dates: string[]): Promise<BungkusDailyRow[]> {
+  if (dates.length === 0) return [];
+  const inactive = await getInactiveNiks();
+  const orders = (await db.select().from(mealOrders).where(inArray(mealOrders.orderDate, dates))).filter(isActiveRow(inactive));
+  const empPt = new Map((await db.select({ nik: employees.nik, pt: employees.pt }).from(employees)).map(e => [String(e.nik || '').toUpperCase().trim(), e.pt]));
+  const acc = new Map<string, BungkusDailyRow>();
+  const staff = new Map<string, Set<string>>();
+  for (const r of orders) {
+    const d = ymd(r.orderDate);
+    const company = resolveMealCompany(r.pt, empPt.get(r.nik.toUpperCase().trim()));
+    const ck = `${d}|${company}`;
+    if (!staff.has(ck)) staff.set(ck, new Set());
+    staff.get(ck)!.add(r.nik.toUpperCase().trim());
+    for (const slot of MEAL_SLOTS) {
+      const k = `${d}|${company}|${slot}`;
+      const row = acc.get(k) || { orderDate: d, company, slot, lapangan: 0, bungkusKantin: 0, makanKantin: 0, karyawan: 0 };
+      const c = mealCounts(r, slot);
+      row.lapangan += c.lapangan; row.bungkusKantin += c.bungkusKantin; row.makanKantin += c.makanKantin;
+      acc.set(k, row);
+    }
+  }
+  // Pastikan TBP & GPS selalu punya baris untuk setiap tanggal yang dihitung (agar tanggal kosong tercatat 0)
+  for (const d of dates) for (const company of ['TBP', 'GPS'] as MealCompany[]) for (const slot of MEAL_SLOTS) {
+    const k = `${d}|${company}|${slot}`;
+    if (!acc.has(k)) acc.set(k, { orderDate: d, company, slot, lapangan: 0, bungkusKantin: 0, makanKantin: 0, karyawan: 0 });
+  }
+  const rows = Array.from(acc.values()).map(r => ({ ...r, karyawan: staff.get(`${r.orderDate}|${r.company}`)?.size || 0 }));
+  const now = new Date();
+  for (let i = 0; i < rows.length; i += 500) {
+    await db.insert(mealBungkusDaily).values(rows.slice(i, i + 500).map(r => ({ ...r, updatedAt: now })))
+      .onConflictDoUpdate({
+        target: [mealBungkusDaily.orderDate, mealBungkusDaily.company, mealBungkusDaily.slot],
+        set: { lapangan: sql`excluded.lapangan`, bungkusKantin: sql`excluded.bungkus_kantin`, makanKantin: sql`excluded.makan_kantin`, karyawan: sql`excluded.karyawan`, updatedAt: now },
+      });
+  }
+  return rows;
+}
+
+// Tanggal yang orderannya diubah setelah rekapan terakhir disimpan
+async function snapshotChangedBungkusDays() {
+  await ensureMealOrdersTable();
+  const changed = await db.execute(sql`
+    SELECT mo.order_date::text AS d FROM meal_orders mo
+    GROUP BY mo.order_date
+    HAVING MAX(mo.updated_at) > COALESCE((SELECT MAX(b.updated_at) FROM meal_bungkus_daily b WHERE b.order_date = mo.order_date), '-infinity'::timestamp)
+    LIMIT 120`);
+  const dates = (changed.rows as { d: string }[]).map(r => String(r.d).slice(0, 10));
+  if (dates.length) await snapshotBungkusDays(dates);
 }
 
 function pickFields(body: any): Partial<Record<EditableField, any>> {
@@ -1149,6 +1219,33 @@ mealOrdersRouter.delete("/api/meal-orders/:id", requireMealManager, async (req, 
 });
 
 // 6. GET /api/meal-orders/sheet — link Google Sheets "Meal Order" (hanya Section Administrasi / Developer)
+// GET /api/meal-orders/bungkus-stats?from=YYYY-MM-DD&to=YYYY-MM-DD — Rekapan Bungkusan harian (untuk list & diagram
+// harian / mingguan / bulanan). Tanggal yang ada orderannya dihitung ulang & disimpan; tanggal lain memakai data tersimpan.
+mealOrdersRouter.get("/api/meal-orders/bungkus-stats", async (req, res) => {
+  try {
+    await ensureMealOrdersTable();
+    const { from, to } = req.query;
+    if (!isDate(from) || !isDate(to) || from > to) return res.status(400).json({ status: "error", message: "Rentang tanggal tidak valid (from/to YYYY-MM-DD)." });
+    const spanDays = (Date.parse(to) - Date.parse(from)) / 86400000;
+    if (spanDays > 400) return res.status(400).json({ status: "error", message: "Rentang maksimal ±1 tahun." });
+
+    const orderDates = (await db.select({ date: mealOrders.orderDate }).from(mealOrders)
+      .where(and(sql`${mealOrders.orderDate} >= ${from}`, sql`${mealOrders.orderDate} <= ${to}`))
+      .groupBy(mealOrders.orderDate)).map(r => ymd(r.date));
+    const live = await snapshotBungkusDays(orderDates);
+    const liveDates = new Set(orderDates);
+    const saved = (await db.select().from(mealBungkusDaily)
+      .where(and(sql`${mealBungkusDaily.orderDate} >= ${from}`, sql`${mealBungkusDaily.orderDate} <= ${to}`)))
+      .filter(r => !liveDates.has(ymd(r.orderDate)))
+      .map(r => ({ orderDate: ymd(r.orderDate), company: r.company, slot: r.slot, lapangan: r.lapangan, bungkusKantin: r.bungkusKantin, makanKantin: r.makanKantin, karyawan: r.karyawan }));
+    const data = [...live, ...saved].sort((a, b) => a.orderDate.localeCompare(b.orderDate));
+    res.json({ status: "success", from, to, data });
+  } catch (error: any) {
+    console.error("[MealOrders BUNGKUS-STATS] Error:", error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
 mealOrdersRouter.get("/api/meal-orders/sheet", requireMealManager, async (_req, res) => {
   try {
     const f = await findMealSheet();

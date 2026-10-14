@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp,
+  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Truck, BarChart3, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,6 +9,8 @@ import { todayWit } from '../utils/training-import';
 import { parseMealOrderSheet, type ParsedMealOrderRow, type MealImportField } from '../utils/meal-order-import';
 import { isTuesdayWednesdaySaturday, mealChoicePatch, computeMealOrderByRoster, isCatatanDisabledForEmployee, type CatatanOption, type MealPreference, type MealChoice } from '../utils/meal-roster-sync';
 import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTitle, type RecapBlock } from './meal-bungkus-recap';
+import { mealCounts, bungkusCount, MEAL_SLOT_BY_GROUP, type MealSlot } from '../utils/meal-bungkus-counts';
+import { MealBungkusStats } from './meal-bungkus-stats';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
@@ -75,28 +77,10 @@ const longDate = (d: string) => { const x = parseYmd(d); return `${x.getUTCDate(
 const shiftDate = (d: string, days: number) => { const x = parseYmd(d); x.setUTCDate(x.getUTCDate() + days); return x.toISOString().slice(0, 10); };
 
 const portions = (v: string | null | undefined) => { const n = Number(String(v || '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; };
-// Hitungan per baris per waktu makan — SATU sumber untuk kartu ringkasan modul & Export TBP/GPS agar angkanya selalu sama.
-//  lapangan      = porsi kolom Lapangan (Bungkus Lapangan)
-//  bungkusKantin = Bungkus Kantin karyawan non-CR (NR): Pagi/Sore dari 1 (B.Pagi)/1 (B.Sore) atau "1" di Kantin; Siang/Sahur dari kolom Kantin
-//  makanKantin   = makan di kantin (karyawan Mess CR yang kolom Kantin-nya terisi)
-type MealSlot = 'pagi' | 'sahur' | 'siang' | 'sore' | 'takjil' | 'malam';
-const MEAL_SLOT_BY_GROUP: Record<string, MealSlot> = { Pagi: 'pagi', Sahur: 'sahur', Siang: 'siang', Sore: 'sore', Takjil: 'takjil', Malam: 'malam' };
-const isCRMess = (r: { statusMess: string | null }) => ['CR', 'MESS'].includes(String(r.statusMess || '').trim().toUpperCase());
-function mealCounts(r: MealOrder, slot: MealSlot): { lapangan: number; bungkusKantin: number; makanKantin: number } {
-  const lapangan = portions(r[`${slot}Lapangan` as LapanganKey]);
-  if (slot === 'takjil' || slot === 'malam') return { lapangan, bungkusKantin: 0, makanKantin: 0 };
-  const kantin = String(r[`${slot}Kantin` as KantinKey] || '').trim();
-  if (isCRMess(r)) return { lapangan, bungkusKantin: 0, makanKantin: kantin && kantin !== '-' ? 1 : 0 };
-  let bungkusKantin = 0;
-  if (slot === 'pagi' || slot === 'sore') bungkusKantin = portions(slot === 'pagi' ? r.batchPagi : r.batchSore) || (kantin === '1' ? 1 : 0);
-  else if (slot === 'siang') bungkusKantin = kantin && kantin !== '-' ? 1 : 0;
-  else bungkusKantin = kantin === '1' ? 1 : 0;
-  return { lapangan, bungkusKantin, makanKantin: 0 };
-}
+// Hitungan bungkus per baris (mealCounts / bungkusCount) dari src/utils/meal-bungkus-counts.ts — dipakai juga oleh Rekapan Bungkusan di server
 
 // Filter tabel dari klik kartu ringkasan
 type CardFilter = { company: Company | 'all'; kind: 'karyawan' | 'slot' | 'total' | 'batch' | 'belumLapor'; slot?: MealSlot; label: string };
-const bungkusCount = (r: MealOrder, slot: MealSlot) => { const c = mealCounts(r, slot); return c.lapangan + c.bungkusKantin; };
 
 const cellTotal = (rows: MealOrder[], key: MealCellKey, kind: 'kantin' | 'lapangan') =>
   rows.reduce((s, r) => s + (kind === 'kantin' ? (String(r[key] || '').trim() ? 1 : 0) : portions(r[key])), 0);
@@ -165,7 +149,8 @@ function FloatingScrollbar({ targetRef }: { targetRef: React.RefObject<HTMLDivEl
 export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => todayWit());
-  const [view, setView] = useState<'orders' | 'recap'>('orders');
+  // orders = Orderan Makanan · recap = List Pengiriman Ke GA (lembar per tanggal) · stats = Rekapan Bungkusan (harian/mingguan/bulanan)
+  const [view, setView] = useState<'orders' | 'recap' | 'stats'>('orders');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const tableAnchorRef = useRef<HTMLDivElement>(null);
@@ -1371,7 +1356,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
         {/* Tab: Orderan Makanan / Rekapan Bungkusan */}
         <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {([['orders', 'Orderan Makanan', Utensils], ['recap', 'Rekapan Bungkusan', Package]] as const).map(([key, label, Icon]) => (
+          {([['orders', 'Orderan Makanan', Utensils], ['recap', 'List Pengiriman Ke GA', Truck], ['stats', 'Rekapan Bungkusan', BarChart3]] as const).map(([key, label, Icon]) => (
             <button
               key={key}
               type="button"
@@ -1383,11 +1368,15 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           ))}
         </div>
 
+        {view === 'stats' && (
+          <MealBungkusStats date={date} onOpenDate={d => { setDate(d); setView('orders'); }} />
+        )}
+
         {view === 'recap' && (
           <div className={`${UI.panel} p-4 sm:p-5 space-y-4 min-w-0`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
               <div>
-                <p className="text-sm font-bold text-slate-900">Rekapan Bungkusan <span className="font-medium text-slate-400">· {dayName(date)}, {longDate(date)}</span></p>
+                <p className="text-sm font-bold text-slate-900">List Pengiriman Ke GA <span className="font-medium text-slate-400">· {dayName(date)}, {longDate(date)}</span></p>
                 <p className="text-xs text-slate-500 mt-0.5">Dihitung otomatis dari porsi Lapangan & kolom 1 (B.Pagi)/1 (B.Sore). Gol IV-V yang pesan bungkusan Pagi/Siang/Sore tampil sebagai Kotakan.</p>
               </div>
               <button
@@ -1404,7 +1393,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 }}
                 disabled={rows.length === 0 || employeesLoading || downloadingPdf}
                 className={`${UI.btnPrimary} shrink-0`}
-                title="Download file PDF Rekapan Bungkusan (A4 landscape)"
+                title="Download file PDF List Pengiriman Ke GA (A4 landscape)"
               >
                 {downloadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Download PDF
               </button>

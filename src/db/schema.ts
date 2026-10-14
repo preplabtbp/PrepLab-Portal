@@ -863,6 +863,22 @@ export const mealOrders = pgTable('meal_orders', {
   uniqueIndex('idx_meal_orders_date_nik').on(t.orderDate, t.nik),
 ]);
 
+// Rekapan Bungkusan harian (snapshot) — satu baris per tanggal × perusahaan (TBP/GPS) × waktu makan.
+// Disimpan otomatis dari Orderan Makanan agar riwayat tetap ada walau orderan tanggal tsb berubah / terhapus.
+export const mealBungkusDaily = pgTable('meal_bungkus_daily', {
+  id: serial('id').primaryKey(),
+  orderDate: date('order_date').notNull(),
+  company: text('company').notNull(), // 'TBP' | 'GPS'
+  slot: text('slot').notNull(), // 'pagi' | 'sahur' | 'siang' | 'sore' | 'takjil' | 'malam'
+  lapangan: integer('lapangan').notNull().default(0), // Bungkus Lapangan
+  bungkusKantin: integer('bungkus_kantin').notNull().default(0), // Bungkus Kantin (NR)
+  makanKantin: integer('makan_kantin').notNull().default(0), // makan di kantin (CR)
+  karyawan: integer('karyawan').notNull().default(0), // jumlah karyawan di orderan tanggal tsb (per perusahaan)
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_meal_bungkus_daily_key').on(t.orderDate, t.company, t.slot),
+]);
+
 // Database Training per karyawan (satu baris per NIK), dua program:
 //  - Training SAP (HAZID, JSA, IUT OTT, IAI, BFA) — acuan Training_SAP.csv
 //  - Training K3 (WAH, LOTO, Confined Space, Basic Fire Fighting + status) — acuan Training_WAH_LOTO_CONFINE_SPACE_FIRE_FIGHTER.csv
