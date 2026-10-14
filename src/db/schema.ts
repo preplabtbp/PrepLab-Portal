@@ -863,6 +863,24 @@ export const mealOrders = pgTable('meal_orders', {
   uniqueIndex('idx_meal_orders_date_nik').on(t.orderDate, t.nik),
 ]);
 
+// Sertifikasi K3 & Kompetensi (Training External): satu baris per peserta per jenis sertifikat
+// certType: 'ahli_k3_kimia' | 'petugas_k3_kimia' | 'proteksi_radiasi' | 'teknisi_k3_listrik' | 'juru_las_3'
+export const trainingCertifications = pgTable('training_certifications', {
+  id: serial('id').primaryKey(),
+  certType: text('cert_type').notNull(),
+  nik: text('nik'), // dicocokkan ke Database Karyawan (boleh kosong bila belum cocok)
+  nama: text('nama').notNull(),
+  jabatan: text('jabatan'),
+  pt: text('pt'), // 'TBP' | 'GPS'
+  tanggal: text('tanggal'), // Tanggal training / ujian 'YYYY-MM-DD'
+  keterangan: text('keterangan'), // mis. 'Lulus'
+  expired: text('expired'), // Tanggal expired 'YYYY-MM-DD'
+  note: text('note'),
+  updatedBy: text('updated_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Rekapan Bungkusan harian (snapshot) — satu baris per tanggal × perusahaan (TBP/GPS) × waktu makan.
 // Disimpan otomatis dari Orderan Makanan agar riwayat tetap ada walau orderan tanggal tsb berubah / terhapus.
 export const mealBungkusDaily = pgTable('meal_bungkus_daily', {
