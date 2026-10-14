@@ -1303,6 +1303,67 @@ mealOrdersRouter.post("/api/meal-orders/import", requireMealManager, async (req,
   }
 });
 
+// Kode roster satu karyawan pada satu tanggal: sheet "Database Rooster Prep & Lab", cadangan tabel roster database
+async function getRosterCodeForDate(nik: string, date: string): Promise<{ code: string | null; source: RosterSource }> {
+  const key = nik.toUpperCase().trim();
+  const dateFormats = getPossibleRosterDateStrings(date);
+  try {
+    const sheet = await fetchRosterSheetForDate(dateFormats);
+    if (sheet.dateFound) {
+      const e = sheet.entries.find(x => x.nik.toUpperCase().trim() === key);
+      if (e) return { code: e.status || '-', source: 'sheet' };
+    }
+  } catch (err: any) {
+    console.warn(`[MealOrders] Gagal membaca sheet roster untuk ${key} ${date}: ${err?.message}`);
+  }
+  const [r] = await db.select({ status: roster.status }).from(roster)
+    .where(and(sql`UPPER(${roster.nik}) = ${key}`, inArray(roster.date, dateFormats))).limit(1);
+  return { code: r?.status ? r.status.trim() : null, source: 'database' };
+}
+
+// 3c. POST /api/meal-orders/:id/clear-belum-lapor — matikan "Belum Lapor" lalu kembalikan orderan ke roster kerja tanggal tsb
+//     (mis. roster N → Malam). Profil karyawan di orderan tidak diubah; pilihan Pagi/Sore Catatan tetap dipakai.
+mealOrdersRouter.post("/api/meal-orders/:id/clear-belum-lapor", requireMealManager, async (req, res) => {
+  try {
+    await ensureMealOrdersTable();
+    const id = Number(req.params.id);
+    const [row] = await db.select().from(mealOrders).where(eq(mealOrders.id, id)).limit(1);
+    if (!row) return res.status(404).json({ status: "error", message: "Orderan tidak ditemukan." });
+    const date = ymd(row.orderDate);
+    const nik = row.nik.toUpperCase().trim();
+
+    const { code: rawCode, source } = await getRosterCodeForDate(nik, date);
+    // Belum Lapor dimatikan manual → kode roster dipakai tanpa penanda BL
+    const code = String(rawCode || '-').replace(/belum\s*lapor|\bBL\b/gi, '').trim() || '-';
+    const [emp] = await db.select({ gol: employees.gol, alamatDomisili: employees.alamatDomisili }).from(employees).where(sql`UPPER(${employees.nik}) = ${nik}`).limit(1);
+    const prefs = await loadMealPreferences(date, nik);
+    const computed = computeMealOrderByRoster(
+      { nik: row.nik, name: row.nama, statusMess: row.statusMess, shift: row.shift, section: row.section, tempatTinggal: row.tempatTinggal, gol: emp?.gol ?? null, alamatDomisili: null, keteranganLapor: null, status: null },
+      code, date, withCurrentChoice(prefs.get(nik), row), 'D',
+    );
+    if (String(computed.shiftKerja || '').toUpperCase() === 'SIANG' && (String(row.shift || '').toLowerCase().includes('nonshift') || (await loadNonshiftNiks(date, nik)).has(nik))) computed.shiftKerja = 'Nonshift';
+
+    const [updated] = await db.update(mealOrders).set({
+      statusKerja: computed.statusKerja,
+      shiftKerja: computed.shiftKerja,
+      pagiKantin: computed.pagiKantin, pagiLapangan: computed.pagiLapangan,
+      siangKantin: computed.siangKantin, siangLapangan: computed.siangLapangan,
+      soreKantin: computed.soreKantin, soreLapangan: computed.soreLapangan,
+      takjilLapangan: computed.takjilLapangan, malamLapangan: computed.malamLapangan,
+      batchPagi: computed.batchPagi, batchSore: computed.batchSore,
+      status: computed.status,
+      keteranganLapor: null,
+      catatan: computed.catatan,
+      updatedBy: updatedByOf(req), updatedAt: new Date(),
+    }).where(eq(mealOrders.id, id)).returning();
+    scheduleSheetSync();
+    res.json({ status: "success", data: updated, rosterCode: rawCode ? code : null, source });
+  } catch (error: any) {
+    console.error("[MealOrders CLEAR-BELUM-LAPOR] Error:", error);
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
 // 4. PUT /api/meal-orders/:id — ubah sebagian kolom (dipakai edit sel langsung di tabel)
 mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res) => {
   try {

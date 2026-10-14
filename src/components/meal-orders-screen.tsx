@@ -993,42 +993,26 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       saveCell(r, patch);
       toast.info(`${r.nama}: Status "Belum Lapor" aktif — seluruh orderan makanan dikosongkan.`);
     } else {
-      // Jika Belum Lapor dimatikan: hitung ulang orderan makanan sesuai shift & profil
-      let rosterCode = r.shiftKerja || 'SIANG';
-      if (r.shiftKerja === 'Cuti Site') rosterCode = 'CS';
-      else if (r.shiftKerja === 'Izin') rosterCode = 'I';
-      else if (r.shiftKerja === 'OFF') rosterCode = 'OFF';
-      else if (r.shiftKerja === 'Sakit') rosterCode = 'SS';
-      else if (r.shiftKerja === 'CUTI') rosterCode = 'CUTI';
-      else if (r.shiftKerja === 'MALAM') rosterCode = 'N';
-      else if (r.shiftKerja === 'LONGSHIFT') rosterCode = 'LS';
-      else if (r.shiftKerja === 'SIANG' || r.shiftKerja === 'Nonshift') rosterCode = 'D';
+      // Belum Lapor dimatikan: kembali ke roster kerja tanggal tsb (mis. roster N → Malam) — dihitung di server dari
+      // sheet "Database Rooster Prep & Lab" agar memakai kode roster asli, bukan tebakan dari kolom Shift
+      clearBelumLapor(r);
+    }
+  };
 
-      const pref: MealPreference = {
-        pagi: (r.pilihanPagi as MealChoice) || null,
-        sore: (r.pilihanSore as MealChoice) || null,
-      };
-      const computed = computeMealOrderByRoster(r, rosterCode, date, pref, 'D');
-      if (r.shiftKerja === 'Nonshift') computed.shiftKerja = 'Nonshift';
-
-      const patch: Partial<MealOrder> = {
-        keteranganLapor: null,
-        shiftKerja: computed.shiftKerja,
-        statusKerja: computed.statusKerja,
-        status: computed.status,
-        pagiKantin: computed.pagiKantin,
-        pagiLapangan: computed.pagiLapangan,
-        siangKantin: computed.siangKantin,
-        siangLapangan: computed.siangLapangan,
-        soreKantin: computed.soreKantin,
-        soreLapangan: computed.soreLapangan,
-        malamLapangan: computed.malamLapangan,
-        batchPagi: computed.batchPagi,
-        batchSore: computed.batchSore,
-        catatan: computed.catatan,
-      };
-      saveCell(r, patch);
-      toast.success(`${r.nama}: Belum Lapor telah dimatikan — orderan makanan aktif kembali.`);
+  const clearBelumLapor = async (r: MealOrder) => {
+    patchLocal(r.id, { keteranganLapor: null });
+    try {
+      const res = await fetch(`/api/meal-orders/${r.id}/clear-belum-lapor`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal mematikan Belum Lapor');
+      patchLocal(r.id, json.data);
+      const shift = json.data?.shiftKerja ? ` · ${json.data.shiftKerja === 'MALAM' ? 'Malam' : json.data.shiftKerja === 'LONGSHIFT' ? 'Longshift' : json.data.shiftKerja}` : '';
+      toast.success(json.rosterCode
+        ? `${r.nama}: Belum Lapor dimatikan — kembali ke roster ${json.rosterCode}${shift}`
+        : `${r.nama}: Belum Lapor dimatikan — kode roster tanggal ini tidak ditemukan, orderan dihitung sebagai hari kerja biasa`);
+    } catch (e: any) {
+      patchLocal(r.id, { keteranganLapor: r.keteranganLapor });
+      toast.error(e.message);
     }
   };
 
