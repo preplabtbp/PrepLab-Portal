@@ -77,6 +77,8 @@ export function isLeaveOrPermissionRosterStatus(val: string | null | undefined):
   const s = val.trim().toUpperCase();
   if (['C', 'CE', 'CT', 'CS', 'TRV', 'I', 'CI', 'TV', 'XP', 'CUTI', 'IZIN', 'TRAVEL', 'BELUM LAPOR'].includes(s)) return true;
   if (s.startsWith('CUTI') || s.startsWith('IZIN') || s.startsWith('BELUM LAPOR') || s.includes('BELUM LAPOR')) return true;
+  // Kode roster cuti di sheet bisa diikuti angka: CT1, CT2, CT5, CE1, CI2, TRV1 … (juga "CT 2", "CT-2", "CT(2)", "CT/2")
+  if (/^(CE|CT|CS|TRV|CI|TV|XP|C|I)\s*[-/(]?\s*\d*\)?$/.test(s)) return true;
   const prefixes = ['CE', 'CT', 'CS', 'TRV', 'CI', 'TV', 'XP', 'C', 'I'];
   return prefixes.some(p => s === p || s.startsWith(p + ' ') || s.startsWith(p + '-') || s.startsWith(p + '(') || s.startsWith(p + '/'));
 }
