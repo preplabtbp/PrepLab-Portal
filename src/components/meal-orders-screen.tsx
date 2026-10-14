@@ -94,6 +94,10 @@ function mealCounts(r: MealOrder, slot: MealSlot): { lapangan: number; bungkusKa
   return { lapangan, bungkusKantin, makanKantin: 0 };
 }
 
+// Filter tabel dari klik kartu ringkasan
+type CardFilter = { company: Company | 'all'; kind: 'karyawan' | 'slot' | 'total' | 'batch' | 'belumLapor'; slot?: MealSlot; label: string };
+const bungkusCount = (r: MealOrder, slot: MealSlot) => { const c = mealCounts(r, slot); return c.lapangan + c.bungkusKantin; };
+
 const cellTotal = (rows: MealOrder[], key: MealCellKey, kind: 'kantin' | 'lapangan') =>
   rows.reduce((s, r) => s + (kind === 'kantin' ? (String(r[key] || '').trim() ? 1 : 0) : portions(r[key])), 0);
 
@@ -164,6 +168,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const [view, setView] = useState<'orders' | 'recap'>('orders');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const tableScrollRef = useRef<HTMLDivElement>(null);
+  const tableAnchorRef = useRef<HTMLDivElement>(null);
+  const [cardFilter, setCardFilter] = useState<CardFilter | null>(null);
+  useEffect(() => { setCardFilter(null); }, [date]);
   const [search, setSearch] = useState('');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; row?: MealOrder } | null>(null);
@@ -319,13 +326,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       && (!q || [r.nama, r.nik, r.section, r.tempatTinggal].some(v => String(v || '').toLowerCase().includes(q))));
   }, [rows, search, sectionFilter]);
 
-  const totals = useMemo(() => Object.fromEntries(activeMealCells.map(c => [c.key, cellTotal(filtered, c.key, c.kind)])) as Record<MealCellKey, number>, [filtered, activeMealCells]);
-  // Total kolom "1 (B.Pagi)" & "1 (B.Sore)" + jumlah yang belum lapor
-  const confirmed = useMemo(() => ({
-    pagi: filtered.reduce((s, r) => s + portions(r.batchPagi), 0),
-    sore: filtered.reduce((s, r) => s + portions(r.batchSore), 0),
-    belumLapor: filtered.filter(r => r.keteranganLapor && r.keteranganLapor.trim() !== '-').length,
-  }), [filtered]);
   // Tanggal sebelumnya yang punya data → sumber "Salin"
   const previousDate = useMemo(() => (data?.dates || []).map(d => String(d.date).slice(0, 10)).find(d => d < date) || null, [data, date]);
 
@@ -1244,6 +1244,31 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     );
   };
 
+  // Baris tabel: semua hasil pencarian/section, atau hanya karyawan dari kartu ringkasan yang diklik
+  const activeSlots = useMemo(() => activeMealGroups.map(g => MEAL_SLOT_BY_GROUP[g.label]).filter(Boolean) as MealSlot[], [activeMealGroups]);
+  const tableRows = useMemo(() => {
+    if (!cardFilter) return filtered;
+    return filtered.filter(r => {
+      if (cardFilter.company !== 'all' && getRowCompany(r) !== cardFilter.company) return false;
+      switch (cardFilter.kind) {
+        case 'slot': return !!cardFilter.slot && bungkusCount(r, cardFilter.slot) > 0;
+        case 'total': return activeSlots.some(s => bungkusCount(r, s) > 0);
+        case 'batch': return portions(r.batchPagi) > 0 || portions(r.batchSore) > 0;
+        case 'belumLapor': return !!r.keteranganLapor && r.keteranganLapor.trim() !== '-';
+        default: return true;
+      }
+    });
+  }, [filtered, cardFilter, getRowCompany, activeSlots]);
+  const tableTotals = useMemo(() => Object.fromEntries(activeMealCells.map(c => [c.key, cellTotal(tableRows, c.key, c.kind)])) as Record<MealCellKey, number>, [tableRows, activeMealCells]);
+  const tableConfirmed = useMemo(() => getConfirmedSummary(tableRows), [tableRows]);
+  // Jumlah bungkus kartu terpilih untuk karyawan yang tampil (bila kartu waktu makan / total)
+  const cardFilterBungkus = useMemo(() => {
+    if (!cardFilter) return 0;
+    if (cardFilter.kind === 'slot' && cardFilter.slot) return tableRows.reduce((s, r) => s + bungkusCount(r, cardFilter.slot!), 0);
+    if (cardFilter.kind === 'total') return tableRows.reduce((s, r) => s + activeSlots.reduce((a, sl) => a + bungkusCount(r, sl), 0), 0);
+    return 0;
+  }, [cardFilter, tableRows, activeSlots]);
+
   const confirmedAll = useMemo(() => getConfirmedSummary(filtered), [filtered]);
   const confirmedTbp = useMemo(() => getConfirmedSummary(tbpFiltered), [tbpFiltered]);
   const confirmedGps = useMemo(() => getConfirmedSummary(gpsFiltered), [gpsFiltered]);
@@ -1438,22 +1463,35 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             </div>
 
             {(summaryCompanyView === 'split' || summaryCompanyView === 'TBP') && renderSummaryRow({
-              key: 'tbp', title: 'PT Trimegah Bangun Persada (TBP)', dot: 'bg-blue-600', scope: 'TBP',
+              key: 'tbp', company: 'TBP', title: 'PT Trimegah Bangun Persada (TBP)', dot: 'bg-blue-600', scope: 'TBP',
               list: tbpFiltered, cards: summaryCardsTbp, confirmed: confirmedTbp,
             })}
             {(summaryCompanyView === 'split' || summaryCompanyView === 'GPS') && renderSummaryRow({
-              key: 'gps', title: 'PT Gane Permai Sentosa (GPS)', dot: 'bg-emerald-600', scope: 'GPS',
+              key: 'gps', company: 'GPS', title: 'PT Gane Permai Sentosa (GPS)', dot: 'bg-emerald-600', scope: 'GPS',
               list: gpsFiltered, cards: summaryCardsGps, confirmed: confirmedGps,
             })}
             {summaryCompanyView === 'all' && renderSummaryRow({
-              key: 'all', title: 'Total Gabungan (TBP & GPS)', dot: 'bg-slate-600', scope: 'Total Gabungan',
+              key: 'all', company: 'all', title: 'Total Gabungan (TBP & GPS)', dot: 'bg-slate-600', scope: 'Total Gabungan',
               list: filtered, cards: summaryCardsAll, confirmed: confirmedAll,
             })}
           </div>
         )}
 
         {/* Tabel */}
-        <div className={`${UI.panel} p-4 sm:p-5 space-y-4 min-w-0`}>
+        <div ref={tableAnchorRef} className={`${UI.panel} p-4 sm:p-5 space-y-4 min-w-0 scroll-mt-4`}>
+          {/* Filter dari kartu ringkasan */}
+          {cardFilter && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5">
+              <div className="flex items-center gap-2 min-w-0 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
+                <span className="text-emerald-900">Menampilkan <b>{cardFilter.label}</b></span>
+                <span className="text-emerald-700">· {tableRows.length} karyawan{cardFilterBungkus ? ` · ${cardFilterBungkus} bungkus` : ''}</span>
+              </div>
+              <button type="button" onClick={() => setCardFilter(null)} className={`${UI.btn} !h-8 !border-emerald-300 !text-emerald-800 shrink-0`}>
+                <X className="w-3.5 h-3.5" /> Tampilkan semua karyawan
+              </button>
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1827,7 +1865,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((r, i) => {
+                    {tableRows.map((r, i) => {
                       const attKind = getAttendanceStatusKind(r);
                       const rowBg = attKind === 'cuti'
                         ? 'bg-purple-50/50 hover:bg-purple-100/60'
@@ -1962,17 +2000,17 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   <tfoot>
                     <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-200">
                       <td colSpan={leadingColSpan} className={`${tdBase} text-[11px] uppercase tracking-wider text-slate-700`}>Total Order</td>
-                      {activeMealCells.map(c => <td key={c.key} className={`${tdBase} text-center text-slate-900`}>{totals[c.key] || '-'}</td>)}
+                      {activeMealCells.map(c => <td key={c.key} className={`${tdBase} text-center text-slate-900`}>{tableTotals[c.key] || '-'}</td>)}
                       {columnVisibility.batches && (
                         <>
-                          <td className={`${tdBase} text-center text-emerald-700`}>{confirmed.pagi}</td>
-                          <td className={`${tdBase} text-center text-emerald-700`}>{confirmed.sore}</td>
+                          <td className={`${tdBase} text-center text-emerald-700`}>{tableConfirmed.pagi}</td>
+                          <td className={`${tdBase} text-center text-emerald-700`}>{tableConfirmed.sore}</td>
                         </>
                       )}
                       {columnVisibility.statusNotes && (
                         <>
                           <td className={tdBase} />
-                          <td className={`${tdBase} text-rose-600`}>{confirmed.belumLapor ? `${confirmed.belumLapor} belum lapor` : ''}</td>
+                          <td className={`${tdBase} text-rose-600`}>{tableConfirmed.belumLapor ? `${tableConfirmed.belumLapor} belum lapor` : ''}</td>
                           <td className={tdBase} />
                         </>
                       )}
@@ -1985,7 +2023,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
               {/* HP: kartu per karyawan */}
               <div className="md:hidden space-y-2">
-                {filtered.map((r, i) => {
+                {tableRows.map((r, i) => {
                   const attKind = getAttendanceStatusKind(r);
                   const cardBorder = attKind === 'cuti'
                     ? 'border-purple-300 bg-purple-50/30'
@@ -2058,7 +2096,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 );
                 })}
               </div>
-              {filtered.length === 0 && <p className="text-center text-xs text-slate-500 py-6">Tidak ada karyawan yang cocok dengan pencarian.</p>}
+              {tableRows.length === 0 && <p className="text-center text-xs text-slate-500 py-6">{cardFilter ? `Tidak ada karyawan untuk ${cardFilter.label}.` : 'Tidak ada karyawan yang cocok dengan pencarian.'}</p>}
             </>
           )}
         </div>

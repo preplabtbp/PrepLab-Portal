@@ -7,6 +7,8 @@ export interface RosterMealCalculation {
   shiftKerja: string | null;
   pagiKantin: string | null;
   pagiLapangan: string | null;
+  sahurKantin?: string | null;
+  sahurLapangan?: string | null;
   siangKantin: string | null;
   siangLapangan: string | null;
   soreKantin: string | null;
