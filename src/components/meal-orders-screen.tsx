@@ -464,12 +464,28 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       const kantin = kantinKeys.map(k => (String(r[k] || '').trim() ? 1 : 0));
       const bungkus = bungkusCols.map(c => portions(r[c.key]));
       const jenisMeal = kantin.some(Boolean) || !bungkus.some(Boolean) ? 'Kantin' : 'Bungkusan';
-      // Hanya status tidak hadir yang dikenal; isian lain (mis. tempat tinggal "Kampung Kawasi") → On Duty
-      const absent = String(r.statusKerja || '').trim().match(/^(cuti|izin|sakit|off|cs|dinas)\b/i);
+      // Status CS (Cuti Site) dianggap tetap On Duty di site, tidak ditaruh CS lagi di kolom Status
+      const sk = String(r.statusKerja || '').trim();
+      const st = String(r.status || '').trim();
+      const sh = String(r.shiftKerja || '').trim();
+      const isCutiSite = sk.toUpperCase() === 'CS' || /cuti\s*site/i.test(sk) ||
+                         st.toUpperCase() === 'CS' || /cuti\s*site/i.test(st) ||
+                         sh.toUpperCase() === 'CS' || /cuti\s*site/i.test(sh);
+
+      let statusExport = 'On Duty';
+      if (!isCutiSite) {
+        const absent = sk.match(/^(cuti|izin|sakit|off|dinas)\b/i) ||
+                       st.match(/^(cuti|izin|sakit|off|dinas)\b/i) ||
+                       sh.match(/^(cuti|izin|sakit|off|dinas)\b/i);
+        if (absent) {
+          statusExport = titleCase(absent[1]);
+        }
+      }
+
       return [
         // Shift hanya Siang / Malam / Longshift: Nonshift, Cuti, Cuti Site, dll. → Siang
         i + 1, r.nik, r.nama, /malam/i.test(r.shiftKerja || '') ? 'Malam' : /long/i.test(r.shiftKerja || '') ? 'Longshift' : 'Siang', jenisMeal,
-        absent ? (absent[1].toUpperCase() === 'CS' ? 'CS' : titleCase(absent[1])) : 'On Duty', ...kantin, ...bungkus,
+        statusExport, ...kantin, ...bungkus,
       ];
     });
     const sum = (c: number) => body.reduce((s, row) => s + (Number(row[c]) || 0), 0);
