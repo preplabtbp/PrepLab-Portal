@@ -417,11 +417,14 @@ const P = {
   green: '#047857', greenSoft: '#ecfdf5', greenLine: '#a7f3d0',
   amber: '#fef3c7', amberLine: '#fcd34d', amberInk: '#78350f',
 };
-const ROW_H = 29; // tinggi seragam setiap baris isi
+const ROW_H = 29; // tinggi minimum setiap baris isi (baris memanjang bila teks perlu 2 baris)
+// Teks panjang (mis. "Laboratorium Krishna (Manager - Deni Nugraha P)") dibungkus ke baris berikutnya — tidak dipotong "…"
 const cellP = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-  height: ROW_H, padding: '0 10px', lineHeight: '16px', verticalAlign: 'middle', whiteSpace: 'nowrap',
-  overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 11, borderBottom: `1px solid ${P.line}`, ...extra,
+  height: ROW_H, padding: '6px 10px', lineHeight: '15px', verticalAlign: 'middle', whiteSpace: 'normal',
+  wordBreak: 'break-word', overflowWrap: 'anywhere', fontSize: 11, borderBottom: `1px solid ${P.line}`, ...extra,
 });
+// Lebar kolom Area | Qty | Keterangan (dipakai tabel & baris TOTAL agar garisnya sejajar)
+const COL_W = ['47%', '9%', '44%'] as const;
 
 function PrintBlock({ block }: { block: RecapBlock }) {
   return (
@@ -437,9 +440,7 @@ function PrintBlock({ block }: { block: RecapBlock }) {
     }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', color: P.ink }}>
         <colgroup>
-          <col style={{ width: '44%' }} />
-          <col style={{ width: '12%' }} />
-          <col style={{ width: '44%' }} />
+          {COL_W.map((w, i) => <col key={i} style={{ width: w }} />)}
         </colgroup>
         <thead>
           <tr>
@@ -484,13 +485,13 @@ function PrintBlock({ block }: { block: RecapBlock }) {
         alignItems: 'center',
         height: 32,
       }}>
-        <div style={{ width: '44%', textAlign: 'center', fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: P.amberInk, borderRight: `1px solid ${P.amberLine}`, boxSizing: 'border-box' }}>
+        <div style={{ width: COL_W[0], textAlign: 'center', fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: P.amberInk, borderRight: `1px solid ${P.amberLine}`, boxSizing: 'border-box' }}>
           TOTAL
         </div>
-        <div style={{ width: '12%', textAlign: 'center', fontSize: 15, fontWeight: 800, color: P.amberInk, borderRight: `1px solid ${P.amberLine}`, boxSizing: 'border-box' }}>
+        <div style={{ width: COL_W[1], textAlign: 'center', fontSize: 15, fontWeight: 800, color: P.amberInk, borderRight: `1px solid ${P.amberLine}`, boxSizing: 'border-box' }}>
           {block.total}
         </div>
-        <div style={{ width: '44%', textAlign: 'center', fontSize: 11, fontWeight: 700, color: P.amberInk, boxSizing: 'border-box' }}>
+        <div style={{ width: COL_W[2], textAlign: 'center', fontSize: 11, fontWeight: 700, color: P.amberInk, boxSizing: 'border-box' }}>
           Bungkus
         </div>
       </div>
