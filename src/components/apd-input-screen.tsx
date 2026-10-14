@@ -618,7 +618,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
               </div>
             </div>
 
-            {/* Versi PC (Desktop): Memanjang seperti Foto dengan ukuran lebih lebar & lega */}
+            {/* Versi PC (Desktop): Memanjang seperti Foto dengan tata letak profesional & presisi */}
             <div
               ref={pcScrollRef}
               className="hidden sm:flex items-stretch gap-3.5 overflow-x-auto pb-3 pt-1 px-1 snap-x scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
@@ -648,44 +648,50 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                   <div
                     key={apd}
                     onClick={() => setSelectedApdModal(apd)}
-                    className={`min-w-[210px] md:min-w-[230px] lg:min-w-[250px] flex-1 shrink-0 rounded-2xl p-4 sm:p-5 border transition-all cursor-pointer select-none flex flex-col justify-between snap-start hover:-translate-y-1 ${
+                    className={`h-[148px] min-w-[210px] md:min-w-[230px] lg:min-w-[245px] flex-1 shrink-0 rounded-2xl p-4 border transition-all cursor-pointer select-none flex flex-col justify-between snap-start hover:-translate-y-1 hover:shadow-md ${
                       isEmpty
-                        ? 'bg-rose-50/85 border-rose-300 text-rose-950 hover:bg-rose-100/90 hover:border-rose-400 hover:shadow-md shadow-xs'
-                        : 'bg-white border-slate-200/90 text-slate-800 hover:border-purple-300 hover:shadow-md shadow-xs'
+                        ? 'bg-rose-50/40 border-rose-200/90 hover:border-rose-300 hover:bg-rose-50/70 shadow-2xs'
+                        : 'bg-white border-slate-200/90 hover:border-purple-300 shadow-2xs'
                     }`}
-                    title="Klik untuk membuka jendela mengambang keterangan & aksi"
+                    title="Klik untuk membuka rincian pengambilan APD"
                   >
-                    <div>
-                      <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                        <span className={`text-xs font-bold uppercase tracking-wider truncate ${isEmpty ? 'text-rose-800' : 'text-slate-700'}`}>
-                          {apd}
-                        </span>
-                        {isEmpty && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 animate-pulse" title="Belum pernah diambil" />
-                        )}
-                      </div>
+                    {/* Header: Title */}
+                    <div className="h-8 flex items-center justify-center text-center">
+                      <span className={`text-[11.5px] font-bold uppercase tracking-wider line-clamp-2 leading-tight ${isEmpty ? 'text-rose-800' : 'text-slate-700'}`}>
+                        {apd}
+                      </span>
+                    </div>
 
-                      <div className="my-2 flex items-baseline gap-1.5">
-                        <span className={`text-3xl sm:text-4xl font-black tracking-tight ${isEmpty ? 'text-rose-900' : 'text-slate-900'}`}>
+                    {/* Middle: Prominent Number & Unit */}
+                    <div className="my-auto text-center py-1">
+                      <div className="flex items-baseline justify-center gap-1.5">
+                        <span className={`text-3xl sm:text-4xl font-black tracking-tight ${isEmpty ? 'text-rose-600' : 'text-slate-900'}`}>
                           {totalTakes}
                         </span>
-                        <span className={`text-xs sm:text-sm font-semibold ${isEmpty ? 'text-rose-600' : 'text-slate-500'}`}>
+                        <span className={`text-xs font-semibold ${isEmpty ? 'text-rose-500' : 'text-slate-500'}`}>
                           kali
                         </span>
                       </div>
                     </div>
 
-                    <div className="mt-3 pt-2.5 border-t border-slate-100/90">
+                    {/* Footer: Status / Info */}
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-center text-center">
                       {isEmpty ? (
-                        <div className="text-xs font-bold text-rose-700 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                          <span className="truncate">Belum ada pengambilan</span>
-                        </div>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Belum Diambil
+                        </span>
                       ) : (
-                        <div className="text-xs font-medium text-slate-500 flex items-center justify-between gap-1">
-                          <span className="truncate">{lastDateDisplay ? `Tgl: ${lastDateDisplay}` : `${totalTakes} data riwayat`}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${isEligible ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {isEligible ? 'Bisa diambil' : 'Belum waktunya'}
+                        <div className="flex items-center justify-between w-full px-0.5 text-xs">
+                          <span className="text-[11px] text-slate-500 truncate font-medium">
+                            {lastDateDisplay ? `Tgl ${lastDateDisplay}` : `${totalTakes}x Data`}
+                          </span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                            isEligible 
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' 
+                              : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isEligible ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                            {isEligible ? 'Bisa Diambil' : 'Belum Waktunya'}
                           </span>
                         </div>
                       )}
@@ -722,42 +728,41 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                   <div
                     key={apd}
                     onClick={() => setSelectedApdModal(apd)}
-                    className={`min-h-[115px] rounded-2xl p-3.5 border transition-all cursor-pointer active:scale-98 flex flex-col justify-between ${
+                    className={`h-[135px] rounded-2xl p-3.5 border transition-all cursor-pointer active:scale-98 flex flex-col justify-between text-center ${
                       isEmpty
-                        ? 'bg-rose-50/85 border-rose-300 text-rose-950 shadow-xs'
-                        : 'bg-white border-slate-200 text-slate-800 shadow-xs'
+                        ? 'bg-rose-50/40 border-rose-200 text-rose-950 shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-800 shadow-2xs'
                     }`}
                   >
-                    <div>
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className={`text-[11px] font-bold uppercase tracking-wider line-clamp-1 ${isEmpty ? 'text-rose-800' : 'text-slate-600'}`}>
-                          {apd}
-                        </span>
-                        {isEmpty && (
-                          <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
-                        )}
-                      </div>
+                    <div className="h-7 flex items-center justify-center">
+                      <span className={`text-[11px] font-bold uppercase tracking-wider line-clamp-2 leading-tight ${isEmpty ? 'text-rose-800' : 'text-slate-700'}`}>
+                        {apd}
+                      </span>
+                    </div>
 
-                      <div className="my-1 flex items-baseline gap-1">
-                        <span className={`text-2xl font-black ${isEmpty ? 'text-rose-900' : 'text-slate-900'}`}>
+                    <div className="my-auto py-1">
+                      <div className="flex items-baseline justify-center gap-1">
+                        <span className={`text-3xl font-black ${isEmpty ? 'text-rose-600' : 'text-slate-900'}`}>
                           {totalTakes}
                         </span>
-                        <span className={`text-xs font-semibold ${isEmpty ? 'text-rose-600' : 'text-slate-500'}`}>
+                        <span className={`text-xs font-semibold ${isEmpty ? 'text-rose-500' : 'text-slate-500'}`}>
                           kali
                         </span>
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-100/80">
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-center">
                       {isEmpty ? (
-                        <span className="text-[10.5px] font-bold text-rose-700">Belum diambil</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                          Belum Diambil
+                        </span>
                       ) : (
-                        <div className="text-[10px] font-medium text-slate-500 flex items-center justify-between">
-                          <span className="truncate">{lastDateDisplay ? lastDateDisplay : `${totalTakes} data`}</span>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isEligible ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {isEligible ? 'Bisa' : 'Tunggu'}
-                          </span>
-                        </div>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          isEligible ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isEligible ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                          {isEligible ? 'Bisa' : 'Tunggu'}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -777,7 +782,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
 
             return (
               <div
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200"
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
                 onClick={() => setSelectedApdModal(null)}
               >
                 <div
@@ -786,26 +791,13 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                 >
                   {/* Header Modal */}
                   <div className="flex items-start justify-between pb-4 border-b border-slate-100">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="p-1.5 rounded-lg bg-purple-100 text-purple-700">
-                          <Shield className="w-5 h-5" />
-                        </span>
-                        <h3 className="text-lg font-bold text-slate-800 leading-snug">{apd}</h3>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                        <Shield className="w-5 h-5" />
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                          totalTakes === 0 
-                            ? 'bg-rose-100 text-rose-800 border border-rose-200' 
-                            : isEligible 
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-                              : 'bg-amber-100 text-amber-800 border border-amber-200'
-                        }`}>
-                          {totalTakes === 0 ? 'Belum Pernah Diambil' : isEligible ? 'Bisa Diambil Kembali' : 'Belum Waktunya'}
-                        </span>
-                        <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-slate-200">
-                          {totalTakes} Kali Pengambilan
-                        </span>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-800 leading-snug">{apd}</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">Detail riwayat & kelayakan pengambilan APD</p>
                       </div>
                     </div>
                     <button
@@ -820,40 +812,50 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
 
                   {/* Isi Modal: Keterangan & Riwayat Pengambilan */}
                   <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
-                    {/* Info Interval & Keterangan */}
-                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2 text-xs">
-                      <div className="flex justify-between items-center text-slate-600">
-                        <span className="font-semibold">Aturan Interval Penggantian:</span>
-                        <span className="font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
-                          {intervalMonths > 0 ? `${intervalMonths} Bulan` : 'Sesuai Kebutuhan'}
-                        </span>
+                    {/* Ringkasan Status 3 Kartu Mini */}
+                    <div className="grid grid-cols-3 gap-2.5 text-center">
+                      <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200/80">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Ambil</span>
+                        <div className="text-lg font-black text-slate-800 mt-0.5">{totalTakes} <span className="text-[11px] font-normal text-slate-500">kali</span></div>
                       </div>
-                      {warningMsg ? (
-                        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="font-bold">Perhatian Jadwal</p>
-                            <p className="mt-0.5 text-[11px] leading-relaxed">{warningMsg}</p>
-                          </div>
+                      <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200/80">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Interval</span>
+                        <div className="text-lg font-black text-slate-800 mt-0.5">{intervalMonths > 0 ? `${intervalMonths} Bln` : 'Bebas'}</div>
+                      </div>
+                      <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200/80">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kelayakan</span>
+                        <div className={`text-xs font-black mt-1 ${totalTakes === 0 ? 'text-rose-600' : isEligible ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {totalTakes === 0 ? 'Belum Ada' : isEligible ? 'Bisa Ambil' : 'Menunggu'}
                         </div>
-                      ) : totalTakes > 0 ? (
-                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="font-bold">Memenuhi Syarat Pengambilan</p>
-                            <p className="mt-0.5 text-[11px] leading-relaxed">Karyawan berhak mengambil APD ini karena telah melewati masa interval penggantian resmi.</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-2">
-                          <Shield className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="font-bold">Belum Pernah Diambil</p>
-                            <p className="mt-0.5 text-[11px] leading-relaxed">Karyawan belum memiliki catatan pengambilan untuk APD ini di sistem.</p>
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
+
+                    {/* Alert Penjelasan Jadwal */}
+                    {warningMsg ? (
+                      <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2.5 text-xs">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Perhatian Jadwal Penggantian</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed">{warningMsg}</p>
+                        </div>
+                      </div>
+                    ) : totalTakes > 0 ? (
+                      <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2.5 text-xs">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Memenuhi Syarat Pengambilan</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed">Karyawan berhak mengambil APD ini karena telah melewati masa interval penggantian resmi.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-2.5 text-xs">
+                        <Shield className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Belum Ada Pengambilan</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed">Karyawan belum memiliki catatan pengambilan untuk APD ini di sistem.</p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Riwayat Pengambilan */}
                     <div>
@@ -944,10 +946,10 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                     <Button
                       type="button"
                       variant={isEligible ? "primary" : "secondary"}
-                      className={`w-full py-3 rounded-2xl text-xs font-bold gap-2 cursor-pointer shadow-sm ${
+                      className={`w-full py-3.5 rounded-2xl text-sm font-bold gap-2 cursor-pointer shadow-sm transition-all ${
                         !isEligible 
-                          ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100' 
-                          : 'bg-purple-600 hover:bg-purple-700 text-white'
+                          ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200' 
+                          : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg'
                       }`}
                       onClick={() => {
                         setEntries(prev => [...prev, {
