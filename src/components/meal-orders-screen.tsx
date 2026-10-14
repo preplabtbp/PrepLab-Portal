@@ -876,9 +876,33 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       pagi: (r.pilihanPagi as MealChoice) || null,
       sore: (r.pilihanSore as MealChoice) || null,
     };
+    const currentCat = String(r.catatan || '').trim();
+    if (currentCat === 'Bungkusan Pagi') {
+      pref.pagi = 'lapangan';
+      pref.sore = 'kantin';
+    } else if (currentCat === 'Bungkusan Sore') {
+      pref.pagi = 'kantin';
+      pref.sore = 'lapangan';
+    } else if (currentCat === 'Bungkusan Pagi dan Bungkusan Sore') {
+      pref.pagi = 'lapangan';
+      pref.sore = 'lapangan';
+    } else if (currentCat === '-') {
+      pref.pagi = 'kantin';
+      pref.sore = 'kantin';
+    }
+
     const computed = computeMealOrderByRoster(r, rosterCode, date, pref);
     // Pertahankan label shift yang dipilih user (mis. Nonshift vs Siang)
     if (shiftKerja === 'Nonshift') computed.shiftKerja = 'Nonshift';
+
+    // Jangan rubah ke Bungkusan Sore saat ganti shift atau tanggal jika tidak diganti!
+    const isExplicitSoreChange = currentCat === 'Bungkusan Sore' || currentCat === 'Bungkusan Pagi dan Bungkusan Sore' || pref.sore === 'lapangan';
+    const isKawasiLSChange = isKawasiRow(r) && String(shiftKerja || '').toUpperCase() === 'LONGSHIFT';
+    if (!isKawasiLSChange && !isExplicitSoreChange) {
+      computed.soreLapangan = null;
+      computed.soreKantin = 'K';
+      computed.batchSore = null;
+    }
 
     const patch: Partial<MealOrder> = {
       shiftKerja: computed.shiftKerja,

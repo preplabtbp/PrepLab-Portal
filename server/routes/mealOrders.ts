@@ -575,21 +575,21 @@ async function loadMealPreferences(date: string, nik?: string): Promise<Map<stri
     // 2. Cek dari kolom Catatan
     const cat = String(r.catatan || '').trim();
     if (cat === 'Bungkusan Pagi dan Bungkusan Sore') {
-      if (p.pagi === undefined) p.pagi = 'lapangan';
-      if (p.sore === undefined) p.sore = 'lapangan';
+      p.pagi = 'lapangan';
+      p.sore = 'lapangan';
     } else if (cat === 'Bungkusan Pagi') {
-      if (p.pagi === undefined) p.pagi = 'lapangan';
-      if (p.sore === undefined) p.sore = 'kantin';
+      p.pagi = 'lapangan';
+      p.sore = 'kantin';
     } else if (cat === 'Bungkusan Sore') {
-      if (p.pagi === undefined) p.pagi = 'kantin';
-      if (p.sore === undefined) p.sore = 'lapangan';
+      p.pagi = 'kantin';
+      p.sore = 'lapangan';
     } else if (cat === '-') {
-      if (p.pagi === undefined) p.pagi = 'kantin';
-      if (p.sore === undefined) p.sore = 'kantin';
+      p.pagi = 'kantin';
+      p.sore = 'kantin';
     }
-    // 3. Fallback dari porsi lapangan
+    // 3. Fallback: pagi lapangan jika ada, namun sore default KANTIN kecuali catatan eksplisit minta Bungkusan Sore
     if (p.pagi === undefined && portions(r.pagiLapangan) > 0) p.pagi = 'lapangan';
-    if (p.sore === undefined && portions(r.soreLapangan) > 0) p.sore = 'lapangan';
+    if (p.sore === undefined) p.sore = 'kantin';
 
     prefs.set(k, p);
   }
@@ -699,15 +699,25 @@ function withCurrentChoice(pref: MealPreference | undefined, current: CurrentCho
   if (!current) return out;
   const asChoice = (v: string | null): MealChoice | null => (v === 'kantin' || v === 'lapangan' ? v : null);
   const isLongShift = String(current.shiftKerja || '').toUpperCase() === 'LONGSHIFT';
-  const cat = String(current.catatan || '').toLowerCase();
-  const pagi = (cat.includes('bungkusan pagi') || cat.includes('pagi bungkusan'))
-    ? 'lapangan'
-    : (asChoice(current.pilihanPagi) || (portions(current.pagiLapangan) > 0 ? 'lapangan' : null));
-  const sore = (cat.includes('bungkusan sore') || cat.includes('sore bungkusan'))
-    ? 'lapangan'
-    : (asChoice(current.pilihanSore) || (!isLongShift && portions(current.soreLapangan) > 0 ? 'lapangan' : null));
-  if (pagi) out.pagi = pagi;
-  if (sore) out.sore = sore;
+  const cat = String(current.catatan || '').trim().toLowerCase();
+
+  if (cat.includes('bungkusan pagi dan bungkusan sore')) {
+    out.pagi = 'lapangan';
+    out.sore = 'lapangan';
+  } else if (cat.includes('bungkusan pagi')) {
+    out.pagi = 'lapangan';
+    out.sore = 'kantin';
+  } else if (cat.includes('bungkusan sore')) {
+    out.pagi = 'kantin';
+    out.sore = 'lapangan';
+  } else if (cat === '-') {
+    out.pagi = 'kantin';
+    out.sore = 'kantin';
+  } else {
+    if (asChoice(current.pilihanPagi)) out.pagi = asChoice(current.pilihanPagi);
+    else if (portions(current.pagiLapangan) > 0) out.pagi = 'lapangan';
+    if (asChoice(current.pilihanSore)) out.sore = asChoice(current.pilihanSore);
+  }
   return out;
 }
 
@@ -1009,13 +1019,16 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     const empPref = withCurrentChoice(prefs.get(nik), { ...current, catatan: lockedCatatan });
     if (lockedCatatan === 'Bungkusan Pagi') {
       empPref.pagi = 'lapangan';
-      if (!empPref.sore) empPref.sore = 'kantin';
+      empPref.sore = 'kantin';
     } else if (lockedCatatan === 'Bungkusan Sore') {
       empPref.sore = 'lapangan';
       if (!empPref.pagi) empPref.pagi = 'kantin';
     } else if (lockedCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
       empPref.pagi = 'lapangan';
       empPref.sore = 'lapangan';
+    } else if (lockedCatatan === '-' || !lockedCatatan) {
+      if (!empPref.pagi) empPref.pagi = 'kantin';
+      empPref.sore = 'kantin';
     }
 
     const computed = computeMealOrderByRoster(emp, emp.status, date, empPref, prevStatus);
@@ -1025,6 +1038,15 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     let finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
       ? null
       : (lockedCatatan || computed.catatan || null);
+
+    // Jangan rubah ke Bungkusan Sore saat pindah tanggal jika tidak diganti!
+    const isExplicitBungkusSore = finalCatatan === 'Bungkusan Sore' || finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore' || empPref.sore === 'lapangan';
+    const isKawasiLS = (lockedTt || '').toLowerCase().includes('kawasi') && computed.shiftKerja === 'Longshift';
+    if (!isKawasiLS && !isExplicitBungkusSore) {
+      computed.soreLapangan = null;
+      computed.soreKantin = (lockedTt || '').toLowerCase().includes('nirwana') && (lockedStatusMess || '').toUpperCase() === 'NR' ? '1' : 'K';
+      computed.batchSore = (lockedTt || '').toLowerCase().includes('nirwana') ? '1' : null;
+    }
 
     if (isCR && isTueWedSat) {
       const sk = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
@@ -1152,13 +1174,16 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const empPref = withCurrentChoice(prefs.get(cleanNik), { ...current, catatan: lockedCatatan });
     if (lockedCatatan === 'Bungkusan Pagi') {
       empPref.pagi = 'lapangan';
-      if (!empPref.sore) empPref.sore = 'kantin';
+      empPref.sore = 'kantin';
     } else if (lockedCatatan === 'Bungkusan Sore') {
       empPref.sore = 'lapangan';
       if (!empPref.pagi) empPref.pagi = 'kantin';
     } else if (lockedCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
       empPref.pagi = 'lapangan';
       empPref.sore = 'lapangan';
+    } else if (lockedCatatan === '-' || !lockedCatatan) {
+      if (!empPref.pagi) empPref.pagi = 'kantin';
+      empPref.sore = 'kantin';
     }
 
     const computed = computeMealOrderByRoster(
@@ -1170,6 +1195,15 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     let finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
       ? null
       : (lockedCatatan || computed.catatan || null);
+
+    // Jangan rubah ke Bungkusan Sore saat pindah tanggal jika tidak diganti!
+    const isExplicitSoreSingle = finalCatatan === 'Bungkusan Sore' || finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore' || empPref.sore === 'lapangan';
+    const isKawasiLSSingle = (lockedTt || '').toLowerCase().includes('kawasi') && computed.shiftKerja === 'Longshift';
+    if (!isKawasiLSSingle && !isExplicitSoreSingle) {
+      computed.soreLapangan = null;
+      computed.soreKantin = 'K';
+      computed.batchSore = null;
+    }
 
     if (isCR && isTueWedSat) {
       const sk = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
@@ -1301,10 +1335,16 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
 
           if (!isKawasi && !isAbsent) {
             r.catatan = targetCat;
-            if (targetCat === 'Bungkusan Pagi' && !r.pagiLapangan && portions(r.pagiLapangan) === 0) {
-              r.pagiLapangan = '1';
-              r.pagiKantin = null;
-              r.batchPagi = null;
+            if (targetCat === 'Bungkusan Pagi') {
+              if (!r.pagiLapangan && portions(r.pagiLapangan) === 0) {
+                r.pagiLapangan = '1';
+                r.pagiKantin = null;
+                r.batchPagi = null;
+              }
+              // Pastikan sore TETAP KANTIN dan tidak berubah jadi Bungkusan Sore
+              r.soreLapangan = null;
+              r.soreKantin = 'K';
+              r.batchSore = null;
             } else if (targetCat === 'Bungkusan Sore' && !r.soreLapangan && portions(r.soreLapangan) === 0) {
               r.soreLapangan = '1';
               r.soreKantin = null;
@@ -1314,6 +1354,18 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
               if (!r.soreLapangan) { r.soreLapangan = '1'; r.soreKantin = null; r.batchSore = null; }
             }
           }
+        }
+
+        // Jangan rubah ke Bungkusan Sore saat pindah tanggal jika tidak diganti!
+        // Jika catatan bukan Bungkusan Sore (mis. Bungkusan Pagi atau '-' / kosong):
+        const isBungkusSore = r.catatan === 'Bungkusan Sore' || r.catatan === 'Bungkusan Pagi dan Bungkusan Sore' || (r.pilihanSore as string) === 'lapangan';
+        const ttRow = `${r.tempatTinggal || ''}`.toLowerCase();
+        const isKawasiRow = ttRow.includes('kawasi');
+        const isLSRow = String(r.shiftKerja || '').toUpperCase() === 'LONGSHIFT';
+        if (!isBungkusSore && !isKawasiRow && !(isKawasiRow && isLSRow) && portions(r.soreLapangan) > 0) {
+          r.soreLapangan = null;
+          r.soreKantin = 'K';
+          r.batchSore = null;
         }
 
         if (isCR && isTueWedSat) {
