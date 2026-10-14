@@ -703,19 +703,63 @@ async function loadMasterTempatTinggalMap(): Promise<Map<string, string>> {
   return map;
 }
 
+// Master profil identitas resmi karyawan di Orderan Makanan:
+// No Urut, Nama, Status Mess, PT, Shift Reguler, Section, Tempat Tinggal.
+// Bagian ini dikunci permanen dan tidak boleh berubah saat pindah tanggal atau saat sinkronisasi roster.
+export type MasterEmployeeProfile = {
+  sortNo: number;
+  nama: string;
+  statusMess: string | null;
+  pt: string | null;
+  shift: string | null;
+  section: string | null;
+  tempatTinggal: string | null;
+};
+
+export async function loadMasterEmployeeProfileMap(): Promise<Map<string, MasterEmployeeProfile>> {
+  // Prioritaskan baris tanggal acuan resmi 2026-10-14, disusul baris dengan section resmi operasional
+  const rows = await db.select({
+    nik: mealOrders.nik,
+    orderDate: mealOrders.orderDate,
+    sortNo: mealOrders.sortNo,
+    nama: mealOrders.nama,
+    statusMess: mealOrders.statusMess,
+    pt: mealOrders.pt,
+    shift: mealOrders.shift,
+    section: mealOrders.section,
+    tempatTinggal: mealOrders.tempatTinggal,
+  }).from(mealOrders)
+    .where(sql`${mealOrders.section} IN ('Laboratorium Krishna', 'Preparasi Krishna', 'Maintenance') OR ${mealOrders.orderDate} = '2026-10-14'`)
+    .orderBy(
+      sql`CASE WHEN ${mealOrders.orderDate} = '2026-10-14' THEN 0 ELSE 1 END`,
+      sql`ABS(${mealOrders.orderDate} - '2026-10-14'::date)`
+    );
+
+  const map = new Map<string, MasterEmployeeProfile>();
+  for (const r of rows) {
+    const k = r.nik.toUpperCase().trim();
+    if (!map.has(k)) {
+      map.set(k, {
+        sortNo: r.sortNo ?? 9999,
+        nama: r.nama,
+        statusMess: r.statusMess || null,
+        pt: r.pt || null,
+        shift: r.shift || null,
+        section: r.section || null,
+        tempatTinggal: r.tempatTinggal || null,
+      });
+    }
+  }
+  return map;
+}
+
 // Membaca master urutan resmi karyawan (sortNo) agar saat pindah tanggal atau sinkron roster,
 // urutan baris karyawan selalu konsisten dan tidak pernah berubah.
 async function loadMasterSortOrderMap(): Promise<Map<string, number>> {
-  const rows = await db.select({ nik: mealOrders.nik, sortNo: mealOrders.sortNo })
-    .from(mealOrders)
-    .where(sql`${mealOrders.sortNo} IS NOT NULL`)
-    .orderBy(asc(mealOrders.sortNo));
+  const profileMap = await loadMasterEmployeeProfileMap();
   const map = new Map<string, number>();
-  for (const r of rows) {
-    const k = r.nik.toUpperCase().trim();
-    if (!map.has(k) && r.sortNo != null) {
-      map.set(k, r.sortNo);
-    }
+  for (const [k, p] of profileMap.entries()) {
+    if (p.sortNo != null) map.set(k, p.sortNo);
   }
   return map;
 }
@@ -723,10 +767,10 @@ async function loadMasterSortOrderMap(): Promise<Map<string, number>> {
 async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; source: RosterSource }> {
   const dateFormats = getPossibleRosterDateStrings(date);
   const masterTtByNik = await loadMasterTempatTinggalMap();
+  const masterProfiles = await loadMasterEmployeeProfileMap();
 
   // Profil karyawan (Status Mess, PT, Shift, Section, Tempat Tinggal) TIDAK diambil dari roster:
-  // disalin persis dari orderan terakhir karyawan tsb sebelum tanggal ini (bila tidak ada: orderan terdekat sesudahnya).
-  // Roster / Database Karyawan hanya untuk karyawan yang belum pernah ada di orderan.
+  // dikunci mengikuti Master Profile resmi (atau riwayat orderan valid).
   const lastOrders = await db.select({
     nik: mealOrders.nik, orderDate: mealOrders.orderDate, statusMess: mealOrders.statusMess, pt: mealOrders.pt,
     shift: mealOrders.shift, section: mealOrders.section, tempatTinggal: mealOrders.tempatTinggal,
@@ -749,15 +793,16 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
   const dbEmps = await db.select().from(employees);
   const dbByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
   const profileOf = (nik: string, fallback: OrderProfile): OrderProfile => {
+    const master = masterProfiles.get(nik);
     const p = profileByNik.get(nik);
     // Tempat Tinggal operasional dikunci: prioritaskan master yang sudah valid (Nirwana / Kampung Kawasi),
     // lalu riwayat orderan terdekat. JANGAN PERNAH mengambil alamatDomisili (alamat KTP/rumah).
-    const lockedTt = masterTtByNik.get(nik) || (p?.tempatTinggal && p.tempatTinggal.length <= 25 ? p.tempatTinggal : null) || fallback.tempatTinggal || null;
+    const lockedTt = masterTtByNik.get(nik) || master?.tempatTinggal || (p?.tempatTinggal && p.tempatTinggal.length <= 25 ? p.tempatTinggal : null) || fallback.tempatTinggal || null;
     return {
-      statusMess: p?.statusMess || fallback.statusMess || null,
-      pt: p?.pt || fallback.pt || null,
-      shift: p?.shift || fallback.shift || null,
-      section: p?.section || fallback.section || null,
+      statusMess: master?.statusMess || p?.statusMess || fallback.statusMess || null,
+      pt: master?.pt || p?.pt || fallback.pt || null,
+      shift: master?.shift || p?.shift || fallback.shift || null,
+      section: master?.section || p?.section || fallback.section || null,
       tempatTinggal: lockedTt,
     };
   };
@@ -771,8 +816,9 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
         source: 'sheet',
         emps: sheet.entries.filter(e => !isInactive(e.nik.toUpperCase())).map(e => {
           const nik = e.nik.toUpperCase();
+          const master = masterProfiles.get(nik);
           const profile = profileOf(nik, { statusMess: e.statusMess || null, pt: e.pt || null, shift: e.shift || null, section: e.section || null, tempatTinggal: null });
-          return { nik: e.nik, name: e.name, ...profile, gol: e.gol || null, status: e.status };
+          return { nik: e.nik, name: master?.nama || e.name, ...profile, gol: e.gol || null, status: e.status };
         }),
       };
     }
@@ -836,6 +882,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   const prevStatuses = await loadPreviousRosterStatuses(date);
   const masterTtByNik = await loadMasterTempatTinggalMap();
   const masterSortMap = await loadMasterSortOrderMap();
+  const masterProfiles = await loadMasterEmployeeProfileMap();
   let maxSortNo = Array.from(masterSortMap.values()).reduce((max, n) => Math.max(max, n), 0);
 
   const getSortNo = (nik: string, currentSortNo?: number | null) => {
@@ -861,20 +908,33 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       continue;
     }
     const current = existingByNik.get(nik);
-    const sortNo = getSortNo(nik, current?.sortNo);
-    // Kolom Tempat Tinggal dikunci: pertahankan nilai di orderan atau gunakan master operasional
-    const lockedTt = (current?.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || masterTtByNik.get(nik) || rosterEmp.tempatTinggal || null;
-    const emp = current
-      ? { ...rosterEmp, statusMess: current.statusMess, pt: current.pt, shift: current.shift, section: current.section, tempatTinggal: lockedTt, keteranganLapor: current.keteranganLapor }
-      : { ...rosterEmp, tempatTinggal: lockedTt };
+    const master = masterProfiles.get(nik);
+    const sortNo = master?.sortNo ?? getSortNo(nik, current?.sortNo);
+    // Kolom Profil (Status Mess, PT, Shift, Section, Tempat Tinggal) dikunci sesuai Master Profile:
+    const lockedStatusMess = master?.statusMess || current?.statusMess || rosterEmp.statusMess || null;
+    const lockedPt = master?.pt || current?.pt || rosterEmp.pt || null;
+    const lockedShift = master?.shift || current?.shift || rosterEmp.shift || null;
+    const lockedSection = master?.section || current?.section || rosterEmp.section || null;
+    const lockedTt = (current?.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || master?.tempatTinggal || masterTtByNik.get(nik) || rosterEmp.tempatTinggal || null;
+
+    const emp = {
+      ...rosterEmp,
+      nama: master?.nama || rosterEmp.name,
+      statusMess: lockedStatusMess,
+      pt: lockedPt,
+      shift: lockedShift,
+      section: lockedSection,
+      tempatTinggal: lockedTt,
+      keteranganLapor: current?.keteranganLapor,
+    };
     const prevStatus = prevStatuses.get(nik);
     const computed = computeMealOrderByRoster(emp, emp.status, date, withCurrentChoice(prefs.get(nik), current), prevStatus);
-    if (computed.shiftKerja === 'SIANG' && nonshift.has(nik)) computed.shiftKerja = 'Nonshift';
+    if (computed.shiftKerja === 'SIANG' && (nonshift.has(nik) || lockedShift === 'Nonshift')) computed.shiftKerja = 'Nonshift';
     rowsToSave.push({
       orderDate: date,
       sortNo,
       nik: emp.nik,
-      nama: emp.name,
+      nama: emp.nama,
       statusMess: emp.statusMess || null,
       pt: emp.pt || null,
       shift: emp.shift || null,
@@ -912,8 +972,9 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     await db.insert(mealOrders).values(chunk)
       .onConflictDoUpdate({
         target: [mealOrders.orderDate, mealOrders.nik],
-        // Hanya kolom hasil roster kehadiran — profil karyawan di orderan tidak ditimpa
+        // Menjaga konsistensi identitas profil master + menyelaraskan kehadiran dan porsi
         set: Object.fromEntries([
+          'sortNo', 'nama', 'statusMess', 'pt', 'shift', 'section', 'tempatTinggal',
           'statusKerja', 'shiftKerja',
           'pagiKantin', 'pagiLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan',
           'takjilLapangan', 'malamLapangan', 'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan',
@@ -952,16 +1013,29 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     }).from(mealOrders)
       .where(and(eq(mealOrders.orderDate, ymd), eq(mealOrders.nik, emp.nik))).limit(1);
     if (!current) return;
+    const masterProfiles = await loadMasterEmployeeProfileMap();
+    const master = masterProfiles.get(cleanNik);
     const prefs = await loadMealPreferences(ymd, cleanNik);
     const prevStatuses = await loadPreviousRosterStatuses(ymd, cleanNik);
     const prevStatus = prevStatuses.get(cleanNik);
+    const lockedStatusMess = master?.statusMess || current.statusMess;
+    const lockedShift = master?.shift || current.shift;
+    const lockedSection = master?.section || emp.section;
+    const lockedTt = (current.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || master?.tempatTinggal || null;
     const computed = computeMealOrderByRoster(
-      { ...emp, statusMess: current.statusMess, shift: current.shift, tempatTinggal: current.tempatTinggal, alamatDomisili: null, keteranganLapor: current.keteranganLapor },
+      { ...emp, name: master?.nama || emp.name, statusMess: lockedStatusMess, shift: lockedShift, section: lockedSection, tempatTinggal: lockedTt, alamatDomisili: null, keteranganLapor: current.keteranganLapor },
       rosterStatus, ymd, withCurrentChoice(prefs.get(cleanNik), current), prevStatus,
     );
-    if (computed.shiftKerja === 'SIANG' && (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik)) computed.shiftKerja = 'Nonshift';
+    if (computed.shiftKerja === 'SIANG' && (lockedShift === 'Nonshift' || (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik))) computed.shiftKerja = 'Nonshift';
 
-    const updateValues = {
+    const updateValues: any = {
+      ...(master?.sortNo != null ? { sortNo: master.sortNo } : {}),
+      ...(master?.nama ? { nama: master.nama } : {}),
+      ...(lockedStatusMess ? { statusMess: lockedStatusMess } : {}),
+      ...(master?.pt ? { pt: master.pt } : {}),
+      ...(lockedShift ? { shift: lockedShift } : {}),
+      ...(lockedSection ? { section: lockedSection } : {}),
+      ...(lockedTt ? { tempatTinggal: lockedTt } : {}),
       statusKerja: computed.statusKerja,
       shiftKerja: computed.shiftKerja,
       pagiKantin: computed.pagiKantin,
@@ -1020,6 +1094,35 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
         console.warn("[MealOrders auto-sync warning]:", syncErr?.message);
       }
     }
+
+    // Selaraskan identitas profil karyawan (No, Nama, Status Mess, PT, Shift, Section, Tempat Tinggal)
+    // agar selalu konsisten dan terkunci mengikuti Master Profile saat berpindah tanggal
+    const masterProfiles = await loadMasterEmployeeProfileMap();
+    rows = rows.map(r => {
+      const clean = r.nik.toUpperCase().trim();
+      const m = masterProfiles.get(clean);
+      if (m) {
+        if (m.sortNo != null) r.sortNo = m.sortNo;
+        if (m.nama) r.nama = m.nama;
+        if (m.statusMess) r.statusMess = m.statusMess;
+        if (m.pt) r.pt = m.pt;
+        if (m.shift) r.shift = m.shift;
+        if (m.section) r.section = m.section;
+        if (m.tempatTinggal && (!r.tempatTinggal || r.tempatTinggal.length > 25)) {
+          r.tempatTinggal = m.tempatTinggal;
+        }
+        if (m.shift === 'Nonshift' && (r.shiftKerja === 'SIANG' || r.shiftKerja === 'Siang')) {
+          r.shiftKerja = 'Nonshift';
+        }
+      }
+      return r;
+    });
+    rows.sort((a, b) => {
+      const sA = a.sortNo ?? 9999;
+      const sB = b.sortNo ?? 9999;
+      if (sA !== sB) return sA - sB;
+      return a.nama.localeCompare(b.nama);
+    });
 
     // Sanitasi status Belum Lapor:
     // Selama "Belum Lapor" belum dimatikan, seluruh porsi orderan makanan, batch, dan catatan WAJIB tetap kosong
