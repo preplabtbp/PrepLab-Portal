@@ -398,7 +398,7 @@ export function LogbookTaskRecommendationModal({
   const handleSaveManualTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualTitle.trim()) {
-      toast.error('Activity Name is required');
+      toast.error('Nama / Jenis kegiatan wajib diisi');
       return;
     }
 
@@ -920,7 +920,7 @@ export function LogbookTaskRecommendationModal({
               {/* 1. Nama / Jenis Kegiatan */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Activity Name <span className="text-rose-500">*</span>
+                  Nama / Jenis Kegiatan <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -936,7 +936,7 @@ export function LogbookTaskRecommendationModal({
               {/* 2. Keterangan / Checklist Subtask */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Description & Subtask Checklist (Optional)
+                  Keterangan & Checklist Subtask (Opsional)
                 </label>
                 <textarea
                   rows={3}
@@ -953,7 +953,7 @@ export function LogbookTaskRecommendationModal({
               {/* 3. PIC Pelaksana */}
               <div className="relative">
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Person In Charge (PIC)
+                  Penanggung Jawab (PIC)
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1011,7 +1011,7 @@ export function LogbookTaskRecommendationModal({
                 {/* Prioritas */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Priority
+                    Prioritas Tugas
                   </label>
                   <select
                     value={manualPriority}
@@ -1028,7 +1028,7 @@ export function LogbookTaskRecommendationModal({
                 {/* Tipe Aktivitas */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Activity Type
+                    Tipe Kegiatan
                   </label>
                   <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
                     <button
@@ -1168,7 +1168,7 @@ export function LogbookTaskRecommendationModal({
                   }`}
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Add to Today's Planning</span>
+                  <span>Tambahkan ke Planning Hari Ini</span>
                 </button>
               </div>
             </div>

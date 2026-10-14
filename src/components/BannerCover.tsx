@@ -117,7 +117,7 @@ export const BannerCover: React.FC<BannerCoverProps> = ({
           className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1.5 transition-all cursor-pointer border border-slate-200 dark:border-slate-700"
         >
           <ImageIcon className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-          <span>+ Add Cover Banner</span>
+          <span>+ Tambah Cover Banner</span>
         </button>
       </div>
     );
@@ -137,13 +137,6 @@ export const BannerCover: React.FC<BannerCoverProps> = ({
         src={cleanCoverUrl}
         alt={alt}
         draggable={false}
-        onError={(e) => {
-          // If pre-signed S3 URL or external URL fails, gracefully fall back to default lab cover
-          const target = e.currentTarget as HTMLImageElement;
-          if (!target.src.includes('images.unsplash.com')) {
-            target.src = 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80';
-          }
-        }}
         style={{ objectPosition: `center ${displayPos}%`, userSelect: 'none' }}
         className={`w-full h-full object-cover transition-[object-position] select-none pointer-events-none ${
           isRepositioning ? (isDragging ? 'duration-0' : 'duration-75') : 'duration-300'
@@ -194,7 +187,7 @@ export const BannerCover: React.FC<BannerCoverProps> = ({
                 className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-600 transition-all cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
-                <span>Cancel</span>
+                <span>Batal</span>
               </button>
               <button
                 type="button"
@@ -202,7 +195,7 @@ export const BannerCover: React.FC<BannerCoverProps> = ({
                 className="px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>Save Position</span>
+                <span>Simpan Posisi</span>
               </button>
             </div>
           </div>
@@ -226,10 +219,10 @@ export const BannerCover: React.FC<BannerCoverProps> = ({
             type="button"
             onClick={handleStartReposition}
             className="px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xs shadow-md transition-all cursor-pointer border border-white/10"
-            title="Reposition this cover image"
+            title="Sesuaikan posisi vertikal gambar cover ini"
           >
             <Move className="w-3.5 h-3.5 text-teal-400" />
-            <span>Reposition</span>
+            <span>Atur Posisi</span>
           </button>
 
           {/* Change Cover Button */}
@@ -237,10 +230,10 @@ export const BannerCover: React.FC<BannerCoverProps> = ({
             type="button"
             onClick={onOpenChangeModal}
             className="px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 backdrop-blur-xs shadow-md transition-all cursor-pointer border border-white/10"
-            title="Change cover banner image"
+            title="Ganti gambar cover banner"
           >
             <Camera className="w-3.5 h-3.5 text-lime-400" />
-            <span>Change Cover</span>
+            <span>Ganti Cover Banner</span>
           </button>
         </div>
       )}
