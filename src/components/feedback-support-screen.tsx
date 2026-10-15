@@ -27,6 +27,7 @@ interface FeedbackItem {
   authorSection?: string;
   status: 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'REJECTED';
   developerNotes?: string | null;
+  developerAttachmentUrl?: string | null;
   resolvedAt?: string | null;
   createdAt: string;
 }
@@ -98,6 +99,9 @@ export function FeedbackSupportScreen({
   const [devSearch, setDevSearch] = useState('');
   const [selectedReportForNotes, setSelectedReportForNotes] = useState<FeedbackItem | null>(null);
   const [notesInput, setNotesInput] = useState('');
+  const [devAttachmentBase64, setDevAttachmentBase64] = useState<string | null>(null);
+  const [devStatusInput, setDevStatusInput] = useState<string>('RESOLVED');
+  const [capturingDevScreen, setCapturingDevScreen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   // Load feedbacks
@@ -175,10 +179,9 @@ export function FeedbackSupportScreen({
     }
   };
 
-  // Support Ctrl+V paste directly on this screen
+  // Support Ctrl+V paste directly on this screen (and in Developer Modal)
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
-      if (activeTab !== 'create') return;
       const items = e.clipboardData?.items;
       if (!items) return;
 
@@ -192,8 +195,14 @@ export function FeedbackSupportScreen({
             }
             const reader = new FileReader();
             reader.onload = () => {
-              setScreenshotBase64(reader.result as string);
-              toast.success('Screenshot dari clipboard (Ctrl+V) berhasil dilampirkan!');
+              const res = reader.result as string;
+              if (selectedReportForNotes) {
+                setDevAttachmentBase64(res);
+                toast.success('Bukti perbaikan dari clipboard (Ctrl+V) berhasil dilampirkan!');
+              } else if (activeTab === 'create') {
+                setScreenshotBase64(res);
+                toast.success('Screenshot dari clipboard (Ctrl+V) berhasil dilampirkan!');
+              }
             };
             reader.readAsDataURL(blob);
             break;
@@ -203,10 +212,14 @@ export function FeedbackSupportScreen({
     };
 
     const handleCustomPasted = (e: any) => {
-      if (activeTab !== 'create') return;
       if (e.detail?.base64) {
-        setScreenshotBase64(e.detail.base64);
-        toast.success('Screenshot dari clipboard (Ctrl+V) berhasil dilampirkan!');
+        if (selectedReportForNotes) {
+          setDevAttachmentBase64(e.detail.base64);
+          toast.success('Bukti perbaikan dari clipboard (Ctrl+V) berhasil dilampirkan!');
+        } else if (activeTab === 'create') {
+          setScreenshotBase64(e.detail.base64);
+          toast.success('Screenshot dari clipboard (Ctrl+V) berhasil dilampirkan!');
+        }
       }
     };
 
@@ -216,7 +229,54 @@ export function FeedbackSupportScreen({
       window.removeEventListener('paste', handlePaste);
       window.removeEventListener('portal:image_pasted', handleCustomPasted);
     };
-  }, [activeTab]);
+  }, [activeTab, selectedReportForNotes]);
+
+  // Handle Developer Proof Image Upload
+  const handleDevImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Ukuran gambar maksimal 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setDevAttachmentBase64(reader.result as string);
+      toast.success('Bukti perbaikan berhasil dipilih!');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Capture Current Portal Screen for Developer
+  const handleCaptureDevScreen = async () => {
+    try {
+      setCapturingDevScreen(true);
+      toast.loading('Menangkap tampilan layar portal...', { id: 'dev-screen-capture' });
+      const targetElement = document.getElementById('root') || document.body;
+      const base64 = await toJpeg(targetElement, {
+        quality: 0.85,
+        skipFonts: true,
+        cacheBust: false,
+        pixelRatio: Math.min(window.devicePixelRatio || 1, 1.25),
+        filter: (node: any) => {
+          if (!node || !node.tagName) return true;
+          if (node.hasAttribute?.('data-html2canvas-ignore')) return false;
+          if (node.classList?.contains('feedback-ignore-capture')) return false;
+          return true;
+        }
+      });
+      setDevAttachmentBase64(base64);
+      toast.dismiss('dev-screen-capture');
+      toast.success('Layar portal berhasil ditangkap sebagai bukti perbaikan!');
+    } catch (err) {
+      toast.dismiss('dev-screen-capture');
+      toast.error('Gagal menangkap layar. Silakan unggah file gambar secara manual.');
+    } finally {
+      setCapturingDevScreen(false);
+    }
+  };
 
   // Handle Image Upload
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -305,23 +365,43 @@ export function FeedbackSupportScreen({
     }
   };
 
-  // Developer Update Status
-  const handleUpdateStatus = async (id: number, newStatus: string, notes?: string) => {
+  // Developer Update Status & Attachment
+  const handleUpdateStatus = async (id: number, newStatus: string, notes?: string, attachmentUrl?: string | null) => {
     setUpdatingStatus(true);
     try {
+      let finalAttachmentUrl = attachmentUrl;
+      // If there is a new image from file input, clipboard, or screenshot
+      if (attachmentUrl && attachmentUrl.startsWith('data:image')) {
+        try {
+          toast.loading('Mengunggah bukti perbaikan ke Google Drive...', { id: 'upload-dev-attach' });
+          finalAttachmentUrl = await uploadPhotoToDrive(
+            attachmentUrl,
+            'image/jpeg',
+            `Dev_Fix_${id}_${Date.now()}.jpg`,
+            'Bug Reports & Feedback'
+          );
+          toast.dismiss('upload-dev-attach');
+        } catch (uploadErr) {
+          console.warn('Drive upload fallback:', uploadErr);
+          finalAttachmentUrl = attachmentUrl;
+        }
+      }
+
       const res = await fetch(`/api/feedbacks/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: newStatus,
-          developerNotes: notes !== undefined ? notes : undefined
+          developerNotes: notes !== undefined ? notes : undefined,
+          developerAttachmentUrl: finalAttachmentUrl !== undefined ? finalAttachmentUrl : undefined
         })
       });
       const json = await res.json();
       if (json.status === 'success') {
-        toast.success(`Status diperbarui menjadi: ${newStatus}`);
+        toast.success(`Catatan & status berhasil disimpan (${newStatus})`);
         setSelectedReportForNotes(null);
         setNotesInput('');
+        setDevAttachmentBase64(null);
         loadFeedbacks();
       } else {
         throw new Error(json.message);
@@ -800,18 +880,57 @@ export function FeedbackSupportScreen({
                     </div>
                   )}
 
-                  {/* Developer Response Notes */}
-                  {item.developerNotes && (
-                    <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200/60 text-xs space-y-1">
-                      <p className="font-bold text-purple-900 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-                        <span>Tanggapan Tim Developer:</span>
-                      </p>
-                      <p className="text-purple-800 leading-relaxed">
-                        {item.developerNotes}
-                      </p>
+                  {/* Developer Response Notes & Proof Attachment */}
+                  {(item.developerNotes || item.developerAttachmentUrl) && (
+                    <div className="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200/80 text-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-purple-900 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Tanggapan Tim Developer:</span>
+                        </p>
+                        {item.status === 'RESOLVED' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            ✅ Telah Diperbaiki
+                          </span>
+                        )}
+                      </div>
+
+                      {item.developerNotes && (
+                        <p className="text-purple-900 leading-relaxed whitespace-pre-wrap">
+                          {item.developerNotes}
+                        </p>
+                      )}
+
+                      {item.developerAttachmentUrl && (
+                        <div className="pt-1">
+                          <p className="text-[11px] font-bold text-purple-900 mb-1.5 flex items-center gap-1">
+                            <ImageIcon className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Bukti / Screenshot Hasil Perbaikan:</span>
+                          </p>
+                          <a
+                            href={item.developerAttachmentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group block relative rounded-xl overflow-hidden border border-purple-200 max-w-sm hover:border-purple-400 transition-all shadow-xs bg-white"
+                          >
+                            <img
+                              src={item.developerAttachmentUrl}
+                              alt="Bukti Perbaikan Developer"
+                              className="w-full max-h-48 object-cover group-hover:scale-102 transition-transform"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-purple-950/70 via-transparent to-transparent flex items-end p-2.5 opacity-90 group-hover:opacity-100">
+                              <span className="text-[11px] font-bold text-white flex items-center gap-1">
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Klik untuk melihat foto bukti perbaikan</span>
+                                <ExternalLink className="w-3 h-3 ml-0.5" />
+                              </span>
+                            </div>
+                          </a>
+                        </div>
+                      )}
+
                       {item.resolvedAt && (
-                        <p className="text-[10px] text-purple-600 font-mono pt-1">
+                        <p className="text-[10px] text-purple-700 font-mono pt-0.5">
                           Diselesaikan pada: {new Date(item.resolvedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                         </p>
                       )}
@@ -950,10 +1069,24 @@ export function FeedbackSupportScreen({
                     </a>
                   )}
 
-                  {item.developerNotes && (
-                    <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-xs">
-                      <strong className="text-purple-900 block mb-0.5">💬 Catatan Developer:</strong>
-                      <p className="text-purple-800">{item.developerNotes}</p>
+                  {(item.developerNotes || item.developerAttachmentUrl) && (
+                    <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-xs space-y-1">
+                      <strong className="text-purple-900 block font-bold flex items-center gap-1">
+                        <span>💬 Catatan Developer:</span>
+                      </strong>
+                      {item.developerNotes && <p className="text-purple-800">{item.developerNotes}</p>}
+                      {item.developerAttachmentUrl && (
+                        <a
+                          href={item.developerAttachmentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-900 underline mt-0.5"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span>Lihat Bukti Perbaikan Terlampir</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>
@@ -965,6 +1098,8 @@ export function FeedbackSupportScreen({
                     onClick={() => {
                       setSelectedReportForNotes(item);
                       setNotesInput(item.developerNotes || '');
+                      setDevStatusInput(item.status === 'PENDING' ? 'RESOLVED' : item.status);
+                      setDevAttachmentBase64(item.developerAttachmentUrl || null);
                     }}
                     className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors flex items-center gap-1 cursor-pointer"
                   >
@@ -1011,7 +1146,7 @@ export function FeedbackSupportScreen({
           {selectedReportForNotes && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
               <div 
-                className="w-full max-w-lg p-6 rounded-3xl border shadow-2xl space-y-4"
+                className="w-full max-w-lg p-6 rounded-3xl border shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto"
                 style={{
                   backgroundColor: 'var(--card-bg, #ffffff)',
                   borderColor: 'var(--border-main, #e2e8f0)'
@@ -1023,22 +1158,55 @@ export function FeedbackSupportScreen({
                     <span>Catatan Developer untuk Pelapor</span>
                   </h4>
                   <button 
-                    onClick={() => setSelectedReportForNotes(null)}
-                    className="text-xs opacity-60 hover:opacity-100"
+                    onClick={() => {
+                      setSelectedReportForNotes(null);
+                      setDevAttachmentBase64(null);
+                    }}
+                    className="text-xs opacity-60 hover:opacity-100 cursor-pointer"
                   >
                     ✕ Tutup
                   </button>
                 </div>
 
-                <div className="p-3 rounded-xl bg-slate-50 border text-xs">
-                  <p className="font-bold">{selectedReportForNotes.title}</p>
-                  <p className="opacity-70 truncate">{selectedReportForNotes.authorName} ({selectedReportForNotes.authorNik})</p>
+                <div className="p-3.5 rounded-2xl bg-slate-50 border text-xs space-y-1">
+                  <p className="font-bold text-slate-900">{selectedReportForNotes.title}</p>
+                  <p className="text-slate-600 truncate">{selectedReportForNotes.authorName} ({selectedReportForNotes.authorNik}) • <span className="font-mono">{selectedReportForNotes.module || 'Umum'}</span></p>
                 </div>
 
+                {/* Status Selection */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold opacity-80">Perbarui Status Laporan:</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'RESOLVED', label: '✅ Selesai', desc: 'Bug telah tuntas' },
+                      { id: 'IN_PROGRESS', label: '🔍 Dikerjakan', desc: 'Sedang diperbaiki' },
+                      { id: 'PENDING', label: '⏳ Menunggu', desc: 'Antrean review' },
+                    ].map(st => {
+                      const isSel = devStatusInput === st.id;
+                      return (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setDevStatusInput(st.id as any)}
+                          className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                            isSel 
+                              ? 'border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold shadow-xs' 
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 text-xs'
+                          }`}
+                        >
+                          <p className="text-xs font-bold">{st.label}</p>
+                          <p className="text-[10px] opacity-70 mt-0.5">{st.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Notes Input */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold opacity-80">Catatan / Jawaban Solusi Developer:</label>
                   <textarea
-                    rows={4}
+                    rows={3}
                     value={notesInput}
                     onChange={(e) => setNotesInput(e.target.value)}
                     placeholder="Tuliskan respon, perbaikan yang telah dilakukan, atau penjelasan ke karyawan..."
@@ -1047,10 +1215,80 @@ export function FeedbackSupportScreen({
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2">
+                {/* Attachment / Screenshot Bukti Perbaikan */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold opacity-80 flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Lampiran / Gambar Bukti Perbaikan <span className="font-normal text-slate-400">(opsional)</span>:</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleCaptureDevScreen}
+                      disabled={capturingDevScreen}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-800 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200 cursor-pointer transition-all active:scale-95"
+                    >
+                      {capturingDevScreen ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Camera className="w-3 h-3" />
+                      )}
+                      <span>{capturingDevScreen ? 'Mengambil...' : '📸 Tangkap Layar Portal'}</span>
+                    </button>
+                  </div>
+
+                  {devAttachmentBase64 ? (
+                    <div className="relative p-3 rounded-2xl border border-purple-200 bg-purple-50/60 flex items-center gap-3 shadow-2xs">
+                      <img 
+                        src={devAttachmentBase64} 
+                        alt="Preview Bukti Perbaikan" 
+                        className="w-16 h-16 object-cover rounded-xl border border-purple-200 shadow-xs shrink-0 bg-white" 
+                      />
+                      <div className="flex-1 min-w-0 text-xs">
+                        <p className="font-bold truncate text-purple-950 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Bukti perbaikan siap dilampirkan</span>
+                        </p>
+                        <p className="text-slate-600 text-[11px] mt-0.5">
+                          Tersimpan & dapat dilihat oleh pelapor
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDevAttachmentBase64(null)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 cursor-pointer transition-colors"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  ) : (
+                    <label 
+                      className="p-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-purple-50/50 hover:border-purple-300 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all text-center group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <ImageIcon className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-800">
+                        Klik untuk unggah screenshot atau tekan <kbd className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-white border font-bold text-purple-900">Ctrl + V</kbd> untuk tempel gambar
+                      </span>
+                      <span className="text-[10px] text-slate-500">PNG, JPG, WEBP (Maks. 5MB)</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleDevImageChange} 
+                        className="hidden" 
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-main)' }}>
                   <button
                     type="button"
-                    onClick={() => setSelectedReportForNotes(null)}
+                    onClick={() => {
+                      setSelectedReportForNotes(null);
+                      setDevAttachmentBase64(null);
+                    }}
                     className="px-4 py-2 rounded-xl text-xs font-semibold border"
                     style={{ borderColor: 'var(--border-main)' }}
                   >
@@ -1059,10 +1297,16 @@ export function FeedbackSupportScreen({
                   <button
                     type="button"
                     disabled={updatingStatus}
-                    onClick={() => handleUpdateStatus(selectedReportForNotes.id, selectedReportForNotes.status, notesInput)}
-                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-sm cursor-pointer"
+                    onClick={() => handleUpdateStatus(
+                      selectedReportForNotes.id, 
+                      devStatusInput || selectedReportForNotes.status, 
+                      notesInput,
+                      devAttachmentBase64
+                    )}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-sm cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    {updatingStatus ? 'Menyimpan...' : 'Simpan Catatan'}
+                    {updatingStatus && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>{updatingStatus ? 'Menyimpan & Mengunggah...' : 'Simpan Catatan & Bukti'}</span>
                   </button>
                 </div>
               </div>

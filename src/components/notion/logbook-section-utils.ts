@@ -19,11 +19,48 @@ export function translateDisplayText(text: string): string {
 import type { TableRowData } from '../NotionDatabaseTable';
 export type { TableRowData };
 
+/**
+ * Universal helper to extract task / activity title from any row,
+ * supporting both English ('Activity Name', 'Activity', 'Title', 'Task') and Indonesian ('Jenis kegiatan', 'Judul', 'Kegiatan')
+ */
+export function getTaskRowTitle(row: TableRowData | Record<string, any>): string {
+  if (!row) return '';
+  const direct = row['Activity Name'] || row['Jenis kegiatan'] || row['Jenis Kegiatan'] || row['Activity'] || row['Judul'] || row['Name'] || row['Title'] || row['task'] || row['Task'];
+  if (direct && typeof direct === 'string' && direct.trim()) {
+    return direct.trim();
+  }
+
+  for (const k of Object.keys(row)) {
+    const kl = k.toLowerCase().trim();
+    if (kl.includes('routine') || kl.includes('rutin') || kl.includes('kategori')) continue;
+    if (
+      kl === 'activity name' ||
+      kl === 'activity' ||
+      kl === 'task' ||
+      kl === 'title' ||
+      kl === 'judul' ||
+      kl === 'name' ||
+      kl === 'nama' ||
+      kl === 'materi' ||
+      kl.includes('jenis kegiatan') ||
+      kl.includes('nama kegiatan') ||
+      kl.includes('judul kegiatan') ||
+      (kl.includes('kegiatan') && !kl.includes('kategori'))
+    ) {
+      const v = row[k];
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        return String(v).trim();
+      }
+    }
+  }
+  return '';
+}
+
 export function isSubItemRow(row: TableRowData): boolean {
   if (!row) return false;
   if (row.isSubItem === 'true' || (row as any).isSubItem === true) return true;
   if (row.parentId || row.parentRowId) return true;
-  const title = String(row['Jenis kegiatan'] || row['Jenis Kegiatan'] || row['Name'] || row['Judul'] || '').trim();
+  const title = getTaskRowTitle(row);
   if (title.startsWith('↳') || title.startsWith('↪')) {
     return true;
   }
@@ -422,9 +459,8 @@ export function aggregateSectionActiveTasks(
   const pushActiveRow = (row: TableRowData, post: any, originIdx: number) => {
     if (!isRowActive(row)) return;
 
-    // Get task title for deduplication
-    const titleKey = Object.keys(row).find(k => k.toLowerCase().includes('kegiatan') || k.toLowerCase() === 'title');
-    const taskTitle = titleKey ? String(row[titleKey] || '').trim() : '';
+    // Get task title for deduplication (supports both English & Indonesian headers)
+    const taskTitle = getTaskRowTitle(row);
     if (!taskTitle) return;
 
     const dedupKey = `${taskTitle.toLowerCase()}_${String(row.PIC || row.pic || '').toLowerCase()}`;
@@ -459,10 +495,12 @@ export function aggregateSectionActiveTasks(
       finalPeriod = 'Non-Routine';
     }
 
-    // Normalize keys to canonical headers
+    // Normalize keys to canonical headers (support both English 'Activity Name' & Indonesian 'Jenis kegiatan')
     const normalizedRow: TableRowData = {
       number: String(activeRows.length + 1),
+      'Activity Name': taskTitle,
       'Jenis kegiatan': taskTitle,
+      'Jenis Kegiatan': taskTitle,
       Keterangan: String(row.Keterangan || row.keterangan || row.uraian || ''),
       'Created Time': String(row['Created Time'] || row['Created time'] || row.created_time || row.date || ''),
       'Tanggal Selesai': String(row['Tanggal Selesai'] || row['Tanggal selesai'] || row.completed || '-'),
@@ -564,14 +602,14 @@ export async function syncLogbookRowsGroupToOrigin(
 
   // 1. Process Parent Task updates
   for (const parent of parentRows) {
-    const targetTitle = getCleanTitle(parent['Jenis kegiatan'] || parent['Jenis Kegiatan'] || parent.title || parent.Name || parent.Judul || '');
+    const targetTitle = getCleanTitle(getTaskRowTitle(parent));
     let targetIdx = -1;
 
     // Try matching by origin index if available
     if (parent._originRowIndex !== undefined && parent._originRowIndex !== '') {
       const candIdx = Number(parent._originRowIndex);
       if (!isNaN(candIdx) && parsed.rows[candIdx]) {
-        const candTitle = getCleanTitle(parsed.rows[candIdx]['Jenis kegiatan'] || parsed.rows[candIdx]['Jenis Kegiatan'] || '');
+        const candTitle = getCleanTitle(getTaskRowTitle(parsed.rows[candIdx]));
         if (candTitle.toLowerCase() === targetTitle.toLowerCase()) {
           targetIdx = candIdx;
         }
@@ -587,7 +625,7 @@ export async function syncLogbookRowsGroupToOrigin(
     if (targetIdx === -1) {
       targetIdx = parsed.rows.findIndex(r => {
         if (isSubItemRow(r)) return false;
-        const rTitle = getCleanTitle(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.title || r.Name || r.Judul || '');
+        const rTitle = getCleanTitle(getTaskRowTitle(r));
         return rTitle.toLowerCase() === targetTitle.toLowerCase();
       });
     }
@@ -622,7 +660,7 @@ export async function syncLogbookRowsGroupToOrigin(
 
   // 2. Process Child Subtask updates & insertions
   for (const sub of childSubRows) {
-    const rawSubTitle = sub['Jenis kegiatan'] || sub['Jenis Kegiatan'] || sub.Name || sub.title || '';
+    const rawSubTitle = getTaskRowTitle(sub);
     const cleanSubTitle = getCleanTitle(rawSubTitle);
     if (!cleanSubTitle) continue;
 
@@ -640,7 +678,7 @@ export async function syncLogbookRowsGroupToOrigin(
     const parentRefTitle = getCleanTitle(
       sub._parentTitle || 
       sub.parentTitle || 
-      (parentRows.length === 1 ? (parentRows[0]['Jenis kegiatan'] || parentRows[0]['Jenis Kegiatan'] || '') : '')
+      (parentRows.length === 1 ? getTaskRowTitle(parentRows[0]) : '')
     );
     const parentRefId = sub.parentId || sub.parentRowId || '';
 
@@ -652,7 +690,7 @@ export async function syncLogbookRowsGroupToOrigin(
     if (existingSubIdx === -1) {
       existingSubIdx = parsed.rows.findIndex(r => {
         if (!isSubItemRow(r)) return false;
-        const candClean = getCleanTitle(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.Name || '');
+        const candClean = getCleanTitle(getTaskRowTitle(r));
         return candClean.toLowerCase() === cleanSubTitle.toLowerCase();
       });
     }
@@ -660,7 +698,7 @@ export async function syncLogbookRowsGroupToOrigin(
     if (existingSubIdx !== -1) {
       // Subtask exists: update it
       const targetSub = parsed.rows[existingSubIdx];
-      const titleKey = findColKey(targetSub, 'Jenis kegiatan', 'Jenis Kegiatan', 'Name', 'Judul');
+      const titleKey = findColKey(targetSub, 'Activity Name', 'Activity', 'Jenis kegiatan', 'Jenis Kegiatan', 'Name', 'Judul');
       const statusKey = findColKey(targetSub, 'Status');
       const dateKey = findColKey(targetSub, 'Tanggal Selesai', 'Tanggal selesai', 'Completed');
       const dueKey = findColKey(targetSub, 'Due Date', 'due date', 'Deadline');
@@ -713,7 +751,7 @@ export async function syncLogbookRowsGroupToOrigin(
       if (originParentIdx === -1 && parentRefTitle) {
         originParentIdx = parsed.rows.findIndex(r => {
           if (isSubItemRow(r)) return false;
-          const rClean = getCleanTitle(r['Jenis kegiatan'] || r['Jenis Kegiatan'] || r.Name || r.Judul || '');
+          const rClean = getCleanTitle(getTaskRowTitle(r));
           return rClean.toLowerCase() === parentRefTitle.toLowerCase() ||
             (parentRefTitle.length > 5 && (rClean.toLowerCase().includes(parentRefTitle.toLowerCase()) || parentRefTitle.toLowerCase().includes(rClean.toLowerCase())));
         });
@@ -740,7 +778,11 @@ export async function syncLogbookRowsGroupToOrigin(
 
       parsed.headers.forEach(h => {
         const hLower = h.toLowerCase().trim();
-        if (hLower.includes('jenis kegiatan') || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama') {
+        const isTitle = (!hLower.includes('routine') && !hLower.includes('rutin')) && (
+          hLower.includes('activity name') || hLower === 'activity' || hLower.includes('jenis kegiatan') || 
+          hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama' || hLower === 'title' || hLower.includes('kegiatan')
+        );
+        if (isTitle) {
           newOriginSubRow[h] = subTitleWithPrefix;
         } else if (hLower === 'status') {
           newOriginSubRow[h] = isSubCompleted ? 'Closed' : 'Open';
@@ -756,8 +798,8 @@ export async function syncLogbookRowsGroupToOrigin(
           newOriginSubRow[h] = sub.Keterangan || '-';
         } else if (hLower.includes('created') || hLower.includes('tanggal')) {
           newOriginSubRow[h] = formatToDDMMYYYY(sub['Created Time'] || sub['Created time']) || todayStr;
-        } else if (hLower.includes('activity')) {
-          newOriginSubRow[h] = parentRowInOrigin ? (parentRowInOrigin['Activity (routine/non routine)'] || 'Routine') : 'Routine';
+        } else if (hLower.includes('activity') && !hLower.includes('name')) {
+          newOriginSubRow[h] = parentRowInOrigin ? (parentRowInOrigin['Activity (routine/non routine)'] || parentRowInOrigin['Activity'] || 'Routine') : 'Routine';
         } else if (hLower === 'period') {
           newOriginSubRow[h] = parentRowInOrigin ? (parentRowInOrigin.period || 'Daily') : 'Daily';
         } else if (hLower.includes('asal') && hLower.includes('halaman')) {
@@ -847,7 +889,10 @@ export async function syncLogbookRowsGroupToOrigin(
     const cells = parsed.headers.map(h => {
       let val = r[h] !== undefined ? String(r[h]) : '';
       const hLower = h.toLowerCase().trim();
-      const isTitleCol = hLower.includes('jenis kegiatan') || hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama';
+      const isTitleCol = (!hLower.includes('routine') && !hLower.includes('rutin')) && (
+        hLower.includes('activity name') || hLower === 'activity' || hLower.includes('jenis kegiatan') || 
+        hLower === 'task' || hLower === 'judul' || hLower === 'name' || hLower === 'nama' || hLower === 'title' || hLower.includes('kegiatan')
+      );
       if (isTitleCol && val) {
         const taskId = r.id || (r as any)._id;
         const parentId = r.parentId || r.parentRowId;
@@ -954,8 +999,7 @@ export function getSectionActiveRecommendations(
       // 🛑 CRITICAL ENTERPRISE FIX: Skip subtask rows so they NEVER leak as top-level task recommendations!
       if (isSubItemRow(row)) return;
 
-      const titleKey = Object.keys(row).find(k => k.toLowerCase().includes('kegiatan') || k.toLowerCase() === 'title');
-      const rawTitle = titleKey ? String(row[titleKey] || '').trim() : '';
+      const rawTitle = getTaskRowTitle(row);
       if (!rawTitle) return;
 
       // Clean title from any internal HTML comments
@@ -1007,7 +1051,7 @@ export function getSectionActiveRecommendations(
       for (let j = idx + 1; j < parsed.rows.length; j++) {
         const nextR = parsed.rows[j];
         if (!isSubItemRow(nextR)) break; // Stop when hitting next parent task
-        const nextTitle = String(nextR['Jenis kegiatan'] || nextR['Jenis Kegiatan'] || nextR['Name'] || '').trim();
+        const nextTitle = getTaskRowTitle(nextR);
         const cleanSubTitle = cleanFrontEndText(nextTitle.replace(/^[↳↪]\s*/, '').replace(/\[[ xX]\]\s*/, '').trim());
         const isSubDone = nextR.Status === 'Closed' || nextR.Status === 'Selesai' || nextR.isCompleted === 'true' || nextTitle.includes('[x]');
 

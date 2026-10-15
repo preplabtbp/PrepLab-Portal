@@ -2261,14 +2261,62 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
           return (insp1 && insp1.includes(nik)) || (insp2 && insp2.includes(nik)) || (insp3 && insp3.includes(nik));
         });
 
-        // 2. Check area / form match (guarding against empty string false positives)
-        const isAreaMatch = Boolean(
+        // 2. Check area / form match with normalization (supporting APD variations & shorthand names)
+        const normalizeKeywords = (str: string): string => {
+          return (str || '')
+            .toLowerCase()
+            .replace(/laboratory|laboratorium/g, 'lab')
+            .replace(/preparation|preparasi/g, 'prep')
+            .replace(/alat pelindung diri/g, 'apd')
+            .replace(/kepatuhan/g, '')
+            .replace(/inspeksi/g, '')
+            .replace(/formulir/g, '')
+            .replace(/checklist/g, '')
+            .replace(/[^a-z0-9]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
+
+        const normSched = normalizeKeywords(`${sInspeksi} ${sSubArea} ${sFormTitle}`);
+        const normInsp = normalizeKeywords(`${judulForm} ${location}`);
+
+        // Check if both are APD inspections
+        const isSchedApd = (s.formInfo?.tipe === 'APD') || normSched.includes('apd');
+        const isInspApd = judulForm.includes('apd') || normInsp.includes('apd');
+
+        let isApdAreaMatch = false;
+        if (isSchedApd && isInspApd) {
+          if (normSched.includes('maintenance') && normInsp.includes('maintenance')) {
+            isApdAreaMatch = true;
+          } else {
+            const matchShiftA = normSched.includes('shift a') && (normInsp.includes('shift a') || normInsp.includes('a'));
+            const matchShiftB = normSched.includes('shift b') && (normInsp.includes('shift b') || normInsp.includes('b'));
+            const matchLab = normSched.includes('lab') && normInsp.includes('lab');
+            const matchPrep = normSched.includes('prep') && normInsp.includes('prep');
+
+            if ((matchShiftA || matchShiftB) && (matchLab || matchPrep)) {
+              isApdAreaMatch = true;
+            } else if (matchLab && normInsp.includes('lab')) {
+              isApdAreaMatch = true;
+            } else if (matchPrep && normInsp.includes('prep')) {
+              isApdAreaMatch = true;
+            }
+          }
+        }
+
+        const isStandardAreaMatch = Boolean(
           (sSubArea && sSubArea.length >= 3 && location && location.length >= 3 && (location.includes(sSubArea) || sSubArea.includes(location))) ||
           (sInspeksi && sInspeksi.length >= 3 && location && location.length >= 3 && (location.includes(sInspeksi) || sInspeksi.includes(location))) ||
-          (judulForm && judulForm.length >= 3 && sFormTitle && sFormTitle.length >= 3 && (judulForm.includes(sFormTitle) || sFormTitle.includes(judulForm)))
+          (judulForm && judulForm.length >= 3 && sFormTitle && sFormTitle.length >= 3 && (judulForm.includes(sFormTitle) || sFormTitle.includes(judulForm))) ||
+          (normSched && normInsp && normSched.length >= 4 && normInsp.length >= 4 && (normSched.includes(normInsp) || normInsp.includes(normSched)))
         );
 
+        const isAreaMatch = isApdAreaMatch || isStandardAreaMatch;
+
         if (isPersonMatch) {
+          if (!matchedAny) {
+            matchedAny = { insp, dataFObj };
+          }
           // If schedule specifically assigns an area/form, require area match or form match to prevent false positives
           if (s.inspeksi && s.inspeksi.trim() !== '' && s.inspeksi !== '-') {
             if (isAreaMatch) {
@@ -2283,7 +2331,7 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
         }
       }
 
-      const matchedInsp = matchedStrict;
+      const matchedInsp = matchedStrict || (s.hasSsProof ? matchedAny : null);
 
       if (matchedInsp) {
         const { insp, dataFObj } = matchedInsp;

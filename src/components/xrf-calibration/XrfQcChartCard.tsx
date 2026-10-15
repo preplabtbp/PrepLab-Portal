@@ -166,6 +166,14 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
     return sigmaDist > 2.0 && sigmaDist <= 3.0;
   }).length;
 
+  // Focus on the LATEST (last) point for control status (in-control vs need re-calibration)
+  const lastPoint = validPoints.length > 0 ? validPoints[validPoints.length - 1] : null;
+  const lastPointSigma = lastPoint && limits.stdevFixed > 0 
+    ? Math.abs((lastPoint.value - limits.nominalValue) / limits.stdevFixed) 
+    : 0;
+  const isLatestNeedRecalibration = lastPoint && lastPointSigma > 3.0;
+  const isLatestWarning = lastPoint && lastPointSigma > 2.0 && lastPointSigma <= 3.0;
+
   // Percentage recovery / bias
   const recoveryPct = limits.nominalValue > 0 
     ? ((statistics.mean / limits.nominalValue) * 100).toFixed(1) 
@@ -174,19 +182,19 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden flex flex-col font-sans transition-all hover:border-slate-300 dark:hover:border-slate-700">
       {/* ------------------------------------------------------------- */}
-      {/* 1. ENTERPRISE HEADER BAR WITH ELEMENT DROPDOWN (GAMBAR 1)      */}
+      {/* 1. ENTERPRISE HEADER BAR WITH ELEMENT DROPDOWN                */}
       {/* ------------------------------------------------------------- */}
       <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 flex items-center justify-between gap-2 flex-wrap">
-        {/* Left: Instrument Pill */}
+        {/* Left: Sample Count Indicator (Instrument name hidden since pinned header already represents it) */}
         <div className="flex items-center gap-2">
-          <span className={`px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider shadow-xs ${headerColorClass}`}>
-            {instrumentName}
+          <span className="text-[11px] font-mono font-bold px-2 py-0.8 rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            N = {validPoints.length} Data
           </span>
         </div>
 
-        {/* Center / Right: ELEMENT DROPDOWN (SESUAI GAMBAR 1) */}
+        {/* Center / Right: ELEMENT DROPDOWN & LATEST CONTROL STATUS */}
         <div className="flex items-center gap-2">
-          {/* Green Element Dropdown matching user prompt Gambar 1 */}
+          {/* Green Element Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setShowElementDropdown(!showElementDropdown)}
@@ -198,7 +206,7 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showElementDropdown ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Dropdown Menu Modal in Green Theme (Gambar 1) */}
+            {/* Dropdown Menu Modal in Green Theme */}
             {showElementDropdown && (
               <div className="absolute right-0 top-full mt-1.5 z-40 w-28 bg-[#16a34a] border-2 border-emerald-700 rounded-xl shadow-2xl overflow-hidden py-1 animate-in fade-in zoom-in-95 duration-150">
                 <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-100/90 border-b border-emerald-600 mb-1">
@@ -215,7 +223,7 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
                       }}
                       className={`w-full px-3 py-1.5 text-left text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
                         isSelected
-                          ? 'bg-[#0284c7] text-white shadow-xs font-black' // Blue highlight as in Gambar 1
+                          ? 'bg-[#0284c7] text-white shadow-xs font-black'
                           : 'text-white hover:bg-emerald-700'
                       }`}
                     >
@@ -228,28 +236,27 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
             )}
           </div>
 
-          {/* Sample Count Badge */}
-          <span className="text-[11px] font-mono font-bold px-2 py-0.8 rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-            N = {validPoints.length}
-          </span>
-
-          {/* Out-of-control Alarm Indicators */}
-          {actionCount > 0 ? (
-            <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300 border border-red-300 dark:border-red-800 flex items-center gap-1">
-              <AlertCircle className="w-3 h-3 text-red-600" />
-              {actionCount} Action
+          {/* Latest Data Point Status: In-Control vs Need Re-calibration (Notion Palette) */}
+          {validPoints.length === 0 ? (
+            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 border border-stone-200 dark:border-stone-700">
+              No Data
             </span>
-          ) : warningCount > 0 ? (
-            <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3 text-amber-600" />
-              {warningCount} Warning
+          ) : isLatestNeedRecalibration ? (
+            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEE2E2] text-[#991B1B] dark:bg-rose-950/70 dark:text-rose-200 border border-[#FCA5A5] dark:border-rose-800 flex items-center gap-1 shadow-2xs">
+              <AlertCircle className="w-3.5 h-3.5 text-[#DC2626]" />
+              Need Re-calibration
             </span>
-          ) : validPoints.length > 0 ? (
-            <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          ) : isLatestWarning ? (
+            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEF3C7] text-[#92400E] dark:bg-amber-950/70 dark:text-amber-200 border border-[#FCD34D] dark:border-amber-800 flex items-center gap-1 shadow-2xs">
+              <AlertTriangle className="w-3.5 h-3.5 text-[#D97706]" />
+              Warning (2σ - 3σ)
+            </span>
+          ) : (
+            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#DCFCE7] text-[#166534] dark:bg-emerald-950/70 dark:text-emerald-200 border border-[#86EFAC] dark:border-emerald-800 flex items-center gap-1 shadow-2xs">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
               In-Control
             </span>
-          ) : null}
+          )}
         </div>
       </div>
 
@@ -479,57 +486,74 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
         </svg>
 
         {/* ------------------------------------------------------- */}
-        {/* ENTERPRISE FLOATING TOOLTIP                             */}
+        {/* NOTION-STYLE FLOATING POPUP / TOOLTIP (GAMBAR 1 & 2)    */}
         {/* ------------------------------------------------------- */}
-        {hoveredPoint && (
-          <div className="absolute top-4 right-16 bg-slate-900/95 text-white text-xs p-3 rounded-xl shadow-2xl pointer-events-none backdrop-blur-md border border-slate-700/80 font-sans z-30 space-y-1.5 animate-in fade-in duration-100 min-w-[200px]">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 font-bold">
-              <span className="text-cyan-400">Run #{hoveredPoint.index}</span>
-              <span className="text-[10px] text-slate-400 font-mono">{hoveredPoint.analyzedAt || hoveredPoint.date}</span>
-            </div>
+        {hoveredPoint && (() => {
+          const pointSigma = limits.stdevFixed > 0 
+            ? ((hoveredPoint.value - limits.nominalValue) / limits.stdevFixed) 
+            : 0;
+          const absSigma = Math.abs(pointSigma);
+          const isPointAction = absSigma > 3.0;
+          const isPointWarning = absSigma > 2.0 && absSigma <= 3.0;
+          const diff = hoveredPoint.value - limits.nominalValue;
+          const sampleDate = hoveredPoint.analyzedAt || hoveredPoint.date || `Pengambilan #${hoveredPoint.index}`;
 
-            <div className="space-y-1 font-mono text-[11px]">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Hasil {currentElement}:</span>
-                <span className="font-bold text-white text-sm">{hoveredPoint.value.toFixed(3)} %</span>
-              </div>
-              <div className="flex justify-between items-center text-[10px]">
-                <span className="text-slate-400">Acuan (CL):</span>
-                <span className="text-emerald-400 font-bold">{limits.nominalValue.toFixed(3)} %</span>
-              </div>
-              <div className="flex justify-between items-center text-[10px]">
-                <span className="text-slate-400">Deviasi (Δ):</span>
-                <span className={(hoveredPoint.value - limits.nominalValue) >= 0 ? "text-emerald-400" : "text-amber-400"}>
-                  {(hoveredPoint.value - limits.nominalValue) > 0 ? '+' : ''}{(hoveredPoint.value - limits.nominalValue).toFixed(3)}
+          return (
+            <div className="absolute top-4 right-14 bg-white/95 dark:bg-[#222222]/95 text-slate-800 dark:text-neutral-100 text-xs p-3.5 rounded-xl shadow-xl pointer-events-none backdrop-blur-md border border-slate-200 dark:border-neutral-700 font-sans z-30 space-y-2 animate-in fade-in zoom-in-95 duration-100 min-w-[220px]">
+              {/* Header: Date & Time as primary title (replaces Run #200) */}
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-neutral-700 pb-2">
+                <span className="text-[12px] font-bold text-slate-800 dark:text-neutral-100">
+                  {sampleDate}
+                </span>
+                <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400">
+                  Run #{hoveredPoint.index}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-[10px]">
-                <span className="text-slate-400">Sigma Dist (Z):</span>
-                <span className="font-bold text-cyan-300">
-                  {limits.stdevFixed > 0 ? (((hoveredPoint.value - limits.nominalValue) / limits.stdevFixed).toFixed(2) + 'σ') : '-'}
-                </span>
-              </div>
-            </div>
 
-            {/* Tooltip Status Pill */}
-            <div className="pt-1 border-t border-slate-800 flex justify-between items-center">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Status QC:</span>
-              {limits.stdevFixed > 0 && Math.abs((hoveredPoint.value - limits.nominalValue) / limits.stdevFixed) > 3.0 ? (
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-red-500/20 text-red-300 border border-red-500/40">
-                  ACTION (&gt;3σ)
-                </span>
-              ) : limits.stdevFixed > 0 && Math.abs((hoveredPoint.value - limits.nominalValue) / limits.stdevFixed) > 2.0 ? (
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  WARNING (2σ - 3σ)
-                </span>
-              ) : (
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                  PASS (≤2σ)
-                </span>
-              )}
+              {/* Body: Notion-style high contrast key-values */}
+              <div className="space-y-1.5 text-[11px] font-mono">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-neutral-400 font-sans">Hasil {currentElement}:</span>
+                  <span className="font-bold text-slate-900 dark:text-white text-xs">{hoveredPoint.value.toFixed(3)} %</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-neutral-400 font-sans">Acuan (CL):</span>
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-400">{limits.nominalValue.toFixed(3)} %</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-neutral-400 font-sans">Deviasi (Δ):</span>
+                  <span className={`font-semibold ${diff >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
+                    {diff > 0 ? '+' : ''}{diff.toFixed(3)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-neutral-400 font-sans">Sigma Dist (Z):</span>
+                  <span className="font-semibold text-sky-700 dark:text-sky-400">
+                    {limits.stdevFixed > 0 ? (pointSigma.toFixed(2) + 'σ') : '-'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Pill in Notion Pastel Colorway (Gambar 2) */}
+              <div className="pt-2 border-t border-slate-100 dark:border-neutral-700 flex justify-between items-center">
+                <span className="text-[10px] text-slate-400 font-sans font-medium uppercase tracking-wider">Status QC:</span>
+                {isPointAction ? (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FEE2E2] text-[#991B1B] dark:bg-rose-950/70 dark:text-rose-200 border border-[#FCA5A5] dark:border-rose-800">
+                    Need Re-calibration (&gt;3σ)
+                  </span>
+                ) : isPointWarning ? (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] dark:bg-amber-950/70 dark:text-amber-200 border border-[#FCD34D] dark:border-amber-800">
+                    WARNING (2σ - 3σ)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#DCFCE7] text-[#166534] dark:bg-emerald-950/70 dark:text-emerald-200 border border-[#86EFAC] dark:border-emerald-800">
+                    IN-CONTROL (≤2σ)
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* ------------------------------------------------------------- */}

@@ -464,6 +464,7 @@ export const getDisplayTitle = (title: string): string => {
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
     .replace(/<!--.*$/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 };
 
@@ -512,12 +513,13 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if ((targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'activity name' || targetLower === 'activity' || targetLower === 'nama kegiatan' || targetLower === 'task') && 
-        (keyLower.includes('jenis kegiatan') || keyLower.includes('activity name') || keyLower === 'activity' || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
+    if ((targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'activity name' || targetLower === 'nama kegiatan' || targetLower === 'task') && 
+        !keyLower.includes('routine') && !keyLower.includes('rutin') &&
+        (keyLower.includes('jenis kegiatan') || keyLower.includes('activity name') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if (targetLower === 'keterangan' && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('content') || keyLower.includes('rincian'))) {
+    if ((targetLower === 'description' || targetLower === 'keterangan') && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('description') || keyLower.includes('content') || keyLower.includes('rincian'))) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -541,7 +543,7 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && (keyLower.includes('completed') || keyLower.includes('aktual selesai') || keyLower === 'selesai' || keyLower.includes('waktu selesai') || keyLower.includes('tanggal selesai'))) {
+    if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && (keyLower.includes('completed') || keyLower.includes('completion') || keyLower.includes('aktual selesai') || keyLower === 'selesai' || keyLower.includes('waktu selesai') || keyLower.includes('tanggal selesai'))) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -549,7 +551,7 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if (targetLower === 'activity (routine/non routine)' && (keyLower.includes('activity') || keyLower.includes('aktivitas'))) {
+    if ((targetLower === 'activity (routine/non routine)' || targetLower === 'activity type' || targetLower === 'aktivitas') && !keyLower.includes('name') && !keyLower.includes('judul') && (keyLower.includes('activity') || keyLower.includes('aktivitas') || keyLower.includes('routine') || keyLower.includes('rutin'))) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -1532,33 +1534,11 @@ export function NotionDatabaseTable({
     }, 100);
   };
 
-// Helper to translate header display labels into English cleanly without breaking backend keys
-const getDisplayHeaderLabel = (colHeader: string): string => {
-  if (!colHeader) return '';
-  const l = colHeader.toLowerCase().trim();
-  const clean = l.replace(/^[^a-z0-9]+/i, '').trim();
-
-  if (l === 'number' || l === 'nomor' || l === 'no.' || l === 'no' || l === '#') return 'Number';
-  if (clean.includes('jenis kegiatan') || clean.includes('nama kegiatan') || clean.includes('judul kegiatan') || clean === 'materi' || clean === 'activity name') return 'Activity Name';
-  if (clean.includes('keterangan') || clean.includes('deskripsi') || clean.includes('description') || clean === 'notes' || clean === 'catatan') return 'Description';
-  if (clean.includes('created') || clean.includes('tanggal dibuat') || clean.includes('waktu dibuat') || clean === 'dibuat') return 'Created Time';
-  if (clean.includes('tanggal selesai') || clean.includes('completion') || clean.includes('completed') || clean.includes('aktual selesai') || clean === 'selesai' || clean.includes('waktu selesai')) return 'Completion Date';
-  if (clean.includes('due') || clean.includes('deadline') || clean.includes('target') || clean.includes('jatuh tempo') || clean.includes('batas waktu') || clean.includes('tenggat')) return 'Due Date';
-  if (clean === 'status') return 'Status';
-  if (clean === 'pic' || clean.includes('penanggung jawab') || clean.includes('assignee')) return 'PIC';
-  if (clean === 'priority' || clean.includes('prioritas')) return 'Priority';
-  if (clean.includes('aktivitas') || clean.includes('activity')) return 'Activity';
-  if (clean === 'kategori' || clean.includes('category')) return 'Category';
-  if (clean === 'periode' || clean.includes('period')) return 'Period';
-  if (clean === 'catatan' || clean === 'notes' || clean === 'note') return 'Notes';
-  return colHeader;
-};
-
   // Column templates definition
   const POPULAR_COLUMN_TEMPLATES = [
     { name: 'Created Time', icon: '🕒', defaultValue: '-', desc: 'Tanggal pembuatan tugas (otomatis saat dibuat)' },
     { name: 'Status', icon: '🏷️', defaultValue: 'Open', desc: 'Dropdown status progress tugas' },
-    { name: 'Completion Date', icon: '✓', defaultValue: '-', desc: 'Completion date of activity' },
+    { name: 'Completed Time', icon: '✓', defaultValue: '-', desc: 'Tanggal atau waktu penyelesaian tugas' },
     { name: 'Priority', icon: '⚡', defaultValue: 'Normal', desc: 'Tingkat urgensi kegiatan' },
     { name: 'PIC', icon: '👤', defaultValue: '', desc: 'Personil penanggung jawab' },
     { name: 'Activity (routine/non routine)', icon: '🔄', defaultValue: 'Routine', desc: 'Klasifikasi aktivitas rutin/non-rutin' },
@@ -1574,15 +1554,15 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
   const getColOrder = (colName: string): number => {
     const l = colName.toLowerCase().trim();
     if (l === 'number' || l === 'no' || l === 'no.' || l === '#') return 0;
-    if (l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
-    if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian') || l.includes('notes')) return 2;
+    if (l.includes('activity name') || l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
+    if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('description') || l.includes('rincian') || l.includes('notes')) return 2;
     if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 3;
-    if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
+    if (l.includes('completion') || l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
     if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) return 5;
     if (l.includes('status')) return 6;
     if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 7;
     if (l.includes('priority') || l.includes('prioritas')) return 8;
-    if (l.includes('activity') || l.includes('aktivitas')) return 9;
+    if (!l.includes('name') && (l.includes('activity') || l.includes('aktivitas'))) return 9;
     if (l.includes('period') || l.includes('periode')) return 10;
     if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 11;
     return 20; // other custom columns
@@ -1590,33 +1570,37 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
 
   // Helper to normalize headers while preserving user-defined column order
   const normalizeAndOrderHeaders = useCallback((inputHeaders: string[]): string[] => {
-    // 1. Remove redundant 'Progress' / 'progres' column and standardize aliases
+    // 1. Remove redundant 'Progress' / 'progres' column and standardize aliases to English
     const filtered = (inputHeaders || []).filter(h => {
       const l = h.toLowerCase().trim();
       if (l.includes('progress') || l.includes('progres') || l.includes('capaian')) return false;
       return true;
     }).map(h => {
       const l = h.toLowerCase().trim();
-      if (l.includes('completed') || l.includes('completion') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) {
+      const clean = l.replace(/^[^a-z0-9]+/i, '').trim();
+      if (clean.includes('completed') || clean.includes('completion') || clean.includes('aktual selesai') || clean === 'selesai' || clean.includes('waktu selesai') || clean.includes('tanggal selesai')) {
         return 'Completion Date';
       }
-      if (l.includes('jenis kegiatan') || l === 'activity name') {
+      if (clean.includes('due') || clean.includes('deadline') || clean.includes('target') || clean.includes('jatuh tempo') || clean.includes('batas waktu')) {
+        return 'Due Date';
+      }
+      if (clean.includes('jenis kegiatan') || clean.includes('activity name')) {
         return 'Activity Name';
       }
-      if (l.includes('keterangan') || l === 'description') {
+      if (clean.includes('keterangan') || clean.includes('catatan') || clean.includes('deskripsi') || clean.includes('description')) {
         return 'Description';
-      }
-      if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) {
-        return 'Due Date';
       }
       return h;
     });
 
-    // Deduplicate headers
+    // Deduplicate headers by semantic clean name
     const uniqueFiltered: string[] = [];
     filtered.forEach(h => {
-      const hl = h.toLowerCase().trim();
-      if (!uniqueFiltered.some(u => u.toLowerCase().trim() === hl)) {
+      const cleanH = h.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
+      if (!uniqueFiltered.some(u => {
+        const cleanU = u.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
+        return cleanU === cleanH;
+      })) {
         uniqueFiltered.push(h);
       }
     });
@@ -1632,7 +1616,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
         'Status',
         'PIC',
         'Priority',
-        'Activity'
+        'Period'
       ];
     }
 
@@ -1698,7 +1682,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
     if (!hasDueDate) {
       const compIdx = headersWithCompleted.findIndex(h => {
         const l = h.toLowerCase().trim();
-        return l.includes('selesai') || l.includes('completed');
+        return l.includes('selesai') || l.includes('completed') || l.includes('completion');
       });
       if (compIdx !== -1) {
         finalHeaders = [
@@ -1832,13 +1816,33 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
   // Ensure Progress, redundant Kategori, and hiddenColumns are never rendered in displayHeaders
   // (Due Date is mandatory and always visible for KPI SLA tracking)
   const displayHeaders = useMemo(() => {
-    return tableHeaders.filter(h => {
+    const raw = tableHeaders.filter(h => {
       const l = h.toLowerCase().trim();
       if (hiddenColumns.some(hc => hc.toLowerCase().trim() === l)) return false;
       if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) return true;
       return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
              !l.includes('kategori') && !l.includes('category');
     });
+
+    // Deduplicate semantically to prevent duplicate Completion Date / Tanggal Selesai or Activity Name
+    const seen = new Set<string>();
+    const deduplicated: string[] = [];
+    for (const h of raw) {
+      const clean = h.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
+      let semanticKey = clean;
+      if (clean.includes('tanggal selesai') || clean.includes('completed') || clean.includes('completion') || clean === 'selesai' || clean.includes('waktu selesai')) {
+        semanticKey = 'completion date';
+      } else if (clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name' || clean === 'title' || clean === 'nama' || clean === 'materi') {
+        semanticKey = 'activity name';
+      } else if (clean.includes('keterangan') || clean.includes('catatan') || clean.includes('deskripsi') || clean.includes('description')) {
+        semanticKey = 'description';
+      }
+      if (!seen.has(semanticKey)) {
+        seen.add(semanticKey);
+        deduplicated.push(h);
+      }
+    }
+    return deduplicated;
   }, [tableHeaders, hiddenColumns]);
 
   // Floating Synchronized Horizontal Scrollbar (Tetap di bawah viewport, transparan saat idle, muncul saat disentuh kursor)
@@ -2178,12 +2182,13 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if ((targetLower === 'activity name' || targetLower === 'activity' || targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title' || targetLower === 'nama kegiatan') && 
-          (cleanKey.includes('jenis kegiatan') || cleanKey.includes('activity') || cleanKey.includes('activity name') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
+      if ((targetLower === 'activity name' || targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title' || targetLower === 'nama kegiatan') && 
+          (!cleanKey.includes('routine') && !cleanKey.includes('rutin')) &&
+          (cleanKey.includes('jenis kegiatan') || cleanKey.includes('activity name') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if ((targetLower === 'description' || targetLower === 'keterangan' || targetLower === 'deskripsi') && (cleanKey.includes('description') || cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
+      if ((targetLower === 'description' || targetLower === 'keterangan') && (cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('description') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -2209,7 +2214,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
         if (fallbackVal === undefined) fallbackVal = val;
       }
       if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && 
-          (cleanKey.includes('completed') || cleanKey.includes('aktual selesai') || cleanKey === 'selesai' || cleanKey.includes('waktu selesai') || cleanKey.includes('tanggal selesai'))) {
+          (cleanKey.includes('completed') || cleanKey.includes('completion') || cleanKey.includes('aktual selesai') || cleanKey === 'selesai' || cleanKey.includes('waktu selesai') || cleanKey.includes('tanggal selesai'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -2217,7 +2222,9 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'activity (routine/non routine)' && (cleanKey.includes('activity') || cleanKey.includes('aktivitas'))) {
+      if ((targetLower === 'activity (routine/non routine)' || targetLower === 'aktivitas') && 
+          !cleanKey.includes('name') && !cleanKey.includes('judul') && !cleanKey.includes('task') &&
+          (cleanKey.includes('activity') || cleanKey.includes('aktivitas') || cleanKey.includes('routine') || cleanKey.includes('rutin'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -2703,7 +2710,11 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
       // 2. Clean Title match (resilient against checkbox toggle [ ] <-> [x], ↳ prefix, and <!--last-modified:...--> changes)
       if (cleanSelTitle && cCleanTitle === cleanSelTitle) return true;
       if (cleanRowTitle && cCleanTitle === cleanRowTitle) return true;
-      if (cleanRowTitle && cCleanTitle.startsWith(`${cleanRowTitle} - `)) return true;
+      if (cleanRowTitle && (cCleanTitle.startsWith(`${cleanRowTitle} - `) || cCleanTitle.startsWith(`${cleanRowTitle}  - `))) return true;
+
+      // Base title match (strip sub-period date suffix like " - 15 Okt 2026")
+      const baseOfCClean = cCleanTitle.split(' - ')[0].trim();
+      if (cleanRowTitle && baseOfCClean === cleanRowTitle) return true;
 
       // 3. Fallback raw string match
       if (selQ && cTopic === selQ) return true;
@@ -3947,20 +3958,19 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
   // Save Row (Create / Edit)
   const handleSaveRow = async (e: React.FormEvent) => {
     e.preventDefault();
-    const title = (rowFormData['Activity Name'] || rowFormData['Activity'] || rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || '').trim();
+    const title = (rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan'] || '').trim();
     if (!title) {
-      toast.error('Activity Name is required');
+      toast.error('Wajib mengisi "Jenis kegiatan"');
       return;
     }
 
     const cleanedRow = { ...rowFormData };
-    // Synchronize title across both English and Indonesian keys and any matching header
-    cleanedRow['Activity Name'] = title;
+    // Synchronize title across both casing keys and any matching header
     cleanedRow['Jenis kegiatan'] = title;
     cleanedRow['Jenis Kegiatan'] = title;
     displayHeaders.forEach(h => {
       const hLower = h.toLowerCase().trim();
-      if (hLower === 'activity name' || hLower === 'activity' || hLower === 'jenis kegiatan' || hLower === 'judul' || hLower === 'task' || hLower === 'nama kegiatan') {
+      if (hLower === 'jenis kegiatan' || hLower === 'judul' || hLower === 'task' || hLower === 'nama kegiatan') {
         cleanedRow[h] = title;
       }
     });
@@ -5258,10 +5268,10 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
   const getNotionColumnIcon = (colHeader: string) => {
     const colLower = colHeader.toLowerCase();
     if (colLower === 'number' || colLower === 'no' || colLower === '#') return <span className="font-mono text-slate-400 font-bold mr-1">#</span>;
-    if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') return <span className="text-slate-400 mr-1 text-xs">≡</span>;
-    if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('jenis kegiatan') || colLower.includes('activity name') || colLower === 'task' || colLower === 'judul' || colLower === 'name') return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi') || colLower.includes('description')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     if (colLower.includes('created') || colLower.includes('tanggal dibuat') || colLower.includes('waktu dibuat')) return <span className="text-slate-400 mr-1 text-xs">📅</span>;
-    if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')) return <span className="text-emerald-500 mr-1 text-xs">✓</span>;
+    if (colLower.includes('completed') || colLower.includes('completion') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai') || colLower.includes('tanggal selesai')) return <span className="text-emerald-500 mr-1 text-xs">✓</span>;
     if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) return <span className="text-amber-500 mr-1 text-xs">🎯</span>;
     if (colLower.includes('status')) return <span className="text-slate-400 mr-1 text-xs">⭕</span>;
     if (colLower.includes('pic') || colLower.includes('assignee')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
@@ -6568,7 +6578,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                   }`}
                   title="Tampilkan tugas yang sudah selesai"
                 >
-                  <span>Completed</span>
+                  <span>Selesai</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
                     logbookFilterMode === 'completed' ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                   }`}>
@@ -6717,7 +6727,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
                   const cleanHeader = colHeader.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
-                  const isJudul = cleanHeader.includes('activity name') || cleanHeader.includes('jenis kegiatan') || cleanHeader === 'activity' || cleanHeader === 'task' || cleanHeader === 'judul' || cleanHeader === 'name' || cleanHeader === 'title' || cleanHeader === 'nama' || cleanHeader === 'materi';
+                  const isJudul = cleanHeader.includes('activity name') || cleanHeader.includes('jenis kegiatan') || cleanHeader === 'task' || cleanHeader === 'judul' || cleanHeader === 'name' || cleanHeader === 'title' || cleanHeader === 'nama' || cleanHeader === 'materi';
                   const colLower = colHeader.toLowerCase();
                   const colIdx = displayHeaders.indexOf(colHeader);
 
@@ -6726,19 +6736,19 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                   if (fitPageMode) {
                     if (isNum) widthClass = 'w-[5%] text-center px-1 py-2.5';
                     else if (isJudul) widthClass = 'w-[25%] px-2.5 py-2.5';
-                    else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[22%] px-2.5 py-2.5';
+                    else if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('description') || colLower.includes('deskripsi')) widthClass = 'w-[22%] px-2.5 py-2.5';
                     else if (colLower.includes('created')) widthClass = 'w-[9%] px-1.5 py-2.5';
-                    else if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('tanggal selesai')) widthClass = 'w-[9%] px-1.5 py-2.5';
+                    else if (colLower.includes('completed') || colLower.includes('completion') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('tanggal selesai') || colLower.includes('waktu selesai')) widthClass = 'w-[9%] px-1.5 py-2.5';
                     else if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) widthClass = 'w-[10%] px-1.5 py-2.5';
                     else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2.5';
                     else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[11%] px-1.5 py-2.5';
                     else if (colLower.includes('priority') || colLower.includes('prioritas')) widthClass = 'w-[6%] px-1.5 py-2.5';
-                    else if (colLower.includes('activity') || colLower.includes('aktivitas')) widthClass = 'w-[7%] px-1.5 py-2.5';
+                    else if (!colLower.includes('name') && (colLower.includes('activity') || colLower.includes('aktivitas'))) widthClass = 'w-[7%] px-1.5 py-2.5';
                     else widthClass = 'w-[6%] px-1.5 py-2.5';
                   } else {
                     if (isNum) widthClass = 'w-16 text-center px-3.5 py-3 whitespace-nowrap';
                     else if (isJudul) widthClass = 'min-w-[260px] px-3.5 py-3 whitespace-nowrap';
-                    else if (colLower.includes('keterangan')) widthClass = 'w-[360px] min-w-[280px] max-w-[450px] px-3.5 py-3 overflow-hidden';
+                    else if (colLower.includes('keterangan') || colLower.includes('description') || colLower.includes('deskripsi')) widthClass = 'w-[360px] min-w-[280px] max-w-[450px] px-3.5 py-3 overflow-hidden';
                     else if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) widthClass = 'min-w-[145px] px-3.5 py-3 whitespace-nowrap';
                     else widthClass = 'px-3.5 py-3 whitespace-nowrap';
                   }
@@ -6759,7 +6769,21 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                         >
                           {getNotionColumnIcon(colHeader)}
                           <span className={`truncate font-semibold ${isNotionLight ? 'text-[#37352f]' : 'text-slate-300'}`}>
-                            {getDisplayHeaderLabel(colHeader)}
+                            {(() => {
+                              const clean = colLower.replace(/^[^a-z0-9]+/i, '').trim();
+                              if (clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name') return 'Activity Name';
+                              if (clean.includes('keterangan') || clean.includes('deskripsi') || clean.includes('description') || clean.includes('catatan')) return 'Description';
+                              if (clean.includes('tanggal selesai') || clean.includes('completed') || clean.includes('completion') || clean === 'selesai' || clean.includes('waktu selesai')) return 'Completion Date';
+                              if (clean.includes('due') || clean.includes('deadline') || clean.includes('target') || clean.includes('jatuh tempo') || clean.includes('batas waktu')) return 'Due Date';
+                              if (clean === 'number' || clean === 'no') return 'Number';
+                              if (clean.includes('created')) return 'Created Time';
+                              if (clean.includes('status')) return 'Status';
+                              if (clean === 'pic' || clean.includes('assignee')) return 'PIC';
+                              if (clean.includes('priority') || clean.includes('prioritas')) return 'Priority';
+                              if (clean.includes('period') || clean.includes('periode')) return 'Period';
+                              if (!clean.includes('name') && (clean.includes('activity') || clean.includes('aktivitas'))) return 'Activity Type';
+                              return colHeader.replace(/^=\s*/, '');
+                            })()}
                           </span>
                           {isSorted && (
                             sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
@@ -7019,7 +7043,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-700 font-semibold border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 font-bold border-[#303030]'
                   }`}
                 >
-                  Action
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -7406,7 +7430,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                   );
                                 }
 
-                                // 2. Jenis kegiatan Column (Judul / Name / Materi)
+                                // 2. Jenis kegiatan Column (Judul / Name / Materi / Activity Name)
                                 if (cleanCol.includes('activity name') || cleanCol.includes('jenis kegiatan') || cleanCol === 'task' || cleanCol === 'judul' || cleanCol === 'name' || cleanCol === 'title' || cleanCol === 'nama' || cleanCol === 'materi') {
                                   const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
 
@@ -7563,7 +7587,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                 }
 
                                 // 3. Keterangan Column (dengan Smart Tasklist & Pewarnaan Teks)
-                                if (colLower.includes('description') || colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) {
+                                if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) {
                                   const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
                                   const taskProgress = parseTasklist(val);
 
@@ -7942,7 +7966,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                         {isSubCompleted ? (
                                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
                                             <CheckCircle2 className="w-3.5 h-3.5" />
-                                            <span>Completed</span>
+                                            <span>Selesai</span>
                                           </span>
                                         ) : (
                                           <span className="text-slate-400 font-mono text-xs">-</span>
@@ -8112,8 +8136,8 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                   );
                                 }
 
-                                // 10. Activity Column (Interactive Dropdown)
-                                if (!colLower.includes('name') && (colLower === 'activity' || colLower.includes('routine') || colLower.includes('aktivitas'))) {
+                                // 10. Activity Column (Interactive Dropdown for Routine / Non-Routine)
+                                if (!cleanCol.includes('activity name') && !colLower.includes('name') && !cleanCol.includes('judul') && (colLower.includes('activity') || colLower.includes('aktivitas'))) {
                                   if (isSubItem) {
                                     return (
                                       <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
@@ -8260,7 +8284,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                            setActiveActionMenuRowIndex(activeActionMenuRowIndex === rowActionKey ? null : rowActionKey);
                                          }}
                                          className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-300 text-black dark:text-black hover:text-black transition-colors cursor-pointer"
-                                         title="Action Options"
+                                         title="Pilihan Aksi"
                                        >
                                          <MoreVertical className="w-4 h-4 text-black dark:text-black" />
                                        </button>
@@ -8288,7 +8312,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                            title={isRowPinned(row) ? "Lepas sematan (unpin) task ini" : "Sematkan task ini ke posisi teratas (Maks. 10 task)"}
                                          >
                                            <Pin className={`w-3.5 h-3.5 shrink-0 ${isRowPinned(row) ? 'text-amber-500 fill-amber-500 rotate-45' : 'text-slate-400'}`} />
-                                           <span>{isRowPinned(row) ? 'Unpin Task' : 'Pin Task to Top (Max 10)'}</span>
+                                           <span>{isRowPinned(row) ? 'Lepas Pin (Unpin Task)' : 'Pin Task ke Atas (Maks 10)'}</span>
                                          </button>
                                        )}
                                        {!isSubItem && (
@@ -8302,10 +8326,10 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                              setActiveActionMenuRowIndex(null);
                                            }}
                                            className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-400 font-medium transition-colors cursor-pointer"
-                                           title="Add subtask under this activity"
+                                           title="Tambah Sub-kegiatan di bawah kegiatan ini"
                                          >
                                            <Plus className="w-3.5 h-3.5 shrink-0 text-teal-500" />
-                                           <span>Add Subtask</span>
+                                           <span>Tambah Sub-kegiatan</span>
                                          </button>
                                        )}
                                        <button
@@ -8329,7 +8353,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                          title="Pilih baris kegiatan ini (Select)"
                                        >
                                          <CheckSquare className="w-3.5 h-3.5 shrink-0 text-teal-500" />
-                                         <span>{selectedRowIndices.has(actualRowIndex) ? 'Deselect Row' : 'Select Row'}</span>
+                                         <span>{selectedRowIndices.has(actualRowIndex) ? 'Batal Pilih Baris' : 'Pilih Baris (Select)'}</span>
                                        </button>
                                        <button
                                          type="button"
@@ -8339,10 +8363,10 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                            setActiveActionMenuRowIndex(null);
                                          }}
                                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-medium transition-colors cursor-pointer"
-                                         title="Edit This Activity"
+                                         title="Edit Data Kegiatan Ini"
                                        >
                                          <Edit2 className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                                         <span>Edit Activity</span>
+                                         <span>Edit Data Kegiatan</span>
                                        </button>
                                        <button
                                          type="button"
@@ -8352,10 +8376,10 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                                            setActiveActionMenuRowIndex(null);
                                          }}
                                          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-medium transition-colors cursor-pointer"
-                                         title={isSubItem ? "Delete this subtask" : "Delete this row"}
+                                         title={isSubItem ? "Hapus Sub-kegiatan Ini" : "Hapus Baris Ini"}
                                        >
                                          <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-500" />
-                                         <span>{isSubItem ? "Delete Subtask" : "Delete Row"}</span>
+                                         <span>{isSubItem ? "Hapus Sub-kegiatan" : "Hapus Baris Ini"}</span>
                                        </button>
                                      </div>
                                    )}
@@ -9340,7 +9364,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                 </div>
                 <div>
                   <h3 className="font-bold text-base" style={{ color: 'var(--text-main, #f1f5f9)' }}>
-                    {editingRowIndex === null ? 'Add New Activity' : 'Edit Activity'}
+                    {editingRowIndex === null ? 'Tambah Data Kegiatan Baru' : 'Edit Data Kegiatan'}
                   </h3>
                   <p className="text-[11px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
                     Struktur kolom sinkron database Weekly Notion
@@ -9362,7 +9386,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
               <div className="relative">
                 <div className="flex items-center justify-between mb-1">
                   <label className="block font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Activity Name <span className="text-rose-500">*</span>
+                    Jenis Kegiatan <span className="text-rose-500">*</span>
                   </label>
                   {(rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan']) && (
                     <span className="text-[10px] text-teal-400 font-sans">
@@ -9442,7 +9466,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                      Task ID (Unique Code)
+                      ID Task (Kode Unik)
                     </label>
                     <span className="text-[9.5px] font-mono text-teal-500 font-bold">Auto Format (L1, P1, Q1, A1, I1, M1)</span>
                   </div>
@@ -9487,11 +9511,11 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                 </div>
               </div>
 
-              {/* 3. Description / Summary Notes */}
+              {/* 3. Keterangan / Catatan Ringkas */}
               <div className="relative">
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Description / Summary Notes
+                    Keterangan / Catatan Ringkas
                   </label>
                   <span className="text-[10px] text-slate-400 font-sans">
                     (Opsional - blok teks untuk styling)
@@ -9771,12 +9795,12 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                 </div>
               </div>
 
-              {/* 5. Activity Type & Periode (Hanya 2 pilihan utama: Routine vs Non Routine) */}
+              {/* 5. Tipe Aktivitas & Periode (Hanya 2 pilihan utama: Routine vs Non Routine) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Activity Type */}
+                {/* Tipe Aktivitas */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Activity Type
+                    Tipe Aktivitas
                   </label>
                   <select
                     value={
@@ -9819,7 +9843,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                 {/* Cadence Periode (Pilihan lanjutan daily s/d yearly jika Routine) */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Period / Cadence
+                    Periode / Cadence
                   </label>
                   {((rowFormData['Activity (routine/non routine)'] || '').toLowerCase().includes('non') ||
                     (rowFormData['period'] || '').toLowerCase().includes('non')) ? (
@@ -9885,7 +9909,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                 {/* 7. Due Date (Batas Waktu KPI) */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px] text-teal-600 dark:text-teal-400">
-                    Due Date (Mandatory KPI Parameter)
+                    Due Date (Parameter KPI Wajib)
                   </label>
                   <input
                     type="text"
@@ -9918,7 +9942,7 @@ const getDisplayHeaderLabel = (colHeader: string): string => {
                   className="!w-auto text-xs px-5 bg-teal-600 hover:bg-teal-500 text-white font-bold"
                 >
                   {isSavingRow ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1.5" />}
-                  <span>{editingRowIndex === null ? 'Save New Activity' : 'Save Changes'}</span>
+                  <span>{editingRowIndex === null ? 'Simpan Baris Baru' : 'Simpan Perubahan'}</span>
                 </Button>
               </div>
             </form>

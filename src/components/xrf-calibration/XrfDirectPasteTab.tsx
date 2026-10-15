@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import Papa from 'papaparse';
 import { 
   ClipboardPaste, CheckCircle2, AlertTriangle, AlertCircle, RefreshCw, 
   Save, Eye, Trash2, ArrowUp, ArrowDown, FileText, Sparkles, Filter, 
@@ -173,7 +174,11 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
     setIsInspecting(true);
 
     try {
-      const lines = textToParse.split(/\r?\n/);
+      const parsedData = Papa.parse<string[]>(textToParse, {
+        delimiter: textToParse.includes('\t') ? '\t' : undefined,
+        skipEmptyLines: false,
+      }).data || [];
+
       const batches: ParsedBatch[] = [];
       let currentItems: ParsedItem[] = [];
       let currentInstCode = selectedInstrument;
@@ -222,22 +227,13 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
         currentItems = [];
       };
 
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+      for (let i = 0; i < parsedData.length; i++) {
+        const cols = (parsedData[i] || []).map(c => String(c ?? '').trim());
         
         // Deteksi delimiter: jika baris kosong total atau whitespace saja
-        if (!line || !line.trim()) {
+        if (cols.length === 0 || cols.every(c => c === '')) {
           finishCurrentSet();
           continue;
-        }
-
-        // Split kolom: mendukung Tab (\t) dari copy Excel, atau koma/semicolon
-        let cols = line.split('\t');
-        if (cols.length < 4) {
-          cols = line.split(',');
-        }
-        if (cols.length < 4) {
-          cols = line.split(';');
         }
 
         // Kolom A: Nomor urut (No)
@@ -253,6 +249,12 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
         const seqNo = parseInt(seqRaw, 10);
         if (isNaN(seqNo)) {
           // Lewati baris header teks
+          continue;
+        }
+
+        // Skip calibration blanks (VER-BLANK WAX, etc.)
+        const checkLabel = String(cols[3] || '').trim();
+        if (/BLANK/i.test(checkLabel)) {
           continue;
         }
 

@@ -188,7 +188,6 @@ export function SectionHubDashboard({
         department: 'Prep & Lab',
         category: sectionTitle,
         isLogbook: true,
-        pt: currentUniverse,
         content: (cachedContent && cachedContent.includes('|')) ? cachedContent : defaultContent
       };
       onSelectPost(target);
@@ -222,11 +221,11 @@ export function SectionHubDashboard({
           { title: 'Logbook Prosedur', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Prosedur', 'Logbook'] },
           { title: 'SOP Preparasi', icon: '📐', searchKeywords: ['SOP Preparasi', 'Preparasi Basah', 'Preparasi Kering'] },
           { title: 'JSA', icon: '💼', searchKeywords: ['JSA', 'Job Safety Analysis'] },
-          { title: 'Laboratory SOP', icon: '💈', searchKeywords: ['Laboratory SOP', 'SOP Laboratorium', 'ED-XRF', 'LOI', 'Fused Bead'] },
+          { title: 'SOP Laboratorium', icon: '💈', searchKeywords: ['SOP Laboratorium', 'ED-XRF', 'LOI', 'Fused Bead'] },
           { title: 'SOP Smelter', icon: '🌐', searchKeywords: ['SOP Smelter', 'HJF', 'KPS'] },
           { title: 'SOP Lainnya', icon: '🔗', searchKeywords: ['SOP Lainnya', 'SOP Lain'] },
           { title: 'IK Preparasi', icon: '📐', searchKeywords: ['IK Preparasi', 'Jaw Crusher', 'Pulverizer', 'Oven'] },
-          { title: 'Laboratory IK', icon: '💈', searchKeywords: ['Laboratory IK', 'IK Laboratorium', 'Zetium', 'Epsilon', 'Muffle'] },
+          { title: 'IK Laboratorium', icon: '💈', searchKeywords: ['IK Laboratorium', 'Zetium', 'Epsilon', 'Muffle'] },
           { title: 'Flow Chart', icon: '🔀', searchKeywords: ['Flow Chart', 'Flow Sheet'] },
           { title: 'Guidance', icon: '</>', searchKeywords: ['Guidance', 'Panduan'] },
         ],
@@ -282,22 +281,22 @@ export function SectionHubDashboard({
       };
     }
 
-    // 3. LABORATORIUM / LABORATORY - 2 Columns: Soft Blue INFO + Soft Cream RULES + Agenda
-    if (sectionTitle.includes('LABORATORIUM') || sectionTitle.includes('LABORATORY')) {
+    // 3. LABORATORIUM (Image 3) - 2 Columns: Soft Blue INFO + Soft Cream RULES + Agenda
+    if (sectionTitle.includes('LABORATORIUM')) {
       return {
         icon: '🥼',
         bannerUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
-          { title: 'Logbook Laboratory', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Laboratory', 'Logbook Laboratorium', 'Logbook Lab', 'Logbook'] },
-          { title: 'Non Routine Laboratory', icon: '▌', searchKeywords: ['Non Routine Laboratory', 'Non Routine Laboratorium', '535', '414', 'Non Routine'] },
-          { title: 'Daily Laboratory', icon: '▌', searchKeywords: ['Daily Laboratory', 'Daily Laboratorium', '541', '450', 'Daily'] },
-          { title: 'Routine Laboratory (Tentative)', icon: '▌', searchKeywords: ['Routine Laboratory (Tentative)', 'Routine Laboratorium (Tentative)', 'Routine Laboratory', 'Routine Laboratorium', '538'] },
-          { title: 'Weekly Laboratory', icon: '▌', searchKeywords: ['Weekly Laboratory', 'Weekly Laboratorium', '542', '418'] },
-          { title: 'Monthly Laboratory', icon: '▌', searchKeywords: ['Monthly Laboratory', 'Monthly Laboratorium', '543', '413'] },
-          { title: 'Quarterly Laboratory', icon: '▌', searchKeywords: ['Quarterly Laboratory', 'Quarterly Laboratorium', '545', '415'] },
-          { title: 'Yearly Laboratory', icon: '▌', searchKeywords: ['Yearly Laboratory', 'Yearly Laboratorium', '549', '474'] },
-          { title: 'Biannual Laboratory', icon: '▌', searchKeywords: ['Biannual Laboratory', 'Biannual Laboratorium', '564', '473'] },
+          { title: 'Logbook Laboratorium', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Laboratorium', 'Logbook Lab', 'Logbook'] },
+          { title: 'Non Routine Laboratorium', icon: '▌', searchKeywords: ['Non Routine Laboratorium', '535', '414', 'Non Routine'] },
+          { title: 'Daily Laboratorium', icon: '▌', searchKeywords: ['Daily Laboratorium', '541', '450', 'Daily'] },
+          { title: 'Routine Laboratorium (Tentative)', icon: '▌', searchKeywords: ['Routine Laboratorium (Tentative)', 'Routine Laboratorium', '538'] },
+          { title: 'Weekly Laboratorium', icon: '▌', searchKeywords: ['Weekly Laboratorium', '542', '418'] },
+          { title: 'Monthly Laboratorium', icon: '▌', searchKeywords: ['Monthly Laboratorium', '543', '413'] },
+          { title: 'Quarterly Laboratorium', icon: '▌', searchKeywords: ['Quarterly Laboratorium', '545', '415'] },
+          { title: 'Yearly Laboratorium', icon: '▌', searchKeywords: ['Yearly Laboratorium', '549', '474'] },
+          { title: 'Biannual Laboratorium', icon: '▌', searchKeywords: ['Biannual Laboratorium', '564', '473'] },
         ],
         rulesTitle: 'RULES',
         rulesItems: [
@@ -307,7 +306,7 @@ export function SectionHubDashboard({
           { title: 'Pengiriman TLD Badge ke Gamaxindo', icon: '📋', searchKeywords: ['Pengiriman TLD Badge ke Gamaxindo', 'Gamaxindo'] },
           { title: 'Pengiriman Surveymeter & Pendose', icon: '🖊️', searchKeywords: ['Pengiriman Surveymeter & Pendose', 'Surveymeter', 'Pendose'] },
           { title: 'Penghapusan data Asset', icon: '🗑️', searchKeywords: ['Penghapusan data Asset', 'Data Asset', 'Asset'] },
-          { title: 'Laboratory Information', icon: '📦', searchKeywords: ['Laboratory Information', 'Information Laboratorium', '576'] },
+          { title: 'Information Laboratorium', icon: '📦', searchKeywords: ['Information Laboratorium', '576'] },
         ],
         showAgenda: true,
         extraLinks: []

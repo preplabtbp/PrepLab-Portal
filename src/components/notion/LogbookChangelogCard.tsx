@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  ClipboardCheck, 
-  CheckCircle2, 
-  Clock, 
-  Copy, 
-  ChevronDown, 
-  ChevronUp, 
-  Sparkles, 
-  ArrowRight, 
+import {
+  ClipboardCheck,
+  CheckCircle2,
+  Clock,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  ArrowRight,
   AlertCircle,
   FileSpreadsheet,
   CornerDownRight,
@@ -19,9 +19,9 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { 
-  TableRowData, 
-  buildLogbookChangelogData, 
+import {
+  TableRowData,
+  buildLogbookChangelogData,
   generateLogbookChangelogWhatsappText,
   formatToDDMMYYYY,
   getTodayDDMMYYYY,
@@ -99,13 +99,12 @@ const SubtaskBreakdownList: React.FC<{
       </div>
       <div className="space-y-1">
         {subtasks.map((st, sIdx) => (
-          <div 
+          <div
             key={sIdx}
-            className={`flex items-center justify-between gap-2 px-2 py-1 rounded-md text-[11px] transition-colors ${
-              st.completed 
-                ? 'bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40' 
-                : 'bg-slate-100/70 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 border border-slate-200/40 dark:border-slate-700/40'
-            }`}
+            className={`flex items-center justify-between gap-2 px-2 py-1 rounded-md text-[11px] transition-colors ${st.completed
+              ? 'bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40'
+              : 'bg-slate-100/70 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 border border-slate-200/40 dark:border-slate-700/40'
+              }`}
           >
             <div className="flex items-center gap-1.5 min-w-0">
               {st.completed ? (
@@ -218,7 +217,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
   const isViewingTomorrow = activeDate === tomorrowStr;
 
   return (
-    <div 
+    <div
       className="mb-5 rounded-2xl border transition-all duration-200 overflow-hidden shadow-xs"
       style={{
         backgroundColor: isNotionLight ? '#ffffff' : '#1e1e1e',
@@ -226,7 +225,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
       }}
     >
       {/* 1. Date Filter & Navigation Bar (Always Visible) */}
-      <div 
+      <div
         className="px-4 py-2.5 border-b flex flex-wrap items-center justify-between gap-3 text-xs"
         style={{
           backgroundColor: isNotionLight ? '#f8fafc' : '#1b2230',
@@ -253,11 +252,10 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
             <button
               type="button"
               onClick={() => handleSelectDate(yesterdayStr)}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all cursor-pointer ${
-                isViewingYesterday
-                  ? 'bg-teal-600 text-white shadow-2xs'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-              }`}
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all cursor-pointer ${isViewingYesterday
+                ? 'bg-teal-600 text-white shadow-2xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
             >
               Kemarin
             </button>
@@ -265,11 +263,10 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
             <button
               type="button"
               onClick={() => handleSelectDate(todayStr)}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all cursor-pointer ${
-                isViewingToday
-                  ? 'bg-teal-600 text-white shadow-2xs'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-              }`}
+              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all cursor-pointer ${isViewingToday
+                ? 'bg-teal-600 text-white shadow-2xs'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
             >
               Hari Ini
             </button>
@@ -319,11 +316,10 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
                 key={dt}
                 type="button"
                 onClick={() => handleSelectDate(dt)}
-                className={`px-2 py-0.5 rounded-md font-mono text-[10.5px] border transition-all cursor-pointer ${
-                  activeDate === dt
-                    ? 'bg-teal-600 text-white border-teal-600 font-bold shadow-2xs'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-teal-400'
-                }`}
+                className={`px-2 py-0.5 rounded-md font-mono text-[10.5px] border transition-all cursor-pointer ${activeDate === dt
+                  ? 'bg-teal-600 text-white border-teal-600 font-bold shadow-2xs'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-teal-400'
+                  }`}
                 title={`Buka changelog tanggal ${dt}`}
               >
                 {dt}
@@ -334,7 +330,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
       </div>
 
       {/* 2. Top Header Bar (Metrics & Quick Actions) */}
-      <div 
+      <div
         className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2"
         style={{
           backgroundColor: isNotionLight ? '#f8fafc' : '#252526',
@@ -355,7 +351,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
               </span>
             </div>
             <p className="text-[11px]" style={{ color: isNotionLight ? '#64748b' : '#94a3b8' }}>
-              {isViewingTomorrow 
+              {isViewingTomorrow
                 ? `Preview serah terima (handover) & rencana kelanjutan kerja tim seksi ${sectionName} untuk ${dayName ? `${dayName}, ` : ''}${activeDate}`
                 : `Rekap eksekutif hasil pengerjaan tim seksi ${sectionName} pada ${dayName ? `${dayName}, ` : ''}${activeDate}`}
             </p>
@@ -437,7 +433,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
           {/* Empty state for the selected date */}
           {changelog.totalTasks === 0 && !currentGeneralNote && (
             <div className="space-y-3">
-              <div 
+              <div
                 className="p-6 rounded-xl border border-dashed text-center flex flex-col items-center justify-center gap-2"
                 style={{
                   backgroundColor: isNotionLight ? '#f8fafc' : '#1e293b',
@@ -491,7 +487,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
                   </p>
                   <div className="space-y-2">
                     {ongoingTasksToday.map(task => (
-                      <div 
+                      <div
                         key={task.id}
                         className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-2xs space-y-2"
                       >
@@ -537,7 +533,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
 
           {/* General Notes / Site Highlights if available */}
           {currentGeneralNote && currentGeneralNote.trim() && (
-            <div 
+            <div
               className="p-3 rounded-xl border flex items-start gap-2.5"
               style={{
                 backgroundColor: isNotionLight ? '#f0fdf4' : 'rgba(6, 78, 59, 0.2)',
@@ -549,7 +545,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
                 <span className="font-bold text-[11px] uppercase tracking-wider block text-emerald-800 dark:text-emerald-300 mb-1">
                   Catatan Umum & Kejadian Khusus ({changelog.dateStr}):
                 </span>
-                <div 
+                <div
                   className="whitespace-pre-line leading-relaxed text-slate-800 dark:text-slate-200"
                   style={{ color: isNotionLight ? '#1e293b' : '#e2e8f0' }}
                 >
@@ -577,7 +573,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
                 ) : (
                   <div className="space-y-2 pl-1">
                     {changelog.closedTasks.map((task) => (
-                      <div 
+                      <div
                         key={task.id}
                         className="p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-emerald-300/80 transition-all bg-slate-50/50 dark:bg-slate-900/30"
                       >
@@ -634,7 +630,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
                 ) : (
                   <div className="space-y-2 pl-1">
                     {changelog.inProgressTasks.map((task) => (
-                      <div 
+                      <div
                         key={task.id}
                         className="p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-sky-300/80 transition-all bg-slate-50/50 dark:bg-slate-900/30"
                       >
@@ -654,7 +650,7 @@ export const LogbookChangelogCard: React.FC<LogbookChangelogCardProps> = ({
                               {/* Progress bar and Subtasks */}
                               <div className="mt-1.5 flex items-center gap-2 max-w-xs">
                                 <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                                  <div 
+                                  <div
                                     className="h-full bg-sky-500 rounded-full transition-all"
                                     style={{ width: `${task.progressPercent}%` }}
                                   />

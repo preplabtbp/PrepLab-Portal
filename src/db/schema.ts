@@ -649,6 +649,7 @@ export const appFeedbacks = pgTable('app_feedbacks', {
   authorSection: text('author_section'),
   status: text('status').notNull().default('PENDING'), // 'PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'
   developerNotes: text('developer_notes'),
+  developerAttachmentUrl: text('developer_attachment_url'),
   resolvedAt: timestamp('resolved_at'),
   createdAt: timestamp('created_at').defaultNow(),
 });

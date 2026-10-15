@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import Papa from 'papaparse';
 import { 
   Save, Clipboard, RefreshCw, AlertCircle, CheckCircle2, AlertTriangle, 
   ArrowUp, ArrowDown, Sparkles, FileSpreadsheet, Plus, Printer, Check, X,
@@ -202,7 +203,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   // Evaluate entire row status
   const evaluateRow = (r: StandardRowInput) => {
     const elements = selectedMatrix === 'LIMONITE' 
-      ? ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO', 'P', 'S']
+      ? ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'P', 'S', 'Cr2O3', 'MnO']
       : ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO'];
 
     let hasAction = false;
@@ -248,88 +249,247 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
     return { passCount, warnCount, actionCount, filledCount, overallStatus };
   }, [rows, references, selectedMatrix]);
 
-  // Quick Paste from Excel handler
-  const handleApplyPaste = () => {
-    if (!rawPastedText.trim()) return;
+  // Quick Paste from Excel handler (Robust PapaParse with standard mapping & blank filtering)
+  const handleApplyPaste = (pastedTextOverride?: string) => {
+    const textToProcess = (typeof pastedTextOverride === 'string' ? pastedTextOverride : rawPastedText).trim();
+    if (!textToProcess) return;
 
     try {
-      const lines = rawPastedText
-        .trim()
-        .split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(Boolean);
+      // 1. Parse using PapaParse to seamlessly handle multi-line quoted cells (e.g. "EPSILON F\nLIMONITE - MYLAR 2026")
+      const parsed = Papa.parse<string[]>(textToProcess, {
+        delimiter: textToProcess.includes('\t') ? '\t' : undefined,
+        skipEmptyLines: 'greedy',
+      });
 
-      const targetStandards = selectedMatrix === 'LIMONITE' 
+      const rawRows = parsed.data || [];
+      if (rawRows.length === 0) {
+        toast.error("Data clipboard kosong atau tidak dapat dibaca.");
+        return;
+      }
+
+      // Check if instrument name is present in pasted text
+      const fullTextUpper = textToProcess.toUpperCase();
+      const detectedInstMatch = fullTextUpper.match(/EPSILON[\s_]+([A-H])/);
+      if (detectedInstMatch) {
+        const instCode = `EPSILON_${detectedInstMatch[1]}`;
+        if (instruments.some(i => i.code === instCode)) {
+          setSelectedInstrument(instCode);
+        }
+      }
+
+      // Detect matrix if present
+      let currentMatrix = selectedMatrix;
+      if (fullTextUpper.includes('LIMONITE') || fullTextUpper.includes('LIM 0') || fullTextUpper.includes('LIM0')) {
+        currentMatrix = 'LIMONITE';
+        setSelectedMatrix('LIMONITE');
+      } else if (fullTextUpper.includes('SAPROLITE') || fullTextUpper.includes('OREAS')) {
+        currentMatrix = 'SAPROLITE';
+        setSelectedMatrix('SAPROLITE');
+      }
+
+      const targetStandards = currentMatrix === 'LIMONITE' 
         ? ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05']
         : ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'LIM', 'SAP16', 'OREAS193', 'SAP19', 'OREAS194', 'SAP'];
 
-      const parsedRows: StandardRowInput[] = [];
+      // Helper to clean numeric text (handle comma decimal, strip, N/A)
+      const cleanVal = (val: any): string => {
+        if (val === undefined || val === null) return '';
+        const s = String(val).replace(',', '.').trim();
+        if (s === '-' || s === '' || s.toUpperCase() === 'N/A' || s.includes('#')) return '';
+        const num = parseFloat(s);
+        return isNaN(num) ? '' : s;
+      };
 
-      for (let i = 0; i < lines.length && parsedRows.length < targetStandards.length; i++) {
-        const parts = lines[i].split('\t').map(p => p.trim());
-        if (parts.some(p => p.toLowerCase().includes('sample code') || p.toLowerCase().includes('date of'))) {
+      // Map to collect data for each target CRM standard
+      const standardDataMap: Record<string, Partial<StandardRowInput>> = {};
+      let firstDetectedDate = '';
+      let firstDetectedTime = '';
+
+      for (let i = 0; i < rawRows.length; i++) {
+        const cols = rawRows[i].map(c => String(c ?? '').trim());
+        if (cols.length < 4) continue;
+
+        // Skip header lines
+        if (cols.some(c => /Sample Code|Date of|% Ni|Date Analyzed/i.test(c))) {
           continue;
         }
 
-        const numStartIdx = parts.findIndex(p => !isNaN(parseFloat(p.replace(',', '.'))) && parseFloat(p.replace(',', '.')) > 0);
-        const stdCode = targetStandards[parsedRows.length];
-        let sampleLabel = `VER-${stdCode}`;
-        let analyzedAt = verificationTime;
-
-        let offset = 0;
-        if (numStartIdx >= 2) {
-          analyzedAt = parts[numStartIdx - 2] || analyzedAt;
-          sampleLabel = parts[numStartIdx - 1] || sampleLabel;
-          offset = numStartIdx;
-        } else if (numStartIdx === 1) {
-          offset = 1;
-        } else {
-          offset = 0;
+        // Calibration blanks (VER-BLANK WAX, VER-BLANK LICOWAX) are calibration baselines, not CRM standards
+        const rowText = cols.join(' ');
+        if (/BLANK/i.test(rowText)) {
+          continue;
         }
 
-        const getVal = (idx: number) => {
-          const raw = parts[offset + idx];
-          if (!raw) return '';
-          return raw.replace(',', '.');
-        };
+        // Identify Standard Code from label/row content:
+        let matchedStdCode = '';
+        if (currentMatrix === 'LIMONITE') {
+          if (/LIM\s*0?1\b/i.test(rowText)) matchedStdCode = 'LIM01';
+          else if (/LIM\s*0?2\b/i.test(rowText)) matchedStdCode = 'LIM02';
+          else if (/LIM\s*0?3\b/i.test(rowText)) matchedStdCode = 'LIM03';
+          else if (/LIM\s*0?4\b/i.test(rowText)) matchedStdCode = 'LIM04';
+          else if (/LIM\s*0?5\b/i.test(rowText)) matchedStdCode = 'LIM05';
+        } else {
+          if (/OREAS\s*184\b/i.test(rowText)) matchedStdCode = 'OREAS184';
+          else if (/OREAS\s*187\b/i.test(rowText)) matchedStdCode = 'OREAS187';
+          else if (/OREAS\s*189\b/i.test(rowText)) matchedStdCode = 'OREAS189';
+          else if (/OREAS\s*190\b/i.test(rowText)) matchedStdCode = 'OREAS190';
+          else if (/SAP\s*16\b/i.test(rowText)) matchedStdCode = 'SAP16';
+          else if (/OREAS\s*193\b/i.test(rowText)) matchedStdCode = 'OREAS193';
+          else if (/SAP\s*19\b/i.test(rowText)) matchedStdCode = 'SAP19';
+          else if (/OREAS\s*194\b/i.test(rowText)) matchedStdCode = 'OREAS194';
+          else if (/(^|\b)VER-LIM\b/i.test(rowText) || (/\bLIM\b/i.test(rowText) && !/LIM\s*0?[1-5]/i.test(rowText))) matchedStdCode = 'LIM';
+          else if (/(^|\b)VER-SAP\b/i.test(rowText) || (/\bSAP\b/i.test(rowText) && !/SAP\s*(16|19)/i.test(rowText))) matchedStdCode = 'SAP';
+        }
 
-        parsedRows.push({
-          standardCode: stdCode,
-          sampleLabel,
-          sequenceNo: parsedRows.length + 1,
-          analyzedAt,
-          ni: getVal(0),
-          co: getVal(1),
-          fe: getVal(2),
-          cao: getVal(3),
-          sio2: getVal(4),
-          al2o3: getVal(5),
-          mgo: getVal(6),
-          cr2o3: getVal(7),
-          mno: getVal(8),
-          p: selectedMatrix === 'LIMONITE' ? getVal(9) : '',
-          s: selectedMatrix === 'LIMONITE' ? getVal(10) : '',
-        });
+        // Find date / time column and label
+        let sampleLabel = '';
+        let rowTime = '';
+        const labelParts: string[] = [];
+
+        for (let c = 0; c < Math.min(cols.length, 6); c++) {
+          const val = cols[c];
+          if (!val) continue;
+
+          // 1. Ekstrak Waktu JAM murni (Format: HH:mm atau H:mm, cth: 2:19 -> 02:19)
+          const timeMatch = val.match(/\b(\d{1,2}):(\d{2})(?::\d{2})?\b/);
+          if (timeMatch && !rowTime) {
+            rowTime = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+          }
+
+          // 2. Ekstrak Tanggal Analisa (bukan tanggal prep dalam label sampel)
+          if (!/^(VER-|OREAS|SAP)/i.test(val)) {
+            const dateMatch = val.match(/\b(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})\b/);
+            if (dateMatch && !firstDetectedDate) {
+              firstDetectedDate = dateMatch[0];
+            }
+          }
+
+          // 3. Bangun Label Sampel lengkap (termasuk huruf Cup/Disc 'B'/'A' dan Tanggal Prep)
+          if (/VER-|OREAS|LIM|SAP/i.test(val)) {
+            labelParts.push(val);
+          } else if (labelParts.length > 0 && (/^[A-Z]$/i.test(val) || /\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/.test(val))) {
+            labelParts.push(val);
+          }
+        }
+
+        if (labelParts.length > 0) {
+          sampleLabel = labelParts.join(' ');
+        }
+
+        // Find the column index of % Ni (first numeric measurement column)
+        let numStartIdx = -1;
+        for (let c = 2; c < cols.length; c++) {
+          const num = parseFloat(cols[c].replace(',', '.'));
+          if (!isNaN(num) && !cols[c].includes('/') && !cols[c].includes(':') && c >= 3) {
+            numStartIdx = c;
+            break;
+          }
+        }
+
+        if (numStartIdx === -1) continue;
+
+        if (!sampleLabel && numStartIdx > 0) {
+          sampleLabel = cols[numStartIdx - 1];
+        }
+
+        // If matchedStdCode wasn't identified by regex, fallback to sequential order
+        if (!matchedStdCode) {
+          const alreadyAssigned = Object.keys(standardDataMap).length;
+          if (alreadyAssigned < targetStandards.length) {
+            matchedStdCode = targetStandards[alreadyAssigned];
+          }
+        }
+
+        if (!matchedStdCode) continue;
+
+        if (!firstDetectedTime && rowTime) {
+          firstDetectedTime = rowTime;
+        }
+
+        // Pastikan rowTime berformat jam valid (HH:mm) dan BUKAN huruf tunggal 'A'/'B'
+        const validAnalyzedAt = (/^\d{1,2}:\d{2}$/.test(rowTime) ? rowTime : (firstDetectedTime || verificationTime));
+
+        // Extract element values according to universal XRF export layout:
+        // Col 0: Ni, Col 1: Co, Col 2: Fe, Col 3: CaO, Col 4: SiO2, Col 5: Al2O3, Col 6: MgO, Col 7: P, Col 8: S, Col 9: Cr2O3, Col 10: MnO
+        const getCol = (offset: number) => cleanVal(cols[numStartIdx + offset]);
+
+        standardDataMap[matchedStdCode] = {
+          standardCode: matchedStdCode,
+          sampleLabel: sampleLabel || `VER-${matchedStdCode}`,
+          analyzedAt: validAnalyzedAt,
+          ni: getCol(0),
+          co: getCol(1),
+          fe: getCol(2),
+          cao: getCol(3),
+          sio2: getCol(4),
+          al2o3: getCol(5),
+          mgo: getCol(6),
+          p: getCol(7),
+          s: getCol(8),
+          cr2o3: getCol(9),
+          mno: getCol(10),
+        };
       }
 
-      if (parsedRows.length > 0) {
-        // Pad with default if needed
-        while (parsedRows.length < targetStandards.length) {
-          const stdCode = targetStandards[parsedRows.length];
-          parsedRows.push({
+      // Build updated rows
+      const updatedRows: StandardRowInput[] = targetStandards.map((stdCode, idx) => {
+        const found = standardDataMap[stdCode];
+        if (found) {
+          const rowAnalyzedAt = (/^\d{1,2}:\d{2}$/.test(found.analyzedAt || '') ? found.analyzedAt! : (firstDetectedTime || verificationTime));
+          return {
             standardCode: stdCode,
-            sampleLabel: `VER-${stdCode}`,
-            sequenceNo: parsedRows.length + 1,
-            analyzedAt: verificationTime,
-            ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: ''
-          });
+            sampleLabel: found.sampleLabel || `VER-${stdCode}`,
+            sequenceNo: idx + 1,
+            analyzedAt: rowAnalyzedAt,
+            ni: found.ni || '',
+            co: found.co || '',
+            fe: found.fe || '',
+            cao: found.cao || '',
+            sio2: found.sio2 || '',
+            al2o3: found.al2o3 || '',
+            mgo: found.mgo || '',
+            p: found.p || '',
+            s: found.s || '',
+            cr2o3: found.cr2o3 || '',
+            mno: found.mno || '',
+          };
         }
-        setRows(parsedRows);
+        const existing = rows.find(r => r.standardCode === stdCode);
+        return existing || {
+          standardCode: stdCode,
+          sampleLabel: `VER-${stdCode}`,
+          sequenceNo: idx + 1,
+          analyzedAt: verificationTime,
+          ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: ''
+        };
+      });
+
+      const filledCount = Object.keys(standardDataMap).length;
+      if (filledCount > 0) {
+        setRows(updatedRows);
+        if (firstDetectedTime && /^\d{1,2}:\d{2}$/.test(firstDetectedTime)) {
+          setVerificationTime(firstDetectedTime);
+        }
+        if (firstDetectedDate) {
+          const dParts = firstDetectedDate.split(/[-/]/).map(n => parseInt(n, 10));
+          if (dParts.length === 3 && !dParts.some(isNaN)) {
+            let year = 0;
+            let month = 0;
+            let day = 0;
+            if (dParts[0] > 1000) {
+              [year, month, day] = dParts;
+            } else {
+              [day, month, year] = dParts;
+              if (year < 100) year = 2000 + year;
+            }
+            setVerificationDate(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+          }
+        }
         setShowPasteModal(false);
         setRawPastedText('');
-        toast.success(`Berhasil mem-parsing ${parsedRows.length} baris ${selectedMatrix} dari Excel!`);
+        toast.success(`Berhasil mem-parsing ${filledCount} standar ${currentMatrix} dari data Excel!`);
       } else {
-        toast.error("Gagal mendeteksi format data baris. Pastikan menyalin baris data tabel Excel.");
+        toast.error("Gagal mendeteksi standar CRM. Pastikan tabel berisi data VER-LIM / OREAS.");
       }
     } catch (err: any) {
       toast.error("Format data clipboard tidak dapat dibaca: " + err.message);
@@ -423,7 +583,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   };
 
   const activeColumns = selectedMatrix === 'LIMONITE'
-    ? ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO', 'P', 'S']
+    ? ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'P', 'S', 'Cr2O3', 'MnO']
     : ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO'];
 
   const companyName = assignedSite === 'GTS' ? 'PT GANE TAMBANG SENTOSA' : 'PT TRIMEGAH BANGUN PERSADA';
@@ -594,7 +754,16 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
       {/* ------------------------------------------------------------- */}
       {/* 2. INTERACTIVE SCREEN TABLE (INTUITIVE & RESPONSIVE)          */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden no-print-area">
+      <div 
+        onPaste={(e) => {
+          const text = e.clipboardData.getData('text');
+          if (text && (text.includes('\t') || text.includes('\n')) && (text.includes('VER-') || text.includes('LIM') || text.includes('OREAS') || text.includes('SAP') || text.includes('EPSILON'))) {
+            e.preventDefault();
+            handleApplyPaste(text);
+          }
+        }}
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden no-print-area"
+      >
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-teal-600 dark:text-teal-400" />
@@ -603,7 +772,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
             </h3>
           </div>
           <span className="text-[11px] text-slate-400">
-            *Nilai acuan nominal CRM ditampilkan 3 angka di belakang koma
+            *Nilai acuan nominal CRM ditampilkan 3 angka di belakang koma (Bisa langsung paste Excel dengan Ctrl+V)
           </span>
         </div>
 
@@ -648,9 +817,10 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                     <td className="py-2 px-3 text-center">
                       <input
                         type="text"
+                        placeholder="HH:mm"
                         value={r.analyzedAt}
                         onChange={e => handleCellChange(idx, 'analyzedAt', e.target.value)}
-                        className="w-16 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-1.5 py-1 text-xs text-center text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-teal-500 outline-none"
+                        className="w-16 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-1.5 py-1 text-xs text-center text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-teal-500 outline-none font-mono"
                       />
                     </td>
 
@@ -965,7 +1135,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
                 Batal
               </button>
               <button
-                onClick={handleApplyPaste}
+                onClick={() => handleApplyPaste()}
                 className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
               >
                 Terapkan ke Tabel

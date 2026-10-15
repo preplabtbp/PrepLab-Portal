@@ -683,7 +683,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             onScroll={(e) => handleScrollSync(e.currentTarget)}
             className="overflow-x-auto scrollbar-none"
           >
-            <div className="flex flex-nowrap gap-4 min-w-max">
+            <div className={`flex flex-nowrap gap-4 min-w-max ${selectedInstruments.length <= 3 ? 'min-w-full justify-center' : ''}`}>
               {selectedInstruments.map((instCode, idx) => {
                 const theme = getInstrumentTheme(instCode, undefined, idx);
                 return (
@@ -698,7 +698,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             </div>
           </div>
         ) : (
-          <div className={`grid ${getGridColsClass()} gap-3`}>
+          <div className={`grid ${getGridColsClass()} gap-3 ${selectedInstruments.length === 3 ? 'max-w-7xl mx-auto' : ''}`}>
             {selectedInstruments.map((instCode, idx) => {
               const theme = getInstrumentTheme(instCode, undefined, idx);
               return (
@@ -754,9 +754,9 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                 key={`compare-row-${stdCode}`} 
                 className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-4"
               >
-                {/* Standard CRM Section Banner (PINNED HEADER 2) */}
-                <div className="sticky top-[111px] z-20 -mx-4 -mt-4 px-4 py-2.5 rounded-t-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-2xs">
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-slate-900 text-white dark:bg-white dark:text-slate-900 tracking-wider">
+                {/* Standard CRM Section Banner (PINNED HEADER 2 - CENTERED) */}
+                <div className="sticky top-[111px] z-20 -mx-4 -mt-4 px-4 py-2.5 rounded-t-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-center text-center shadow-2xs">
+                  <span className="px-3.5 py-1 rounded-lg text-xs font-black bg-slate-900 text-white dark:bg-white dark:text-slate-900 tracking-wider">
                     STANDAR: {std.name}
                   </span>
                 </div>
@@ -767,7 +767,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                     onScroll={(e) => handleScrollSync(e.currentTarget)}
                     className="xrf-strip-scroll overflow-x-auto pb-4 pt-1 scrollbar-thin"
                   >
-                    <div className="flex flex-nowrap gap-4 min-w-max">
+                    <div className={`flex flex-nowrap gap-4 min-w-max ${selectedInstruments.length <= 3 ? 'min-w-full justify-center' : ''}`}>
                       {selectedInstruments.map((instCode, idx) => {
                         const theme = getInstrumentTheme(instCode, undefined, idx);
                         const instData = stdData[instCode] || {
@@ -800,7 +800,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className={`grid ${getGridColsClass()} gap-4`}>
+                  <div className={`grid ${getGridColsClass()} gap-4 ${selectedInstruments.length === 3 ? 'max-w-7xl mx-auto' : ''}`}>
                     {selectedInstruments.map((instCode, idx) => {
                       const theme = getInstrumentTheme(instCode, undefined, idx);
                       const instData = stdData[instCode] || {

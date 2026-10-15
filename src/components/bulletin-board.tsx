@@ -616,7 +616,6 @@ export function BulletinBoard({
       department: 'Prep & Lab',
       category: cleanSection,
       isLogbook: true,
-      pt: targetUniverse === 'ALL' ? 'TBP' : targetUniverse,
       content: contentToUse
     };
 
@@ -822,7 +821,7 @@ export function BulletinBoard({
   const handleInitializeTableForPost = async () => {
     if (!selectedPost) return;
     toast.loading("Membuat tabel topik...", { id: "init-table" });
-    const defaultHeaders = ['number', 'Activity Name', 'Description', 'PIC', 'Status', 'Priority', 'Activity', 'Completion Date', 'Group', 'Created Time'];
+    const defaultHeaders = ['number', 'Jenis Kegiatan', 'Keterangan', 'PIC', 'Status', 'Priority', 'Aktivitas', 'Tanggal Selesai', 'Group', 'Created Time'];
     const headerLine = `| ${defaultHeaders.join(' | ')} |`;
     const separatorLine = `| ${defaultHeaders.map(() => '---').join(' | ')} |`;
     const tableMd = `${headerLine}\n${separatorLine}`;
