@@ -1796,19 +1796,15 @@ async function syncBulletinToAgenda(post: any) {
     });
   });
 
-  // Ensure critical DB columns exist
-  try {
-    await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;');
-    await pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya text;');
-  } catch (e: any) {
-    console.warn('Auto migration note:', e.message);
-  }
+  // Ensure critical DB columns exist in background
+  pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS tanggal_efektif_tidak_bekerja text;').catch(() => {});
+  pool.query('ALTER TABLE employees ADD COLUMN IF NOT EXISTS masa_kerja_jabatan_sebelumnya text;').catch(() => {});
 
   // Mulai pelayan (server) di port 3000
   initRosterCron();
   initTrainingNotificationCron();
 
-  httpServer.listen(PORT, () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server backend siap berjalan di http://localhost:${PORT} (http://127.0.0.1:${PORT})`);
   });
 }
