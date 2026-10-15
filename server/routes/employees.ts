@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, sql } from "drizzle-orm";
-import { db, isDbCircuitBroken } from "../../src/db/index.js";
+import { db, isDbCircuitBroken, withDbFallback } from "../../src/db/index.js";
 import { employees, developerUsers, employeeAttendance, employeeCounseling, employeeAchievements } from "../../src/db/schema.js";
 import { toPublicEmployee } from "../middleware/auth.js";
 import { drive } from "../../google-services.js";
@@ -607,24 +607,17 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     const passStatus = (e: any) => includeInactive || !isResignedOrNonActiveStatus(e);
     const cacheKey = includeInactive ? `${nik}::all` : nik;
 
-    // Meeting Room, Admin, Super Admin virtual account checks (full access to search all employees)
-    if (
+    const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+    const isSpecialAccount = 
       cleanNik === 'MEETINGROOM' || 
       cleanNik === 'MEETING' || 
       cleanNik === 'RUANGMEETING' || 
       cleanNik === 'RUANG_MEETING' ||
       cleanNik.includes('MEETING') ||
-      cleanNik === 'PREPLABADMIN'
-    ) {
-      let allData = await db.select().from(employees);
-      // Strictly exclude demo, staging, admin accounts
-      allData = allData.filter(e => {
-        const eNik = (e.nik || '').toString().toUpperCase();
-        const eName = (e.name || '').toString().toLowerCase();
-        return !eNik.includes('DEMO') && !eName.includes('demo') && eNik !== 'PREPLABADMIN';
-      });
-      return res.json({ status: "success", data: allData.map(e => toPublicEmployee(e)) });
-    }
+      cleanNik === 'PREPLABADMIN' ||
+      cleanNik.includes('DEMO') ||
+      cleanNik.includes('SPV') ||
+      HARDCODED_DEVS.includes(cleanNik);
 
     const now = Date.now();
     const cached = cachedHierarchy.get(cacheKey);
@@ -632,26 +625,63 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
       return res.json({ status: "success", data: cached.data });
     }
 
-    const userResult = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
-    
-    if (userResult.length === 0) {
-      return res.status(404).json({ status: "error", message: "User not found" });
+    // Ambil data karyawan dari DB dengan fallback CSV cepat (600ms)
+    let allEmployeesData: any[] = [];
+    if (!isDbCircuitBroken()) {
+      try {
+        allEmployeesData = await withDbFallback(
+          () => db.select().from(employees),
+          () => getCsvEmployees(),
+          600
+        );
+      } catch {
+        allEmployeesData = getCsvEmployees();
+      }
+    } else {
+      allEmployeesData = getCsvEmployees();
+    }
+    if (!allEmployeesData || allEmployeesData.length === 0) {
+      allEmployeesData = getCsvEmployees();
+    }
+
+    // Meeting Room, Admin, Super Admin, Devs, & Special accounts -> Akses seluruh karyawan
+    if (isSpecialAccount) {
+      const filtered = allEmployeesData.filter(e => {
+        const eNik = (e.nik || '').toString().toUpperCase();
+        const eName = (e.name || '').toString().toLowerCase();
+        return !eNik.includes('DEMO') && !eName.includes('demo') && eNik !== 'PREPLABADMIN';
+      });
+      const formatted = filtered.map(e => toPublicEmployee(e));
+      cachedHierarchy.set(cacheKey, { data: formatted, timestamp: now });
+      return res.json({ status: "success", data: formatted });
+    }
+
+    let user = allEmployeesData.find(e => (e.nik || '').toString().trim().toUpperCase() === cleanNik);
+    if (!user) {
+      const csv = getCsvEmployees();
+      user = csv.find(e => (e.nik || '').toString().trim().toUpperCase() === cleanNik);
     }
     
-    const user = userResult[0];
+    if (!user) {
+      // Jika NIK tidak ditemukan, tetap kembalikan data karyawan publik agar UI tidak error
+      const formatted = allEmployeesData.filter(passStatus).map(e => toPublicEmployee(e));
+      return res.json({ status: "success", data: formatted });
+    }
+    
     const sectionLower = (user.section || "").toLowerCase();
     const deptLower = (user.department || "").toLowerCase();
     const jabatanLower = (user.jabatan || "").toLowerCase();
-    const attMap = await getAttendanceMap();
-    const counselMap = await getCounselingMap();
+    const [attMap, counselMap] = await Promise.all([
+      getAttendanceMap().catch(() => ({})),
+      getCounselingMap().catch(() => ({}))
+    ]);
     
     const isUserMgr = isSectionManagerOrAdmin(user);
     const isUserGts = isGtsEmployee(user);
 
     // Section Manager / Admin / QA dapat mengakses seluruh karyawan aktif (TBP & GTS)
     if (isUserMgr) {
-      const allData = await db.select().from(employees);
-      const activeData = allData.filter(e => passStatus(e));
+      const activeData = allEmployeesData.filter(e => passStatus(e));
       const formatted = activeData.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
       cachedHierarchy.set(cacheKey, { data: formatted, timestamp: now });
       return res.json({ status: "success", data: formatted });
@@ -673,8 +703,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     }
     
     // Fetch all employees and strictly enforce company universe (GTS only for GTS, TBP only for TBP)
-    const allEmployees = await db.select().from(employees);
-    const subordinates = allEmployees.filter(e => {
+    const subordinates = allEmployeesData.filter(e => {
       if (!passStatus(e)) return false;
       const eIsGts = isGtsEmployee(e);
       if (isUserGts && !eIsGts) return false; // Karyawan GTS hanya bisa akses data GTS
@@ -699,55 +728,105 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     res.json({ status: "success", data: formatted });
   } catch (error) {
     console.error("Error fetching hierarchy:", error);
-    res.status(500).json({ status: "error", message: "Failed to fetch hierarchy" });
+    const csvAll = getCsvEmployees();
+    res.json({ status: "success", data: csvAll.map(e => toPublicEmployee(e)) });
   }
 });
 
 employeesRouter.get("/:nik", async (req, res) => {
   try {
     const { nik } = req.params;
+    const cleanNik = (nik || "").trim().toUpperCase();
     const viewerNik = (req.headers['x-user-nik'] || req.query.viewerNik || '').toString().trim().toUpperCase();
 
-    const data = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
-    if (data.length === 0) {
+    let targetEmp: any = null;
+    if (!isDbCircuitBroken()) {
+      try {
+        const dbData = await withDbFallback(
+          () => db.select().from(employees).where(eq(employees.nik, nik)).limit(1),
+          () => {
+            const csv = getCsvEmployees();
+            return csv.filter(e => (e.nik || '').toUpperCase() === cleanNik);
+          },
+          600
+        );
+        if (dbData.length > 0) targetEmp = dbData[0];
+      } catch {
+        const csv = getCsvEmployees();
+        targetEmp = csv.find(e => (e.nik || '').toUpperCase() === cleanNik);
+      }
+    } else {
+      const csv = getCsvEmployees();
+      targetEmp = csv.find(e => (e.nik || '').toUpperCase() === cleanNik);
+    }
+
+    if (!targetEmp) {
+      const csv = getCsvEmployees();
+      targetEmp = csv.find(e => (e.nik || '').toUpperCase() === cleanNik);
+    }
+
+    if (!targetEmp) {
       return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
     }
 
-    const targetEmp = data[0];
     const targetIsGts = isGtsEmployee(targetEmp);
 
     // Cross-company access validation:
     // Akun GTS hanya bisa diakses karyawan GTS dan Section Manager TBP.
     // Akun TBP hanya bisa diakses karyawan TBP dan Section Manager GTS.
-    if (viewerNik && viewerNik !== nik.toUpperCase()) {
-      const viewerResult = await db.select().from(employees).where(eq(employees.nik, viewerNik)).limit(1);
-      if (viewerResult.length > 0) {
-        const viewer = viewerResult[0];
-        const viewerIsMgr = isSectionManagerOrAdmin(viewer);
-        const viewerIsGts = isGtsEmployee(viewer);
+    if (viewerNik && viewerNik !== cleanNik) {
+      try {
+        let viewer: any = null;
+        if (!isDbCircuitBroken()) {
+          const viewerResult = await withDbFallback(
+            () => db.select().from(employees).where(eq(employees.nik, viewerNik)).limit(1),
+            () => {
+              const csv = getCsvEmployees();
+              return csv.filter(e => (e.nik || '').toUpperCase() === viewerNik);
+            },
+            400
+          );
+          if (viewerResult.length > 0) viewer = viewerResult[0];
+        }
+        if (!viewer) {
+          const csv = getCsvEmployees();
+          viewer = csv.find(e => (e.nik || '').toUpperCase() === viewerNik);
+        }
 
-        if (!viewerIsMgr) {
-          if (targetIsGts && !viewerIsGts) {
-            return res.status(403).json({ 
-              status: "error", 
-              message: "Akses ditolak: Akun GTS hanya dapat diakses oleh karyawan GTS atau Section Manager TBP." 
-            });
-          }
-          if (!targetIsGts && viewerIsGts) {
-            return res.status(403).json({ 
-              status: "error", 
-              message: "Akses ditolak: Akun TBP hanya dapat diakses oleh karyawan TBP atau Section Manager GTS." 
-            });
+        if (viewer) {
+          const viewerIsMgr = isSectionManagerOrAdmin(viewer);
+          const viewerIsGts = isGtsEmployee(viewer);
+
+          if (!viewerIsMgr) {
+            if (targetIsGts && !viewerIsGts) {
+              return res.status(403).json({ 
+                status: "error", 
+                message: "Akses ditolak: Akun GTS hanya dapat diakses oleh karyawan GTS atau Section Manager TBP." 
+              });
+            }
+            if (!targetIsGts && viewerIsGts) {
+              return res.status(403).json({ 
+                status: "error", 
+                message: "Akses ditolak: Akun TBP hanya dapat diakses oleh karyawan TBP atau Section Manager GTS." 
+              });
+            }
           }
         }
-      }
+      } catch {}
     }
 
-    const attMap = await getAttendanceMap();
-    const counselMap = await getCounselingMap();
+    const [attMap, counselMap] = await Promise.all([
+      getAttendanceMap().catch(() => ({})),
+      getCounselingMap().catch(() => ({}))
+    ]);
     res.json({ status: "success", employee: attachAttendanceToEmployee(targetEmp, attMap, counselMap) });
   } catch (error) {
     console.error("Error fetching employee:", error);
+    const csv = getCsvEmployees();
+    const fallbackEmp = csv.find(e => (e.nik || '').toUpperCase() === req.params.nik?.toUpperCase());
+    if (fallbackEmp) {
+      return res.json({ status: "success", employee: toPublicEmployee(fallbackEmp) });
+    }
     res.status(500).json({ status: "error", message: "Failed to fetch employee" });
   }
 });

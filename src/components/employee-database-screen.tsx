@@ -743,10 +743,24 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     try {
       let url = inspectorNik ? `/api/employees/hierarchy/${encodeURIComponent(inspectorNik)}?includeInactive=1` : `/api/employees?includeInactive=1`;
       let res = await fetch(url);
-      if (!res.ok && isMeetingRoom) {
+      if (!res.ok) {
+        // Fallback otomatis ke /api/employees jika endpoint hierarchy bermasalah
         res = await fetch('/api/employees?includeInactive=1');
       }
-      if (!res.ok) throw new Error("Gagal mengambil data karyawan");
+      if (!res.ok) {
+        // Cek cache lokal sebelum melempar error
+        const localCached = localStorage.getItem('preplab_emp_db_all') || sessionStorage.getItem(cacheKey);
+        if (localCached) {
+          try {
+            const parsed = JSON.parse(localCached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setEmployees(parsed);
+              return;
+            }
+          } catch {}
+        }
+        throw new Error("Gagal mengambil data karyawan");
+      }
       const data = await res.json();
       let list = data.status === 'success' ? (data.data || []) : (Array.isArray(data) ? data : []);
       if (list.length > 0) {
@@ -788,6 +802,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
         } catch {}
       }
     } catch (err: any) {
+      const localCached = localStorage.getItem('preplab_emp_db_all') || sessionStorage.getItem(cacheKey);
+      if (localCached) {
+        try {
+          const parsed = JSON.parse(localCached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setEmployees(parsed);
+            return;
+          }
+        } catch {}
+      }
       if (employees.length === 0) {
         setError(err.message);
       }
