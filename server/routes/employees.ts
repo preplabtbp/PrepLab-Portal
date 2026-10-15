@@ -20,6 +20,33 @@ export function normalizeNameKey(name: string): string {
     .trim();
 }
 
+// Helper to read and persist employee photos locally when DB is offline or for local storage
+export function getLocalEmployeePhotos(): Record<string, string> {
+  try {
+    const photoFile = path.join(process.cwd(), 'server', 'data', 'employee_photos.json');
+    if (fs.existsSync(photoFile)) {
+      return JSON.parse(fs.readFileSync(photoFile, 'utf8'));
+    }
+  } catch (e) {}
+  return {};
+}
+
+export function saveLocalEmployeePhoto(nik: string, photo: string | null) {
+  try {
+    const photoFile = path.join(process.cwd(), 'server', 'data', 'employee_photos.json');
+    let data: Record<string, string> = {};
+    if (fs.existsSync(photoFile)) {
+      data = JSON.parse(fs.readFileSync(photoFile, 'utf8'));
+    }
+    if (photo) {
+      data[nik.toUpperCase().trim()] = photo;
+    } else {
+      delete data[nik.toUpperCase().trim()];
+    }
+    fs.writeFileSync(photoFile, JSON.stringify(data, null, 2));
+  } catch (e) {}
+}
+
 // In-memory CSV fallback when database is slow or unreachable
 let csvEmployeesCache: any[] | null = null;
 export function getCsvEmployees(): any[] {
@@ -29,25 +56,48 @@ export function getCsvEmployees(): any[] {
     if (fs.existsSync(csvPath)) {
       const content = fs.readFileSync(csvPath, 'utf8');
       const parsed = Papa.parse<Record<string, string>>(content, { header: true, skipEmptyLines: true });
-      csvEmployeesCache = parsed.data.map((row: any, idx: number) => ({
-        id: idx + 1,
-        nik: row['NIK'] || '',
-        name: row['Nama'] || '',
-        nama: row['Nama'] || '',
-        ktp: row['No.KTP'] || '',
-        pt: row['PT'] || 'TBP',
-        section: row['Bagian'] || row['Departemen'] || 'Preparation',
-        department: row['Departemen'] || 'Preparation & Laboratory',
-        jabatan: row['Jabatan Baru'] || row['Jabatan'] || 'Staff',
-        position: row['Jabatan Baru'] || row['Jabatan'] || 'Staff',
-        jobGrade: row['Job Grade'] || '',
-        gol: row['Gol'] || '',
-        phone: row['Nomor Telp. Pribadi'] || '',
-        statusKaryawan: row['Status Karyawan'] || 'Active',
-        dohAwal: row['DOH Awal'] || '',
-        masaKerja: row['Masa Kerja'] || '',
-        firstLoginComplete: true
-      })).filter((e: any) => e.nik && !e.nik.toUpperCase().includes('DEMO') && !e.nik.includes('#N/A'));
+      const localPhotos = getLocalEmployeePhotos();
+
+      csvEmployeesCache = parsed.data.map((row: any, idx: number) => {
+        const rawNik = (row['NIK'] || '').trim();
+        const nik = rawNik.toUpperCase();
+        return {
+          id: idx + 1,
+          nik,
+          name: row['Nama'] || '',
+          nama: row['Nama'] || '',
+          ktp: row['No.KTP'] || '',
+          pt: row['PT'] || 'TBP',
+          poh: row['POH'] || '',
+          sponsor: row['Sponsor'] || '',
+          section: row['Bagian'] || row['Departemen'] || 'Preparation',
+          department: row['Departemen'] || 'Preparation & Laboratory',
+          jabatan: row['Jabatan Baru'] || row['Jabatan'] || 'Staff',
+          position: row['Jabatan Baru'] || row['Jabatan'] || 'Staff',
+          jobGrade: row['Job Grade'] || '',
+          gol: row['Gol'] || '',
+          phone: row['Nomor Telp. Pribadi'] || '',
+          statusKaryawan: row['Status Karyawan'] || 'Active',
+          statusKontrak: row['Status Kontrak'] || '',
+          tanggalPermanent: row['Tanggal Permanent'] || '',
+          tanggalAwalBergabung: row['DOH Awal'] || '',
+          dohAwal: row['DOH Awal'] || '',
+          tanggalJabatanBaru: row['Tanggal Jabatan Baru'] || '',
+          masaKerja: row['Masa Kerja'] || '',
+          masaKerjaJabatanTerakhir: row['Masa Kerja Jabatan Terakhir'] || '',
+          tempatLahir: row['Tempat Lahir'] || '',
+          tanggalLahir: row['Tanggal Lahir'] || '',
+          keluargaKandung: row['Keluarga Kandung yang Bisa Dihubungi'] || '',
+          phoneKeluarga: row['No.Telephone Keluarga Kandung'] || '',
+          orangTerdekat: row['Orang terdekat yang bisa dihubungi'] || '',
+          phoneDarurat: row['No.Telephone darurat Orang Terdekat'] || '',
+          alamatKtp: row['Alamat Sesuai KTP'] || '',
+          alamatDomisili: row['Alamat Domisili'] || '',
+          photo: localPhotos[nik] || row['Foto'] || row['Photo'] || null,
+          avatar: null,
+          firstLoginComplete: true
+        };
+      }).filter((e: any) => e.nik && !e.nik.toUpperCase().includes('DEMO') && !e.nik.includes('#N/A'));
       return csvEmployeesCache;
     }
   } catch (err) {
@@ -112,31 +162,87 @@ async function getAttendanceMap(): Promise<Record<string, any>> {
   }
 }
 
+function parseCounselingCsvFallback(): Record<string, any> {
+  const map: Record<string, any> = {};
+  try {
+    const csvPath = path.join(process.cwd(), 'scripts', 'counseling_spdk_data.csv');
+    if (fs.existsSync(csvPath)) {
+      const content = fs.readFileSync(csvPath, 'utf8');
+      const parsed = Papa.parse<Record<string, string>>(content, { header: true, skipEmptyLines: true });
+      for (const row of parsed.data) {
+        const name = (row['Nama Karyawan'] || '').trim();
+        if (!name) continue;
+        const c1 = parseInt(row['Konseling 1'] || '0', 10) || 0;
+        const c2 = parseInt(row['Konseling 2'] || '0', 10) || 0;
+        const c3 = parseInt(row['Konseling 3'] || '0', 10) || 0;
+        const st = parseInt(row['ST'] || '0', 10) || 0;
+        const sp1 = parseInt(row['SP 1'] || '0', 10) || 0;
+        const sp2 = parseInt(row['SP 2'] || '0', 10) || 0;
+        const sp3 = parseInt(row['SP 3'] || '0', 10) || 0;
+        const sppt = parseInt(row['SPPT'] || '0', 10) || 0;
+        const total = c1 + c2 + c3 + st + sp1 + sp2 + sp3 + sppt;
+        const entry: any = {
+          name,
+          konseling1: c1,
+          konseling2: c2,
+          konseling3: c3,
+          st,
+          sp1,
+          sp2,
+          sp3,
+          sppt,
+          totalPelanggaran: total,
+          alasanKonseling1: row['Alasan Konseling 1'] || '',
+          alasanKonseling2: row['Alasan Konseling 2'] || '',
+          alasanKonseling3: row['Alasan Konseling 3'] || '',
+          alasanSuratTeguran: row['Alasan Surat Teguran'] || '',
+          alasanSp1: row['Alasan SP 1'] || '',
+          alasanSp2: row['Alasan SP 2'] || '',
+          alasanSp3: row['Alasan SP 3'] || '',
+          alasanSppt: row['Alasan SPPT'] || '',
+          tanggalKonseling1: (row[' Tanggal Konseling \n1'] || row['Tanggal Konseling 1'] || '').trim(),
+          tanggalKonseling2: (row[' Tanggal Konseling \n2'] || row['Tanggal Konseling 2'] || '').trim(),
+          tanggalKonseling3: (row[' Tanggal Konseling \n3'] || row['Tanggal Konseling 3'] || '').trim(),
+          tanggalSuratTeguran: (row['Tanggal Surat Teguran'] || '').trim(),
+          tanggalSp1: (row['Tanggal SP 1'] || '').trim(),
+          tanggalSp2: (row['Tanggal SP 2'] || '').trim(),
+          tanggalSp3: (row['Tanggal SP 3'] || '').trim(),
+          tanggalSppt: (row['Tanggal SPPT'] || '').trim(),
+        };
+        map[normalizeNameKey(name)] = entry;
+      }
+    }
+  } catch (e) {}
+  return map;
+}
+
 async function getCounselingMap(): Promise<Record<string, any>> {
   const now = Date.now();
   if (cachedCounselingMap && (now - cachedCounselingMap.timestamp < CACHE_TTL_MS)) {
     return cachedCounselingMap.data;
   }
-  try {
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('COUNSEL_TIMEOUT')), 500));
-    const dbPromise = db.select().from(employeeCounseling);
-    const allC: any = await Promise.race([dbPromise, timeoutPromise]);
-    const map: Record<string, any> = {};
-    for (const item of allC) {
-      if (item.nik) {
-        map[item.nik] = item;
-        map[item.nik.toUpperCase().trim()] = item;
+  let map: Record<string, any> = {};
+  if (!isDbCircuitBroken()) {
+    try {
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('COUNSEL_TIMEOUT')), 500));
+      const dbPromise = db.select().from(employeeCounseling);
+      const allC: any = await Promise.race([dbPromise, timeoutPromise]);
+      for (const item of allC) {
+        if (item.nik) {
+          map[item.nik] = item;
+          map[item.nik.toUpperCase().trim()] = item;
+        }
+        if (item.name) {
+          map[normalizeNameKey(item.name)] = item;
+        }
       }
-      if (item.name) {
-        map[normalizeNameKey(item.name)] = item;
-      }
-    }
-    cachedCounselingMap = { data: map, timestamp: now };
-    return map;
-  } catch (e) {
-    cachedCounselingMap = { data: {}, timestamp: now };
-    return {};
+    } catch (e) {}
   }
+  if (Object.keys(map).length === 0) {
+    map = parseCounselingCsvFallback();
+  }
+  cachedCounselingMap = { data: map, timestamp: now };
+  return map;
 }
 
 function attachAttendanceToEmployee(e: any, attMap: Record<string, any>, counselMap?: Record<string, any>) {
