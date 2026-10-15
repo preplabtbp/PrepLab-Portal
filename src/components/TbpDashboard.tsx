@@ -606,10 +606,11 @@ export function TbpDashboard({
     else if (searchStr === 'quality assurance') searchStr = 'manajemen mutu';
     else if (searchStr === 'procedure') searchStr = 'prosedur';
     
+    const rawTarget = (title || '').toLowerCase().trim();
     // 1. Exact match (cleaned of markdown formatting)
     let post = posts.find(p => {
       const clean = (p?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
-      return clean === searchStr;
+      return clean === searchStr || clean === rawTarget;
     });
     
     // 2. Exact match with "Information " or "Section " prefix

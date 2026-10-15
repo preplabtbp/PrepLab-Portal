@@ -2040,6 +2040,10 @@ router.post('/api/push/subscribe', async (req, res) => {
 router.get("/api/health", (req, res) => {    res.json({ status: "ok", message: "Server is running!" });
   });
 
+router.get("/api/config/env", (req, res) => {
+    res.json({ env: process.env.NODE_ENV || 'production' });
+  });
+
 router.get("/api/settings", async (req, res) => {
     try {
       const settings = await db.select().from(appSettings);

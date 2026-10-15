@@ -775,6 +775,9 @@ export function markdownToVisualHtml(text?: string | null): string {
   html = html.replace(/\*\*\(Done\)\*\*|\[Done\]|\(Done\)/gi, '<span class="badge-done inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 mr-1 select-none">DONE</span>&nbsp;');
   html = html.replace(/\*\*\(OPEN\)\*\*|\[OPEN\]|\(OPEN\)/gi, '<span class="badge-open inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 mr-1 select-none">OPEN</span>&nbsp;');
 
+  // Strip empty color tags (e.g. [gray][/gray]) before formatting
+  html = html.replace(/\[([a-zA-Z0-9_-]+)\]\s*\[\/\1\]/gi, '');
+
   // Convert Color tags like [blue]...[/blue], [green]...[/green], [orange]...[/orange], etc.
   html = formatColorTagsToHtml(html);
 

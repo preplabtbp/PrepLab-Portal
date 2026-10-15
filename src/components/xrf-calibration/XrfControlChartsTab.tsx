@@ -3,10 +3,11 @@ import {
   LineChart, Sliders, RefreshCw, Calendar, ArrowLeftRight, 
   HelpCircle, Sparkles, Filter, Check, Eye, EyeOff, 
   LayoutGrid, Columns, Layers, CheckSquare, Square, Info, ShieldCheck,
-  CheckCircle2, Database, ChevronDown, Activity, Building2, Cpu
+  CheckCircle2, Database, ChevronDown, Activity, Building2, Cpu, ShieldAlert
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { XrfQcChartCard, QC_ELEMENTS_LIST } from './XrfQcChartCard';
+import { XrfQcChartCard, QC_ELEMENTS_LIST, XrfPointData, XrfChartLimitData } from './XrfQcChartCard';
+import { XrfOffspecIsolationModal, IsolatedOffspecPoint } from './XrfOffspecIsolationModal';
 
 interface XrfControlChartsTabProps {
   instruments: Array<{ code: string; name: string }>;
@@ -252,6 +253,157 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   const [compactStats, setCompactStats] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
 
+  // -----------------------------------------------------------------
+  // 5. OFFSPEC DATA ISOLATION (CHART TERPISAH & REKAP PER INSTRUMEN)
+  // -----------------------------------------------------------------
+  const [isolatedPoints, setIsolatedPoints] = useState<IsolatedOffspecPoint[]>(() => {
+    try {
+      const saved = localStorage.getItem('xrf_isolated_offspec_points');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to parse isolated points from storage', e);
+      return [];
+    }
+  });
+  const [showOffspecModal, setShowOffspecModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('xrf_isolated_offspec_points', JSON.stringify(isolatedPoints));
+    } catch (e) {
+      console.error('Failed to save isolated points to storage', e);
+    }
+  }, [isolatedPoints]);
+
+  const handleToggleIsolatePoint = useCallback((
+    point: XrfPointData, 
+    element: string, 
+    limits: XrfChartLimitData, 
+    instCode: string, 
+    instName: string, 
+    stdCode: string
+  ) => {
+    const pointId = `${instCode}-${stdCode}-${element}-${point.index}`;
+    setIsolatedPoints(prev => {
+      const exists = prev.some(p => p.id === pointId);
+      if (exists) {
+        toast.info(`Titik #${point.index} (${element}) dikeluarkan dari isolasi data off-spec`);
+        return prev.filter(p => p.id !== pointId);
+      } else {
+        const pointSigma = limits.stdevFixed > 0 
+          ? ((point.value - limits.nominalValue) / limits.stdevFixed) 
+          : 0;
+        const absSigma = Math.abs(pointSigma);
+        const status = absSigma > 3.0 ? 'action' : absSigma > 2.0 ? 'warning' : 'normal';
+        const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : status === 'warning' ? 'Off-Spec Warning (2-3σ)' : 'In-Control (≤2σ)';
+
+        const newPoint: IsolatedOffspecPoint = {
+          id: pointId,
+          pointId: point.id,
+          index: point.index,
+          date: point.date || new Date().toISOString().split('T')[0],
+          analyzedAt: point.analyzedAt,
+          instrumentCode: instCode,
+          instrumentName: instName,
+          standardCode: stdCode,
+          element,
+          value: point.value,
+          nominalValue: limits.nominalValue,
+          stdevFixed: limits.stdevFixed,
+          diff: point.value - limits.nominalValue,
+          sigmaDist: pointSigma,
+          status,
+          statusLabel,
+          isolatedAt: new Date().toISOString(),
+        };
+        toast.success(`Titik #${point.index} (${element}) berhasil diisolasi ke chart off-spec`);
+        return [...prev, newPoint];
+      }
+    });
+  }, []);
+
+  const handleRemovePoint = useCallback((id: string) => {
+    setIsolatedPoints(prev => prev.filter(p => p.id !== id));
+    toast.info('Titik off-spec dihapus dari rekap isolasi');
+  }, []);
+
+  const handleClearAll = useCallback(() => {
+    setIsolatedPoints([]);
+    toast.info('Semua data isolasi off-spec telah dibersihkan');
+  }, []);
+
+  const isPointIsolated = useCallback((
+    point: XrfPointData, 
+    element: string, 
+    instCode: string, 
+    stdCode: string
+  ) => {
+    const pointId = `${instCode}-${stdCode}-${element}-${point.index}`;
+    return isolatedPoints.some(p => p.id === pointId);
+  }, [isolatedPoints]);
+
+  const handleIsolateAllOffspecInCard = useCallback((
+    cardPoints: XrfPointData[], 
+    element: string, 
+    limits: XrfChartLimitData, 
+    instCode: string, 
+    instName: string, 
+    stdCode: string
+  ) => {
+    const offspecPoints = cardPoints.filter(p => {
+      const dist = limits.stdevFixed > 0 ? Math.abs((p.value - limits.nominalValue) / limits.stdevFixed) : 0;
+      return dist > 2.0;
+    });
+
+    if (offspecPoints.length === 0) {
+      toast.info('Tidak ada titik off-spec (>2σ) pada standar ini.');
+      return;
+    }
+
+    setIsolatedPoints(prev => {
+      const existingIds = new Set(prev.map(p => p.id));
+      const newlyAdded: IsolatedOffspecPoint[] = [];
+
+      offspecPoints.forEach(p => {
+        const pointId = `${instCode}-${stdCode}-${element}-${p.index}`;
+        if (!existingIds.has(pointId)) {
+          const pointSigma = limits.stdevFixed > 0 ? ((p.value - limits.nominalValue) / limits.stdevFixed) : 0;
+          const absSigma = Math.abs(pointSigma);
+          const status = absSigma > 3.0 ? 'action' : 'warning';
+          const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : 'Off-Spec Warning (2-3σ)';
+
+          newlyAdded.push({
+            id: pointId,
+            pointId: p.id,
+            index: p.index,
+            date: p.date || new Date().toISOString().split('T')[0],
+            analyzedAt: p.analyzedAt,
+            instrumentCode: instCode,
+            instrumentName: instName,
+            standardCode: stdCode,
+            element,
+            value: p.value,
+            nominalValue: limits.nominalValue,
+            stdevFixed: limits.stdevFixed,
+            diff: p.value - limits.nominalValue,
+            sigmaDist: pointSigma,
+            status,
+            statusLabel,
+            isolatedAt: new Date().toISOString(),
+          });
+        }
+      });
+
+      if (newlyAdded.length > 0) {
+        toast.success(`${newlyAdded.length} titik off-spec di ${stdCode} (${element}) berhasil diisolasi!`);
+      } else {
+        toast.info(`Semua titik off-spec di ${stdCode} sudah terisolasi sebelumnya.`);
+      }
+
+      return [...prev, ...newlyAdded];
+    });
+  }, []);
+
   // Horizontal scroll synchronization for side-by-side mode
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const isSyncingScroll = useRef<boolean>(false);
@@ -412,6 +564,63 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
 
   // Active grid data for current selected element
   const currentGridData = allElementsData[selectedElement] || gridData;
+
+  const handleAutoIsolateAllOffspec = useCallback(() => {
+    setIsolatedPoints(prev => {
+      const existingIds = new Set(prev.map(p => p.id));
+      const newlyAdded: IsolatedOffspecPoint[] = [];
+
+      Object.entries(currentGridData).forEach(([stdCode, instObj]) => {
+        const stdName = STANDARD_DISPLAY_NAMES[stdCode] || stdCode;
+        Object.entries(instObj as Record<string, any>).forEach(([instCode, data]) => {
+          const limits = data.limits;
+          const points = data.points || [];
+          const theme = getInstrumentTheme(instCode);
+
+          points.forEach((p: any) => {
+            if (typeof p.value === 'number' && !isNaN(p.value) && limits && limits.stdevFixed > 0) {
+              const sigmaDist = (p.value - limits.nominalValue) / limits.stdevFixed;
+              const absSigma = Math.abs(sigmaDist);
+              if (absSigma > 2.0) {
+                const pointId = `${instCode}-${stdName}-${selectedElement}-${p.index}`;
+                if (!existingIds.has(pointId)) {
+                  const status = absSigma > 3.0 ? 'action' : 'warning';
+                  const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : 'Off-Spec Warning (2-3σ)';
+                  newlyAdded.push({
+                    id: pointId,
+                    pointId: p.id,
+                    index: p.index,
+                    date: p.date || new Date().toISOString().split('T')[0],
+                    analyzedAt: p.analyzedAt,
+                    instrumentCode: instCode,
+                    instrumentName: theme.name,
+                    standardCode: stdName,
+                    element: selectedElement,
+                    value: p.value,
+                    nominalValue: limits.nominalValue,
+                    stdevFixed: limits.stdevFixed,
+                    diff: p.value - limits.nominalValue,
+                    sigmaDist,
+                    status,
+                    statusLabel,
+                    isolatedAt: new Date().toISOString(),
+                  });
+                }
+              }
+            }
+          });
+        });
+      });
+
+      if (newlyAdded.length > 0) {
+        toast.success(`${newlyAdded.length} titik off-spec di seluruh instrumen berhasil diisolasi!`);
+      } else {
+        toast.info('Semua titik off-spec yang aktif telah diisolasi.');
+      }
+
+      return [...prev, ...newlyAdded];
+    });
+  }, [currentGridData, selectedElement]);
 
   // Toggle instrument selection (up to 6 instruments side-by-side)
   const toggleInstrument = (code: string) => {
@@ -596,6 +805,25 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             >
               {showStats ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
               KPI Stats
+            </button>
+
+            {/* Dedicated Off-Spec Isolation Modal Launcher */}
+            <button
+              onClick={() => setShowOffspecModal(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black border flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                isolatedPoints.length > 0
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 shadow-rose-500/20'
+                  : 'bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+              }`}
+              title="Buka Chart Isolasi Data Off-Spec & Rekap Per Instrumen"
+            >
+              <ShieldAlert className={`w-3.5 h-3.5 ${isolatedPoints.length > 0 ? 'text-amber-200 animate-pulse' : 'text-rose-500'}`} />
+              <span>Chart Isolasi Off-Spec</span>
+              {isolatedPoints.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white text-rose-700 font-black">
+                  {isolatedPoints.length}
+                </span>
+              )}
             </button>
 
             <button
@@ -793,6 +1021,10 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                               points={instData.points}
                               showStats={showStats}
                               compactStats={compactStats}
+                              onToggleIsolatePoint={(pt, el, lim) => handleToggleIsolatePoint(pt, el, lim, instCode, theme.name, std.name)}
+                              onOpenOffspecModal={() => setShowOffspecModal(true)}
+                              onIsolateAllOffspecInCard={(pts, el, lim) => handleIsolateAllOffspecInCard(pts, el, lim, instCode, theme.name, std.name)}
+                              isPointIsolated={(pt, el) => isPointIsolated(pt, el, instCode, std.name)}
                             />
                           </div>
                         );
@@ -823,6 +1055,10 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                             points={instData.points}
                             showStats={showStats}
                             compactStats={compactStats}
+                            onToggleIsolatePoint={(pt, el, lim) => handleToggleIsolatePoint(pt, el, lim, instCode, theme.name, std.name)}
+                            onOpenOffspecModal={() => setShowOffspecModal(true)}
+                            onIsolateAllOffspecInCard={(pts, el, lim) => handleIsolateAllOffspecInCard(pts, el, lim, instCode, theme.name, std.name)}
+                            isPointIsolated={(pt, el) => isPointIsolated(pt, el, instCode, std.name)}
                           />
                         </div>
                       );
@@ -834,6 +1070,17 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
           })
         )}
       </div>
+
+      {/* Dedicated Off-Spec Data Isolation Modal & Per-Instrument Recap */}
+      <XrfOffspecIsolationModal
+        isOpen={showOffspecModal}
+        onClose={() => setShowOffspecModal(false)}
+        isolatedPoints={isolatedPoints}
+        onRemovePoint={handleRemovePoint}
+        onClearAll={handleClearAll}
+        onAutoIsolateAllOffspec={handleAutoIsolateAllOffspec}
+        instrumentThemes={INSTRUMENT_THEMES}
+      />
     </div>
   );
 };

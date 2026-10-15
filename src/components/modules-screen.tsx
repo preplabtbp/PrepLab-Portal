@@ -46,7 +46,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
       .catch(() => {});
   }, []);
 
-  const isMeetingRoom = inspectorNik?.toUpperCase() === 'MEETINGROOM' || inspectorNik?.toUpperCase() === 'MEETING';
+  const isMeetingRoom = inspectorNik?.toUpperCase() === 'MEETINGROOM' || inspectorNik?.toUpperCase() === 'MEETING' || inspectorNik?.toUpperCase() === 'MEETINGROOMGTS' || inspectorNik?.toUpperCase()?.includes('MEETING');
   const isSuperAdmin = 
     inspectorNik === '02D25000055' || 
     inspectorNik === '02D24000043' || 
@@ -154,7 +154,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
             icon: <Settings className="w-5 h-5 sm:w-6 sm:h-6" />, 
             color: 'rose', 
             action: () => {
-              if (isMeetingRoom && !isDeveloper) {
+              if (isMeetingRoom) {
                 setShowDevAuthModal(true);
               } else {
                 onNav('admin-dashboard');

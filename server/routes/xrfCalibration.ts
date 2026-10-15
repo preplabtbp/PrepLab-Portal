@@ -174,6 +174,8 @@ async function seedInitialXrfData() {
     const existingStds = await db.select().from(xrfStandards).limit(1);
     if (existingStds.length === 0) {
       const defaultStandards = [
+        { code: 'BLANK_A', name: 'BLANK A', matrixType: 'BLANK', displayOrder: 0 },
+        { code: 'BLANK_B', name: 'VER-BLANK B', matrixType: 'BLANK', displayOrder: 0 },
         { code: 'LIM01', name: 'LIM 01', matrixType: 'LIMONITE', displayOrder: 1 },
         { code: 'LIM02', name: 'LIM 02', matrixType: 'LIMONITE', displayOrder: 2 },
         { code: 'LIM03', name: 'LIM 03', matrixType: 'LIMONITE', displayOrder: 3 },
@@ -1301,7 +1303,7 @@ xrfRouter.post("/import-recap-csv", async (req, res) => {
 
       const seqStr = String(cols[0] || '').trim();
       const seq = parseInt(seqStr, 10);
-      if (isNaN(seq) || seq < 1 || seq > 5) continue;
+      if (isNaN(seq) || seq < 1 || seq > 25) continue;
 
       const niVal = parseFloat(cols[4]);
       if (isNaN(niVal)) continue; // ignore #DIV/0! or non-numbers
@@ -1311,7 +1313,9 @@ xrfRouter.post("/import-recap-csv", async (req, res) => {
         currentInstrument = targetInstrumentCode;
       } else {
         const xrfText = String(cols[1] || '').toUpperCase();
-        if (xrfText.includes('EPSILON A') || xrfText.includes('EPSILON_A')) {
+        if (xrfText.includes('SUPERMINI') || xrfText.includes('RIGAKU') || xrfText.includes('WDXRF')) {
+          currentInstrument = 'SUPERMINI';
+        } else if (xrfText.includes('EPSILON A') || xrfText.includes('EPSILON_A')) {
           currentInstrument = 'EPSILON_A';
         } else if (xrfText.includes('EPSILON B') || xrfText.includes('EPSILON_B')) {
           currentInstrument = 'EPSILON_B';
@@ -1321,14 +1325,31 @@ xrfRouter.post("/import-recap-csv", async (req, res) => {
       }
 
       const dateStr = String(cols[2] || '').trim();
-      const rawLabel = String(cols[3] || '').trim();
+      const rawLabel = String(cols[3] || '').trim().toUpperCase();
 
-      let stdCode = 'LIM01';
-      if (rawLabel.includes('LIM01')) stdCode = 'LIM01';
-      else if (rawLabel.includes('LIM02')) stdCode = 'LIM02';
-      else if (rawLabel.includes('LIM03')) stdCode = 'LIM03';
-      else if (rawLabel.includes('LIM04')) stdCode = 'LIM04';
-      else if (rawLabel.includes('LIM05')) stdCode = 'LIM05';
+      let stdCode = 'UNKNOWN';
+      if (rawLabel.includes('BLANK A') || rawLabel === 'BLANK A') stdCode = 'BLANK_A';
+      else if (rawLabel.includes('BLANK B') || rawLabel.includes('BLANK_B')) stdCode = 'BLANK_B';
+      else if (rawLabel.includes('LIM01') || rawLabel.includes('LIM 01')) stdCode = 'LIM01';
+      else if (rawLabel.includes('LIM02') || rawLabel.includes('LIM 02')) stdCode = 'LIM02';
+      else if (rawLabel.includes('LIM03') || rawLabel.includes('LIM 03')) stdCode = 'LIM03';
+      else if (rawLabel.includes('LIM04') || rawLabel.includes('LIM 04')) stdCode = 'LIM04';
+      else if (rawLabel.includes('LIM05') || rawLabel.includes('LIM 05')) stdCode = 'LIM05';
+      else if (rawLabel.includes('OREAS184') || rawLabel.includes('OREAS 184')) stdCode = 'OREAS184';
+      else if (rawLabel.includes('OREAS187') || rawLabel.includes('OREAS 187')) stdCode = 'OREAS187';
+      else if (rawLabel.includes('OREAS189') || rawLabel.includes('OREAS 189')) stdCode = 'OREAS189';
+      else if (rawLabel.includes('OREAS190') || rawLabel.includes('OREAS 190')) stdCode = 'OREAS190';
+      else if (rawLabel.includes('OREAS191') || rawLabel.includes('OREAS 191')) stdCode = 'OREAS191';
+      else if (rawLabel.includes('OREAS192') || rawLabel.includes('OREAS 192')) stdCode = 'OREAS192';
+      else if (rawLabel.includes('OREAS193') || rawLabel.includes('OREAS 193')) stdCode = 'OREAS193';
+      else if (rawLabel.includes('SAP19') || rawLabel.includes('SAP 19')) stdCode = 'SAP19';
+      else if (rawLabel.includes('OREAS194') || rawLabel.includes('OREAS 194')) stdCode = 'OREAS194';
+      else if (rawLabel.includes('OREAS195') || rawLabel.includes('OREAS 195')) stdCode = 'OREAS195';
+      else if (rawLabel.includes('SAP16') || rawLabel.includes('SAP 16')) stdCode = 'SAP16';
+      else if (rawLabel.includes('OREAS182') || rawLabel.includes('OREAS 182')) stdCode = 'OREAS182';
+      else if (rawLabel.includes('LIM13') || rawLabel.includes('LIM 13')) stdCode = 'LIM13';
+      else if (rawLabel.includes('LIM')) stdCode = 'LIM01';
+      else if (rawLabel.includes('OREAS')) stdCode = 'OREAS184';
 
       const [dPart, tPart] = dateStr.split(' ');
       if (!dPart) continue;

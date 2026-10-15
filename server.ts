@@ -1043,6 +1043,7 @@ const app = express();
     '/api/auth/check-nik',
     '/api/auth/setup',
     '/api/auth/reset-password',
+    '/api/config/env',
     '/api/health',
     '/api/drive/view',
     '/api/labbot/chat',

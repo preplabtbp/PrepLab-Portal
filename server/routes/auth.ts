@@ -82,7 +82,34 @@ const MEETING_ROOM_USER = {
   isMeetingRoom: true
 };
 
+const MEETING_ROOM_GTS_USER = {
+  id: 999991,
+  nik: 'MEETINGROOMGTS',
+  username: 'meetingroomgts',
+  name: 'Meeting Room GTS PrepLab',
+  jabatan: 'Meeting Room Display GTS',
+  jobGrade: 'ALL',
+  section: 'ALL',
+  department: 'ALL',
+  gol: 'IV',
+  pt: 'GTS',
+  firstLoginComplete: true,
+  isAdmin: true,
+  isDeveloper: false,
+  isMeetingRoom: true
+};
+
 function resolveDemoUser(normalized: string) {
+  if (
+    normalized === 'MEETINGROOMGTS' ||
+    normalized === 'MEETING_ROOM_GTS' ||
+    normalized === 'MEETINGGTS' ||
+    normalized === 'GTSMEETING' ||
+    normalized === 'GTS_MEETING' ||
+    normalized === 'MEETING_GTS'
+  ) {
+    return MEETING_ROOM_GTS_USER;
+  }
   if (
     normalized === 'MEETING' ||
     normalized === 'MEETINGROOM' ||
@@ -176,7 +203,7 @@ authRouter.post("/login", async (req, res) => {
     const isDemoAllowed = env.ENABLE_DEMO_USER || process.env.ENABLE_DEMO_USER === 'true' || true;
     const demoUser = isDemoAllowed ? resolveDemoUser(normalized) : null;
     if (demoUser) {
-      const isMeeting = demoUser.nik === 'MEETINGROOM';
+      const isMeeting = demoUser.nik === 'MEETINGROOM' || demoUser.nik === 'MEETINGROOMGTS';
       const isPasswordValid = isMeeting
         ? (password === '123' || password === 'preplabportal')
         : (password === '112233' || password === 'spvdemo123' || password === 'demo123');

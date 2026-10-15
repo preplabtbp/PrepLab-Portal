@@ -26,6 +26,7 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'daily-input' | 'direct-paste' | 'history-logs' | 'control-charts' | 'master-references'>('control-charts');
   const [instruments, setInstruments] = useState<Array<{ code: string; name: string }>>([
+    { code: 'SUPERMINI', name: 'Supermini 200 (GTS)' },
     { code: 'EPSILON_A', name: 'EPSILON A' },
     { code: 'EPSILON_B', name: 'EPSILON B' },
     { code: 'EPSILON_C', name: 'EPSILON C' },
@@ -34,6 +35,8 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
     { code: 'EPSILON_F', name: 'EPSILON F' },
   ]);
   const [standards, setStandards] = useState<Array<{ code: string; name: string }>>([
+    { code: 'BLANK_A', name: 'BLANK A' },
+    { code: 'BLANK_B', name: 'VER-BLANK B' },
     { code: 'LIM01', name: 'LIM 01' },
     { code: 'LIM02', name: 'LIM 02' },
     { code: 'LIM03', name: 'LIM 03' },

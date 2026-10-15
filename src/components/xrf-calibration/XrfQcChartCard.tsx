@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   AlertTriangle, AlertCircle, CheckCircle2, ChevronDown, 
-  Layers, Sliders, Activity, Info 
+  Layers, Sliders, Activity, Info, ShieldAlert, Check, 
+  X, Sparkles, ExternalLink 
 } from 'lucide-react';
 
 export interface XrfChartLimitData {
@@ -57,6 +58,11 @@ interface XrfQcChartCardProps {
   points: XrfPointData[];
   showStats?: boolean;
   compactStats?: boolean;
+  // Off-spec isolation callbacks
+  onToggleIsolatePoint?: (point: XrfPointData, element: string, limits: XrfChartLimitData) => void;
+  onOpenOffspecModal?: () => void;
+  onIsolateAllOffspecInCard?: (points: XrfPointData[], element: string, limits: XrfChartLimitData) => void;
+  isPointIsolated?: (point: XrfPointData, element: string) => boolean;
 }
 
 export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
@@ -71,10 +77,16 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
   points,
   showStats = true,
   compactStats = false,
+  onToggleIsolatePoint,
+  onOpenOffspecModal,
+  onIsolateAllOffspecInCard,
+  isPointIsolated,
 }) => {
   const [hoveredPoint, setHoveredPoint] = useState<XrfPointData | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<XrfPointData | null>(null);
   const [showElementDropdown, setShowElementDropdown] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -82,12 +94,15 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowElementDropdown(false);
       }
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setSelectedPoint(null);
+      }
     };
-    if (showElementDropdown) {
+    if (showElementDropdown || selectedPoint) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showElementDropdown]);
+  }, [showElementDropdown, selectedPoint]);
 
   // SVG Chart Dimensions
   const svgWidth = 540;
@@ -454,29 +469,64 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
             />
           )}
 
-          {/* Interactive Data Points with Sigma Severity Highlighting */}
+          {/* Interactive Data Points with Sigma Severity Highlighting & Click-to-Isolate */}
           {validPoints.map((p) => {
             const cx = getXCoord(p.index);
             const cy = getYCoord(p.value);
             const isHovered = hoveredPoint?.id === p.id || hoveredPoint?.index === p.index;
+            const isSelected = selectedPoint?.id === p.id || (selectedPoint?.index === p.index && selectedPoint?.value === p.value);
+            const isIsolated = isPointIsolated ? isPointIsolated(p, currentElement) : false;
 
             const sigmaDist = limits.stdevFixed > 0 ? Math.abs((p.value - limits.nominalValue) / limits.stdevFixed) : 0;
             const isAction = sigmaDist > 3.0;
             const isWarning = sigmaDist > 2.0 && sigmaDist <= 3.0;
 
             const pointColor = isAction ? '#EF4444' : isWarning ? '#F59E0B' : '#0F172A';
-            const radius = isHovered ? 4.8 : 3.2;
+            const radius = isSelected ? 5.2 : isHovered ? 4.8 : 3.2;
 
             return (
-              <g key={`point-g-${p.index}-${p.id || ''}`}>
+              <g 
+                key={`point-g-${p.index}-${p.id || ''}`}
+                className="cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedPoint(isSelected ? null : p);
+                }}
+              >
+                {/* Visual Halo / Pulse Ring for Isolated Off-Spec Points */}
+                {isIsolated && (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={radius + 4}
+                    fill="none"
+                    stroke="#EF4444"
+                    strokeWidth={1.8}
+                    strokeDasharray="3 2"
+                    className="animate-pulse"
+                  />
+                )}
+
+                {/* Selected Point Ring */}
+                {isSelected && (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={radius + 4}
+                    fill="none"
+                    stroke="#2563EB"
+                    strokeWidth={2}
+                  />
+                )}
+
                 <circle
                   cx={cx}
                   cy={cy}
                   r={radius}
-                  fill={isHovered ? '#3B82F6' : pointColor}
+                  fill={isSelected ? '#2563EB' : isHovered ? '#3B82F6' : pointColor}
                   stroke="#FFFFFF"
-                  strokeWidth={isHovered ? 2 : 1.2}
-                  className={`cursor-pointer transition-transform duration-100 ${!isAction && !isWarning ? 'dark:fill-slate-100' : ''}`}
+                  strokeWidth={isHovered || isSelected ? 2 : 1.2}
+                  className={`transition-transform duration-100 ${!isAction && !isWarning ? 'dark:fill-slate-100' : ''}`}
                   onMouseEnter={() => setHoveredPoint(p)}
                   onMouseLeave={() => setHoveredPoint(null)}
                 />
@@ -486,9 +536,151 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
         </svg>
 
         {/* ------------------------------------------------------- */}
-        {/* NOTION-STYLE FLOATING POPUP / TOOLTIP (GAMBAR 1 & 2)    */}
+        {/* INTERACTIVE POPOVER ON CLICK (OFF-SPEC ISOLATION POPUP) */}
         {/* ------------------------------------------------------- */}
-        {hoveredPoint && (() => {
+        {selectedPoint && (() => {
+          const pointSigma = limits.stdevFixed > 0 
+            ? ((selectedPoint.value - limits.nominalValue) / limits.stdevFixed) 
+            : 0;
+          const absSigma = Math.abs(pointSigma);
+          const isPointAction = absSigma > 3.0;
+          const isPointWarning = absSigma > 2.0 && absSigma <= 3.0;
+          const diff = selectedPoint.value - limits.nominalValue;
+          const sampleDate = selectedPoint.analyzedAt || selectedPoint.date || `Pengambilan #${selectedPoint.index}`;
+          const isIsolated = isPointIsolated ? isPointIsolated(selectedPoint, currentElement) : false;
+          const offspecCountInCard = validPoints.filter(p => limits.stdevFixed > 0 && Math.abs((p.value - limits.nominalValue) / limits.stdevFixed) > 2.0).length;
+
+          return (
+            <div 
+              ref={popoverRef}
+              className="absolute top-3 right-4 sm:right-10 bg-white dark:bg-[#1e1e1e] text-slate-800 dark:text-neutral-100 text-xs p-3.5 rounded-xl shadow-2xl pointer-events-auto backdrop-blur-md border-2 border-teal-500/80 dark:border-teal-500/60 font-sans z-40 space-y-2.5 animate-in fade-in zoom-in-95 duration-100 min-w-[260px] max-w-[320px]"
+            >
+              {/* Header with Title and Close Button */}
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-neutral-700 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-2.5 h-2.5 rounded-full ${isPointAction ? 'bg-rose-500' : isPointWarning ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                  <span className="text-[12px] font-bold text-slate-900 dark:text-white">
+                    {sampleDate}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300">
+                    Run #{selectedPoint.index}
+                  </span>
+                  <button
+                    onClick={() => setSelectedPoint(null)}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                    title="Tutup Popover"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body: High contrast key-values */}
+              <div className="space-y-1 text-[11px] font-mono bg-slate-50 dark:bg-neutral-900/60 p-2 rounded-lg border border-slate-100 dark:border-neutral-800">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-neutral-400 font-sans">Hasil {currentElement}:</span>
+                  <span className="font-bold text-slate-900 dark:text-white text-xs">{selectedPoint.value.toFixed(3)} %</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-neutral-400 font-sans">Acuan (CL):</span>
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-400">{limits.nominalValue.toFixed(3)} %</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-neutral-400 font-sans">Deviasi (Δ):</span>
+                  <span className={`font-semibold ${diff >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
+                    {diff > 0 ? '+' : ''}{diff.toFixed(3)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-neutral-400 font-sans">Sigma Dist (Z):</span>
+                  <span className={`font-semibold ${absSigma > 3 ? 'text-rose-600 dark:text-rose-400' : absSigma > 2 ? 'text-amber-600 dark:text-amber-400' : 'text-sky-700 dark:text-sky-400'}`}>
+                    {limits.stdevFixed > 0 ? (pointSigma.toFixed(2) + 'σ') : '-'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Pill */}
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="text-slate-400 font-sans font-medium uppercase tracking-wider">Status QC:</span>
+                {isPointAction ? (
+                  <span className="px-2 py-0.5 rounded-md font-bold bg-[#FEE2E2] text-[#991B1B] dark:bg-rose-950/70 dark:text-rose-200 border border-[#FCA5A5] dark:border-rose-800">
+                    Need Re-calibration (&gt;3σ)
+                  </span>
+                ) : isPointWarning ? (
+                  <span className="px-2 py-0.5 rounded-md font-bold bg-[#FEF3C7] text-[#92400E] dark:bg-amber-950/70 dark:text-amber-200 border border-[#FCD34D] dark:border-amber-800">
+                    WARNING (2σ - 3σ)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md font-bold bg-[#DCFCE7] text-[#166534] dark:bg-emerald-950/70 dark:text-emerald-200 border border-[#86EFAC] dark:border-emerald-800">
+                    IN-CONTROL (≤2σ)
+                  </span>
+                )}
+              </div>
+
+              {/* Actions: Isolate Point, Open Offspec Modal, Isolate All in Card */}
+              <div className="pt-2 border-t border-slate-100 dark:border-neutral-700 space-y-1.5">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onToggleIsolatePoint) {
+                      onToggleIsolatePoint(selectedPoint, currentElement, limits);
+                    }
+                  }}
+                  className={`w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                    isIsolated
+                      ? 'bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-slate-800 dark:text-neutral-100 border border-slate-300 dark:border-neutral-600'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white border border-rose-700'
+                  }`}
+                >
+                  {isIsolated ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Hapus Titik dari Isolasi</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      <span>Isolasi Titik Ini ke Chart Off-Spec</span>
+                    </>
+                  )}
+                </button>
+
+                {onOpenOffspecModal && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenOffspecModal();
+                    }}
+                    className="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 dark:bg-neutral-100 dark:hover:bg-white text-white dark:text-slate-900 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Buka Chart Isolasi Off-Spec</span>
+                  </button>
+                )}
+
+                {onIsolateAllOffspecInCard && offspecCountInCard > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onIsolateAllOffspecInCard(validPoints, currentElement, limits);
+                    }}
+                    className="w-full py-1 px-2 rounded-lg text-[10.5px] font-bold text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center justify-center gap-1 transition-all cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Isolasi Semua Off-Spec di Standar Ini ({offspecCountInCard})</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ------------------------------------------------------- */}
+        {/* NOTION-STYLE FLOATING POPUP / TOOLTIP (HOVER STATE)     */}
+        {/* ------------------------------------------------------- */}
+        {!selectedPoint && hoveredPoint && (() => {
           const pointSigma = limits.stdevFixed > 0 
             ? ((hoveredPoint.value - limits.nominalValue) / limits.stdevFixed) 
             : 0;
@@ -550,6 +742,11 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
                     IN-CONTROL (≤2σ)
                   </span>
                 )}
+              </div>
+
+              {/* Hint to click */}
+              <div className="text-[9.5px] text-center text-slate-400 dark:text-neutral-500 pt-1 border-t border-slate-100 dark:border-neutral-700/60 font-sans">
+                👆 Klik titik data untuk opsi isolasi
               </div>
             </div>
           );

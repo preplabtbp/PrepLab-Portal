@@ -1,4 +1,4 @@
-import { translateDisplayText } from './notion/logbook-section-utils';
+import { translateDisplayText, getDisplayColumnHeader } from './notion/logbook-section-utils';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { 
   Search, 
@@ -495,9 +495,30 @@ export const getPriorityWeight = (priority: string): number => {
 
 export const getCellValue = (row: TableRowData, colName: string): string => {
   if (!row) return '';
+  const targetLower = colName.toLowerCase().trim();
+
+  if (targetLower === 'description' || targetLower === 'keterangan') {
+    if (row[colName] !== undefined && row[colName] !== '' && row[colName] !== '-') {
+      return row[colName];
+    }
+    for (const key of Object.keys(row)) {
+      const val = row[key];
+      const keyLower = key.toLowerCase().trim();
+      if (
+        keyLower.includes('keterangan') || 
+        keyLower.includes('description') || 
+        keyLower.includes('deskripsi') || 
+        keyLower.includes('catatan') || 
+        keyLower.includes('rincian')
+      ) {
+        if (val !== undefined && val !== '' && val !== '-') return val;
+      }
+    }
+    return row[colName] ?? '-';
+  }
+
   if (row[colName] !== undefined && row[colName] !== '') return row[colName];
 
-  const targetLower = colName.toLowerCase().trim();
   let fallbackVal: string | undefined = undefined;
 
   for (const key of Object.keys(row)) {
@@ -734,7 +755,9 @@ export function migrateChecklistsInRows(
         .filter(l => !l.trim().match(/^[-*•]\s*\[([ xX])\]/))
         .join('\n')
         .trim();
-      row['Keterangan'] = nonChecklist || '-';
+      const cleanVal = nonChecklist || '-';
+      row['Keterangan'] = cleanVal;
+      if (row['Description'] !== undefined) row['Description'] = cleanVal;
     } else if (hasExistingSubRows && taskProg.hasTasklist && taskProg.items.length > 0) {
       // Subtasks already exist as relational rows; sanitize parent's Keterangan from duplicate checklist lines
       const nonChecklist = ketVal
@@ -742,7 +765,9 @@ export function migrateChecklistsInRows(
         .filter(l => !l.trim().match(/^[-*•]\s*\[([ xX])\]/))
         .join('\n')
         .trim();
-      row['Keterangan'] = nonChecklist || '-';
+      const cleanVal = nonChecklist || '-';
+      row['Keterangan'] = cleanVal;
+      if (row['Description'] !== undefined) row['Description'] = cleanVal;
     }
   }
 
@@ -924,6 +949,19 @@ export function NotionDatabaseTable({
     const { rows: prepped } = migrateChecklistsInRows(rows, section);
     return prepped;
   });
+  const subtaskSaveDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const localRowsRef = useRef(localRows);
+  useEffect(() => {
+    localRowsRef.current = localRows;
+  }, [localRows]);
+
+  useEffect(() => {
+    return () => {
+      if (subtaskSaveDebounceRef.current) {
+        clearTimeout(subtaskSaveDebounceRef.current);
+      }
+    };
+  }, []);
   const [dirtyRowIndices, setDirtyRowIndices] = useState<Set<number>>(new Set());
   const [originalRowsBackup, setOriginalRowsBackup] = useState<TableRowData[]>(() => rows ? JSON.parse(JSON.stringify(rows)) : []);
   const [showSaveConfirmModal, setShowSaveConfirmModal] = useState<boolean>(false);
@@ -972,10 +1010,34 @@ export function NotionDatabaseTable({
   } | null>(null);
 
   // Hidden columns feature (hides column without deleting row data or resetting details)
+  const isCoreMandatoryColumn = useCallback((col: string): boolean => {
+    const cl = col.toLowerCase().trim();
+    const clean = cl.replace(/^[^a-z0-9]+/i, '').trim();
+    return (
+      cl === 'number' || cl === 'no' || cl === '#' ||
+      clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name' || clean === 'title' ||
+      clean.includes('description') || clean.includes('keterangan') || clean.includes('deskripsi') || clean.includes('catatan') ||
+      clean.includes('status')
+    );
+  }, []);
+
   const [hiddenColumns, setHiddenColumns] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(`notion_hidden_cols_${section || 'default'}`);
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed: string[] = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      // Clean up any mandatory core columns from saved hidden columns
+      return parsed.filter(c => {
+        const cl = c.toLowerCase().trim();
+        const clean = cl.replace(/^[^a-z0-9]+/i, '').trim();
+        const isCore = 
+          cl === 'number' || cl === 'no' || cl === '#' ||
+          clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name' || clean === 'title' ||
+          clean.includes('description') || clean.includes('keterangan') || clean.includes('deskripsi') || clean.includes('catatan') ||
+          clean.includes('status');
+        return !isCore;
+      });
     } catch {
       return [];
     }
@@ -983,12 +1045,21 @@ export function NotionDatabaseTable({
 
   const handleToggleHideColumn = (colName: string) => {
     const colLower = colName.toLowerCase().trim();
-    if (colLower === 'number' || colLower === 'no') {
+    const clean = colLower.replace(/^[^a-z0-9]+/i, '').trim();
+    if (colLower === 'number' || colLower === 'no' || colLower === '#') {
       toast.error('Kolom Nomor (#) tidak dapat disembunyikan');
       return;
     }
-    if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') {
+    if (clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name' || clean === 'title') {
       toast.error('Kolom Judul/Kegiatan adalah kolom utama dan tidak dapat disembunyikan');
+      return;
+    }
+    if (clean.includes('description') || clean.includes('keterangan') || clean.includes('deskripsi') || clean.includes('catatan')) {
+      toast.error('Kolom Keterangan/Deskripsi adalah kolom utama dan tidak dapat disembunyikan');
+      return;
+    }
+    if (clean.includes('status')) {
+      toast.error('Kolom Status adalah kolom utama dan tidak dapat disembunyikan');
       return;
     }
 
@@ -1639,7 +1710,7 @@ export function NotionDatabaseTable({
     if (!hasCreatedTime) {
       const ketIdx = headersWithNumber.findIndex(h => {
         const l = h.toLowerCase().trim();
-        return l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi');
+        return l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('description') || l.includes('rincian');
       });
       if (ketIdx !== -1) {
         headersWithCreated = [
@@ -1818,7 +1889,16 @@ export function NotionDatabaseTable({
   const displayHeaders = useMemo(() => {
     const raw = tableHeaders.filter(h => {
       const l = h.toLowerCase().trim();
-      if (hiddenColumns.some(hc => hc.toLowerCase().trim() === l)) return false;
+      const clean = l.replace(/^[^a-z0-9]+/i, '').trim();
+
+      // Core mandatory columns CANNOT be hidden under any circumstances
+      const isCoreMandatory = 
+        l === 'number' || l === 'no' || l === '#' ||
+        clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name' || clean === 'title' ||
+        clean.includes('keterangan') || clean.includes('description') || clean.includes('deskripsi') || clean.includes('catatan') ||
+        clean.includes('status');
+
+      if (!isCoreMandatory && hiddenColumns.some(hc => hc.toLowerCase().trim() === l)) return false;
       if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) return true;
       return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
              !l.includes('kategori') && !l.includes('category');
@@ -1842,6 +1922,31 @@ export function NotionDatabaseTable({
         deduplicated.push(h);
       }
     }
+
+    // Emergency Failsafe Recovery: If hiddenColumns or filtering somehow reduced visible columns to <= 1
+    if (deduplicated.length <= 1 && tableHeaders.length > 1) {
+      const fallbackSeen = new Set<string>();
+      const recovered: string[] = [];
+      for (const h of tableHeaders) {
+        const l = h.toLowerCase().trim();
+        if (l.includes('progress') || l.includes('progres') || l.includes('kategori') || l.includes('category')) continue;
+        const clean = l.replace(/^[^a-z0-9]+/i, '').trim();
+        let semanticKey = clean;
+        if (clean.includes('tanggal selesai') || clean.includes('completed') || clean.includes('completion') || clean === 'selesai') {
+          semanticKey = 'completion date';
+        } else if (clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name') {
+          semanticKey = 'activity name';
+        } else if (clean.includes('keterangan') || clean.includes('catatan') || clean.includes('deskripsi') || clean.includes('description')) {
+          semanticKey = 'description';
+        }
+        if (!fallbackSeen.has(semanticKey)) {
+          fallbackSeen.add(semanticKey);
+          recovered.push(h);
+        }
+      }
+      if (recovered.length > deduplicated.length) return recovered;
+    }
+
     return deduplicated;
   }, [tableHeaders, hiddenColumns]);
 
@@ -2162,9 +2267,31 @@ export function NotionDatabaseTable({
   // Helper to read row property with fuzzy matching across header aliases
   const getRowVal = useCallback((row: TableRowData, colName: string): string => {
     if (!row) return '';
+    const targetLower = colName.toLowerCase().trim();
+
+    if (targetLower === 'description' || targetLower === 'keterangan') {
+      if (row[colName] !== undefined && row[colName] !== '' && row[colName] !== '-') {
+        return row[colName];
+      }
+      for (const key of Object.keys(row)) {
+        const val = row[key];
+        const keyLower = key.toLowerCase().trim();
+        const cleanKey = keyLower.replace(/^[^a-z0-9]+/i, '').trim();
+        if (
+          cleanKey.includes('keterangan') || 
+          cleanKey.includes('description') || 
+          cleanKey.includes('deskripsi') || 
+          cleanKey.includes('catatan') || 
+          cleanKey.includes('rincian')
+        ) {
+          if (val !== undefined && val !== '' && val !== '-') return val;
+        }
+      }
+      return row[colName] || '';
+    }
+
     if (row[colName] !== undefined && row[colName] !== '') return row[colName];
 
-    const targetLower = colName.toLowerCase().trim();
     const cleanTarget = targetLower.replace(/^[^a-z0-9]+/i, '').trim();
     let fallbackVal: string | undefined = undefined;
 
@@ -2235,6 +2362,38 @@ export function NotionDatabaseTable({
     }
     return fallbackVal ?? row[colName] ?? '';
   }, []);
+
+  // Helper to ensure both Keterangan, Description, and any matching column are kept 100% in sync
+  const setRowDescription = useCallback((targetRow: TableRowData, textVal: string) => {
+    const val = textVal || '-';
+    targetRow['Keterangan'] = val;
+    targetRow['Description'] = val;
+    targetRow['Deskripsi'] = val;
+    for (const k of Object.keys(targetRow)) {
+      const kl = k.toLowerCase().trim();
+      if (
+        kl.includes('keterangan') || 
+        kl.includes('description') || 
+        kl.includes('deskripsi') || 
+        kl.includes('catatan') || 
+        kl.includes('rincian')
+      ) {
+        targetRow[k] = val;
+      }
+    }
+    displayHeaders.forEach(h => {
+      const hl = h.toLowerCase().trim();
+      if (
+        hl.includes('keterangan') || 
+        hl.includes('description') || 
+        hl.includes('deskripsi') || 
+        hl.includes('catatan') || 
+        hl.includes('rincian')
+      ) {
+        targetRow[h] = val;
+      }
+    });
+  }, [displayHeaders]);
 
   // Logbook Parent Task Metrics for Enterprise Focus Mode
   const logbookTaskCounts = useMemo(() => {
@@ -2907,24 +3066,33 @@ export function NotionDatabaseTable({
         (targetRow as any)._pinned = 'true';
       }
 
-      if (colLower.includes('keterangan') && wasPinned) {
+      const isDescCol = colLower.includes('keterangan') || colLower.includes('description') || colLower.includes('catatan') || colLower.includes('deskripsi') || colLower.includes('rincian');
+
+      if (isDescCol && wasPinned) {
         let finalVal = newValue;
         if (!finalVal.includes('<!--pin-->')) {
           finalVal = `${finalVal} <!--pin-->`.trim();
         }
         targetRow[keyToSet] = finalVal;
+        if (targetRow['Keterangan'] !== undefined) targetRow['Keterangan'] = finalVal;
+        if (targetRow['Description'] !== undefined) targetRow['Description'] = finalVal;
       } else {
         targetRow[keyToSet] = newValue;
+        if (isDescCol) {
+          if (targetRow['Keterangan'] !== undefined) targetRow['Keterangan'] = newValue;
+          if (targetRow['Description'] !== undefined) targetRow['Description'] = newValue;
+        }
       }
 
-      if (colLower === 'jenis kegiatan' || colLower === 'judul' || colLower === 'task' || colLower === 'nama kegiatan') {
+      if (colLower === 'jenis kegiatan' || colLower === 'judul' || colLower === 'task' || colLower === 'nama kegiatan' || colLower === 'activity name') {
         targetRow['Jenis kegiatan'] = newValue;
         targetRow['Jenis Kegiatan'] = newValue;
+        if (targetRow['Activity Name'] !== undefined) targetRow['Activity Name'] = newValue;
       }
 
       // Smart Tasklist Auto-progress:
       // Otomatis open jika 0%, on progress jika progress berjalan (>0% & <100%), closed ketika 100%
-      if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi') || colLower.includes('rincian')) {
+      if (isDescCol) {
         const taskProg = parseTasklist(newValue);
         if (taskProg.hasTasklist) {
           const autoStatus = taskProg.percentage === 0 ? 'Open' : taskProg.percentage === 100 ? 'Closed' : 'On Progress';
@@ -3321,11 +3489,12 @@ export function NotionDatabaseTable({
     // Clean any legacy checklist lines from parent's Keterangan if present so it remains strictly narrative.
     const currentKet = getRowVal(parentRow, 'Keterangan') || '';
     const cleanKet = currentKet
+      .replace(/<br\s*\/?>/gi, '\n')
       .split('\n')
       .filter(l => !l.trim().match(/^[-*•]\s*\[([ xX])\]/))
       .join('\n')
       .trim();
-    parentRow['Keterangan'] = cleanKet || '-';
+    setRowDescription(parentRow, cleanKet || '-');
 
     const subId = `sub_${parentId}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const formattedTitle = `↳ [ ] ${cleanTitle}`;
@@ -3564,7 +3733,7 @@ export function NotionDatabaseTable({
 
       if (taskProg.hasTasklist && taskProg.items.length > 0) {
         // Strip tasklist lines from parent row's Keterangan, keep non-checklist text
-        row['Keterangan'] = taskProg.cleanText || '-';
+        setRowDescription(row, taskProg.cleanText || '-');
         newRows.push(row);
 
         const parentIndex = newRows.length - 1;
@@ -3649,11 +3818,12 @@ export function NotionDatabaseTable({
     const parentId = parentRow.id || `task_${Date.now()}_${parentIdx}_${Math.random().toString(36).substr(2, 6)}`;
     const updatedParentRow: TableRowData = { ...parentRow, id: parentId };
     const cleanKet = (newKetVal || '')
+      .replace(/<br\s*\/?>/gi, '\n')
       .split('\n')
       .filter(l => !l.trim().match(/^[-*•]\s*\[([ xX])\]/))
       .join('\n')
       .trim();
-    updatedParentRow['Keterangan'] = cleanKet || '-';
+    setRowDescription(updatedParentRow, cleanKet || '-');
     updatedParentRow['Last Modified'] = nowIso;
 
     // Temukan range sub-items lama di bawah parentIdx
@@ -3734,8 +3904,24 @@ export function NotionDatabaseTable({
       setSelectedRow(updatedParentRow);
     }
     onRowsChange?.(nextRows);
-    await saveTableToBackend(nextRows);
+
+    if (subtaskSaveDebounceRef.current) {
+      clearTimeout(subtaskSaveDebounceRef.current);
+    }
+    subtaskSaveDebounceRef.current = setTimeout(async () => {
+      await saveTableToBackend(nextRows);
+    }, 600);
   };
+
+  // Handler to close detail modal and flush any pending subtask saves
+  const handleCloseDetailModal = useCallback(() => {
+    if (subtaskSaveDebounceRef.current) {
+      clearTimeout(subtaskSaveDebounceRef.current);
+      subtaskSaveDebounceRef.current = null;
+      saveTableToBackend(localRowsRef.current);
+    }
+    setSelectedRow(null);
+  }, []);
 
   // Toggle Checklist Sub-Item Completed Status & Sinkronkan Progres Task Utama
   const handleToggleSubItemCompleted = (subRowIndex: number, currentCompleted: boolean) => {
@@ -3849,11 +4035,12 @@ export function NotionDatabaseTable({
         // Clean any legacy checklist lines from parent's Keterangan so it stays strictly narrative.
         const existingKet = getRowVal(parentRow, 'Keterangan') || '';
         const cleanKet = existingKet
+          .replace(/<br\s*\/?>/gi, '\n')
           .split('\n')
           .filter(line => !line.trim().match(/^[-*•]\s*\[([ xX])\]/))
           .join('\n')
           .trim();
-        parentRow['Keterangan'] = cleanKet || '-';
+        setRowDescription(parentRow, cleanKet || '-');
         nextRows[parentIdx] = parentRow;
 
         // Auto-expand completed subtasks drawer so user has instant visual confirmation (no "disappearing shock")
@@ -3994,9 +4181,11 @@ export function NotionDatabaseTable({
     if (wasPinned) {
       cleanedRow.isPinned = 'true';
       (cleanedRow as any)._pinned = 'true';
-      let curKet = cleanedRow['Keterangan'] || '';
+      let curKet = cleanedRow['Keterangan'] || cleanedRow['Description'] || '';
       if (!curKet.includes('<!--pin-->')) {
-        cleanedRow['Keterangan'] = `${curKet} <!--pin-->`.trim();
+        const pinKet = `${curKet} <!--pin-->`.trim();
+        cleanedRow['Keterangan'] = pinKet;
+        if (cleanedRow['Description'] !== undefined) cleanedRow['Description'] = pinKet;
       }
       const pKey = cleanedRow.id ? String(cleanedRow.id) : (cleanedRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
       if (pKey && !pinnedRowKeys.includes(pKey)) {
@@ -6844,7 +7033,7 @@ export function NotionDatabaseTable({
                             )}
 
                             {/* Sembunyikan Kolom (Non-protected) */}
-                            {!isJudul && (
+                            {!isJudul && !cleanHeader.includes('keterangan') && !cleanHeader.includes('description') && !cleanHeader.includes('status') && (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -7012,6 +7201,19 @@ export function NotionDatabaseTable({
                         <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-700/60">
                           <div className="text-[10px] px-1 mb-1.5 font-bold uppercase tracking-wider text-amber-500 flex items-center justify-between">
                             <span>Kolom Tersembunyi ({hiddenColumns.length})</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setHiddenColumns([]);
+                                try {
+                                  localStorage.removeItem(`notion_hidden_cols_${section || 'default'}`);
+                                } catch {}
+                                toast.success('Semua kolom ditampilkan kembali');
+                              }}
+                              className="text-[10px] text-teal-500 hover:text-teal-400 font-semibold cursor-pointer underline hover:no-underline"
+                            >
+                              Tampilkan Semua
+                            </button>
                           </div>
                           <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
                             {hiddenColumns.map(colName => (
@@ -7586,8 +7788,15 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // 3. Keterangan Column (dengan Smart Tasklist & Pewarnaan Teks)
-                                if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) {
+                                // 3. Keterangan / Description Column (dengan Smart Tasklist & Pewarnaan Teks)
+                                if (
+                                  colLower.includes('keterangan') || 
+                                  colLower.includes('description') || 
+                                  colLower.includes('catatan') || 
+                                  colLower.includes('deskripsi') ||
+                                  colLower.includes('content') ||
+                                  colLower.includes('rincian')
+                                ) {
                                   const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
                                   const taskProgress = parseTasklist(val);
 
@@ -8255,13 +8464,19 @@ export function NotionDatabaseTable({
                                 }
 
                                 // Default custom column
+                                const cleanCustomVal = (val || '')
+                                  .replace(/<!--[\s\S]*?-->/g, '')
+                                  .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+                                  .replace(/<!--.*$/g, '')
+                                  .trim();
+
                                 return (
                                   <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap border-r ${
                                     isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                   } ${
                                     fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
                                   }`}>
-                                    {val && val !== '-' ? val : <span className="font-mono text-slate-400">-</span>}
+                                    {cleanCustomVal && cleanCustomVal !== '-' ? cleanCustomVal : <span className="font-mono text-slate-400">-</span>}
                                   </td>
                                 );
                               })}
@@ -9386,7 +9601,7 @@ export function NotionDatabaseTable({
               <div className="relative">
                 <div className="flex items-center justify-between mb-1">
                   <label className="block font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Jenis Kegiatan <span className="text-rose-500">*</span>
+                    Activity Name <span className="text-rose-500">*</span>
                   </label>
                   {(rowFormData['Jenis kegiatan'] || rowFormData['Jenis Kegiatan']) && (
                     <span className="text-[10px] text-teal-400 font-sans">
@@ -9515,7 +9730,7 @@ export function NotionDatabaseTable({
               <div className="relative">
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-bold uppercase tracking-wider text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Keterangan / Catatan Ringkas
+                    Description / Notes
                   </label>
                   <span className="text-[10px] text-slate-400 font-sans">
                     (Opsional - blok teks untuk styling)
@@ -9532,11 +9747,11 @@ export function NotionDatabaseTable({
                   )}
                   <textarea
                     rows={3}
-                    value={rowFormData['Keterangan'] || ''}
+                    value={rowFormData['Keterangan'] || rowFormData['Description'] || ''}
                     onChange={(e) => {
                       const val = e.target.value;
                       const cursor = e.target.selectionStart;
-                      setRowFormData(prev => ({ ...prev, Keterangan: val }));
+                      setRowFormData(prev => ({ ...prev, Keterangan: val, Description: val }));
                       if (cursor !== null) {
                         requestAnimationFrame(() => {
                           e.target.setSelectionRange(cursor, cursor);
@@ -9546,7 +9761,7 @@ export function NotionDatabaseTable({
                     onKeyDown={(e) => {
                       const textarea = e.currentTarget;
                       const { selectionStart, selectionEnd } = textarea;
-                      const val = rowFormData['Keterangan'] || '';
+                      const val = rowFormData['Keterangan'] || rowFormData['Description'] || '';
 
                       if (e.key === 'Enter' && selectionStart === selectionEnd && !e.shiftKey) {
                         const lineStart = val.lastIndexOf('\n', selectionStart - 1) + 1;
@@ -9627,7 +9842,7 @@ export function NotionDatabaseTable({
 
                 {/* Live visual preview if formatting tags or colors exist */}
                 {(() => {
-                  const val = rowFormData['Keterangan'] || '';
+                  const val = rowFormData['Keterangan'] || rowFormData['Description'] || '';
                   const hasFormat = /(\*\*|\*|~~|`|\[color|\[biru|\[merah|\[hijau|\[kuning|\[ungu|\[abu|\[orange|\[pink)/i.test(val);
                   if (!hasFormat) return null;
                   return (
@@ -9800,7 +10015,7 @@ export function NotionDatabaseTable({
                 {/* Tipe Aktivitas */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Tipe Aktivitas
+                    Activity Type
                   </label>
                   <select
                     value={
@@ -9843,7 +10058,7 @@ export function NotionDatabaseTable({
                 {/* Cadence Periode (Pilihan lanjutan daily s/d yearly jika Routine) */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px]" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                    Periode / Cadence
+                    Period / Cadence
                   </label>
                   {((rowFormData['Activity (routine/non routine)'] || '').toLowerCase().includes('non') ||
                     (rowFormData['period'] || '').toLowerCase().includes('non')) ? (
@@ -9909,7 +10124,7 @@ export function NotionDatabaseTable({
                 {/* 7. Due Date (Batas Waktu KPI) */}
                 <div>
                   <label className="block font-bold uppercase tracking-wider mb-1 text-[10px] text-teal-600 dark:text-teal-400">
-                    Due Date (Parameter KPI Wajib)
+                    Due Date (Required KPI)
                   </label>
                   <input
                     type="text"
@@ -9963,7 +10178,7 @@ export function NotionDatabaseTable({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25, ease: "easeInOut" }}
               className="fixed inset-0 bg-black/75 backdrop-blur-sm"
-              onClick={() => setSelectedRow(null)}
+              onClick={() => handleCloseDetailModal()}
             />
 
             {/* Right-to-Left Slide-over Panel (Wide 2-Column Layout) */}
@@ -10091,7 +10306,7 @@ export function NotionDatabaseTable({
                       <span>Hapus</span>
                     </button>
                     <button
-                      onClick={() => setSelectedRow(null)}
+                      onClick={() => handleCloseDetailModal()}
                       className="p-2 rounded-xl border hover:opacity-80 transition-opacity ml-1 cursor-pointer"
                       style={{
                         backgroundColor: 'var(--card-bg, #1e293b)',
@@ -10359,7 +10574,7 @@ export function NotionDatabaseTable({
                             );
 
                         const liveRow = actualIdx !== -1 ? localRows[actualIdx] : selectedRow;
-                        let canonicalKetVal = getRowVal(liveRow, 'Keterangan') || '';
+                        let canonicalKetVal = (getRowVal(liveRow, 'Keterangan') || getRowVal(liveRow, 'Description') || '').replace(/<br\s*\/?>/gi, '\n');
 
                         // Collect child rows from table to ensure 100% synchronization
                         if (actualIdx !== -1) {
