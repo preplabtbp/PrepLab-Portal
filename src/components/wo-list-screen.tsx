@@ -12,11 +12,12 @@ import { PageHeader } from './PageHeader';
 import { 
   getISOWeek, 
   getISOWeekYear, 
-  isDateInISOWeek, 
-  isThisISOWeek, 
-  isLastISOWeek, 
+  isDateInISOWeek,
+  isThisISOWeek,
+  isLastISOWeek,
   getYearISOWeeksList,
-  getYearMonthsList
+  getYearMonthsList,
+  getLastISOWeek
 } from '../utils/iso-week';
 
 export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: string, inspectorNik: string }) {
@@ -292,7 +293,7 @@ export function WOListScreen({ inspectorName, inspectorNik }: { inspectorName: s
               </optgroup>
               <optgroup label="⚡ Minggu ISO">
                 <option value="this_iso_week">⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
-                <option value="last_iso_week">⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+                <option value="last_iso_week">⏮️ Minggu ISO Lalu (W{String(getLastISOWeek(new Date()).week).padStart(2, '0')})</option>
               </optgroup>
               <optgroup label="📋 Daftar Spesifik Minggu ISO">
                 {isoWeeksList.map(iw => (

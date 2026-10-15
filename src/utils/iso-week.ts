@@ -111,14 +111,45 @@ export function getISOWeekFilterOptions(year: number = new Date().getFullYear())
   return options;
 }
 
+/**
+ * Get the last ISO week of the given year (W52 or W53).
+ * Some years have only 52 weeks; others have 53.
+ */
+export function getLastISOWeekOfYear(year: number): number {
+  // Check if W53 exists: if the start of W53 is still in this year and maps to W53
+  const range53 = getISOWeekRange(year, 53);
+  const weekOf53Start = getISOWeek(range53.start);
+  const yearOf53Start = getISOWeekYear(range53.start);
+
+  // If W53's start date reparsed as a different week or year, then W53 doesn't exist
+  if (weekOf53Start !== 53 || yearOf53Start !== year) {
+    return 52;
+  }
+  return 53;
+}
+
+/**
+ * Get the last ISO week relative to a given date (could span into previous year).
+ * Handles the edge case where currentWeek = W1 (previous week = W52/W53 of last year).
+ */
+export function getLastISOWeek(dateInput: Date | string | number): { week: number; year: number } {
+  const d = parseDateSafe(dateInput) || new Date();
+  const lastWeekDate = new Date(d.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return {
+    week: getISOWeek(lastWeekDate),
+    year: getISOWeekYear(lastWeekDate)
+  };
+}
+
 export function getYearISOWeeksList(year: number = new Date().getFullYear()): Array<{ value: string; label: string; week: number; year: number }> {
   const list = [];
   const currentWeek = getISOWeek(new Date());
+  const currentYear = getISOWeekYear(new Date());
+  const maxWeek = getLastISOWeekOfYear(year);
 
-  for (let w = 53; w >= 1; w--) {
+  for (let w = maxWeek; w >= 1; w--) {
     const range = getISOWeekRange(year, w);
-    // Include week if valid
-    const isCurrent = w === currentWeek && year === new Date().getFullYear();
+    const isCurrent = w === currentWeek && year === currentYear;
     list.push({
       value: `iso_${year}_${w}`,
       label: `Minggu ${String(w).padStart(2, '0')} [${range.start.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${range.end.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}]${isCurrent ? ' • (Minggu Ini)' : ''}`,

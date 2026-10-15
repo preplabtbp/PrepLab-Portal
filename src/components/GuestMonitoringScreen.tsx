@@ -9,11 +9,12 @@ import { GuestBarcodeModal } from './GuestBarcodeModal';
 import { Card, Button } from './ui';
 import { getRekapanPemantauan, buatPdfRekapan, cekPdfRekapanPeriode } from '../sheets-api';
 import { ACCEPTABLE_RANGES } from './monitoring-dashboard';
-import { 
-  getISOWeek, 
-  getISOWeekYear, 
-  getISOWeekRange, 
-  getYearISOWeeksList 
+import {
+  getISOWeek,
+  getISOWeekYear,
+  getISOWeekRange,
+  getYearISOWeeksList,
+  getLastISOWeek
 } from '../utils/iso-week';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
@@ -279,12 +280,12 @@ export const GuestMonitoringScreen: React.FC = () => {
       start = '';
       end = '';
     } else if (preset === 'this_iso_week') {
-      const range = getISOWeekRange(now.getFullYear(), getISOWeek(now));
+      const range = getISOWeekRange(getISOWeekYear(now), getISOWeek(now));
       start = formatDateYMD(range.start);
       end = formatDateYMD(range.end);
     } else if (preset === 'last_iso_week') {
-      const lastWeek = Math.max(1, getISOWeek(now) - 1);
-      const range = getISOWeekRange(now.getFullYear(), lastWeek);
+      const lastWeekInfo = getLastISOWeek(now);
+      const range = getISOWeekRange(lastWeekInfo.year, lastWeekInfo.week);
       start = formatDateYMD(range.start);
       end = formatDateYMD(range.end);
     } else if (preset === 'this_month') {
@@ -674,8 +675,8 @@ export const GuestMonitoringScreen: React.FC = () => {
       return `Minggu ISO Ini (W${String(currW).padStart(2, '0')})`;
     }
     if (selectedPreset === 'last_iso_week') {
-      const lastW = Math.max(1, getISOWeek(new Date()) - 1);
-      return `Minggu ISO Lalu (W${String(lastW).padStart(2, '0')})`;
+      const lastWeekInfo = getLastISOWeek(new Date());
+      return `Minggu ISO Lalu (W${String(lastWeekInfo.week).padStart(2, '0')})`;
     }
     if (selectedPreset === 'this_month') {
       return `Bulan Ini (${MONTH_NAMES[new Date().getMonth()]} ${new Date().getFullYear()})`;
@@ -865,7 +866,7 @@ export const GuestMonitoringScreen: React.FC = () => {
               >
                 <optgroup label="⚡ Filter Cepat Minggu ISO">
                   <option value="this_iso_week">⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
-                  <option value="last_iso_week">⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+                  <option value="last_iso_week">⏮️ Minggu ISO Lalu (W{String(getLastISOWeek(new Date()).week).padStart(2, '0')})</option>
                 </optgroup>
 
                 <optgroup label="📅 Filter Cepat Bulanan">
