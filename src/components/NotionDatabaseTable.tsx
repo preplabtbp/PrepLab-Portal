@@ -513,12 +513,13 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if ((targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'activity name' || targetLower === 'activity' || targetLower === 'nama kegiatan' || targetLower === 'task') && 
-        (keyLower.includes('jenis kegiatan') || keyLower.includes('activity name') || keyLower === 'activity' || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
+    if ((targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'activity name' || targetLower === 'nama kegiatan' || targetLower === 'task') && 
+        !keyLower.includes('routine') && !keyLower.includes('rutin') &&
+        (keyLower.includes('jenis kegiatan') || keyLower.includes('activity name') || keyLower === 'task' || keyLower === 'judul' || keyLower === 'name' || keyLower === 'nama' || keyLower === 'kegiatan')) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if (targetLower === 'keterangan' && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('content') || keyLower.includes('rincian'))) {
+    if ((targetLower === 'description' || targetLower === 'keterangan') && (keyLower.includes('keterangan') || keyLower.includes('catatan') || keyLower.includes('deskripsi') || keyLower.includes('description') || keyLower.includes('content') || keyLower.includes('rincian'))) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -542,7 +543,7 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if ((targetLower === 'tanggal selesai' || targetLower === 'completed time') && (keyLower.includes('completed') || keyLower.includes('aktual selesai') || keyLower === 'selesai' || keyLower.includes('waktu selesai') || keyLower.includes('tanggal selesai'))) {
+    if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && (keyLower.includes('completed') || keyLower.includes('completion') || keyLower.includes('aktual selesai') || keyLower === 'selesai' || keyLower.includes('waktu selesai') || keyLower.includes('tanggal selesai'))) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -550,7 +551,7 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
-    if (targetLower === 'activity (routine/non routine)' && (keyLower.includes('activity') || keyLower.includes('aktivitas'))) {
+    if ((targetLower === 'activity (routine/non routine)' || targetLower === 'activity type' || targetLower === 'aktivitas') && !keyLower.includes('name') && !keyLower.includes('judul') && (keyLower.includes('activity') || keyLower.includes('aktivitas') || keyLower.includes('routine') || keyLower.includes('rutin'))) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
@@ -1553,15 +1554,15 @@ export function NotionDatabaseTable({
   const getColOrder = (colName: string): number => {
     const l = colName.toLowerCase().trim();
     if (l === 'number' || l === 'no' || l === 'no.' || l === '#') return 0;
-    if (l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
-    if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('rincian') || l.includes('notes')) return 2;
+    if (l.includes('activity name') || l.includes('jenis kegiatan') || l === 'task' || l === 'judul' || l === 'name' || l === 'nama') return 1;
+    if (l.includes('keterangan') || l.includes('catatan') || l.includes('deskripsi') || l.includes('description') || l.includes('rincian') || l.includes('notes')) return 2;
     if (l.includes('created') || l.includes('tanggal dibuat') || l.includes('waktu dibuat')) return 3;
-    if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
+    if (l.includes('completion') || l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai')) return 4;
     if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) return 5;
     if (l.includes('status')) return 6;
     if (l === 'pic' || l.includes('assignee') || l.includes('pj') || l === 'personil') return 7;
     if (l.includes('priority') || l.includes('prioritas')) return 8;
-    if (l.includes('activity') || l.includes('aktivitas')) return 9;
+    if (!l.includes('name') && (l.includes('activity') || l.includes('aktivitas'))) return 9;
     if (l.includes('period') || l.includes('periode')) return 10;
     if (l.includes('group') || l.includes('kategori') || l.includes('category') || l.includes('dept')) return 11;
     return 20; // other custom columns
@@ -1569,27 +1570,37 @@ export function NotionDatabaseTable({
 
   // Helper to normalize headers while preserving user-defined column order
   const normalizeAndOrderHeaders = useCallback((inputHeaders: string[]): string[] => {
-    // 1. Remove redundant 'Progress' / 'progres' column and standardize aliases
+    // 1. Remove redundant 'Progress' / 'progres' column and standardize aliases to English
     const filtered = (inputHeaders || []).filter(h => {
       const l = h.toLowerCase().trim();
       if (l.includes('progress') || l.includes('progres') || l.includes('capaian')) return false;
       return true;
     }).map(h => {
       const l = h.toLowerCase().trim();
-      if (l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai')) {
-        return 'Tanggal Selesai';
+      const clean = l.replace(/^[^a-z0-9]+/i, '').trim();
+      if (clean.includes('completed') || clean.includes('completion') || clean.includes('aktual selesai') || clean === 'selesai' || clean.includes('waktu selesai') || clean.includes('tanggal selesai')) {
+        return 'Completion Date';
       }
-      if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) {
+      if (clean.includes('due') || clean.includes('deadline') || clean.includes('target') || clean.includes('jatuh tempo') || clean.includes('batas waktu')) {
         return 'Due Date';
+      }
+      if (clean.includes('jenis kegiatan') || clean.includes('activity name')) {
+        return 'Activity Name';
+      }
+      if (clean.includes('keterangan') || clean.includes('catatan') || clean.includes('deskripsi') || clean.includes('description')) {
+        return 'Description';
       }
       return h;
     });
 
-    // Deduplicate headers
+    // Deduplicate headers by semantic clean name
     const uniqueFiltered: string[] = [];
     filtered.forEach(h => {
-      const hl = h.toLowerCase().trim();
-      if (!uniqueFiltered.some(u => u.toLowerCase().trim() === hl)) {
+      const cleanH = h.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
+      if (!uniqueFiltered.some(u => {
+        const cleanU = u.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
+        return cleanU === cleanH;
+      })) {
         uniqueFiltered.push(h);
       }
     });
@@ -1597,15 +1608,15 @@ export function NotionDatabaseTable({
     if (uniqueFiltered.length === 0) {
       return [
         'Number',
-        'Jenis kegiatan',
-        'Keterangan',
+        'Activity Name',
+        'Description',
         'Created Time',
-        'Tanggal Selesai',
+        'Completion Date',
         'Due Date',
         'Status',
         'PIC',
         'Priority',
-        'Aktivitas'
+        'Period'
       ];
     }
 
@@ -1641,10 +1652,10 @@ export function NotionDatabaseTable({
       }
     }
 
-    // Ensure 'Tanggal Selesai' exists
+    // Ensure 'Completion Date' exists
     const hasCompleted = headersWithCreated.some(h => {
       const l = h.toLowerCase().trim();
-      return l.includes('completed') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai');
+      return l.includes('completed') || l.includes('completion') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai');
     });
 
     let headersWithCompleted = headersWithCreated;
@@ -1653,11 +1664,11 @@ export function NotionDatabaseTable({
       if (createdIdx !== -1) {
         headersWithCompleted = [
           ...headersWithCreated.slice(0, createdIdx + 1),
-          'Tanggal Selesai',
+          'Completion Date',
           ...headersWithCreated.slice(createdIdx + 1)
         ];
       } else {
-        headersWithCompleted = [...headersWithCreated, 'Tanggal Selesai'];
+        headersWithCompleted = [...headersWithCreated, 'Completion Date'];
       }
     }
 
@@ -1671,7 +1682,7 @@ export function NotionDatabaseTable({
     if (!hasDueDate) {
       const compIdx = headersWithCompleted.findIndex(h => {
         const l = h.toLowerCase().trim();
-        return l.includes('selesai') || l.includes('completed');
+        return l.includes('selesai') || l.includes('completed') || l.includes('completion');
       });
       if (compIdx !== -1) {
         finalHeaders = [
@@ -1805,13 +1816,33 @@ export function NotionDatabaseTable({
   // Ensure Progress, redundant Kategori, and hiddenColumns are never rendered in displayHeaders
   // (Due Date is mandatory and always visible for KPI SLA tracking)
   const displayHeaders = useMemo(() => {
-    return tableHeaders.filter(h => {
+    const raw = tableHeaders.filter(h => {
       const l = h.toLowerCase().trim();
       if (hiddenColumns.some(hc => hc.toLowerCase().trim() === l)) return false;
       if (l.includes('due') || l.includes('deadline') || l.includes('target') || l.includes('jatuh tempo') || l.includes('batas waktu')) return true;
       return !l.includes('progress') && !l.includes('progres') && !l.includes('capaian') &&
              !l.includes('kategori') && !l.includes('category');
     });
+
+    // Deduplicate semantically to prevent duplicate Completion Date / Tanggal Selesai or Activity Name
+    const seen = new Set<string>();
+    const deduplicated: string[] = [];
+    for (const h of raw) {
+      const clean = h.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
+      let semanticKey = clean;
+      if (clean.includes('tanggal selesai') || clean.includes('completed') || clean.includes('completion') || clean === 'selesai' || clean.includes('waktu selesai')) {
+        semanticKey = 'completion date';
+      } else if (clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name' || clean === 'title' || clean === 'nama' || clean === 'materi') {
+        semanticKey = 'activity name';
+      } else if (clean.includes('keterangan') || clean.includes('catatan') || clean.includes('deskripsi') || clean.includes('description')) {
+        semanticKey = 'description';
+      }
+      if (!seen.has(semanticKey)) {
+        seen.add(semanticKey);
+        deduplicated.push(h);
+      }
+    }
+    return deduplicated;
   }, [tableHeaders, hiddenColumns]);
 
   // Floating Synchronized Horizontal Scrollbar (Tetap di bawah viewport, transparan saat idle, muncul saat disentuh kursor)
@@ -2157,7 +2188,7 @@ export function NotionDatabaseTable({
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if (targetLower === 'keterangan' && (cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
+      if ((targetLower === 'description' || targetLower === 'keterangan') && (cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('description') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -2182,8 +2213,8 @@ export function NotionDatabaseTable({
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
-      if ((targetLower === 'tanggal selesai' || targetLower === 'completed time') && 
-          (cleanKey.includes('completed') || cleanKey.includes('aktual selesai') || cleanKey === 'selesai' || cleanKey.includes('waktu selesai') || cleanKey.includes('tanggal selesai'))) {
+      if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && 
+          (cleanKey.includes('completed') || cleanKey.includes('completion') || cleanKey.includes('aktual selesai') || cleanKey === 'selesai' || cleanKey.includes('waktu selesai') || cleanKey.includes('tanggal selesai'))) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -5237,10 +5268,10 @@ export function NotionDatabaseTable({
   const getNotionColumnIcon = (colHeader: string) => {
     const colLower = colHeader.toLowerCase();
     if (colLower === 'number' || colLower === 'no' || colLower === '#') return <span className="font-mono text-slate-400 font-bold mr-1">#</span>;
-    if (colLower.includes('jenis kegiatan') || colLower === 'task' || colLower === 'judul') return <span className="text-slate-400 mr-1 text-xs">≡</span>;
-    if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('jenis kegiatan') || colLower.includes('activity name') || colLower === 'task' || colLower === 'judul' || colLower === 'name') return <span className="text-slate-400 mr-1 text-xs">≡</span>;
+    if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi') || colLower.includes('description')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     if (colLower.includes('created') || colLower.includes('tanggal dibuat') || colLower.includes('waktu dibuat')) return <span className="text-slate-400 mr-1 text-xs">📅</span>;
-    if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')) return <span className="text-emerald-500 mr-1 text-xs">✓</span>;
+    if (colLower.includes('completed') || colLower.includes('completion') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai') || colLower.includes('tanggal selesai')) return <span className="text-emerald-500 mr-1 text-xs">✓</span>;
     if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) return <span className="text-amber-500 mr-1 text-xs">🎯</span>;
     if (colLower.includes('status')) return <span className="text-slate-400 mr-1 text-xs">⭕</span>;
     if (colLower.includes('pic') || colLower.includes('assignee')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
@@ -6696,7 +6727,7 @@ export function NotionDatabaseTable({
                   const isSorted = sortColumn === colHeader;
                   const isNum = colHeader.toLowerCase() === 'number' || colHeader.toLowerCase() === 'no';
                   const cleanHeader = colHeader.toLowerCase().replace(/^[^a-z0-9]+/i, '').trim();
-                  const isJudul = cleanHeader.includes('jenis kegiatan') || cleanHeader === 'task' || cleanHeader === 'judul' || cleanHeader === 'name' || cleanHeader === 'title' || cleanHeader === 'nama' || cleanHeader === 'materi';
+                  const isJudul = cleanHeader.includes('activity name') || cleanHeader.includes('jenis kegiatan') || cleanHeader === 'task' || cleanHeader === 'judul' || cleanHeader === 'name' || cleanHeader === 'title' || cleanHeader === 'nama' || cleanHeader === 'materi';
                   const colLower = colHeader.toLowerCase();
                   const colIdx = displayHeaders.indexOf(colHeader);
 
@@ -6705,19 +6736,19 @@ export function NotionDatabaseTable({
                   if (fitPageMode) {
                     if (isNum) widthClass = 'w-[5%] text-center px-1 py-2.5';
                     else if (isJudul) widthClass = 'w-[25%] px-2.5 py-2.5';
-                    else if (colLower.includes('keterangan') || colLower.includes('catatan')) widthClass = 'w-[22%] px-2.5 py-2.5';
+                    else if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('description') || colLower.includes('deskripsi')) widthClass = 'w-[22%] px-2.5 py-2.5';
                     else if (colLower.includes('created')) widthClass = 'w-[9%] px-1.5 py-2.5';
-                    else if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('tanggal selesai')) widthClass = 'w-[9%] px-1.5 py-2.5';
+                    else if (colLower.includes('completed') || colLower.includes('completion') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('tanggal selesai') || colLower.includes('waktu selesai')) widthClass = 'w-[9%] px-1.5 py-2.5';
                     else if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) widthClass = 'w-[10%] px-1.5 py-2.5';
                     else if (colLower.includes('status')) widthClass = 'w-[9%] px-1.5 py-2.5';
                     else if (colLower === 'pic' || colLower.includes('assignee')) widthClass = 'w-[11%] px-1.5 py-2.5';
                     else if (colLower.includes('priority') || colLower.includes('prioritas')) widthClass = 'w-[6%] px-1.5 py-2.5';
-                    else if (colLower.includes('activity') || colLower.includes('aktivitas')) widthClass = 'w-[7%] px-1.5 py-2.5';
+                    else if (!colLower.includes('name') && (colLower.includes('activity') || colLower.includes('aktivitas'))) widthClass = 'w-[7%] px-1.5 py-2.5';
                     else widthClass = 'w-[6%] px-1.5 py-2.5';
                   } else {
                     if (isNum) widthClass = 'w-16 text-center px-3.5 py-3 whitespace-nowrap';
                     else if (isJudul) widthClass = 'min-w-[260px] px-3.5 py-3 whitespace-nowrap';
-                    else if (colLower.includes('keterangan')) widthClass = 'w-[360px] min-w-[280px] max-w-[450px] px-3.5 py-3 overflow-hidden';
+                    else if (colLower.includes('keterangan') || colLower.includes('description') || colLower.includes('deskripsi')) widthClass = 'w-[360px] min-w-[280px] max-w-[450px] px-3.5 py-3 overflow-hidden';
                     else if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) widthClass = 'min-w-[145px] px-3.5 py-3 whitespace-nowrap';
                     else widthClass = 'px-3.5 py-3 whitespace-nowrap';
                   }
@@ -6738,11 +6769,21 @@ export function NotionDatabaseTable({
                         >
                           {getNotionColumnIcon(colHeader)}
                           <span className={`truncate font-semibold ${isNotionLight ? 'text-[#37352f]' : 'text-slate-300'}`}>
-                            {colLower.includes('tanggal selesai') || colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai')
-                              ? 'Tanggal Selesai'
-                              : (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu'))
-                              ? 'Due Date'
-                              : colHeader}
+                            {(() => {
+                              const clean = colLower.replace(/^[^a-z0-9]+/i, '').trim();
+                              if (clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name') return 'Activity Name';
+                              if (clean.includes('keterangan') || clean.includes('deskripsi') || clean.includes('description') || clean.includes('catatan')) return 'Description';
+                              if (clean.includes('tanggal selesai') || clean.includes('completed') || clean.includes('completion') || clean === 'selesai' || clean.includes('waktu selesai')) return 'Completion Date';
+                              if (clean.includes('due') || clean.includes('deadline') || clean.includes('target') || clean.includes('jatuh tempo') || clean.includes('batas waktu')) return 'Due Date';
+                              if (clean === 'number' || clean === 'no') return 'Number';
+                              if (clean.includes('created')) return 'Created Time';
+                              if (clean.includes('status')) return 'Status';
+                              if (clean === 'pic' || clean.includes('assignee')) return 'PIC';
+                              if (clean.includes('priority') || clean.includes('prioritas')) return 'Priority';
+                              if (clean.includes('period') || clean.includes('periode')) return 'Period';
+                              if (!clean.includes('name') && (clean.includes('activity') || clean.includes('aktivitas'))) return 'Activity Type';
+                              return colHeader.replace(/^=\s*/, '');
+                            })()}
                           </span>
                           {isSorted && (
                             sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" /> : <ArrowDown className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
@@ -7002,7 +7043,7 @@ export function NotionDatabaseTable({
                     isNotionLight ? 'bg-[#fbfbfa] text-slate-700 font-semibold border-[#e9e9e8]' : 'bg-[#202020] text-slate-300 font-bold border-[#303030]'
                   }`}
                 >
-                  Aksi
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -7389,8 +7430,8 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // 2. Jenis kegiatan Column (Judul / Name / Materi)
-                                if (cleanCol.includes('jenis kegiatan') || cleanCol === 'task' || cleanCol === 'judul' || cleanCol === 'name' || cleanCol === 'title' || cleanCol === 'nama' || cleanCol === 'materi') {
+                                // 2. Jenis kegiatan Column (Judul / Name / Materi / Activity Name)
+                                if (cleanCol.includes('activity name') || cleanCol.includes('jenis kegiatan') || cleanCol === 'task' || cleanCol === 'judul' || cleanCol === 'name' || cleanCol === 'title' || cleanCol === 'nama' || cleanCol === 'materi') {
                                   const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
 
                                   return (
@@ -8095,8 +8136,8 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // 10. Activity Column (Interactive Dropdown)
-                                if (colLower.includes('activity') || colLower.includes('aktivitas')) {
+                                // 10. Activity Column (Interactive Dropdown for Routine / Non-Routine)
+                                if (!cleanCol.includes('activity name') && !colLower.includes('name') && !cleanCol.includes('judul') && (colLower.includes('activity') || colLower.includes('aktivitas'))) {
                                   if (isSubItem) {
                                     return (
                                       <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${

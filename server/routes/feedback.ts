@@ -1,10 +1,23 @@
 import { Router } from "express";
-import { db } from "../../src/db/index.js";
+import { db, pool } from "../../src/db/index.js";
 import { appFeedbacks, developerUsers, notifications } from "../../src/db/schema.js";
 import { eq, desc, and } from "drizzle-orm";
 import { sendWebPush } from "../utils.js";
 
 export const router = Router();
+
+// Ensure developer_attachment_url exists in database table
+export const ensureFeedbackAttachmentColumn = async () => {
+  try {
+    await pool.query(`
+      ALTER TABLE app_feedbacks 
+      ADD COLUMN IF NOT EXISTS developer_attachment_url TEXT;
+    `);
+  } catch (err: any) {
+    console.warn("[Feedback] Could not alter app_feedbacks for developer_attachment_url:", err?.message || err);
+  }
+};
+ensureFeedbackAttachmentColumn().catch(() => {});
 
 // GET /api/feedbacks
 // Query params: ?authorNik=... or ?all=true
@@ -133,7 +146,7 @@ router.post("/api/feedbacks", async (req, res) => {
 router.put("/api/feedbacks/:id/status", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { status, developerNotes } = req.body;
+    const { status, developerNotes, developerAttachmentUrl } = req.body;
 
     if (isNaN(id)) {
       return res.status(400).json({ status: "error", message: "ID tidak valid" });
@@ -142,6 +155,7 @@ router.put("/api/feedbacks/:id/status", async (req, res) => {
     const updates: any = {};
     if (status) updates.status = status;
     if (developerNotes !== undefined) updates.developerNotes = developerNotes;
+    if (developerAttachmentUrl !== undefined) updates.developerAttachmentUrl = developerAttachmentUrl;
     if (status === 'RESOLVED') {
       updates.resolvedAt = new Date();
     }
@@ -166,7 +180,7 @@ router.put("/api/feedbacks/:id/status", async (req, res) => {
           category: 'feedback',
           type: 'info',
           title: `Tanggapan Developer: "${item.title.slice(0, 35)}"`,
-          message: `Status: ${statusLabel}${developerNotes ? `\nCatatan: "${developerNotes}"` : ''}`,
+          message: `Status: ${statusLabel}${developerNotes ? `\nCatatan: "${developerNotes}"` : ''}${developerAttachmentUrl ? '\n(📸 Terdapat lampiran bukti perbaikan)' : ''}`,
           link: '/feedback-support',
           isRead: false
         }).returning();
