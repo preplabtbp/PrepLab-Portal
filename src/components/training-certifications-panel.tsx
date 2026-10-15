@@ -176,7 +176,7 @@ export function TrainingCertificationsPanel() {
           <Download className="w-4 h-4 text-slate-500" /> Export Excel
         </button>
         {canManage && (
-          <button type="button" onClick={() => setForm(emptyForm(typeFilter === 'all' ? 'ahli_k3_kimia' : typeFilter))} className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-lg bg-emerald-700 text-white text-xs font-semibold shadow-sm hover:bg-emerald-800 cursor-pointer">
+          <button type="button" onClick={() => setForm(emptyForm(typeFilter === 'all' ? 'ahli_k3_kimia' : typeFilter))} className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-lg bg-[#23a1af] text-white text-xs font-bold shadow-sm hover:bg-[#1b808c] cursor-pointer transition-all">
             <Plus className="w-4 h-4" /> Tambah Peserta
           </button>
         )}

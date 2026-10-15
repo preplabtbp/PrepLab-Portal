@@ -28,6 +28,7 @@ import {
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import { TrainingCertificationsPanel } from './training-certifications-panel';
+import { CERT_TYPES, CERT_META, type CertType, type TrainingCertification } from '../utils/training-certifications';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Chart as ChartJS,
@@ -80,22 +81,26 @@ declare module 'chart.js' {
   }
 }
 
-// Palet dashboard (teal gelap sebagai warna utama, kuning & coral sebagai aksen)
+// Palet dashboard mengikuti foto Manpower (Teal & Golden Amber)
 const DASH = {
-  bg: '#eef1f0',
-  brand: '#0f5b52',
-  brandSoft: '#e3f0ed',
-  yellow: '#f5c451',
-  coral: '#f08a6c',
-  mint: '#4fd1c1',
+  bg: '#f1f8f9',           // light icy teal background
+  brand: '#23a1af',        // signature Teal from photo
+  brandDark: '#1b808c',    // deeper teal
+  brandSoft: '#e0f4f7',    // soft teal tint
+  yellow: '#f0a202',       // signature golden amber from manpower / pie chart
+  yellowDark: '#d97706',   // dark amber
+  yellowSoft: '#fef3c7',   // soft amber tint
+  coral: '#ea580c',        // attention orange
+  blue: '#5b9bd5',         // soft blue from %izin slice
+  mint: '#2dd4bf',
   ink: '#0f172a',
 };
 
-// Warna status: WARNING kuning, EXPIRED merah, Belum merah muda, Tidak Wajib abu-abu
-const CHART_WARNING = '#facc15';
+// Warna status: WARNING kuning-emas, EXPIRED merah, Belum abu-abu, Tidak Wajib abu-abu
+const CHART_WARNING = '#f0a202';
 const CHART_EXPIRED = '#dc2626';
-const CHART_BELUM = '#fda4af';
-const LIGHT_CHART_COLORS = new Set([CHART_WARNING, CHART_BELUM, '#cbd5e1', '#60a5fa']);
+const CHART_BELUM = '#cbd5e1';
+const LIGHT_CHART_COLORS = new Set([CHART_WARNING, CHART_BELUM, '#cbd5e1', '#60a5fa', '#fef08a']);
 const STATUS_BADGE: Record<string, string> = {
   PASS: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   WARNING: 'bg-yellow-100 text-yellow-800 border-yellow-300',
@@ -333,13 +338,13 @@ const POP_STAGES = [
   { key: 'pom', label: 'POM', desc: 'Pengawas Operasional Madya', attended: (p?: PopData | null) => popPassedPom(p) },
 ] as const;
 const POP_KETERANGAN_STYLE: Record<PopKeterangan, string> = {
-  PASS: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  MASA_KERJA: 'bg-amber-50 text-amber-800 border-amber-200',
+  PASS: 'bg-[#e0f4f7] text-[#0e7490] border-[#a5f3fc]',
+  MASA_KERJA: 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d]',
   IJAZAH: 'bg-rose-50 text-rose-700 border-rose-200',
   TIDAK_WAJIB: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 const POP_KETERANGAN_COLOR: Record<PopKeterangan, string> = {
-  PASS: '#10b981', MASA_KERJA: '#f59e0b', IJAZAH: '#f43f5e', TIDAK_WAJIB: '#94a3b8',
+  PASS: '#23a1af', MASA_KERJA: '#f0a202', IJAZAH: '#f43f5e', TIDAK_WAJIB: '#94a3b8',
 };
 const popMasaKerja = (p?: PopData | null) => (p?.doh ? masaKerjaFromDoh(p.doh, TODAY) : p?.masaKerja || null);
 
@@ -995,13 +1000,40 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     staleTime: 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
+
+  // Sertifikasi K3 & Kompetensi (Training External) — digabungkan langsung ke tabel POP/POM
+  const { data: certPayload } = useQuery({
+    queryKey: ['training-certifications'],
+    queryFn: async (): Promise<{ data: TrainingCertification[]; access: { viewAll: boolean; canManage: boolean } }> => {
+      const res = await fetch('/api/training-certifications');
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memuat data sertifikasi');
+      return json;
+    },
+    staleTime: 60 * 1000,
+  });
+  const certRows: TrainingCertification[] = certPayload?.data ?? [];
+
   const allRecords = payload?.records ?? EMPTY_RECORDS;
-  // Hanya karyawan yang terdaftar di program modul ini (Internal: SAP/K3 · External: POP/POM)
-  const records = useMemo(() => allRecords.filter(r => inScope(r, scope)), [allRecords, scope]);
+  // External: gabungkan karyawan inPop + karyawan yang memiliki Sertifikasi K3 & Kompetensi
+  const records = useMemo(() => {
+    if (scope !== 'external') {
+      return allRecords.filter(r => inScope(r, scope));
+    }
+    const certNiks = new Set(certRows.map(c => (c.nik || '').trim().toUpperCase()).filter(Boolean));
+    const certNames = new Set(certRows.map(c => (c.nama || '').toLowerCase().replace(/[^a-z]/g, '')).filter(Boolean));
+    return allRecords.filter(r => {
+      if (r.inPop) return true;
+      if (r.nik && certNiks.has(r.nik.trim().toUpperCase())) return true;
+      if (r.nama && certNames.has(r.nama.toLowerCase().replace(/[^a-z]/g, ''))) return true;
+      return false;
+    });
+  }, [allRecords, scope, certRows]);
+
   const access: TrainingAccess = payload?.access ?? { viewAll: false, canManage: false, nik: '' };
   const scopePrograms = SCOPE_PROGRAMS[scope];
   const isExternal = scope === 'external';
-  // Training External: tab Sertifikasi POP/POM (data training_records) | Sertifikasi K3 & Kompetensi (training_certifications)
+  // Training External: default ke 'pop' (tabel terpadu gabungan)
   const [externalTab, setExternalTab] = useState<'pop' | 'cert'>('pop');
 
   const [program, setProgram] = useState<TrainingProgram>(() => {
@@ -1415,10 +1447,80 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   }, [filteredRecords]);
 
   // SAP/K3: No, NIK, Nama, GOL, Shift, Status (+ Bagian & PT di K3) + kolom training + Aksi
-  // POP   : No, NIK, Nama, PT, Masa Kerja, Pra POP, POP, Kualifikasi, Keterangan POP, POM + Aksi
+  // POP   : No, NIK, Nama, PT, Masa Kerja, Pra POP, POP, Kualifikasi, Keterangan POP, POM + Sertifikasi K3 & Kompetensi + Aksi
   const tableColSpan = program === 'pop'
-    ? 10 + (canManage ? 1 : 0)
+    ? 11 + (canManage ? 1 : 0)
     : 6 + (program === 'k3' ? 2 : 0) + (program === 'sap' ? SAP_TRAININGS.length : K3_TRAININGS.length) + (canManage ? 1 : 0);
+
+  // Pemetaan Sertifikasi K3 & Kompetensi per orang
+  const certsByPerson = useMemo(() => {
+    const byNik = new Map<string, TrainingCertification[]>();
+    const byName = new Map<string, TrainingCertification[]>();
+    certRows.forEach(c => {
+      if (c.nik) {
+        const k = c.nik.trim().toUpperCase();
+        if (!byNik.has(k)) byNik.set(k, []);
+        byNik.get(k)!.push(c);
+      }
+      if (c.nama) {
+        const k = c.nama.toLowerCase().replace(/[^a-z]/g, '');
+        if (!byName.has(k)) byName.set(k, []);
+        byName.get(k)!.push(c);
+      }
+    });
+    return { byNik, byName };
+  }, [certRows]);
+
+  const getPersonCerts = useCallback((r: TrainingRecord): TrainingCertification[] => {
+    const kNik = (r.nik || '').trim().toUpperCase();
+    if (kNik && certsByPerson.byNik.has(kNik)) return certsByPerson.byNik.get(kNik)!;
+    const kName = (r.nama || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (kName && certsByPerson.byName.has(kName)) return certsByPerson.byName.get(kName)!;
+    return [];
+  }, [certsByPerson]);
+
+  const renderK3KompetensiBadges = (r: TrainingRecord) => {
+    const certs = getPersonCerts(r);
+    if (!certs || certs.length === 0) {
+      return <span className="text-[11px] font-semibold text-slate-400">-</span>;
+    }
+    return (
+      <div className="flex flex-wrap items-center justify-center gap-1 max-w-[240px] mx-auto">
+        {certs.map(c => {
+          let badgeColor = 'bg-slate-100 text-slate-800 border-slate-300';
+          let shortLabel: string = c.certType;
+          if (c.certType === 'iso_17025') {
+            badgeColor = 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d] font-bold';
+            shortLabel = 'ISO 17025';
+          } else if (c.certType === 'ahli_k3_kimia') {
+            badgeColor = 'bg-[#e0f4f7] text-[#0e7490] border-[#a5f3fc] font-bold';
+            shortLabel = 'Ahli K3 Kimia';
+          } else if (c.certType === 'petugas_k3_kimia') {
+            badgeColor = 'bg-[#e0f4f7] text-[#0891b2] border-[#a5f3fc] font-bold';
+            shortLabel = 'Petugas K3 Kimia';
+          } else if (c.certType === 'proteksi_radiasi') {
+            badgeColor = 'bg-[#e0f2fe] text-[#0284c7] border-[#bae6fd] font-bold';
+            shortLabel = 'PPR Radiasi';
+          } else if (c.certType === 'teknisi_k3_listrik') {
+            badgeColor = 'bg-[#ecfdf5] text-[#059669] border-[#a7f3d0] font-bold';
+            shortLabel = 'K3 Listrik';
+          } else if (c.certType === 'juru_las_3') {
+            badgeColor = 'bg-[#f7fee7] text-[#65a30d] border-[#d9f99d] font-bold';
+            shortLabel = 'Juru Las III';
+          }
+          return (
+            <span
+              key={`${c.id}-${c.certType}`}
+              title={`${CERT_META[c.certType]?.title || c.certType}${c.tanggal ? ` · Tgl: ${c.tanggal}` : ''}${c.expired ? ` · Exp: ${c.expired}` : ''}${c.keterangan ? ` (${c.keterangan})` : ''}`}
+              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] border tracking-tight shadow-2xs whitespace-nowrap ${badgeColor}`}
+            >
+              {shortLabel}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
 
   const activeFilterCount = [golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter].filter(f => f !== 'ALL').length;
   // Hasil pencarian Overview: seluruh karyawan (lintas program) + pencapaian training masing-masing
@@ -1647,14 +1749,17 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     } else {
       header = ['NO', 'NIK', 'NAMA KARYAWAN', 'SECTION', 'JABATAN', 'PT', 'DOH', 'MASA KERJA',
         'TGL PRA POP', 'INSTRUKTUR', 'PRE TEST', 'POST TEST', 'HASIL PRA POP', 'BATCH POP',
-        'PENDIDIKAN TERAKHIR', 'TAHUN LULUS', 'PENGALAMAN TAMBANG', 'KETERANGAN POP', 'POM', 'KETERANGAN POM'];
+        'PENDIDIKAN TERAKHIR', 'TAHUN LULUS', 'PENGALAMAN TAMBANG', 'KETERANGAN POP', 'POM', 'KETERANGAN POM',
+        'SERTIFIKASI K3 & KOMPETENSI'];
       rows = ordered.map(({ r, jabatan }, i) => {
         const p = r.popData || {};
         const ket = p.popKeterangan ? (POP_KETERANGAN[p.popKeterangan as PopKeterangan]?.label ?? p.popKeterangan) : '';
+        const certList = getPersonCerts(r).map(c => CERT_META[c.certType]?.title || c.certType).join('; ');
         return [
           i + 1, r.nik, r.nama, r.bagian || '', jabatan, r.pt || '', p.doh || '', popMasaKerja(p) || '',
           p.praPop || '', p.praPopIns || '', p.praPopPre ?? '', p.praPopPost ?? '', p.praPopResult || '', p.popBatch || '',
           p.pendidikan || '', p.tahunLulus || '', p.pengalamanTambang || '', ket, p.pom || '', p.pomKeterangan || '',
+          certList || '-',
         ];
       });
     }
@@ -1839,23 +1944,26 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   return (
     <div className="min-h-screen pb-16 transition-colors duration-200" style={{ backgroundColor: DASH.bg }}>
       <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-3 sm:space-y-4">
-        {/* ===== Top bar ===== */}
-        <div className="rounded-[26px] bg-white dark:bg-slate-900 px-3 sm:px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        {/* ===== Top bar: garis aksen Teal atas & badge Manpower seperti foto referensi ===== */}
+        <div className="rounded-[26px] bg-white dark:bg-slate-900 px-3 sm:px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-[0_1px_3px_rgba(35,161,175,0.08)] border-t-[5px]" style={{ borderTopColor: DASH.brand }}>
           <div className="flex items-center gap-3 min-w-0">
             {onBack && (
               <button type="button" onClick={onBack} className="p-2 rounded-full border border-slate-200 hover:bg-slate-50 cursor-pointer active:scale-95" title="Kembali">
                 <ArrowLeft className="w-4 h-4 text-slate-700" />
               </button>
             )}
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0" style={{ backgroundColor: DASH.brand }}>
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold shrink-0 shadow-sm" style={{ backgroundColor: DASH.brand }}>
               <GraduationCap className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">{SCOPE_META[scope].title}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider text-white shadow-xs" style={{ backgroundColor: DASH.yellow }}>
+                  {isExternal ? 'Kompetensi & POP' : 'Training Internal'}
+                </span>
+                <h1 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">{SCOPE_META[scope].title}</h1>
                 {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" aria-label="Memperbarui data" />}
               </div>
-              <p className="text-[11px] sm:text-xs font-medium text-slate-500 truncate">Halo, {inspectorName || 'Admin'} · {SCOPE_META[scope].sub}</p>
+              <p className="text-[11px] sm:text-xs font-semibold text-slate-500 truncate">Halo, {inspectorName || 'Admin'} · {SCOPE_META[scope].sub}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1864,7 +1972,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <button
                   type="button"
                   onClick={openCreateModal}
-                  className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-white font-semibold text-xs transition-all cursor-pointer active:scale-95 hover:opacity-90"
+                  className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-white font-bold text-xs transition-all cursor-pointer active:scale-95 hover:opacity-95 shadow-sm"
                   style={{ backgroundColor: DASH.brand }}
                 >
                   <Plus className="w-4 h-4" />
@@ -1892,20 +2000,41 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
         </div>
 
-        {/* ===== Training External: Sertifikasi POP/POM | Sertifikasi K3 & Kompetensi ===== */}
+        {/* ===== Training External View Switcher ===== */}
         {isExternal && (
-          <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-            {([['pop', 'Sertifikasi POP/POM', Award], ['cert', 'Sertifikasi K3 & Kompetensi', HardHat]] as const).map(([key, label, Icon]) => (
+          <div className="flex flex-wrap items-center justify-between gap-2 p-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
+            <div className="inline-flex items-center gap-1.5 flex-wrap">
               <button
-                key={key}
                 type="button"
-                onClick={() => setExternalTab(key)}
-                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${externalTab === key ? 'text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-                style={externalTab === key ? { backgroundColor: DASH.brand } : undefined}
+                onClick={() => setExternalTab('pop')}
+                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all ${
+                  externalTab === 'pop'
+                    ? 'text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+                style={externalTab === 'pop' ? { backgroundColor: DASH.brand } : undefined}
               >
-                <Icon className="w-4 h-4" /> {label}
+                <Award className="w-4 h-4" />
+                Tabel Terpadu POP/POM &amp; Sertifikasi K3
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setExternalTab('cert')}
+                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all ${
+                  externalTab === 'cert'
+                    ? 'text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+                style={externalTab === 'cert' ? { backgroundColor: DASH.yellow } : undefined}
+              >
+                <HardHat className="w-4 h-4" />
+                Kelola Detail Sertifikasi K3 &amp; Kompetensi
+              </button>
+            </div>
+            <div className="px-3 py-1 text-[11px] font-bold text-slate-600 hidden sm:flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: DASH.brand }} />
+              {certRows.length} Sertifikasi K3 (ISO 17025, Radiasi, K3 Kimia, Listrik, Las) Tergabung ke Tabel
+            </div>
           </div>
         )}
 
@@ -2566,7 +2695,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <table className="w-full text-left border-collapse">
                   <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800">
                     {program === 'pop' ? (
-                    <tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-teal-50/70 border-b-2 border-teal-200">
                       <th className="px-3 py-2.5 text-center">No</th>
                       <th className="px-3 py-2.5">NIK</th>
                       <th className="px-3 py-2.5">Nama</th>
@@ -2577,6 +2706,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       <th className="px-3 py-2.5">Kualifikasi</th>
                       <th className="px-3 py-2.5 text-center">Keterangan POP</th>
                       <th className="px-3 py-2.5 text-center" title="Pengawas Operasional Madya">POM</th>
+                      <th className="px-3 py-2.5 text-center bg-amber-100/70 text-amber-950 border-l border-r border-amber-300 font-black tracking-normal" title="Sertifikasi K3 & Kompetensi (ISO 17025, Ahli/Petugas K3 Kimia, PPR Radiasi, Listrik, Las)">
+                        Sertifikasi K3 &amp; Kompetensi
+                      </th>
                       {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
                     </tr>
                     ) : (
@@ -2624,6 +2756,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                             <td className="px-3 py-2 min-w-[140px]">{renderKualifikasi(r.popData)}</td>
                             <td className="px-3 py-2 text-center">{renderPopKeterangan(r.popData?.popKeterangan)}</td>
                             <td className="px-3 py-2 text-center">{renderPom(r.popData)}</td>
+                            <td className="px-3 py-2 text-center bg-amber-50/40 border-l border-r border-amber-200/80 min-w-[160px]">
+                              {renderK3KompetensiBadges(r)}
+                            </td>
                           </>
                         ) : (
                           <>
@@ -2687,6 +2822,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                         <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-600">POP</span>{renderPopBatch(r.popData)}</div>
                         <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-600">POM</span>{renderPom(r.popData)}</div>
                         <div className="col-span-2">{renderKualifikasi(r.popData)}</div>
+                        <div className="col-span-2 pt-2 border-t border-amber-200 bg-amber-50/50 p-2 rounded-xl">
+                          <span className="text-[10px] font-black uppercase text-amber-900 block mb-1">Sertifikasi K3 &amp; Kompetensi</span>
+                          {renderK3KompetensiBadges(r)}
+                        </div>
                       </>
                     ) : program === 'sap'
                       ? SAP_TRAININGS.map(t => (
