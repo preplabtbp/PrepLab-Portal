@@ -158,7 +158,11 @@ authRouter.post("/check-nik", async (req, res) => {
     });
   } catch(e: any) {
     console.error("Check NIK error:", e);
-    res.status(500).json({ status: "error", message: "Terjadi kesalahan saat memeriksa identitas pengguna" });
+    const isConnErr = e?.code === 'ETIMEDOUT' || e?.code === 'ECONNREFUSED' || e?.message?.includes('ETIMEDOUT') || e?.message?.includes('timeout');
+    const message = isConnErr
+      ? "Koneksi ke Database Cloud SQL timeout. Pastikan IP Anda terdaftar di Authorized Networks GCP."
+      : "Terjadi kesalahan saat memeriksa identitas pengguna";
+    res.status(500).json({ status: "error", message });
   }
 });
 
@@ -268,7 +272,11 @@ authRouter.post("/login", async (req, res) => {
     });
   } catch(e: any) {
     console.error("Login error:", e);
-    res.status(500).json({ status: "error", message: "Gagal memproses login pengguna" });
+    const isConnErr = e?.code === 'ETIMEDOUT' || e?.code === 'ECONNREFUSED' || e?.message?.includes('ETIMEDOUT') || e?.message?.includes('timeout');
+    const message = isConnErr
+      ? "Koneksi ke Database Cloud SQL timeout. Pastikan IP Anda terdaftar di Authorized Networks GCP."
+      : "Gagal memproses login pengguna";
+    res.status(500).json({ status: "error", message });
   }
 });
 
