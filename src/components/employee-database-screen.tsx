@@ -2661,12 +2661,14 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             const getSection = (emp: any) => sectionFromJabatan(normJab(emp)) || sectionFromBagian(emp) || 'Lainnya';
 
                             const getLevel = (emp: any): 'manager' | 'prepSpt' | 'labSpt' | 'supervisor' | 'foreman' | 'staff' | 'crew' | 'other' => {
+                              const j = String(emp.jabatan || emp['Jabatan Baru'] || '').toLowerCase();
                               const rank = getJabatanRank(emp.jabatan || emp['Jabatan Baru']);
                               if (rank === 0) return 'manager';
                               if (rank === 1) return 'prepSpt';
                               if (rank === 2) return 'labSpt';
+                              if (j.includes('admin') || j.includes('staff')) return 'staff';
                               if (rank <= 8) return 'supervisor';
-                              if (rank <= 13) return 'foreman';
+                              if (rank <= 14) return 'foreman';
                               if (rank <= 15) return 'staff';
                               if (rank <= 17.5) return 'crew';
                               return 'other';
@@ -2779,9 +2781,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 </div>
                               ));
 
+                            const getSectionDisplayName = (name: string) => {
+                              if (name === 'Maintenance') return 'Laboratory Maintenance';
+                              if (name === 'Administration') return 'Admin, Preparation & Lab';
+                              return name;
+                            };
+
                             const sectionHeader = (name: string, total: number) => (
                               <div className="relative z-10 w-full rounded-xl bg-[#22a7b8] text-white px-1.5 py-1.5 text-center shadow-sm">
-                                <div className="text-[10.5px] font-black uppercase tracking-wide leading-tight break-words">{name}</div>
+                                <div className="text-[10.5px] font-black uppercase tracking-wide leading-tight break-words">{getSectionDisplayName(name)}</div>
                                 <div className="text-[10px] font-semibold opacity-90">{total} Orang</div>
                               </div>
                             );
@@ -2810,14 +2818,32 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               return b ? b.supervisor.length + b.foreman.length + b.staff.length + b.crew.length : 0;
                             };
 
-                            // ===== Susunan kolom bagan =====
+                            // ===== Susunan kolom bagan (Sesuai Struktur Organisasi Manpower PrepLab Resmi) =====
+                            // Urutan Kiri ke Kanan:
+                            // 1. Preparation Superintendent (Preparation Wet, Preparation Dry)
+                            // 2. Inventory Control (Inventory Control Supervisor -> Admin, Inventory Control)
+                            // 3. Laboratory Maintenance (Supervisor -> Foreman -> Crew)
+                            // 4. Quality Assurance (Specialist -> Officer)
+                            // 5. Laboratory Superintendent (Laboratory Supervisor -> Foreman -> Crew)
+                            // 6. Administration (Admin, Preparation & Laboratory)
                             const presentSections = (names: string[]) => names.filter(n => sections.has(n));
                             type OrgGroup = { key: string; spts: any[] | null; label: string; cols: string[] };
-                            const groups: OrgGroup[] = [
+                            const rawGroups: OrgGroup[] = [
                               { key: 'prep', spts: prepSpts, label: 'Preparation Superintendent', cols: presentSections(PREP_SECTIONS) },
+                              { key: 'Inventory Control', spts: null, label: 'Inventory Control', cols: presentSections(['Inventory Control']) },
+                              { key: 'Maintenance', spts: null, label: 'Laboratory Maintenance', cols: presentSections(['Maintenance']) },
+                              { key: 'Quality Assurance', spts: null, label: 'Quality Assurance', cols: presentSections(['Quality Assurance']) },
                               { key: 'lab', spts: labSpts, label: 'Laboratory Superintendent', cols: presentSections(LAB_SECTIONS) },
-                              ...presentSections(DIRECT_SECTIONS).map(name => ({ key: name, spts: null, label: name, cols: [name] })),
-                            ]
+                              { key: 'Administration', spts: null, label: 'Admin, Preparation & Lab', cols: presentSections(['Administration']) },
+                            ];
+
+                            const KNOWN_SECTIONS = new Set(['Preparation Wet', 'Preparation Dry', 'Preparation', 'Inventory Control', 'Maintenance', 'Quality Assurance', 'Laboratory', 'Administration']);
+                            const extraSections = Array.from(sections.keys()).filter(s => !KNOWN_SECTIONS.has(s));
+                            extraSections.forEach(s => {
+                              rawGroups.push({ key: s, spts: null, label: s, cols: [s] });
+                            });
+
+                            const groups: OrgGroup[] = rawGroups
                               .filter(g => g.spts === null || g.spts.length > 0 || g.cols.length > 0)
                               .map(g => (g.cols.length > 0 ? g : { ...g, cols: [`__empty_${g.key}`] }));
 
@@ -2841,7 +2867,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                     {sectionHeader(name, sectionTotal(name))}
                                     <div className="w-0.5 h-2 bg-slate-300 mx-auto" />
                                     {b.supervisor.length > 0 && <div className="mb-1.5 flex justify-center">{supervisorBlock(b.supervisor)}</div>}
-                                    {groupBox('Admin', b.staff, 'border-amber-200 bg-amber-50', 'text-amber-800')}
+                                    {groupBox('Admin, Prep & Lab', b.staff, 'border-amber-200 bg-amber-50', 'text-amber-800')}
                                   </div>
                                 );
                               }
@@ -2917,6 +2943,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               <div className="max-h-[75vh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-xl border border-slate-100 bg-slate-50/40 p-3 sm:p-4">
                                 {/* Layar lebar: bagan grid dengan baris level yang sama tinggi agar garis & kotak selalu sejajar */}
                                 <div className="hidden lg:grid w-full" style={{ gridTemplateColumns: `repeat(${nCols}, minmax(0, 1fr))` }}>
+                                  {/* Level 0: Head of Site (Sesuai Bagan Struktur Organisasi Resmi) */}
+                                  {(!q || 'head of site'.includes(q) || 'younsel'.includes(q) || 'roos'.includes(q)) && (
+                                    <div className="flex flex-col items-center mb-1" style={{ gridColumn: `1 / span ${nCols}` }}>
+                                      <div className="relative z-10 w-full max-w-[12rem] px-3 py-1.5 rounded-2xl border-2 border-dashed border-rose-400 bg-rose-50/70 shadow-xs flex flex-col items-center text-center">
+                                        <div className="text-[10px] font-extrabold uppercase tracking-wide text-rose-600">Head of Site</div>
+                                        <div className="text-[11.5px] font-black text-rose-700 leading-tight mt-0.5">Younsel Evand Roos</div>
+                                      </div>
+                                      <div className={`w-0.5 h-3 ${LINE}`} />
+                                    </div>
+                                  )}
+
                                   {/* Level 1: Manager */}
                                   <div className="flex flex-col items-center" style={{ gridColumn: `1 / span ${nCols}` }}>
                                     <div className="w-full flex flex-wrap gap-2 justify-center">
@@ -2955,6 +2992,15 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                                 {/* Layar sempit: pohon vertikal */}
                                 <div className="lg:hidden space-y-3">
+                                  {(!q || 'head of site'.includes(q) || 'younsel'.includes(q) || 'roos'.includes(q)) && (
+                                    <div className="flex flex-col items-center mb-2">
+                                      <div className="w-full max-w-[12rem] px-3 py-1.5 rounded-2xl border-2 border-dashed border-rose-400 bg-rose-50/70 shadow-xs flex flex-col items-center text-center">
+                                        <div className="text-[10px] font-extrabold uppercase tracking-wide text-rose-600">Head of Site</div>
+                                        <div className="text-[11.5px] font-black text-rose-700 leading-tight mt-0.5">Younsel Evand Roos</div>
+                                      </div>
+                                      <div className={`w-0.5 h-3 ${LINE}`} />
+                                    </div>
+                                  )}
                                   <div className="flex flex-wrap gap-2">
                                     {managers.length > 0
                                       ? managers.map(emp => personCard(emp, 'border-violet-300 ring-2 ring-violet-100'))
