@@ -361,7 +361,6 @@ export function BulletinBoard({
       const targetPt = isDev ? "ALL" : userUniverse;
       const fetchUrl =
         `/api/bulletin?pt=${targetPt}&nik=${encodeURIComponent(inspectorNik || "")}&_t=${Date.now()}`;
-      console.log("[Bulletin] Fetching:", fetchUrl, "isDev:", isDev);
       const res = await fetch(fetchUrl, {
         cache: "no-store",
         headers: {

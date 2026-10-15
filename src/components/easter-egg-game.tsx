@@ -62,7 +62,8 @@ export const EasterEggGame: React.FC<EasterEggGameProps> = ({ onClose }) => {
     });
 
     // Initialize socket connection
-    const newSocket = io(); 
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '') : '';
+    const newSocket = io({ auth: { token } }); 
     setSocket(newSocket);
 
     newSocket.on('quiz:state', (updatedPlayers: PlayerState[]) => {

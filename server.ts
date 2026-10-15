@@ -25,7 +25,8 @@ try {
   console.error('   Container akan berhenti. Periksa --set-secrets / --update-secrets di Cloud Run.');
   process.exit(1);
 }
-import { requireAuth } from "./server/middleware/auth.js";
+import jwt from 'jsonwebtoken';
+import { requireAuth, JWT_SECRET } from "./server/middleware/auth.js";
 import { router as miscRouter, syncMasterQuestionsFromSheet } from "./server/routes/misc.js";
 import { router as bulletinRouter } from "./server/routes/bulletin.js";
 import { router as quizRouter } from "./server/routes/quiz.js";
@@ -153,6 +154,8 @@ async function initDbSchema() {
       updated_at TIMESTAMP DEFAULT NOW()
     );`);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_attendance_nik_year ON employee_attendance(nik, year);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_attendance_nik ON employee_attendance(nik);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_attendance_year ON employee_attendance(year);`);
     await db.execute(sql`ALTER TABLE employee_attendance ADD COLUMN IF NOT EXISTS alasan_izin_khusus TEXT;`);
     await db.execute(sql`ALTER TABLE employee_attendance ADD COLUMN IF NOT EXISTS alasan_sakit_site TEXT;`);
     await db.execute(sql`ALTER TABLE employee_attendance ADD COLUMN IF NOT EXISTS alasan_sakit_luar TEXT;`);
@@ -324,38 +327,6 @@ async function initDbSchema() {
       console.warn("Clinic visits table init warning:", clinicInitErr.message);
     }
 
-    // Employee Attendance Table (Rekap Absensi: Sakit, Izin, Alpa, Tanggal & Alasan)
-    try {
-      await db.execute(sql`CREATE TABLE IF NOT EXISTS employee_attendance (
-        id SERIAL PRIMARY KEY,
-        nik TEXT NOT NULL,
-        name TEXT,
-        year INTEGER NOT NULL DEFAULT 2026,
-        izin INTEGER DEFAULT 0,
-        izin_khusus INTEGER DEFAULT 0,
-        sakit INTEGER DEFAULT 0,
-        sakit_site_count INTEGER DEFAULT 0,
-        sakit_luar_count INTEGER DEFAULT 0,
-        alpa INTEGER DEFAULT 0,
-        tanggal_izin TEXT,
-        tanggal_izin_khusus TEXT,
-        tanggal_sakit_site TEXT,
-        tanggal_sakit_luar TEXT,
-        tanggal_alpa TEXT,
-        alasan_izin TEXT,
-        alasan_sakit TEXT,
-        details JSONB,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );`);
-      await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_attendance_nik_year ON employee_attendance(nik, year);`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_attendance_nik ON employee_attendance(nik);`);
-      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_employee_attendance_year ON employee_attendance(year);`);
-      await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS attendance_data JSONB;`);
-    } catch (attendanceInitErr: any) {
-      console.warn("Employee attendance table init warning:", attendanceInitErr.message);
-    }
-
     // Auto seed questions if table is empty
     const qCount = await db.select().from(questions).limit(1);
     if (!qCount || qCount.length === 0) {
@@ -491,10 +462,53 @@ async function uploadFileToDrive(token, base64Data, mimeType, filename, folderId
 const app = express();
   const PORT = Number(process.env.PORT) || 3000;
   const httpServer = createServer(app);
+  const allowedSocketOrigins = [
+    'https://portal.preplabtbp.com',
+    'https://preplab-portal-scgudezxqq-et.a.run.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000'
+  ];
+
   const io = new Server(httpServer, {
-    cors: { origin: "*" }
+    cors: {
+      origin: (origin, callback) => {
+        if (!origin || allowedSocketOrigins.includes(origin) || origin.endsWith('.preplabtbp.com')) {
+          callback(null, true);
+        } else {
+          console.warn(`[Socket.IO CORS] Rejected connection from unauthorized origin: ${origin}`);
+          callback(new Error('CORS not allowed for Socket.IO origin: ' + origin));
+        }
+      },
+      credentials: true
+    }
   });
   setIoInstance(io);
+
+  // AUTH MIDDLEWARE FOR SOCKET.IO (Temuan #1)
+  io.use((socket, next) => {
+    const token = (socket.handshake.auth && socket.handshake.auth.token) ||
+                  (socket.handshake.query && socket.handshake.query.token) ||
+                  (socket.handshake.headers && socket.handshake.headers.authorization?.replace(/^Bearer\s+/i, ''));
+
+    if (!token) {
+      console.warn(`[Socket ${socket.id}] Rejected: no auth token provided`);
+      return next(new Error('Authentication required'));
+    }
+
+    try {
+      const decoded = jwt.verify(token as string, JWT_SECRET) as any;
+      socket.data.nik = decoded.nik;
+      socket.data.name = decoded.name;
+      socket.data.userId = decoded.id;
+      socket.data.role = decoded.role;
+      next();
+    } catch (err: any) {
+      console.warn(`[Socket ${socket.id}] Rejected: invalid token (${err.message})`);
+      return next(new Error('Invalid token'));
+    }
+  });
 
   // Teams Chat & System Socket.IO state
   const onlineSockets = new Map(); // socket.id -> { socketId, nik, name, department, section, avatar, room, isQuiz, node, lastActive }
@@ -600,11 +614,23 @@ const app = express();
 
     // Register user presence across the portal
     socket.on('presence:join', (user) => {
-      if (!user || !user.nik) return;
+      if (!user || !user.nik) {
+        console.warn(`[Socket ${socket.id}] presence:join rejected: missing nik`);
+        return;
+      }
+
+      // Security validation: payload NIK must match decoded JWT NIK
+      if (socket.data.nik && user.nik !== socket.data.nik) {
+        console.warn(`[Socket ${socket.id}] presence:join rejected: NIK mismatch! payload=${user.nik}, jwt=${socket.data.nik}`);
+        socket.disconnect(true);
+        return;
+      }
+
       const existing = onlineSockets.get(socket.id) || {};
       onlineSockets.set(socket.id, {
         ...existing,
         ...user,
+        nik: socket.data.nik || user.nik,
         socketId: socket.id,
         lastActive: Date.now()
       });
@@ -672,6 +698,10 @@ const app = express();
     // --- REAL-TIME TEMPAT NONGKRONG AVATAR LOUNGE SYNC ---
     socket.on('lounge:join', (data) => {
       if (!data || !data.nik) return;
+      if (socket.data.nik && data.nik !== socket.data.nik) {
+        data.nik = socket.data.nik;
+        if (socket.data.name) data.name = socket.data.name;
+      }
       socket.join('lounge');
 
       // Default spawn positions on gazebo benches (authentic GBA tile coords)
@@ -1062,7 +1092,8 @@ const app = express();
     '/api/user',
     '/api/gallery',
     '/api/portal-gallery',
-    '/api/xrf'
+    '/api/xrf',
+    '/api/inspections/p2h-lab'
   ];
 
   app.use('/api', (req, res, next) => {

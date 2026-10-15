@@ -29,7 +29,7 @@ router.get("/api/bulletin", async (req, res) => {
       
       // If pt === 'ALL' or (isSuperUser and no pt specified), return all bulletin posts
       if (pt === 'ALL' || (isSuperUser && !pt)) {
-        console.log('[Bulletin API] Unrestricted access granted for user:', nik, 'pt:', pt);
+        // unrestricted access
       } else if (pt === 'GTS') {
         conditions.push(eq(bulletinPosts.pt, 'GTS'));
       } else {
@@ -62,7 +62,6 @@ router.get("/api/bulletin", async (req, res) => {
           .limit(limitNum)
           .offset((pageNum - 1) * limitNum);
 
-        console.log('[Bulletin API] Returning paginated', data.length, 'posts of', total, 'for pt:', pt, 'page:', pageNum);
         return res.json({
           status: "success",
           data,
@@ -77,7 +76,6 @@ router.get("/api/bulletin", async (req, res) => {
       }
       
       const data = await (baseQuery as any).orderBy(bulletinPosts.createdAt);
-      console.log('[Bulletin API] Returning', data.length, 'posts for pt:', pt, 'nik:', nik);
       res.json({ status: "success", data });
     } catch (error: any) {
       console.error('[Bulletin API] Error:', error.message);

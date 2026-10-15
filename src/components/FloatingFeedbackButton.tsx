@@ -280,7 +280,7 @@ export function FloatingFeedbackButton({
     }
   };
 
-  if (currentPath === '/feedback-support' || isCrew) {
+  if (currentPath === '/feedback-support' || isCrew || currentPath.startsWith('/inspect') || currentPath.startsWith('/weekly-inspection')) {
     return null;
   }
 

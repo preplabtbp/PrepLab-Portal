@@ -138,6 +138,26 @@ function resolveDemoUser(normalized: string) {
   return null;
 }
 
+// Helper: Retry DB queries on transient connection errors or pool timeouts
+async function queryWithRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 350): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: any) {
+    const isConnErr = 
+      err?.message?.includes('timeout') || 
+      err?.message?.includes('Connection') || 
+      err?.message?.includes('terminated') ||
+      err?.code === 'ECONNRESET' ||
+      err?.code === 'ETIMEDOUT';
+    if (retries > 0 && isConnErr) {
+      console.warn(`[DB Retry] Retrying query due to connection error (${err.message}). Retries left: ${retries}`);
+      await new Promise(r => setTimeout(r, delayMs));
+      return queryWithRetry(fn, retries - 1, delayMs * 2);
+    }
+    throw err;
+  }
+}
+
 // Check NIK / Username (Sanitized: No password hash or full PII leaked)
 authRouter.post("/check-nik", async (req, res) => {
   try {
@@ -159,14 +179,16 @@ authRouter.post("/check-nik", async (req, res) => {
       });
     }
 
-    const employeeMatches = await db.select().from(employees)
-      .where(
-        or(
-          sql`UPPER(${employees.nik}) = ${normalized}`,
-          sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+    const employeeMatches = await queryWithRetry(() =>
+      db.select().from(employees)
+        .where(
+          or(
+            sql`UPPER(${employees.nik}) = ${normalized}`,
+            sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+          )
         )
-      )
-      .limit(1);
+        .limit(1)
+    );
 
     const employee = employeeMatches[0];
     
@@ -227,14 +249,16 @@ authRouter.post("/login", async (req, res) => {
       }
     }
 
-    const employeeMatches = await db.select().from(employees)
-      .where(
-        or(
-          sql`UPPER(${employees.nik}) = ${normalized}`,
-          sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+    const employeeMatches = await queryWithRetry(() =>
+      db.select().from(employees)
+        .where(
+          or(
+            sql`UPPER(${employees.nik}) = ${normalized}`,
+            sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+          )
         )
-      )
-      .limit(1);
+        .limit(1)
+    );
 
     const user = employeeMatches[0];
     

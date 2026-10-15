@@ -119,7 +119,8 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
   // Real-time Socket.IO listener for instant notification delivery
   useEffect(() => {
     if (!userNik) return;
-    const socket = io();
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '') : '';
+    const socket = io({ auth: { token } });
 
     socket.on('notification:new', (notif: any) => {
       if (!notif) return;
