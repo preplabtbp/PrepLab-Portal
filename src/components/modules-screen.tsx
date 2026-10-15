@@ -34,14 +34,25 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
     userSection = profile.section || '';
   } catch (e) {}
 
-  const [developerList, setDeveloperList] = useState<string[]>([]);
+  const [developerList, setDeveloperList] = useState<string[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('preplab_developers');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     fetch('/api/developers')
       .then(res => res.json())
       .then(json => {
         const list = Array.isArray(json) ? json : (json?.data || []);
-        setDeveloperList(list.map((d: any) => d.nik));
+        const niks = list.map((d: any) => d.nik);
+        setDeveloperList(niks);
+        try {
+          sessionStorage.setItem('preplab_developers', JSON.stringify(niks));
+        } catch {}
       })
       .catch(() => {});
   }, []);

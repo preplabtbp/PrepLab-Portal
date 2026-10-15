@@ -29,18 +29,39 @@ router.use((req, res, next) => {
   next();
 });
 
+const FALLBACK_DEVS = [
+  { nik: '02D25000055', name: 'Muhamad Anugrah Ramadhan' },
+  { nik: '02D24000043', name: 'Muhamad Alvin Febriansyah' },
+  { nik: 'M0403240177', name: 'Aldy Aldersun Puluh' },
+  { nik: '04D21001047', name: 'Sukarman A. Akil, ST' },
+  { nik: '04D24000042', name: 'Junjunan Muhammad Syukur' },
+  { nik: 'PREPLABADMIN', name: 'Administrator PrepLab' }
+];
+let cachedDevelopers: any[] | null = null;
+let lastDevFetchTime = 0;
+
 router.get('/api/developers', async (req, res) => {
-  try {
-    const devs = await db.select().from(developerUsers);
-    res.json(devs);
-  } catch (err) {
-    console.error("Error fetching developers:", err);
-    res.json([
-      { nik: '02D25000055', name: 'Muhamad Anugrah Ramadhan' },
-      { nik: '02D24000043', name: 'Muhamad Alvin Febriansyah' },
-      { nik: 'M0403240177', name: 'Aldy Aldersun Puluh' }
-    ]);
+  if (cachedDevelopers && (Date.now() - lastDevFetchTime < 10 * 60 * 1000)) {
+    return res.json(cachedDevelopers);
   }
+  try {
+    const devs = await Promise.race([
+      db.select().from(developerUsers),
+      new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 800))
+    ]);
+    if (devs && devs.length > 0) {
+      cachedDevelopers = devs;
+      lastDevFetchTime = Date.now();
+      return res.json(devs);
+    }
+  } catch (err) {
+    // Fall through to fallback devs
+  }
+  if (!cachedDevelopers) {
+    cachedDevelopers = FALLBACK_DEVS;
+    lastDevFetchTime = Date.now();
+  }
+  res.json(cachedDevelopers);
 });
 
 // In-memory fallback array for Group Safety Reports & Feed

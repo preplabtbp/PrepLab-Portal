@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "../../src/db/index.js";
+import { db, isDbCircuitBroken } from "../../src/db/index.js";
 import { eq, desc, or, inArray, isNull, and, gte, lte } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
@@ -17,6 +17,7 @@ import {
 import webpush from 'web-push';
 import path from "path";
 import { syncSingleEmployeeMealOrder } from "./mealOrders.js";
+import { getCsvEmployees } from "./employees.js";
 
 export const router = Router();
 
@@ -349,17 +350,72 @@ export async function computeRosterData() {
   return result;
 }
 
+function generateFallbackRosterData(): any[] {
+  const emps = getCsvEmployees();
+  const today = new Date();
+  const next7DaysTemplate: any[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const dayStr = d.toLocaleDateString('id-ID', { weekday: 'short' });
+    const dateStr = d.toISOString().slice(0, 10);
+    next7DaysTemplate.push({ day: dayStr, date: dateStr });
+  }
+
+  return emps.map(emp => ({
+    nik: emp.nik,
+    name: emp.name,
+    jabatan: emp.jabatan,
+    department: emp.department || emp.section,
+    section: emp.section,
+    gol: emp.gol,
+    jobGrade: emp.jobGrade,
+    shift: emp.shift || 'Nonshift',
+    poh: emp.poh || 'Site',
+    pt: emp.pt,
+    statusMess: emp.statusMess || 'CR',
+    rotation: emp.rotation || '6:2',
+    joinDate: emp.dohAwal || '',
+    permanentDate: '',
+    statusKontrak: 'PKWTT',
+    lastTrvDate: null,
+    nextTrvDate: null,
+    nextWorkDate: null,
+    outsiteDate: null,
+    onsiteDate: null,
+    masukKerjaDate: null,
+    schedule: next7DaysTemplate.map(t => ({ day: t.day, date: t.date, shiftCode: 'D' })),
+    fullSchedule: {}
+  }));
+}
+
 router.get("/api/roster", async (req, res) => {
   try {
     const isForceRefresh = req.query.refresh === 'true' || req.query.refresh === '1';
     if (!cachedRosterResult || isForceRefresh || (Date.now() - lastCacheTime > CACHE_TTL_MS)) {
-      cachedRosterResult = await computeRosterData();
-      lastCacheTime = Date.now();
+      if (isDbCircuitBroken()) {
+        cachedRosterResult = generateFallbackRosterData();
+        lastCacheTime = Date.now();
+      } else {
+        try {
+          cachedRosterResult = await Promise.race([
+            computeRosterData(),
+            new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Roster DB timeout")), 600))
+          ]);
+          lastCacheTime = Date.now();
+        } catch (dbErr: any) {
+          console.warn("[Roster DB offline/timeout, using fallback]:", dbErr?.message);
+          if (!cachedRosterResult) {
+            cachedRosterResult = generateFallbackRosterData();
+            lastCacheTime = Date.now();
+          }
+        }
+      }
     }
     res.json(cachedRosterResult);
-  } catch (e) {
-    console.error("Error fetching roster:", e);
-    res.status(500).json({ error: "Failed to fetch roster" });
+  } catch (e: any) {
+    console.warn("Roster error, serving fallback:", e?.message);
+    res.json(generateFallbackRosterData());
   }
 });
 

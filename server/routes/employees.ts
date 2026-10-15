@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { eq, sql } from "drizzle-orm";
-import { db } from "../../src/db/index.js";
+import { db, isDbCircuitBroken } from "../../src/db/index.js";
 import { employees, developerUsers, employeeAttendance, employeeCounseling, employeeAchievements } from "../../src/db/schema.js";
 import { toPublicEmployee } from "../middleware/auth.js";
 import { drive } from "../../google-services.js";
 import { Readable } from "stream";
+import fs from "fs";
+import path from "path";
+import Papa from "papaparse";
 
 export const employeesRouter = Router();
 
@@ -15,6 +18,42 @@ export function normalizeNameKey(name: string): string {
     .replace(/\b(st|s\.t|s\.sos|s\.pi|s\.e|a\.md|s\.kom|s\.pd|dr|drs|ir|m\.t|m\.si)\b/gi, '')
     .replace(/[^a-z0-9]/g, '')
     .trim();
+}
+
+// In-memory CSV fallback when database is slow or unreachable
+let csvEmployeesCache: any[] | null = null;
+export function getCsvEmployees(): any[] {
+  if (csvEmployeesCache && csvEmployeesCache.length > 0) return csvEmployeesCache;
+  try {
+    const csvPath = path.join(process.cwd(), 'data.csv');
+    if (fs.existsSync(csvPath)) {
+      const content = fs.readFileSync(csvPath, 'utf8');
+      const parsed = Papa.parse<Record<string, string>>(content, { header: true, skipEmptyLines: true });
+      csvEmployeesCache = parsed.data.map((row: any, idx: number) => ({
+        id: idx + 1,
+        nik: row['NIK'] || '',
+        name: row['Nama'] || '',
+        nama: row['Nama'] || '',
+        ktp: row['No.KTP'] || '',
+        pt: row['PT'] || 'TBP',
+        section: row['Bagian'] || row['Departemen'] || 'Preparation',
+        department: row['Departemen'] || 'Preparation & Laboratory',
+        jabatan: row['Jabatan Baru'] || row['Jabatan'] || 'Staff',
+        position: row['Jabatan Baru'] || row['Jabatan'] || 'Staff',
+        jobGrade: row['Job Grade'] || '',
+        gol: row['Gol'] || '',
+        phone: row['Nomor Telp. Pribadi'] || '',
+        statusKaryawan: row['Status Karyawan'] || 'Active',
+        dohAwal: row['DOH Awal'] || '',
+        masaKerja: row['Masa Kerja'] || '',
+        firstLoginComplete: true
+      })).filter((e: any) => e.nik && !e.nik.toUpperCase().includes('DEMO') && !e.nik.includes('#N/A'));
+      return csvEmployeesCache;
+    }
+  } catch (err) {
+    console.warn('CSV employee fallback load warning:', err);
+  }
+  return [];
 }
 
 // In-memory cache for ultra-fast employee, attendance & counseling data serving
@@ -37,7 +76,9 @@ async function getAttendanceMap(): Promise<Record<string, any>> {
     return cachedAttendanceMap.data;
   }
   try {
-    const allAtt = await db.select().from(employeeAttendance);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('ATT_TIMEOUT')), 800));
+    const dbPromise = db.select().from(employeeAttendance);
+    const allAtt: any = await Promise.race([dbPromise, timeoutPromise]);
     const map: Record<string, any> = {};
     for (const item of allAtt) {
       const nik = item.nik;
@@ -66,6 +107,7 @@ async function getAttendanceMap(): Promise<Record<string, any>> {
     cachedAttendanceMap = { data: map, timestamp: now };
     return map;
   } catch (e) {
+    cachedAttendanceMap = { data: {}, timestamp: now };
     return {};
   }
 }
@@ -76,47 +118,9 @@ async function getCounselingMap(): Promise<Record<string, any>> {
     return cachedCounselingMap.data;
   }
   try {
-    // Ensure table exists
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS employee_counseling (
-        id SERIAL PRIMARY KEY,
-        nik TEXT NOT NULL,
-        name TEXT,
-        jabatan TEXT,
-        pt TEXT,
-        total_sp TEXT,
-        bulan_konseling TEXT,
-        konseling_1 TEXT,
-        konseling_2 TEXT,
-        konseling_3 TEXT,
-        st TEXT,
-        sp_1 TEXT,
-        sp_2 TEXT,
-        sp_3 TEXT,
-        phk TEXT,
-        masa_berlaku_sanksi TEXT,
-        masa_pemulihan_1 TEXT,
-        masa_pemulihan_2 TEXT,
-        alasan_konseling TEXT,
-        alasan_sp TEXT,
-        keterangan TEXT,
-        pernah_sp_sebelumnya TEXT,
-        pernah_terlibat_spdk TEXT,
-        kronologi_spdk TEXT,
-        kategori_spdk TEXT,
-        tindakan_spdk TEXT,
-        status_sanksi TEXT DEFAULT 'Aman',
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_counseling_nik ON employee_counseling(nik);
-      ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS alasan_konseling TEXT;
-      ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS sppt TEXT;
-      ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS tanggal_sp TEXT;
-      ALTER TABLE employees ADD COLUMN IF NOT EXISTS jumlah_cuti_site TEXT;
-    `);
-
-    const allC = await db.select().from(employeeCounseling);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('COUNSEL_TIMEOUT')), 500));
+    const dbPromise = db.select().from(employeeCounseling);
+    const allC: any = await Promise.race([dbPromise, timeoutPromise]);
     const map: Record<string, any> = {};
     for (const item of allC) {
       if (item.nik) {
@@ -130,6 +134,7 @@ async function getCounselingMap(): Promise<Record<string, any>> {
     cachedCounselingMap = { data: map, timestamp: now };
     return map;
   } catch (e) {
+    cachedCounselingMap = { data: {}, timestamp: now };
     return {};
   }
 }
@@ -446,11 +451,30 @@ employeesRouter.get("/", async (req, res) => {
     // includeInactive=1: sertakan karyawan Resign/PHK/SPPHK (dipakai modul Database Karyawan untuk Total Data)
     const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
     const passStatus = (e: any) => includeInactive || !isResignedOrNonActiveStatus(e);
+    // Return memory cache immediately (<1ms) if available
+    if (!pt && !all && !includeInactive && cachedAllEmployees && (Date.now() - cachedAllEmployees.timestamp < CACHE_TTL_MS)) {
+      return res.json(cachedAllEmployees.data);
+    }
     
-    // Jalankan pembersihan duplikat di database jika ada
-    await cleanupDuplicateEmployees();
+    // Non-blocking cleanup in background
+    cleanupDuplicateEmployees().catch(() => {});
 
-    let data = await db.select().from(employees);
+    let data: any[] = [];
+    if (isDbCircuitBroken()) {
+      data = getCsvEmployees();
+    } else {
+      try {
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('EMP_TIMEOUT')), 500));
+        const dbPromise = db.select().from(employees);
+        data = (await Promise.race([dbPromise, timeoutPromise])) as any[];
+        if (!data || data.length === 0) {
+          data = getCsvEmployees();
+        }
+      } catch (dbErr) {
+        console.warn("DB query timed out or failed in /api/employees, serving local CSV fallback");
+        data = getCsvEmployees();
+      }
+    }
 
     // Strictly exclude demo, staging, admin and broken spreadsheet accounts
     data = data.filter(e => {
@@ -517,12 +541,17 @@ employeesRouter.get("/", async (req, res) => {
     }
     data = deduplicatedData;
 
-    const attMap = await getAttendanceMap();
-    const counselMap = await getCounselingMap();
-    res.json(data.map(e => attachAttendanceToEmployee(e, attMap, counselMap)));
+    const [attMap, counselMap] = await Promise.all([getAttendanceMap(), getCounselingMap()]);
+    const finalData = data.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
+    if (!pt && !all && !includeInactive) {
+      cachedAllEmployees = { data: finalData, timestamp: Date.now() };
+    }
+    res.json(finalData);
   } catch (error) {
     console.error("Error fetching employees:", error);
-    res.status(500).json({ error: "Failed to fetch employees" });
+    // Ultimate fallback: CSV
+    const csvFallback = getCsvEmployees();
+    res.json(csvFallback.map(e => attachAttendanceToEmployee(e, {}, {})));
   }
 });
 

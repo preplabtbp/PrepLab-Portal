@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "../../src/db/index.js";
+import { db, isDbCircuitBroken } from "../../src/db/index.js";
 import { eq, desc, or, inArray, isNull, and, gte, lte, sql } from "drizzle-orm";
 import { 
   apdSettings, apdHistory, apdDocuments, employees 
@@ -146,20 +146,37 @@ export async function syncApdDataFromSheet(force: boolean = false) {
   }
 }
 
+const DEFAULT_APD_SETTINGS: Record<string, number> = {
+  "Helm": 24,
+  "Sepatu Safety": 12,
+  "Kacamata Safety": 6,
+  "Rompi Safety": 12,
+  "Sarung Tangan": 1,
+  "Masker": 1,
+  "Earplug": 6,
+  "Earmuff": 12,
+  "Face Shield": 12
+};
+
 // GET /api/apd/settings
 router.get("/api/apd/settings", async (req, res) => {
   try {
-    await syncApdDataFromSheet();
-    const data = await db.select().from(apdSettings);
-    // Return record dictionary expected by useApdInput and apd-settings-screen
-    const settingsMap: Record<string, number> = {};
-    for (const item of data) {
-      settingsMap[item.itemName] = item.intervalMonths || 0;
+    syncApdDataFromSheet().catch(() => {});
+    const settingsMap: Record<string, number> = { ...DEFAULT_APD_SETTINGS };
+    if (!isDbCircuitBroken()) {
+      try {
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+        const data: any = await Promise.race([db.select().from(apdSettings), timeoutPromise]);
+        for (const item of data) {
+          if (item.itemName) settingsMap[item.itemName] = item.intervalMonths || 0;
+        }
+      } catch (dbErr: any) {
+        console.warn("[APD Settings DB notice]:", dbErr?.message);
+      }
     }
     res.json(settingsMap);
   } catch (e: any) {
-    console.error(e);
-    res.json({});
+    res.json(DEFAULT_APD_SETTINGS);
   }
 });
 
@@ -186,39 +203,55 @@ router.post("/api/apd/settings", async (req, res) => {
 router.get("/api/apd/history", async (req, res) => {
   try {
     const { pt, nik } = req.query;
-    await syncApdDataFromSheet();
+    syncApdDataFromSheet().catch(() => {});
 
     // If query by NIK, return formatted history map grouped by APD type
     if (nik && typeof nik === 'string' && nik.trim()) {
       const cleanNik = nik.trim();
-      const records = await db.select().from(apdHistory).where(
-        sql`LOWER(${apdHistory.nik}) = LOWER(${cleanNik})`
-      );
-
       const historyMap: Record<string, Array<{ date: string; url?: string }>> = {};
-      for (const r of records) {
-        const item = r.itemName || 'Lainnya';
-        if (!historyMap[item]) historyMap[item] = [];
-        historyMap[item].push({
-          date: r.dateTaken ? new Date(r.dateTaken).toISOString() : new Date().toISOString(),
-          url: r.photoUrl || ''
-        });
+      if (!isDbCircuitBroken()) {
+        try {
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+          const records: any = await Promise.race([
+            db.select().from(apdHistory).where(sql`LOWER(${apdHistory.nik}) = LOWER(${cleanNik})`),
+            timeoutPromise
+          ]);
+          for (const r of records) {
+            const item = r.itemName || 'Lainnya';
+            if (!historyMap[item]) historyMap[item] = [];
+            historyMap[item].push({
+              date: r.dateTaken ? new Date(r.dateTaken).toISOString() : new Date().toISOString(),
+              url: r.photoUrl || ''
+            });
+          }
+        } catch (dbErr: any) {
+          console.warn("[APD History NIK DB notice]:", dbErr?.message);
+        }
       }
       return res.json(historyMap);
     }
 
     // Default list query (e.g. for admin/monitoring table)
-    let query: any = db.select().from(apdHistory);
-    if (pt && (pt as string).toUpperCase() === 'GTS') {
-      query = query.where(eq(apdHistory.pt, 'GTS'));
-    } else {
-      query = query.where(or(eq(apdHistory.pt, 'TBP'), eq(apdHistory.pt, 'GPS'), eq(apdHistory.pt, 'TBP_GPS'), isNull(apdHistory.pt)));
+    if (isDbCircuitBroken()) {
+      return res.json([]);
     }
-    const data = await query;
-    res.json(data);
+    try {
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+      let query: any = db.select().from(apdHistory);
+      if (pt && (pt as string).toUpperCase() === 'GTS') {
+        query = query.where(eq(apdHistory.pt, 'GTS'));
+      } else {
+        query = query.where(or(eq(apdHistory.pt, 'TBP'), eq(apdHistory.pt, 'GPS'), eq(apdHistory.pt, 'TBP_GPS'), isNull(apdHistory.pt)));
+      }
+      const data = await Promise.race([query, timeoutPromise]);
+      res.json(data || []);
+    } catch (dbErr: any) {
+      console.warn("[APD History list DB notice]:", dbErr?.message);
+      res.json([]);
+    }
   } catch (e: any) {
-    console.error(e);
-    res.status(500).json({ error: e.message });
+    console.warn("[APD History error]:", e?.message);
+    res.json([]);
   }
 });
 

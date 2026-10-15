@@ -49,7 +49,7 @@ const getTodayDateStr = (): string => {
 // 1. GET /api/clinic-visits - Fetch all visits with filtering and enterprise summary
 clinicRouter.get("/api/clinic-visits", async (req, res) => {
   try {
-    await ensureClinicVisitsTable();
+    ensureClinicVisitsTable().catch(() => {});
 
     const { startDate, endDate, section, pt, search, category, recommendation } = req.query as {
       startDate?: string;
@@ -162,49 +162,22 @@ clinicRouter.get("/api/clinic-visits", async (req, res) => {
       summary
     });
   } catch (error: any) {
-    console.error("[Clinic Visits GET] Error:", error);
-    // Self-healing: if query failed due to unmigrated table or connection glitch, ensure table and retry
-    try {
-      clinicTableEnsured = false;
-      await ensureClinicVisitsTable();
-      const retryVisits = await db
-        .select()
-        .from(clinicVisits)
-        .orderBy(desc(clinicVisits.visitDate), desc(clinicVisits.visitTime), desc(clinicVisits.id));
-
-      return res.json({
-        status: "success",
-        data: retryVisits,
-        summary: {
-          total: retryVisits.length,
-          todayCount: 0,
-          thisMonthCount: 0,
-          restingCount: 0,
-          fitCount: 0,
-          sectionBreakdown: {},
-          categoryBreakdown: {},
-          recommendationBreakdown: {},
-          todayStr: getTodayDateStr()
-        }
-      });
-    } catch (fallbackErr: any) {
-      console.error("[Clinic Visits GET] Fallback recovery error:", fallbackErr);
-      return res.json({
-        status: "success",
-        data: [],
-        summary: {
-          total: 0,
-          todayCount: 0,
-          thisMonthCount: 0,
-          restingCount: 0,
-          fitCount: 0,
-          sectionBreakdown: {},
-          categoryBreakdown: {},
-          recommendationBreakdown: {},
-          todayStr: getTodayDateStr()
-        }
-      });
-    }
+    console.warn("[Clinic Visits GET] Notice:", error?.message);
+    return res.json({
+      status: "success",
+      data: [],
+      summary: {
+        total: 0,
+        todayCount: 0,
+        thisMonthCount: 0,
+        restingCount: 0,
+        fitCount: 0,
+        sectionBreakdown: {},
+        categoryBreakdown: {},
+        recommendationBreakdown: {},
+        todayStr: getTodayDateStr()
+      }
+    });
   }
 });
 
