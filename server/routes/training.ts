@@ -381,11 +381,22 @@ export function initTrainingNotificationCron() {
 
 // Helper to get fallback seed rows when database is offline or not yet initialized
 let cachedSeedRows: any[] | null = null;
-function getTrainingSapSeedRows(): any[] {
-  if (!cachedSeedRows) {
-    cachedSeedRows = TRAINING_SAP_SEED.map(([no, nik, nama, jabatan, gol, shift, hazid, jsa, iutOtt, iai, bfa], idx) => ({
+function getAllTrainingSeedRows(): any[] {
+  if (cachedSeedRows) return cachedSeedRows;
+
+  const recordsByNik = new Map<string, any>();
+
+  // 1. Initial SAP seed rows
+  TRAINING_SAP_SEED.forEach(([no, nik, nama, jabatan, gol, shift, hazid, jsa, iutOtt, iai, bfa], idx) => {
+    const cleanNik = String(nik).trim().toUpperCase();
+    recordsByNik.set(cleanNik, {
       id: idx + 1,
-      no, nik, nama, jabatan, gol, shift,
+      no,
+      nik: cleanNik,
+      nama,
+      jabatan,
+      gol,
+      shift,
       inSap: true,
       inK3: false,
       inPop: false,
@@ -399,10 +410,88 @@ function getTrainingSapSeedRows(): any[] {
       updatedBy: 'seed',
       createdAt: new Date(),
       updatedAt: new Date()
-    }));
+    });
+  });
+
+  // 2. K3 seed CSV
+  try {
+    const parsedK3 = parseTrainingSheet(Papa.parse<unknown[]>(TRAINING_K3_SEED_CSV, { skipEmptyLines: true }).data);
+    if (parsedK3?.records) {
+      parsedK3.records.forEach((r: any, idx: number) => {
+        const cleanNik = String(r.nik).trim().toUpperCase();
+        const existing = recordsByNik.get(cleanNik) || {
+          id: recordsByNik.size + 1,
+          nik: cleanNik,
+          nama: r.nama,
+          jabatan: r.jabatan,
+          gol: r.gol,
+          shift: r.shift,
+          bagian: r.bagian,
+          pt: r.pt,
+          inSap: false,
+          inK3: false,
+          inPop: false,
+          updatedBy: 'seed',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        existing.inK3 = true;
+        existing.noK3 = r.no ?? (idx + 1);
+        existing.bagian = existing.bagian || r.bagian || null;
+        existing.pt = existing.pt || r.pt || null;
+        existing.wah = r.wah || null;
+        existing.wahStatus = r.wahStatus || null;
+        existing.loto = r.loto || null;
+        existing.lotoStatus = r.lotoStatus || null;
+        existing.confinedSpace = r.confinedSpace || null;
+        existing.confinedSpaceStatus = r.confinedSpaceStatus || null;
+        existing.fireFighting = r.fireFighting || null;
+        existing.fireFightingStatus = r.fireFightingStatus || null;
+        recordsByNik.set(cleanNik, existing);
+      });
+    }
+  } catch (e: any) {
+    console.warn('[Training] Failed to parse K3 seed:', e?.message);
   }
+
+  // 3. POP seed CSV
+  try {
+    const parsedPop = parseTrainingSheet(Papa.parse<unknown[]>(TRAINING_POP_SEED_CSV, { skipEmptyLines: true }).data);
+    if (parsedPop?.records) {
+      parsedPop.records.forEach((r: any, idx: number) => {
+        const cleanNik = String(r.nik).trim().toUpperCase();
+        const existing = recordsByNik.get(cleanNik) || {
+          id: recordsByNik.size + 1,
+          nik: cleanNik,
+          nama: r.nama,
+          jabatan: r.jabatan,
+          gol: r.gol,
+          shift: r.shift,
+          bagian: r.bagian,
+          pt: r.pt,
+          inSap: false,
+          inK3: false,
+          inPop: false,
+          updatedBy: 'seed',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        existing.inPop = true;
+        existing.noPop = r.no ?? (idx + 1);
+        existing.bagian = existing.bagian || r.bagian || null;
+        existing.pt = existing.pt || r.pt || null;
+        existing.popData = r.popData || null;
+        recordsByNik.set(cleanNik, existing);
+      });
+    }
+  } catch (e: any) {
+    console.warn('[Training] Failed to parse POP seed:', e?.message);
+  }
+
+  cachedSeedRows = Array.from(recordsByNik.values());
   return cachedSeedRows;
 }
+const getTrainingSapSeedRows = getAllTrainingSeedRows;
 
 // GET /api/training-records/me — training WARNING / EXPIRED milik karyawan yang login (untuk kartu di Home)
 trainingRouter.get("/api/training-records/me", async (req, res) => {
