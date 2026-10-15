@@ -27,8 +27,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
-import { TrainingCertificationsPanel } from './training-certifications-panel';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  CERT_TYPES,
+  CERT_META,
+  certStatus,
+  defaultCertExpired,
+  type CertType,
+  type TrainingCertification,
+} from '../utils/training-certifications';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -375,7 +382,7 @@ export type TrainingScope = 'internal' | 'external';
 const SCOPE_PROGRAMS: Record<TrainingScope, TrainingProgram[]> = { internal: ['sap', 'k3'], external: ['pop'] };
 const SCOPE_META: Record<TrainingScope, { title: string; sub: string }> = {
   internal: { title: 'Training Internal', sub: 'Rekap Training SAP & K3' },
-  external: { title: 'Training External', sub: 'Rekap Sertifikasi Pra POP, POP & POM' },
+  external: { title: 'Training External', sub: 'Rekap Sertifikasi POP/POM & Sertifikasi K3/Kompetensi' },
 };
 const inScope = (r: TrainingRecord, scope: TrainingScope) => SCOPE_PROGRAMS[scope].some(p => !!r[PROGRAM_FLAG_KEY[p]]);
 
@@ -995,14 +1002,148 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     staleTime: 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
+  const isExternal = scope === 'external';
+
+  // Data Sertifikasi K3 & Kompetensi (Training External)
+  const { data: certsPayload } = useQuery({
+    queryKey: ['training-certifications'],
+    queryFn: async (): Promise<{ data: TrainingCertification[]; access: { viewAll: boolean; canManage: boolean } }> => {
+      const res = await fetch('/api/training-certifications');
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memuat data sertifikasi');
+      return json;
+    },
+    staleTime: 60 * 1000,
+    enabled: isExternal,
+  });
+  const certRows: TrainingCertification[] = certsPayload?.data ?? [];
+
+  // Peta sertifikasi per person (key: NIK uppercase & nama lowercase)
+  const certsByPerson = useMemo(() => {
+    const map = new Map<string, TrainingCertification[]>();
+    for (const c of certRows) {
+      if (c.nik) {
+        const k = c.nik.trim().toUpperCase();
+        if (!map.has(k)) map.set(k, []);
+        map.get(k)!.push(c);
+      }
+      const nameKey = c.nama.trim().toLowerCase();
+      if (!map.has(nameKey)) map.set(nameKey, []);
+      map.get(nameKey)!.push(c);
+    }
+    return map;
+  }, [certRows]);
+
+  const getPersonCerts = useCallback((r: TrainingRecord): TrainingCertification[] => {
+    const fromNik = r.nik ? certsByPerson.get(r.nik.trim().toUpperCase()) : undefined;
+    if (fromNik && fromNik.length > 0) return fromNik;
+    return certsByPerson.get(r.nama.trim().toLowerCase()) || [];
+  }, [certsByPerson]);
+
+  const getPersonCert = useCallback((r: TrainingRecord, type: CertType): TrainingCertification | undefined => {
+    return getPersonCerts(r).find(c => c.certType === type);
+  }, [getPersonCerts]);
+
   const allRecords = payload?.records ?? EMPTY_RECORDS;
-  // Hanya karyawan yang terdaftar di program modul ini (Internal: SAP/K3 · External: POP/POM)
-  const records = useMemo(() => allRecords.filter(r => inScope(r, scope)), [allRecords, scope]);
+  // Karyawan terdaftar di program modul: Internal (SAP/K3), External (POP/POM & Sertifikasi K3/Kompetensi)
+  const records = useMemo(() => {
+    if (!isExternal) return allRecords.filter(r => inScope(r, scope));
+    const certNiks = new Set(certRows.map(c => c.nik?.trim().toUpperCase()).filter(Boolean));
+    const certNames = new Set(certRows.map(c => c.nama.trim().toLowerCase()).filter(Boolean));
+    return allRecords.filter(r => inScope(r, scope) || (r.nik && certNiks.has(r.nik.trim().toUpperCase())) || certNames.has(r.nama.trim().toLowerCase()));
+  }, [allRecords, scope, isExternal, certRows]);
   const access: TrainingAccess = payload?.access ?? { viewAll: false, canManage: false, nik: '' };
   const scopePrograms = SCOPE_PROGRAMS[scope];
-  const isExternal = scope === 'external';
-  // Training External: tab Sertifikasi POP/POM (data training_records) | Sertifikasi K3 & Kompetensi (training_certifications)
-  const [externalTab, setExternalTab] = useState<'pop' | 'cert'>('pop');
+
+  const todayYmd = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  // Form modal Sertifikasi K3 & Kompetensi
+  type CertFormState = {
+    id?: number;
+    certType: CertType;
+    nama: string;
+    nik: string;
+    jabatan: string;
+    pt: string;
+    tanggal: string;
+    keterangan: string;
+    expired: string;
+    note: string;
+  };
+  const [certForm, setCertForm] = useState<CertFormState | null>(null);
+  const [isSavingCert, setIsSavingCert] = useState(false);
+  const [deleteCertTarget, setDeleteCertTarget] = useState<TrainingCertification | null>(null);
+
+  const openAddCertModal = (r?: TrainingRecord, defaultType: CertType = 'iso_17025') => {
+    const defaultDate = new Date().toISOString().slice(0, 10);
+    setCertForm({
+      certType: defaultType,
+      nama: r?.nama || '',
+      nik: r?.nik || '',
+      jabatan: r?.jabatan || '',
+      pt: r?.pt ? (r.pt.toUpperCase().includes('GPS') ? 'GPS' : 'TBP') : 'TBP',
+      tanggal: defaultDate,
+      keterangan: 'Lulus',
+      expired: defaultCertExpired(defaultType, defaultDate) || '',
+      note: '',
+    });
+  };
+
+  const openEditCertModal = (cert: TrainingCertification, r?: TrainingRecord) => {
+    setCertForm({
+      id: cert.id,
+      certType: cert.certType,
+      nama: cert.nama,
+      nik: cert.nik || r?.nik || '',
+      jabatan: cert.jabatan || r?.jabatan || '',
+      pt: cert.pt || r?.pt || 'TBP',
+      tanggal: cert.tanggal || '',
+      keterangan: cert.keterangan || 'Lulus',
+      expired: cert.expired || '',
+      note: cert.note || '',
+    });
+  };
+
+  const submitCertForm = async () => {
+    if (!certForm) return;
+    if (!certForm.nama.trim()) { toast.error('Nama karyawan wajib diisi'); return; }
+    setIsSavingCert(true);
+    try {
+      const autoExp = defaultCertExpired(certForm.certType, certForm.tanggal);
+      const body = { ...certForm, expired: certForm.expired || autoExp || '' };
+      const res = await fetch(certForm.id ? `/api/training-certifications/${certForm.id}` : '/api/training-certifications', {
+        method: certForm.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal menyimpan sertifikasi');
+      toast.success(certForm.id ? 'Data sertifikasi berhasil diperbarui' : `${certForm.nama} berhasil ditambahkan ke ${CERT_META[certForm.certType]?.title || 'sertifikasi'}`);
+      setCertForm(null);
+      queryClient.invalidateQueries({ queryKey: ['training-certifications'] });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setIsSavingCert(false);
+    }
+  };
+
+  const confirmDeleteCert = async () => {
+    if (!deleteCertTarget) return;
+    try {
+      const res = await fetch(`/api/training-certifications/${deleteCertTarget.id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal menghapus sertifikasi');
+      toast.success(`Sertifikasi ${deleteCertTarget.nama} berhasil dihapus`);
+      setDeleteCertTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['training-certifications'] });
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
 
   const [program, setProgram] = useState<TrainingProgram>(() => {
     if (scope === 'external') return 'pop';
@@ -1390,8 +1531,15 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         }
       } else {
         const p = r.popData;
-        if (statusFilter !== 'ALL' && statusFilter in POP_KETERANGAN && p?.popKeterangan !== statusFilter) return false;
-        if (statusFilter === 'BELUM_POP' && (popAttendedPop(p) || p?.popKeterangan === 'TIDAK_WAJIB')) return false;
+        if (statusFilter.startsWith('CERT_')) {
+          const cType = statusFilter.slice(5) as CertType;
+          if (!getPersonCert(r, cType)) return false;
+        } else if (statusFilter === 'HAS_CERT') {
+          if (getPersonCerts(r).length === 0) return false;
+        } else {
+          if (statusFilter !== 'ALL' && statusFilter in POP_KETERANGAN && p?.popKeterangan !== statusFilter) return false;
+          if (statusFilter === 'BELUM_POP' && (popAttendedPop(p) || p?.popKeterangan === 'TIDAK_WAJIB')) return false;
+        }
         if (missingFilter) {
           const s = POP_STAGES.find(x => x.key === missingFilter);
           if (s && !s.attended(p)) return false;
@@ -1399,7 +1547,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       }
       return true;
     });
-  }, [programRecords, program, searchQuery, golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter, missingFilter]);
+  }, [programRecords, program, searchQuery, golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter, missingFilter, getPersonCert, getPersonCerts]);
 
   // Kelompokkan per jabatan (urut hierarki), nomor diurutkan ulang dari 1 di tiap kelompok
   const jabatanGroups = useMemo(() => {
@@ -1415,9 +1563,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   }, [filteredRecords]);
 
   // SAP/K3: No, NIK, Nama, GOL, Shift, Status (+ Bagian & PT di K3) + kolom training + Aksi
-  // POP   : No, NIK, Nama, PT, Masa Kerja, Pra POP, POP, Kualifikasi, Keterangan POP, POM + Aksi
+  // POP   : No, NIK, Nama, PT, Masa Kerja, Pra POP, POP, Kualifikasi, Keterangan POP, POM + 6 Sertifikasi K3 & Kompetensi + Aksi
   const tableColSpan = program === 'pop'
-    ? 10 + (canManage ? 1 : 0)
+    ? 10 + CERT_TYPES.length + (canManage ? 1 : 0)
     : 6 + (program === 'k3' ? 2 : 0) + (program === 'sap' ? SAP_TRAININGS.length : K3_TRAININGS.length) + (canManage ? 1 : 0);
 
   const activeFilterCount = [golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter].filter(f => f !== 'ALL').length;
@@ -1647,14 +1795,21 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     } else {
       header = ['NO', 'NIK', 'NAMA KARYAWAN', 'SECTION', 'JABATAN', 'PT', 'DOH', 'MASA KERJA',
         'TGL PRA POP', 'INSTRUKTUR', 'PRE TEST', 'POST TEST', 'HASIL PRA POP', 'BATCH POP',
-        'PENDIDIKAN TERAKHIR', 'TAHUN LULUS', 'PENGALAMAN TAMBANG', 'KETERANGAN POP', 'POM', 'KETERANGAN POM'];
+        'PENDIDIKAN TERAKHIR', 'TAHUN LULUS', 'PENGALAMAN TAMBANG', 'KETERANGAN POP', 'POM', 'KETERANGAN POM',
+        ...CERT_TYPES.map(ct => ct.title.toUpperCase())];
       rows = ordered.map(({ r, jabatan }, i) => {
         const p = r.popData || {};
         const ket = p.popKeterangan ? (POP_KETERANGAN[p.popKeterangan as PopKeterangan]?.label ?? p.popKeterangan) : '';
+        const certCols = CERT_TYPES.map(ct => {
+          const c = getPersonCert(r, ct.type);
+          if (!c) return '-';
+          return `${c.keterangan || 'Lulus'}${c.tanggal ? ` (Tgl: ${c.tanggal})` : ''}${c.expired ? ` [Exp: ${c.expired}]` : ''}`;
+        });
         return [
           i + 1, r.nik, r.nama, r.bagian || '', jabatan, r.pt || '', p.doh || '', popMasaKerja(p) || '',
           p.praPop || '', p.praPopIns || '', p.praPopPre ?? '', p.praPopPost ?? '', p.praPopResult || '', p.popBatch || '',
           p.pendidikan || '', p.tahunLulus || '', p.pengalamanTambang || '', ket, p.pom || '', p.pomKeterangan || '',
+          ...certCols,
         ];
       });
     }
@@ -1759,6 +1914,66 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     );
   };
 
+  const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const fmtCertDate = (d: string | null | undefined) => {
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return '-';
+    const [y, m, dd] = d.split('-').map(Number);
+    return `${String(dd).padStart(2, '0')} ${MONTHS_SHORT[m - 1]} ${y}`;
+  };
+
+  const renderCertCell = (cert: TrainingCertification | undefined, r: TrainingRecord, type: CertType) => {
+    if (!cert) {
+      if (canManage) {
+        return (
+          <div className="flex items-center justify-center group/cell">
+            <span className="text-slate-300 dark:text-slate-600 font-bold group-hover/cell:hidden">-</span>
+            <button
+              type="button"
+              onClick={() => openAddCertModal(r, type)}
+              className="hidden group-hover/cell:inline-flex items-center justify-center w-5 h-5 rounded bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-bold cursor-pointer"
+              title={`Tambah ${CERT_META[type]?.title || type} untuk ${r.nama}`}
+            >
+              +
+            </button>
+          </div>
+        );
+      }
+      return <span className="text-slate-300 dark:text-slate-600 font-bold text-center block">-</span>;
+    }
+
+    const st = certStatus(cert.expired, todayYmd);
+    const isIso = cert.certType === 'iso_17025';
+    const badgeCls = st.status === 'active'
+      ? isIso
+        ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+        : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+      : st.status === 'soon'
+      ? 'bg-amber-100 text-amber-900 border-amber-400 hover:bg-amber-200'
+      : st.status === 'expired'
+      ? 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
+
+    return (
+      <button
+        type="button"
+        onClick={() => openEditCertModal(cert, r)}
+        className={`inline-flex flex-col items-center justify-center px-2 py-0.5 rounded-md text-[10px] font-bold border transition-all cursor-pointer shadow-2xs ${badgeCls}`}
+        title={`${CERT_META[cert.certType]?.title || cert.certType}
+Peserta: ${cert.nama}
+Status: ${cert.keterangan || 'Lulus'} (${st.status === 'active' ? 'Aktif' : st.status === 'soon' ? 'Segera Expired' : st.status === 'expired' ? 'Expired' : 'Masa berlaku ?'})
+Tanggal: ${fmtCertDate(cert.tanggal)}
+Expired: ${fmtCertDate(cert.expired)}${cert.note ? `\nCatatan: ${cert.note}` : ''}`}
+      >
+        <span className="whitespace-nowrap">{cert.keterangan || 'Lulus'}</span>
+        {cert.expired && (
+          <span className="text-[9px] font-semibold opacity-75 whitespace-nowrap">
+            {cert.expired.slice(0, 4)}
+          </span>
+        )}
+      </button>
+    );
+  };
+
   const renderStatusBadge = (r: TrainingRecord) => {
     if (program === 'sap') {
       const done = sapDoneCount(r);
@@ -1859,17 +2074,27 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {canManage && !(isExternal && externalTab === 'cert') && (
+            {canManage && (
               <>
                 <button
                   type="button"
                   onClick={openCreateModal}
-                  className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-white font-semibold text-xs transition-all cursor-pointer active:scale-95 hover:opacity-90"
+                  className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-white font-semibold text-xs transition-all cursor-pointer active:scale-95 hover:opacity-90 shadow-sm"
                   style={{ backgroundColor: DASH.brand }}
                 >
                   <Plus className="w-4 h-4" />
-                  Tambah Data
+                  {isExternal ? 'Tambah Personel POP' : 'Tambah Data'}
                 </button>
+                {isExternal && (
+                  <button
+                    type="button"
+                    onClick={() => openAddCertModal()}
+                    className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-white font-semibold text-xs transition-all cursor-pointer active:scale-95 hover:opacity-90 bg-teal-600 hover:bg-teal-700 shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Tambah Sertifikasi K3
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -1891,25 +2116,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             )}
           </div>
         </div>
-
-        {/* ===== Training External: Sertifikasi POP/POM | Sertifikasi K3 & Kompetensi ===== */}
-        {isExternal && (
-          <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-            {([['pop', 'Sertifikasi POP/POM', Award], ['cert', 'Sertifikasi K3 & Kompetensi', HardHat]] as const).map(([key, label, Icon]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setExternalTab(key)}
-                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${externalTab === key ? 'text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-                style={externalTab === key ? { backgroundColor: DASH.brand } : undefined}
-              >
-                <Icon className="w-4 h-4" /> {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {isExternal && externalTab === 'cert' ? <TrainingCertificationsPanel /> : (<>
         {/* ===== Baris 1: Overview · Status SAP · Ring program ===== */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
           <DashCard className="lg:col-span-4">
@@ -2515,10 +2721,20 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       </>
                     ) : (
                       <>
-                        {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => (
-                          <option key={k} value={k}>{POP_KETERANGAN[k].label}</option>
-                        ))}
-                        <option value="BELUM_POP">Wajib, Belum Ikut POP</option>
+                        <optgroup label="Kualifikasi POP">
+                          {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => (
+                            <option key={k} value={k}>{POP_KETERANGAN[k].label}</option>
+                          ))}
+                          <option value="BELUM_POP">Wajib, Belum Ikut POP</option>
+                        </optgroup>
+                        <optgroup label="Sertifikasi K3 & Kompetensi">
+                          <option value="HAS_CERT">Semua yang Memiliki Sertifikasi</option>
+                          {CERT_TYPES.map(ct => (
+                            <option key={ct.type} value={`CERT_${ct.type}`}>
+                              {ct.title.replace(' : 2017 Sistem Manajemen Laboratorium', '')}
+                            </option>
+                          ))}
+                        </optgroup>
                       </>
                     )}
                   </select>
@@ -2566,19 +2782,39 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <table className="w-full text-left border-collapse">
                   <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800">
                     {program === 'pop' ? (
-                    <tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      <th className="px-3 py-2.5 text-center">No</th>
-                      <th className="px-3 py-2.5">NIK</th>
-                      <th className="px-3 py-2.5">Nama</th>
-                      <th className="px-3 py-2.5 text-center">PT</th>
-                      <th className="px-3 py-2.5" title="Dihitung dari tanggal awal bergabung (DOH)">Masa Kerja</th>
-                      <th className="px-3 py-2.5 text-center" title="Pra Pengawas Operasional Pertama">Pra POP</th>
-                      <th className="px-3 py-2.5 text-center" title="Pengawas Operasional Pertama">POP</th>
-                      <th className="px-3 py-2.5">Kualifikasi</th>
-                      <th className="px-3 py-2.5 text-center">Keterangan POP</th>
-                      <th className="px-3 py-2.5 text-center" title="Pengawas Operasional Madya">POM</th>
-                      {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
-                    </tr>
+                      <>
+                        <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                          <th rowSpan={2} className="px-3 py-2 text-center bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700">No</th>
+                          <th rowSpan={2} className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700">NIK</th>
+                          <th rowSpan={2} className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700">Nama</th>
+                          <th rowSpan={2} className="px-3 py-2 text-center bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700">PT</th>
+                          <th rowSpan={2} className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700" title="Dihitung dari tanggal awal bergabung (DOH)">Masa Kerja</th>
+                          <th colSpan={5} className="px-3 py-1.5 text-center bg-amber-500/10 text-amber-900 dark:text-amber-300 font-black border-r border-slate-200 dark:border-slate-700">
+                            Sertifikasi POP & POM
+                          </th>
+                          <th colSpan={CERT_TYPES.length} className="px-3 py-1.5 text-center bg-teal-500/10 text-teal-900 dark:text-teal-300 font-black border-r border-slate-200 dark:border-slate-700">
+                            Sertifikasi K3 & Kompetensi
+                          </th>
+                          {canManage && <th rowSpan={2} className="px-3 py-2 text-center bg-slate-50 dark:bg-slate-800">Aksi</th>}
+                        </tr>
+                        <tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 dark:bg-slate-800">
+                          <th className="px-3 py-2 text-center" title="Pra Pengawas Operasional Pertama">Pra POP</th>
+                          <th className="px-3 py-2 text-center" title="Pengawas Operasional Pertama">POP</th>
+                          <th className="px-3 py-2">Kualifikasi</th>
+                          <th className="px-3 py-2 text-center">Keterangan POP</th>
+                          <th className="px-3 py-2 text-center border-r border-slate-200 dark:border-slate-700" title="Pengawas Operasional Madya">POM</th>
+                          {CERT_TYPES.map((ct, i) => (
+                            <th
+                              key={ct.type}
+                              className={`px-2.5 py-2 text-center whitespace-nowrap ${i === CERT_TYPES.length - 1 ? 'border-r border-slate-200 dark:border-slate-700' : ''}`}
+                              title={`${ct.title} · Masa Berlaku: ${ct.validYears ? `${ct.validYears} Tahun` : 'Belum ditentukan'} (${ct.issuer})`}
+                            >
+                              <span className="font-bold">{ct.title.replace(' : 2017 Sistem Manajemen Laboratorium', '')}</span>
+                              <span className="block text-[8px] font-normal lowercase text-slate-400">{ct.issuer}</span>
+                            </th>
+                          ))}
+                        </tr>
+                      </>
                     ) : (
                     <tr className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                       <th className="px-3 py-2.5 text-center">No</th>
@@ -2623,7 +2859,12 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                             <td className="px-3 py-2 text-center">{renderPopBatch(r.popData)}</td>
                             <td className="px-3 py-2 min-w-[140px]">{renderKualifikasi(r.popData)}</td>
                             <td className="px-3 py-2 text-center">{renderPopKeterangan(r.popData?.popKeterangan)}</td>
-                            <td className="px-3 py-2 text-center">{renderPom(r.popData)}</td>
+                            <td className="px-3 py-2 text-center border-r border-slate-100 dark:border-slate-800">{renderPom(r.popData)}</td>
+                            {CERT_TYPES.map((ct, i) => (
+                              <td key={ct.type} className={`px-2 py-2 text-center ${i === CERT_TYPES.length - 1 ? 'border-r border-slate-100 dark:border-slate-800' : ''}`}>
+                                {renderCertCell(getPersonCert(r, ct.type), r, ct.type)}
+                              </td>
+                            ))}
                           </>
                         ) : (
                           <>
@@ -2687,6 +2928,35 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                         <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-600">POP</span>{renderPopBatch(r.popData)}</div>
                         <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-600">POM</span>{renderPom(r.popData)}</div>
                         <div className="col-span-2">{renderKualifikasi(r.popData)}</div>
+                        {getPersonCerts(r).length > 0 && (
+                          <div className="col-span-2 pt-2 mt-1 border-t border-slate-200/70 dark:border-slate-700/70">
+                            <p className="text-[10px] font-black uppercase text-teal-700 dark:text-teal-400 mb-1.5 flex items-center gap-1">
+                              <Award className="w-3 h-3" /> Sertifikasi K3 & Kompetensi
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {getPersonCerts(r).map(c => {
+                                const st = certStatus(c.expired, todayYmd);
+                                const isIso = c.certType === 'iso_17025';
+                                return (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => openEditCertModal(c, r)}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                                      st.status === 'active'
+                                        ? isIso ? 'bg-amber-50 text-amber-900 border-amber-300' : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                        : st.status === 'soon' ? 'bg-amber-100 text-amber-900 border-amber-400' : 'bg-rose-50 text-rose-800 border-rose-300'
+                                    }`}
+                                  >
+                                    <span>{CERT_META[c.certType]?.title.replace(' : 2017 Sistem Manajemen Laboratorium', '') || c.certType}:</span>
+                                    <span>{c.keterangan || 'Lulus'}</span>
+                                    {c.expired && <span className="opacity-75">({c.expired.slice(0, 4)})</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </>
                     ) : program === 'sap'
                       ? SAP_TRAININGS.map(t => (
@@ -2722,7 +2992,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
           </div>
         </div>
-        </>)}
       </div>
 
       {/* Modal Tambah / Edit */}
@@ -2940,6 +3209,226 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             <div className="flex gap-2.5">
               <Button variant="secondary" onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 text-xs font-bold">Batal</Button>
               <Button variant="danger" onClick={handleDelete} className="flex-1 py-2.5 text-xs font-bold">Hapus</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah / Edit Sertifikasi K3 & Kompetensi */}
+      {certForm && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <form
+            onSubmit={e => { e.preventDefault(); submitCertForm(); }}
+            className="w-full max-w-lg max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl shadow-2xl border"
+            style={cardStyle}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b bg-teal-50/70 dark:bg-teal-950/30" style={cardStyle}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-xs">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    {certForm.id ? 'Edit Sertifikasi K3 & Kompetensi' : 'Tambah Sertifikasi K3 & Kompetensi'}
+                  </h3>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    {CERT_META[certForm.certType]?.title || 'Sertifikasi Eksternal'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCertForm(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Jenis Sertifikasi</label>
+                <select
+                  value={certForm.certType}
+                  onChange={e => {
+                    const ct = e.target.value as CertType;
+                    const autoExp = defaultCertExpired(ct, certForm.tanggal);
+                    setCertForm(prev => prev ? { ...prev, certType: ct, expired: autoExp || prev.expired } : null);
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-slate-100"
+                >
+                  {CERT_TYPES.map(ct => (
+                    <option key={ct.type} value={ct.type}>
+                      {ct.title} ({ct.issuer})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Nama Karyawan</label>
+                <input
+                  type="text"
+                  value={certForm.nama}
+                  onChange={e => {
+                    const name = e.target.value;
+                    const match = allRecords.find(r => r.nama.toLowerCase().trim() === name.toLowerCase().trim());
+                    setCertForm(prev => prev ? {
+                      ...prev,
+                      nama: name,
+                      nik: match?.nik || prev.nik,
+                      jabatan: match?.jabatan || prev.jabatan,
+                      pt: match?.pt || prev.pt,
+                    } : null);
+                  }}
+                  list="employee-names-list-cert"
+                  placeholder="Ketik atau pilih nama karyawan..."
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 font-bold"
+                />
+                <datalist id="employee-names-list-cert">
+                  {allRecords.map(r => (
+                    <option key={r.id} value={r.nama}>{r.nik} · {r.jabatan}</option>
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">NIK</label>
+                  <input
+                    type="text"
+                    value={certForm.nik}
+                    onChange={e => setCertForm(prev => prev ? { ...prev, nik: e.target.value } : null)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono font-bold"
+                    placeholder="Contoh: 04D20020842"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Perusahaan (PT)</label>
+                  <select
+                    value={certForm.pt}
+                    onChange={e => setCertForm(prev => prev ? { ...prev, pt: e.target.value } : null)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold"
+                  >
+                    <option value="TBP">TBP</option>
+                    <option value="GPS">GPS</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Jabatan</label>
+                <input
+                  type="text"
+                  value={certForm.jabatan}
+                  onChange={e => setCertForm(prev => prev ? { ...prev, jabatan: e.target.value } : null)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                  placeholder="Contoh: Laboratory Supervisor"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Tanggal Pelaksanaan</label>
+                  <input
+                    type="date"
+                    value={certForm.tanggal}
+                    onChange={e => {
+                      const tgl = e.target.value;
+                      const autoExp = defaultCertExpired(certForm.certType, tgl);
+                      setCertForm(prev => prev ? { ...prev, tanggal: tgl, expired: autoExp || prev.expired } : null);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Tanggal Expired
+                    {CERT_META[certForm.certType]?.validYears && (
+                      <span className="font-normal text-slate-400 ml-1">({CERT_META[certForm.certType].validYears} thn)</span>
+                    )}
+                  </label>
+                  <input
+                    type="date"
+                    value={certForm.expired}
+                    onChange={e => setCertForm(prev => prev ? { ...prev, expired: e.target.value } : null)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Keterangan / Hasil</label>
+                  <input
+                    type="text"
+                    value={certForm.keterangan}
+                    onChange={e => setCertForm(prev => prev ? { ...prev, keterangan: e.target.value } : null)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold"
+                    placeholder="Lulus / Selesai"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Penerbit</label>
+                  <div className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    {CERT_META[certForm.certType]?.issuer || '-'}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Catatan (Opsional)</label>
+                <textarea
+                  value={certForm.note}
+                  onChange={e => setCertForm(prev => prev ? { ...prev, note: e.target.value } : null)}
+                  rows={2}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                  placeholder="Nomor sertifikat, lisensi K3, batch pelatihan, dll."
+                />
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 flex gap-2.5 px-5 py-4 border-t" style={cardStyle}>
+              {certForm.id && canManage && (
+                <Button
+                  type="button"
+                  variant="danger"
+                  onClick={() => {
+                    const found = certRows.find(c => c.id === certForm.id);
+                    if (found) setDeleteCertTarget(found);
+                  }}
+                  className="py-2.5 text-xs font-bold"
+                >
+                  Hapus
+                </Button>
+              )}
+              <Button type="button" variant="secondary" onClick={() => setCertForm(null)} className="flex-1 py-2.5 text-xs font-bold">
+                Batal
+              </Button>
+              <Button type="submit" disabled={isSavingCert} className="flex-1 py-2.5 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white">
+                {isSavingCert && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {certForm.id ? 'Simpan Perubahan' : 'Tambah Sertifikasi'}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Konfirmasi Hapus Sertifikasi */}
+      {deleteCertTarget && (
+        <div className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl shadow-2xl border p-6 pb-8 sm:pb-6 text-center" style={cardStyle}>
+            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-black text-slate-950 mb-1">Hapus Data Sertifikasi?</h3>
+            <p className="text-xs text-slate-600 mb-5">
+              Sertifikasi <span className="font-bold text-slate-900">{CERT_META[deleteCertTarget.certType]?.title}</span> untuk <span className="font-bold text-slate-900">{deleteCertTarget.nama}</span> akan dihapus.
+            </p>
+            <div className="flex gap-2.5">
+              <Button variant="secondary" onClick={() => setDeleteCertTarget(null)} className="flex-1 py-2.5 text-xs font-bold">Batal</Button>
+              <Button variant="danger" onClick={confirmDeleteCert} className="flex-1 py-2.5 text-xs font-bold">Hapus</Button>
             </div>
           </div>
         </div>
