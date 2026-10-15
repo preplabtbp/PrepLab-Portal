@@ -464,6 +464,7 @@ export const getDisplayTitle = (title: string): string => {
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
     .replace(/<!--.*$/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 };
 
@@ -2678,7 +2679,11 @@ export function NotionDatabaseTable({
       // 2. Clean Title match (resilient against checkbox toggle [ ] <-> [x], ↳ prefix, and <!--last-modified:...--> changes)
       if (cleanSelTitle && cCleanTitle === cleanSelTitle) return true;
       if (cleanRowTitle && cCleanTitle === cleanRowTitle) return true;
-      if (cleanRowTitle && cCleanTitle.startsWith(`${cleanRowTitle} - `)) return true;
+      if (cleanRowTitle && (cCleanTitle.startsWith(`${cleanRowTitle} - `) || cCleanTitle.startsWith(`${cleanRowTitle}  - `))) return true;
+
+      // Base title match (strip sub-period date suffix like " - 15 Okt 2026")
+      const baseOfCClean = cCleanTitle.split(' - ')[0].trim();
+      if (cleanRowTitle && baseOfCClean === cleanRowTitle) return true;
 
       // 3. Fallback raw string match
       if (selQ && cTopic === selQ) return true;

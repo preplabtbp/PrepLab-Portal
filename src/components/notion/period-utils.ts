@@ -531,15 +531,38 @@ export function getTopicSubPeriods(
 
   // 2. From existing comments in the discussion drawer
   if (baseTopicTitle && allComments && allComments.length > 0) {
-    const baseClean = baseTopicTitle.toLowerCase().trim();
-    const prefix = `${baseClean} - `;
+    const cleanBase = baseTopicTitle
+      .replace(/^[↳↪\s]+/, '')
+      .replace(/^\[[ xX]\]\s*/, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+      .replace(/<!--.*$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim().toLowerCase();
+
+    const rowTaskId = (row?.id || (baseTopicTitle.match(/<!--task-id:([^>]+)-->/)?.[1]) || '').toLowerCase().trim();
+
     allComments.forEach(c => {
-      const t = (c.topicTitle || '').trim();
-      const tLower = t.toLowerCase();
-      if (tLower.startsWith(prefix)) {
-        const sub = t.substring(prefix.length).trim();
-        if (sub) {
-          foundPeriods.add(sub);
+      const rawT = (c.topicTitle || '').trim();
+      const taskMatch = rawT.match(/<!--task-id:([^>]+)-->/);
+      const isIdMatch = Boolean(rowTaskId && ((c as any).topicId === rowTaskId || taskMatch?.[1]?.toLowerCase().trim() === rowTaskId));
+
+      const cleanT = rawT
+        .replace(/^[↳↪\s]+/, '')
+        .replace(/^\[[ xX]\]\s*/, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+        .replace(/<!--.*$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim().toLowerCase();
+
+      if (cleanT.includes(' - ')) {
+        const parts = cleanT.split(' - ');
+        const tBase = parts[0].trim();
+        const sub = parts.slice(1).join(' - ').trim();
+        if (sub && (isIdMatch || tBase === cleanBase || cleanT.startsWith(`${cleanBase} - `))) {
+          const rawParts = rawT.split(' - ');
+          foundPeriods.add(rawParts.length > 1 ? rawParts[rawParts.length - 1].trim() : sub);
         }
       }
     });

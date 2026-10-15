@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Rekap Evaluasi Teknis & Daftar Bahasan Vendor LIMS</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 12mm 10mm 15mm 10mm;
+      @bottom-right {
+        content: counter(page) " / " counter(pages);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      line-height: 1.45;
+      font-size: 9.5pt;
+      margin: 0;
+      padding: 0;
+    }
+
+    .header-container {
+      border-bottom: 2.5px solid #0f766e;
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .title-area h1 {
+      font-size: 15pt;
+      font-weight: 800;
+      color: #0f766e;
+      margin: 0 0 3px 0;
+      letter-spacing: -0.3px;
+      text-transform: uppercase;
+    }
+
+    .title-area .subtitle {
+      font-size: 9.5pt;
+      color: #475569;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    .meta-area {
+      text-align: right;
+      font-size: 8pt;
+      color: #64748b;
+      line-height: 1.35;
+    }
+
+    .badge {
+      display: inline-block;
+      background-color: #0f766e;
+      color: #ffffff;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .intro-box {
+      background-color: #f8fafc;
+      border-left: 3.5px solid #0f766e;
+      padding: 7px 10px;
+      border-radius: 0 5px 5px 0;
+      margin-bottom: 14px;
+      font-size: 8.8pt;
+      color: #334155;
+    }
+
+    .grid-container {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .card {
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+      page-break-inside: avoid;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+
+    .card-header {
+      background: #f1f5f9;
+      border-bottom: 1px solid #cbd5e1;
+      padding: 5px 10px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .item-num {
+      background: #0f766e;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 8pt;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .card-title {
+      font-size: 9.5pt;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0;
+    }
+
+    .card-body {
+      padding: 7px 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 8.5pt;
+    }
+
+    .field-block {
+      background: #ffffff;
+    }
+
+    .field-label {
+      font-weight: 700;
+      font-size: 7.8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .label-critique {
+      color: #b91c1c;
+    }
+
+    .label-demand {
+      color: #0f766e;
+    }
+
+    .field-text {
+      color: #334155;
+      margin: 0;
+      line-height: 1.35;
+    }
+
+    .footer {
+      margin-top: 15px;
+      border-top: 1px solid #cbd5e1;
+      padding-top: 6px;
+      font-size: 7.5pt;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-container">
+    <div class="title-area">
+      <span class="badge">Official Technical Audit Document</span>
+      <h1>Rekap 20 Evaluasi Teknis & Daftar Tuntutan Vendor LIMS</h1>
+      <p class="subtitle">Laboratorium Preparasi, Analisis & Pengujian Sampel Tambang/Smelter</p>
+    </div>
+    <div class="meta-area">
+      <strong>Tanggal:</strong> 14 Oktober 2026<br>
+      <strong>Agenda:</strong> Vendor Performance Review<br>
+      <strong>Aplikasi:</strong> HI-LIMS Solution
+    </div>
+  </div>
+
+  <div class="intro-box">
+    <strong>Panduan Meeting:</strong> Dokumen ini merangkum 20 poin evaluasi kinerja operasional, kelemahan arsitektur sistem, dan daftar tuntutan peningkatan teknis LIMS. Seluruh poin berfokus murni pada aspek keandalan sistem, integritas data pengujian laboratorium, serta efisiensi kerja personil di lapangan.
+  </div>
+
+  <div class="grid-container">
+
+    <!-- Item 1 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">1</span>
+        <h2 class="card-title">Arsitektur Deployment: Skema Shortcut & File Sharing (SMB)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Aplikasi dan database disimpan di 1 PC lokal lalu shortcut disebar via network folder share. Ini bukan arsitektur client-server murni; mengeksekusi binary dan data mentah melalui SMB menciptakan beban I/O tinggi pada jaringan lokal.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Migrasi penuh ke arsitektur Client-Server terpusat atau Web-based (Zero-Client). Database harus dikelola oleh dedicated engine mandiri, bukan direct file-share.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 2 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">2</span>
+        <h2 class="card-title">Batasan Kapasitas User (Limitasi 20 Simultaneous User)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Sistem saat ini terbentur limitasi konkurensi 20 user bersamaan. Pada jam sibuk shift kerja, user ke-21 ke atas terkunci atau menyebabkan latensi ekstrem bagi pengguna lainnya.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Hilangkan batasan 20 user simultan dan terapkan sistem manajemen koneksi (*connection pooling*) modern yang mampu melayani seluruh personel lab multi-shift secara paralel.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 3 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">3</span>
+        <h2 class="card-title">Latensi & Kecepatan: Waktu Menunggu Loading Melebihi Waktu Operasi</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Personel data management dan analis menghabiskan porsi waktu kerja lebih lama untuk menunggu layar *loading / freeze* daripada menginput data. Turnaround Time (TAT) sampel terhambat sistem.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Optimasi indexing database, perbaikan arsitektur query data, dan implementasi caching di sisi server agar proses transisi layar dan eksekusi data selesai dalam hitungan sub-detik (< 1s).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 4 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">4</span>
+        <h2 class="card-title">Kebutuhan Skema Dual-ID Sampel (External ID vs. Internal Lab ID)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Registrasi saat ini hanya mendukung 1 nama/ID sampel. Lab tidak bisa melakukan *blind analysis*, padahal standar QA/QC lab tambang mewajibkan pemisahan identitas demi mencegah bias pengujian.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Dukungan registrasi Dual-ID: *External ID* (ID Asli Klien/Mine) dipetakan ke *Internal ID* (ID Analisis Lab) selama proses prep & assay, lalu otomatis di-map kembali ke ID asli saat pelaporan/CoA.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 5 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">5</span>
+        <h2 class="card-title">Ketiadaan Skema Verifikasi / Approval Berjenjang per Seksi</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Tidak ada kontrol *gatekeeping* antar seksi kerja. Data dari seksi preparasi atau instrumen bisa langsung terdorong ke pelaporan tanpa mekanisme verifikasi resmi per tahap.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Penerapan *Sequential Workflow Approval*: Tahap Preparation Approval &rarr; Instrument/Assay Approval &rarr; QA/QC Review &rarr; Section Head Final Sign-Off secara digital berjenjang.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 6 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">6</span>
+        <h2 class="card-title">Ketidakstabilan Cetak Barcode (Posisi Meleset & Sering Error)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Sering terjadi error tiba-tiba pada pencetakan barcode di mana posisi cetak bergeser/meleset dari stiker label fisik, menyebabkan barcode tidak terbaca oleh scanner genggam.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Perbaikan engine rendering printout barcode dengan kalibrasi margin presisi (offset millimeter control) dan penyediaan modul preview layout sebelum eksekusi cetak.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 7 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">7</span>
+        <h2 class="card-title">Rigiditas Sistem Pencetakan: Ketiadaan Dukungan Multi-Printer</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Modul pencetakan sangat kaku dan hanya mendukung konfigurasi hardware tertentu. Lab kesulitan menyesuaikan jika menggunakan tipe printer stiker yang berbeda.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Sistem pencetakan harus fleksibel mendukung **Thermal Roll Printer (Zebra/Xprinter ESC/POS)** maupun **Printer Biasa (Kertas Stiker Lembaran A4)** dengan template layout yang dapat diatur.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 8 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">8</span>
+        <h2 class="card-title">Kesulitan Ekstraksi Raw Data dengan Multi-Filter Kustom</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Penarikan raw data sangat sulit saat ingin mengombinasikan berbagai filter kustom (rentang tanggal, kode klien, jenis analisa, status sampel). Query sering kali macet atau gagal.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Penyediaan fitur *Advanced Data Exporter* dengan filter multi-parameter dinamis dan kemampuan ekspor langsung ke format Microsoft Excel (.xlsx) atau CSV secara cepat dan stabil.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 9 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">9</span>
+        <h2 class="card-title">Ketidakstabilan Sistem: Crash Mendadak (Sudden Force Close)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Aplikasi sering mengalami *force close* (keluar sendiri) atau tabel data tiba-tiba kosong di tengah operasional tanpa pesan error yang informatif, merusak flow kerja staf.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Audit dan perbaikan *memory leak*, implementasi *structured exception handling*, serta penyediaan file error log terpusat agar setiap insiden crash dapat dilacak akar masalahnya.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 10 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">10</span>
+        <h2 class="card-title">Tingginya Risiko Kerusakan Database (Data Corruption & SPOF)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Menempatkan database di PC biasa yang diakses ramai-ramai عبر folder share sangat rentan korup jika terjadi lonjakan arus, PC mati mendadak, atau jaringan terputus saat transaksi data.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Gunakan Database Management System (DBMS) kelas enterprise yang menjamin prinsip ACID (Atomicity, Consistency, Isolation, Durability) dengan proteksi *auto-rollback* transaksi.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 11 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">11</span>
+        <h2 class="card-title">Ketiadaan Skema Backup Otomatis & Disaster Recovery Terjadwal</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Pencadangan data saat ini masih bersifat manual dan disimpan di storage fisik yang sama. Sangat rentan jika hardware host mengalami kerusakan fisik (*disk failure*) atau malware.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Implementasi *Automated Scheduled Backup* harian dan per shift ke storage sekunder/NAS terpisah, dilengkapi prosedur restore data teruji tanpa downtime berkepanjangan.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 12 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">12</span>
+        <h2 class="card-title">Perluasan Otomatisasi Alat Uji: Dari Timbangan ke XRF / Spektrometri</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Integrasi ke beberapa timbangan sudah ada, namun instrumen pembaca kadar utama (seperti XRF) belum terhubung otomatis secara end-to-end. Penarikan data masih manual/semi-manual.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Pembangunan integrasi otomatis (file watcher / direct instrument API) untuk membaca dan memetakan output hasil uji mesin XRF langsung ke nomor batch sampel di LIMS.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 13 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">13</span>
+        <h2 class="card-title">Antarmuka (UI/UX) Usang & Pemborosan Ruang Layar (Screen Waste)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Form Job Registration dan modul lainnya menyisakan 60–70% kanvas kosong abu-abu, tidak responsif terhadap resolusi monitor modern, dan menggunakan tata letak kaku era 2005.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Redesain layout antarmuka yang modern, padat informasi, adaptif terhadap layar Full HD/Wide, serta memprioritaskan kemudahan visual bagi operator laboratorium.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 14 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">14</span>
+        <h2 class="card-title">Minimnya Dukungan Navigasi Keyboard (High-Speed Data Entry)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Operator dipaksa mengandalkan klik mouse secara konstan untuk navigasi antar kolom form dan tombol aksi, memperlambat kecepatan input saat menangani batch ratusan sampel.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Dukungan komprehensif alur keyboard: perpindahan kolom dengan Tab/Enter, shortcut tombol fungsi (F1-F12), dan mekanisme input cepat tanpa perlu melepas tangan dari keyboard.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 15 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">15</span>
+        <h2 class="card-title">Dashboard Monitoring yang Terlalu Sederhana & Statis</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Widget *24 Hours Job Status* hanya menampilkan 4 kotak angka statis tanpa visualisasi alur batch. Manajemen lab tidak dapat melihat di mana titik kemacetan sampel berada.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Pengembangan visual status board berbasis alur proses (Kanban): Penerimaan &rarr; Prep (Drying/Pulverizing) &rarr; XRF &rarr; Verifikasi, dengan indikator waktu tunggu per tahap.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 16 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">16</span>
+        <h2 class="card-title">Ketiadaan Fitur Operasi Massal (Bulk Action / Multi-Select)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Pengubahan status, pemilihan metode pengujian, atau verifikasi data harus dilakukan baris per baris. Sangat tidak efisien untuk operasional tambang dengan volume tinggi.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Penyediaan fitur *checkbox multi-select* dan *bulk actions* (seperti Mass Status Change, Mass Print, Bulk Sample Assignment) pada tabel Job dan Data Entry.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 17 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">17</span>
+        <h2 class="card-title">Kelemahan Audit Trail & Integritas Rekam Jejak (ISO 17025)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Modifikasi angka hasil pengujian atau pembatalan job belum terekam secara komprehensif bersama alasan perubahan (*reason for change*). Rentan saat audit eksternal.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Penerapan Audit Trail ketat berstandar ISO 17025 yang mencatat identitas user, timestamp, nilai sebelum vs sesudah, serta alasan perubahan secara permanen (*immutable log*).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 18 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">18</span>
+        <h2 class="card-title">Manajemen Hak Akses (Role-Based Access Control) yang Kurang Spesifik</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Pengaturan wewenang pengguna masih sangat umum dan belum bisa dibatasi secara granular per seksi kerja (misal: personel prep tidak boleh memvalidasi hasil XRF).</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Penyempurnaan manajemen otorisasi berbasis peran (RBAC) yang granular per divisi (Sampler, Prep, Analyst, QC, Foreman, Superintendent) untuk mencegah pelanggaran SOP.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 19 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">19</span>
+        <h2 class="card-title">Ketiadaan Validasi Mutu Otomatis (QA/QC: Duplicate & CRM)</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Pengecekan batas toleransi sampel duplikat (RPD) dan deviasi standar CRM (Certified Reference Material) masih dilakukan manual oleh analis, memperbesar risiko human error.</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Sistem harus otomatis menghitung RPD dan mengevaluasi CRM terhadap batas kendali (2SD / 3SD) dengan indikator visual merah jika out-of-control sebelum job disahkan.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item 20 -->
+    <div class="card">
+      <div class="card-header">
+        <span class="item-num">20</span>
+        <h2 class="card-title">Format Output Pelaporan & CoA yang Kaku dan Terbatas</h2>
+      </div>
+      <div class="card-body">
+        <div class="field-block">
+          <div class="field-label label-critique">Fakta & Poin Kritik</div>
+          <p class="field-text">Template Certificate of Analysis (CoA) dan summary report sangat kaku, sulit disesuaikan dengan kebutuhan format spesifik berbagai klien tambang (PT TBP, MSP, ONC, HPL).</p>
+        </div>
+        <div class="field-block">
+          <div class="field-label label-demand">Tuntutan / Solusi Teknis</div>
+          <p class="field-text">Penyediaan *Report Template Designer* yang mendukung kustomisasi layout, ekspor PDF instan dengan QR-Code validasi keaslian dokumen, serta tanda tangan digital.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <span>Dokumen Resmi Rapat Evaluasi Sistem LIMS Laboratorium</span>
+    <span>Sifat Dokumen: Internal & Rahasia</span>
+  </div>
+
+</body>
+</html>
