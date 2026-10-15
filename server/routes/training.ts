@@ -385,104 +385,68 @@ function getAllTrainingSeedRows(): any[] {
   if (cachedSeedRows) return cachedSeedRows;
 
   const recordsByNik = new Map<string, any>();
+  const now = new Date();
+
+  const applyRecords = (records: ParsedTrainingRow[], programs: TrainingProgram[], fillProfileOnly = false) => {
+    records.forEach(rec => {
+      const cleanNik = String(rec.nik || '').trim().toUpperCase();
+      if (!cleanNik) return;
+      rec.nik = cleanNik;
+      const existing = recordsByNik.get(cleanNik);
+      const merged: any = mergeTrainingRow(rec, existing, { programs, updatedBy: 'seed', now, fillProfileOnly });
+      if (!existing) {
+        merged.id = recordsByNik.size + 1;
+        merged.createdAt = now;
+      } else {
+        merged.id = existing.id;
+        merged.createdAt = existing.createdAt || now;
+      }
+      recordsByNik.set(cleanNik, merged);
+    });
+  };
 
   // 1. Initial SAP seed rows
-  TRAINING_SAP_SEED.forEach(([no, nik, nama, jabatan, gol, shift, hazid, jsa, iutOtt, iai, bfa], idx) => {
-    const cleanNik = String(nik).trim().toUpperCase();
-    recordsByNik.set(cleanNik, {
-      id: idx + 1,
-      no,
-      nik: cleanNik,
-      nama,
-      jabatan,
-      gol,
-      shift,
-      inSap: true,
-      inK3: false,
-      inPop: false,
-      hazid: hazid || null,
-      jsa: jsa || null,
-      iutOtt: iutOtt || null,
-      iai: iai || null,
-      bfa: bfa || null,
-      bs: null,
-      notes: null,
-      updatedBy: 'seed',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-  });
+  const sapRecs: ParsedTrainingRow[] = TRAINING_SAP_SEED.map(([no, nik, nama, jabatan, gol, shift, hazid, jsa, iutOtt, iai, bfa]) => ({
+    no, nik, nama, jabatan, gol, shift,
+    hazid: hazid || null, jsa: jsa || null, iutOtt: iutOtt || null, iai: iai || null, bfa: bfa || null,
+  }));
+  applyRecords(sapRecs, ['sap']);
 
-  // 2. K3 seed CSV
+  // 2. Monitoring SAP CSV (180+ employees with BFA, HIRA, JSA, IUT OTT, IAI, BS, scores & status)
+  try {
+    const parsedMonitoring = parseTrainingSheet(Papa.parse<unknown[]>(TRAINING_MONITORING_SEED_CSV, { skipEmptyLines: true }).data);
+    if (parsedMonitoring?.records) {
+      applyRecords(parsedMonitoring.records, ['sap']);
+    }
+  } catch (e: any) {
+    console.warn('[Training] Failed to parse Monitoring seed:', e?.message);
+  }
+
+  // 3. Basic Safety CSV (BS training dates for all employees)
+  try {
+    const parsedBs = parseTrainingSheet(Papa.parse<unknown[]>(TRAINING_BASIC_SAFETY_SEED_CSV, { skipEmptyLines: true }).data, { singleTraining: 'bs' });
+    if (parsedBs?.records) {
+      applyRecords(parsedBs.records, ['sap'], true);
+    }
+  } catch (e: any) {
+    console.warn('[Training] Failed to parse Basic Safety seed:', e?.message);
+  }
+
+  // 4. K3 seed CSV (WAH, LOTO, Confined Space, Fire Fighting for 185 employees)
   try {
     const parsedK3 = parseTrainingSheet(Papa.parse<unknown[]>(TRAINING_K3_SEED_CSV, { skipEmptyLines: true }).data);
     if (parsedK3?.records) {
-      parsedK3.records.forEach((r: any, idx: number) => {
-        const cleanNik = String(r.nik).trim().toUpperCase();
-        const existing = recordsByNik.get(cleanNik) || {
-          id: recordsByNik.size + 1,
-          nik: cleanNik,
-          nama: r.nama,
-          jabatan: r.jabatan,
-          gol: r.gol,
-          shift: r.shift,
-          bagian: r.bagian,
-          pt: r.pt,
-          inSap: false,
-          inK3: false,
-          inPop: false,
-          updatedBy: 'seed',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        existing.inK3 = true;
-        existing.noK3 = r.no ?? (idx + 1);
-        existing.bagian = existing.bagian || r.bagian || null;
-        existing.pt = existing.pt || r.pt || null;
-        existing.wah = r.wah || null;
-        existing.wahStatus = r.wahStatus || null;
-        existing.loto = r.loto || null;
-        existing.lotoStatus = r.lotoStatus || null;
-        existing.confinedSpace = r.confinedSpace || null;
-        existing.confinedSpaceStatus = r.confinedSpaceStatus || null;
-        existing.fireFighting = r.fireFighting || null;
-        existing.fireFightingStatus = r.fireFightingStatus || null;
-        recordsByNik.set(cleanNik, existing);
-      });
+      applyRecords(parsedK3.records, ['k3']);
     }
   } catch (e: any) {
     console.warn('[Training] Failed to parse K3 seed:', e?.message);
   }
 
-  // 3. POP seed CSV
+  // 5. POP seed CSV (Pra POP, POP, POM, popData for 63 employees)
   try {
     const parsedPop = parseTrainingSheet(Papa.parse<unknown[]>(TRAINING_POP_SEED_CSV, { skipEmptyLines: true }).data);
     if (parsedPop?.records) {
-      parsedPop.records.forEach((r: any, idx: number) => {
-        const cleanNik = String(r.nik).trim().toUpperCase();
-        const existing = recordsByNik.get(cleanNik) || {
-          id: recordsByNik.size + 1,
-          nik: cleanNik,
-          nama: r.nama,
-          jabatan: r.jabatan,
-          gol: r.gol,
-          shift: r.shift,
-          bagian: r.bagian,
-          pt: r.pt,
-          inSap: false,
-          inK3: false,
-          inPop: false,
-          updatedBy: 'seed',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        existing.inPop = true;
-        existing.noPop = r.no ?? (idx + 1);
-        existing.bagian = existing.bagian || r.bagian || null;
-        existing.pt = existing.pt || r.pt || null;
-        existing.popData = r.popData || null;
-        recordsByNik.set(cleanNik, existing);
-      });
+      applyRecords(parsedPop.records, ['pop']);
     }
   } catch (e: any) {
     console.warn('[Training] Failed to parse POP seed:', e?.message);
