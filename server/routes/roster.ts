@@ -350,7 +350,7 @@ export async function computeRosterData() {
   return result;
 }
 
-function generateFallbackRosterData(): any[] {
+export function generateFallbackRosterData(): any[] {
   const emps = getCsvEmployees();
   const today = new Date();
   const next7DaysTemplate: any[] = [];

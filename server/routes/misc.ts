@@ -18,6 +18,9 @@ import {
 import webpush from 'web-push';
 import { invalidateScheduleCache, fetchInspectionScheduleFromSheet, rekapInspeksiCache, REKAP_INSPEKSI_CACHE_TTL } from "./inspections.js";
 import { invalidateGamificationCache } from "./gamification.js";
+import { isDbCircuitBroken } from "../../src/db/index.js";
+import { getCsvEmployees } from "./employees.js";
+import { generateFallbackRosterData } from "./roster.js";
 
 export const router = Router();
 
@@ -1028,11 +1031,37 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     proofsPromise.catch(() => {});
     rosterPromise.catch(() => {});
 
-    // Run initial DB queries in parallel
-    const [allEmployees, allRoster] = await Promise.all([
-      db.select().from(employees),
-      rosterPromise
-    ]);
+    // Run initial DB queries in parallel with circuit breaker & timeout protection
+    let allEmployees: any[] = [];
+    let allRoster: any[] = [];
+
+    if (isDbCircuitBroken()) {
+      allEmployees = getCsvEmployees();
+      allRoster = generateFallbackRosterData();
+    } else {
+      try {
+        const timeoutEmps = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 600));
+        const resEmps = await Promise.race([
+          Promise.all([
+            db.select().from(employees),
+            rosterPromise
+          ]),
+          timeoutEmps
+        ]) as [any[], any[]];
+        allEmployees = resEmps[0] || [];
+        allRoster = resEmps[1] || [];
+      } catch {
+        allEmployees = getCsvEmployees();
+        allRoster = generateFallbackRosterData();
+      }
+    }
+
+    if (!allEmployees || allEmployees.length === 0) {
+      allEmployees = getCsvEmployees();
+    }
+    if (!allRoster || allRoster.length === 0) {
+      allRoster = generateFallbackRosterData();
+    }
 
     // Pre-build employee lookup maps for O(1) matching (instead of nested O(n*m) loops)
     const empByNikLower = new Map<string, typeof allEmployees[0]>();
