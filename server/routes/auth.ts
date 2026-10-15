@@ -201,10 +201,23 @@ authRouter.post("/check-nik", async (req, res) => {
       });
     }
 
+    // Instant response for core developers without database roundtrip latency
+    const devFallback = resolveDevFallbackUser(normalized);
+    if (devFallback) {
+      return res.json({ 
+        status: "success", 
+        found: true,
+        firstLoginComplete: Boolean(devFallback.firstLoginComplete),
+        name: devFallback.name,
+        avatar: devFallback.avatar || null,
+        username: devFallback.username || null
+      });
+    }
+
     let employee: any = null;
     try {
-      // Race DB query against a 3.5s timeout so developers are never blocked by offline/firewalled Cloud SQL
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 3500));
+      // Race DB query against a fast 1200ms timeout
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1200));
       const dbPromise = db.select().from(employees)
         .where(
           or(
@@ -217,7 +230,7 @@ authRouter.post("/check-nik", async (req, res) => {
       const employeeMatches: any = await Promise.race([dbPromise, timeoutPromise]);
       employee = employeeMatches?.[0];
     } catch (dbErr) {
-      console.warn("DB query timed out or failed in /check-nik, checking dev fallback:", dbErr);
+      console.warn("DB query timed out or failed in /check-nik:", dbErr);
     }
 
     if (!employee) {
@@ -290,28 +303,28 @@ authRouter.post("/login", async (req, res) => {
 
     let user: any = null;
     let isDevFallback = false;
-    try {
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 3500));
-      const dbPromise = db.select().from(employees)
-        .where(
-          or(
-            sql`UPPER(${employees.nik}) = ${normalized}`,
-            sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+
+    // Check dev fallback immediately for instant sub-millisecond response
+    const devFallback = resolveDevFallbackUser(normalized);
+    if (devFallback) {
+      user = devFallback;
+      isDevFallback = true;
+    } else {
+      try {
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1200));
+        const dbPromise = db.select().from(employees)
+          .where(
+            or(
+              sql`UPPER(${employees.nik}) = ${normalized}`,
+              sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      const employeeMatches: any = await Promise.race([dbPromise, timeoutPromise]);
-      user = employeeMatches?.[0];
-    } catch (dbErr) {
-      console.warn("DB query timed out or failed in /login, checking dev fallback:", dbErr);
-    }
-
-    if (!user) {
-      const devFallback = resolveDevFallbackUser(normalized);
-      if (devFallback) {
-        user = devFallback;
-        isDevFallback = true;
+        const employeeMatches: any = await Promise.race([dbPromise, timeoutPromise]);
+        user = employeeMatches?.[0];
+      } catch (dbErr) {
+        console.warn("DB query timed out or failed in /login:", dbErr);
       }
     }
 
