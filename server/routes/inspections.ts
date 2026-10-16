@@ -2579,7 +2579,15 @@ router.get("/api/inspection-schedule", async (req, res) => {
     });
   } catch (error: any) {
     console.error("Error fetching inspection schedule:", error);
-    res.status(500).json({ error: error.message || "Failed to load inspection schedule" });
+    // Graceful fallback to avoid HTTP 500 red network errors on slow or offline Google Sheet fetch
+    res.json({
+      success: false,
+      sheet: 'CurrentWeek',
+      week: 'Current',
+      total: 0,
+      data: [],
+      error: error.message || "Failed to load inspection schedule"
+    });
   }
 });
 

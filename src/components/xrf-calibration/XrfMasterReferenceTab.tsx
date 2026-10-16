@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Save, RefreshCw, Table, Sliders, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -7,6 +7,47 @@ interface XrfMasterReferenceTabProps {
 }
 
 const MATRIX_ELEMENTS = ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO'];
+
+// Sub-komponen baris tabel di-memoize untuk mencegah re-render massal seluruh 225 input sel saat mengetik/beralih
+interface StandardMatrixRowProps {
+  std: { code: string; name: string };
+  stdRow: Record<string, { nominalValue: number; stdevFixed: number }>;
+  activeMode: 'STDEV' | 'NOMINAL';
+  onCellChange: (stdCode: string, el: string, valStr: string) => void;
+}
+
+const StandardMatrixRow = React.memo<StandardMatrixRowProps>(({
+  std,
+  stdRow,
+  activeMode,
+  onCellChange,
+}) => {
+  return (
+    <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+      <td className="py-2 px-4 font-bold text-slate-900 dark:text-slate-100 bg-slate-50/50 dark:bg-slate-900/50 border-r border-slate-200 dark:border-slate-700 font-sans">
+        {std.name}
+      </td>
+      {MATRIX_ELEMENTS.map(el => {
+        const valObj = stdRow[el] || { nominalValue: 0, stdevFixed: 0 };
+        const currentVal = activeMode === 'STDEV' ? valObj.stdevFixed : valObj.nominalValue;
+
+        return (
+          <td key={`cell-${std.code}-${el}`} className="py-1 px-1.5 border-r border-slate-200 dark:border-slate-700">
+            <input
+              type="number"
+              step="0.001"
+              value={currentVal !== undefined && currentVal > 0 ? currentVal : ''}
+              placeholder="0.000"
+              onChange={e => onCellChange(std.code, el, e.target.value)}
+              className="w-full text-right px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-transparent focus:border-teal-500 rounded font-mono text-slate-800 dark:text-slate-100 outline-none transition-all"
+            />
+          </td>
+        );
+      })}
+    </tr>
+  );
+});
+StandardMatrixRow.displayName = 'StandardMatrixRow';
 
 export const XrfMasterReferenceTab: React.FC<XrfMasterReferenceTabProps> = ({
   standards,
@@ -46,7 +87,7 @@ export const XrfMasterReferenceTab: React.FC<XrfMasterReferenceTabProps> = ({
     loadReferences();
   }, []);
 
-  const handleCellChange = (stdCode: string, el: string, valStr: string) => {
+  const handleCellChange = useCallback((stdCode: string, el: string, valStr: string) => {
     const val = parseFloat(valStr) || 0;
     setMatrix(prev => {
       const updatedStd = { ...(prev[stdCode] || {}) };
@@ -63,7 +104,7 @@ export const XrfMasterReferenceTab: React.FC<XrfMasterReferenceTabProps> = ({
         [stdCode]: updatedStd,
       };
     });
-  };
+  }, [activeMode]);
 
   const handleSaveAll = async () => {
     setSaving(true);
@@ -121,7 +162,7 @@ export const XrfMasterReferenceTab: React.FC<XrfMasterReferenceTabProps> = ({
           <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex items-center text-xs font-bold">
             <button
               onClick={() => setActiveMode('STDEV')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 activeMode === 'STDEV'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -131,7 +172,7 @@ export const XrfMasterReferenceTab: React.FC<XrfMasterReferenceTabProps> = ({
             </button>
             <button
               onClick={() => setActiveMode('NOMINAL')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 activeMode === 'NOMINAL'
                   ? 'bg-teal-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -178,33 +219,15 @@ export const XrfMasterReferenceTab: React.FC<XrfMasterReferenceTabProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[11px]">
-              {standards.map((std, idx) => {
-                const stdRow = matrix[std.code] || {};
-                return (
-                  <tr key={`std-row-${std.code}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="py-2 px-4 font-bold text-slate-900 dark:text-slate-100 bg-slate-50/50 dark:bg-slate-900/50 border-r border-slate-200 dark:border-slate-700 font-sans">
-                      {std.name}
-                    </td>
-                    {MATRIX_ELEMENTS.map(el => {
-                      const valObj = stdRow[el] || { nominalValue: 0, stdevFixed: 0 };
-                      const currentVal = activeMode === 'STDEV' ? valObj.stdevFixed : valObj.nominalValue;
-
-                      return (
-                        <td key={`cell-${std.code}-${el}`} className="py-1 px-1.5 border-r border-slate-200 dark:border-slate-700">
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={currentVal !== undefined && currentVal > 0 ? currentVal : ''}
-                            placeholder="0.000"
-                            onChange={e => handleCellChange(std.code, el, e.target.value)}
-                            className="w-full text-right px-2 py-1 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-transparent focus:border-teal-500 rounded font-mono text-slate-800 dark:text-slate-100 outline-none transition-all"
-                          />
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
+              {standards.map((std, idx) => (
+                <StandardMatrixRow
+                  key={`std-row-${std.code}-${idx}`}
+                  std={std}
+                  stdRow={matrix[std.code] || {}}
+                  activeMode={activeMode}
+                  onCellChange={handleCellChange}
+                />
+              ))}
             </tbody>
           </table>
         </div>

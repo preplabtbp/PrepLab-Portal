@@ -7321,11 +7321,11 @@ export function NotionDatabaseTable({
                 </tr>
               ) : (() => {
                 let runningParentNumber = 0;
-                return groupedRowsData.map(({ groupName, groupRows }) => {
+                return groupedRowsData.map(({ groupName, groupRows }, gIdx) => {
                   const isCollapsed = collapsedGroups[groupName];
 
                   return (
-                    <React.Fragment key={groupName}>
+                    <React.Fragment key={groupName ? `grp-${groupName}` : `grp-idx-${gIdx}`}>
                       {/* Notion Group Header Row */}
                       <tr
                         onClick={() => toggleGroup(groupName)}

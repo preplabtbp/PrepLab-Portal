@@ -41,7 +41,18 @@ const originalFetch = window.fetch;
 window.fetch = async (...args) => {
   let [resource, config] = args;
   config = config || {};
-  config.credentials = config.credentials || 'include';
+
+  // Only apply credentials 'include' to local portal endpoints to avoid CORS policy rejection on external public APIs (e.g. Open-Meteo)
+  const isLocalEndpoint = typeof resource === 'string' && (
+    resource.startsWith('/') ||
+    resource.startsWith(window.location.origin) ||
+    resource.includes('localhost:') ||
+    resource.includes('127.0.0.1:')
+  );
+
+  if (isLocalEndpoint) {
+    config.credentials = config.credentials || 'include';
+  }
 
   const token = localStorage.getItem('p2h_token') || localStorage.getItem('token');
   if (token && typeof resource === 'string' && (resource.startsWith('/api/') || resource.startsWith('http://localhost:3000/api/'))) {

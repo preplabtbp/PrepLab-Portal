@@ -236,14 +236,14 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
 
       {/* Main Tab Content */}
       <div>
-        {activeTab === 'control-charts' && (
+        <div className={activeTab === 'control-charts' ? 'block' : 'hidden'}>
           <XrfControlChartsTab
             instruments={instruments}
             standards={standards}
             assignedSite={assignedSite}
             isDevOrManager={isDevOrManager}
           />
-        )}
+        </div>
 
         {activeTab === 'daily-input' && (
           <XrfDailyInputTab
