@@ -62,10 +62,22 @@ function sanitizePopData(value: unknown): PopData | null {
     pengalamanTambang: text(v.pengalamanTambang),
     masaKerja: text(v.masaKerja),
     popKeterangan: normalizePopKeterangan(v.popKeterangan),
+    popExpired: normalizeTrainingDate(v.popExpired),
+    popPenerbit: text(v.popPenerbit),
+    penyelenggara: text(v.penyelenggara),
+    provider: text(v.provider),
+    popSertifikat: text(v.popSertifikat),
     pom: text(v.pom),
     pomPendidikan: text(v.pomPendidikan),
     pomMasaKerja: text(v.pomMasaKerja),
     pomKeterangan: passOnly(v.pomKeterangan),
+    pomExpired: normalizeTrainingDate(v.pomExpired),
+    pomPenerbit: text(v.pomPenerbit),
+    pomPenyelenggara: text(v.pomPenyelenggara),
+    pomProvider: text(v.pomProvider),
+    pomSertifikat: text(v.pomSertifikat),
+    pomNote: text(v.pomNote),
+    notes: text(v.notes),
   };
 }
 

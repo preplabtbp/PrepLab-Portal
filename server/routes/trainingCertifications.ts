@@ -305,8 +305,14 @@ trainingCertificationsRouter.put("/api/training-certifications/:id", requireMana
     const values = pickCert(req.body);
     const [row] = await db.update(trainingCertifications).set({ ...values, updatedBy: updatedByOf(req), updatedAt: new Date() })
       .where(eq(trainingCertifications.id, id)).returning();
-    if (!row) return res.status(404).json({ status: "error", message: "Data sertifikasi tidak ditemukan." });
-    res.json({ status: "success", data: row });
+    if (cachedFallbackCerts) {
+      const fIdx = cachedFallbackCerts.findIndex(c => c.id === id);
+      if (fIdx >= 0) cachedFallbackCerts[fIdx] = { ...cachedFallbackCerts[fIdx], ...values };
+    }
+    if (!row && !cachedFallbackCerts?.some(c => c.id === id)) {
+      return res.status(404).json({ status: "error", message: "Data sertifikasi tidak ditemukan." });
+    }
+    res.json({ status: "success", data: row || cachedFallbackCerts?.find(c => c.id === id) });
   } catch (error: any) {
     res.status(400).json({ status: "error", message: error.message });
   }

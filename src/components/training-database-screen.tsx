@@ -1870,6 +1870,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 key={`${c.id}-${c.certType}`}
                 onClick={canManage ? () => setCertModalForm({
                   id: c.id,
+                  source: 'cert',
                   certType: c.certType,
                   nama: c.nama || r.nama,
                   nik: c.nik || r.nik,
@@ -1879,6 +1880,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   keterangan: c.keterangan || 'Lulus',
                   expired: c.expired || '',
                   note: c.note || '',
+                  penerbit: c.penerbit || '',
+                  penyelenggara: c.penyelenggara || '',
+                  provider: c.provider || '',
+                  sertifikat: c.sertifikat || '',
                 }) : undefined}
                 title={`${CERT_META[c.certType]?.title || c.certType}${c.tanggal ? ` · Tgl: ${c.tanggal}` : ''}${c.expired ? ` · Exp: ${c.expired}` : ''}${c.keterangan ? ` (${c.keterangan})` : ''}${canManage ? ' — Klik untuk kelola / edit' : ''}`}
                 className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] border tracking-tight shadow-2xs whitespace-nowrap transition-transform ${canManage ? 'cursor-pointer hover:scale-105 hover:ring-1 hover:ring-amber-400' : ''} ${badgeColor}`}
@@ -2066,9 +2071,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         program: 'Sertifikasi' as const,
         label: 'Pengawas Operasional Pertama (POP)',
         desc: 'BNSP / KESDM',
-        penerbit: (p as any)?.popPenerbit || 'BNSP / KESDM',
-        penyelenggara: (p as any)?.penyelenggara || 'PPSDM Geominerba',
-        provider: (p as any)?.provider || 'Lembaga Diklat Profesi',
+        penerbit: (p as any)?.popPenerbit ? (p as any).popPenerbit : 'BNSP / KESDM',
+        penyelenggara: (p as any)?.penyelenggara ? (p as any).penyelenggara : 'PPSDM Geominerba',
+        provider: (p as any)?.provider ? (p as any).provider : 'Lembaga Diklat Profesi',
         date: p?.popBatch || (p as any)?.doh || null,
         expiry: popExp,
         warningDate: certWarningDate(popExp),
@@ -2093,9 +2098,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         program: 'Sertifikasi' as const,
         label: 'Pengawas Operasional Madya (POM)',
         desc: 'BNSP / KESDM',
-        penerbit: (p as any)?.pomPenerbit || 'BNSP / KESDM',
-        penyelenggara: (p as any)?.pomPenyelenggara || 'PPSDM Geominerba',
-        provider: (p as any)?.pomProvider || 'Lembaga Diklat Profesi',
+        penerbit: (p as any)?.pomPenerbit ? (p as any).pomPenerbit : 'BNSP / KESDM',
+        penyelenggara: (p as any)?.pomPenyelenggara ? (p as any).pomPenyelenggara : 'PPSDM Geominerba',
+        provider: (p as any)?.pomProvider ? (p as any).pomProvider : 'Lembaga Diklat Profesi',
         date: p?.pom || null,
         expiry: pomExp,
         warningDate: certWarningDate(pomExp),
@@ -4075,8 +4080,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                                           <button
                                             type="button"
                                             onClick={() => setCertModalForm({
-                                              id: r.id, certType: r.certType, nama: r.nama, nik: r.nik || '', jabatan: r.jabatan || '', pt: r.pt || 'TBP',
+                                              id: r.id, source: 'cert', certType: r.certType, nama: r.nama, nik: r.nik || '', jabatan: r.jabatan || '', pt: r.pt || 'TBP',
                                               tanggal: r.tanggal || '', keterangan: r.keterangan || '', expired: r.expired || '', note: r.note || '',
+                                              penerbit: r.penerbit || '', penyelenggara: r.penyelenggara || '', provider: r.provider || '', sertifikat: r.sertifikat || '',
                                             })}
                                             className="p-1.5 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-teal-50 cursor-pointer"
                                             title="Edit"
@@ -4798,25 +4804,26 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               setIsSavingCert(true);
               try {
                 if (certModalForm.source === 'pop' || certModalForm.source === 'pom') {
-                  const rec = records.find(r => r.id === certModalForm.recordId || (certModalForm.nik && r.nik === certModalForm.nik));
+                  const rec = records.find(r => r.id === certModalForm.recordId || (certModalForm.nik && r.nik === certModalForm.nik)) || (globalSelectedPerson?.id === certModalForm.recordId ? globalSelectedPerson : null);
                   if (rec) {
                     const curPop: any = { ...(rec.popData || {}) };
                     if (certModalForm.source === 'pop') {
-                      curPop.popBatch = certModalForm.tanggal || curPop.popBatch;
-                      curPop.popKeterangan = certModalForm.keterangan || curPop.popKeterangan;
-                      curPop.popExpired = certModalForm.expired || curPop.popExpired;
-                      curPop.popPenerbit = certModalForm.penerbit || curPop.popPenerbit;
-                      curPop.penyelenggara = certModalForm.penyelenggara || curPop.penyelenggara;
-                      curPop.provider = certModalForm.provider || curPop.provider;
-                      curPop.popSertifikat = certModalForm.sertifikat || curPop.popSertifikat;
+                      if (certModalForm.tanggal !== undefined) curPop.popBatch = certModalForm.tanggal;
+                      if (certModalForm.keterangan !== undefined) curPop.popKeterangan = certModalForm.keterangan;
+                      if (certModalForm.expired !== undefined) curPop.popExpired = certModalForm.expired;
+                      if (certModalForm.penerbit !== undefined) curPop.popPenerbit = certModalForm.penerbit;
+                      if (certModalForm.penyelenggara !== undefined) curPop.penyelenggara = certModalForm.penyelenggara;
+                      if (certModalForm.provider !== undefined) curPop.provider = certModalForm.provider;
+                      if (certModalForm.sertifikat !== undefined) curPop.popSertifikat = certModalForm.sertifikat;
                     } else {
-                      curPop.pom = certModalForm.tanggal || curPop.pom;
-                      curPop.pomKeterangan = certModalForm.keterangan || curPop.pomKeterangan;
-                      curPop.pomExpired = certModalForm.expired || curPop.pomExpired;
-                      curPop.pomPenerbit = certModalForm.penerbit || curPop.pomPenerbit;
-                      curPop.pomPenyelenggara = certModalForm.penyelenggara || curPop.pomPenyelenggara;
-                      curPop.pomProvider = certModalForm.provider || curPop.pomProvider;
-                      curPop.pomSertifikat = certModalForm.sertifikat || curPop.pomSertifikat;
+                      if (certModalForm.tanggal !== undefined) curPop.pom = certModalForm.tanggal;
+                      if (certModalForm.keterangan !== undefined) curPop.pomKeterangan = certModalForm.keterangan;
+                      if (certModalForm.expired !== undefined) curPop.pomExpired = certModalForm.expired;
+                      if (certModalForm.penerbit !== undefined) curPop.pomPenerbit = certModalForm.penerbit;
+                      if (certModalForm.penyelenggara !== undefined) curPop.pomPenyelenggara = certModalForm.penyelenggara;
+                      if (certModalForm.provider !== undefined) curPop.pomProvider = certModalForm.provider;
+                      if (certModalForm.sertifikat !== undefined) curPop.pomSertifikat = certModalForm.sertifikat;
+                      if (certModalForm.note !== undefined) curPop.pomNote = certModalForm.note;
                     }
                     const res = await fetch(`/api/training-records/${rec.id}`, {
                       method: 'PUT',
@@ -4825,6 +4832,16 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     });
                     const json = await res.json();
                     if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memperbarui data');
+
+                    // Update globalSelectedPerson immediately so UI refreshes in real-time
+                    setGlobalSelectedPerson(prev => {
+                      if (!prev) return null;
+                      if (prev.id === rec.id || (rec.nik && prev.nik === rec.nik)) {
+                        return { ...prev, popData: curPop };
+                      }
+                      return prev;
+                    });
+
                     toast.success(`Data ${certModalForm.source.toUpperCase()} berhasil diperbarui`);
                   }
                 } else {
@@ -4847,7 +4864,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   toast.success(json.message || 'Sertifikasi berhasil disimpan');
                 }
                 setCertModalForm(null);
-                queryClient.invalidateQueries({ queryKey: ['training-certifications'] });
+                await queryClient.invalidateQueries({ queryKey: ['training-certifications'] });
+                await queryClient.invalidateQueries({ queryKey: TRAINING_QUERY_KEY });
                 fetchRecords();
               } catch (err: any) {
                 toast.error(err.message || 'Gagal menyimpan sertifikasi');
