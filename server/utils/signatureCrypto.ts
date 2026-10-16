@@ -1,9 +1,12 @@
 import crypto from 'crypto';
 
-// Master key derived from TTD_ENCRYPTION_KEY, JWT_SECRET, or fallback securely
-const MASTER_SECRET = process.env.TTD_ENCRYPTION_KEY || process.env.JWT_SECRET || 'preplab-secure-ttd-master-key-2026-tbp-obi';
-// Always produce consistent 32-byte key for AES-256
-const ENCRYPTION_KEY = crypto.createHash('sha256').update(MASTER_SECRET).digest();
+// Master key derived from dedicated TTD_ENCRYPTION_KEY or stable system master key
+// NOTE: Must NOT use JWT_SECRET exclusively as primary key because JWT_SECRET differs between
+// localhost and Cloud Run production, which would prevent signatures encrypted on one from
+// being decrypted on the other against the shared Cloud SQL database.
+const STABLE_DEFAULT_SECRET = 'preplab-secure-ttd-master-key-2026-tbp-obi';
+const PRIMARY_SECRET = process.env.TTD_ENCRYPTION_KEY || STABLE_DEFAULT_SECRET;
+const ENCRYPTION_KEY = crypto.createHash('sha256').update(PRIMARY_SECRET).digest();
 
 export interface EncryptedSignature {
   ciphertext: string;
@@ -36,7 +39,8 @@ export function encryptSignature(plainTextDataUrl: string): EncryptedSignature {
 
 /**
  * Decrypts an encrypted signature using AES-256-GCM.
- * Throws an error if the auth tag is invalid (anti-tamper protection).
+ * Supports multi-key fallback (stable default, TTD_ENCRYPTION_KEY, and JWT_SECRET)
+ * so signatures registered on localhost or production can always be opened.
  */
 export function decryptSignature(encrypted: EncryptedSignature): string {
   if (!encrypted.ciphertext || !encrypted.iv || !encrypted.tag) {
@@ -45,14 +49,30 @@ export function decryptSignature(encrypted: EncryptedSignature): string {
 
   const iv = Buffer.from(encrypted.iv, 'base64');
   const tag = Buffer.from(encrypted.tag, 'base64');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
 
-  decipher.setAuthTag(tag);
+  const candidateSecrets = [
+    PRIMARY_SECRET,
+    STABLE_DEFAULT_SECRET,
+    process.env.JWT_SECRET,
+  ].filter((s): s is string => typeof s === 'string' && s.length > 0);
 
-  let decrypted = decipher.update(encrypted.ciphertext, 'base64', 'utf8');
-  decrypted += decipher.final('utf8');
+  const uniqueSecrets = Array.from(new Set(candidateSecrets));
 
-  return decrypted;
+  let lastError: any = null;
+  for (const secret of uniqueSecrets) {
+    try {
+      const key = crypto.createHash('sha256').update(secret).digest();
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(tag);
+      let decrypted = decipher.update(encrypted.ciphertext, 'base64', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Gagal mendekripsi tanda tangan');
 }
 
 /**
