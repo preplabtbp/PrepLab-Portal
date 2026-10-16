@@ -1038,9 +1038,22 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                   </div>
                   <h4 className="font-bold text-slate-800 text-base sm:text-lg">Status &amp; Riwayat Pengambilan APD</h4>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Daftar 11 jenis APD resmi, riwayat pengambilan terakhir, dan status kelayakan masa interval penggantian.
-                </p>
+                <div className="flex flex-wrap items-center gap-2.5 mt-1.5">
+                  <p className="text-xs text-slate-500">
+                    Daftar 11 jenis APD resmi, riwayat pengambilan terakhir, dan status kelayakan masa interval penggantian.
+                  </p>
+                  {canEditApdHistory ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                      <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                      Akses Edit Aktif: {permissionInfo.roleLabel}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title="Hanya Section Inventory Control, Developer, dan Manager yang dapat mengedit/menghapus riwayat">
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      Mode Read-Only (Hanya Lihat)
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Toggle Table vs Data List */}
@@ -1262,11 +1275,24 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                                 <button
                                   type="button"
                                   onClick={() => setSelectedApdModal(item.apd)}
-                                  className="py-1 px-2.5 rounded-xl border border-slate-200 hover:border-purple-300 bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                                  title="Lihat Rincian & Riwayat Pengambilan"
+                                  className={`py-1 px-2.5 rounded-xl border font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
+                                    canEditApdHistory
+                                      ? 'border-purple-200 hover:border-purple-400 bg-purple-50/70 hover:bg-purple-100/80 text-purple-800'
+                                      : 'border-slate-200 hover:border-purple-300 bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700'
+                                  }`}
+                                  title={canEditApdHistory ? "Kelola Riwayat: Edit Tanggal, Hapus, atau Tambah Data" : "Lihat Rincian & Riwayat Pengambilan"}
                                 >
-                                  <FileText className="w-3.5 h-3.5 text-purple-600" />
-                                  <span>Riwayat</span>
+                                  {canEditApdHistory ? (
+                                    <>
+                                      <Pencil className="w-3.5 h-3.5 text-purple-600" />
+                                      <span>Riwayat &amp; Edit</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FileText className="w-3.5 h-3.5 text-purple-600" />
+                                      <span>Riwayat</span>
+                                    </>
+                                  )}
                                 </button>
 
                                 {item.isInDraft ? (
@@ -1392,10 +1418,24 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                           <button
                             type="button"
                             onClick={() => setSelectedApdModal(item.apd)}
-                            className="py-1.5 px-3 rounded-xl border border-slate-200 hover:border-purple-300 bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                            className={`py-1.5 px-3 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                              canEditApdHistory
+                                ? 'border-purple-200 hover:border-purple-400 bg-purple-50/70 hover:bg-purple-100/80 text-purple-800'
+                                : 'border-slate-200 hover:border-purple-300 bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700'
+                            }`}
+                            title={canEditApdHistory ? "Kelola Riwayat: Edit Tanggal, Hapus, atau Tambah Data" : "Lihat Detail & Riwayat Pengambilan"}
                           >
-                            <FileText className="w-3.5 h-3.5 text-purple-600" />
-                            <span>Detail &amp; Riwayat</span>
+                            {canEditApdHistory ? (
+                              <>
+                                <Pencil className="w-3.5 h-3.5 text-purple-600" />
+                                <span>Detail &amp; Kelola Riwayat</span>
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="w-3.5 h-3.5 text-purple-600" />
+                                <span>Detail &amp; Riwayat</span>
+                              </>
+                            )}
                           </button>
 
                           {item.isInDraft ? (

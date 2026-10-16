@@ -2918,25 +2918,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </button>
               </div>
 
-              {/* Ringkasan jumlah training */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
-                {[
-                  { label: 'POP/POM', count: globalPersonProfile.popStages.filter(s => s.attended).length, total: globalPersonProfile.popStages.length, color: '#7c3aed', show: isExternal && globalPersonProfile.popStages.length > 0 },
-                  { label: 'Training SAP', count: globalPersonProfile.sapItems.filter(s => s.state === 'Berlaku' || s.state === 'WARNING').length, total: globalPersonProfile.sapItems.length, color: DASH.brand, show: !isExternal && globalPersonProfile.sapItems.length > 0 },
-                  { label: 'Training K3', count: globalPersonProfile.k3Items.filter(s => s.state === 'Telah Mengikuti').length, total: globalPersonProfile.k3Items.length, color: '#d97706', show: !isExternal && globalPersonProfile.k3Items.length > 0 },
-                  { label: 'Sertifikasi', count: globalPersonProfile.certItems.filter(s => s.status === 'active' || s.status === 'soon').length, total: globalPersonProfile.certItems.length, color: globalPersonProfile.certItems.some(s => s.status === 'soon') ? '#d97706' : '#059669', show: isExternal && globalPersonProfile.certItems.length > 0 },
-                ].filter(i => i.show).map(item => (
-                  <div key={item.label} className="rounded-2xl border border-slate-200/80 p-3 text-center">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{item.label}</p>
-                    <p className="text-2xl font-extrabold mt-1" style={{ color: item.color }}>{item.count}<span className="text-sm text-slate-400 font-bold">/{item.total}</span></p>
-                  </div>
-                ))}
-                {globalPersonProfile.popStages.length === 0 && globalPersonProfile.sapItems.length === 0 && globalPersonProfile.k3Items.length === 0 && globalPersonProfile.certItems.length === 0 && (
-                  <div className="col-span-full text-center py-4 text-xs text-slate-500 font-semibold">
-                    Belum ada data training tercatat untuk karyawan ini
-                  </div>
-                )}
-              </div>
+
             </div>
 
 
