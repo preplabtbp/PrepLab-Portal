@@ -889,7 +889,7 @@ function PersonProgramCards({ record, scope }: { record: TrainingRecord; scope: 
     const stageDate: Record<string, string | null | undefined> = { praPop: p?.praPop };
     const stageInfo: Record<string, string | null | undefined> = { praPop: p?.praPopResult, pop: p?.popBatch };
     return (
-      <div className="lg:col-span-4 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
+      <div className="lg:col-span-3 grid grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
         {POP_STAGES.map(s => {
           const ok = s.attended(p);
           return (
@@ -919,7 +919,7 @@ function PersonProgramCards({ record, scope }: { record: TrainingRecord; scope: 
   }
 
   return (
-    <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
+    <div className="lg:col-span-3 grid grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
       {all.map(p => {
         const part = a.parts.find(x => x.id === p.id);
         const latest = rows.filter(r => r.program === programLabel[p.id] && r.date).map(r => r.date!).sort().pop() || null;
@@ -3630,7 +3630,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
           )}
 
-          <DashCard className={`lg:col-span-8 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
+          <DashCard className={`lg:col-span-5 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
             <DashTitle
               title="Analitik Training"
               sub={
@@ -3737,6 +3737,77 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <div className="h-full flex items-center justify-center text-xs font-medium text-slate-500">Belum ada data untuk ditampilkan</div>
               )}
               </div>
+            </div>
+          </DashCard>
+
+          <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+            <DashTitle
+              title={countOnly ? 'Jumlah Peserta per Training' : 'Cakupan per Training'}
+              sub={countOnly ? 'Klik untuk melihat pesertanya' : program === 'k3' ? 'Wajib per section & GOL I–III · klik untuk melihat yang belum ikut' : 'Klik untuk melihat yang belum berlaku'}
+            />
+            <div className="space-y-2">
+              {stats.coverage.map(c => {
+                const active = missingFilter === c.key;
+                const pct = c.target ? Math.round((c.done / c.target) * 100) : 0;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setMissingFilter(active ? null : c.key)}
+                    title={c.desc}
+                    className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition-all cursor-pointer border ${active ? 'border-transparent' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/60 dark:border-slate-700'}`}
+                    style={active ? { backgroundColor: DASH.brandSoft, borderColor: DASH.brand } : undefined}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{c.label}</span>
+                      <span className="text-[11px] font-semibold text-slate-600">
+                        {countOnly ? `${c.done} orang` : `${c.done}/${c.target} · ${pct}%`}
+                      </span>
+                    </div>
+                    {!countOnly && (
+                      <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: pct >= 90 ? DASH.brand : pct >= 70 ? DASH.yellow : DASH.coral }} />
+                      </div>
+                    )}
+                    <div className="mt-1 flex flex-wrap gap-x-2.5 text-[10px] font-semibold text-slate-500">
+                      {!countOnly && c.target - c.done > 0 && <span className="text-rose-600">{c.target - c.done} {program === 'k3' ? 'belum ikut' : 'belum berlaku'}</span>}
+                      {c.warning > 0 && <span className="text-yellow-600">{c.warning} warning</span>}
+                      {!countOnly && c.expired > 0 && <span className="text-red-600">{c.expired} expired/fail</span>}
+                      {c.pending > 0 && <span className="text-sky-600">{c.pending} pending</span>}
+                      {countOnly && c.expired > 0 && <span className="text-red-600">{c.expired} fail</span>}
+                      {c.exempt > 0 && <span>{c.exempt} tidak wajib</span>}
+                    </div>
+                  </button>
+                );
+              })}
+
+              {program === 'pop' && (
+                <div className="pt-2">
+                  <p className="text-[11px] font-semibold text-slate-600 mb-1.5">Kualifikasi POP</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => {
+                      const n = programRecords.filter(r => r.popData?.popKeterangan === k).length;
+                      const active = statusFilter === k;
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setStatusFilter(active ? 'ALL' : k)}
+                          title={POP_KETERANGAN[k].desc}
+                          className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl border text-left cursor-pointer ${active ? 'border-transparent' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100'}`}
+                          style={active ? { backgroundColor: DASH.brandSoft, borderColor: DASH.brand } : undefined}
+                        >
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: POP_KETERANGAN_COLOR[k] }} />
+                            <span className="text-[10px] font-semibold text-slate-800 truncate">{POP_KETERANGAN[k].label}</span>
+                          </span>
+                          <span className="text-xs font-bold text-slate-900">{n}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </DashCard>
           </>)}
@@ -4052,79 +4123,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
           </div>
         ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 items-start">
-          <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
-            <DashTitle
-              title={countOnly ? 'Jumlah Peserta per Training' : 'Cakupan per Training'}
-              sub={countOnly ? 'Klik untuk melihat pesertanya' : program === 'k3' ? 'Wajib per section & GOL I–III · klik untuk melihat yang belum ikut' : 'Klik untuk melihat yang belum berlaku'}
-            />
-            <div className="space-y-2">
-              {stats.coverage.map(c => {
-                const active = missingFilter === c.key;
-                const pct = c.target ? Math.round((c.done / c.target) * 100) : 0;
-                return (
-                  <button
-                    key={c.key}
-                    type="button"
-                    onClick={() => setMissingFilter(active ? null : c.key)}
-                    title={c.desc}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition-all cursor-pointer border ${active ? 'border-transparent' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/60 dark:border-slate-700'}`}
-                    style={active ? { backgroundColor: DASH.brandSoft, borderColor: DASH.brand } : undefined}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{c.label}</span>
-                      <span className="text-[11px] font-semibold text-slate-600">
-                        {countOnly ? `${c.done} orang` : `${c.done}/${c.target} · ${pct}%`}
-                      </span>
-                    </div>
-                    {!countOnly && (
-                      <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: pct >= 90 ? DASH.brand : pct >= 70 ? DASH.yellow : DASH.coral }} />
-                      </div>
-                    )}
-                    <div className="mt-1 flex flex-wrap gap-x-2.5 text-[10px] font-semibold text-slate-500">
-                      {!countOnly && c.target - c.done > 0 && <span className="text-rose-600">{c.target - c.done} {program === 'k3' ? 'belum ikut' : 'belum berlaku'}</span>}
-                      {c.warning > 0 && <span className="text-yellow-600">{c.warning} warning</span>}
-                      {!countOnly && c.expired > 0 && <span className="text-red-600">{c.expired} expired/fail</span>}
-                      {c.pending > 0 && <span className="text-sky-600">{c.pending} pending</span>}
-                      {countOnly && c.expired > 0 && <span className="text-red-600">{c.expired} fail</span>}
-                      {c.exempt > 0 && <span>{c.exempt} tidak wajib</span>}
-                    </div>
-                  </button>
-                );
-              })}
-
-              {program === 'pop' && (
-                <div className="pt-2">
-                  <p className="text-[11px] font-semibold text-slate-600 mb-1.5">Kualifikasi POP</p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => {
-                      const n = programRecords.filter(r => r.popData?.popKeterangan === k).length;
-                      const active = statusFilter === k;
-                      return (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => setStatusFilter(active ? 'ALL' : k)}
-                          title={POP_KETERANGAN[k].desc}
-                          className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl border text-left cursor-pointer ${active ? 'border-transparent' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100'}`}
-                          style={active ? { backgroundColor: DASH.brandSoft, borderColor: DASH.brand } : undefined}
-                        >
-                          <span className="flex items-center gap-1.5 min-w-0">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: POP_KETERANGAN_COLOR[k] }} />
-                            <span className="text-[10px] font-semibold text-slate-800 truncate">{POP_KETERANGAN[k].label}</span>
-                          </span>
-                          <span className="text-xs font-bold text-slate-900">{n}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </DashCard>
-
-          <div className="lg:col-span-8 min-w-0">
+        <div className="w-full min-w-0">
           <div className={tableCardCls}>
             {/* Header tabel: judul · tab program · Filter · Export */}
             <div className="flex flex-col gap-3 mb-3">
@@ -4477,7 +4476,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
           </>
         )}
-          </div>
           </div>
         </div>
         )}

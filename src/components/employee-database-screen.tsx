@@ -45,7 +45,8 @@ import {
   FileText, BarChart3, ChevronRight, ChevronDown, ChevronUp, ExternalLink, CheckCircle2, AlertTriangle, Fingerprint, 
   Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, 
   Plus, Edit3, ShieldAlert, Scale, Gavel, Clock, AlertOctagon, Info, ShieldCheck,
-  HeartHandshake, CalendarRange, Trophy, Award, Trash2, StickyNote, Check, UserX
+  HeartHandshake, CalendarRange, Trophy, Award, Trash2, StickyNote, Check, UserX,
+  UserPlus, UserCheck, RotateCcw
 } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
@@ -413,6 +414,194 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     entries: Array<{ tanggal: string; alasan: string }>;
   } | null>(null);
 
+  // SO Vacant Dynamic Assignments State (Persisted in localStorage)
+  const SO_ASSIGNMENTS_STORAGE_KEY = 'preplab_so_vacant_assignments_v1';
+  const [soAssignments, setSoAssignments] = useState<Record<string, Array<{
+    id: string;
+    name: string;
+    nik?: string;
+    jabatan: string;
+    shift: 'A' | 'B' | 'NONSHIFT';
+    section?: string;
+    pt?: string;
+    addedAt: string;
+  }>>>(() => {
+    try {
+      const raw = localStorage.getItem(SO_ASSIGNMENTS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
+    return {};
+  });
+
+  const saveSoAssignments = (updated: Record<string, any[]>) => {
+    setSoAssignments(updated);
+    try {
+      localStorage.setItem(SO_ASSIGNMENTS_STORAGE_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed saving SO assignments', e);
+    }
+  };
+
+  // State Modal Isi Posisi Vacant di SO
+  const [fillVacantModal, setFillVacantModal] = useState<{
+    isOpen: boolean;
+    roleKey: string;
+    title: string;
+    quota: number;
+    existingCount: number;
+    effVacant: number;
+    totalCount: number;
+    sectionName?: string;
+  } | null>(null);
+
+  const [fillVacantTab, setFillVacantTab] = useState<'existing' | 'new'>('existing');
+  const [vacantSearchEmp, setVacantSearchEmp] = useState('');
+  const [vacantSelectedEmp, setVacantSelectedEmp] = useState<any | null>(null);
+  const [vacantShift, setVacantShift] = useState<'A' | 'B' | 'NONSHIFT'>('A');
+
+  // Input manual karyawan baru untuk vacant
+  const [newVacantName, setNewVacantName] = useState('');
+  const [newVacantNik, setNewVacantNik] = useState('');
+  const [newVacantPt, setNewVacantPt] = useState('PT Trimegah Bangun Persada');
+  const [isSavingVacant, setIsSavingVacant] = useState(false);
+
+  const handleAssignExistingToVacant = () => {
+    if (!fillVacantModal || !vacantSelectedEmp) {
+      toast.error('Pilih karyawan terlebih dahulu');
+      return;
+    }
+    const roleKey = fillVacantModal.roleKey;
+    const newAssignment = {
+      id: `assign_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: vacantSelectedEmp.name,
+      nik: vacantSelectedEmp.nik || '',
+      jabatan: fillVacantModal.title,
+      shift: vacantShift,
+      section: fillVacantModal.sectionName || fillVacantModal.title,
+      pt: vacantSelectedEmp.pt || 'PT Trimegah Bangun Persada',
+      addedAt: new Date().toISOString()
+    };
+
+    const currentList = soAssignments[roleKey] || [];
+    const updated = {
+      ...soAssignments,
+      [roleKey]: [...currentList, newAssignment]
+    };
+    saveSoAssignments(updated);
+    toast.success(`${vacantSelectedEmp.name} berhasil ditugaskan ke ${fillVacantModal.title}`, {
+      description: `Jumlah Vacant berkurang 1 dan Existing bertambah 1 (${vacantShift === 'A' ? 'Shift A' : vacantShift === 'B' ? 'Shift B' : 'Non Shift'}).`
+    });
+    setFillVacantModal(null);
+    setVacantSelectedEmp(null);
+    setVacantSearchEmp('');
+  };
+
+  const handleCreateNewEmployeeForVacant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fillVacantModal) return;
+    if (!newVacantName.trim()) {
+      toast.error('Nama karyawan wajib diisi');
+      return;
+    }
+
+    setIsSavingVacant(true);
+    const finalNik = newVacantNik.trim() || `EMP${Date.now().toString().slice(-6)}`;
+    const roleKey = fillVacantModal.roleKey;
+
+    const newEmpPayload: Record<string, any> = {
+      name: newVacantName.trim(),
+      nik: finalNik,
+      jabatan: fillVacantModal.title,
+      section: fillVacantModal.sectionName || fillVacantModal.title,
+      department: 'Preparation & Laboratory',
+      pt: newVacantPt,
+      shift: vacantShift === 'NONSHIFT' ? 'Non Shift' : `Shift ${vacantShift}`,
+      statusKaryawan: 'Aktif',
+      statusKontrak: 'PKWT',
+      editorNik: inspectorNik
+    };
+
+    try {
+      // 1. Simpan ke backend database API jika online
+      try {
+        const res = await fetch('/api/employees', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-nik': inspectorNik
+          },
+          body: JSON.stringify(newEmpPayload)
+        });
+        if (res.ok) {
+          const resJson = await res.json();
+          if (resJson.data) {
+            newEmpPayload.nik = resJson.data.nik || finalNik;
+          }
+        }
+      } catch (apiErr) {
+        console.warn('API save fallback to local state', apiErr);
+      }
+
+      // 2. Tambah ke local employees list
+      setEmployees(prev => {
+        const next = [newEmpPayload, ...prev.filter(e => e.nik !== finalNik)];
+        try {
+          const cacheStr = JSON.stringify(next);
+          localStorage.setItem(cacheKey, cacheStr);
+          sessionStorage.setItem(cacheKey, cacheStr);
+        } catch {}
+        return next;
+      });
+
+      // 3. Masukkan ke penugasan SO
+      const newAssignment = {
+        id: `assign_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name: newVacantName.trim(),
+        nik: finalNik,
+        jabatan: fillVacantModal.title,
+        shift: vacantShift,
+        section: fillVacantModal.sectionName || fillVacantModal.title,
+        pt: newVacantPt,
+        addedAt: new Date().toISOString()
+      };
+
+      const currentList = soAssignments[roleKey] || [];
+      const updated = {
+        ...soAssignments,
+        [roleKey]: [...currentList, newAssignment]
+      };
+      saveSoAssignments(updated);
+
+      toast.success(`Karyawan baru ${newVacantName.trim()} berhasil ditambahkan!`, {
+        description: `Posisi ${fillVacantModal.title}: Vacant berkurang 1 dan Existing bertambah 1.`
+      });
+
+      setFillVacantModal(null);
+      setNewVacantName('');
+      setNewVacantNik('');
+    } catch (err: any) {
+      toast.error('Gagal menambahkan karyawan: ' + err.message);
+    } finally {
+      setIsSavingVacant(false);
+    }
+  };
+
+  const handleRemoveVacantAssignment = (roleKey: string, assignmentId: string, personName: string) => {
+    const currentList = soAssignments[roleKey] || [];
+    const updatedList = currentList.filter(item => item.id !== assignmentId);
+    const updated = {
+      ...soAssignments,
+      [roleKey]: updatedList
+    };
+    saveSoAssignments(updated);
+    toast.info(`Penugasan ${personName} dibatalkan`, {
+      description: 'Posisi telah dikembalikan menjadi Vacant (+1 Vacant, -1 Existing).'
+    });
+  };
+
   useEffect(() => {
     if (selectedEmployee) {
       setNoteContent(selectedEmployee.catatan || '');
@@ -753,6 +942,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
     return { label: 'User', color: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' };
   }, [inspectorNik, developerList, employees]);
+
+  // Hak akses Khusus Edit SO pada Posisi Vacant:
+  // HANYA untuk Section Administrasi, Developer, dan Manager
+  const canEditSOVacant = useMemo(() => {
+    if (userRoleBadge.label === 'Developer' || userRoleBadge.label === 'Admin' || userRoleBadge.label === 'Manager') {
+      return true;
+    }
+    if (isLocalHostEnv) return true;
+    return false;
+  }, [userRoleBadge, isLocalHostEnv]);
 
   const fetchEmployees = async (silent = false) => {
     if (!silent && employees.length === 0) {
@@ -3309,6 +3508,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               defaultRole?: string;
                               defaultNik?: string;
                               forcedShift?: 'A' | 'B' | 'NONSHIFT';
+                              isCustomAssigned?: boolean;
+                              assignmentId?: string;
                             }
 
                             const renderOfficialRoleBox = ({
@@ -3334,8 +3535,34 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               crewDropdown?: boolean;
                               crewKey?: string;
                             }) => {
+                              const effectiveKey = crewKey || title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                              const customAssigned = soAssignments[effectiveKey] || [];
+
+                              const customAssignedItems = customAssigned.map(a => {
+                                const existingEmp = findEmp(a.name, a.nik);
+                                return {
+                                  empOrName: existingEmp || {
+                                    id: a.id,
+                                    name: a.name,
+                                    nik: a.nik || '-',
+                                    jabatan: a.jabatan || title,
+                                    department: 'Preparation & Laboratory',
+                                    section: a.section || title,
+                                    status_karyawan: 'Aktif',
+                                    shift: a.shift === 'NONSHIFT' ? 'Non Shift' : `Shift ${a.shift}`,
+                                  },
+                                  defaultRole: a.jabatan || title,
+                                  defaultNik: a.nik,
+                                  forcedShift: a.shift,
+                                  isCustomAssigned: true,
+                                  assignmentId: a.id,
+                                };
+                              });
+
+                              const combinedPeople = [...people, ...customAssignedItems];
+
                               // Resolve person list with full name, role, NIK, and shift
-                              const resolvedList = people.map(p => {
+                              const resolvedList = combinedPeople.map(p => {
                                 const isString = typeof p === 'string';
                                 const rawName = isString ? p : (p?.empOrName || p?.name || p);
                                 const defaultRole = (isString ? undefined : p?.defaultRole) || title;
@@ -3352,11 +3579,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 const shift = forcedShift || getEmployeeShift(emp) || 'NONSHIFT';
                                 const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (nik && isHighlighted(nik)));
 
-                                return { emp, name, role, nik, shift, hasMatch };
+                                const isCustomAssigned = isString ? false : !!p?.isCustomAssigned;
+                                const assignmentId = isString ? undefined : p?.assignmentId;
+                                return { emp, name, role, nik, shift, hasMatch, isCustomAssigned, assignmentId };
                               });
 
-                              const existingCount = customExisting ?? resolvedList.length;
-                              const effVacant = customVacant ?? (vacantCount > 0 ? vacantCount : (quota > existingCount ? quota - existingCount : 0));
+                              const baseExisting = customExisting ?? people.length;
+                              const baseVacant = customVacant ?? (vacantCount > 0 ? vacantCount : Math.max(0, quota - baseExisting));
+                              const filledCount = customAssigned.length;
+                              const existingCount = baseExisting + filledCount;
+                              const effVacant = Math.max(0, baseVacant - filledCount);
                               const totalCount = customTotal ?? (existingCount + effVacant);
 
                               // Split into Shift A, Shift B, Non Shift
@@ -3429,6 +3661,21 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                         </div>
                                       )}
                                     </div>
+                                    {p.isCustomAssigned && canEditSOVacant && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm(`Batalkan penugasan ${p.name} dari ${title}? Posisi akan kembali menjadi Vacant.`)) {
+                                            handleRemoveVacantAssignment(effectiveKey, p.assignmentId!, p.name);
+                                          }
+                                        }}
+                                        className="p-1 rounded-md text-rose-500 hover:text-rose-700 hover:bg-rose-100/80 transition-colors shrink-0 ml-1 cursor-pointer"
+                                        title="Batalkan penugasan (kembalikan ke Vacant)"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
                                   </button>
                                 );
                               };
@@ -3453,9 +3700,37 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                         Existing : {existingCount}
                                       </span>
                                       {effVacant > 0 && (
-                                        <span className="px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold">
-                                          Vacant : {effVacant}
-                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (canEditSOVacant) {
+                                              setFillVacantModal({
+                                                isOpen: true,
+                                                roleKey: effectiveKey,
+                                                title,
+                                                quota,
+                                                existingCount,
+                                                effVacant,
+                                                totalCount,
+                                                sectionName: title,
+                                              });
+                                              setFillVacantTab('existing');
+                                              setVacantSelectedEmp(null);
+                                              setVacantSearchEmp('');
+                                              setNewVacantName('');
+                                              setNewVacantNik('');
+                                            } else {
+                                              toast.info('Hanya Section Administrasi, Developer, dan Manager yang memiliki hak akses untuk mengisi posisi Vacant.');
+                                            }
+                                          }}
+                                          className={`px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold flex items-center gap-0.5 ${
+                                            canEditSOVacant ? 'hover:bg-rose-100 hover:border-rose-400 cursor-pointer shadow-2xs active:scale-95' : ''
+                                          }`}
+                                          title={canEditSOVacant ? 'Klik untuk isi posisi Vacant' : undefined}
+                                        >
+                                          <span>Vacant : {effVacant}</span>
+                                          {canEditSOVacant && <Plus className="w-2.5 h-2.5 text-rose-600" />}
+                                        </button>
                                       )}
                                       <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-800 font-black">
                                         Total : {totalCount}
@@ -3557,7 +3832,64 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       )}
 
                                       {/* Vacant List */}
-                                      {effVacant > 0 && (
+                                       {effVacant > 0 && (
+                                         <div className="rounded-lg bg-rose-50/50 border border-dashed border-rose-300 p-1.5 space-y-1">
+                                           {Array.from({ length: effVacant }).map((_, vIdx) => {
+                                             const num = runningNumber++;
+                                             return (
+                                               <button
+                                                 key={vIdx}
+                                                 type="button"
+                                                 onClick={() => {
+                                                   if (canEditSOVacant) {
+                                                     setFillVacantModal({
+                                                       isOpen: true,
+                                                       roleKey: effectiveKey,
+                                                       title,
+                                                       quota,
+                                                       existingCount,
+                                                       effVacant,
+                                                       totalCount,
+                                                       sectionName: title,
+                                                     });
+                                                     setFillVacantTab('existing');
+                                                     setVacantSelectedEmp(null);
+                                                     setVacantSearchEmp('');
+                                                     setNewVacantName('');
+                                                     setNewVacantNik('');
+                                                   } else {
+                                                     toast.info('Hanya Section Administrasi, Developer, dan Manager yang memiliki hak akses untuk mengisi posisi Vacant.');
+                                                   }
+                                                 }}
+                                                 className={`w-full flex items-center justify-between gap-1.5 py-1 px-1.5 rounded-md text-[9px] transition-all text-left ${
+                                                   canEditSOVacant
+                                                     ? 'bg-white hover:bg-rose-100/90 border border-rose-200 cursor-pointer shadow-2xs hover:shadow-xs hover:border-rose-400 group/vac active:scale-[0.99]'
+                                                     : 'bg-transparent text-rose-600'
+                                                 }`}
+                                                 title={canEditSOVacant ? `Klik untuk mengisi posisi Vacant: ${title}` : `Posisi Vacant: ${title}`}
+                                               >
+                                                 <div className="flex items-center gap-1.5 min-w-0">
+                                                   <span className="font-mono font-bold text-rose-400 w-3.5 shrink-0 text-right text-[8.5px]">{num}.</span>
+                                                   <span className="bg-rose-100 text-rose-700 px-1.5 py-0.2 rounded border border-rose-200 font-black text-[8px] font-mono uppercase tracking-wider">
+                                                     (Vacant)
+                                                   </span>
+                                                   <span className="text-[8px] text-rose-500 italic truncate font-medium">
+                                                     {canEditSOVacant ? 'Klik untuk tambah / isi karyawan' : 'Belum Terisi'}
+                                                   </span>
+                                                 </div>
+
+                                                 {canEditSOVacant && (
+                                                   <div className="flex items-center gap-1 shrink-0">
+                                                     <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white font-extrabold text-[7.5px] uppercase tracking-wider flex items-center gap-0.5 shadow-2xs group-hover/vac:bg-rose-700">
+                                                       <Plus className="w-2.5 h-2.5" /> Isi
+                                                     </span>
+                                                   </div>
+                                                 )}
+                                               </button>
+                                             );
+                                           })}
+                                         </div>
+                                       )}           {effVacant > 0 && (
                                         <div className="rounded-lg bg-rose-50/40 border border-dashed border-rose-300 p-1.5 space-y-0.5">
                                           {Array.from({ length: effVacant }).map((_, vIdx) => {
                                             const num = runningNumber++;
@@ -6718,6 +7050,407 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 className="ml-auto px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition-colors"
               >
                 Tutup Jendela
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Isi Posisi Vacant di Struktur Organisasi (Khusus Section Administrasi, Developer, dan Manager) */}
+      {fillVacantModal && (
+        <div 
+          onClick={() => setFillVacantModal(null)}
+          className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col text-slate-900"
+          >
+            {/* Header Modal */}
+            <div className="p-5 border-b border-slate-200 bg-gradient-to-r from-teal-50 via-cyan-50/40 to-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#20969D] text-white flex items-center justify-center font-black text-sm shadow-md">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-base text-slate-900 leading-tight">
+                      Isi Posisi Vacant
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
+                      {userRoleBadge.label}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-600 mt-0.5 uppercase tracking-wide">
+                    {fillVacantModal.title}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFillVacantModal(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quota & Role Info Card */}
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
+              <div className="text-slate-600 font-medium">
+                Seksi: <span className="font-bold text-slate-800">{fillVacantModal.sectionName || fillVacantModal.title}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Existing: {fillVacantModal.existingCount}
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
+                  Vacant: {fillVacantModal.effVacant}
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">
+                  Total: {fillVacantModal.totalCount}
+                </span>
+              </div>
+            </div>
+
+            {/* Tab Nav: Pilih Dari Database vs Tambah Karyawan Baru */}
+            <div className="flex border-b border-slate-200 px-5 pt-3 gap-2 bg-white">
+              <button
+                type="button"
+                onClick={() => setFillVacantTab('existing')}
+                className={`pb-2.5 px-3 text-xs font-black flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                  fillVacantTab === 'existing'
+                    ? 'border-[#20969D] text-[#20969D]'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>Pilih Karyawan Yang Ada</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFillVacantTab('new')}
+                className={`pb-2.5 px-3 text-xs font-black flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                  fillVacantTab === 'new'
+                    ? 'border-[#20969D] text-[#20969D]'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Tambah Karyawan Baru</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto max-h-[60vh] space-y-4">
+              {fillVacantTab === 'existing' ? (
+                /* TAB 1: PILIH DARI KARYAWAN YANG ADA */
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Cari Karyawan (Nama / NIK)
+                    </label>
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={vacantSearchEmp}
+                        onChange={(e) => setVacantSearchEmp(e.target.value)}
+                        placeholder="Ketik nama atau NIK karyawan..."
+                        className="w-full pl-9 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#20969D]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* List Hasil Pencarian */}
+                  {vacantSearchEmp.trim() && (
+                    <div className="max-h-40 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl p-1 space-y-1 bg-slate-50/50">
+                      {employees
+                        .filter(e => {
+                          const q = vacantSearchEmp.toLowerCase();
+                          return (e.name || '').toLowerCase().includes(q) || (e.nik || '').toLowerCase().includes(q);
+                        })
+                        .slice(0, 6)
+                        .map(emp => (
+                          <div
+                            key={emp.nik || emp.id}
+                            onClick={() => {
+                              setVacantSelectedEmp(emp);
+                              setVacantSearchEmp('');
+                            }}
+                            className={`p-2 rounded-lg flex items-center justify-between text-xs cursor-pointer transition-colors ${
+                              vacantSelectedEmp?.nik === emp.nik
+                                ? 'bg-teal-100 text-teal-900 font-bold border border-teal-300'
+                                : 'hover:bg-white text-slate-800'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-slate-900 truncate">{emp.name}</div>
+                              <div className="text-[10px] text-slate-500 font-mono truncate">
+                                NIK: {emp.nik || '-'} • {emp.jabatan || 'Belum ada jabatan'}
+                              </div>
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 shrink-0 ml-2">
+                              Pilih
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                  {/* Karyawan Terpilih */}
+                  {vacantSelectedEmp ? (
+                    <div className="p-3.5 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-teal-700 block mb-0.5">
+                          Karyawan Dipilih:
+                        </span>
+                        <div className="text-sm font-black text-slate-900 truncate">
+                          {vacantSelectedEmp.name}
+                        </div>
+                        <div className="text-xs text-slate-600 font-mono mt-0.5">
+                          NIK: {vacantSelectedEmp.nik || '-'} • Jabatan: {vacantSelectedEmp.jabatan || '-'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setVacantSelectedEmp(null)}
+                        className="text-xs text-rose-600 hover:text-rose-800 font-bold ml-2 shrink-0 px-2 py-1 rounded hover:bg-rose-50"
+                      >
+                        Ganti
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-slate-50 border border-dashed border-slate-300 text-center text-xs text-slate-500">
+                      Silakan cari dan pilih karyawan yang akan ditugaskan ke posisi ini.
+                    </div>
+                  )}
+
+                  {/* Pilihan Shift */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Pilih Pembagian Shift di SO
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('A')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'A'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-blue-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-blue-300" />
+                        Shift A
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('B')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'B'
+                            ? 'bg-amber-400 text-amber-950 border-amber-400 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-amber-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-amber-600" />
+                        Shift B
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('NONSHIFT')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'NONSHIFT'
+                            ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-slate-300" />
+                        Non Shift
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tombol Simpan Penugasan */}
+                  <button
+                    type="button"
+                    onClick={handleAssignExistingToVacant}
+                    disabled={!vacantSelectedEmp}
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#20969D] hover:bg-[#1b7f85] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer active:scale-95"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>Tugaskan ke Posisi Ini (Vacant -1, Existing +1)</span>
+                  </button>
+                </div>
+              ) : (
+                /* TAB 2: TAMBAH KARYAWAN BARU */
+                <form onSubmit={handleCreateNewEmployeeForVacant} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Nama Lengkap Karyawan <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newVacantName}
+                      onChange={(e) => setNewVacantName(e.target.value)}
+                      placeholder="Contoh: Budi Santoso"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#20969D] font-medium"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        NIK Karyawan <span className="text-slate-400 font-normal">(Opsional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={newVacantNik}
+                        onChange={(e) => setNewVacantNik(e.target.value)}
+                        placeholder="Contoh: 04D25000099"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#20969D] font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Perusahaan (PT)
+                      </label>
+                      <select
+                        value={newVacantPt}
+                        onChange={(e) => setNewVacantPt(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#20969D] font-medium bg-white"
+                      >
+                        <option value="PT Trimegah Bangun Persada">PT Trimegah Bangun Persada (TBP)</option>
+                        <option value="PT Gane Tambang Sentosa">PT Gane Tambang Sentosa (GTS)</option>
+                        <option value="PT Gebe Prima Sentosa">PT Gebe Prima Sentosa (GPS)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Jabatan di SO
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={fillVacantModal.title}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100 text-slate-600 font-bold"
+                    />
+                  </div>
+
+                  {/* Pilihan Shift */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Pilih Pembagian Shift
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('A')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'A'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-blue-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-blue-300" />
+                        Shift A
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('B')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'B'
+                            ? 'bg-amber-400 text-amber-950 border-amber-400 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-amber-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-amber-600" />
+                        Shift B
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('NONSHIFT')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'NONSHIFT'
+                            ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-slate-300" />
+                        Non Shift
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingVacant}
+                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer active:scale-95 mt-2"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>{isSavingVacant ? 'Menyimpan...' : 'Simpan & Masukkan ke Posisi Vacant'}</span>
+                  </button>
+                </form>
+              )}
+
+              {/* DAFTAR PENUGASAN YANG SUDAH ADA DI POSISI INI */}
+              {((soAssignments[fillVacantModal.roleKey] || []).length > 0) && (
+                <div className="pt-4 border-t border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-700">
+                      Karyawan Ditugaskan di Posisi Ini ({(soAssignments[fillVacantModal.roleKey] || []).length}):
+                    </span>
+                    <span className="text-[10px] text-slate-500 italic">
+                      Dapat dibatalkan jika salah penugasan
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {(soAssignments[fillVacantModal.roleKey] || []).map((assigned, aIdx) => (
+                      <div
+                        key={assigned.id}
+                        className="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-slate-900 truncate">
+                            {aIdx + 1}. {assigned.name}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-2">
+                            <span>NIK: {assigned.nik || '-'}</span>
+                            <span className="px-1.5 py-0.2 rounded font-bold bg-white border border-slate-200 text-slate-700">
+                              {assigned.shift === 'NONSHIFT' ? 'Non Shift' : `Shift ${assigned.shift}`}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveVacantAssignment(fillVacantModal.roleKey, assigned.id, assigned.name)}
+                          className="px-2.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 text-[10px] font-bold flex items-center gap-1 transition-colors ml-2 shrink-0 cursor-pointer"
+                          title="Batalkan penugasan dan kembalikan ke Vacant"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Hapus</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-[10px] text-slate-500 italic">
+                * Posisi terisi otomatis mengurangi jumlah Vacant dan menambah Existing.
+              </span>
+              <button
+                type="button"
+                onClick={() => setFillVacantModal(null)}
+                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold cursor-pointer transition-colors"
+              >
+                Tutup
               </button>
             </div>
           </div>
