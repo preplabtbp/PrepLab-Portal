@@ -2991,6 +2991,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               'Moch.Siswanto': { pop: 'Batch (2023)', kualifikasi: 'Memenuhi Syarat' },
                               'Valdi Pratama': { praPop: true, pop: 'Batch 4', kualifikasi: 'Memenuhi Syarat' },
                               'Raldy Chevien Aryando D': { praPop: true, kualifikasi: 'Tidak Wajib POP' },
+                              'Nyong Dokolamo': { praPop: true, kualifikasi: 'Ijazah Tidak Mendukung' },
                               'Nyong Dokolomo': { praPop: true, kualifikasi: 'Ijazah Tidak Mendukung' },
                               'Murti Tamisari Harun': { praPop: true, pop: 'Batch 6', kualifikasi: 'Memenuhi Syarat' },
                               'Hariyanto Aludin': { kualifikasi: 'Ijazah Tidak Mendukung' },
@@ -3050,6 +3051,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               'yulianus t. mangando': { nik: '02D25000057', name: 'Yulianus Tiku Mangando' },
                               'yulianus tiku mangando': { nik: '02D25000057', name: 'Yulianus Tiku Mangando' },
                               'mahardian muhamad f': { nik: '04D25000055', name: 'Mahardian Muhamad Firdaus' },
+                              'nyong dokolamo': { nik: 'M0405190523', name: 'Nyong Dokolamo' },
+                              'nyong dokolomo': { nik: 'M0405190523', name: 'Nyong Dokolamo' },
+                              'nyong dokulamo': { nik: 'M0405190523', name: 'Nyong Dokolamo' },
+                              'm. ardiyan syah darmawan': { nik: '04D25000064', name: 'Muhammad Ardiyan Syah Darmawan' },
                             };
 
                             const normEmpKey = (s: string) => String(s || '').toLowerCase()
@@ -3116,6 +3121,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   return cleanWords.every(w => eWords.includes(w));
                                 });
                                 if (tokenMatch) return tokenMatch;
+
+                                // Fallback: match by distinctive tokens (>= 4 chars), e.g. "nyong", "dokolamo", "dokolomo"
+                                const looseMatch = pool.find(e => {
+                                  const eLower = (e.name || '').toLowerCase();
+                                  return cleanWords.some(w => w.length >= 4 && (eLower.includes(w) || (w.includes('dokol') && eLower.includes('dokol'))));
+                                });
+                                if (looseMatch) return looseMatch;
                               }
 
                               return null;
@@ -3156,37 +3168,65 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               width = 'w-64',
                               cardTheme: 'teal' | 'amber' | 'slate' | 'red-dashed' = 'slate'
                             ) => {
-                              const name = emp?.name || defaultName;
-                              const role = emp?.jabatan || roleTitle;
-                              const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (emp?.nik && isHighlighted(emp.nik)));
+                              const resolvedEmp = emp || findEmp(defaultName, defaultNik);
+                              const name = resolvedEmp?.name || defaultName;
+                              const role = resolvedEmp?.jabatan || roleTitle;
+                              const nik = resolvedEmp?.nik || defaultNik;
+                              const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (nik && isHighlighted(nik)));
 
-                              let borderClass = 'border-2 border-slate-900 bg-white text-slate-900 shadow-sm';
+                              const targetEmp = resolvedEmp || {
+                                id: `virtual-${defaultName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                                name: defaultName,
+                                nik: defaultNik || '-',
+                                jabatan: roleTitle,
+                                department: 'Preparation & Laboratory',
+                                section: roleTitle,
+                                status_karyawan: 'Aktif',
+                              };
+
+                              let borderClass = 'border-2 border-slate-900 bg-white text-slate-900 shadow-sm hover:border-[#20969D] hover:shadow-md';
                               let titleColor = 'text-slate-900';
-                              let nameColor = 'text-slate-800';
+                              let nameColor = 'text-slate-900';
+                              let ringColor = 'ring-2 ring-slate-300 group-hover:ring-[#20969D]';
                               if (cardTheme === 'red-dashed') {
-                                borderClass = 'border-2 border-dashed border-red-500 bg-white shadow-sm';
+                                borderClass = 'border-2 border-dashed border-red-500 bg-white shadow-sm hover:border-red-600 hover:shadow-md';
                                 titleColor = 'text-red-600';
-                                nameColor = 'text-red-600';
-                              } else if (cardTheme === 'amber') {
-                                borderClass = 'border-2 border-slate-900 bg-white text-slate-900 shadow-sm';
-                                titleColor = 'text-slate-900';
-                                nameColor = 'text-slate-800';
+                                nameColor = 'text-red-700';
+                                ringColor = 'ring-2 ring-red-300 group-hover:ring-red-500';
                               }
 
                               return (
                                 <button
                                   type="button"
-                                  onClick={() => emp && setSelectedEmployee(emp)}
-                                  className={`group relative ${width} py-2.5 px-3 rounded-xl ${borderClass} text-center cursor-pointer transition-all flex flex-col items-center justify-center ${
+                                  onClick={() => setSelectedEmployee(targetEmp)}
+                                  title={`Klik untuk melihat detail profil ${name}`}
+                                  className={`group relative ${width} py-2 px-3 rounded-xl ${borderClass} text-center cursor-pointer transition-all flex flex-col items-center justify-center hover:-translate-y-0.5 active:scale-[0.98] ${
                                     hasMatch ? 'ring-4 ring-amber-400' : ''
                                   }`}
                                 >
-                                  <div className={`w-full text-[11px] font-black uppercase tracking-wider ${titleColor} leading-tight`}>
+                                  {/* Role Title */}
+                                  <div className={`w-full text-[10.5px] xl:text-[11px] font-black uppercase tracking-wider ${titleColor} leading-tight`}>
                                     {roleTitle}
                                   </div>
-                                  <div className={`w-full text-[10.5px] font-bold ${nameColor} italic mt-1 leading-snug whitespace-normal break-words`}>
+
+                                  {/* Foto / Avatar */}
+                                  <div className="my-1.5 relative">
+                                    <div className={`rounded-full p-0.5 shadow-xs transition-all group-hover:scale-105 ${ringColor}`}>
+                                      {renderAvatar(resolvedEmp || targetEmp, 'w-11 h-11 xl:w-12 xl:h-12 text-xs font-black')}
+                                    </div>
+                                  </div>
+
+                                  {/* Nama Karyawan */}
+                                  <div className={`w-full text-[10.5px] xl:text-[11px] font-black ${nameColor} italic leading-tight whitespace-normal break-words group-hover:text-[#20969D] transition-colors`}>
                                     {name}
                                   </div>
+
+                                  {/* NIK Opsional */}
+                                  {nik && nik !== '-' && (
+                                    <div className="text-[8.5px] font-mono font-semibold text-slate-500 mt-0.5 leading-none">
+                                      NIK: {nik}
+                                    </div>
+                                  )}
                                 </button>
                               );
                             };
@@ -3340,12 +3380,36 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   avatarClasses = 'border border-amber-300 bg-amber-100 text-amber-950';
                                 }
 
+                                const targetEmp = p.emp || {
+                                  id: `virtual-${p.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                                  name: p.name,
+                                  nik: p.nik || '-',
+                                  jabatan: p.role || title,
+                                  department: 'Preparation & Laboratory',
+                                  section: title,
+                                  status_karyawan: 'Aktif',
+                                  shift: p.shift === 'NONSHIFT' ? 'Non Shift' : `Shift ${p.shift}`,
+                                };
+
                                 return (
                                   <button
                                     key={`${p.name}-${num}`}
                                     type="button"
-                                    onClick={() => p.emp && setSelectedEmployee(p.emp)}
-                                    className={`w-full flex items-start gap-1.5 py-1 px-1.5 rounded-lg transition-all text-left cursor-pointer group ${rowClasses} ${
+                                    onClick={() => {
+                                      if (p.emp && p.emp.nik && p.emp.nik !== '-') {
+                                        setSelectedEmployee(p.emp);
+                                      } else {
+                                        const pool = (employees && employees.length > 0) ? employees : activeEmployeesList;
+                                        const found = pool.find(e => 
+                                          (p.nik && p.nik !== '-' && String(e.nik || '').toUpperCase() === String(p.nik).toUpperCase()) ||
+                                          normEmpKey(e.name) === normEmpKey(p.name) ||
+                                          (e.name && p.name && (e.name.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(e.name.toLowerCase())))
+                                        );
+                                        setSelectedEmployee(found || targetEmp);
+                                      }
+                                    }}
+                                    title={`Klik untuk melihat detail profil ${p.name}`}
+                                    className={`w-full flex items-start gap-1.5 py-1 px-1.5 rounded-lg transition-all text-left cursor-pointer group hover:shadow-xs active:scale-[0.99] ${rowClasses} ${
                                       p.hasMatch ? 'ring-2 ring-emerald-500' : ''
                                     }`}
                                   >
@@ -3353,7 +3417,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       {num}.
                                     </span>
                                     <div className={`w-5 h-5 rounded-full overflow-hidden shrink-0 font-bold flex items-center justify-center text-[8px] shadow-2xs mt-0.5 ${avatarClasses}`}>
-                                      {renderAvatar(p.emp, 'w-full h-full text-[8px]')}
+                                      {renderAvatar(p.emp || targetEmp, 'w-full h-full text-[8px]')}
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <div className="text-[9.5px] xl:text-[10px] font-black text-slate-900 group-hover:text-[#20969D] leading-tight whitespace-normal break-words">
@@ -3515,6 +3579,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             };
 
                             // Ambil personil dari activeEmployeesList berdasarkan seksi / jabatan
+                            const headOfSiteEmp = findEmp('Younsel Evand Roos');
                             const managerEmp = findEmp('Deni Nugraha Perdiana', '04D20020842');
                             const prepSptEmp = findEmp('Arif Maulana Lessy', '02D24000009');
                             const labSptEmp = findEmp('Tigwa Anggawikara', '04D23000004');
@@ -3522,7 +3587,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             // 1. Preparation Wet
                             const prepWetSupervisor = findEmp('Janter Jaya Barimbing', '04D19000564');
                             const prepWetForemen = [
-                              'Nyong Dokolomo', 'Roy Marten Bobrikit', 'Hariyanto Aludin', 'Rusli Rorano',
+                              'Nyong Dokolamo', 'Roy Marten Bobrikit', 'Hariyanto Aludin', 'Rusli Rorano',
                               'Arsun Lantia', 'Murti Tamisari Harun', 'Karolus Megawanto Lebang', "Mohamad Noer Syafi'i",
                               'Taufikir, S.Pi', 'Mahardian Muhamad F', 'Muhammad Atha Ghali', 'M. Ardiyan Syah Darmawan'
                             ];
@@ -3910,7 +3975,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   {/* LEVEL 0: SITE MANAGEMENT (HEAD OF SITE) */}
                                   <div className="flex flex-col items-center">
                                     {renderAniExecutiveCard(
-                                      null,
+                                      headOfSiteEmp,
                                       'Head of Site',
                                       'Younsel Evand Roos',
                                       undefined,
