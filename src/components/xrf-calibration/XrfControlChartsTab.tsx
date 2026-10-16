@@ -6,7 +6,7 @@ import {
   CheckCircle2, Database, ChevronDown, Activity, Building2, Cpu, ShieldAlert
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { XrfQcChartCard, QC_ELEMENTS_LIST, XrfPointData, XrfChartLimitData } from './XrfQcChartCard';
+import { XrfQcChartCard, QC_ELEMENTS_LIST, XrfPointData, XrfChartLimitData, XrfPointAnnotation } from './XrfQcChartCard';
 import { XrfOffspecIsolationModal, IsolatedOffspecPoint } from './XrfOffspecIsolationModal';
 
 interface XrfControlChartsTabProps {
@@ -267,6 +267,16 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   });
   const [showOffspecModal, setShowOffspecModal] = useState<boolean>(false);
 
+  // Anomaly point annotations: Issue, Solution, PIC (persistent in localStorage)
+  const [pointAnnotations, setPointAnnotations] = useState<Record<string, XrfPointAnnotation>>(() => {
+    try {
+      const saved = localStorage.getItem('xrf_point_annotations');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
   useEffect(() => {
     try {
       localStorage.setItem('xrf_isolated_offspec_points', JSON.stringify(isolatedPoints));
@@ -274,6 +284,58 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       console.error('Failed to save isolated points to storage', e);
     }
   }, [isolatedPoints]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('xrf_point_annotations', JSON.stringify(pointAnnotations));
+    } catch (e) {
+      console.error('Failed to save point annotations to storage', e);
+    }
+  }, [pointAnnotations]);
+
+  const handleSaveAnnotation = useCallback((cardKey: string, pointIndex: number, annotation: XrfPointAnnotation) => {
+    const fullKey = `${cardKey}-${pointIndex}`;
+    setPointAnnotations(prev => ({
+      ...prev,
+      [fullKey]: { ...annotation, updatedAt: new Date().toISOString() }
+    }));
+    // Also sync to isolatedPoints if this point is currently isolated
+    setIsolatedPoints(prev => prev.map(p => {
+      if (p.id === fullKey) {
+        return {
+          ...p,
+          issue: annotation.issue,
+          solution: annotation.solution,
+          picNik: annotation.picNik,
+          picName: annotation.picName,
+        };
+      }
+      return p;
+    }));
+    toast.success(`Catatan anomali untuk titik #${pointIndex} berhasil disimpan`);
+  }, []);
+
+  const handleDeleteAnnotation = useCallback((cardKey: string, pointIndex: number) => {
+    const fullKey = `${cardKey}-${pointIndex}`;
+    setPointAnnotations(prev => {
+      const next = { ...prev };
+      delete next[fullKey];
+      return next;
+    });
+    setIsolatedPoints(prev => prev.map(p => {
+      if (p.id === fullKey) {
+        return {
+          ...p,
+          issue: undefined,
+          solution: undefined,
+          picNik: undefined,
+          picName: undefined,
+        };
+      }
+      return p;
+    }));
+    toast.info(`Catatan untuk titik #${pointIndex} telah dihapus`);
+  }, []);
 
   const handleToggleIsolatePoint = useCallback((
     point: XrfPointData, 
@@ -296,6 +358,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         const absSigma = Math.abs(pointSigma);
         const status = absSigma > 3.0 ? 'action' : absSigma > 2.0 ? 'warning' : 'normal';
         const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : status === 'warning' ? 'Off-Spec Warning (2-3σ)' : 'In-Control (≤2σ)';
+        const ann = pointAnnotations[pointId];
 
         const newPoint: IsolatedOffspecPoint = {
           id: pointId,
@@ -315,12 +378,16 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
           status,
           statusLabel,
           isolatedAt: new Date().toISOString(),
+          issue: ann?.issue,
+          solution: ann?.solution,
+          picNik: ann?.picNik,
+          picName: ann?.picName,
         };
         toast.success(`Titik #${point.index} (${element}) berhasil diisolasi ke chart off-spec`);
         return [...prev, newPoint];
       }
     });
-  }, []);
+  }, [pointAnnotations]);
 
   const handleRemovePoint = useCallback((id: string) => {
     setIsolatedPoints(prev => prev.filter(p => p.id !== id));
@@ -371,6 +438,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
           const absSigma = Math.abs(pointSigma);
           const status = absSigma > 3.0 ? 'action' : 'warning';
           const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : 'Off-Spec Warning (2-3σ)';
+          const ann = pointAnnotations[pointId];
 
           newlyAdded.push({
             id: pointId,
@@ -390,6 +458,10 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             status,
             statusLabel,
             isolatedAt: new Date().toISOString(),
+            issue: ann?.issue,
+            solution: ann?.solution,
+            picNik: ann?.picNik,
+            picName: ann?.picName,
           });
         }
       });
@@ -586,6 +658,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                 if (!existingIds.has(pointId)) {
                   const status = absSigma > 3.0 ? 'action' : 'warning';
                   const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : 'Off-Spec Warning (2-3σ)';
+                  const ann = pointAnnotations[pointId];
                   newlyAdded.push({
                     id: pointId,
                     pointId: p.id,
@@ -604,6 +677,10 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                     status,
                     statusLabel,
                     isolatedAt: new Date().toISOString(),
+                    issue: ann?.issue,
+                    solution: ann?.solution,
+                    picNik: ann?.picNik,
+                    picName: ann?.picName,
                   });
                 }
               }
@@ -1004,6 +1081,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                           points: [],
                         };
 
+                        const cardKey = `${instCode}-${std.name}-${selectedElement}`;
+                        const cardAnnotations: Record<number, XrfPointAnnotation> = {};
+                        Object.entries(pointAnnotations).forEach(([k, ann]) => {
+                          if (k.startsWith(`${cardKey}-`)) {
+                            const pIdx = parseInt(k.replace(`${cardKey}-`, ''), 10);
+                            if (!isNaN(pIdx)) cardAnnotations[pIdx] = ann;
+                          }
+                        });
+
                         return (
                           <div 
                             key={`card-side-${stdCode}-${instCode}`} 
@@ -1025,6 +1111,9 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                               onOpenOffspecModal={() => setShowOffspecModal(true)}
                               onIsolateAllOffspecInCard={(pts, el, lim) => handleIsolateAllOffspecInCard(pts, el, lim, instCode, theme.name, std.name)}
                               isPointIsolated={(pt, el) => isPointIsolated(pt, el, instCode, std.name)}
+                              annotations={cardAnnotations}
+                              onSaveAnnotation={(pIdx, ann) => handleSaveAnnotation(cardKey, pIdx, ann)}
+                              onDeleteAnnotation={(pIdx) => handleDeleteAnnotation(cardKey, pIdx)}
                             />
                           </div>
                         );
@@ -1040,6 +1129,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                         statistics: { count: 0, mean: 0, median: 0, min: 0, max: 0, actualStdev: 0 },
                         points: [],
                       };
+
+                      const cardKey = `${instCode}-${std.name}-${selectedElement}`;
+                      const cardAnnotations: Record<number, XrfPointAnnotation> = {};
+                      Object.entries(pointAnnotations).forEach(([k, ann]) => {
+                        if (k.startsWith(`${cardKey}-`)) {
+                          const pIdx = parseInt(k.replace(`${cardKey}-`, ''), 10);
+                          if (!isNaN(pIdx)) cardAnnotations[pIdx] = ann;
+                        }
+                      });
 
                       return (
                         <div key={`card-grid-${stdCode}-${instCode}`}>
@@ -1059,6 +1157,9 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                             onOpenOffspecModal={() => setShowOffspecModal(true)}
                             onIsolateAllOffspecInCard={(pts, el, lim) => handleIsolateAllOffspecInCard(pts, el, lim, instCode, theme.name, std.name)}
                             isPointIsolated={(pt, el) => isPointIsolated(pt, el, instCode, std.name)}
+                            annotations={cardAnnotations}
+                            onSaveAnnotation={(pIdx, ann) => handleSaveAnnotation(cardKey, pIdx, ann)}
+                            onDeleteAnnotation={(pIdx) => handleDeleteAnnotation(cardKey, pIdx)}
                           />
                         </div>
                       );

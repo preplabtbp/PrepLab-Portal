@@ -25,6 +25,10 @@ export interface IsolatedOffspecPoint {
   statusLabel: string;
   isolatedAt: string;
   note?: string;
+  issue?: string;
+  solution?: string;
+  picNik?: string;
+  picName?: string;
 }
 
 interface XrfOffspecIsolationModalProps {
@@ -52,8 +56,6 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
   const [filterSeverity, setFilterSeverity] = useState<'ALL' | 'ACTION' | 'WARNING'>('ALL');
   const [chartMode, setChartMode] = useState<'sigma' | 'raw'>('sigma');
   const [hoveredChartPoint, setHoveredChartPoint] = useState<IsolatedOffspecPoint | null>(null);
-
-  if (!isOpen) return null;
 
   // Distinct lists for filters
   const availableInstruments = useMemo(() => {
@@ -139,7 +141,7 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
     const headers = [
       'ID', 'Tanggal Analisa', 'Run #', 'Mesin XRF', 'Kode Standar',
       'Unsur', 'Nilai Terukur (%)', 'Nilai Acuan CL (%)', 'Deviasi (Diff)',
-      'Sigma Distance (Z)', 'Status QC', 'Waktu Isolasi'
+      'Sigma Distance (Z)', 'Status QC', 'Issue / Masalah', 'Solusi / Tindakan', 'PIC NIK', 'PIC Nama', 'Waktu Isolasi'
     ];
 
     const rows = filteredPoints.map(p => [
@@ -154,6 +156,10 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
       p.diff.toFixed(4),
       p.sigmaDist.toFixed(2),
       p.status === 'action' ? 'Need Re-calibration (>3σ)' : 'Warning (2σ-3σ)',
+      `"${(p.issue || '').replace(/"/g, '""')}"`,
+      `"${(p.solution || '').replace(/"/g, '""')}"`,
+      `"${p.picNik || ''}"`,
+      `"${(p.picName || '').replace(/"/g, '""')}"`,
       p.isolatedAt
     ]);
 
@@ -234,6 +240,9 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
     if (code.includes('SUPERMINI')) return '#EC4899';
     return '#3B82F6';
   };
+
+  // Safe early exit after all hooks have been called
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
@@ -827,6 +836,7 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
                       <th className="px-3.5 py-3 text-right">Deviasi (Δ)</th>
                       <th className="px-3.5 py-3 text-right">Sigma (Z)</th>
                       <th className="px-3.5 py-3 text-center">Status QC</th>
+                      <th className="px-3.5 py-3">Catatan Anomali & PIC</th>
                       <th className="px-3.5 py-3 text-center">Aksi</th>
                     </tr>
                   </thead>
@@ -894,13 +904,39 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
                                 </span>
                               )}
                             </td>
+                            <td className="px-3.5 py-2.5 font-sans text-[11px]">
+                              {item.issue || item.solution || item.picName ? (
+                                <div className="space-y-0.5 max-w-[240px]">
+                                  {item.issue && (
+                                    <div className="text-slate-800 dark:text-slate-200">
+                                      <span className="font-bold text-rose-600 dark:text-rose-400">Issue:</span> {item.issue}
+                                    </div>
+                                  )}
+                                  {item.solution && (
+                                    <div className="text-slate-600 dark:text-slate-400">
+                                      <span className="font-bold text-emerald-600 dark:text-emerald-400">Action:</span> {item.solution}
+                                    </div>
+                                  )}
+                                  {item.picName && (
+                                    <div className="text-slate-500 text-[10px] font-mono">
+                                      <span className="font-semibold font-sans">PIC:</span> [{item.picNik || '-'}] {item.picName}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600 italic text-[10.5px]">Tanpa Catatan</span>
+                              )}
+                            </td>
                             <td className="px-3.5 py-2.5 text-center font-sans">
                               <button
-                                onClick={() => onRemovePoint(item.id)}
-                                className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
-                                title="Hapus titik ini dari daftar isolasi"
+                                onClick={() => {
+                                  onRemovePoint(item.id);
+                                  toast.success(`Titik #${item.index} dikembalikan ke chart utama.`);
+                                }}
+                                className="px-2 py-1 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-[10.5px] font-bold inline-flex items-center gap-1 transition-all cursor-pointer border border-slate-200 dark:border-slate-700"
+                                title="Kembalikan titik ini ke grafik kontrol utama"
                               >
-                                <X className="w-3.5 h-3.5" />
+                                <span>Kembalikan</span>
                               </button>
                             </td>
                           </tr>
