@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import {
   GraduationCap,
@@ -1057,6 +1058,7 @@ function PersonAchievementModal({ record, onClose, scope }: { record: TrainingRe
 
 export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', onBack, scope = 'internal' }: TrainingDatabaseScreenProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   // Data di-cache TanStack Query: kunjungan ulang tampil instan, lalu diperbarui di background
   // Cache per akun (NIK) agar data akses penuh tidak pernah tampil ke akun lain di perangkat yang sama
   const { data: payload, isLoading, isFetching, error: loadError } = useQuery({
@@ -1612,6 +1614,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       programs: [
         { key: 'sap' as const, label: 'Training SAP', sub: '6 jenis training · berlaku 2 th', count: sapPeople.length, metric: `${sapComplete} lengkap`, spark: spark(sapDates), latest: latestOf(sapDates) },
         { key: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · CS · Fire Fighting · per section', count: k3People.length, metric: `${k3Complete}/${k3Wajib.length} lengkap`, spark: spark(k3Dates), latest: latestOf(k3Dates) },
+        { key: 'pra_pop' as const, label: 'Training Pra POP', sub: 'Persiapan Pengawas Operasional', count: records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).length, metric: `${records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).length} terlaksana`, spark: spark(records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).map(r => r.popData?.praPop)), latest: latestOf(records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).map(r => r.popData?.praPop)) },
       ],
       // Training External: satu kartu per tahap sertifikasi
       stageCards: POP_STAGES.map(s => ({
@@ -1828,8 +1831,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   // SAP/K3: No, NIK, Nama, GOL, Shift, Status (+ Bagian & PT di K3) + kolom training + Aksi
   // POP   : No, NIK, Nama, PT, Masa Kerja, Pra POP, POP, Kualifikasi, Keterangan POP, POM + Sertifikasi K3 & Kompetensi + Aksi
-  const tableColSpan = program === 'pop'
-    ? 10 + (canManage ? 1 : 0)
+  const tableColSpan = program === 'pra_pop'
+    ? 12 + (canManage ? 1 : 0)
+    : program === 'pop'
+    ? 8 + (canManage ? 1 : 0)
     : 6 + (program === 'k3' ? 2 : 0) + (program === 'sap' ? SAP_TRAININGS.length : K3_TRAININGS.length) + (canManage ? 1 : 0);
 
   const renderK3KompetensiBadges = (r: TrainingRecord) => {
@@ -2543,7 +2548,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     return <MyTrainingView record={own} name={inspectorName} onBack={onBack} scope={scope} />;
   }
 
-  const tableCardCls = 'rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-white dark:border-slate-800 p-3 sm:p-5 min-w-0';
+  const tableCardCls = 'rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_3px_rgba(15,23,42,0.06)] border border-slate-200/90 dark:border-slate-800 p-3.5 sm:p-5 min-w-0';
   const pieTotal = dashboard.pie.done + dashboard.pie.warning + dashboard.pie.expired + dashboard.pie.none;
   const pieRows = [
     { label: 'Berlaku', value: dashboard.pie.done, color: DASH.brand },
@@ -2624,9 +2629,22 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider text-white shadow-xs" style={{ backgroundColor: DASH.yellow }}>
-                  {isExternal ? 'Kompetensi & POP' : 'Training Internal'}
-                </span>
+                <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/training-database')}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${!isExternal ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
+                  >
+                    Training Internal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/training-external')}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${isExternal ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
+                  >
+                    Sertifikasi
+                  </button>
+                </div>
                 <h1 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">{SCOPE_META[scope].title}</h1>
                 {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" aria-label="Memperbarui data" />}
               </div>
@@ -2661,7 +2679,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 >
                   <Plus className="w-4 h-4" />
                   {isExternal
-                    ? externalSheet === 'pop' ? 'Tambah Data Pra POP & POP'
+                    ? externalSheet === 'pop' ? 'Tambah Data POP'
                     : externalSheet === 'pom' ? 'Tambah Data POM'
                     : externalSheet === 'k3_kimia' ? 'Tambah K3 Kimia'
                     : externalSheet === 'k3_listrik' ? 'Tambah K3 Listrik'
@@ -2751,8 +2769,21 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         )}
 
         {/* ===== Pencarian Nama Karyawan (Tersedia di Training Internal & Sertifikasi) ===== */}
-        (
-          <div className="rounded-[24px] bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-xs border border-slate-200/80 dark:border-slate-800">
+        <div className="rounded-[24px] bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-sm border border-slate-200/90 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+              <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                {isExternal ? "Pencarian Sertifikasi Personel" : "Pencarian Training Karyawan"}
+              </span>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800">
+                {isExternal ? "POP, POM & Sertifikasi Eksternal" : "SAP, K3 & Pra POP"}
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+              Ketik nama atau NIK untuk melihat rekap lengkap
+            </span>
+          </div>
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -2847,7 +2878,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </div>
             </div>
           </div>
-        )
 
         {/* ===== Profil Karyawan (Global Search Result) ===== */}
         {globalPersonProfile ? (
@@ -3620,7 +3650,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </>
           ) : (<>
           {isExternal ? (
-          <div className="lg:col-span-4 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
+          <div className="lg:col-span-3 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
             {dashboard.stageCards.map(s => {
               const active = missingFilter === s.key;
               const pct = s.total ? Math.round((s.count / s.total) * 100) : 0;
@@ -3664,7 +3694,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             })}
           </div>
           ) : (
-          <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
+          <div className="lg:col-span-3 grid grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
             {dashboard.programs.map(p => {
               const active = program === p.key;
               return (
@@ -4152,7 +4182,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                           <th className="px-3 py-2.5">Jabatan</th>
                           <th className="px-3 py-2.5 text-center">PT</th>
                           <th className="px-3 py-2.5">Masa Kerja</th>
-                          <th className="px-3 py-2.5 text-center">Pra POP</th>
                           <th className="px-3 py-2.5 text-center">POP Batch</th>
                           <th className="px-3 py-2.5 text-center">Status POM</th>
                           <th className="px-3 py-2.5">Batch / Catatan POM</th>
@@ -4168,7 +4197,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                             <td className="px-3 py-2 text-xs font-medium text-slate-700">{r.jabatan || '-'}</td>
                             <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>
                             <td className="px-3 py-2 text-[11px] whitespace-nowrap">{popMasaKerja(r.popData) || '-'}</td>
-                            <td className="px-3 py-2 text-center">{renderPraPop(r.popData)}</td>
                             <td className="px-3 py-2 text-center">{renderPopBatch(r.popData)}</td>
                             <td className="px-3 py-2 text-center">
                               {popPassedPom(r.popData) ? (
@@ -4237,7 +4265,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
               {/* Tab program (Training Internal: SAP, K3, Pra POP) */}
               {!isExternal && (
-              <div className="grid grid-cols-3 gap-1 p-1 rounded-full bg-slate-100 dark:bg-slate-800">
+              <div className="grid grid-cols-3 gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700">
                 {([
                   { id: 'sap' as const, label: 'Training SAP', short: 'SAP' },
                   { id: 'k3' as const, label: 'Training K3', short: 'K3' },
@@ -4249,11 +4277,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       key={tab.id}
                       type="button"
                       onClick={() => switchProgram(tab.id)}
-                      className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${active ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-800'}`}
+                      className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${active ? 'bg-white dark:bg-slate-900 shadow-xs text-slate-950 dark:text-slate-100' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
                     >
                       <span className="sm:hidden">{tab.short}</span>
                       <span className="hidden sm:inline">{tab.label}</span>
-                      <span className="text-[10px] font-bold px-1.5 rounded-full" style={active ? { backgroundColor: DASH.brandSoft, color: DASH.brand } : undefined}>{programCounts[tab.id]}</span>
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={active ? { backgroundColor: DASH.brandSoft, color: DASH.brand } : { backgroundColor: 'rgba(0,0,0,0.06)', color: '#64748b' }}>
+                        {programCounts[tab.id]}
+                      </span>
                     </button>
                   );
                 })}
@@ -4423,18 +4453,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                             <td className="px-3 py-2 text-center text-[11px] font-mono font-bold">{r.popData?.praPopPre ?? '-'}</td>
                             <td className="px-3 py-2 text-center text-[11px] font-mono font-bold">{r.popData?.praPopPost ?? '-'}</td>
                             <td className="px-3 py-2 text-center">{renderPraPop(r.popData)}</td>
-                            {canManage && (
-                              <td className="px-3 py-2 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal(r)}
-                                  className="p-1 rounded-md text-slate-400 hover:text-slate-900 cursor-pointer"
-                                  title="Edit Data Pra POP"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            )}
                           </>
                         ) : program === 'pop' ? (
                           <>
@@ -4446,18 +4464,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                             <td className="px-3 py-2 text-center">{renderPopBatch(r.popData)}</td>
                             <td className="px-3 py-2 min-w-[140px]">{renderKualifikasi(r.popData)}</td>
                             <td className="px-3 py-2 text-center">{renderPopKeterangan(r.popData?.popKeterangan)}</td>
-                            {canManage && (
-                              <td className="px-3 py-2 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal(r)}
-                                  className="p-1 rounded-md text-slate-400 hover:text-slate-900 cursor-pointer"
-                                  title="Edit Data POP"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            )}
                           </>
                         ) : (
                           <>
