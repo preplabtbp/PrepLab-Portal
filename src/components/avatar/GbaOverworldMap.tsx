@@ -16,8 +16,15 @@ import {
   GbaNickelAshtray, GbaCoffeeUrn, GBA_GAZEBO_PAVING_BASE64
 } from './GbaSectionRooms';
 import { GbaCharacterSprite } from './GbaCharacterSprite';
+import { 
+  GbaLoungeGhostNpc, 
+  GbaUndergroundDominoTable, 
+  GbaUndergroundChessTable, 
+  GbaUndergroundLadder, 
+  GbaUndergroundLantern 
+} from '../home-widgets/lounge/LoungeFurnitureSvg';
 
-export type GbaRoomType = 'laboratory' | 'preparation' | 'maintenance' | 'warehouse' | 'qa' | 'lounge_nickel';
+export type GbaRoomType = 'laboratory' | 'preparation' | 'maintenance' | 'warehouse' | 'qa' | 'lounge_nickel' | 'underground_lounge';
 
 export interface GbaInteractivePlayer {
   id: string;
@@ -56,6 +63,12 @@ export interface GbaOverworldMapProps {
   onOpenFullLounge?: () => void;
   onPlayerMove?: (pos: { x: number; y: number; facing: 'down' | 'up' | 'left' | 'right'; actionState: string }) => void;
   onPlayerAction?: (action: { actionState: string; facing?: 'down' | 'up' | 'left' | 'right'; speechText?: string; x: number; y: number }) => void;
+  onPlayGhostRps?: () => void;
+  isSecretHoleUnlocked?: boolean;
+  onEnterSecretDomino?: () => void;
+  onAscendToGazebo?: () => void;
+  onOpenDominoGame?: (seat?: 'top' | 'bottom' | 'left' | 'right') => void;
+  onOpenChessGame?: (seat?: 'left' | 'right') => void;
   className?: string;
   isCompactDiorama?: boolean;
 }
@@ -244,13 +257,19 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
   onOpenFullLounge,
   onPlayerMove,
   onPlayerAction,
+  onPlayGhostRps,
+  isSecretHoleUnlocked = false,
+  onEnterSecretDomino,
+  onAscendToGazebo,
+  onOpenDominoGame,
+  onOpenChessGame,
   className = '',
   isCompactDiorama = false
 }) => {
   // ── HARVEST MOON: BACK TO NATURE COZY INTIMATE PROPORTIONS ──
   // Interior Rooms: 11 cols x 8 rows = 176x128 pixels (Zoomed-in intimate workshop/lab)
-  // Lounge Gazebo: 12 cols x 8 rows = 192x128 pixels (Cozy rest shelter)
-  const isLounge = roomType === 'lounge_nickel';
+  // Lounge Gazebo & Underground Bunker: 12 cols x 8 rows = 192x128 pixels (Cozy rest shelter)
+  const isLounge = roomType === 'lounge_nickel' || roomType === 'underground_lounge';
   const MAP_COLS = isLounge ? 12 : 11;
   const MAP_ROWS = 8;
   const MAP_WIDTH = MAP_COLS * 16;
@@ -263,13 +282,38 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
   onPlayerActionRef.current = onPlayerAction;
 
   // Initial Player Coordinates: Centered on the floor
-  const [posX, setPosX] = useState(() => (isLounge ? 3.44 : 5));
-  const [posY, setPosY] = useState(() => (isLounge ? 4.75 : 4.5));
-  const [facing, setFacing] = useState<'down' | 'up' | 'left' | 'right'>('right');
+  const [posX, setPosX] = useState(() => (roomType === 'underground_lounge' ? 1.5 : (isLounge ? 3.44 : 5)));
+  const [posY, setPosY] = useState(() => (roomType === 'underground_lounge' ? 2.4 : (isLounge ? 4.75 : 4.5)));
+  const [facing, setFacing] = useState<'down' | 'up' | 'left' | 'right'>(() => (roomType === 'underground_lounge' ? 'down' : 'right'));
   const [walkFrame, setWalkFrame] = useState(0);
   const [actionState, setActionState] = useState<'idle' | 'walk' | 'sit' | 'coffee' | 'smoke'>(
-    () => (isLounge ? 'sit' : 'idle')
+    () => (roomType === 'underground_lounge' ? 'idle' : (isLounge ? 'sit' : 'idle'))
   );
+
+  // Transition coordinates between Gazebo and Underground Lounge
+  useEffect(() => {
+    if (roomType === 'underground_lounge') {
+      setPosX(1.5);
+      setPosY(2.4);
+      setFacing('down');
+      setActionState('idle');
+      movementRef.current.currentX = 1.5;
+      movementRef.current.currentY = 2.4;
+      movementRef.current.targetX = 1.5;
+      movementRef.current.targetY = 2.4;
+      movementRef.current.facing = 'down';
+    } else if (roomType === 'lounge_nickel') {
+      setPosX(2.35);
+      setPosY(6.2);
+      setFacing('up');
+      setActionState('idle');
+      movementRef.current.currentX = 2.35;
+      movementRef.current.currentY = 6.2;
+      movementRef.current.targetX = 2.35;
+      movementRef.current.targetY = 6.2;
+      movementRef.current.facing = 'up';
+    }
+  }, [roomType]);
 
   // Sync external playerActionState if provided
   useEffect(() => {
@@ -320,6 +364,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     pendingAction: 'idle' | 'sit' | 'smoke' | 'coffee' | null;
     pendingSpeech: string | null;
     pendingFacing: 'down' | 'up' | 'left' | 'right' | null;
+    pendingCallback: (() => void) | null;
   }>({
     currentX: isLounge ? 3 : 5,
     currentY: isLounge ? 4.8 : 4.5,
@@ -329,7 +374,8 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     walkDistance: 0,
     pendingAction: null,
     pendingSpeech: null,
-    pendingFacing: null
+    pendingFacing: null,
+    pendingCallback: null
   });
 
   // Keep ref synchronized with position
@@ -367,8 +413,12 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
           const finalAction = state.pendingAction || 'idle';
           setActionState(finalAction);
           let finalFacing = state.facing;
-          if (state.pendingAction === 'sit') {
-            finalFacing = state.pendingFacing || 'down';
+          if (state.pendingFacing) {
+            finalFacing = state.pendingFacing;
+            state.facing = finalFacing;
+            setFacing(finalFacing);
+          } else if (state.pendingAction === 'sit') {
+            finalFacing = 'down';
             state.facing = finalFacing;
             setFacing(finalFacing);
           }
@@ -380,6 +430,12 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
           }
           state.pendingAction = null;
           state.pendingFacing = null;
+
+          const onArriveCb = state.pendingCallback;
+          state.pendingCallback = null;
+          if (onArriveCb) {
+            onArriveCb();
+          }
 
           // Broadcast arrival & final action state to all players in lounge
           onPlayerActionRef.current?.({
@@ -448,6 +504,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     action?: 'idle' | 'sit' | 'smoke' | 'coffee';
     speech?: string;
     facing?: 'down' | 'up' | 'left' | 'right';
+    callback?: () => void;
   }) => {
     // Clamp inside walkable floor boundaries
     const minX = isLounge ? 0.8 : 1.2;
@@ -467,6 +524,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     movementRef.current.pendingAction = onArrival?.action || null;
     movementRef.current.pendingSpeech = onArrival?.speech || null;
     movementRef.current.pendingFacing = onArrival?.facing || null;
+    movementRef.current.pendingCallback = onArrival?.callback || null;
 
     // Immediately inform other lounge members of walking intent and destination
     onPlayerMoveRef.current?.({
@@ -504,7 +562,7 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     }
 
     // 2. Specific Objects per Room
-    if (isLounge) {
+    if (roomType === 'lounge_nickel') {
       // 1. Communal Snack & Coffee Table in Center: (x: 4.5..7.5, y: 4.4..5.8)
       if (tx >= 4.5 && tx <= 7.5 && ty >= 4.4 && ty <= 5.8) {
         startMoveTo(6.0, 5.8, { action: 'coffee', speech: '☕ Mencicipi pisang goreng hangat & ngopi bareng rekan di meja tengah!' });
@@ -615,6 +673,75 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
       // Sample Ore Drum: (x: 0.2..1.5, y: 4.2..5.2)
       if (tx >= 0.2 && tx <= 1.5 && ty >= 4.2 && ty <= 5.2) {
         startMoveTo(1.4, 4.8, { speech: '🪨 Sampel bijih ore limonite dari tambang' });
+        return;
+      }
+    } else if (roomType === 'underground_lounge') {
+      // 1. Tangga Naik ke Gazebo: (x: 0.5..2.2, y: 1.0..3.2)
+      if (tx >= 0.5 && tx <= 2.2 && ty >= 1.0 && ty <= 3.2) {
+        startMoveTo(1.5, 2.4, {
+          action: 'idle',
+          facing: 'up',
+          speech: '🪜 Menaiki tangga kembali ke Gazebo...',
+          callback: () => {
+            if (onAscendToGazebo) onAscendToGazebo();
+          }
+        });
+        return;
+      }
+
+      // 2. Meja Gaple 4 Kursi: (x: 2.0..5.8, y: 3.2..6.2)
+      if (tx >= 2.0 && tx <= 5.8 && ty >= 3.2 && ty <= 6.2) {
+        const dominoSlots = [
+          { x: 3.8, y: 3.45, facing: 'down' as const, seat: 'top' as const },
+          { x: 3.8, y: 5.75, facing: 'up' as const, seat: 'bottom' as const },
+          { x: 2.2, y: 4.6, facing: 'right' as const, seat: 'left' as const },
+          { x: 5.4, y: 4.6, facing: 'left' as const, seat: 'right' as const }
+        ];
+        const sortedSlots = [...dominoSlots].sort((a, b) => 
+          Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty)
+        );
+        const chosen = sortedSlots[0];
+        startMoveTo(chosen.x, chosen.y, {
+          action: 'sit',
+          facing: chosen.facing,
+          speech: `🀄 Duduk di Kursi ${chosen.seat.toUpperCase()} Meja Gaple...`,
+          callback: () => {
+            if (onOpenDominoGame) onOpenDominoGame(chosen.seat);
+          }
+        });
+        return;
+      }
+
+      // 3. Meja Catur 2 Kursi: (x: 7.2..10.6, y: 3.2..6.2)
+      if (tx >= 7.2 && tx <= 10.6 && ty >= 3.2 && ty <= 6.2) {
+        const chessSlots = [
+          { x: 7.4, y: 4.6, facing: 'right' as const, seat: 'left' as const },
+          { x: 10.2, y: 4.6, facing: 'left' as const, seat: 'right' as const }
+        ];
+        const sortedSlots = [...chessSlots].sort((a, b) => 
+          Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty)
+        );
+        const chosen = sortedSlots[0];
+        startMoveTo(chosen.x, chosen.y, {
+          action: 'sit',
+          facing: chosen.facing,
+          speech: `♟️ Duduk di Kursi ${chosen.seat === 'left' ? 'Putih' : 'Hitam'} Meja Catur...`,
+          callback: () => {
+            if (onOpenChessGame) onOpenChessGame(chosen.seat);
+          }
+        });
+        return;
+      }
+
+      // 4. Peti Sampel Kayu Bawah Kiri: (x: 0.4..2.0, y: 5.5..7.5)
+      if (tx >= 0.4 && tx <= 2.0 && ty >= 5.5 && ty <= 7.5) {
+        startMoveTo(1.6, 6.2, { speech: '📦 Peti perlengkapan & sampel limonite tambang rahasia' });
+        return;
+      }
+
+      // 5. Drum Bahan Bakar Cadangan Bawah Kanan: (x: 9.8..11.6, y: 5.5..7.5)
+      if (tx >= 9.8 && tx <= 11.6 && ty >= 5.5 && ty <= 7.5) {
+        startMoveTo(9.8, 6.2, { speech: '🛢️ Drum cadangan bahan bakar & solar bunker K3' });
         return;
       }
     } else {
@@ -1188,6 +1315,184 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
               {/* 7. Right Pillar Corner: K3 Water Cooler & Proportional Stainless Ashtray */}
               <GbaWaterCooler x={10.4} y={4.2} />
               <GbaNickelAshtray x={10.4} y={5.8} />
+
+              {/* 8. Bottom-Left Corner: Mysterious Gazebo Ghost NPC (Pure Easter Egg, No Floating Labels) */}
+              <g 
+                transform="translate(18, 98)" 
+                className="cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playSfx('confirm');
+
+                  // Player approaches ghost (tile x: 2.1, y: 6.2) and faces left towards ghost
+                  const distToGhost = Math.hypot(posX - 2.1, posY - 6.2);
+                  if (distToGhost < 0.7) {
+                    setFacing('left');
+                    movementRef.current.facing = 'left';
+                    onPlayerActionRef.current?.({
+                      actionState: 'idle',
+                      facing: 'left',
+                      x: Number(posX.toFixed(2)),
+                      y: Number(posY.toFixed(2))
+                    });
+                    if (onPlayGhostRps) onPlayGhostRps();
+                  } else {
+                    startMoveTo(2.1, 6.2, {
+                      facing: 'left',
+                      action: 'idle',
+                      callback: () => {
+                        if (onPlayGhostRps) onPlayGhostRps();
+                      }
+                    });
+                  }
+                }}
+              >
+                {/* Pure pixel art ghost sprite without labels/nametag */}
+                <GbaLoungeGhostNpc 
+                  width={14}
+                  height={18}
+                  className="hover:scale-115 transition-transform duration-200" 
+                />
+              </g>
+
+              {/* 9. Secret Underground Domino Hole (Appears after 5 wins vs Ghost) */}
+              {isSecretHoleUnlocked && (
+                <g 
+                  transform="translate(36, 102)" 
+                  className="cursor-pointer group"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playSfx('confirm');
+                    // Player walks onto the secret hole then enters
+                    startMoveTo(2.35, 6.35, {
+                      facing: 'down',
+                      action: 'idle',
+                      callback: () => {
+                        if (onEnterSecretDomino) onEnterSecretDomino();
+                      }
+                    });
+                  }}
+                >
+                  <title>🕳️ Lubang Rahasia (Klik untuk masuk ke Bunker Bawah Tanah)</title>
+                  {/* Outer Pit Rim */}
+                  <ellipse cx="8" cy="6" rx="8" ry="4.5" fill="#090518" stroke="#6B21A8" strokeWidth="0.8" />
+                  <ellipse cx="8" cy="6" rx="6.5" ry="3.5" fill="#1E0E45" />
+                  {/* Swirling Deep Void */}
+                  <ellipse cx="8" cy="6" rx="4.5" ry="2.2" fill="#3B0764" />
+                  <ellipse cx="8" cy="6" rx="3" ry="1.4" fill="#A855F7" opacity="0.85">
+                    <animate attributeName="rx" values="3;4.2;3" dur="1.8s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.85;0.35;0.85" dur="1.8s" repeatCount="indefinite" />
+                  </ellipse>
+                  {/* Floating Mystical Glow Sparks */}
+                  <circle cx="5" cy="4" r="0.6" fill="#F3E8FF" opacity="0.8">
+                    <animate attributeName="cy" values="4;1.5;4" dur="2s" repeatCount="indefinite" />
+                  </circle>
+                  <circle cx="11" cy="5" r="0.6" fill="#C084FC" opacity="0.8">
+                    <animate attributeName="cy" values="5;2.5;5" dur="2.2s" repeatCount="indefinite" />
+                  </circle>
+                </g>
+              )}
+            </g>
+          )}
+
+          {/* ========================================================= */}
+          {/* 7. SECRET UNDERGROUND LOUNGE & BUNKER (12 cols x 8 rows)  */}
+          {/* ========================================================= */}
+          {roomType === 'underground_lounge' && (
+            <g>
+              {/* 1. Deep Cavern Stone Wall with Timber Support Beams (Rows 0, 1) */}
+              {Array.from({ length: MAP_COLS }).map((_, c) => (
+                <g key={`ug-wall-${c}`}>
+                  {/* Dark Cavern Stone Tile */}
+                  <rect x={c * 16} y={0} width={16} height={16} fill="#18122B" stroke="#0F0A1C" strokeWidth="0.5" />
+                  <rect x={c * 16 + 2} y={2} width={12} height={12} fill="#231942" />
+                  <rect x={c * 16} y={16} width={16} height={16} fill="#18122B" stroke="#0F0A1C" strokeWidth="0.5" />
+                  <rect x={c * 16 + 1} y={17} width={14} height={13} fill="#231942" />
+                  {/* Timber Beams at columns 0, 3, 6, 9, 11 */}
+                  {(c === 0 || c === 3 || c === 6 || c === 9 || c === 11) && (
+                    <rect x={c * 16 + 4} y={0} width={8} height={32} fill="#78350F" stroke="#451A03" strokeWidth="0.6" />
+                  )}
+                </g>
+              ))}
+
+              {/* Horizontal Timber Header Beam across entire cavern wall */}
+              <rect x={0} y={28} width={MAP_WIDTH} height={5} fill="#5C2B09" stroke="#3B1A04" strokeWidth="0.7" />
+              <rect x={0} y={29} width={MAP_WIDTH} height={1.5} fill="#92400E" opacity="0.6" />
+
+              {/* Center Banner Plaque: PREPLAB SECRET UNDERGROUND CLUB */}
+              <g transform="translate(68, 6)">
+                <rect x={0} y={0} width={56} height={16} rx={2} fill="#451A03" stroke="#F59E0B" strokeWidth="0.8" />
+                <rect x={2} y={2} width={52} height={12} fill="#78350F" />
+                <text x={28} y={7.5} textAnchor="middle" fontSize="3.8" fontWeight="900" fill="#FEF08A" fontFamily="monospace">
+                  PREPLAB SECRET CLUB
+                </text>
+                <text x={28} y={12} textAnchor="middle" fontSize="3" fontWeight="bold" fill="#FDE047" fontFamily="monospace">
+                  GAPLE & CHESS BUNKER
+                </text>
+              </g>
+
+              {/* 2. Cozy Underground Rustic Wood Flooring (Rows 2..7) */}
+              {Array.from({ length: MAP_ROWS - 2 }).map((_, r) => (
+                <g key={`ug-floor-${r}`}>
+                  {Array.from({ length: MAP_COLS }).map((_, c) => (
+                    <GbaWoodFloorTile 
+                      key={`ug-tile-${c}-${r}`} 
+                      x={c} 
+                      y={r + 2} 
+                      alt={(c + r) % 2 === 0} 
+                    />
+                  ))}
+                </g>
+              ))}
+
+              {/* 3. Hanging Miner Lanterns with Warm Flickering Light */}
+              <GbaUndergroundLantern x={54} y={24} />
+              <GbaUndergroundLantern x={126} y={24} />
+
+              {/* 4. Top-Left Corner: Wooden Mine Ladder to Gazebo */}
+              <g transform="translate(14, 18)">
+                <GbaUndergroundLadder 
+                  onClick={() => {
+                    if (onAscendToGazebo) onAscendToGazebo();
+                  }}
+                />
+              </g>
+
+              {/* 5. Center-Left: 4-Seater Domino (Gaple) Table */}
+              <g transform="translate(36, 52)">
+                <GbaUndergroundDominoTable 
+                  onClick={() => {
+                    if (onOpenDominoGame) onOpenDominoGame('bottom');
+                  }}
+                  onSeatClick={(seat) => {
+                    if (onOpenDominoGame) onOpenDominoGame(seat);
+                  }}
+                />
+              </g>
+
+              {/* 6. Center-Right: 2-Seater Chess Table */}
+              <g transform="translate(122, 56)">
+                <GbaUndergroundChessTable 
+                  onClick={() => {
+                    if (onOpenChessGame) onOpenChessGame('left');
+                  }}
+                  onSeatClick={(seat) => {
+                    if (onOpenChessGame) onOpenChessGame(seat);
+                  }}
+                />
+              </g>
+
+              {/* 7. Bottom Corners: Sample Crates & Reserve Fuel Drums */}
+              <g transform="translate(10, 102)">
+                <rect x={0} y={0} width={14} height={14} rx={1} fill="#78350F" stroke="#451A03" strokeWidth="0.6" />
+                <line x1={0} y1={0} x2={14} y2={14} stroke="#451A03" strokeWidth="0.5" />
+                <line x1={14} y1={0} x2={0} y2={14} stroke="#451A03" strokeWidth="0.5" />
+                <text x={7} y={8.5} textAnchor="middle" fontSize="3" fontWeight="900" fill="#FDE047" fontFamily="monospace">
+                  K3
+                </text>
+              </g>
+
+              <GbaNickelDrumTile x={10.4} y={6.2} type="limonite" />
             </g>
           )}
 

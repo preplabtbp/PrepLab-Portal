@@ -1710,7 +1710,7 @@ ${aiMeetingNotes
 
               {/* List of Recent / All Posts */}
               <div className="space-y-0.5">
-                {(showAllPostsView ? filteredPosts : recentPostsList).map((post) => {
+                {(showAllPostsView ? filteredPosts : recentPostsList).map((post, postIdx) => {
                   const isSelected = selectedPost?.id === post.id && !isEditing;
                   const title = getPostTitle(post);
                   const icon = getNotionIcon(post);
