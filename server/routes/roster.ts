@@ -400,7 +400,7 @@ router.get("/api/roster", async (req, res) => {
         try {
           cachedRosterResult = await Promise.race([
             computeRosterData(),
-            new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Roster DB timeout")), 600))
+            new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Roster DB timeout")), 25000))
           ]);
           lastCacheTime = Date.now();
         } catch (dbErr: any) {

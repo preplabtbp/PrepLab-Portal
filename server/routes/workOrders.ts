@@ -127,7 +127,7 @@ const FALLBACK_WORK_ORDERS = [
 router.get("/api/equipments", async (req, res) => {
     try {
       if (isDbCircuitBroken()) return res.json(FALLBACK_EQUIPMENTS);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 500));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
       const data = await Promise.race([db.select().from(equipments), timeoutPromise]) as any[];
       res.json(data && data.length > 0 ? data : FALLBACK_EQUIPMENTS);
     } catch (error) {
@@ -146,7 +146,7 @@ router.get("/api/work-orders/maintenance-summary", async (req, res) => {
       allWOs = (pt && (pt as string).toUpperCase() === 'GTS') ? [] : FALLBACK_WORK_ORDERS;
     } else {
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 500));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
         allWOs = await Promise.race([
           (pt && (pt as string).toUpperCase() === 'GTS')
             ? db.select().from(workOrders).where(eq(workOrders.pt, 'GTS')).orderBy(asc(workOrders.woId))
@@ -396,7 +396,7 @@ router.get(["/api/work-orders", "/api/workorders"], async (req, res) => {
         return res.json(filtered);
       }
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 500));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
         let query: any = db.select().from(workOrders).orderBy(desc(workOrders.date), desc(workOrders.id));
         if (pt && (pt as string).toUpperCase() === 'GTS') {
           query = query.where(eq(workOrders.pt, 'GTS'));
@@ -409,7 +409,7 @@ router.get(["/api/work-orders", "/api/workorders"], async (req, res) => {
         
         // Enrich with employee section info for clear section visibility
         try {
-          const timeoutEmps = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+          const timeoutEmps = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
           const allEmps: any = await Promise.race([
             db.select({ nik: employees.nik, section: employees.section, department: employees.department }).from(employees),
             timeoutEmps

@@ -120,7 +120,7 @@ const toSnake = (s: string) => s.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`);
 async function getInactiveNiks(): Promise<Set<string>> {
   if (isDbCircuitBroken()) return new Set();
   try {
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
     const rows: any = await Promise.race([
       db.select({ nik: employees.nik, statusKaryawan: employees.statusKaryawan, section: employees.section }).from(employees),
       timeoutPromise
@@ -746,13 +746,6 @@ async function loadMasterTempatTinggalMap(): Promise<Map<string, string>> {
     if (!tt || tt.length > 25) continue; // abaikan alamat KTP panjang
     if (!map.has(k)) {
       map.set(k, tt);
-    } else {
-      const cur = map.get(k)!;
-      if (cur !== 'Nirwana' && tt === 'Nirwana') {
-        map.set(k, 'Nirwana');
-      } else if (cur !== 'Nirwana' && cur !== 'Kampung Kawasi' && tt === 'Kampung Kawasi') {
-        map.set(k, 'Kampung Kawasi');
-      }
     }
   }
   return map;
@@ -934,14 +927,14 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
   const profileOf = (nik: string, fallback: OrderProfile): OrderProfile => {
     const master = masterProfiles.get(nik);
     const p = profileByNik.get(nik);
-    // Tempat Tinggal operasional dikunci: prioritaskan master yang sudah valid (Nirwana / Kampung Kawasi),
-    // lalu riwayat orderan terdekat. JANGAN PERNAH mengambil alamatDomisili (alamat KTP/rumah).
-    const lockedTt = masterTtByNik.get(nik) || master?.tempatTinggal || (p?.tempatTinggal && p.tempatTinggal.length <= 25 ? p.tempatTinggal : null) || fallback.tempatTinggal || null;
+    // Tempat Tinggal operasional dikunci: prioritaskan riwayat orderan terdekat, lalu master yang sudah valid
+    // JANGAN PERNAH mengambil alamatDomisili (alamat KTP/rumah).
+    const lockedTt = (p?.tempatTinggal && p.tempatTinggal.length <= 25 ? p.tempatTinggal : null) || masterTtByNik.get(nik) || master?.tempatTinggal || fallback.tempatTinggal || null;
     return {
-      statusMess: master?.statusMess || p?.statusMess || fallback.statusMess || null,
-      pt: master?.pt || p?.pt || fallback.pt || null,
-      shift: master?.shift || p?.shift || fallback.shift || null,
-      section: master?.section || p?.section || fallback.section || null,
+      statusMess: p?.statusMess || master?.statusMess || fallback.statusMess || null,
+      pt: p?.pt || master?.pt || fallback.pt || null,
+      shift: p?.shift || master?.shift || fallback.shift || null,
+      section: p?.section || master?.section || fallback.section || null,
       tempatTinggal: lockedTt,
     };
   };
@@ -1023,6 +1016,22 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   const masterTtByNik = await loadMasterTempatTinggalMap();
   const masterSortMap = await loadMasterSortOrderMap();
   const masterProfiles = await loadMasterEmployeeProfileMap();
+
+  // Riwayat profil terdekat dari tanggal lain agar PT & Residence karyawan tidak pernah berubah/hilang
+  const lastOrders = await db.select({
+    nik: mealOrders.nik, pt: mealOrders.pt, tempatTinggal: mealOrders.tempatTinggal,
+    statusMess: mealOrders.statusMess, shift: mealOrders.shift, section: mealOrders.section,
+  }).from(mealOrders)
+    .where(sql`${mealOrders.orderDate} <> ${date}`)
+    .orderBy(sql`CASE WHEN ${mealOrders.orderDate} < ${date} THEN 0 ELSE 1 END`, sql`ABS(${mealOrders.orderDate} - ${date}::date)`);
+  const lastOrdersByNik = new Map<string, typeof lastOrders[0]>();
+  for (const lo of lastOrders) {
+    const k = String(lo.nik || '').toUpperCase().trim();
+    if (!lastOrdersByNik.has(k)) lastOrdersByNik.set(k, lo);
+  }
+  const dbEmps = await db.select({ nik: employees.nik, pt: employees.pt, statusMess: employees.statusMess, shift: employees.shift, section: employees.section }).from(employees);
+  const empDbByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
+
   let maxSortNo = Array.from(masterSortMap.values()).reduce((max, n) => Math.max(max, n), 0);
 
   const getSortNo = (nik: string, currentSortNo?: number | null) => {
@@ -1052,12 +1061,17 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     const current = existingByNik.get(nik);
     const master = masterProfiles.get(nik);
     const sortNo = master?.sortNo ?? getSortNo(nik, current?.sortNo);
-    // Kolom Profil (Status Mess, PT, Shift, Section, Residence) dikunci sesuai Master Profile:
-    const lockedStatusMess = master?.statusMess || current?.statusMess || rosterEmp.statusMess || null;
-    const lockedPt = master?.pt || current?.pt || rosterEmp.pt || null;
-    const lockedShift = master?.shift || current?.shift || rosterEmp.shift || null;
-    const lockedSection = master?.section || current?.section || rosterEmp.section || null;
-    const lockedTt = (current?.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null) || master?.tempatTinggal || masterTtByNik.get(nik) || rosterEmp.tempatTinggal || null;
+    // Kolom Profil (Status Mess, PT, Shift, Section, Residence): PT & Residence TIDAK BOLEH diganti saat sinkronisasi roster
+    const lockedStatusMess = current?.statusMess || lastOrdersByNik.get(nik)?.statusMess || empDbByNik.get(nik)?.statusMess || master?.statusMess || rosterEmp.statusMess || null;
+    const lockedPt = current?.pt || lastOrdersByNik.get(nik)?.pt || empDbByNik.get(nik)?.pt || master?.pt || rosterEmp.pt || null;
+    const lockedShift = current?.shift || lastOrdersByNik.get(nik)?.shift || empDbByNik.get(nik)?.shift || master?.shift || rosterEmp.shift || null;
+    const lockedSection = current?.section || lastOrdersByNik.get(nik)?.section || empDbByNik.get(nik)?.section || master?.section || rosterEmp.section || null;
+    const lockedTt = (current?.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null)
+      || (lastOrdersByNik.get(nik)?.tempatTinggal && lastOrdersByNik.get(nik)!.tempatTinggal!.length <= 25 ? lastOrdersByNik.get(nik)!.tempatTinggal : null)
+      || masterTtByNik.get(nik)
+      || master?.tempatTinggal
+      || rosterEmp.tempatTinggal
+      || null;
 
     // Kolom Catatan dikunci mengikuti aturan tanggal acuan:
     // Kamis kembali ke Senin, Jumat pakai Kamis, dst.
@@ -1185,6 +1199,10 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
           'updatedBy', 'updatedAt'
         ].map(f => [f, f === 'catatan'
           ? sql.raw(`COALESCE(NULLIF(TRIM(excluded.catatan), ''), meal_orders.catatan)`)
+          : f === 'pt'
+          ? sql.raw(`COALESCE(NULLIF(TRIM(meal_orders.pt), ''), excluded.pt)`)
+          : f === 'tempatTinggal'
+          ? sql.raw(`COALESCE(NULLIF(TRIM(meal_orders.tempat_tinggal), ''), excluded.tempat_tinggal)`)
           : sql.raw(`excluded.${toSnake(f)}`)]))
       });
   }
@@ -1406,6 +1424,43 @@ function getMealOrderSeedRows(date: string) {
   });
 }
 
+async function getMealOrderRowsWithLatestProfiles(date: string) {
+  const seedRows = getMealOrderSeedRows(date);
+  try {
+    const lastOrders = await db.select({
+      nik: mealOrders.nik, pt: mealOrders.pt, tempatTinggal: mealOrders.tempatTinggal,
+      statusMess: mealOrders.statusMess, shift: mealOrders.shift, section: mealOrders.section,
+    }).from(mealOrders)
+      .orderBy(sql`CASE WHEN ${mealOrders.orderDate} < ${date} THEN 0 ELSE 1 END`, sql`ABS(${mealOrders.orderDate} - ${date}::date)`);
+    const lastByNik = new Map<string, typeof lastOrders[0]>();
+    for (const lo of lastOrders) {
+      const k = String(lo.nik || '').toUpperCase().trim();
+      if (!lastByNik.has(k)) lastByNik.set(k, lo);
+    }
+    const dbEmps = await db.select({ nik: employees.nik, pt: employees.pt, statusMess: employees.statusMess, shift: employees.shift, section: employees.section }).from(employees);
+    const empByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
+
+    return seedRows.map(r => {
+      const k = String(r.nik || '').toUpperCase().trim();
+      const last = lastByNik.get(k);
+      const emp = empByNik.get(k);
+      const pt = last?.pt || emp?.pt || r.pt || null;
+      const tempatTinggal = (last?.tempatTinggal && last.tempatTinggal.length <= 25 ? last.tempatTinggal : null) || r.tempatTinggal || null;
+      return {
+        ...r,
+        pt,
+        tempatTinggal,
+        statusMess: last?.statusMess || emp?.statusMess || r.statusMess || null,
+        shift: last?.shift || emp?.shift || r.shift || null,
+        section: last?.section || emp?.section || r.section || null,
+      };
+    });
+  } catch (err: any) {
+    console.warn('[MealOrders latest profiles fallback warn]:', err?.message);
+    return seedRows;
+  }
+}
+
 // 1. GET /api/meal-orders?date=YYYY-MM-DD — daftar order satu tanggal + tanggal-tanggal yang sudah ada datanya
 mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
   const date = isDate(req.query.date) ? req.query.date : new Date().toISOString().slice(0, 10);
@@ -1416,24 +1471,24 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
 
     let rows: any[] = [];
     if (isDbCircuitBroken()) {
-      rows = getMealOrderSeedRows(date);
+      rows = await getMealOrderRowsWithLatestProfiles(date);
     } else {
       try {
         const inactive = await getInactiveNiks().catch(() => new Set<string>());
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('MEAL_TIMEOUT')), 500));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
         const dbPromise = db.select().from(mealOrders)
           .where(eq(mealOrders.orderDate, date))
           .orderBy(sql`${mealOrders.sortNo} ASC NULLS LAST`, asc(mealOrders.nama));
         const dbRows = ((await Promise.race([dbPromise, timeoutPromise])) as any[]).filter(isActiveRow(inactive));
 
         if (!dbRows || dbRows.length === 0) {
-          rows = getMealOrderSeedRows(date);
+          rows = await getMealOrderRowsWithLatestProfiles(date);
         } else {
           rows = dbRows;
         }
       } catch (dbErr: any) {
         console.warn("[MealOrders GET DB offline, using seed fallback]:", dbErr?.message);
-        rows = getMealOrderSeedRows(date);
+        rows = await getMealOrderRowsWithLatestProfiles(date);
       }
     }
 
@@ -1449,7 +1504,7 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
 
     if (!isDbCircuitBroken()) {
       try {
-        const timeoutDates = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+        const timeoutDates = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
         const dbDatesPromise = db.select({ date: mealOrders.orderDate, count: sql<number>`COUNT(*)::int` })
           .from(mealOrders)
           .groupBy(mealOrders.orderDate).orderBy(desc(mealOrders.orderDate)).limit(60);
@@ -1696,6 +1751,46 @@ mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res
       fields.batchPagi = null;
       fields.batchSore = null;
       fields.catatan = null;
+    } else if ('shiftKerja' in fields && fields.shiftKerja) {
+      // Jika shift diubah tanpa mengirim porsi makan manual, hitung otomatis sesuai aturan modul
+      const mealKeys = ['pagiKantin', 'pagiLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan', 'malamLapangan'];
+      const hasMealFields = mealKeys.some(k => k in fields);
+      if (!hasMealFields) {
+        const [currentRow] = await db.select().from(mealOrders).where(eq(mealOrders.id, id)).limit(1);
+        if (currentRow) {
+          const sUpper = String(fields.shiftKerja).toUpperCase();
+          let rosterCode = 'D';
+          let canonicalShift = 'Siang';
+          if (sUpper === 'CUTI SITE' || sUpper === 'CS') { rosterCode = 'CS'; canonicalShift = 'Cuti Site'; }
+          else if (sUpper === 'IZIN') { rosterCode = 'I'; canonicalShift = 'Izin'; }
+          else if (sUpper === 'OFF') { rosterCode = 'OFF'; canonicalShift = 'OFF'; }
+          else if (sUpper === 'SAKIT' || sUpper === 'SS') { rosterCode = 'SS'; canonicalShift = 'Sakit'; }
+          else if (sUpper === 'CUTI') { rosterCode = 'CUTI'; canonicalShift = 'CUTI'; }
+          else if (sUpper === 'MALAM') { rosterCode = 'N'; canonicalShift = 'Malam'; }
+          else if (sUpper === 'LONGSHIFT') { rosterCode = 'LS'; canonicalShift = 'Longshift'; }
+          else if (sUpper === 'NONSHIFT') { rosterCode = 'D'; canonicalShift = 'Nonshift'; }
+          else if (sUpper === 'SIANG') { rosterCode = 'D'; canonicalShift = 'Siang'; }
+
+          const pref: MealPreference = {
+            pagi: (currentRow.pilihanPagi as MealChoice) || null,
+            sore: (currentRow.pilihanSore as MealChoice) || null,
+          };
+          const computed = computeMealOrderByRoster(currentRow, rosterCode, ymd(currentRow.orderDate), pref);
+          fields.shiftKerja = canonicalShift;
+          fields.statusKerja = computed.statusKerja;
+          fields.status = computed.status;
+          fields.pagiKantin = computed.pagiKantin;
+          fields.pagiLapangan = computed.pagiLapangan;
+          fields.siangKantin = computed.siangKantin;
+          fields.siangLapangan = computed.siangLapangan;
+          fields.soreKantin = computed.soreKantin;
+          fields.soreLapangan = computed.soreLapangan;
+          fields.malamLapangan = computed.malamLapangan;
+          fields.batchPagi = computed.batchPagi;
+          fields.batchSore = computed.batchSore;
+          fields.catatan = computed.catatan;
+        }
+      }
     }
 
     // Proteksi: Hari Selasa, Rabu, dan Sabtu untuk Karyawan Status Mess CR (Gol II-V):
@@ -1777,7 +1872,7 @@ mealOrdersRouter.get("/api/meal-orders/bungkus-stats", async (req, res) => {
 
     if (!isDbCircuitBroken()) {
       try {
-        const timeoutTable = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 500));
+        const timeoutTable = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
         await Promise.race([ensureMealOrdersTable(), timeoutTable]);
 
         const orderDates = (await db.select({ date: mealOrders.orderDate }).from(mealOrders)

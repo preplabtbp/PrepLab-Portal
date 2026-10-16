@@ -1582,7 +1582,7 @@ const FALLBACK_PEMANTAUAN = [
 router.get("/api/pemantauan", async (req, res) => {
     try {
       if (isDbCircuitBroken()) return res.json(FALLBACK_PEMANTAUAN);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 500));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
       const data = await Promise.race([
         db.select().from(pemantauan).orderBy(
           sql`tanggal ASC, CASE WHEN LOWER(shift) LIKE '%pagi%' OR LOWER(shift) LIKE '%ds%' OR LOWER(shift) = '1' THEN 1 WHEN LOWER(shift) LIKE '%siang%' OR LOWER(shift) = '2' THEN 2 WHEN LOWER(shift) LIKE '%malam%' OR LOWER(shift) LIKE '%ns%' OR LOWER(shift) = '3' THEN 3 ELSE 4 END ASC, LPAD(TRIM(jam), 5, '0') ASC, id ASC`

@@ -117,7 +117,7 @@ router.get("/api/tickets", async (req, res) => {
       return res.json(FALLBACK_TICKETS);
     }
     try {
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TICKETS_TIMEOUT')), 500));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
       dbData = await Promise.race([
         db.select().from(tickets).orderBy(desc(tickets.id)),
         timeoutPromise
@@ -132,7 +132,7 @@ router.get("/api/tickets", async (req, res) => {
     // Fetch inspections to automatically link and backfill missing PDF report URLs
     let allInspections: any[] = [];
     try {
-      const timeoutInsp = new Promise((_, reject) => setTimeout(() => reject(new Error('INSP_TIMEOUT')), 400));
+      const timeoutInsp = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
       allInspections = await Promise.race([db.select().from(inspections), timeoutInsp]) as any[];
     } catch (e) {}
 

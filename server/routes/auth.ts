@@ -216,8 +216,8 @@ authRouter.post("/check-nik", async (req, res) => {
 
     let employee: any = null;
     try {
-      // Race DB query against a fast 1200ms timeout
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1200));
+      // Race DB query against a reliable 10s timeout
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 10000));
       const dbPromise = db.select().from(employees)
         .where(
           or(
@@ -311,7 +311,7 @@ authRouter.post("/login", async (req, res) => {
       isDevFallback = true;
     } else {
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1200));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 10000));
         const dbPromise = db.select().from(employees)
           .where(
             or(
@@ -407,7 +407,7 @@ authRouter.get("/me", requireAuth, async (req, res) => {
 
     let userFromDb = null;
     try {
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 2500));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 10000));
       const dbPromise = db.select().from(employees).where(eq(employees.nik, sessionUser.nik)).limit(1);
       const matches: any = await Promise.race([dbPromise, timeoutPromise]);
       if (matches && matches.length > 0) {

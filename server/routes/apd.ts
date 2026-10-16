@@ -165,7 +165,7 @@ router.get("/api/apd/settings", async (req, res) => {
     const settingsMap: Record<string, number> = { ...DEFAULT_APD_SETTINGS };
     if (!isDbCircuitBroken()) {
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
         const data: any = await Promise.race([db.select().from(apdSettings), timeoutPromise]);
         for (const item of data) {
           if (item.itemName) settingsMap[item.itemName] = item.intervalMonths || 0;
@@ -211,7 +211,7 @@ router.get("/api/apd/history", async (req, res) => {
       const historyMap: Record<string, Array<{ date: string; url?: string }>> = {};
       if (!isDbCircuitBroken()) {
         try {
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
           const records: any = await Promise.race([
             db.select().from(apdHistory).where(sql`LOWER(${apdHistory.nik}) = LOWER(${cleanNik})`),
             timeoutPromise
@@ -236,7 +236,7 @@ router.get("/api/apd/history", async (req, res) => {
       return res.json([]);
     }
     try {
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
       let query: any = db.select().from(apdHistory);
       if (pt && (pt as string).toUpperCase() === 'GTS') {
         query = query.where(eq(apdHistory.pt, 'GTS'));

@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { Button, Input, Select } from './ui';
 
@@ -8,7 +8,7 @@ import { addMonths, isBefore, parseISO, format, startOfDay } from 'date-fns';
 import { useApdInput, ApdEntry, getHistoryIgnoreCase } from '../features/apd/hooks/useApdInput';
 import { parseGoogleDriveId } from '../lib/p5m-flyer';
 
-import { getApdSettings, getApdHistoryByNik, recordApdTakes, getEmployees, addEmployee, generateApdDocument, uploadApdProof } from '../sheets-api';
+import { getApdSettings, getApdHistoryByNik, recordApdTakes, getEmployees, addEmployee, generateApdDocument, uploadApdProof, uploadPhotoToDrive } from '../sheets-api';
 import { PageHeader } from './PageHeader';
 
 const APD_TYPES = [
@@ -74,6 +74,54 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
   // State untuk jendela mengambang detail APD
   const [selectedApdModal, setSelectedApdModal] = useState<string | null>(null);
   const pcScrollRef = useRef<HTMLDivElement>(null);
+
+  // State untuk upload BA Kerusakan Barang (PDF) jika belum waktunya pengambilan
+  const [baKerusakanFile, setBaKerusakanFile] = useState<{ file?: File; name: string; url?: string } | null>(null);
+  const [isUploadingBa, setIsUploadingBa] = useState(false);
+
+  const handleUploadBaKerusakan = async (apdName: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      toast.error('File BA Kerusakan harus berformat PDF (.pdf)');
+      e.target.value = '';
+      return;
+    }
+    setIsUploadingBa(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          const base64 = reader.result as string;
+          const cleanApd = apdName.replace(/[^a-zA-Z0-9]/g, '_');
+          const cleanNik = (employeeData?.nik || 'NIK').replace(/[^a-zA-Z0-9]/g, '_');
+          const fileName = `BA_Kerusakan_${cleanNik}_${cleanApd}_${Date.now()}.pdf`;
+          const uploadedUrl = await uploadPhotoToDrive(base64, 'application/pdf', fileName, 'Dokumen APD');
+          setBaKerusakanFile({
+            file,
+            name: file.name,
+            url: uploadedUrl || '',
+          });
+          toast.success(`BA Kerusakan (${file.name}) berhasil diunggah!`);
+        } catch (err) {
+          console.error('Upload drive error:', err);
+          setBaKerusakanFile({
+            file,
+            name: file.name,
+            url: '',
+          });
+          toast.success(`BA Kerusakan (${file.name}) siap dilampirkan.`);
+        } finally {
+          setIsUploadingBa(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error(err);
+      toast.error('Gagal membaca file PDF');
+      setIsUploadingBa(false);
+    }
+  };
 
 
 
@@ -233,9 +281,14 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
     e.preventDefault();
     if (!employeeData || entries.length === 0) return;
     
-    // Instead of showing signature, just submit directly.
-    submitApdData();
+    // Validasi: Jika ada APD yang belum waktunya diambil, wajib melampirkan file BA Kerusakan Barang (PDF)
+    const unverified = entries.find(entry => entry.warningMessage && !entry.baFileName);
+    if (unverified) {
+      toast.error(`Pengambilan ${unverified.apd} belum memenuhi interval penggantian. Wajib melampirkan Berita Acara (BA) Kerusakan Barang (PDF)!`);
+      return;
+    }
 
+    submitApdData();
   };
 
 
@@ -779,11 +832,12 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
             const warningMsg = getIntervalWarning(apd, format(new Date(), 'yyyy-MM-dd'), employeeData.history);
             const isEligible = !warningMsg;
             const intervalMonths = getIntervalIgnoreCase(intervals, apd) || 0;
+            const canAddToForm = isEligible || !!baKerusakanFile;
 
             return (
               <div
                 className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
-                onClick={() => setSelectedApdModal(null)}
+                onClick={() => { setSelectedApdModal(null); setBaKerusakanFile(null); }}
               >
                 <div
                   className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[88vh] overflow-hidden animate-in zoom-in-95 duration-200"
@@ -802,7 +856,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                     </div>
                     <button
                       type="button"
-                      onClick={() => setSelectedApdModal(null)}
+                      onClick={() => { setSelectedApdModal(null); setBaKerusakanFile(null); }}
                       className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                       title="Tutup"
                     >
@@ -939,37 +993,142 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                         </div>
                       )}
                     </div>
+
+                    {/* Upload BA Kerusakan Barang jika belum waktunya pengambilan */}
+                    {!isEligible && (
+                      <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200/90 space-y-3">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-amber-950">
+                              Upload BA Kerusakan Barang (Format PDF)
+                            </h4>
+                            <p className="text-[11px] text-amber-800 leading-relaxed mt-0.5">
+                              Karena belum memenuhi jadwal interval penggantian, pembuatan form baru <strong>hanya dapat diproses</strong> setelah melampirkan file Berita Acara (BA) Kerusakan Barang dengan format PDF.
+                            </p>
+                          </div>
+                        </div>
+
+                        {baKerusakanFile ? (
+                          <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-emerald-300 shadow-2xs">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-900 truncate">{baKerusakanFile.name}</p>
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> BA Kerusakan PDF Siap Dilampirkan
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {baKerusakanFile.url && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDoc({
+                                    url: baKerusakanFile.url!,
+                                    title: `BA Kerusakan - ${apd}`,
+                                    date: format(new Date(), 'dd-MM-yyyy'),
+                                    employeeName: employeeData.nama,
+                                    nik: employeeData.nik
+                                  })}
+                                  className="text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-md font-bold transition-colors cursor-pointer"
+                                >
+                                  Lihat
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setBaKerusakanFile(null)}
+                                className="text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 p-1.5 rounded-lg font-semibold transition-colors cursor-pointer"
+                                title="Hapus file BA"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-amber-400 bg-white hover:bg-amber-100/60 text-amber-900 text-xs font-bold transition-all cursor-pointer shadow-2xs ${isUploadingBa ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                              {isUploadingBa ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin text-amber-700" />
+                                  <span>Mengunggah BA Kerusakan PDF...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4 text-amber-700" />
+                                  <span>Pilih &amp; Upload BA Kerusakan Barang (.pdf)</span>
+                                </>
+                              )}
+                              <input
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                className="hidden"
+                                disabled={isUploadingBa}
+                                onChange={(e) => handleUploadBaKerusakan(apd, e)}
+                              />
+                            </label>
+                            <p className="text-[10px] text-amber-700 mt-1 text-center font-medium">
+                              Wajib format dokumen PDF (.pdf)
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Footer Modal: Tombol Tambah ke Form Input */}
-                  <div className="pt-4 border-t border-slate-100">
+                  <div className="pt-4 border-t border-slate-100 space-y-1.5">
                     <Button
                       type="button"
-                      variant={isEligible ? "primary" : "secondary"}
-                      className={`w-full py-3.5 rounded-2xl text-sm font-bold gap-2 cursor-pointer shadow-sm transition-all ${
-                        !isEligible 
-                          ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200' 
-                          : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg'
+                      disabled={!canAddToForm}
+                      className={`w-full py-3.5 rounded-2xl text-sm font-bold gap-2 shadow-sm transition-all ${
+                        !canAddToForm 
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60' 
+                          : baKerusakanFile
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md hover:shadow-lg cursor-pointer'
+                            : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg cursor-pointer'
                       }`}
                       onClick={() => {
+                        if (!canAddToForm) return;
                         setEntries(prev => [...prev, {
                           id: Math.random().toString(36).substr(2, 9),
                           apd: apd,
                           ukuran: '-',
                           jumlah: '1',
-                          keterangan: '',
-                          warningMessage: getIntervalWarning(apd, tanggal, employeeData.history)
+                          keterangan: baKerusakanFile ? `Penggantian Khusus (BA Kerusakan: ${baKerusakanFile.name})` : '',
+                          warningMessage: getIntervalWarning(apd, tanggal, employeeData.history),
+                          baFileUrl: baKerusakanFile?.url || '',
+                          baFileName: baKerusakanFile?.name || '',
                         }]);
                         setShowAddedPopup(apd);
                         setSelectedApdModal(null);
+                        setBaKerusakanFile(null);
                         toast.success(`${apd} berhasil ditambahkan ke draft input!`);
                         setTimeout(() => {
                           document.getElementById('apd-input-form')?.scrollIntoView({ behavior: 'smooth' });
                         }, 120);
                       }}
                     >
-                      <Plus className="w-4 h-4" /> Tambah ke Form Input
+                      {!canAddToForm ? (
+                        <>
+                          <Lock className="w-4 h-4" /> Belum Waktunya Ambil (Upload BA PDF Diperlukan)
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4" /> Tambah ke Form Input {baKerusakanFile ? '(Dengan BA Kerusakan)' : ''}
+                        </>
+                      )}
                     </Button>
+                    {!canAddToForm && (
+                      <p className="text-[11px] text-center text-amber-700 font-semibold">
+                        Tombol dinonaktifkan: Silakan upload BA Kerusakan Barang (PDF) untuk melanjutkan.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1050,15 +1209,88 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                         onChange={(e) => updateEntry(entry.id, 'keterangan', e.target.value)}
                       />
 
-                      {entry.warningMessage && (
-                        <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-start gap-2.5 mt-2 animate-in fade-in zoom-in-95">
-                          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                          <div>
-                            <h4 className="font-semibold text-rose-800 text-xs mb-0.5">Peringatan Interval</h4>
-                            <p className="text-[11px] text-rose-700 leading-relaxed">
-                              {entry.warningMessage}
-                            </p>
+                      {entry.baFileName && (
+                        <div className="bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl flex items-center justify-between text-xs mt-2 shadow-2xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="w-4 h-4 text-emerald-700 shrink-0" />
+                            <span className="font-bold text-emerald-950 truncate">BA Kerusakan: {entry.baFileName}</span>
                           </div>
+                          {entry.baFileUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDoc({
+                                url: entry.baFileUrl!,
+                                title: `BA Kerusakan - ${entry.apd}`,
+                                date: tanggal,
+                                employeeName: employeeData?.nama || '',
+                                nik: employeeData?.nik || '',
+                              })}
+                              className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 hover:underline flex items-center gap-1 cursor-pointer shrink-0 ml-2"
+                            >
+                              Lihat PDF <ExternalLink className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {entry.warningMessage && !entry.baFileName && (
+                        <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl space-y-2 mt-2 animate-in fade-in zoom-in-95">
+                          <div className="flex items-start gap-2.5">
+                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-rose-800 text-xs mb-0.5">Peringatan Interval (Wajib BA Kerusakan PDF)</h4>
+                              <p className="text-[11px] text-rose-700 leading-relaxed">
+                                {entry.warningMessage}
+                              </p>
+                            </div>
+                          </div>
+                          <label className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white border border-rose-300 text-rose-800 hover:bg-rose-100/50 text-xs font-bold cursor-pointer transition-colors shadow-2xs">
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Upload BA Kerusakan Barang (.pdf)</span>
+                            <input
+                              type="file"
+                              accept="application/pdf,.pdf"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+                                  toast.error('File harus berformat PDF (.pdf)');
+                                  return;
+                                }
+                                try {
+                                  const reader = new FileReader();
+                                  reader.onloadend = async () => {
+                                    try {
+                                      const base64 = reader.result as string;
+                                      const cleanApd = entry.apd.replace(/[^a-zA-Z0-9]/g, '_');
+                                      const cleanNik = (employeeData?.nik || 'NIK').replace(/[^a-zA-Z0-9]/g, '_');
+                                      const fileName = `BA_Kerusakan_${cleanNik}_${cleanApd}_${Date.now()}.pdf`;
+                                      const uploadedUrl = await uploadPhotoToDrive(base64, 'application/pdf', fileName, 'Dokumen APD');
+                                      setEntries(prev => prev.map(ent => ent.id === entry.id ? {
+                                        ...ent,
+                                        baFileUrl: uploadedUrl || '',
+                                        baFileName: file.name,
+                                        keterangan: ent.keterangan || `Penggantian Khusus (BA Kerusakan: ${file.name})`
+                                      } : ent));
+                                      toast.success(`BA Kerusakan (${file.name}) berhasil dilampirkan.`);
+                                    } catch (err) {
+                                      setEntries(prev => prev.map(ent => ent.id === entry.id ? {
+                                        ...ent,
+                                        baFileUrl: '',
+                                        baFileName: file.name,
+                                        keterangan: ent.keterangan || `Penggantian Khusus (BA Kerusakan: ${file.name})`
+                                      } : ent));
+                                      toast.success(`BA Kerusakan (${file.name}) siap dilampirkan.`);
+                                    }
+                                  };
+                                  reader.readAsDataURL(file);
+                                } catch (err) {
+                                  toast.error('Gagal membaca file PDF');
+                                }
+                              }}
+                            />
+                          </label>
                         </div>
                       )}
                     </div>

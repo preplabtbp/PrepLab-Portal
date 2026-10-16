@@ -61,7 +61,7 @@ router.get("/api/bulletin", async (req, res) => {
         return res.json({ status: "success", data: [] });
       }
 
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
       if (pageNum && limitNum) {
         const totalQuery = conditions.length > 0 
           ? db.select({ count: sql<number>`count(*)` }).from(bulletinPosts).where(and(...conditions))

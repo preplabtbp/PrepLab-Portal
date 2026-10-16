@@ -126,7 +126,7 @@ async function getAttendanceMap(): Promise<Record<string, any>> {
     return cachedAttendanceMap.data;
   }
   try {
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('ATT_TIMEOUT')), 800));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('ATT_TIMEOUT')), 15000));
     const dbPromise = db.select().from(employeeAttendance);
     const allAtt: any = await Promise.race([dbPromise, timeoutPromise]);
     const map: Record<string, any> = {};
@@ -224,7 +224,7 @@ async function getCounselingMap(): Promise<Record<string, any>> {
   let map: Record<string, any> = {};
   if (!isDbCircuitBroken()) {
     try {
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('COUNSEL_TIMEOUT')), 500));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('COUNSEL_TIMEOUT')), 15000));
       const dbPromise = db.select().from(employeeCounseling);
       const allC: any = await Promise.race([dbPromise, timeoutPromise]);
       for (const item of allC) {
@@ -570,7 +570,7 @@ employeesRouter.get("/", async (req, res) => {
       data = getCsvEmployees();
     } else {
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('EMP_TIMEOUT')), 500));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('EMP_TIMEOUT')), 15000));
         const dbPromise = db.select().from(employees);
         data = (await Promise.race([dbPromise, timeoutPromise])) as any[];
         if (!data || data.length === 0) {
@@ -598,7 +598,7 @@ employeesRouter.get("/", async (req, res) => {
       return true;
     });
 
-    if (all !== 'true') {
+    if (all !== 'true' && all !== '1') {
       const isGtsReq = (pt || '').toString().trim().toUpperCase() === 'GTS';
       if (isGtsReq) {
         data = data.filter(e => {
@@ -715,6 +715,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
 
     const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
     const isSpecialAccount = 
+      HARDCODED_DEVS.includes(cleanNik) ||
       cleanNik === 'MEETINGROOM' || 
       cleanNik === 'MEETING' || 
       cleanNik === 'RUANGMEETING' || 
@@ -722,8 +723,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
       cleanNik.includes('MEETING') ||
       cleanNik === 'PREPLABADMIN' ||
       cleanNik.includes('DEMO') ||
-      cleanNik.includes('SPV') ||
-      HARDCODED_DEVS.includes(cleanNik);
+      cleanNik.includes('SPV');
 
     const now = Date.now();
     const cached = cachedHierarchy.get(cacheKey);
@@ -731,14 +731,14 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
       return res.json({ status: "success", data: cached.data });
     }
 
-    // Ambil data karyawan dari DB dengan fallback CSV cepat (600ms)
+    // Ambil data karyawan dari DB dengan fallback CSV jika offline
     let allEmployeesData: any[] = [];
     if (!isDbCircuitBroken()) {
       try {
         allEmployeesData = await withDbFallback(
           () => db.select().from(employees),
           () => getCsvEmployees(),
-          600
+          15000
         );
       } catch {
         allEmployeesData = getCsvEmployees();
@@ -750,14 +750,19 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
       allEmployeesData = getCsvEmployees();
     }
 
-    // Meeting Room, Admin, Super Admin, Devs, & Special accounts -> Akses seluruh karyawan
+    const [attMap, counselMap] = await Promise.all([
+      getAttendanceMap().catch(() => ({})),
+      getCounselingMap().catch(() => ({}))
+    ]);
+
+    // Meeting Room, Demo, & Special virtual accounts -> Akses seluruh karyawan dengan absensi lengkap
     if (isSpecialAccount) {
       const filtered = allEmployeesData.filter(e => {
         const eNik = (e.nik || '').toString().toUpperCase();
         const eName = (e.name || '').toString().toLowerCase();
         return !eNik.includes('DEMO') && !eName.includes('demo') && eNik !== 'PREPLABADMIN';
       });
-      const formatted = filtered.map(e => toPublicEmployee(e));
+      const formatted = filtered.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
       cachedHierarchy.set(cacheKey, { data: formatted, timestamp: now });
       return res.json({ status: "success", data: formatted });
     }
@@ -769,18 +774,14 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     }
     
     if (!user) {
-      // Jika NIK tidak ditemukan, tetap kembalikan data karyawan publik agar UI tidak error
-      const formatted = allEmployeesData.filter(passStatus).map(e => toPublicEmployee(e));
+      // Jika NIK tidak ditemukan, tetap kembalikan data karyawan publik dengan absensi agar UI tidak error
+      const formatted = allEmployeesData.filter(passStatus).map(e => attachAttendanceToEmployee(e, attMap, counselMap));
       return res.json({ status: "success", data: formatted });
     }
     
     const sectionLower = (user.section || "").toLowerCase();
     const deptLower = (user.department || "").toLowerCase();
     const jabatanLower = (user.jabatan || "").toLowerCase();
-    const [attMap, counselMap] = await Promise.all([
-      getAttendanceMap().catch(() => ({})),
-      getCounselingMap().catch(() => ({}))
-    ]);
     
     const isUserMgr = isSectionManagerOrAdmin(user);
     const isUserGts = isGtsEmployee(user);
@@ -1140,7 +1141,7 @@ employeesRouter.post("/import", async (req, res) => {
           pt: normalized['pt'] || normalized['perusahaan'] || null,
           poh: normalized['poh'] || null,
           sponsor: normalized['sponsor'] || null,
-          statusKaryawan: normalized['statuskaryawan'] || normalized['status'] || null,
+          statusKaryawan: normalized['statuskaryawan'] || normalized['status'] || raw['Status Karyawan'] || raw['Status'] || 'Active',
           tanggalEfektifTidakBekerja: cleanDateVal(normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja']),
           tanggalAwalBergabung: cleanDateVal(normalized['dohawal'] || normalized['doh'] || normalized['tanggalawalbergabung']),
           tanggalJabatanBaru: cleanDateVal(normalized['tanggaljabatanbaru'] || normalized['tgljabatanbaru']),

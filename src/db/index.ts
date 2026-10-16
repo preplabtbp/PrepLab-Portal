@@ -30,12 +30,12 @@ export function reportDbSuccess() {
 
 /**
  * Execute a database query with tight timeout protection and automatic circuit breaker.
- * When DB is offline or firewalled, returns fallbackFn() in 0 ms.
+ * When DB is offline or firewalled, returns fallbackFn() after timeoutMs.
  */
 export async function withDbFallback<T>(
   queryFn: () => Promise<T>,
   fallbackFn: () => T | Promise<T>,
-  timeoutMs = 600
+  timeoutMs = 15000
 ): Promise<T> {
   if (isDbCircuitBroken()) {
     return fallbackFn();
@@ -55,11 +55,11 @@ export async function withDbFallback<T>(
 
 export const createPool = () => {
   const poolConfig: any = {
-    connectionTimeoutMillis: 2000, // 2s fast fail instead of 15s freeze
-    idleTimeoutMillis: 10000,
-    max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 6,
+    connectionTimeoutMillis: 30000,
+    idleTimeoutMillis: 30000,
+    max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 10,
     keepAlive: true,
-    keepAliveInitialDelayMillis: 5000,
+    keepAliveInitialDelayMillis: 10000,
     allowExitOnIdle: true,
   };
 

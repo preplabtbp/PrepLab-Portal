@@ -467,7 +467,7 @@ trainingRouter.get("/api/training-records/me", async (req, res) => {
       return res.json({ status: "success", data: { nik, nama: (req as any).user?.name ?? null, alerts: [] } });
     }
     try {
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 400));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
       const [rec]: any = await Promise.race([
         db.select().from(trainingRecords).where(eq(trainingRecords.nik, nik)),
         timeoutPromise
@@ -553,7 +553,7 @@ trainingRouter.get("/api/training-records", async (req, res) => {
       rows = access.viewAll ? allSeed : allSeed.filter(r => r.nik === access.nik);
     } else {
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TRAINING_TIMEOUT')), 500));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
         const dbPromise = db
           .select()
           .from(trainingRecords)

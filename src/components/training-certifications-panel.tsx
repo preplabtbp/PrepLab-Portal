@@ -4,7 +4,7 @@ import { Award, Plus, Edit3, Trash2, Loader2, X, Search, ShieldCheck, AlertTrian
 import { toast } from 'sonner';
 import { Input, Select, Textarea, Button } from './ui';
 import {
-  CERT_TYPES, CERT_META, certStatus, defaultCertExpired, type CertType, type TrainingCertification,
+  CERT_TYPES, CERT_META, certStatus, certWarningDate, defaultCertExpired, type CertType, type TrainingCertification,
 } from '../utils/training-certifications';
 
 // ===== Sertifikasi K3 & Kompetensi (Training External) =====
@@ -23,7 +23,7 @@ const todayYmd = () => {
 
 const STATUS_UI = {
   active: { label: 'Aktif', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  soon: { label: 'Segera Expired', cls: 'bg-amber-50 text-amber-800 border-amber-200' },
+  soon: { label: 'Warning', cls: 'bg-amber-50 text-amber-800 border-amber-300' },
   expired: { label: 'Expired', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
   unknown: { label: 'Masa berlaku ?', cls: 'bg-slate-50 text-slate-500 border-slate-200' },
 } as const;
@@ -150,8 +150,8 @@ export function TrainingCertificationsPanel() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { icon: <Award className="w-3.5 h-3.5" />, label: 'Sertifikat Tercatat', value: stats.total, hint: `${stats.people} personel · ${CERT_TYPES.length} jenis`, tone: 'text-slate-900' },
-          { icon: <ShieldCheck className="w-3.5 h-3.5" />, label: 'Aktif', value: stats.active, hint: 'masa berlaku > 90 hari', tone: 'text-emerald-700' },
-          { icon: <Clock className="w-3.5 h-3.5" />, label: 'Segera Expired', value: stats.soon, hint: '≤ 90 hari lagi', tone: 'text-amber-700' },
+          { icon: <ShieldCheck className="w-3.5 h-3.5" />, label: 'Aktif', value: stats.active, hint: 'masa berlaku > 1 tahun', tone: 'text-emerald-700' },
+          { icon: <Clock className="w-3.5 h-3.5" />, label: 'Warning Expired', value: stats.soon, hint: '≤ 1 tahun lagi', tone: 'text-amber-700' },
           { icon: <AlertTriangle className="w-3.5 h-3.5" />, label: 'Expired', value: stats.expired, hint: 'perlu diperpanjang', tone: 'text-rose-600' },
         ].map(c => (
           <div key={c.label} className="rounded-2xl bg-white border border-slate-200/80 shadow-sm px-4 py-3">
@@ -216,6 +216,7 @@ export function TrainingCertificationsPanel() {
                         <th className={`${th} text-center`}>Tanggal Training/Ujian</th>
                         <th className={`${th} text-center`}>Keterangan</th>
                         <th className={`${th} text-center`}>Tanggal Expired</th>
+                        <th className={`${th} text-center text-amber-800`}>Tanggal Warning</th>
                         <th className={`${th} text-center`}>Status</th>
                         <th className={th}>Note</th>
                         {canManage && <th className={th} />}
@@ -236,6 +237,7 @@ export function TrainingCertificationsPanel() {
                             <td className={`${td} text-center whitespace-nowrap tabular-nums`}>{fmtDate(r.tanggal)}</td>
                             <td className={`${td} text-center`}>{r.keterangan || <span className="text-slate-300">-</span>}</td>
                             <td className={`${td} text-center whitespace-nowrap tabular-nums font-semibold`}>{fmtDate(r.expired)}</td>
+                            <td className={`${td} text-center whitespace-nowrap tabular-nums font-semibold text-amber-800`}>{fmtDate(certWarningDate(r.expired))}</td>
                             <td className={`${td} text-center whitespace-nowrap`}>
                               <span className={`inline-flex px-2 py-0.5 rounded-full border text-[10px] font-semibold ${ui.cls}`} title={daysLeft != null ? (daysLeft < 0 ? `Lewat ${-daysLeft} hari` : `${daysLeft} hari lagi`) : undefined}>
                                 {ui.label}{status === 'soon' && daysLeft != null ? ` · ${daysLeft} hr` : ''}

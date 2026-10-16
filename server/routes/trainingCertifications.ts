@@ -239,7 +239,7 @@ trainingCertificationsRouter.get("/api/training-certifications", async (req, res
       rows = getFullFallbackCertifications();
     } else {
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 500));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
         rows = (await Promise.race([
           db.select().from(trainingCertifications).orderBy(asc(trainingCertifications.certType), asc(trainingCertifications.tanggal), asc(trainingCertifications.id)),
           timeoutPromise

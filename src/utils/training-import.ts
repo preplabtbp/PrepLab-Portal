@@ -203,9 +203,17 @@ export function masaKerjaFromDoh(doh: string, today: string = todayWit()): strin
   return `${Math.floor(months / 12)} Tahun ${months % 12} Bulan`;
 }
 
-export const popAttendedPra = (p?: PopData | null) => !!p && (!!p.praPop || p.praPopResult === 'PASS' || p.praPopPre != null || p.praPopPost != null);
-export const popAttendedPop = (p?: PopData | null) => !!p?.popBatch;
-export const popPassedPom = (p?: PopData | null) => p?.pomKeterangan === 'PASS';
+// Keikutsertaan / kelulusan langsung pada masing-masing tahap
+export const popPraPopDirectAttended = (p?: PopData | null) => !!p && (!!p.praPop || p.praPopResult === 'PASS' || p.praPopPre != null || p.praPopPost != null);
+export const popPopDirectAttended = (p?: PopData | null) => !!p && !!p.popBatch;
+export const popPassedPom = (p?: PopData | null) => !!p && (p.pomKeterangan === 'PASS' || !!p.pom);
+export const popFollowedPom = (p?: PopData | null) => !!p && (p.pomKeterangan === 'PASS' || !!p.pom);
+
+// Memenuhi / telah mengikuti POP: jika sudah mengikuti POM maka tidak perlu lagi mengikuti POP (sudah terpenuhi)
+export const popAttendedPop = (p?: PopData | null) => !!p && (!!p.popBatch || popFollowedPom(p));
+
+// Memenuhi / telah mengikuti Pra POP: jika sudah mengikuti POM ataupun POP maka tidak perlu lagi mengikuti Pra POP (sudah terpenuhi)
+export const popAttendedPra = (p?: PopData | null) => !!p && (popPraPopDirectAttended(p) || !!p.popBatch || popFollowedPom(p));
 
 export interface ParsedTrainingSheet {
   programs: TrainingProgram[];

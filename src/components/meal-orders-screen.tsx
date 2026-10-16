@@ -91,7 +91,6 @@ const PROFILE_FIELDS: { key: keyof MealOrder; label: string; placeholder?: strin
   { key: 'pt', label: 'PT' },
   { key: 'shift', label: 'Shift' },
   { key: 'section', label: 'Section' },
-  { key: 'statusKerja', label: 'Status Kerja Karyawan', placeholder: 'mis. Cuti / Dinas / -' },
   { key: 'sahur', label: 'Keterangan: Sahur', placeholder: '-' },
   { key: 'tidakPuasa', label: 'Keterangan: Tidak Puasa', placeholder: '-' },
   { key: 'tempatTinggal', label: 'Residence', placeholder: 'mis. Nirwana' },
@@ -168,7 +167,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   // Pengaturan visibilitas kolom & header
   const [columnVisibility, setColumnVisibility] = useState<{
-    profile: boolean;     // Status Mess, PT, Shift, Section, Status Kerja, Residence
+    profile: boolean;     // Status Mess, PT, Shift, Section, Residence
     ramadan: boolean;     // Keterangan Sahur, Tidak Puasa, Takjil
     statusNotes: boolean; // Status, Belum Lapor, Catatan
     summary: boolean;     // Ringkasan Total Card di atas tabel
@@ -217,7 +216,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   }, [activeMealGroups]);
 
   const leadingColSpan = useMemo(() => {
-    return 4 + (columnVisibility.profile ? 6 : 0) + (columnVisibility.ramadan ? 2 : 0);
+    return 4 + (columnVisibility.profile ? 5 : 0) + (columnVisibility.ramadan ? 2 : 0);
   }, [columnVisibility.profile, columnVisibility.ramadan]);
 
   const handleSyncRoster = async () => {
@@ -365,6 +364,49 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         next.shift = prev.shift || emp.shift || '';
         next.section = prev.section || emp.section || '';
       }
+    }
+    if (key === 'shiftKerja' && value) {
+      const sUpper = value.toUpperCase();
+      let rosterCode = 'D';
+      let canonicalShift = 'Siang';
+      if (sUpper === 'CUTI SITE' || sUpper === 'CS') { rosterCode = 'CS'; canonicalShift = 'Cuti Site'; }
+      else if (sUpper === 'IZIN') { rosterCode = 'I'; canonicalShift = 'Izin'; }
+      else if (sUpper === 'OFF') { rosterCode = 'OFF'; canonicalShift = 'OFF'; }
+      else if (sUpper === 'SAKIT' || sUpper === 'SS') { rosterCode = 'SS'; canonicalShift = 'Sakit'; }
+      else if (sUpper === 'CUTI') { rosterCode = 'CUTI'; canonicalShift = 'CUTI'; }
+      else if (sUpper === 'MALAM') { rosterCode = 'N'; canonicalShift = 'Malam'; }
+      else if (sUpper === 'LONGSHIFT') { rosterCode = 'LS'; canonicalShift = 'Longshift'; }
+      else if (sUpper === 'NONSHIFT') { rosterCode = 'D'; canonicalShift = 'Nonshift'; }
+      else if (sUpper === 'SIANG') { rosterCode = 'D'; canonicalShift = 'Siang'; }
+
+      const empLike = {
+        nik: next.nik,
+        name: next.nama,
+        nama: next.nama,
+        statusMess: next.statusMess,
+        pt: next.pt,
+        shift: next.shift,
+        section: next.section,
+        tempatTinggal: next.tempatTinggal,
+      };
+      const pref: MealPreference = {
+        pagi: (modal?.row?.pilihanPagi as MealChoice) || null,
+        sore: (modal?.row?.pilihanSore as MealChoice) || null,
+      };
+      const computed = computeMealOrderByRoster(empLike, rosterCode, date, pref);
+      next.shiftKerja = canonicalShift;
+      next.statusKerja = computed.statusKerja || '-';
+      next.status = computed.status || '';
+      next.pagiKantin = computed.pagiKantin || '';
+      next.pagiLapangan = computed.pagiLapangan || '';
+      next.siangKantin = computed.siangKantin || '';
+      next.siangLapangan = computed.siangLapangan || '';
+      next.soreKantin = computed.soreKantin || '';
+      next.soreLapangan = computed.soreLapangan || '';
+      next.malamLapangan = computed.malamLapangan || '';
+      next.batchPagi = computed.batchPagi || '';
+      next.batchSore = computed.batchSore || '';
+      next.catatan = computed.catatan || '';
     }
     return next;
   });
@@ -862,15 +904,20 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       return;
     }
 
-    let rosterCode = shiftKerja || 'SIANG';
-    if (shiftKerja === 'Cuti Site') rosterCode = 'CS';
-    else if (shiftKerja === 'Izin') rosterCode = 'I';
-    else if (shiftKerja === 'OFF') rosterCode = 'OFF';
-    else if (shiftKerja === 'Sakit') rosterCode = 'SS';
-    else if (shiftKerja === 'CUTI') rosterCode = 'CUTI';
-    else if (shiftKerja === 'MALAM') rosterCode = 'N';
-    else if (shiftKerja === 'LONGSHIFT') rosterCode = 'LS';
-    else if (shiftKerja === 'SIANG' || shiftKerja === 'Nonshift') rosterCode = 'D';
+    const sUpper = String(shiftKerja || '').toUpperCase();
+    let rosterCode = 'D';
+    let canonicalShift = 'Siang';
+    if (sUpper === 'CUTI SITE' || sUpper === 'CS') { rosterCode = 'CS'; canonicalShift = 'Cuti Site'; }
+    else if (sUpper === 'IZIN') { rosterCode = 'I'; canonicalShift = 'Izin'; }
+    else if (sUpper === 'OFF') { rosterCode = 'OFF'; canonicalShift = 'OFF'; }
+    else if (sUpper === 'SAKIT' || sUpper === 'SS') { rosterCode = 'SS'; canonicalShift = 'Sakit'; }
+    else if (sUpper === 'CUTI') { rosterCode = 'CUTI'; canonicalShift = 'CUTI'; }
+    else if (sUpper === 'MALAM') { rosterCode = 'N'; canonicalShift = 'Malam'; }
+    else if (sUpper === 'LONGSHIFT') { rosterCode = 'LS'; canonicalShift = 'Longshift'; }
+    else if (sUpper === 'NONSHIFT') { rosterCode = 'D'; canonicalShift = 'Nonshift'; }
+    else if (sUpper === 'SIANG') { rosterCode = 'D'; canonicalShift = 'Siang'; }
+    else if (!shiftKerja) { rosterCode = '-'; canonicalShift = ''; }
+    else { rosterCode = shiftKerja; canonicalShift = shiftKerja; }
 
     const pref: MealPreference = {
       pagi: (r.pilihanPagi as MealChoice) || null,
@@ -892,17 +939,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     }
 
     const computed = computeMealOrderByRoster(r, rosterCode, date, pref);
-    // Pertahankan label shift yang dipilih user (mis. Nonshift vs Siang)
-    if (shiftKerja === 'Nonshift') computed.shiftKerja = 'Nonshift';
-
-    // Jangan rubah ke Bungkusan Sore saat ganti shift atau tanggal jika tidak diganti!
-    const isExplicitSoreChange = currentCat === 'Bungkusan Sore' || currentCat === 'Bungkusan Pagi dan Bungkusan Sore' || pref.sore === 'lapangan';
-    const isKawasiLSChange = isKawasiRow(r) && String(shiftKerja || '').toUpperCase() === 'LONGSHIFT';
-    if (!isKawasiLSChange && !isExplicitSoreChange) {
-      computed.soreLapangan = null;
-      computed.soreKantin = 'K';
-      computed.batchSore = null;
-    }
+    computed.shiftKerja = canonicalShift || null;
 
     const patch: Partial<MealOrder> = {
       shiftKerja: computed.shiftKerja,
@@ -920,6 +957,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
       catatan: computed.catatan,
     };
     saveCell(r, patch);
+    toast.success(`${r.nama}: Shift diubah ke "${canonicalShift || '-'}", orderan makanan diperbarui.`);
   };
 
   const isKawasiRow = (r: MealOrder) => `${r.tempatTinggal || ''}`.toLowerCase().includes('kawasi');
@@ -1536,7 +1574,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
               type="button"
               onClick={() => updateColVisibility({ profile: !columnVisibility.profile })}
               className={`${UI.btn} !h-10 shrink-0 ${columnVisibility.profile ? '' : '!border-emerald-300 !bg-emerald-50 !text-emerald-800'}`}
-              title={columnVisibility.profile ? 'Sembunyikan kolom info profil (Status Mess, PT, Shift, Section, Status Kerja, Residence)' : 'Tampilkan kolom info profil'}
+              title={columnVisibility.profile ? 'Sembunyikan kolom info profil (Status Mess, PT, Shift, Section, Residence)' : 'Tampilkan kolom info profil'}
             >
               {columnVisibility.profile ? <EyeOff className="w-3.5 h-3.5 text-slate-500" /> : <Eye className="w-3.5 h-3.5 text-emerald-600" />}
               <span>{columnVisibility.profile ? 'Sembunyikan Profil' : 'Tampilkan Profil'}</span>
@@ -1569,7 +1607,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                       <label className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer select-none">
                         <div>
                           <p className="font-semibold text-slate-800">Info Profil Karyawan</p>
-                          <p className="text-[10px] text-slate-500">Mess, PT, Shift, Section, Status Kerja, Residence</p>
+                          <p className="text-[10px] text-slate-500">Mess, PT, Shift, Section, Residence</p>
                         </div>
                         <input
                           type="checkbox"
@@ -1777,7 +1815,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                           <th rowSpan={2} className={thSticky1}>PT</th>
                           <th rowSpan={2} className={thSticky1}>Shift</th>
                           <th rowSpan={2} className={thSticky1}>Section</th>
-                          <th rowSpan={2} className={thSticky1}>Status Kerja</th>
                         </>
                       )}
                       {columnVisibility.ramadan && (
@@ -1877,7 +1914,6 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             <td className={`${tdBase} text-center`}>{r.pt || '-'}</td>
                             <td className={tdBase}>{r.shift || '-'}</td>
                             <td className={tdBase}>{r.section || '-'}</td>
-                            <td className={`${tdBase} text-center`}>{renderStatusBadge(r.statusKerja, attKind)}</td>
                           </>
                         )}
                         {columnVisibility.ramadan && (
@@ -1892,20 +1928,27 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         <td className={`${tdBase} text-center p-1`}>
                           {canManage ? (
                             <select
-                              value={r.shiftKerja || ''}
+                              value={
+                                !r.shiftKerja ? '' :
+                                ['SIANG', 'Siang'].includes(r.shiftKerja) ? 'Siang' :
+                                ['MALAM', 'Malam'].includes(r.shiftKerja) ? 'Malam' :
+                                ['NONSHIFT', 'Nonshift'].includes(r.shiftKerja) ? 'Nonshift' :
+                                ['LONGSHIFT', 'Longshift'].includes(r.shiftKerja) ? 'Longshift' :
+                                r.shiftKerja
+                              }
                               onChange={e => changeShiftKerja(r, e.target.value || null)}
                               className={`w-full rounded-md text-xs font-semibold px-1 py-1 cursor-pointer focus:outline-none border transition-colors ${getShiftBadgeStyle(r.shiftKerja)}`}
                             >
                               <option value="">-</option>
                               <option value="Nonshift">Nonshift</option>
-                              <option value="SIANG">Siang</option>
-                              <option value="MALAM">Malam</option>
-                              <option value="LONGSHIFT">Longshift</option>
+                              <option value="Siang">Siang</option>
+                              <option value="Malam">Malam</option>
+                              <option value="Longshift">Longshift</option>
                               <option value="OFF">OFF</option>
                               <option value="CUTI">CUTI</option>
                               <option value="Cuti Site">Cuti Site</option>
                               <option value="Izin">Izin</option>
-                              {r.shiftKerja && !['', 'Nonshift', 'SIANG', 'MALAM', 'LONGSHIFT', 'OFF', 'CUTI', 'Cuti Site', 'Izin'].includes(r.shiftKerja) && (
+                              {r.shiftKerja && !['', 'Nonshift', 'Siang', 'Malam', 'Longshift', 'OFF', 'CUTI', 'Cuti Site', 'Izin', 'SIANG', 'MALAM', 'LONGSHIFT'].includes(r.shiftKerja) && (
                                 <option value={r.shiftKerja}>{r.shiftKerja}</option>
                               )}
                             </select>

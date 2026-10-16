@@ -1061,7 +1061,8 @@ const app = express();
     '/api/user',
     '/api/gallery',
     '/api/portal-gallery',
-    '/api/xrf'
+    '/api/xrf',
+    '/api/employees/photo'
   ];
 
   app.use('/api', (req, res, next) => {

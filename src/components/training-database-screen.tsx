@@ -24,11 +24,18 @@ import {
   Award,
   ChevronDown,
   SlidersHorizontal,
+  FlaskConical,
+  Zap,
+  Radio,
+  FileCheck,
+  Flame,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
 import { TrainingCertificationsPanel } from './training-certifications-panel';
-import { CERT_TYPES, CERT_META, type CertType, type TrainingCertification } from '../utils/training-certifications';
+import { CERT_TYPES, CERT_META, defaultCertExpired, certStatus, certWarningDate, type CertType, type TrainingCertification } from '../utils/training-certifications';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Chart as ChartJS,
@@ -59,6 +66,9 @@ import {
   popAttendedPra,
   popAttendedPop,
   popPassedPom,
+  popFollowedPom,
+  popPraPopDirectAttended,
+  popPopDirectAttended,
   type PopData,
   type PopKeterangan,
   type TrainingKey,
@@ -371,7 +381,7 @@ const EMPTY_FORM: FormState = {
 const POP_FORM_KEYS = ['doh', 'praPop', 'praPopIns', 'praPopPre', 'praPopPost', 'praPopResult', 'popBatch', 'pendidikan',
   'tahunLulus', 'pengalamanTambang', 'popKeterangan', 'pom', 'pomKeterangan'] as const;
 
-const PROGRAM_LABEL: Record<TrainingProgram, string> = { sap: 'Training SAP', k3: 'Training K3', pop: 'Sertifikasi POP/POM' };
+const PROGRAM_LABEL: Record<TrainingProgram, string> = { sap: 'Training SAP', k3: 'Training K3', pop: 'Training Pra POP & POP' };
 const PROGRAM_FLAG_KEY = { sap: 'inSap', k3: 'inK3', pop: 'inPop' } as const;
 const PROGRAM_NO_KEY = { sap: 'no', k3: 'noK3', pop: 'noPop' } as const;
 
@@ -627,15 +637,22 @@ function TrainingAchievementDetail({ record, scope }: { record: TrainingRecord; 
                 <MyTrainingRow
                   label="Pra POP"
                   desc="Pra Pengawas Operasional Pertama"
-                  sub={popAttendedPra(p)
+                  sub={popPraPopDirectAttended(p)
                     ? [p?.praPop && formatTrainingDate(p.praPop), p?.praPopPre != null && `Pre ${p.praPopPre}`, p?.praPopPost != null && `Post ${p.praPopPost}`].filter(Boolean).join(' · ')
+                    : popFollowedPom(p) ? 'Sudah mengikuti POM, tidak perlu Pra POP'
+                    : p?.popBatch ? 'Sudah mengikuti POP, tidak perlu Pra POP'
                     : undefined}
-                  right={popAttendedPra(p) ? badge(p?.praPopResult || 'Telah Mengikuti', STATUS_BADGE.PASS) : badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')}
+                  right={popPraPopDirectAttended(p) ? badge(p?.praPopResult || 'Telah Mengikuti', STATUS_BADGE.PASS)
+                    : (popFollowedPom(p) || p?.popBatch) ? badge('Tidak Perlu', 'bg-slate-100 text-slate-600 border-slate-200')
+                    : badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')}
                 />
                 <MyTrainingRow
                   label="POP"
                   desc="Pengawas Operasional Pertama"
-                  right={p?.popBatch ? badge(p.popBatch, 'bg-violet-50 text-violet-800 border-violet-200') : badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')}
+                  sub={!p?.popBatch && popFollowedPom(p) ? 'Sudah mengikuti POM, tidak perlu POP' : undefined}
+                  right={p?.popBatch ? badge(p.popBatch, 'bg-violet-50 text-violet-800 border-violet-200')
+                    : popFollowedPom(p) ? badge('Tidak Perlu', 'bg-slate-100 text-slate-600 border-slate-200')
+                    : badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')}
                 />
                 <MyTrainingRow
                   label="Keterangan POP"
@@ -688,12 +705,48 @@ function personTrainingRows(r: TrainingRecord, scope?: TrainingScope): PersonTra
     });
   }
   if (r.inPop && show('pop')) {
+    const p = r.popData;
+    const hasPom = popFollowedPom(p);
+    const hasPop = !!p?.popBatch;
+    const directPra = popPraPopDirectAttended(p);
+
     POP_STAGES.forEach(s => {
-      const ok = s.attended(r.popData);
+      let ok = false;
+      let text = 'Belum';
+      let cls = belum;
+
+      if (s.key === 'praPop') {
+        if (directPra) {
+          ok = true;
+          text = 'Telah Mengikuti';
+          cls = STATUS_BADGE.PASS;
+        } else if (hasPom || hasPop) {
+          ok = true;
+          text = 'Tidak Perlu';
+          cls = 'bg-slate-100 text-slate-600 border-slate-200';
+        }
+      } else if (s.key === 'pop') {
+        if (hasPop) {
+          ok = true;
+          text = p?.popBatch || 'Telah Mengikuti';
+          cls = STATUS_BADGE.PASS;
+        } else if (hasPom) {
+          ok = true;
+          text = 'Tidak Perlu';
+          cls = 'bg-slate-100 text-slate-600 border-slate-200';
+        }
+      } else if (s.key === 'pom') {
+        if (hasPom) {
+          ok = true;
+          text = p?.pom || 'PASS';
+          cls = STATUS_BADGE.PASS;
+        }
+      }
+
       rows.push({
         program: 'POP/POM', label: s.label, desc: s.desc,
-        date: s.key === 'praPop' ? r.popData?.praPop ?? null : null, until: null,
-        badge: ok ? { text: s.key === 'pop' && r.popData?.popBatch ? r.popData.popBatch : 'Telah Mengikuti', cls: STATUS_BADGE.PASS } : { text: 'Belum', cls: belum },
+        date: s.key === 'praPop' ? p?.praPop ?? null : null, until: null,
+        badge: { text, cls },
         ok,
       });
     });
@@ -1014,6 +1067,33 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   });
   const certRows: TrainingCertification[] = certPayload?.data ?? [];
 
+  // Pemetaan Sertifikasi K3 & Kompetensi per orang
+  const certsByPerson = useMemo(() => {
+    const byNik = new Map<string, TrainingCertification[]>();
+    const byName = new Map<string, TrainingCertification[]>();
+    certRows.forEach(c => {
+      if (c.nik) {
+        const k = c.nik.trim().toUpperCase();
+        if (!byNik.has(k)) byNik.set(k, []);
+        byNik.get(k)!.push(c);
+      }
+      if (c.nama) {
+        const k = c.nama.toLowerCase().replace(/[^a-z]/g, '');
+        if (!byName.has(k)) byName.set(k, []);
+        byName.get(k)!.push(c);
+      }
+    });
+    return { byNik, byName };
+  }, [certRows]);
+
+  const getPersonCerts = useCallback((r: TrainingRecord): TrainingCertification[] => {
+    const kNik = (r.nik || '').trim().toUpperCase();
+    if (kNik && certsByPerson.byNik.has(kNik)) return certsByPerson.byNik.get(kNik)!;
+    const kName = (r.nama || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (kName && certsByPerson.byName.has(kName)) return certsByPerson.byName.get(kName)!;
+    return [];
+  }, [certsByPerson]);
+
   const allRecords = payload?.records ?? EMPTY_RECORDS;
   // External: gabungkan karyawan inPop + karyawan yang memiliki Sertifikasi K3 & Kompetensi
   const records = useMemo(() => {
@@ -1022,19 +1102,107 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     }
     const certNiks = new Set(certRows.map(c => (c.nik || '').trim().toUpperCase()).filter(Boolean));
     const certNames = new Set(certRows.map(c => (c.nama || '').toLowerCase().replace(/[^a-z]/g, '')).filter(Boolean));
-    return allRecords.filter(r => {
+    const matched = allRecords.filter(r => {
       if (r.inPop) return true;
       if (r.nik && certNiks.has(r.nik.trim().toUpperCase())) return true;
       if (r.nama && certNames.has(r.nama.toLowerCase().replace(/[^a-z]/g, ''))) return true;
       return false;
     });
+    // Bila ada pemegang sertifikat yang belum tercatat di training_records, buatkan entri baris tampilan
+    const existingNiks = new Set(matched.map(r => (r.nik || '').trim().toUpperCase()).filter(Boolean));
+    const existingNames = new Set(matched.map(r => (r.nama || '').toLowerCase().replace(/[^a-z]/g, '')).filter(Boolean));
+    const extras: TrainingRecord[] = [];
+    const seen = new Set<string>();
+    certRows.forEach(c => {
+      const kNik = (c.nik || '').trim().toUpperCase();
+      const kName = (c.nama || '').toLowerCase().replace(/[^a-z]/g, '');
+      const key = kNik || kName;
+      if (seen.has(key)) return;
+      seen.add(key);
+      if ((kNik && existingNiks.has(kNik)) || (kName && existingNames.has(kName))) return;
+      extras.push({
+        id: -c.id,
+        nik: c.nik || '',
+        nama: c.nama || '',
+        jabatan: c.jabatan || '',
+        bagian: '',
+        pt: c.pt || 'TBP',
+        gol: '',
+        shift: '',
+        inSap: false,
+        inK3: false,
+        inPop: false,
+        popData: null,
+      } as any as TrainingRecord);
+    });
+    return [...matched, ...extras];
   }, [allRecords, scope, certRows]);
 
   const access: TrainingAccess = payload?.access ?? { viewAll: false, canManage: false, nik: '' };
   const scopePrograms = SCOPE_PROGRAMS[scope];
   const isExternal = scope === 'external';
-  // Training External: default ke 'pop' (tabel terpadu gabungan)
-  const [externalTab, setExternalTab] = useState<'pop' | 'cert'>('pop');
+
+  // Sheet Pemisah di Training External: POP, POM, K3 Kimia, K3 Listrik, ISO 17025, Proteksi Radiasi, Juru Las, Semua
+  const [externalSheet, setExternalSheet] = useState<'pop' | 'pom' | 'k3_kimia' | 'k3_listrik' | 'iso_17025' | 'proteksi_radiasi' | 'juru_las_3' | 'all'>('pop');
+
+  // Filter Sertifikasi K3 & POP di Training External
+  const [certTypeFilter, setCertTypeFilter] = useState<string>('ALL');
+
+  // Modal Kelola Sertifikasi K3 (Tambah / Edit)
+  type CertFormState = { id?: number; certType: CertType; nama: string; nik: string; jabatan: string; pt: string; tanggal: string; keterangan: string; expired: string; note: string };
+  const [certModalForm, setCertModalForm] = useState<CertFormState | null>(null);
+  const [isSavingCert, setIsSavingCert] = useState(false);
+  const [certDeleteTarget, setCertDeleteTarget] = useState<TrainingCertification | null>(null);
+
+  // Perhitungan kuantitas untuk tab sheet & diagram
+  const popTotalCount = useMemo(() => records.filter(r => r.inPop).length, [records]);
+  const pomPassedCount = useMemo(() => records.filter(r => r.inPop && popPassedPom(r.popData)).length, [records]);
+  const k3KimiaCount = useMemo(() => certRows.filter(c => c.certType === 'ahli_k3_kimia' || c.certType === 'petugas_k3_kimia').length, [certRows]);
+  const k3ListrikCount = useMemo(() => certRows.filter(c => c.certType === 'teknisi_k3_listrik').length, [certRows]);
+  const iso17025Count = useMemo(() => certRows.filter(c => c.certType === 'iso_17025').length, [certRows]);
+  const radiasiCount = useMemo(() => certRows.filter(c => c.certType === 'proteksi_radiasi').length, [certRows]);
+  const juruLasCount = useMemo(() => certRows.filter(c => c.certType === 'juru_las_3').length, [certRows]);
+  const totalExternalCerts = useMemo(() => certRows.length + popTotalCount, [certRows, popTotalCount]);
+
+  const todayYmdStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const fmtDateStr = useCallback((d: string | null | undefined) => {
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return '-';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const [y, m, dd] = d.split('-').map(Number);
+    return `${String(dd).padStart(2, '0')} ${months[m - 1]} ${y}`;
+  }, []);
+
+  const exportCertExcel = useCallback(async (sheetType: string) => {
+    const XLSX = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    const aoa: (string | number)[][] = [];
+    const targetTypes = sheetType === 'all'
+      ? CERT_TYPES
+      : sheetType === 'k3_kimia'
+        ? CERT_TYPES.filter(c => c.type === 'ahli_k3_kimia' || c.type === 'petugas_k3_kimia')
+        : CERT_TYPES.filter(c => c.type === sheetType);
+
+    for (const meta of targetTypes) {
+      const list = certRows.filter(r => r.certType === meta.type);
+      if (list.length === 0 && sheetType !== 'all') continue;
+      aoa.push([`${meta.title.toUpperCase()} — Masa Berlaku ${meta.validYears ?? '?'} Tahun (${meta.issuer})`]);
+      aoa.push(['Nama Karyawan', 'NIK', 'Jabatan', 'PT', 'Tanggal Training/Ujian', 'Keterangan', 'Tanggal Expired', 'Status', 'Note']);
+      for (const r of list) {
+        const st = certStatus(r.expired, todayYmdStr);
+        const statusLabel = st.status === 'active' ? 'Aktif' : st.status === 'soon' ? 'Segera Expired' : st.status === 'expired' ? 'Expired' : 'Unknown';
+        aoa.push([r.nama, r.nik || '', r.jabatan || '', r.pt || '', r.tanggal || '', r.keterangan || '', r.expired || '', statusLabel, r.note || '']);
+      }
+      aoa.push([]);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 30 }, { wch: 14 }, { wch: 32 }, { wch: 6 }, { wch: 20 }, { wch: 12 }, { wch: 16 }, { wch: 15 }, { wch: 40 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Sertifikasi');
+    XLSX.writeFile(wb, `Sertifikasi_${sheetType}_${todayYmdStr}.xlsx`);
+  }, [certRows, todayYmdStr]);
 
   const [program, setProgram] = useState<TrainingProgram>(() => {
     if (scope === 'external') return 'pop';
@@ -1046,6 +1214,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [searchOpen, setSearchOpen] = useState(false);
   const [personDetail, setPersonDetail] = useState<TrainingRecord | null>(null);
   const closePersonDetail = useCallback(() => setPersonDetail(null), []);
+
+  // Pencarian Global (Training External): cari nama → tampilkan profil lengkap semua training
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [globalSelectedPerson, setGlobalSelectedPerson] = useState<TrainingRecord | null>(null);
   // Karyawan terpilih dari pencarian Overview → kartu dashboard di sampingnya menampilkan data karyawan ini
   const [selectedNik, setSelectedNik] = useState<string | null>(null);
   const [golFilter, setGolFilter] = useState('ALL');
@@ -1059,6 +1232,113 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   // Tampilan HP: diagram & filter lanjutan dilipat agar ringkas
   const [showCharts, setShowCharts] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Status UI mapping untuk sertifikasi
+  const CERT_STATUS_UI = {
+    active: { label: 'Aktif', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    soon: { label: 'Warning', cls: 'bg-amber-50 text-amber-800 border-amber-300' },
+    expired: { label: 'Expired', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+    unknown: { label: 'Masa berlaku ?', cls: 'bg-slate-50 text-slate-500 border-slate-200' },
+  } as const;
+
+  // POM data & stats
+  const pomPeople = useMemo(() => records.filter(r => r.inPop), [records]);
+  const pomPassedPeople = useMemo(() => pomPeople.filter(r => popPassedPom(r.popData)), [pomPeople]);
+  const pomBelumPeople = useMemo(() => pomPeople.filter(r => !popPassedPom(r.popData)), [pomPeople]);
+  const pomStats = useMemo(() => {
+    const total = pomPeople.length;
+    const passed = pomPassedPeople.length;
+    const belum = pomBelumPeople.length;
+    const pctPassed = total ? Math.round((passed / total) * 100) : 0;
+    return { total, passed, belum, pctPassed };
+  }, [pomPeople, pomPassedPeople, pomBelumPeople]);
+
+  const pomPtChartData = useMemo(() => {
+    const tbpPassed = pomPassedPeople.filter(r => (r.pt || 'TBP').toUpperCase().includes('TBP')).length;
+    const tbpBelum = pomBelumPeople.filter(r => (r.pt || 'TBP').toUpperCase().includes('TBP')).length;
+    const gpsPassed = pomPassedPeople.filter(r => (r.pt || '').toUpperCase().includes('GPS')).length;
+    const gpsBelum = pomBelumPeople.filter(r => (r.pt || '').toUpperCase().includes('GPS')).length;
+    return {
+      labels: ['PT TBP', 'PT GPS'],
+      datasets: [
+        { label: 'Lulus POM', data: [tbpPassed, gpsPassed], backgroundColor: '#10b981', borderRadius: 6 },
+        { label: 'Belum / Proses', data: [tbpBelum, gpsBelum], backgroundColor: '#cbd5e1', borderRadius: 6 },
+      ],
+    };
+  }, [pomPassedPeople, pomBelumPeople]);
+
+  const filteredPomRecords = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return pomPeople.filter(r => {
+      if (q && ![r.nama, r.nik, r.jabatan, r.pt, r.popData?.pom].some(v => String(v || '').toLowerCase().includes(q))) return false;
+      if (ptFilter !== 'ALL' && (r.pt || '') !== ptFilter) return false;
+      if (statusFilter === 'PASS' && !popPassedPom(r.popData)) return false;
+      if (statusFilter === 'BELUM' && popPassedPom(r.popData)) return false;
+      return true;
+    });
+  }, [pomPeople, searchQuery, ptFilter, statusFilter]);
+
+  // Cert data & stats (untuk sheet ISO, K3 Kimia, K3 Listrik, Radiasi, Las, Semua)
+  const targetCertTypes = useMemo(() => {
+    if (externalSheet === 'all') return CERT_TYPES;
+    if (externalSheet === 'k3_kimia') return CERT_TYPES.filter(c => c.type === 'ahli_k3_kimia' || c.type === 'petugas_k3_kimia');
+    return CERT_TYPES.filter(c => c.type === externalSheet);
+  }, [externalSheet]);
+
+  const currentCertRows = useMemo(() => {
+    if (externalSheet === 'pop' || externalSheet === 'pom') return [];
+    if (externalSheet === 'all') return certRows;
+    if (externalSheet === 'k3_kimia') return certRows.filter(c => c.certType === 'ahli_k3_kimia' || c.certType === 'petugas_k3_kimia');
+    return certRows.filter(c => c.certType === externalSheet);
+  }, [externalSheet, certRows]);
+
+  const filteredCertRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return currentCertRows.filter(r => {
+      if (q && ![r.nama, r.nik, r.jabatan, r.pt, r.note, r.keterangan].some(v => String(v || '').toLowerCase().includes(q))) return false;
+      if (ptFilter !== 'ALL' && (r.pt || '') !== ptFilter) return false;
+      if (statusFilter !== 'ALL') {
+        const st = certStatus(r.expired, todayYmdStr).status;
+        if (statusFilter === 'AKTIF' && st !== 'active') return false;
+        if (statusFilter === 'SEGERA' && st !== 'soon') return false;
+        if (statusFilter === 'EXPIRED' && st !== 'expired') return false;
+      }
+      return true;
+    });
+  }, [currentCertRows, searchQuery, ptFilter, statusFilter, todayYmdStr]);
+
+  const certKPI = useMemo(() => {
+    const total = currentCertRows.length;
+    const people = new Set(currentCertRows.map(r => r.nik || r.nama.toLowerCase())).size;
+    let active = 0;
+    let soon = 0;
+    let expired = 0;
+    for (const r of currentCertRows) {
+      const st = certStatus(r.expired, todayYmdStr).status;
+      if (st === 'active') active++;
+      else if (st === 'soon') soon++;
+      else if (st === 'expired') expired++;
+    }
+    return { total, people, typesCount: targetCertTypes.length, active, soon, expired };
+  }, [currentCertRows, targetCertTypes, todayYmdStr]);
+
+  const certPtChartData = useMemo(() => {
+    if (currentCertRows.length === 0) return null;
+    const tbpCount = currentCertRows.filter(r => (r.pt || 'TBP').toUpperCase().includes('TBP')).length;
+    const gpsCount = currentCertRows.filter(r => (r.pt || '').toUpperCase().includes('GPS')).length;
+    return {
+      labels: ['PT TBP', 'PT GPS'],
+      datasets: [
+        {
+          label: 'Peserta',
+          data: [tbpCount, gpsCount],
+          backgroundColor: [DASH.brand, DASH.yellow],
+          borderRadius: 8,
+          barThickness: 28,
+        },
+      ],
+    };
+  }, [currentCertRows]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<TrainingRecord | null>(null);
@@ -1088,7 +1368,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    enabled: isModalOpen,
+    enabled: isModalOpen || !!certModalForm,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -1104,8 +1384,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const canManage = access.canManage;
 
   const programRecords = useMemo(
-    () => records.filter(r => !!r[PROGRAM_FLAG_KEY[program]]),
-    [records, program]
+    () => records.filter(r => isExternal ? (r.inPop || getPersonCerts(r).length > 0) : !!r[PROGRAM_FLAG_KEY[program]]),
+    [records, program, isExternal, getPersonCerts]
   );
 
   const programCounts = useMemo(() => ({
@@ -1129,18 +1409,31 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         const v = r.popData?.praPop;
         if (v && v > latest) latest = v;
       });
-      // Jumlah yang telah mengikuti tiap tahap (tanpa target / masa berlaku)
-      const coverage = POP_STAGES.map(s => ({
-        key: s.key as string,
-        label: s.label,
-        desc: s.desc,
-        done: programRecords.filter(r => s.attended(r.popData)).length,
-        warning: 0,
-        expired: 0,
-        pending: 0,
-        target: total,
-        exempt: 0,
-      }));
+      // Jumlah yang telah mengikuti tiap tahap + Sertifikasi K3 & Kompetensi
+      const coverage = [
+        ...POP_STAGES.map(s => ({
+          key: s.key as string,
+          label: s.label,
+          desc: s.desc,
+          done: programRecords.filter(r => s.attended(r.popData)).length,
+          warning: 0,
+          expired: 0,
+          pending: 0,
+          target: total,
+          exempt: 0,
+        })),
+        {
+          key: 'cert_k3',
+          label: 'Sertifikasi K3 & Kompetensi',
+          desc: 'Ahli/Petugas K3 Kimia, Radiasi, Listrik, Las, ISO 17025',
+          done: programRecords.filter(r => getPersonCerts(r).length > 0).length,
+          warning: 0,
+          expired: 0,
+          pending: 0,
+          target: total,
+          exempt: 0,
+        },
+      ];
       const memenuhi = programRecords.filter(r => r.popData?.popKeterangan === 'PASS').length;
       return { total, latest, coverage, cardA: coverage[1].done, cardB: memenuhi };
     }
@@ -1287,6 +1580,38 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     };
   }, [records, isExternal]);
 
+  // ===== Diagram gabungan Training & Sertifikasi =====
+  const combinedTrainingCertData = useMemo(() => {
+    const popPeople = records.filter(r => r.inPop);
+    const praPopCount = popPeople.filter(r => popAttendedPra(r.popData)).length;
+    const popCount = popPeople.filter(r => popAttendedPop(r.popData)).length;
+    const pomCount = popPeople.filter(r => popPassedPom(r.popData)).length;
+
+    // Sertifikasi K3 & Eksternal
+    const k3Kimia = certRows.filter(c => c.certType === 'ahli_k3_kimia' || c.certType === 'petugas_k3_kimia').length;
+    const k3Listrik = certRows.filter(c => c.certType === 'teknisi_k3_listrik').length;
+    const iso17025 = certRows.filter(c => c.certType === 'iso_17025').length;
+    const radiasi = certRows.filter(c => c.certType === 'proteksi_radiasi').length;
+    const juruLas = certRows.filter(c => c.certType === 'juru_las_3').length;
+
+    const rows = [
+      { label: 'Pra POP', category: 'Training', value: praPopCount, color: '#0284c7' },
+      { label: 'POP', category: 'Training', value: popCount, color: '#0d9488' },
+      { label: 'POM', category: 'Training', value: pomCount, color: '#10b981' },
+      { label: 'K3 Kimia', category: 'Sertifikasi', value: k3Kimia, color: '#8b5cf6' },
+      { label: 'K3 Listrik', category: 'Sertifikasi', value: k3Listrik, color: '#ec4899' },
+      { label: 'ISO 17025', category: 'Sertifikasi', value: iso17025, color: '#f59e0b' },
+      { label: 'Prot. Radiasi', category: 'Sertifikasi', value: radiasi, color: '#ea580c' },
+      { label: 'Juru Las', category: 'Sertifikasi', value: juruLas, color: '#6366f1' },
+    ].filter(r => r.value > 0);
+
+    const totalTraining = praPopCount + popCount + pomCount;
+    const totalCert = k3Kimia + k3Listrik + iso17025 + radiasi + juruLas;
+    const grandTotal = rows.reduce((s, r) => s + r.value, 0);
+
+    return { rows, totalTraining, totalCert, grandTotal };
+  }, [records, certRows]);
+
   // ===== Jumlah karyawan yang telah mengikuti (Training K3 & Sertifikasi POP — tanpa target/masa berlaku) =====
   const participation = useMemo(() => {
     const k3People = records.filter(r => r.inK3);
@@ -1400,6 +1725,17 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       if (bagianFilter !== 'ALL' && (r.bagian || '') !== bagianFilter) return false;
       if (ptFilter !== 'ALL' && (r.pt || '') !== ptFilter) return false;
 
+      if (isExternal && certTypeFilter !== 'ALL') {
+        const pCerts = getPersonCerts(r);
+        if (certTypeFilter === 'POP_POM') {
+          if (!r.inPop) return false;
+        } else if (certTypeFilter === 'K3_KOMPETENSI') {
+          if (pCerts.length === 0) return false;
+        } else {
+          if (!pCerts.some(c => c.certType === certTypeFilter)) return false;
+        }
+      }
+
       if (program === 'sap') {
         if (statusFilter === 'LENGKAP' && !isSapComplete(r)) return false;
         if (statusFilter === 'BELUM' && isSapComplete(r)) return false;
@@ -1425,13 +1761,17 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         if (statusFilter !== 'ALL' && statusFilter in POP_KETERANGAN && p?.popKeterangan !== statusFilter) return false;
         if (statusFilter === 'BELUM_POP' && (popAttendedPop(p) || p?.popKeterangan === 'TIDAK_WAJIB')) return false;
         if (missingFilter) {
-          const s = POP_STAGES.find(x => x.key === missingFilter);
-          if (s && !s.attended(p)) return false;
+          if (missingFilter === 'cert_k3') {
+            if (getPersonCerts(r).length === 0) return false;
+          } else {
+            const s = POP_STAGES.find(x => x.key === missingFilter);
+            if (s && !s.attended(p)) return false;
+          }
         }
       }
       return true;
     });
-  }, [programRecords, program, searchQuery, golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter, missingFilter]);
+  }, [programRecords, program, isExternal, certTypeFilter, getPersonCerts, searchQuery, golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter, missingFilter]);
 
   // Kelompokkan per jabatan (urut hierarki), nomor diurutkan ulang dari 1 di tiap kelompok
   const jabatanGroups = useMemo(() => {
@@ -1449,80 +1789,91 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   // SAP/K3: No, NIK, Nama, GOL, Shift, Status (+ Bagian & PT di K3) + kolom training + Aksi
   // POP   : No, NIK, Nama, PT, Masa Kerja, Pra POP, POP, Kualifikasi, Keterangan POP, POM + Sertifikasi K3 & Kompetensi + Aksi
   const tableColSpan = program === 'pop'
-    ? 11 + (canManage ? 1 : 0)
+    ? 10 + (canManage ? 1 : 0)
     : 6 + (program === 'k3' ? 2 : 0) + (program === 'sap' ? SAP_TRAININGS.length : K3_TRAININGS.length) + (canManage ? 1 : 0);
-
-  // Pemetaan Sertifikasi K3 & Kompetensi per orang
-  const certsByPerson = useMemo(() => {
-    const byNik = new Map<string, TrainingCertification[]>();
-    const byName = new Map<string, TrainingCertification[]>();
-    certRows.forEach(c => {
-      if (c.nik) {
-        const k = c.nik.trim().toUpperCase();
-        if (!byNik.has(k)) byNik.set(k, []);
-        byNik.get(k)!.push(c);
-      }
-      if (c.nama) {
-        const k = c.nama.toLowerCase().replace(/[^a-z]/g, '');
-        if (!byName.has(k)) byName.set(k, []);
-        byName.get(k)!.push(c);
-      }
-    });
-    return { byNik, byName };
-  }, [certRows]);
-
-  const getPersonCerts = useCallback((r: TrainingRecord): TrainingCertification[] => {
-    const kNik = (r.nik || '').trim().toUpperCase();
-    if (kNik && certsByPerson.byNik.has(kNik)) return certsByPerson.byNik.get(kNik)!;
-    const kName = (r.nama || '').toLowerCase().replace(/[^a-z]/g, '');
-    if (kName && certsByPerson.byName.has(kName)) return certsByPerson.byName.get(kName)!;
-    return [];
-  }, [certsByPerson]);
 
   const renderK3KompetensiBadges = (r: TrainingRecord) => {
     const certs = getPersonCerts(r);
-    if (!certs || certs.length === 0) {
-      return <span className="text-[11px] font-semibold text-slate-400">-</span>;
-    }
+    const hasCerts = certs && certs.length > 0;
     return (
-      <div className="flex flex-wrap items-center justify-center gap-1 max-w-[240px] mx-auto">
-        {certs.map(c => {
-          let badgeColor = 'bg-slate-100 text-slate-800 border-slate-300';
-          let shortLabel: string = c.certType;
-          if (c.certType === 'iso_17025') {
-            badgeColor = 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d] font-bold';
-            shortLabel = 'ISO 17025';
-          } else if (c.certType === 'ahli_k3_kimia') {
-            badgeColor = 'bg-[#e0f4f7] text-[#0e7490] border-[#a5f3fc] font-bold';
-            shortLabel = 'Ahli K3 Kimia';
-          } else if (c.certType === 'petugas_k3_kimia') {
-            badgeColor = 'bg-[#e0f4f7] text-[#0891b2] border-[#a5f3fc] font-bold';
-            shortLabel = 'Petugas K3 Kimia';
-          } else if (c.certType === 'proteksi_radiasi') {
-            badgeColor = 'bg-[#e0f2fe] text-[#0284c7] border-[#bae6fd] font-bold';
-            shortLabel = 'PPR Radiasi';
-          } else if (c.certType === 'teknisi_k3_listrik') {
-            badgeColor = 'bg-[#ecfdf5] text-[#059669] border-[#a7f3d0] font-bold';
-            shortLabel = 'K3 Listrik';
-          } else if (c.certType === 'juru_las_3') {
-            badgeColor = 'bg-[#f7fee7] text-[#65a30d] border-[#d9f99d] font-bold';
-            shortLabel = 'Juru Las III';
-          }
-          return (
-            <span
-              key={`${c.id}-${c.certType}`}
-              title={`${CERT_META[c.certType]?.title || c.certType}${c.tanggal ? ` · Tgl: ${c.tanggal}` : ''}${c.expired ? ` · Exp: ${c.expired}` : ''}${c.keterangan ? ` (${c.keterangan})` : ''}`}
-              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] border tracking-tight shadow-2xs whitespace-nowrap ${badgeColor}`}
-            >
-              {shortLabel}
-            </span>
-          );
-        })}
+      <div className="flex flex-wrap items-center justify-center gap-1 max-w-[260px] mx-auto">
+        {hasCerts ? (
+          certs.map(c => {
+            let badgeColor = 'bg-slate-100 text-slate-800 border-slate-300';
+            let shortLabel: string = c.certType;
+            if (c.certType === 'iso_17025') {
+              badgeColor = 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d] font-bold';
+              shortLabel = 'ISO 17025';
+            } else if (c.certType === 'ahli_k3_kimia') {
+              badgeColor = 'bg-[#e0f4f7] text-[#0e7490] border-[#a5f3fc] font-bold';
+              shortLabel = 'Ahli K3 Kimia';
+            } else if (c.certType === 'petugas_k3_kimia') {
+              badgeColor = 'bg-[#e0f4f7] text-[#0891b2] border-[#a5f3fc] font-bold';
+              shortLabel = 'Petugas K3 Kimia';
+            } else if (c.certType === 'proteksi_radiasi') {
+              badgeColor = 'bg-[#e0f2fe] text-[#0284c7] border-[#bae6fd] font-bold';
+              shortLabel = 'PPR Radiasi';
+            } else if (c.certType === 'teknisi_k3_listrik') {
+              badgeColor = 'bg-[#ecfdf5] text-[#059669] border-[#a7f3d0] font-bold';
+              shortLabel = 'K3 Listrik';
+            } else if (c.certType === 'juru_las_3') {
+              badgeColor = 'bg-[#f7fee7] text-[#65a30d] border-[#d9f99d] font-bold';
+              shortLabel = 'Juru Las III';
+            }
+            return (
+              <span
+                key={`${c.id}-${c.certType}`}
+                onClick={canManage ? () => setCertModalForm({
+                  id: c.id,
+                  certType: c.certType,
+                  nama: c.nama || r.nama,
+                  nik: c.nik || r.nik,
+                  jabatan: c.jabatan || r.jabatan || '',
+                  pt: c.pt || r.pt || 'TBP',
+                  tanggal: c.tanggal || '',
+                  keterangan: c.keterangan || 'Lulus',
+                  expired: c.expired || '',
+                  note: c.note || '',
+                }) : undefined}
+                title={`${CERT_META[c.certType]?.title || c.certType}${c.tanggal ? ` · Tgl: ${c.tanggal}` : ''}${c.expired ? ` · Exp: ${c.expired}` : ''}${c.keterangan ? ` (${c.keterangan})` : ''}${canManage ? ' — Klik untuk kelola / edit' : ''}`}
+                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] border tracking-tight shadow-2xs whitespace-nowrap transition-transform ${canManage ? 'cursor-pointer hover:scale-105 hover:ring-1 hover:ring-amber-400' : ''} ${badgeColor}`}
+              >
+                {shortLabel}
+              </span>
+            );
+          })
+        ) : (
+          <span className="text-[11px] font-semibold text-slate-400">-</span>
+        )}
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setCertModalForm({
+              certType: 'iso_17025',
+              nama: r.nama,
+              nik: r.nik,
+              jabatan: r.jabatan || '',
+              pt: r.pt || 'TBP',
+              tanggal: '',
+              keterangan: 'Lulus',
+              expired: '',
+              note: '',
+            })}
+            className="w-5 h-5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 flex items-center justify-center text-[10px] font-black cursor-pointer transition-colors"
+            title={`+ Tambah sertifikasi K3 untuk ${r.nama}`}
+          >
+            +
+          </button>
+        )}
       </div>
     );
   };
 
-  const activeFilterCount = [golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter].filter(f => f !== 'ALL').length;
+  const activeFilterCount = [
+    golFilter, shiftFilter, bagianFilter, ptFilter, statusFilter,
+    isExternal ? certTypeFilter : 'ALL',
+  ].filter(f => f !== 'ALL').length;
+
   // Hasil pencarian Overview: seluruh karyawan (lintas program) + pencapaian training masing-masing
   const searchMatches = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1532,6 +1883,137 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       .slice(0, 8)
       .map(r => ({ record: r, achievement: personAchievement(r, scope) }));
   }, [records, searchQuery, scope]);
+
+  // Global Search (Training External): cari dari allRecords + certRows
+  const globalSearchMatches = useMemo(() => {
+    if (!isExternal) return [];
+    const q = globalSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    // Cari di training records
+    const trMatches = allRecords
+      .filter(r => [r.nama, r.nik, r.jabatan, r.bagian].some(v => String(v || '').toLowerCase().includes(q)))
+      .slice(0, 10);
+    // Juga cari di certRows untuk orang yang mungkin hanya ada di sertifikasi
+    const trNiks = new Set(trMatches.map(r => (r.nik || '').trim().toUpperCase()).filter(Boolean));
+    const trNames = new Set(trMatches.map(r => (r.nama || '').toLowerCase().replace(/[^a-z]/g, '')).filter(Boolean));
+    const certOnlyPeople = new Map<string, TrainingCertification>();
+    certRows.forEach(c => {
+      const kNik = (c.nik || '').trim().toUpperCase();
+      const kName = (c.nama || '').toLowerCase().replace(/[^a-z]/g, '');
+      if ((kNik && trNiks.has(kNik)) || (kName && trNames.has(kName))) return;
+      if (!([c.nama, c.nik, c.jabatan, c.pt, c.note].some(v => String(v || '').toLowerCase().includes(q)))) return;
+      const key = kNik || kName;
+      if (!certOnlyPeople.has(key)) certOnlyPeople.set(key, c);
+    });
+    return {
+      records: trMatches,
+      certOnlyPeople: Array.from(certOnlyPeople.values()).slice(0, 5),
+    };
+  }, [isExternal, globalSearchQuery, allRecords, certRows]);
+
+  // Bangun profil training lengkap untuk satu orang (global search result)
+  const globalPersonProfile = useMemo(() => {
+    if (!globalSelectedPerson) return null;
+    const r = globalSelectedPerson;
+    const pCerts = getPersonCerts(r);
+    // POP/POM data
+    const p = r.popData;
+    const hasPom = popFollowedPom(p);
+    const hasPop = !!p?.popBatch;
+    const directPra = popPraPopDirectAttended(p);
+
+    const popStages = r.inPop ? POP_STAGES.map(s => {
+      let attended = false;
+      let extra: string | null = null;
+      if (s.key === 'praPop') {
+        if (directPra) {
+          attended = true;
+          extra = p?.praPop ? formatTrainingDate(p.praPop) : 'Telah Mengikuti';
+        } else if (hasPom) {
+          attended = true;
+          extra = 'Tidak Perlu (Sudah POM)';
+        } else if (hasPop) {
+          attended = true;
+          extra = 'Tidak Perlu (Sudah POP)';
+        }
+      } else if (s.key === 'pop') {
+        if (hasPop) {
+          attended = true;
+          extra = p?.popBatch || 'Telah Mengikuti';
+        } else if (hasPom) {
+          attended = true;
+          extra = 'Tidak Perlu (Sudah POM)';
+        }
+      } else if (s.key === 'pom') {
+        if (hasPom) {
+          attended = true;
+          extra = p?.pom || (p?.pomKeterangan === 'PASS' ? 'PASS' : null);
+        }
+      }
+      return {
+        key: s.key,
+        label: s.label,
+        desc: s.desc,
+        attended,
+        extra,
+      };
+    }) : [];
+    // SAP trainings
+    const sapItems = r.inSap ? SAP_TRAININGS.map(t => {
+      const state = sapState(r, t.key, t.statusKey);
+      const date = r[t.key];
+      const expiry = date ? trainingValidity(date, TODAY).expiryDate : null;
+      return {
+        program: 'Training SAP' as const, label: t.label, desc: t.desc,
+        date, expiry, state: SAP_STATE_META[state].label, stateCls: SAP_STATE_META[state].cls,
+      };
+    }) : [];
+    // K3 trainings
+    const k3Items = r.inK3 ? K3_TRAININGS.map(t => {
+      const state = k3State(r, t.key, t.statusKey);
+      const b = k3BadgeOf(state);
+      return {
+        program: 'Training K3' as const, label: t.label, desc: t.desc,
+        date: r[t.key], expiry: null as string | null, state: b.text, stateCls: b.cls,
+      };
+    }) : [];
+    // Sertifikasi K3 & Kompetensi
+    const certItems = pCerts.map(c => {
+      const st = certStatus(c.expired, todayYmdStr);
+      const ui = CERT_STATUS_UI[st.status];
+      const warningDate = certWarningDate(c.expired);
+      return {
+        program: 'Sertifikasi' as const, label: CERT_META[c.certType]?.title || c.certType,
+        desc: CERT_META[c.certType]?.issuer || '', date: c.tanggal, expiry: c.expired,
+        warningDate,
+        status: st.status, daysLeft: st.daysLeft,
+        state: ui.label, stateCls: ui.cls, keterangan: c.keterangan, note: c.note,
+      };
+    });
+    return { record: r, popStages, sapItems, k3Items, certItems };
+  }, [globalSelectedPerson, getPersonCerts, todayYmdStr]);
+
+  const selectGlobalPerson = (r: TrainingRecord) => {
+    setGlobalSelectedPerson(r);
+    setGlobalSearchQuery(r.nama);
+    setGlobalSearchOpen(false);
+  };
+  const selectGlobalCertPerson = (c: TrainingCertification) => {
+    // Buat TrainingRecord sementara dari data cert
+    const fakeRecord: TrainingRecord = {
+      id: -c.id, nik: c.nik || '', nama: c.nama || '',
+      jabatan: c.jabatan || '', bagian: '', pt: c.pt || 'TBP', gol: '', shift: '',
+      inSap: false, inK3: false, inPop: false, popData: null,
+    } as any as TrainingRecord;
+    setGlobalSelectedPerson(fakeRecord);
+    setGlobalSearchQuery(c.nama);
+    setGlobalSearchOpen(false);
+  };
+  const clearGlobalPerson = () => {
+    setGlobalSelectedPerson(null);
+    setGlobalSearchQuery('');
+    setGlobalSearchOpen(false);
+  };
 
   const selectedPerson = useMemo(() => (selectedNik ? records.find(r => r.nik === selectedNik) ?? null : null), [records, selectedNik]);
   const selectPerson = (r: TrainingRecord) => {
@@ -1543,7 +2025,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const clearPerson = () => { setSelectedNik(null); setSearchQuery(''); setSearchOpen(false); };
 
   const hasActiveFilter = !!searchQuery || golFilter !== 'ALL' || shiftFilter !== 'ALL' || bagianFilter !== 'ALL'
-    || ptFilter !== 'ALL' || statusFilter !== 'ALL' || !!missingFilter;
+    || ptFilter !== 'ALL' || statusFilter !== 'ALL' || (isExternal && certTypeFilter !== 'ALL') || !!missingFilter;
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -1553,6 +2035,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     setBagianFilter('ALL');
     setPtFilter('ALL');
     setStatusFilter('ALL');
+    setCertTypeFilter('ALL');
     setMissingFilter(null);
   };
 
@@ -1834,7 +2317,19 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   };
 
   const renderPraPop = (p?: PopData | null) => {
-    if (!popAttendedPra(p)) return <span className="text-[11px] font-bold text-slate-300">Belum</span>;
+    if (!popPraPopDirectAttended(p)) {
+      if (popFollowedPom(p) || p?.popBatch) {
+        return (
+          <span
+            className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap"
+            title={popFollowedPom(p) ? 'Sudah mengikuti POM, tidak perlu Pra POP' : 'Sudah mengikuti POP, tidak perlu Pra POP'}
+          >
+            Tidak Perlu
+          </span>
+        );
+      }
+      return <span className="text-[11px] font-bold text-slate-300">Belum</span>;
+    }
     const score = [p?.praPopPre != null && `Pre ${p.praPopPre}`, p?.praPopPost != null && `Post ${p.praPopPost}`].filter(Boolean).join(' · ');
     return (
       <div className="inline-flex flex-col items-center gap-0.5" title={p?.praPopIns ? `Instruktur: ${p.praPopIns}` : undefined}>
@@ -1845,9 +2340,26 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     );
   };
 
-  const renderPopBatch = (p?: PopData | null) => p?.popBatch
-    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-violet-50 text-violet-800 border border-violet-200 whitespace-nowrap"><Award className="w-3 h-3" />{p.popBatch}</span>
-    : <span className="text-[11px] font-bold text-slate-300">Belum</span>;
+  const renderPopBatch = (p?: PopData | null) => {
+    if (p?.popBatch) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-violet-50 text-violet-800 border border-violet-200 whitespace-nowrap">
+          <Award className="w-3 h-3" />{p.popBatch}
+        </span>
+      );
+    }
+    if (popFollowedPom(p)) {
+      return (
+        <span
+          className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap"
+          title="Sudah mengikuti POM, tidak perlu POP"
+        >
+          Tidak Perlu
+        </span>
+      );
+    }
+    return <span className="text-[11px] font-bold text-slate-300">Belum</span>;
+  };
 
   const renderPom = (p?: PopData | null) => popPassedPom(p)
     ? <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black border ${STATUS_BADGE.PASS}`}>PASS</span>
@@ -1967,16 +2479,42 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {canManage && !(isExternal && externalTab === 'cert') && (
+            {canManage && (
               <>
                 <button
                   type="button"
-                  onClick={openCreateModal}
+                  onClick={() => {
+                    if (!isExternal || externalSheet === 'pop' || externalSheet === 'pom') {
+                      openCreateModal();
+                    } else {
+                      const ct: CertType = externalSheet === 'k3_kimia' ? 'ahli_k3_kimia' : externalSheet === 'all' ? 'iso_17025' : (externalSheet as CertType);
+                      setCertModalForm({
+                        certType: ct,
+                        nama: '',
+                        nik: '',
+                        jabatan: '',
+                        pt: 'TBP',
+                        tanggal: '',
+                        keterangan: 'Lulus',
+                        expired: '',
+                        note: '',
+                      });
+                    }
+                  }}
                   className="flex-1 md:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-white font-bold text-xs transition-all cursor-pointer active:scale-95 hover:opacity-95 shadow-sm"
                   style={{ backgroundColor: DASH.brand }}
                 >
                   <Plus className="w-4 h-4" />
-                  Tambah Data
+                  {isExternal
+                    ? externalSheet === 'pop' ? 'Tambah Data Pra POP & POP'
+                    : externalSheet === 'pom' ? 'Tambah Data POM'
+                    : externalSheet === 'k3_kimia' ? 'Tambah K3 Kimia'
+                    : externalSheet === 'k3_listrik' ? 'Tambah K3 Listrik'
+                    : externalSheet === 'iso_17025' ? 'Tambah ISO 17025'
+                    : externalSheet === 'proteksi_radiasi' ? 'Tambah PPR'
+                    : externalSheet === 'juru_las_3' ? 'Tambah Juru Las'
+                    : 'Tambah Sertifikasi'
+                    : 'Tambah Data'}
                 </button>
                 <button
                   type="button"
@@ -2000,48 +2538,575 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
         </div>
 
-        {/* ===== Training External View Switcher ===== */}
+        {/* ===== Sheet Pemisah Sertifikasi Eksternal (POP, POM, K3 Kimia, K3 Listrik, ISO 17025, PPR, Juru Las, Semua) ===== */}
         {isExternal && (
-          <div className="flex flex-wrap items-center justify-between gap-2 p-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs">
-            <div className="inline-flex items-center gap-1.5 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setExternalTab('pop')}
-                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all ${
-                  externalTab === 'pop'
-                    ? 'text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-                style={externalTab === 'pop' ? { backgroundColor: DASH.brand } : undefined}
-              >
-                <Award className="w-4 h-4" />
-                Tabel Terpadu POP/POM &amp; Sertifikasi K3
-              </button>
-              <button
-                type="button"
-                onClick={() => setExternalTab('cert')}
-                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all ${
-                  externalTab === 'cert'
-                    ? 'text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-                style={externalTab === 'cert' ? { backgroundColor: DASH.yellow } : undefined}
-              >
-                <HardHat className="w-4 h-4" />
-                Kelola Detail Sertifikasi K3 &amp; Kompetensi
-              </button>
+          <div className="rounded-[24px] bg-white dark:bg-slate-900 p-2.5 shadow-xs border border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-2 mb-2 px-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                Sheet Pemisah Program &amp; Sertifikasi
+              </span>
+              <span className="text-[10px] font-semibold text-slate-400">
+                Pilih sheet untuk mengganti diagram &amp; daftar di bawah
+              </span>
             </div>
-            <div className="px-3 py-1 text-[11px] font-bold text-slate-600 hidden sm:flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: DASH.brand }} />
-              {certRows.length} Sertifikasi K3 (ISO 17025, Radiasi, K3 Kimia, Listrik, Las) Tergabung ke Tabel
+            <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
+              {[
+                { id: 'pop', label: 'Training Pra POP & POP', short: 'Pra POP & POP', icon: <Award className="w-4 h-4" />, count: popTotalCount },
+                { id: 'pom', label: 'Training POM', short: 'POM', icon: <Award className="w-4 h-4" />, count: pomPassedCount },
+                { id: 'k3_kimia', label: 'K3 Kimia', short: 'K3 Kimia', icon: <FlaskConical className="w-4 h-4" />, count: k3KimiaCount },
+                { id: 'k3_listrik', label: 'K3 Listrik', short: 'K3 Listrik', icon: <Zap className="w-4 h-4" />, count: k3ListrikCount },
+                { id: 'iso_17025', label: 'ISO 17025', short: 'ISO 17025', icon: <FileCheck className="w-4 h-4" />, count: iso17025Count },
+                { id: 'proteksi_radiasi', label: 'Proteksi Radiasi', short: 'Radiasi', icon: <Radio className="w-4 h-4" />, count: radiasiCount },
+                { id: 'juru_las_3', label: 'Juru Las', short: 'Las III', icon: <Flame className="w-4 h-4" />, count: juruLasCount },
+                { id: 'all', label: 'Semua Sertifikasi', short: 'Semua', icon: <ShieldCheck className="w-4 h-4" />, count: totalExternalCerts },
+              ].map(sheet => {
+                const active = externalSheet === sheet.id;
+                return (
+                  <button
+                    key={sheet.id}
+                    type="button"
+                    onClick={() => {
+                      setExternalSheet(sheet.id as any);
+                      setSelectedNik(null);
+                      setSearchQuery('');
+                      setStatusFilter('ALL');
+                    }}
+                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
+                      active
+                        ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25 scale-[1.01]'
+                        : 'text-slate-700 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700'
+                    }`}
+                  >
+                    {sheet.icon}
+                    <span>{sheet.label}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black tabular-nums ${
+                        active ? 'bg-white/25 text-white' : 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200'
+                      }`}
+                    >
+                      {sheet.count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {isExternal && externalTab === 'cert' ? <TrainingCertificationsPanel /> : (<>
-        {/* ===== Baris 1: Overview · Status SAP · Ring program ===== */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
-          <DashCard className="lg:col-span-4">
+        {/* ===== Global Search (Training External): Cari karyawan → semua training ===== */}
+        {isExternal && (
+          <div className="rounded-[24px] bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-xs border border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={globalSearchQuery}
+                  onChange={e => { setGlobalSearchQuery(e.target.value); setGlobalSearchOpen(true); setGlobalSelectedPerson(null); }}
+                  onFocus={() => setGlobalSearchOpen(true)}
+                  onBlur={() => setTimeout(() => setGlobalSearchOpen(false), 200)}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') setGlobalSearchOpen(false);
+                    const matches = !Array.isArray(globalSearchMatches) ? globalSearchMatches : null;
+                    if (e.key === 'Enter' && matches?.records[0]) selectGlobalPerson(matches.records[0]);
+                  }}
+                  placeholder="🔍 Cari nama karyawan — tampilkan semua training & sertifikasi yang dimiliki..."
+                  className="w-full pl-10 pr-9 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/30 transition-all"
+                />
+                {globalSearchQuery && (
+                  <button type="button" onClick={clearGlobalPerson} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                {/* Dropdown hasil pencarian global */}
+                {globalSearchOpen && globalSearchQuery.trim() && !globalSelectedPerson && (() => {
+                  const matches = !Array.isArray(globalSearchMatches) ? globalSearchMatches : null;
+                  const hasResults = matches && (matches.records.length > 0 || matches.certOnlyPeople.length > 0);
+                  return (
+                    <div className="absolute left-0 right-0 top-full mt-2 z-30 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl overflow-hidden">
+                      {!hasResults ? (
+                        <p className="px-4 py-3 text-xs font-medium text-slate-500">Karyawan tidak ditemukan</p>
+                      ) : (
+                        <ul className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                          {matches!.records.map(r => {
+                            const pCerts = getPersonCerts(r);
+                            const trainings: string[] = [];
+                            if (r.inPop) trainings.push('POP/POM');
+                            if (r.inSap) trainings.push('SAP');
+                            if (r.inK3) trainings.push('K3');
+                            if (pCerts.length > 0) trainings.push(`${pCerts.length} Sertifikasi`);
+                            return (
+                              <li key={r.nik || r.id}>
+                                <button
+                                  type="button"
+                                  onMouseDown={e => e.preventDefault()}
+                                  onClick={() => selectGlobalPerson(r)}
+                                  className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                                >
+                                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white" style={{ backgroundColor: DASH.brand }}>
+                                    <Users className="w-4 h-4" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-bold text-slate-900 dark:text-slate-100 break-words">{r.nama}</p>
+                                    <p className="text-[10px] font-medium text-slate-500 truncate">{r.nik} · {r.jabatan || '-'} · {r.pt || '-'}</p>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {trainings.map(t => (
+                                        <span key={t} className="px-1.5 py-0.5 rounded-md text-[9px] font-bold" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>{t}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </button>
+                              </li>
+                            );
+                          })}
+                          {matches!.certOnlyPeople.map(c => (
+                            <li key={`cert-${c.id}`}>
+                              <button
+                                type="button"
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => selectGlobalCertPerson(c)}
+                                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                              >
+                                <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: DASH.yellowSoft, color: DASH.yellowDark }}>
+                                  <Award className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100 break-words">{c.nama}</p>
+                                  <p className="text-[10px] font-medium text-slate-500 truncate">{c.nik || '-'} · {c.jabatan || '-'}</p>
+                                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-50 text-amber-700">Sertifikasi {CERT_META[c.certType]?.title || c.certType}</span>
+                                </div>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== Profil Training Karyawan (Global Search Result) ===== */}
+        {isExternal && globalPersonProfile ? (
+          <div className="space-y-3 sm:space-y-4">
+            {/* Header profil */}
+            <div className="rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-200/80 dark:border-slate-800 p-4 sm:p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md" style={{ backgroundColor: DASH.brand }}>
+                  <Users className="w-7 h-7" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-teal-600 mb-0.5">Profil Training Karyawan</p>
+                  <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight break-words">{globalPersonProfile.record.nama}</h2>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs font-semibold text-slate-600">
+                    <span>NIK: <span className="font-mono font-bold text-slate-900">{globalPersonProfile.record.nik || '-'}</span></span>
+                    <span>Jabatan: {globalPersonProfile.record.jabatan || '-'}</span>
+                    <span>PT: {globalPersonProfile.record.pt || '-'}</span>
+                    {globalPersonProfile.record.gol && <span>GOL: {globalPersonProfile.record.gol}</span>}
+                    {globalPersonProfile.record.bagian && <span>Bagian: {globalPersonProfile.record.bagian}</span>}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearGlobalPerson}
+                  className="px-4 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 cursor-pointer shrink-0"
+                >
+                  ✕ Tutup Profil
+                </button>
+              </div>
+
+              {/* Ringkasan jumlah training */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+                {[
+                  { label: 'POP/POM', count: globalPersonProfile.popStages.filter(s => s.attended).length, total: globalPersonProfile.popStages.length, color: '#7c3aed', show: globalPersonProfile.popStages.length > 0 },
+                  { label: 'Training SAP', count: globalPersonProfile.sapItems.filter(s => s.state === 'Berlaku' || s.state === 'WARNING').length, total: globalPersonProfile.sapItems.length, color: DASH.brand, show: globalPersonProfile.sapItems.length > 0 },
+                  { label: 'Training K3', count: globalPersonProfile.k3Items.filter(s => s.state === 'Telah Mengikuti').length, total: globalPersonProfile.k3Items.length, color: '#d97706', show: globalPersonProfile.k3Items.length > 0 },
+                  { label: 'Sertifikasi', count: globalPersonProfile.certItems.filter(s => s.status === 'active' || s.status === 'soon').length, total: globalPersonProfile.certItems.length, color: globalPersonProfile.certItems.some(s => s.status === 'soon') ? '#d97706' : '#059669', show: globalPersonProfile.certItems.length > 0 },
+                ].filter(i => i.show).map(item => (
+                  <div key={item.label} className="rounded-2xl border border-slate-200/80 p-3 text-center">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{item.label}</p>
+                    <p className="text-2xl font-extrabold mt-1" style={{ color: item.color }}>{item.count}<span className="text-sm text-slate-400 font-bold">/{item.total}</span></p>
+                  </div>
+                ))}
+                {globalPersonProfile.popStages.length === 0 && globalPersonProfile.sapItems.length === 0 && globalPersonProfile.k3Items.length === 0 && globalPersonProfile.certItems.length === 0 && (
+                  <div className="col-span-full text-center py-4 text-xs text-slate-500 font-semibold">
+                    Belum ada data training tercatat untuk karyawan ini
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tabel POP/POM */}
+            {globalPersonProfile.popStages.length > 0 && (
+              <DashCard>
+                <DashTitle title="Sertifikasi POP / POM" sub={`Masa kerja ${popMasaKerja(globalPersonProfile.record.popData) || '-'}`} />
+                <div className="overflow-x-auto -mx-1 mt-2">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-100">
+                        <th className="px-3 py-2 font-semibold">Tahap</th>
+                        <th className="px-3 py-2 font-semibold">Deskripsi</th>
+                        <th className="px-3 py-2 font-semibold">Keterangan</th>
+                        <th className="px-3 py-2 font-semibold text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {globalPersonProfile.popStages.map(s => {
+                        const isTidakPerlu = s.extra?.startsWith('Tidak Perlu');
+                        return (
+                          <tr key={s.label}>
+                            <td className="px-3 py-2.5 font-bold text-slate-900">{s.label}</td>
+                            <td className="px-3 py-2.5 text-slate-600">{s.desc}</td>
+                            <td className="px-3 py-2.5 text-slate-700 font-medium">{s.extra || '-'}</td>
+                            <td className="px-3 py-2.5 text-right">
+                              <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                                isTidakPerlu
+                                  ? 'bg-slate-100 text-slate-600 border-slate-200'
+                                  : s.attended ? STATUS_BADGE.PASS : 'bg-slate-100 text-slate-500 border-slate-200'
+                              }`}>
+                                {isTidakPerlu ? 'Tidak Perlu' : s.attended ? 'Telah Mengikuti' : 'Belum'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </DashCard>
+            )}
+
+            {/* Tabel SAP */}
+            {globalPersonProfile.sapItems.length > 0 && (
+              <DashCard>
+                <DashTitle title="Training SAP" sub={`GOL ${globalPersonProfile.record.gol || '-'} · berlaku 2 tahun`} />
+                <div className="overflow-x-auto -mx-1 mt-2">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-100">
+                        <th className="px-3 py-2 font-semibold">Training</th>
+                        <th className="px-3 py-2 font-semibold">Deskripsi</th>
+                        <th className="px-3 py-2 font-semibold">Tgl Training</th>
+                        <th className="px-3 py-2 font-semibold">Berlaku s/d</th>
+                        <th className="px-3 py-2 font-semibold text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {globalPersonProfile.sapItems.map(t => (
+                        <tr key={t.label}>
+                          <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">{t.label}</td>
+                          <td className="px-3 py-2.5 text-slate-600">{t.desc}</td>
+                          <td className="px-3 py-2.5 text-slate-700 font-mono whitespace-nowrap">{t.date ? formatTrainingDate(t.date) : '-'}</td>
+                          <td className="px-3 py-2.5 text-slate-700 font-mono whitespace-nowrap">{t.expiry ? formatTrainingDate(t.expiry) : '-'}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold border ${t.stateCls}`}>{t.state}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </DashCard>
+            )}
+
+            {/* Tabel K3 */}
+            {globalPersonProfile.k3Items.length > 0 && (
+              <DashCard>
+                <DashTitle title="Training K3" sub="Tanpa masa berlaku" />
+                <div className="overflow-x-auto -mx-1 mt-2">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-100">
+                        <th className="px-3 py-2 font-semibold">Training</th>
+                        <th className="px-3 py-2 font-semibold">Deskripsi</th>
+                        <th className="px-3 py-2 font-semibold">Tgl Training</th>
+                        <th className="px-3 py-2 font-semibold text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {globalPersonProfile.k3Items.map(t => (
+                        <tr key={t.label}>
+                          <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">{t.label}</td>
+                          <td className="px-3 py-2.5 text-slate-600">{t.desc}</td>
+                          <td className="px-3 py-2.5 text-slate-700 font-mono whitespace-nowrap">{t.date ? formatTrainingDate(t.date) : '-'}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold border ${t.stateCls}`}>{t.state}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </DashCard>
+            )}
+
+            {/* Tabel Sertifikasi K3 & Kompetensi */}
+            {globalPersonProfile.certItems.length > 0 && (
+              <DashCard>
+                <DashTitle
+                  title="Sertifikasi K3 & Kompetensi"
+                  sub="Ahli K3 Kimia, K3 Listrik, ISO 17025, Proteksi Radiasi, Juru Las · Warning otomatis muncul 1 tahun (<= 365 hari) sebelum expired"
+                />
+
+                {/* Banner Peringatan jika ada sertifikasi Warning (<= 1 tahun) atau Expired */}
+                {(() => {
+                  const soonItems = globalPersonProfile.certItems.filter(i => i.status === 'soon');
+                  const expiredItems = globalPersonProfile.certItems.filter(i => i.status === 'expired');
+                  if (soonItems.length === 0 && expiredItems.length === 0) return null;
+                  return (
+                    <div className="mt-2.5 mb-2 p-3 rounded-xl bg-amber-50/90 border border-amber-200/90 text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="font-bold text-[11px] uppercase tracking-wider text-amber-900">
+                          Peringatan Masa Berlaku Sertifikasi (Warning: &le; 1 Tahun Sebelum Expired)
+                        </p>
+                        <p className="text-[11px] leading-relaxed text-amber-800">
+                          {expiredItems.length > 0 && (
+                            <span className="font-semibold text-rose-700">
+                              {expiredItems.length} sertifikasi telah expired ({expiredItems.map(x => x.label).join(', ')}).{' '}
+                            </span>
+                          )}
+                          {soonItems.length > 0 && (
+                            <span>
+                              {soonItems.length} sertifikasi mendekati masa expired (&le; 1 tahun / 365 hari):{' '}
+                              <span className="font-semibold">{soonItems.map(x => `${x.label}${x.daysLeft != null ? ` (${x.daysLeft} hari lagi)` : ''}`).join(', ')}</span>. Harap persiapkan perpanjangan atau sertifikasi ulang.
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="overflow-x-auto -mx-1 mt-2">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-100">
+                        <th className="px-3 py-2 font-semibold">Sertifikasi</th>
+                        <th className="px-3 py-2 font-semibold">Penerbit</th>
+                        <th className="px-3 py-2 font-semibold">Tgl Training/Ujian</th>
+                        <th className="px-3 py-2 font-semibold">Keterangan</th>
+                        <th className="px-3 py-2 font-semibold">Tgl Expired</th>
+                        <th className="px-3 py-2 font-semibold text-amber-800 dark:text-amber-400">Tgl Warning</th>
+                        <th className="px-3 py-2 font-semibold text-right">Status</th>
+                        <th className="px-3 py-2 font-semibold">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {globalPersonProfile.certItems.map((t, idx) => (
+                        <tr
+                          key={idx}
+                          className={`transition-colors ${
+                            t.status === 'soon'
+                              ? 'bg-amber-50/50 hover:bg-amber-50/80'
+                              : t.status === 'expired'
+                              ? 'bg-rose-50/50 hover:bg-rose-50/80'
+                              : 'hover:bg-slate-50/60'
+                          }`}
+                        >
+                          <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">{t.label}</td>
+                          <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{t.desc}</td>
+                          <td className="px-3 py-2.5 text-slate-700 font-mono whitespace-nowrap">{t.date ? fmtDateStr(t.date) : '-'}</td>
+                          <td className="px-3 py-2.5 text-slate-700 font-semibold">{t.keterangan || '-'}</td>
+                          <td
+                            className={`px-3 py-2.5 font-mono whitespace-nowrap ${
+                              t.status === 'soon'
+                                ? 'text-amber-800 font-black'
+                                : t.status === 'expired'
+                                ? 'text-rose-700 font-black'
+                                : 'text-slate-700'
+                            }`}
+                          >
+                            {t.expiry ? fmtDateStr(t.expiry) : '-'}
+                          </td>
+                          <td
+                            className={`px-3 py-2.5 font-mono whitespace-nowrap ${
+                              t.status === 'soon'
+                                ? 'text-amber-800 font-black'
+                                : t.status === 'expired'
+                                ? 'text-rose-600 font-semibold'
+                                : 'text-amber-900/80 font-medium'
+                            }`}
+                          >
+                            {t.warningDate ? (
+                              <span className="inline-flex items-center gap-1">
+                                {t.status === 'soon' && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />}
+                                {fmtDateStr(t.warningDate)}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold border shadow-2xs ${t.stateCls}`}
+                              title={t.daysLeft != null ? (t.daysLeft < 0 ? `Lewat ${-t.daysLeft} hari` : `${t.daysLeft} hari lagi`) : undefined}
+                            >
+                              {t.status === 'soon' && <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />}
+                              {t.status === 'expired' && <Clock className="w-3 h-3 text-rose-600 shrink-0" />}
+                              {t.status === 'active' && <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />}
+                              <span>
+                                {t.state}
+                                {t.status === 'soon' && t.daysLeft != null ? ` · ${t.daysLeft} hr` : ''}
+                              </span>
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-600 min-w-[120px]">{t.note || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer Keterangan Status */}
+                <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="font-bold text-slate-400">Status Masa Berlaku:</span>
+                    <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" /> Aktif (&gt; 1 tahun)
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
+                      <AlertTriangle className="w-3 h-3 text-amber-600" /> Warning (&le; 1 tahun / 365 hari sebelum expired)
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-rose-700 font-semibold">
+                      <Clock className="w-3 h-3 text-rose-600" /> Expired (Lewat masa berlaku)
+                    </span>
+                  </div>
+                  <span className="italic text-slate-400">Acuan hari ini: {fmtDateStr(todayYmdStr)}</span>
+                </div>
+              </DashCard>
+            )}
+          </div>
+        ) : (
+        <>
+
+        {/* ===== Baris 1: Overview · Status · KPI ===== */}
+        {isExternal && externalSheet !== 'pop' && externalSheet !== 'pom' ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 sm:p-5">
+              <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Award className="w-4 h-4 text-slate-600" />
+                SERTIFIKAT TERCATAT
+              </p>
+              <p className="mt-2 text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-slate-100 tabular-nums">{certKPI.total}</p>
+              <p className="text-[11px] font-semibold text-slate-500 mt-1">{certKPI.people} personel · {certKPI.typesCount} jenis</p>
+            </div>
+
+            <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 sm:p-5">
+              <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-600 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                AKTIF
+              </p>
+              <p className="mt-2 text-3xl sm:text-4xl font-extrabold text-emerald-600 tabular-nums">{certKPI.active}</p>
+              <p className="text-[11px] font-semibold text-slate-500 mt-1">masa berlaku &gt; 1 tahun</p>
+            </div>
+
+            <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 sm:p-5">
+              <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-amber-600" />
+                WARNING EXPIRED
+              </p>
+              <p className="mt-2 text-3xl sm:text-4xl font-extrabold text-amber-600 tabular-nums">{certKPI.soon}</p>
+              <p className="text-[11px] font-semibold text-slate-500 mt-1">≤ 1 tahun lagi</p>
+            </div>
+
+            <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 sm:p-5">
+              <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-rose-600 flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-rose-600" />
+                EXPIRED
+              </p>
+              <p className="mt-2 text-3xl sm:text-4xl font-extrabold text-rose-600 tabular-nums">{certKPI.expired}</p>
+              <p className="text-[11px] font-semibold text-slate-500 mt-1">perlu diperpanjang</p>
+            </div>
+          </div>
+        ) : isExternal && externalSheet === 'pom' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
+            <DashCard className="lg:col-span-4">
+              <DashTitle title="Overview POM" sub="Pengawas Operasional Madya" />
+              <div className="flex items-end justify-between gap-3">
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{pomStats.total}</span>
+                  <span className="text-xs font-medium text-slate-500 leading-tight pb-1">Kandidat<br />Personel POP</span>
+                </div>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: DASH.brand }}>
+                  <Award className="w-4 h-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-xs font-semibold flex flex-wrap gap-x-3 gap-y-1">
+                <span className="text-emerald-600 font-bold">{pomStats.passed} Lulus POM</span>
+                <span className="text-slate-500 font-medium">{pomStats.belum} Belum / Proses</span>
+                <span className="text-teal-700 font-black">{pomStats.pctPassed}% Kelulusan</span>
+              </p>
+              <div className="relative mt-3">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Cari kandidat POM (nama, NIK, jabatan)..."
+                  className="w-full pl-10 pr-9 py-2.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-base sm:text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+                />
+                {searchQuery && (
+                  <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-700">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </DashCard>
+
+            <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+              <DashTitle title="Status Kelulusan POM" sub="Komposisi kelulusan kandidat POM" />
+              <div className="flex items-center gap-4">
+                <div className="w-[120px] h-[120px] shrink-0">
+                  {pomStats.total > 0 && (
+                    <Doughnut
+                      data={{
+                        labels: ['Lulus POM', 'Belum / Proses'],
+                        datasets: [{
+                          data: [pomStats.passed, pomStats.belum],
+                          backgroundColor: ['#10b981', '#cbd5e1'],
+                          borderColor: '#ffffff',
+                          borderWidth: 3,
+                        }],
+                      }}
+                      options={{
+                        cutout: '0%',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                      }}
+                    />
+                  )}
+                </div>
+                <ul className="space-y-2 min-w-0 flex-1">
+                  <li className="flex items-start gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full mt-1 shrink-0 bg-emerald-500" />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-tight">Lulus POM</p>
+                      <p className="text-[11px] text-slate-500">{pomStats.passed} orang · {pomStats.pctPassed}%</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full mt-1 shrink-0 bg-slate-300" />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-tight">Belum / Proses</p>
+                      <p className="text-[11px] text-slate-500">{pomStats.belum} orang · {100 - pomStats.pctPassed}%</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </DashCard>
+
+            <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+              <DashTitle title="Efektivitas POM" sub="Persentase kelulusan terhadap kandidat POP" />
+              <div className="flex items-center justify-center pt-2">
+                <ProgressRing value={pomStats.pctPassed} color="#10b981" label="Lulus POM" />
+              </div>
+            </DashCard>
+          </div>
+        ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4">
+          <DashCard className="lg:col-span-3">
             <DashTitle title="Training Overview" />
             <div className="flex items-end justify-between gap-3">
               <div className="flex items-end gap-2">
@@ -2078,75 +3143,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </>)}
               </p>
             )}
-            <div className="relative mt-3">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true); setSelectedNik(null); }}
-                onFocus={() => setSearchOpen(true)}
-                onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
-                onKeyDown={e => {
-                  if (e.key === 'Escape') setSearchOpen(false);
-                  if (e.key === 'Enter' && searchMatches[0]) selectPerson(searchMatches[0].record);
-                }}
-                title={searchQuery}
-                placeholder="Cari karyawan — lihat pencapaian training..."
-                className="w-full pl-10 pr-9 py-2.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-base sm:text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={clearPerson}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-                  title="Hapus pencarian"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-              {searchOpen && searchQuery.trim() && (
-                <div className="absolute left-0 right-0 top-full mt-2 z-30 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl overflow-hidden">
-                  {searchMatches.length === 0 ? (
-                    <p className="px-4 py-3 text-xs font-medium text-slate-500">Karyawan tidak ditemukan</p>
-                  ) : (
-                    <ul className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                      {searchMatches.map(({ record: r, achievement: a }) => (
-                        <li key={r.nik}>
-                          <button
-                            type="button"
-                            onMouseDown={e => e.preventDefault()}
-                            onClick={() => selectPerson(r)}
-                            className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-slate-900 dark:text-slate-100 break-words">{r.nama}</p>
-                              <p className="text-[10px] font-medium text-slate-500 truncate">{r.nik} · {r.jabatan || '-'}</p>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {a.parts.map(part => (
-                                  <span
-                                    key={part.id}
-                                    className="px-1.5 py-0.5 rounded-md text-[9px] font-bold"
-                                    style={{ backgroundColor: DASH.brandSoft, color: part.done >= part.total ? DASH.brand : '#64748b' }}
-                                  >
-                                    {part.label} {part.done}/{part.total}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="shrink-0 flex flex-col items-end gap-1 w-14">
-                              <span className="text-sm font-bold" style={{ color: pctColor(a.pct) }}>{a.pct}%</span>
-                              <span className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: DASH.brandSoft }}>
-                                <span className="block h-full rounded-full" style={{ width: `${a.pct}%`, backgroundColor: pctColor(a.pct) }} />
-                              </span>
-                            </div>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
             {selectedPerson && (() => {
               const a = personAchievement(selectedPerson, scope);
               return (
@@ -2193,20 +3189,78 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           {selectedPerson ? (
             <>
               {isExternal
-                ? <PersonPopCard record={selectedPerson} className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`} />
-                : <PersonSapCard record={selectedPerson} className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`} />}
-              <PersonRingsCard record={selectedPerson} scope={scope} className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`} />
+                ? <PersonPopCard record={selectedPerson} className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`} />
+                : <PersonSapCard record={selectedPerson} className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`} />}
+              <PersonRingsCard record={selectedPerson} scope={scope} className={`lg:col-span-6 ${showCharts ? '' : 'hidden'} md:block`} />
             </>
           ) : (<>
-          <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
-            <DashTitle title={isExternal ? 'Kualifikasi POP' : 'Status Training SAP'} sub={isExternal ? 'Komposisi keterangan kualifikasi POP' : 'Seluruh training wajib (per GOL)'} />
-            <div className="flex items-center gap-4">
-              <div className="w-[120px] h-[120px] shrink-0">
+          {/* Kolom Baru: Diagram Gabungan Training & Sertifikasi */}
+          <DashCard className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`}>
+            <DashTitle
+              title="Training & Sertifikasi"
+              sub="Diagram gabungan sebaran kualifikasi"
+            />
+            <div className="flex items-center gap-3 pt-1">
+              <div className="w-[100px] h-[100px] shrink-0">
+                {combinedTrainingCertData.grandTotal > 0 ? (
+                  <Doughnut
+                    data={{
+                      labels: combinedTrainingCertData.rows.map(r => r.label),
+                      datasets: [{
+                        data: combinedTrainingCertData.rows.map(r => r.value),
+                        backgroundColor: combinedTrainingCertData.rows.map(r => r.color),
+                        borderColor: '#ffffff',
+                        borderWidth: 2.5,
+                        hoverOffset: 4,
+                      }],
+                    }}
+                    options={{
+                      cutout: '55%',
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          callbacks: {
+                            label: ctx => ` ${ctx.label}: ${ctx.parsed} orang (${Math.round((Number(ctx.parsed) / combinedTrainingCertData.grandTotal) * 100)}%)`,
+                          },
+                        },
+                      },
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400">Kosong</div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between text-[11px] font-bold pb-1 mb-1 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-slate-600 dark:text-slate-400">Total Perolehan</span>
+                  <span className="tabular-nums font-black text-teal-600 dark:text-teal-400">{combinedTrainingCertData.grandTotal}</span>
+                </div>
+                <div className="max-h-[110px] overflow-y-auto space-y-1 custom-scrollbar pr-1">
+                  {combinedTrainingCertData.rows.map(r => (
+                    <div key={r.label} className="flex items-center justify-between text-[10px]">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
+                        <span className="truncate text-slate-700 dark:text-slate-300 font-medium">{r.label}</span>
+                      </span>
+                      <span className="font-bold tabular-nums text-slate-900 dark:text-slate-100 shrink-0 ml-1">{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </DashCard>
+
+          <DashCard className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`}>
+            <DashTitle title={isExternal ? 'Kualifikasi POP' : 'Status Training SAP'} sub={isExternal ? 'Komposisi keterangan kualifikasi' : 'Seluruh training wajib (per GOL)'} />
+            <div className="flex items-center gap-3 pt-1">
+              <div className="w-[100px] h-[100px] shrink-0">
                 {summaryPieTotal > 0 && (
                   <Doughnut
                     data={{
                       labels: summaryPieRows.map(r => r.label),
-                      datasets: [{ data: summaryPieRows.map(r => r.value), backgroundColor: summaryPieRows.map(r => r.color), borderColor: '#ffffff', borderWidth: 3, hoverOffset: 6 }],
+                      datasets: [{ data: summaryPieRows.map(r => r.value), backgroundColor: summaryPieRows.map(r => r.color), borderColor: '#ffffff', borderWidth: 2.5, hoverOffset: 4 }],
                     }}
                     options={{
                       cutout: '0%',
@@ -2220,13 +3274,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   />
                 )}
               </div>
-              <ul className="space-y-2 min-w-0 flex-1">
+              <ul className="space-y-1.5 min-w-0 flex-1 max-h-[110px] overflow-y-auto custom-scrollbar pr-1">
                 {summaryPieRows.map(r => (
-                  <li key={r.label} className="flex items-start gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full mt-1 shrink-0" style={{ backgroundColor: r.color }} />
+                  <li key={r.label} className="flex items-start gap-1.5">
+                    <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ backgroundColor: r.color }} />
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-tight">{r.label}</p>
-                      <p className="text-[11px] text-slate-500">{r.value} {isExternal ? 'orang' : 'training'} · {summaryPieTotal ? Math.round((r.value / summaryPieTotal) * 100) : 0}%</p>
+                      <p className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 leading-tight truncate">{r.label}</p>
+                      <p className="text-[10px] text-slate-500">{r.value} {isExternal ? 'orang' : 'training'} · {summaryPieTotal ? Math.round((r.value / summaryPieTotal) * 100) : 0}%</p>
                     </div>
                   </li>
                 ))}
@@ -2234,13 +3288,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
           </DashCard>
 
-          <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+          <DashCard className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`}>
             <DashTitle
               title={isExternal ? 'Efektivitas Sertifikasi' : 'Efektivitas Program'}
               right={
-                <div className="flex flex-wrap justify-end gap-x-2.5 gap-y-1 text-[10px] font-semibold text-slate-500">
+                <div className="flex flex-wrap justify-end gap-x-2 gap-y-1 text-[9px] font-semibold text-slate-500">
                   {dashboard.rings.map(r => (
-                    <span key={r.key} className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: r.color }} />{r.label.replace(' Diikuti', '').replace(' Lengkap', '')}</span>
+                    <span key={r.key} className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: r.color }} />{r.label.replace(' Diikuti', '').replace(' Lengkap', '')}</span>
                   ))}
                 </div>
               }
@@ -2251,6 +3305,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </DashCard>
           </>)}
         </div>
+        )}
 
         {/* HP: tombol buka/tutup diagram */}
         <button
@@ -2264,6 +3319,109 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         </button>
 
         {/* ===== Baris 2: Kartu program · Analitik ===== */}
+        {isExternal && externalSheet !== 'pop' && externalSheet !== 'pom' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
+            <DashCard className={`lg:col-span-4 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
+              <DashTitle title="Status Masa Berlaku" sub="Komposisi masa aktif sertifikat" />
+              <div className="flex items-center gap-4 pt-2">
+                <div className="w-[120px] h-[120px] shrink-0">
+                  {certKPI.total > 0 ? (
+                    <Doughnut
+                      data={{
+                        labels: ['Aktif', 'Segera Expired', 'Expired'],
+                        datasets: [{
+                          data: [certKPI.active, certKPI.soon, certKPI.expired],
+                          backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                          borderWidth: 2,
+                          borderColor: '#ffffff',
+                        }],
+                      }}
+                      options={{
+                        cutout: '60%',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full rounded-full border-4 border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400">Kosong</div>
+                  )}
+                </div>
+                <ul className="space-y-2 min-w-0 flex-1 text-xs">
+                  <li className="flex items-center justify-between">
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Aktif</span>
+                    <span className="font-bold text-slate-900">{certKPI.active} ({certKPI.total ? Math.round((certKPI.active / certKPI.total) * 100) : 0}%)</span>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />Segera Expired</span>
+                    <span className="font-bold text-amber-700">{certKPI.soon} ({certKPI.total ? Math.round((certKPI.soon / certKPI.total) * 100) : 0}%)</span>
+                  </li>
+                  <li className="flex items-center justify-between">
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" />Expired</span>
+                    <span className="font-bold text-rose-600">{certKPI.expired} ({certKPI.total ? Math.round((certKPI.expired / certKPI.total) * 100) : 0}%)</span>
+                  </li>
+                </ul>
+              </div>
+            </DashCard>
+
+            <DashCard className={`lg:col-span-8 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
+              <DashTitle title="Distribusi Peserta per Perusahaan" sub="Jumlah pemegang sertifikasi di PT TBP vs PT GPS" />
+              <div className="relative flex-1 min-h-[160px] pt-1">
+                {certPtChartData ? (
+                  <Bar
+                    data={certPtChartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: { legend: { display: false } },
+                      scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { precision: 0 } },
+                      },
+                    }}
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400">Belum ada data</div>
+                )}
+              </div>
+            </DashCard>
+          </div>
+        ) : isExternal && externalSheet === 'pom' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
+            <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
+              <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 p-4 border border-slate-200/80">
+                <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Lulus POM</p>
+                <p className="text-3xl font-black text-slate-900 mt-1">{pomStats.passed} <span className="text-xs font-semibold text-slate-500">orang</span></p>
+                <p className="text-[11px] text-slate-500 mt-0.5">{pomStats.pctPassed}% dari seluruh kandidat</p>
+              </div>
+              <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 p-4 border border-slate-200/80">
+                <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Belum / Dalam Proses</p>
+                <p className="text-3xl font-black text-slate-900 mt-1">{pomStats.belum} <span className="text-xs font-semibold text-slate-500">orang</span></p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Kandidat POP yang belum sertifikasi POM</p>
+              </div>
+            </div>
+
+            <DashCard className={`lg:col-span-8 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
+              <DashTitle title="Distribusi POM per Perusahaan" sub="Perbandingan lulus POM dan belum per PT" />
+              <div className="relative flex-1 min-h-[220px]">
+                <Bar
+                  data={pomPtChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11, weight: 'bold' } } },
+                    },
+                    scales: {
+                      x: { grid: { display: false } },
+                      y: { beginAtZero: true, ticks: { precision: 0 } },
+                    },
+                  }}
+                />
+              </div>
+            </DashCard>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
           {selectedPerson ? (
             <>
@@ -2470,8 +3628,307 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </DashCard>
           </>)}
         </div>
+        )}
 
         {/* ===== Baris 3: Cakupan · Daftar Karyawan ===== */}
+        {isExternal && externalSheet !== 'pop' && externalSheet !== 'pom' ? (
+          <div className="rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 space-y-4">
+            {/* Baris Pencarian, Filter & Tombol Aksi */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Cari nama, NIK, jabatan, PT..."
+                  className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+                />
+                {searchQuery && (
+                  <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-700">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <select
+                  value={certTypeFilter}
+                  onChange={e => setCertTypeFilter(e.target.value)}
+                  className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold cursor-pointer dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-200"
+                >
+                  <option value="ALL">Semua Sertifikat</option>
+                  {targetCertTypes.map(c => <option key={c.type} value={c.type}>{c.title}</option>)}
+                </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+                  className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold cursor-pointer dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-slate-200"
+                >
+                  <option value="ALL">Semua Status</option>
+                  <option value="AKTIF">Aktif (&gt; 1 Tahun)</option>
+                  <option value="SEGERA">Warning (≤ 1 Tahun)</option>
+                  <option value="EXPIRED">Expired</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => exportCertExcel(externalSheet)}
+                  disabled={currentCertRows.length === 0}
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4 text-slate-500" /> Export Excel
+                </button>
+
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setCertModalForm({
+                      certType: externalSheet === 'all' || externalSheet === 'k3_kimia' ? (targetCertTypes[0]?.type || 'iso_17025') : (externalSheet as CertType),
+                      nama: '',
+                      nik: '',
+                      jabatan: '',
+                      pt: 'TBP',
+                      tanggal: '',
+                      keterangan: 'Lulus',
+                      expired: '',
+                      note: '',
+                    })}
+                    className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl bg-teal-600 text-white text-xs font-bold shadow-sm hover:bg-teal-700 cursor-pointer transition-all"
+                  >
+                    <Plus className="w-4 h-4" /> Tambah Peserta
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* List group tabel persis seperti foto yang diupload user */}
+            <div className="space-y-5">
+              {targetCertTypes
+                .filter(meta => certTypeFilter === 'ALL' || meta.type === certTypeFilter)
+                .map(meta => {
+                  const list = filteredCertRows.filter(r => r.certType === meta.type);
+                  if (list.length === 0 && (searchQuery || certTypeFilter !== 'ALL') && !canManage) return null;
+                  return (
+                    <div key={meta.type} className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden">
+                      {/* Header Banner Kuning / Warna Sertifikat */}
+                      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200" style={{ backgroundColor: meta.color }}>
+                        <div>
+                          <p className="text-sm font-black text-slate-900 uppercase tracking-wide">{meta.title}</p>
+                          <p className="text-[11px] font-semibold text-slate-700 mt-0.5">
+                            *Masa Berlaku Sertifikasi {meta.validYears ?? '?'} Tahun ({meta.issuer}) · {list.length} peserta
+                          </p>
+                        </div>
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={() => setCertModalForm({
+                              certType: meta.type, nama: '', nik: '', jabatan: '', pt: 'TBP', tanggal: '', keterangan: 'Lulus', expired: '', note: ''
+                            })}
+                            className="inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-white/90 border border-slate-300 text-xs font-black text-slate-800 hover:bg-white cursor-pointer shrink-0 shadow-xs"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Peserta
+                          </button>
+                        )}
+                      </div>
+
+                      {list.length === 0 ? (
+                        <p className="px-4 py-8 text-center text-xs font-semibold text-slate-400 italic">
+                          Belum ada peserta{searchQuery ? ' yang cocok dengan pencarian' : ''}
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse text-left">
+                            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                              <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                                <th className="px-3.5 py-3">Nama Karyawan</th>
+                                <th className="px-3.5 py-3">Jabatan</th>
+                                <th className="px-3.5 py-3 text-center">PT</th>
+                                <th className="px-3.5 py-3 text-center">Tanggal Training/Ujian</th>
+                                <th className="px-3.5 py-3 text-center">Keterangan</th>
+                                <th className="px-3.5 py-3 text-center">Tanggal Expired</th>
+                                <th className="px-3.5 py-3 text-center text-amber-800 dark:text-amber-400">Tanggal Warning</th>
+                                <th className="px-3.5 py-3 text-center">Status</th>
+                                <th className="px-3.5 py-3">Note</th>
+                                {canManage && <th className="px-3.5 py-3 text-center">Aksi</th>}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                              {list.map(r => {
+                                const { status, daysLeft } = certStatus(r.expired, todayYmdStr);
+                                const ui = CERT_STATUS_UI[status];
+                                return (
+                                  <tr key={r.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                                    <td className="px-3.5 py-2.5 whitespace-nowrap">
+                                      <span className="font-extrabold text-xs text-slate-950 dark:text-slate-100 block">{r.nama}</span>
+                                      {r.nik && <span className="text-[10px] font-mono font-bold text-slate-500 block">{r.nik}</span>}
+                                    </td>
+                                    <td className="px-3.5 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{r.jabatan || '-'}</td>
+                                    <td className="px-3.5 py-2.5 text-xs font-black text-center text-slate-800 dark:text-slate-200">{r.pt || '-'}</td>
+                                    <td className="px-3.5 py-2.5 text-xs text-center whitespace-nowrap font-medium text-slate-800 dark:text-slate-200">{fmtDateStr(r.tanggal)}</td>
+                                    <td className="px-3.5 py-2.5 text-xs text-center font-semibold text-slate-800 dark:text-slate-200">{r.keterangan || '-'}</td>
+                                    <td className="px-3.5 py-2.5 text-xs text-center whitespace-nowrap font-bold text-slate-900 dark:text-slate-100">{fmtDateStr(r.expired)}</td>
+                                    <td className="px-3.5 py-2.5 text-xs text-center whitespace-nowrap font-semibold text-amber-800 dark:text-amber-400">
+                                      {r.expired ? fmtDateStr(certWarningDate(r.expired)) : '-'}
+                                    </td>
+                                    <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
+                                      <span className={`inline-flex px-2.5 py-0.5 rounded-full border text-[10px] font-black ${ui.cls}`} title={daysLeft != null ? (daysLeft < 0 ? `Lewat ${-daysLeft} hari` : `${daysLeft} hari lagi`) : undefined}>
+                                        {ui.label}{status === 'soon' && daysLeft != null ? ` · ${daysLeft} hr` : ''}
+                                      </span>
+                                    </td>
+                                    <td className="px-3.5 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-300 min-w-[160px]">{r.note || '-'}</td>
+                                    {canManage && (
+                                      <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
+                                        <div className="flex items-center justify-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => setCertModalForm({
+                                              id: r.id, certType: r.certType, nama: r.nama, nik: r.nik || '', jabatan: r.jabatan || '', pt: r.pt || 'TBP',
+                                              tanggal: r.tanggal || '', keterangan: r.keterangan || '', expired: r.expired || '', note: r.note || '',
+                                            })}
+                                            className="p-1.5 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-teal-50 cursor-pointer"
+                                            title="Edit"
+                                          >
+                                            <Edit3 className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setCertDeleteTarget(r)}
+                                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                                            title="Hapus"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        ) : isExternal && externalSheet === 'pom' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 items-start">
+            <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+              <DashTitle title="Filter Status POM" sub="Klik untuk memfilter kandidat POM" />
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === 'PASS' ? 'ALL' : 'PASS')}
+                  className={`w-full text-left px-3.5 py-3 rounded-2xl transition-all cursor-pointer border ${statusFilter === 'PASS' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/60'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      Lulus POM
+                    </span>
+                    <span className="text-xs font-black text-emerald-700">{pomStats.passed} orang</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Personel yang telah dinyatakan PASS POM</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === 'BELUM' ? 'ALL' : 'BELUM')}
+                  className={`w-full text-left px-3.5 py-3 rounded-2xl transition-all cursor-pointer border ${statusFilter === 'BELUM' ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/60'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+                      Belum / Proses POM
+                    </span>
+                    <span className="text-xs font-black text-slate-700">{pomStats.belum} orang</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Kandidat POP yang belum mengikuti atau belum lulus POM</p>
+                </button>
+              </div>
+            </DashCard>
+
+            <div className="lg:col-span-8 min-w-0">
+              <div className={tableCardCls}>
+                {/* Header tabel POM */}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div>
+                    <h3 className="text-[15px] font-bold tracking-tight text-slate-900 dark:text-slate-100">Daftar Kandidat POM</h3>
+                    <p className="text-[11px] font-medium text-slate-500">Pengawas Operasional Madya · {filteredPomRecords.length} personel</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer"
+                    title="Ekspor CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Export
+                  </button>
+                </div>
+
+                <div className="hidden md:block rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                  <div className="overflow-x-auto max-h-[70vh]">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800">
+                        <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-teal-50/70 border-b-2 border-teal-200">
+                          <th className="px-3 py-2.5 text-center">No</th>
+                          <th className="px-3 py-2.5">NIK</th>
+                          <th className="px-3 py-2.5">Nama</th>
+                          <th className="px-3 py-2.5">Jabatan</th>
+                          <th className="px-3 py-2.5 text-center">PT</th>
+                          <th className="px-3 py-2.5">Masa Kerja</th>
+                          <th className="px-3 py-2.5 text-center">Pra POP</th>
+                          <th className="px-3 py-2.5 text-center">POP Batch</th>
+                          <th className="px-3 py-2.5 text-center">Kelulusan POM</th>
+                          <th className="px-3 py-2.5">Batch / Catatan POM</th>
+                          {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {filteredPomRecords.map((r, idx) => (
+                          <tr key={r.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{idx + 1}</td>
+                            <td className="px-3 py-2 text-[11px] font-mono font-bold text-slate-800 whitespace-nowrap">{r.nik}</td>
+                            <td className="px-3 py-2 text-xs font-black text-slate-950 min-w-[160px]">{r.nama}</td>
+                            <td className="px-3 py-2 text-xs font-medium text-slate-700">{r.jabatan || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>
+                            <td className="px-3 py-2 text-[11px] whitespace-nowrap">{popMasaKerja(r.popData) || '-'}</td>
+                            <td className="px-3 py-2 text-center">{renderPraPop(r.popData)}</td>
+                            <td className="px-3 py-2 text-center">{renderPopBatch(r.popData)}</td>
+                            <td className="px-3 py-2 text-center">
+                              {popPassedPom(r.popData) ? (
+                                <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-black border bg-emerald-50 text-emerald-800 border-emerald-200">PASS</span>
+                              ) : (
+                                <span className="text-[11px] font-bold text-slate-300">Belum</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-xs text-slate-600 min-w-[140px]">{r.popData?.pom || '-'}</td>
+                            {canManage && (
+                              <td className="px-3 py-2 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button type="button" onClick={() => openEditModal(r)} className="p-1.5 rounded-full hover:bg-teal-50 text-teal-700 cursor-pointer" title="Edit">
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button type="button" onClick={() => setDeleteTarget(r)} className="p-1.5 rounded-full hover:bg-rose-50 text-rose-600 cursor-pointer" title="Hapus">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 items-start">
           <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
             <DashTitle
@@ -2706,9 +4163,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       <th className="px-3 py-2.5">Kualifikasi</th>
                       <th className="px-3 py-2.5 text-center">Keterangan POP</th>
                       <th className="px-3 py-2.5 text-center" title="Pengawas Operasional Madya">POM</th>
-                      <th className="px-3 py-2.5 text-center bg-amber-100/70 text-amber-950 border-l border-r border-amber-300 font-black tracking-normal" title="Sertifikasi K3 & Kompetensi (ISO 17025, Ahli/Petugas K3 Kimia, PPR Radiasi, Listrik, Las)">
-                        Sertifikasi K3 &amp; Kompetensi
-                      </th>
                       {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
                     </tr>
                     ) : (
@@ -2756,9 +4210,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                             <td className="px-3 py-2 min-w-[140px]">{renderKualifikasi(r.popData)}</td>
                             <td className="px-3 py-2 text-center">{renderPopKeterangan(r.popData?.popKeterangan)}</td>
                             <td className="px-3 py-2 text-center">{renderPom(r.popData)}</td>
-                            <td className="px-3 py-2 text-center bg-amber-50/40 border-l border-r border-amber-200/80 min-w-[160px]">
-                              {renderK3KompetensiBadges(r)}
-                            </td>
                           </>
                         ) : (
                           <>
@@ -2822,10 +4273,6 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                         <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-600">POP</span>{renderPopBatch(r.popData)}</div>
                         <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-black uppercase text-slate-600">POM</span>{renderPom(r.popData)}</div>
                         <div className="col-span-2">{renderKualifikasi(r.popData)}</div>
-                        <div className="col-span-2 pt-2 border-t border-amber-200 bg-amber-50/50 p-2 rounded-xl">
-                          <span className="text-[10px] font-black uppercase text-amber-900 block mb-1">Sertifikasi K3 &amp; Kompetensi</span>
-                          {renderK3KompetensiBadges(r)}
-                        </div>
                       </>
                     ) : program === 'sap'
                       ? SAP_TRAININGS.map(t => (
@@ -2861,6 +4308,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
           </div>
         </div>
+        )}
         </>)}
       </div>
 
@@ -3079,6 +4527,278 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             <div className="flex gap-2.5">
               <Button variant="secondary" onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 text-xs font-bold">Batal</Button>
               <Button variant="danger" onClick={handleDelete} className="flex-1 py-2.5 text-xs font-bold">Hapus</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Kelola Sertifikasi K3 & Kompetensi */}
+      {certModalForm && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!certModalForm.nama.trim()) {
+                toast.error('Nama karyawan wajib diisi');
+                return;
+              }
+              setIsSavingCert(true);
+              try {
+                const autoExp = defaultCertExpired(certModalForm.certType, certModalForm.tanggal);
+                const body = {
+                  ...certModalForm,
+                  expired: certModalForm.expired || autoExp || '',
+                };
+                const url = certModalForm.id ? `/api/training-certifications/${certModalForm.id}` : '/api/training-certifications';
+                const res = await fetch(url, {
+                  method: certModalForm.id ? 'PUT' : 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body),
+                });
+                const json = await res.json();
+                if (!res.ok || json.status !== 'success') {
+                  toast.error(json.message || 'Gagal menyimpan sertifikasi');
+                  return;
+                }
+                toast.success(json.message);
+                setCertModalForm(null);
+                queryClient.invalidateQueries({ queryKey: ['training-certifications'] });
+                fetchRecords();
+              } catch (err: any) {
+                toast.error(err.message || 'Gagal menyimpan sertifikasi');
+              } finally {
+                setIsSavingCert(false);
+              }
+            }}
+            className="w-full max-w-lg max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl shadow-2xl border flex flex-col"
+            style={cardStyle}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b bg-white dark:bg-slate-900" style={cardStyle}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold shadow-sm" style={{ backgroundColor: DASH.yellow }}>
+                  <HardHat className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-slate-950 dark:text-slate-100">
+                    {certModalForm.id ? 'Kelola / Edit Sertifikasi K3' : 'Tambah Sertifikasi K3 & Kompetensi'}
+                  </h3>
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    {CERT_META[certModalForm.certType]?.title || 'Sertifikasi K3'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCertModalForm(null)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs font-semibold text-slate-700 dark:text-slate-200">
+              <div>
+                <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Jenis Sertifikasi K3 / Kompetensi</label>
+                <Select
+                  value={certModalForm.certType}
+                  onChange={e => {
+                    const ct = e.target.value as CertType;
+                    const autoExp = defaultCertExpired(ct, certModalForm.tanggal);
+                    setCertModalForm(prev => prev ? { ...prev, certType: ct, expired: autoExp || prev.expired } : null);
+                  }}
+                  className="w-full"
+                >
+                  {CERT_TYPES.map(ct => (
+                    <option key={ct.type} value={ct.type}>{ct.title} ({ct.issuer})</option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Nama Karyawan *</label>
+                  <Input
+                    list="cert-emp-list"
+                    value={certModalForm.nama}
+                    onChange={e => {
+                      const val = e.target.value;
+                      const emp = employees.find(x => String(x.name || '').trim().toLowerCase() === val.trim().toLowerCase());
+                      setCertModalForm(prev => {
+                        if (!prev) return null;
+                        return {
+                          ...prev,
+                          nama: val,
+                          nik: emp ? (emp.nik || prev.nik) : prev.nik,
+                          jabatan: emp ? (emp.jabatan || prev.jabatan) : prev.jabatan,
+                          pt: emp ? (String(emp.pt || prev.pt || '').toUpperCase().includes('GPS') ? 'GPS' : 'TBP') : prev.pt,
+                        };
+                      });
+                    }}
+                    placeholder="Ketik atau pilih nama"
+                    required
+                  />
+                  <datalist id="cert-emp-list">
+                    {employees.map((e, idx) => (
+                      <option key={e.nik || `${e.name}-${idx}`} value={e.name}>{e.nik ? `(${e.nik}) ` : ''}{e.jabatan || ''}</option>
+                    ))}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">NIK</label>
+                  <Input
+                    value={certModalForm.nik}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, nik: e.target.value } : null)}
+                    placeholder="Contoh: 12345678"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Jabatan</label>
+                  <Input
+                    value={certModalForm.jabatan}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, jabatan: e.target.value } : null)}
+                    placeholder="Contoh: Chemist / Analyst"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Perusahaan (PT)</label>
+                  <Select
+                    value={certModalForm.pt}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, pt: e.target.value } : null)}
+                  >
+                    <option value="TBP">TBP</option>
+                    <option value="GPS">GPS</option>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Tanggal Sertifikasi</label>
+                  <Input
+                    type="date"
+                    value={certModalForm.tanggal}
+                    onChange={e => {
+                      const tgl = e.target.value;
+                      const autoExp = defaultCertExpired(certModalForm.certType, tgl);
+                      setCertModalForm(prev => prev ? { ...prev, tanggal: tgl, expired: autoExp || prev.expired } : null);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">
+                    Masa Berlaku / Expired
+                  </label>
+                  <Input
+                    type="date"
+                    value={certModalForm.expired}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, expired: e.target.value } : null)}
+                  />
+                  {CERT_META[certModalForm.certType]?.validYears && (
+                    <span className="block mt-1 text-[10px] text-slate-500">
+                      Standar berlaku: {CERT_META[certModalForm.certType].validYears} tahun ({CERT_META[certModalForm.certType].issuer})
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Hasil / Keterangan</label>
+                  <Input
+                    value={certModalForm.keterangan}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, keterangan: e.target.value } : null)}
+                    placeholder="Lulus / Kompeten"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Catatan Tambahan</label>
+                  <Input
+                    value={certModalForm.note}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, note: e.target.value } : null)}
+                    placeholder="Nomor sertifikat / catatan"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 flex items-center justify-between gap-2 p-4 border-t bg-slate-50 dark:bg-slate-800" style={cardStyle}>
+              {certModalForm.id ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rowToDelete = certRows.find(c => c.id === certModalForm.id);
+                    if (rowToDelete) setCertDeleteTarget(rowToDelete);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Hapus
+                </button>
+              ) : <div />}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setCertModalForm(null)}
+                  disabled={isSavingCert}
+                  className="py-2 px-4 text-xs font-bold"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSavingCert}
+                  className="py-2 px-4 text-xs font-bold"
+                  style={{ backgroundColor: DASH.brand }}
+                >
+                  {isSavingCert ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Award className="w-3.5 h-3.5" />}
+                  {certModalForm.id ? 'Perbarui Sertifikasi' : 'Simpan Sertifikasi'}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Konfirmasi Hapus Sertifikasi K3 */}
+      {certDeleteTarget && (
+        <div className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl shadow-2xl border p-6 text-center" style={cardStyle}>
+            <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-black text-slate-950 dark:text-slate-100 mb-1">Hapus Sertifikasi?</h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mb-5">
+              Sertifikasi <span className="font-black text-slate-900 dark:text-slate-100">{CERT_META[certDeleteTarget.certType]?.title || certDeleteTarget.certType}</span> milik <span className="font-black text-slate-900 dark:text-slate-100">{certDeleteTarget.nama}</span> akan dihapus permanen.
+            </p>
+            <div className="flex gap-2.5">
+              <Button variant="secondary" onClick={() => setCertDeleteTarget(null)} className="flex-1 py-2.5 text-xs font-bold">Batal</Button>
+              <Button
+                variant="danger"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/training-certifications/${certDeleteTarget.id}`, { method: 'DELETE' });
+                    const json = await res.json();
+                    if (!res.ok || json.status !== 'success') {
+                      toast.error(json.message || 'Gagal menghapus sertifikasi');
+                      return;
+                    }
+                    toast.success(json.message);
+                    setCertDeleteTarget(null);
+                    if (certModalForm?.id === certDeleteTarget.id) setCertModalForm(null);
+                    queryClient.invalidateQueries({ queryKey: ['training-certifications'] });
+                    fetchRecords();
+                  } catch (err: any) {
+                    toast.error(err.message || 'Gagal menghapus sertifikasi');
+                  }
+                }}
+                className="flex-1 py-2.5 text-xs font-bold"
+              >
+                Hapus
+              </Button>
             </div>
           </div>
         </div>

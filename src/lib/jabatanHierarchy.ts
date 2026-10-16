@@ -135,7 +135,35 @@ export function getJabatanRank(rawJabatan?: string | null): number {
 }
 
 /**
+ * Menghitung urutan kolom seksi/bagian sesuai diagram Struktur Organisasi:
+ * 1 = Wet Preparation
+ * 2 = Dry Preparation
+ * 3 = Inventory Control
+ * 4 = Laboratory Maintenance
+ * 5 = Quality Assurance
+ * 6 = Laboratory
+ * 7 = Administration (Admin, Preparation & Laboratory)
+ * 99 = Lainnya
+ */
+export function getSectionRank(emp: any): number {
+  if (!emp) return 99;
+  const norm = (str?: any) => String(str || '').toLowerCase().trim();
+  const j = norm(emp.jabatan || emp['Jabatan'] || emp['Jabatan Baru']);
+  const s = norm(emp.section || emp.bagian || emp['Bagian'] || emp.department);
+
+  if (j.includes('wet') || s.includes('wet')) return 1;
+  if (j.includes('dry') || s.includes('dry')) return 2;
+  if (j.includes('inventory') || s.includes('inv')) return 3;
+  if (j.includes('maintenance') || s.includes('maint')) return 4;
+  if (j.includes('quality') || j.includes('qa') || s.includes('qa') || s.includes('quality')) return 5;
+  if (j.includes('laboratory') || s.includes('lab')) return 6;
+  if (j.includes('admin') || s.includes('admin')) return 7;
+  return 99;
+}
+
+/**
  * Pembanding (comparator) karyawan berdasarkan urutan hirarki jabatan resmi,
+ * seksi Struktur Organisasi (Wet -> Dry -> Inv -> Maint -> QA -> Lab -> Admin),
  * dan sekunder berdasarkan nama (A-Z).
  */
 export function compareEmployeesByJabatan(a: any, b: any): number {
@@ -153,8 +181,16 @@ export function compareEmployeesByJabatan(a: any, b: any): number {
     return rankA - rankB;
   }
 
-  // Jika ranking sama, urutkan nama secara alfabetis
+  // Jika ranking jabatan sama (mis. sesama Crew Prep & Lab), urutkan berdasarkan urutan Section di Struktur Organisasi
+  const secRankA = getSectionRank(a);
+  const secRankB = getSectionRank(b);
+  if (secRankA !== secRankB) {
+    return secRankA - secRankB;
+  }
+
+  // Jika ranking & section sama, urutkan nama secara alfabetis
   const nameA = String(a.name || a.nama || a['Nama'] || '').trim();
   const nameB = String(b.name || b.nama || b['Nama'] || '').trim();
   return nameA.localeCompare(nameB, 'id', { sensitivity: 'base' });
 }
+

@@ -45,9 +45,30 @@ export function defaultCertExpired(type: CertType, tanggal: string | null | unde
 }
 
 export type CertStatus = 'active' | 'soon' | 'expired' | 'unknown';
-/** Status masa berlaku terhadap tanggal hari ini (YYYY-MM-DD). "Segera" = ≤ 90 hari lagi. */
+/** Status masa berlaku terhadap tanggal hari ini (YYYY-MM-DD). "Warning" (Segera Expired) = ≤ 365 hari (1 tahun) lagi. */
 export function certStatus(expired: string | null | undefined, today: string): { status: CertStatus; daysLeft: number | null } {
-  if (!expired || !/^\d{4}-\d{2}-\d{2}$/.test(expired)) return { status: 'unknown', daysLeft: null };
-  const daysLeft = Math.round((Date.parse(expired) - Date.parse(today)) / 86400000);
-  return { status: daysLeft < 0 ? 'expired' : daysLeft <= 90 ? 'soon' : 'active', daysLeft };
+  if (!expired) return { status: 'unknown', daysLeft: null };
+  const cleanExp = String(expired).trim().replace(/\//g, '-');
+  const m = cleanExp.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return { status: 'unknown', daysLeft: null };
+  const expIso = `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+  const daysLeft = Math.round((Date.parse(expIso) - Date.parse(today)) / 86400000);
+  return { status: daysLeft < 0 ? 'expired' : daysLeft <= 365 ? 'soon' : 'active', daysLeft };
+}
+
+
+/** Tanggal mulai Warning = 1 tahun sebelum tanggal expired (YYYY-MM-DD) */
+export function certWarningDate(expired: string | null | undefined): string | null {
+  if (!expired) return null;
+  const cleanExp = String(expired).trim().replace(/\//g, '-');
+  const m = cleanExp.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return null;
+  const y = parseInt(m[1], 10) - 1;
+  const month = parseInt(m[2], 10);
+  const day = parseInt(m[3], 10);
+  if (month === 2 && day === 29) {
+    const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+    return `${y}-02-${isLeap ? '29' : '28'}`;
+  }
+  return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }

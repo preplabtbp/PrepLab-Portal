@@ -1040,7 +1040,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       allRoster = generateFallbackRosterData();
     } else {
       try {
-        const timeoutEmps = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 600));
+        const timeoutEmps = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
         const resEmps = await Promise.race([
           Promise.all([
             db.select().from(employees),
