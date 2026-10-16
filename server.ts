@@ -160,6 +160,8 @@ async function initDbSchema() {
     await db.execute(sql`ALTER TABLE employee_attendance ADD COLUMN IF NOT EXISTS alasan_sakit_site TEXT;`);
     await db.execute(sql`ALTER TABLE employee_attendance ADD COLUMN IF NOT EXISTS alasan_sakit_luar TEXT;`);
     await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS attendance_data JSONB;`);
+    await db.execute(sql`ALTER TABLE apd_history ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;`);
+    await db.execute(sql`ALTER TABLE apd_history ADD COLUMN IF NOT EXISTS original_date_key TEXT;`);
 
     await db.execute(sql`CREATE TABLE IF NOT EXISTS rekap_manual_overrides (
       id SERIAL PRIMARY KEY,

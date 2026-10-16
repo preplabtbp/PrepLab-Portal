@@ -2215,8 +2215,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...Object.fromEntries(Object.entries(form).filter(([k]) => !k.startsWith('pop_'))),
-          // Data Sertifikasi POP dikirim sebagai satu objek popData
-          ...(program === 'pop' ? { popData: Object.fromEntries(POP_FORM_KEYS.map(k => [k, form[`pop_${k}`] || null])) } : {}),
+          // Data Sertifikasi POP dikirim sebagai satu objek popData (preserve provider & custom fields)
+          ...(program === 'pop' ? {
+            popData: {
+              ...(editingRecord?.popData || {}),
+              ...Object.fromEntries(POP_FORM_KEYS.map(k => [k, form[`pop_${k}`] || null])),
+            }
+          } : {}),
           program,
           updatedBy: inspectorName || inspectorNik,
         }),
@@ -3161,12 +3166,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                                     });
                                   } else {
                                     setCertModalForm({
-                                      id: t.id, certType: t.certType,
+                                      id: t.id, certType: t.certType, source: 'cert',
                                       nama: globalPersonProfile?.record.nama || "", nik: globalPersonProfile?.record.nik || "",
                                       jabatan: globalPersonProfile?.record.jabatan || "", pt: globalPersonProfile?.record.pt || "TBP",
                                       tanggal: t.date || "", keterangan: t.keterangan || "Lulus", expired: t.expiry || "",
-                                      penerbit: t.penerbit !== "-" ? t.penerbit : "", penyelenggara: t.penyelenggara !== "-" ? t.penyelenggara : "",
-                                      provider: t.provider !== "-" ? t.provider : "", sertifikat: t.sertifikat !== "-" ? t.sertifikat : "",
+                                      penerbit: t.penerbit !== "-" ? t.penerbit : (CERT_META[t.certType]?.issuer || ""),
+                                      penyelenggara: t.penyelenggara !== "-" ? t.penyelenggara : "",
+                                      provider: t.provider !== "-" ? t.provider : "",
+                                      sertifikat: t.sertifikat !== "-" ? t.sertifikat : "",
                                       note: t.note !== "-" ? t.note : "",
                                     });
                                   }
@@ -4020,7 +4027,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                           <button
                             type="button"
                             onClick={() => setCertModalForm({
-                              certType: meta.type, nama: '', nik: '', jabatan: '', pt: 'TBP', tanggal: '', keterangan: 'Lulus', expired: '', note: ''
+                              source: 'cert', certType: meta.type, nama: '', nik: '', jabatan: '', pt: 'TBP', tanggal: '', keterangan: 'Lulus', expired: '', note: '',
+                              penerbit: meta.issuer || '', penyelenggara: '', provider: '', sertifikat: ''
                             })}
                             className="inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-white/90 border border-slate-300 text-xs font-black text-slate-800 hover:bg-white cursor-pointer shrink-0 shadow-xs"
                           >
@@ -4039,14 +4047,15 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                             <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                               <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
                                 <th className="px-3.5 py-3">Nama Karyawan</th>
-                                <th className="px-3.5 py-3">Jabatan</th>
-                                <th className="px-3.5 py-3 text-center">PT</th>
-                                <th className="px-3.5 py-3 text-center">Tanggal Training/Ujian</th>
-                                <th className="px-3.5 py-3 text-center">Keterangan</th>
-                                <th className="px-3.5 py-3 text-center">Tanggal Expired</th>
+                                <th className="px-3.5 py-3">Penerbit</th>
+                                <th className="px-3.5 py-3">Penyelenggara</th>
+                                <th className="px-3.5 py-3">Provider</th>
+                                <th className="px-3.5 py-3 text-center">Tanggal Training</th>
                                 <th className="px-3.5 py-3 text-center text-amber-800 dark:text-amber-400">Tanggal Warning</th>
+                                <th className="px-3.5 py-3 text-center">Tanggal Expired</th>
                                 <th className="px-3.5 py-3 text-center">Status</th>
                                 <th className="px-3.5 py-3">Note</th>
+                                <th className="px-3.5 py-3 text-center">Sertifikat</th>
                                 {canManage && <th className="px-3.5 py-3 text-center">Aksi</th>}
                               </tr>
                             </thead>
@@ -4058,22 +4067,36 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                                   <tr key={r.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                                     <td className="px-3.5 py-2.5 whitespace-nowrap">
                                       <span className="font-extrabold text-xs text-slate-950 dark:text-slate-100 block">{r.nama}</span>
-                                      {r.nik && <span className="text-[10px] font-mono font-bold text-slate-500 block">{r.nik}</span>}
+                                      <span className="text-[10px] text-slate-500 block">
+                                        {r.nik && <span className="font-mono font-bold mr-1.5">{r.nik}</span>}
+                                        {r.jabatan && <span>{r.jabatan}</span>}
+                                        {r.pt && <span className="ml-1 font-bold">({r.pt})</span>}
+                                      </span>
                                     </td>
-                                    <td className="px-3.5 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{r.jabatan || '-'}</td>
-                                    <td className="px-3.5 py-2.5 text-xs font-black text-center text-slate-800 dark:text-slate-200">{r.pt || '-'}</td>
-                                    <td className="px-3.5 py-2.5 text-xs text-center whitespace-nowrap font-medium text-slate-800 dark:text-slate-200">{fmtDateStr(r.tanggal)}</td>
-                                    <td className="px-3.5 py-2.5 text-xs text-center font-semibold text-slate-800 dark:text-slate-200">{r.keterangan || '-'}</td>
-                                    <td className="px-3.5 py-2.5 text-xs text-center whitespace-nowrap font-bold text-slate-900 dark:text-slate-100">{fmtDateStr(r.expired)}</td>
+                                    <td className="px-3.5 py-2.5 text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.penerbit || meta.issuer || '-'}</td>
+                                    <td className="px-3.5 py-2.5 text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.penyelenggara && r.penyelenggara !== '-' ? r.penyelenggara : '-'}</td>
+                                    <td className="px-3.5 py-2.5 text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.provider && r.provider !== '-' ? r.provider : '-'}</td>
+                                    <td className="px-3.5 py-2.5 text-xs text-center whitespace-nowrap font-medium text-slate-800 dark:text-slate-200">{r.tanggal ? fmtDateStr(r.tanggal) : '-'}</td>
                                     <td className="px-3.5 py-2.5 text-xs text-center whitespace-nowrap font-semibold text-amber-800 dark:text-amber-400">
                                       {r.expired ? fmtDateStr(certWarningDate(r.expired)) : '-'}
                                     </td>
+                                    <td className="px-3.5 py-2.5 text-xs text-center whitespace-nowrap font-bold text-slate-900 dark:text-slate-100">{r.expired ? fmtDateStr(r.expired) : '-'}</td>
                                     <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
                                       <span className={`inline-flex px-2.5 py-0.5 rounded-full border text-[10px] font-black ${ui.cls}`} title={daysLeft != null ? (daysLeft < 0 ? `Lewat ${-daysLeft} hari` : `${daysLeft} hari lagi`) : undefined}>
-                                        {ui.label}{status === 'soon' && daysLeft != null ? ` · ${daysLeft} hr` : ''}
+                                        {ui.label}{status === 'soon' && daysLeft != null ? ` • ${daysLeft} hr` : ''}
                                       </span>
                                     </td>
-                                    <td className="px-3.5 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-300 min-w-[160px]">{r.note || '-'}</td>
+                                    <td className="px-3.5 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-300 min-w-[120px]">{r.note || '-'}</td>
+                                    <td className="px-3.5 py-2.5 text-center whitespace-nowrap text-xs">
+                                      {r.sertifikat && r.sertifikat !== '-' ? (
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800">
+                                          <FileText className="w-3 h-3" />
+                                          {r.sertifikat}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400 font-semibold">-</span>
+                                      )}
+                                    </td>
                                     {canManage && (
                                       <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
                                         <div className="flex items-center justify-center gap-1">
@@ -4082,7 +4105,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                                             onClick={() => setCertModalForm({
                                               id: r.id, source: 'cert', certType: r.certType, nama: r.nama, nik: r.nik || '', jabatan: r.jabatan || '', pt: r.pt || 'TBP',
                                               tanggal: r.tanggal || '', keterangan: r.keterangan || '', expired: r.expired || '', note: r.note || '',
-                                              penerbit: r.penerbit || '', penyelenggara: r.penyelenggara || '', provider: r.provider || '', sertifikat: r.sertifikat || '',
+                                              penerbit: r.penerbit || meta.issuer || '', penyelenggara: r.penyelenggara || '', provider: r.provider || '', sertifikat: r.sertifikat || '',
                                             })}
                                             className="p-1.5 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-teal-50 cursor-pointer"
                                             title="Edit"
@@ -4804,7 +4827,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               setIsSavingCert(true);
               try {
                 if (certModalForm.source === 'pop' || certModalForm.source === 'pom') {
-                  const rec = records.find(r => r.id === certModalForm.recordId || (certModalForm.nik && r.nik === certModalForm.nik)) || (globalSelectedPerson?.id === certModalForm.recordId ? globalSelectedPerson : null);
+                  const rec = allRecords.find(r => r.id === certModalForm.recordId || (certModalForm.nik && r.nik === certModalForm.nik)) || (globalSelectedPerson?.id === certModalForm.recordId ? globalSelectedPerson : null);
                   if (rec) {
                     const curPop: any = { ...(rec.popData || {}) };
                     if (certModalForm.source === 'pop') {
@@ -4815,6 +4838,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       if (certModalForm.penyelenggara !== undefined) curPop.penyelenggara = certModalForm.penyelenggara;
                       if (certModalForm.provider !== undefined) curPop.provider = certModalForm.provider;
                       if (certModalForm.sertifikat !== undefined) curPop.popSertifikat = certModalForm.sertifikat;
+                      if (certModalForm.note !== undefined) curPop.notes = certModalForm.note;
                     } else {
                       if (certModalForm.tanggal !== undefined) curPop.pom = certModalForm.tanggal;
                       if (certModalForm.keterangan !== undefined) curPop.pomKeterangan = certModalForm.keterangan;
@@ -4865,6 +4889,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 }
                 setCertModalForm(null);
                 await queryClient.invalidateQueries({ queryKey: ['training-certifications'] });
+                await queryClient.refetchQueries({ queryKey: ['training-certifications'] });
                 await queryClient.invalidateQueries({ queryKey: TRAINING_QUERY_KEY });
                 fetchRecords();
               } catch (err: any) {

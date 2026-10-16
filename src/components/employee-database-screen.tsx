@@ -60,8 +60,49 @@ import { calculateRosterLeave } from '../lib/rosterLeave';
 import { getEmployeeTenureInfo } from '../lib/tenureUtils';
 import { compareEmployeesByJabatan, getJabatanRank } from '../lib/jabatanHierarchy';
 
+const KNOWN_RESIGNED_NIKS = new Set([
+  '04D24000052', // Fikri Lisantri Fahmi
+  '02D23000050', // Kevin Gibran Mamoto
+  '04D25000062', // M. Bagus Ihza Ai Rizki
+  '04D25000045', // Kevin Murheza
+  'M0405240291', // Ade Wijaya
+  'M0210190719', // La Ode Ali Wara
+  '04D26000012', // Nurhafiz Syahputra
+  'M0404220419', // M Tarmizi
+  'M0206250798', // Ardi Waiyolu
+  'M0403240137', // Taufik Mulyadi
+  'M0210230886', // Salim Hi. Hasan
+  'M0201250027', // Fasrul La Udi
+  'M0203220110', // Rifa Nuridi
+  'M0403240143', // M. Fiky Aciman
+  'M0402230177', // Faisal Bakri
+  'M0402260053', // Muhammad Irfan Fadli
+  'M0205250595', // Darwan Alimudin
+]);
+
 export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
   if (!empOrStatus) return false;
+  
+  if (typeof empOrStatus === 'object') {
+    const rawNik = String(empOrStatus.nik || '').trim().toUpperCase();
+    if (rawNik && KNOWN_RESIGNED_NIKS.has(rawNik)) return true;
+
+    // Cek jika ada tanggal efektif tidak bekerja
+    const eff = empOrStatus.tanggalEfektifTidakBekerja || empOrStatus.tanggal_efektif_tidak_bekerja;
+    if (eff && eff !== '-' && eff !== '0' && eff !== '#N/A' && String(eff).trim()) {
+      return true;
+    }
+
+    // Cek keterangan / catatan / alasan / statusMess / statusKontrak
+    const rawKet = String(empOrStatus.keterangan || empOrStatus.alasan || empOrStatus.catatan || empOrStatus.statusMess || empOrStatus.statusKontrak || '').toUpperCase();
+    if (rawKet.includes('RESIGN') || rawKet.includes('PHK') || rawKet.includes('SPPHK') || rawKet.includes('KELUAR') || rawKet.includes('BERHENTI')) {
+      return true;
+    }
+
+    const sec = String(empOrStatus.section || empOrStatus.bagian || '').trim().toUpperCase();
+    if (sec.includes('#N/A')) return true;
+  }
+
   const status = typeof empOrStatus === 'string'
     ? empOrStatus
     : (empOrStatus.statusKaryawan || empOrStatus.status_karyawan || empOrStatus.status || empOrStatus['Status Karyawan'] || empOrStatus['Status'] || '');
@@ -72,14 +113,14 @@ export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
     s.includes('MUTASI') ||
     s.includes('SPPHK') ||
     s.includes('KELUAR') ||
+    s.includes('BERHENTI') ||
     s.includes('INACTIVE') ||
     s.includes('NONAKTIF') ||
-    s.includes('NON AKTIF')
+    s.includes('NON AKTIF') ||
+    s.includes('HABIS KONTRAK')
   ) {
     return true;
   }
-  const sec = typeof empOrStatus === 'object' ? String(empOrStatus.section || empOrStatus.bagian || '').trim().toUpperCase() : '';
-  if (sec.includes('#N/A')) return true;
   return false;
 }
 
@@ -3294,19 +3335,24 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             };
 
                             const findEmp = (rawName: string, preferredNik?: string) => {
-                              const pool = (employees && employees.length > 0) ? employees : activeEmployeesList;
+                              // Prioritaskan activeEmployeesList agar personil yang aktif selalu diutamakan dibanding yang resign/non-aktif
+                              const pool = (activeEmployeesList && activeEmployeesList.length > 0) ? activeEmployeesList : (employees || []);
                               if (preferredNik) {
                                 const byNik = pool.find(e => String(e.nik || '').toUpperCase() === preferredNik.toUpperCase());
                                 if (byNik) return byNik;
+                                const byNikAll = employees?.find(e => String(e.nik || '').toUpperCase() === preferredNik.toUpperCase());
+                                if (byNikAll) return byNikAll;
                               }
                               const cleanLower = String(rawName || '').toLowerCase().trim();
                               if (SO_NAME_ALIASES[cleanLower]) {
                                 const alias = SO_NAME_ALIASES[cleanLower];
-                                const byNik = pool.find(e => String(e.nik || '').toUpperCase() === alias.nik.toUpperCase());
+                                const byNik = pool.find(e => String(e.nik || '').toUpperCase() === alias.nik.toUpperCase()) ||
+                                              employees?.find(e => String(e.nik || '').toUpperCase() === alias.nik.toUpperCase());
                                 if (byNik) return byNik;
                               }
                               const targetKey = normEmpKey(rawName);
-                              const exact = pool.find(e => normEmpKey(e.name) === targetKey);
+                              const exact = pool.find(e => normEmpKey(e.name) === targetKey) ||
+                                            employees?.find(e => normEmpKey(e.name) === targetKey);
                               if (exact) return exact;
 
                               const cleanWords = cleanLower
@@ -3320,11 +3366,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 const tokenMatch = pool.find(e => {
                                   const eWords = (e.name || '').toLowerCase();
                                   return cleanWords.every(w => eWords.includes(w));
+                                }) || employees?.find(e => {
+                                  const eWords = (e.name || '').toLowerCase();
+                                  return cleanWords.every(w => eWords.includes(w));
                                 });
                                 if (tokenMatch) return tokenMatch;
 
                                 // Fallback: match by distinctive tokens (>= 4 chars), e.g. "nyong", "dokolamo", "dokolomo"
                                 const looseMatch = pool.find(e => {
+                                  const eLower = (e.name || '').toLowerCase();
+                                  return cleanWords.some(w => w.length >= 4 && (eLower.includes(w) || (w.includes('dokol') && eLower.includes('dokol'))));
+                                }) || employees?.find(e => {
                                   const eLower = (e.name || '').toLowerCase();
                                   return cleanWords.some(w => w.length >= 4 && (eLower.includes(w) || (w.includes('dokol') && eLower.includes('dokol'))));
                                 });
@@ -3603,20 +3655,30 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 return { emp, name, role, nik, shift, hasMatch, isCustomAssigned, assignmentId };
                               });
 
-                              const baseExisting = customExisting ?? people.length;
-                              const baseVacant = customVacant ?? (vacantCount > 0 ? vacantCount : Math.max(0, quota - baseExisting));
-                              const filledCount = customAssigned.length;
+                              // Saring personil yang sudah resign atau non-aktif agar tidak muncul di diagram SO
+                              const activeResolvedList = resolvedList.filter(p => {
+                                if (p.emp && isResignedOrNonActiveStatus(p.emp)) return false;
+                                const rawNik = String(p.nik || p.emp?.nik || '').trim().toUpperCase();
+                                if (rawNik && KNOWN_RESIGNED_NIKS.has(rawNik)) return false;
+                                const match = findEmp(p.name, p.nik);
+                                if (match && isResignedOrNonActiveStatus(match)) return false;
+                                return true;
+                              });
+
+                              const activeExistingFromPeople = activeResolvedList.filter(p => !p.isCustomAssigned).length;
+                              const baseExisting = customExisting ?? activeExistingFromPeople;
+                              const filledCount = activeResolvedList.filter(p => p.isCustomAssigned).length;
                               const existingCount = baseExisting + filledCount;
-                              const effVacant = Math.max(0, baseVacant - filledCount);
-                              const totalCount = customTotal ?? (existingCount + effVacant);
+                              const effVacant = Math.max(0, quota > 0 ? (quota - existingCount) : ((customVacant ?? vacantCount) - filledCount));
+                              const totalCount = customTotal ?? (quota > 0 ? Math.max(quota, existingCount + effVacant) : (existingCount + effVacant));
 
                               // Split into Shift A, Shift B, Non Shift
-                              const shiftAPeople = resolvedList.filter(p => p.shift === 'A');
-                              const shiftBPeople = resolvedList.filter(p => p.shift === 'B');
-                              const nonShiftPeople = resolvedList.filter(p => p.shift !== 'A' && p.shift !== 'B');
+                              const shiftAPeople = activeResolvedList.filter(p => p.shift === 'A');
+                              const shiftBPeople = activeResolvedList.filter(p => p.shift === 'B');
+                              const nonShiftPeople = activeResolvedList.filter(p => p.shift !== 'A' && p.shift !== 'B');
 
                               const hasMultipleShifts = splitShifts && (shiftAPeople.length > 0 || shiftBPeople.length > 0);
-                              const isExpanded = crewDropdown ? (!!expandedCrewSections[crewKey] || (q && resolvedList.some(p => p.hasMatch))) : true;
+                              const isExpanded = crewDropdown ? (!!expandedCrewSections[crewKey] || (q && activeResolvedList.some(p => p.hasMatch))) : true;
 
                               let runningNumber = 1;
 
@@ -3846,7 +3908,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                         </>
                                       ) : (
                                         <div className="space-y-1">
-                                          {resolvedList.map(p => renderPersonRow(p, runningNumber++))}
+                                          {activeResolvedList.map(p => renderPersonRow(p, runningNumber++))}
                                         </div>
                                       )}
 
@@ -3908,21 +3970,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                              );
                                            })}
                                          </div>
-                                       )}           {effVacant > 0 && (
-                                        <div className="rounded-lg bg-rose-50/40 border border-dashed border-rose-300 p-1.5 space-y-0.5">
-                                          {Array.from({ length: effVacant }).map((_, vIdx) => {
-                                            const num = runningNumber++;
-                                            return (
-                                              <div key={vIdx} className="flex items-center gap-1.5 py-0.5 px-1 text-[9px] text-rose-600 italic">
-                                                <span className="font-mono font-bold text-rose-400 w-3.5 shrink-0 text-right text-[8.5px]">{num}.</span>
-                                                <span className="bg-rose-100/70 text-rose-600 px-1.5 py-0.2 rounded border border-rose-200 text-[8px] font-mono uppercase tracking-wider">
-                                                  (Vacant)
-                                                </span>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
+                                       )}
                                     </div>
                                   )}
                                 </div>

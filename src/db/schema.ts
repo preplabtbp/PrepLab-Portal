@@ -272,6 +272,8 @@ export const apdHistory = pgTable('apd_history', {
   dateTaken: timestamp('date_taken').defaultNow(),
   photoUrl: text('photo_url'),
   pt: text('pt').default('TBP'),
+  isDeleted: boolean('is_deleted').default(false),
+  originalDateKey: text('original_date_key'),
 });
 
 // --- APD Documents ---
