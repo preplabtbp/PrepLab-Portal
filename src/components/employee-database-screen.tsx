@@ -2591,7 +2591,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       transition={{ duration: 0.25 }}
                       className="overflow-hidden"
                     >
-                      <div className="bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-xl p-4 sm:p-5 relative mt-2">
+                      <div className={`bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-xl relative mt-2 ${
+                        activeStatDetail === 'active' ? 'p-2 sm:p-3' : 'p-4 sm:p-5'
+                      }`}>
                         {/* Header Drawer */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
                           <div className="flex items-center gap-2.5">
@@ -3359,6 +3361,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             };
 
                             // 1. Executive Top Card (Gaya Resmi Organigram)
+                            // 1. Executive Top Card (Gaya Resmi Organigram)
                             const renderAniExecutiveCard = (
                               emp: any,
                               roleTitle: string,
@@ -3367,6 +3370,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               width = 'w-64',
                               cardTheme: 'teal' | 'amber' | 'slate' | 'red-dashed' = 'slate'
                             ) => {
+                              const isHeadOfSite = cardTheme === 'red-dashed' || roleTitle.toLowerCase().includes('head of site');
                               const resolvedEmp = emp || findEmp(defaultName, defaultNik);
                               const name = resolvedEmp?.name || defaultName;
                               const role = resolvedEmp?.jabatan || roleTitle;
@@ -3383,16 +3387,31 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 status_karyawan: 'Aktif',
                               };
 
-                              let borderClass = 'border-2 border-slate-900 bg-white text-slate-900 shadow-sm hover:border-[#20969D] hover:shadow-md';
-                              let titleColor = 'text-slate-900';
-                              let nameColor = 'text-slate-900';
-                              let ringColor = 'ring-2 ring-slate-300 group-hover:ring-[#20969D]';
-                              if (cardTheme === 'red-dashed') {
-                                borderClass = 'border-2 border-dashed border-red-500 bg-white shadow-sm hover:border-red-600 hover:shadow-md';
-                                titleColor = 'text-red-600';
-                                nameColor = 'text-red-700';
-                                ringColor = 'ring-2 ring-red-300 group-hover:ring-red-500';
+                              // Khusus HEAD OF SITE: Tidak perlu foto/avatar dan tidak perlu buka profil (Hanya Nama dan Jabatan saja)
+                              if (isHeadOfSite) {
+                                return (
+                                  <div
+                                    className={`relative ${width} py-2.5 px-3 rounded-xl border-2 border-dashed border-red-500 bg-white shadow-sm text-center flex flex-col items-center justify-center select-text cursor-default ${
+                                      hasMatch ? 'ring-4 ring-amber-400' : ''
+                                    }`}
+                                  >
+                                    {/* Role Title / Jabatan */}
+                                    <div className="w-full text-[11px] xl:text-[11.5px] font-black uppercase tracking-wider text-red-600 leading-tight">
+                                      {roleTitle}
+                                    </div>
+
+                                    {/* Nama Karyawan */}
+                                    <div className="w-full text-[11px] xl:text-[12px] font-black text-teal-700 italic leading-tight whitespace-normal break-words mt-1">
+                                      {name}
+                                    </div>
+                                  </div>
+                                );
                               }
+
+                              const borderClass = 'border-2 border-slate-900 bg-white text-slate-900 shadow-sm hover:border-[#20969D] hover:shadow-md';
+                              const titleColor = 'text-slate-900';
+                              const nameColor = 'text-slate-900';
+                              const ringColor = 'ring-2 ring-slate-300 group-hover:ring-[#20969D]';
 
                               return (
                                 <button
@@ -4237,7 +4256,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             };
 
                             return (
-                              <div className="w-full max-h-[88vh] overflow-y-auto overflow-x-auto custom-scrollbar rounded-2xl border-t-4 border-t-[#20969D] border-b-4 border-b-[#20969D] border-x border-x-slate-200 bg-white p-3 sm:p-5 shadow-sm select-none space-y-4">
+                              <div className="w-full max-h-[88vh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-2xl border-t-4 border-t-[#20969D] border-b-4 border-b-[#20969D] border-x border-x-slate-200 bg-white p-2.5 sm:p-3.5 xl:p-4 shadow-sm select-none space-y-4">
                                 
                                 {/* ================= HEADER SO (ORGANIGRAMA PREPLAB) ================= */}
                                   <div className="w-full flex flex-col items-center justify-center pt-1 pb-3 border-b border-teal-100/80">
@@ -4335,13 +4354,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   </div>
 
                                   {/* ================= DESKTOP VIEW: STRUKTUR HIERARKI GRID ================= */}
-                                  <div className="hidden lg:grid w-full min-w-[1350px] xl:min-w-[1520px] items-start gap-x-2.5" style={{ gridTemplateColumns: `repeat(${nCols}, minmax(0, 1fr))` }}>
+                                  <div className="hidden lg:grid w-full items-start gap-x-1.5 xl:gap-x-2" style={{ gridTemplateColumns: `repeat(${nCols}, minmax(0, 1fr))` }}>
                                     
                                     {/* CONNECTOR 1: Garis Pembagi Horizontal dari Manager ke 6 Cabang (Terhubung mulus tanpa celah) */}
                                     {rawGroups.map((g, gi) => (
                                       <div key={`c1-${g.key}`} className="relative h-7" style={{ gridColumn: groupSpan(gi) }}>
                                         {gi > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-2 border-solid border-slate-900" />}
-                                        {gi < rawGroups.length - 1 && <div className="absolute top-0 left-1/2 -right-3 xl:-right-3.5 border-t-2 border-solid border-slate-900" />}
+                                        {gi < rawGroups.length - 1 && <div className="absolute top-0 left-1/2 -right-1.5 xl:-right-2 border-t-2 border-solid border-slate-900" />}
                                         <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-2 border-solid border-slate-900" />
                                       </div>
                                     ))}
@@ -4353,13 +4372,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       const isDirect = g.spts === null;
 
                                       return (
-                                        <div key={`s-${g.key}`} className="relative px-1 flex flex-col items-center justify-center self-stretch h-full" style={{ gridColumn: groupSpan(gi) }}>
+                                        <div key={`s-${g.key}`} className="relative px-0.5 xl:px-1 flex flex-col items-center justify-center self-stretch h-full" style={{ gridColumn: groupSpan(gi) }}>
                                           {/* Garis Koordinasi Horizontal Putus-Putus Antara Prep Spt & Lab Spt (Sesuai Diagram Resmi) */}
                                           {gi === 0 && (
-                                            <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -right-3 xl:-right-3.5 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
+                                            <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -right-1.5 xl:-right-2 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
                                           )}
                                           {(gi === 1 || gi === 2 || gi === 3) && (
-                                            <div className="absolute top-1/2 -translate-y-1/2 left-0 -right-3 xl:-right-3.5 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
+                                            <div className="absolute top-1/2 -translate-y-1/2 left-0 -right-1.5 xl:-right-2 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
                                           )}
                                           {gi === 4 && (
                                             <div className="absolute top-1/2 -translate-y-1/2 left-0 right-1/2 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
@@ -4376,7 +4395,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                                 g.label,
                                                 isPrep ? 'Arif Maulana Lessy' : 'Tigwa Anggawikara',
                                                 isPrep ? '02D24000009' : '04D23000004',
-                                                'w-56',
+                                                isPrep ? 'w-52 xl:w-56' : 'w-full max-w-[195px] xl:max-w-[210px]',
                                                 'slate'
                                               )}
                                               <div className="w-0 flex-1 min-h-[1.25rem] border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
@@ -4390,7 +4409,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                     {columns.map((c, ci) => (
                                       <div key={`c2-${ci}`} className="relative h-5" style={{ gridColumn: colSpan(ci) }}>
                                         {c.pos > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-2 border-solid border-slate-900" />}
-                                        {c.pos < c.size - 1 && <div className="absolute top-0 left-1/2 -right-3 xl:-right-3.5 border-t-2 border-solid border-slate-900" />}
+                                        {c.pos < c.size - 1 && <div className="absolute top-0 left-1/2 -right-1.5 xl:-right-2 border-t-2 border-solid border-slate-900" />}
                                         <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-2 border-solid border-slate-900" />
                                       </div>
                                     ))}

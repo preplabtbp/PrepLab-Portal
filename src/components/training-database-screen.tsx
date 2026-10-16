@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   Info,
   Pencil,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -1925,13 +1926,15 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   // Global Search (Training External): cari dari allRecords + certRows
   const globalSearchMatches = useMemo(() => {
-    if (!isExternal) return [];
     const q = globalSearchQuery.trim().toLowerCase();
     if (!q) return [];
     // Cari di training records
     const trMatches = allRecords
-      .filter(r => [r.nama, r.nik, r.jabatan, r.bagian].some(v => String(v || '').toLowerCase().includes(q)))
+      .filter(r => [r.nama, r.nik, r.jabatan, r.bagian, r.pt].some(v => String(v || '').toLowerCase().includes(q)))
       .slice(0, 10);
+    if (!isExternal) {
+      return { records: trMatches, certOnlyPeople: [] };
+    }
     // Juga cari di certRows untuk orang yang mungkin hanya ada di sertifikasi
     const trNiks = new Set(trMatches.map(r => (r.nik || '').trim().toUpperCase()).filter(Boolean));
     const trNames = new Set(trMatches.map(r => (r.nama || '').toLowerCase().replace(/[^a-z]/g, '')).filter(Boolean));
@@ -1998,7 +2001,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       };
     }) : [];
     // SAP trainings
-    const sapItems = r.inSap ? SAP_TRAININGS.map(t => {
+    const hasAnySap = Boolean(r.inSap || r.gol || SAP_TRAININGS.some(t => Boolean(r[t.key])));
+    const sapItems = hasAnySap ? SAP_TRAININGS.map(t => {
       const state = sapState(r, t.key, t.statusKey);
       const date = r[t.key];
       const expiry = date ? trainingValidity(date, TODAY).expiryDate : null;
@@ -2008,7 +2012,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       };
     }) : [];
     // K3 trainings
-    const k3Items = r.inK3 ? K3_TRAININGS.map(t => {
+    const hasAnyK3 = Boolean(r.inK3 || K3_TRAININGS.some(t => Boolean(r[t.key])));
+    const k3Items = hasAnyK3 ? K3_TRAININGS.map(t => {
       const state = k3State(r, t.key, t.statusKey);
       const b = k3BadgeOf(state);
       return {
@@ -2745,8 +2750,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
         )}
 
-        {/* ===== Global Search (Training External): Cari karyawan → semua training ===== */}
-        {isExternal && (
+        {/* ===== Pencarian Nama Karyawan (Tersedia di Training Internal & Sertifikasi) ===== */}
+        (
           <div className="rounded-[24px] bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-xs border border-slate-200/80 dark:border-slate-800">
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
@@ -2762,7 +2767,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     const matches = !Array.isArray(globalSearchMatches) ? globalSearchMatches : null;
                     if (e.key === 'Enter' && matches?.records[0]) selectGlobalPerson(matches.records[0]);
                   }}
-                  placeholder="🔍 Cari nama karyawan — tampilkan semua training & sertifikasi yang dimiliki..."
+                  placeholder={isExternal ? "🔍 Cari nama karyawan — tampilkan sertifikasi kompetensi & POP/POM..." : "🔍 Cari nama karyawan — tampilkan status Training SAP & K3..."}
                   className="w-full pl-10 pr-9 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600/30 transition-all"
                 />
                 {globalSearchQuery && (
@@ -2783,10 +2788,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                           {matches!.records.map(r => {
                             const pCerts = getPersonCerts(r);
                             const trainings: string[] = [];
-                            if (r.inPop) trainings.push('POP/POM');
-                            if (r.inSap) trainings.push('SAP');
-                            if (r.inK3) trainings.push('K3');
-                            if (pCerts.length > 0) trainings.push(`${pCerts.length} Sertifikasi`);
+                            if (isExternal) {
+                              if (r.inPop) trainings.push('POP/POM');
+                              if (pCerts.length > 0) trainings.push(`${pCerts.length} Sertifikasi`);
+                            } else {
+                              if (r.inSap || r.gol) trainings.push('Training SAP');
+                              if (r.inK3) trainings.push('Training K3');
+                              if (r.popData?.praPop || (r as any).praPop) trainings.push('Pra POP');
+                            }
                             return (
                               <li key={r.nik || r.id}>
                                 <button
@@ -2838,10 +2847,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </div>
             </div>
           </div>
-        )}
+        )
 
-        {/* ===== Profil Training Karyawan (Global Search Result) ===== */}
-        {isExternal && globalPersonProfile ? (
+        {/* ===== Profil Karyawan (Global Search Result) ===== */}
+        {globalPersonProfile ? (
           <div className="space-y-3 sm:space-y-4">
             {/* Header profil */}
             <div className="rounded-[26px] bg-white dark:bg-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] border border-slate-200/80 dark:border-slate-800 p-4 sm:p-6">
@@ -2850,7 +2859,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <Users className="w-7 h-7" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-teal-600 mb-0.5">Profil Training Karyawan</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-teal-600 mb-0.5">{isExternal ? "Profil Sertifikasi Karyawan" : "Profil Training Internal Karyawan"}</p>
                   <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight break-words">{globalPersonProfile.record.nama}</h2>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs font-semibold text-slate-600">
                     <span>NIK: <span className="font-mono font-bold text-slate-900">{globalPersonProfile.record.nik || '-'}</span></span>
@@ -2872,10 +2881,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               {/* Ringkasan jumlah training */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
                 {[
-                  { label: 'POP/POM', count: globalPersonProfile.popStages.filter(s => s.attended).length, total: globalPersonProfile.popStages.length, color: '#7c3aed', show: globalPersonProfile.popStages.length > 0 },
-                  { label: 'Training SAP', count: globalPersonProfile.sapItems.filter(s => s.state === 'Berlaku' || s.state === 'WARNING').length, total: globalPersonProfile.sapItems.length, color: DASH.brand, show: globalPersonProfile.sapItems.length > 0 },
-                  { label: 'Training K3', count: globalPersonProfile.k3Items.filter(s => s.state === 'Telah Mengikuti').length, total: globalPersonProfile.k3Items.length, color: '#d97706', show: globalPersonProfile.k3Items.length > 0 },
-                  { label: 'Sertifikasi', count: globalPersonProfile.certItems.filter(s => s.status === 'active' || s.status === 'soon').length, total: globalPersonProfile.certItems.length, color: globalPersonProfile.certItems.some(s => s.status === 'soon') ? '#d97706' : '#059669', show: globalPersonProfile.certItems.length > 0 },
+                  { label: 'POP/POM', count: globalPersonProfile.popStages.filter(s => s.attended).length, total: globalPersonProfile.popStages.length, color: '#7c3aed', show: isExternal && globalPersonProfile.popStages.length > 0 },
+                  { label: 'Training SAP', count: globalPersonProfile.sapItems.filter(s => s.state === 'Berlaku' || s.state === 'WARNING').length, total: globalPersonProfile.sapItems.length, color: DASH.brand, show: !isExternal && globalPersonProfile.sapItems.length > 0 },
+                  { label: 'Training K3', count: globalPersonProfile.k3Items.filter(s => s.state === 'Telah Mengikuti').length, total: globalPersonProfile.k3Items.length, color: '#d97706', show: !isExternal && globalPersonProfile.k3Items.length > 0 },
+                  { label: 'Sertifikasi', count: globalPersonProfile.certItems.filter(s => s.status === 'active' || s.status === 'soon').length, total: globalPersonProfile.certItems.length, color: globalPersonProfile.certItems.some(s => s.status === 'soon') ? '#d97706' : '#059669', show: isExternal && globalPersonProfile.certItems.length > 0 },
                 ].filter(i => i.show).map(item => (
                   <div key={item.label} className="rounded-2xl border border-slate-200/80 p-3 text-center">
                     <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{item.label}</p>
@@ -2892,10 +2901,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
 
 
-            {/* Tabel SAP */}
-            {globalPersonProfile.sapItems.length > 0 && (
+            {/* ===== MODUL TRAINING INTERNAL: Tabel SAP, K3, & Pra POP ===== */}
+            {!isExternal && globalPersonProfile.sapItems.length > 0 && (
               <DashCard>
-                <DashTitle title="Training SAP" sub={`GOL ${globalPersonProfile.record.gol || '-'} · berlaku 2 tahun`} />
+                <DashTitle title="Daftar Status Training SAP" sub={`GOL ${globalPersonProfile.record.gol || '-'} · Masa berlaku 2 tahun dari tanggal training`} />
                 <div className="overflow-x-auto -mx-1 mt-2">
                   <table className="w-full text-left text-xs">
                     <thead>
@@ -2925,10 +2934,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </DashCard>
             )}
 
-            {/* Tabel K3 */}
-            {globalPersonProfile.k3Items.length > 0 && (
+            {!isExternal && globalPersonProfile.k3Items.length > 0 && (
               <DashCard>
-                <DashTitle title="Training K3" sub="Tanpa masa berlaku" />
+                <DashTitle title="Daftar Training K3" sub="Tanpa masa berlaku" />
                 <div className="overflow-x-auto -mx-1 mt-2">
                   <table className="w-full text-left text-xs">
                     <thead>
@@ -2956,8 +2964,39 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </DashCard>
             )}
 
-            {/* Tabel Sertifikasi K3 & Kompetensi */}
-            {globalPersonProfile.certItems.length > 0 && (
+            {/* Tabel Pra POP */} 
+            {!isExternal && Boolean(globalPersonProfile.record.popData?.praPop || (globalPersonProfile.record as any).praPop) && (
+              <DashCard>
+                <DashTitle title="Training Pra POP" sub="Persiapan Pengawas Operasional Pertama (Internal Training)" />
+                <div className="overflow-x-auto -mx-1 mt-2">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-100">
+                        <th className="px-3 py-2 font-semibold">Training</th>
+                        <th className="px-3 py-2 font-semibold text-center">Tanggal Training</th>
+                        <th className="px-3 py-2 font-semibold text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100">Training Pra POP Internal</td>
+                        <td className="px-3 py-2.5 font-mono text-center text-slate-700 dark:text-slate-300">
+                          {formatTrainingDate(globalPersonProfile.record.popData?.praPop || (globalPersonProfile.record as any).praPop) || "-"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <span className="inline-flex px-2.5 py-0.5 rounded-md text-[10px] font-bold border bg-teal-50 text-teal-700 border-teal-200">
+                            Telah Mengikuti
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </DashCard>
+            )}
+
+            {/* ===== MODUL SERTIFIKASI (EXTERNAL): Tabel Sertifikasi POP, POM & Sertifikasi Kompetensi (10 Kolom) ===== */}
+            {isExternal && globalPersonProfile.certItems.length > 0 && (
               <DashCard>
                 <DashTitle
                   title="Sertifikasi POP, POM & Sertifikasi Kompetensi"
@@ -2997,75 +3036,113 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <div className="overflow-x-auto -mx-1 mt-2">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-100">
-                        <th className="px-3 py-2 font-semibold">Sertifikasi</th>
-                        <th className="px-3 py-2 font-semibold">Penerbit</th>
-                        <th className="px-3 py-2 font-semibold">Tgl Training/Ujian</th>
-                        <th className="px-3 py-2 font-semibold">Keterangan</th>
-                        <th className="px-3 py-2 font-semibold">Tgl Expired</th>
-                        <th className="px-3 py-2 font-semibold text-amber-800 dark:text-amber-400">Tgl Warning</th>
-                        <th className="px-3 py-2 font-semibold text-right">Status</th>
-                        <th className="px-3 py-2 font-semibold">Note</th>
+                      <tr className="text-[10px] uppercase font-bold tracking-wider text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80">
+                        <th className="px-3.5 py-3">Sertifikasi</th>
+                        <th className="px-3.5 py-3">Penerbit</th>
+                        <th className="px-3.5 py-3">Penyelenggara</th>
+                        <th className="px-3.5 py-3">Provider</th>
+                        <th className="px-3.5 py-3 text-center">Tanggal Training</th>
+                        <th className="px-3.5 py-3 text-center text-amber-800 dark:text-amber-400">Tanggal Warning</th>
+                        <th className="px-3.5 py-3 text-center">Tanggal Expired</th>
+                        <th className="px-3.5 py-3 text-center">Status</th>
+                        <th className="px-3.5 py-3">Note</th>
+                        <th className="px-3.5 py-3 text-center">Sertifikat</th>
+                        {canManage && <th className="px-3.5 py-3 text-center">Aksi</th>}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {globalPersonProfile.certItems.map((t, idx) => (
                         <tr
                           key={idx}
                           className={`transition-colors ${
-                            t.status === 'soon'
-                              ? 'bg-amber-50/50 hover:bg-amber-50/80'
-                              : t.status === 'expired'
-                              ? 'bg-rose-50/50 hover:bg-rose-50/80'
-                              : 'hover:bg-slate-50/60'
+                            t.status === "soon"
+                              ? "bg-amber-50/50 hover:bg-amber-50/80 dark:bg-amber-950/20"
+                              : t.status === "expired"
+                              ? "bg-rose-50/50 hover:bg-rose-50/80 dark:bg-rose-950/20"
+                              : "hover:bg-slate-50/60 dark:hover:bg-slate-800/50"
                           }`}
                         >
-                          <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">{t.label}</td>
-                          <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{t.desc}</td>
-                          <td className="px-3 py-2.5 text-slate-700 font-mono whitespace-nowrap">{t.date ? fmtDateStr(t.date) : '-'}</td>
-                          <td className="px-3 py-2.5 text-slate-700 font-semibold">{t.keterangan || '-'}</td>
-                          <td
-                            className={`px-3 py-2.5 font-mono whitespace-nowrap ${
-                              t.status === 'soon'
-                                ? 'text-amber-800 font-black'
-                                : t.status === 'expired'
-                                ? 'text-rose-700 font-black'
-                                : 'text-slate-700'
-                            }`}
-                          >
-                            {t.expiry ? fmtDateStr(t.expiry) : '-'}
-                          </td>
-                          <td
-                            className={`px-3 py-2.5 font-mono whitespace-nowrap ${
-                              t.status === 'soon'
-                                ? 'text-amber-800 font-black'
-                                : t.status === 'expired'
-                                ? 'text-rose-600 font-semibold'
-                                : 'text-amber-900/80 font-medium'
-                            }`}
-                          >
+                          <td className="px-3.5 py-2.5 font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">{t.label || "-"}</td>
+                          <td className="px-3.5 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap">{t.penerbit || t.desc || "-"}</td>
+                          <td className="px-3.5 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap">{t.penyelenggara && t.penyelenggara !== "-" ? t.penyelenggara : "-"}</td>
+                          <td className="px-3.5 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap">{t.provider && t.provider !== "-" ? t.provider : "-"}</td>
+                          <td className="px-3.5 py-2.5 text-center font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">{t.date ? fmtDateStr(t.date) : "-"}</td>
+                          <td className="px-3.5 py-2.5 text-center font-mono whitespace-nowrap">
                             {t.warningDate ? (
-                              <span className="inline-flex items-center gap-1">
-                                {t.status === 'soon' && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />}
+                              <span className={`inline-flex items-center gap-1 font-semibold ${t.status === "soon" ? "text-amber-800 dark:text-amber-400 font-black" : "text-slate-600 dark:text-slate-400"}`}>
+                                {t.status === "soon" && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />}
                                 {fmtDateStr(t.warningDate)}
                               </span>
-                            ) : '-'}
+                            ) : "-"}
                           </td>
-                          <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold border shadow-2xs ${t.stateCls}`}
-                              title={t.daysLeft != null ? (t.daysLeft < 0 ? `Lewat ${-t.daysLeft} hari` : `${t.daysLeft} hari lagi`) : undefined}
-                            >
-                              {t.status === 'soon' && <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />}
-                              {t.status === 'expired' && <Clock className="w-3 h-3 text-rose-600 shrink-0" />}
-                              {t.status === 'active' && <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />}
-                              <span>
-                                {t.state}
-                                {t.status === 'soon' && t.daysLeft != null ? ` · ${t.daysLeft} hr` : ''}
-                              </span>
+                          <td className={`px-3.5 py-2.5 text-center font-mono whitespace-nowrap ${t.status === "soon" ? "text-amber-800 dark:text-amber-400 font-black" : t.status === "expired" ? "text-rose-700 dark:text-rose-400 font-black" : "text-slate-700 dark:text-slate-300 font-semibold"}`}>
+                            {t.expiry ? fmtDateStr(t.expiry) : "-"}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border shadow-2xs ${t.stateCls}`} title={t.daysLeft != null ? (t.daysLeft < 0 ? `Lewat ${-t.daysLeft} hari` : `${t.daysLeft} hari lagi`) : undefined}>
+                              {t.status === "soon" && <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />}
+                              {t.status === "expired" && <Clock className="w-3 h-3 text-rose-600 shrink-0" />}
+                              {t.status === "active" && <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />}
+                              <span>{t.state}{t.status === "soon" && t.daysLeft != null ? ` · ${t.daysLeft} hr` : ""}</span>
                             </span>
                           </td>
-                          <td className="px-3 py-2.5 text-slate-600 min-w-[120px]">{t.note || '-'}</td>
+                          <td className="px-3.5 py-2.5 text-slate-600 dark:text-slate-300 text-xs min-w-[120px]">{t.note && t.note !== "-" ? t.note : "-"}</td>
+                          <td className="px-3.5 py-2.5 text-center whitespace-nowrap text-xs">
+                            {t.sertifikat && t.sertifikat !== "-" ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800">
+                                <FileText className="w-3 h-3" />
+                                {t.sertifikat}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-semibold">-</span>
+                            )}
+                          </td>
+                          {canManage && (
+                            <td className="px-3.5 py-2.5 text-center whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (t.source === "pop") {
+                                    setCertModalForm({
+                                      id: undefined, source: "pop", recordId: globalPersonProfile?.record.id, certType: "pop",
+                                      nama: globalPersonProfile?.record.nama || "", nik: globalPersonProfile?.record.nik || "",
+                                      jabatan: globalPersonProfile?.record.jabatan || "", pt: globalPersonProfile?.record.pt || "TBP",
+                                      tanggal: t.date || "", keterangan: t.keterangan || "Kompeten / Lulus", expired: t.expiry || "",
+                                      penerbit: t.penerbit !== "-" ? t.penerbit : "BNSP / KESDM",
+                                      penyelenggara: t.penyelenggara !== "-" ? t.penyelenggara : "PPSDM Geominerba",
+                                      provider: t.provider !== "-" ? t.provider : "Lembaga Diklat Profesi",
+                                      sertifikat: t.sertifikat !== "-" ? t.sertifikat : "", note: t.note !== "-" ? t.note : "",
+                                    });
+                                  } else if (t.source === "pom") {
+                                    setCertModalForm({
+                                      id: undefined, source: "pom", recordId: globalPersonProfile?.record.id, certType: "pom",
+                                      nama: globalPersonProfile?.record.nama || "", nik: globalPersonProfile?.record.nik || "",
+                                      jabatan: globalPersonProfile?.record.jabatan || "", pt: globalPersonProfile?.record.pt || "TBP",
+                                      tanggal: t.date || "", keterangan: t.keterangan || "PASS", expired: t.expiry || "",
+                                      penerbit: t.penerbit !== "-" ? t.penerbit : "BNSP / KESDM",
+                                      penyelenggara: t.penyelenggara !== "-" ? t.penyelenggara : "PPSDM Geominerba",
+                                      provider: t.provider !== "-" ? t.provider : "Lembaga Diklat Profesi",
+                                      sertifikat: t.sertifikat !== "-" ? t.sertifikat : "", note: t.note !== "-" ? t.note : "",
+                                    });
+                                  } else {
+                                    setCertModalForm({
+                                      id: t.id, certType: t.certType,
+                                      nama: globalPersonProfile?.record.nama || "", nik: globalPersonProfile?.record.nik || "",
+                                      jabatan: globalPersonProfile?.record.jabatan || "", pt: globalPersonProfile?.record.pt || "TBP",
+                                      tanggal: t.date || "", keterangan: t.keterangan || "Lulus", expired: t.expiry || "",
+                                      penerbit: t.penerbit !== "-" ? t.penerbit : "", penyelenggara: t.penyelenggara !== "-" ? t.penyelenggara : "",
+                                      provider: t.provider !== "-" ? t.provider : "", sertifikat: t.sertifikat !== "-" ? t.sertifikat : "",
+                                      note: t.note !== "-" ? t.note : "",
+                                    });
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-teal-50 dark:hover:bg-teal-900/40 cursor-pointer"
+                                title="Edit Sertifikasi"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
