@@ -10,7 +10,7 @@
 // KET/STATUS dibaca berdasarkan nilainya (PASS/FAILED = hasil, EXPIRED/WARNING = masa berlaku), sehingga header
 // ganda di Excel ("Status", "Status_1") maupun CSV pandas ("Status.1", "TGL2") tetap terbaca benar.
 
-export type TrainingProgram = 'sap' | 'k3' | 'pop';
+export type TrainingProgram = 'sap' | 'k3' | 'pra_pop' | 'pop';
 
 export type SapDateKey = 'hazid' | 'jsa' | 'iutOtt' | 'iai' | 'bfa' | 'bs';
 export type SapStatusKey = 'hazidStatus' | 'jsaStatus' | 'iutOttStatus' | 'iaiStatus' | 'bfaStatus' | 'bsStatus';
@@ -164,10 +164,22 @@ export interface PopData {
   pengalamanTambang?: string | null; // Pengalaman kerja di pertambangan lain
   masaKerja?: string | null;         // Masa kerja (teks dari file, cadangan bila DOH kosong)
   popKeterangan?: PopKeterangan | string | null;
+  popExpired?: string | null;
+  popPenerbit?: string | null;
+  penyelenggara?: string | null;
+  provider?: string | null;
+  popSertifikat?: string | null;
   pom?: string | null;               // Keikutsertaan POM (batch / keterangan)
   pomPendidikan?: string | null;
   pomMasaKerja?: string | null;
   pomKeterangan?: string | null;     // 'PASS' | null
+  pomExpired?: string | null;
+  pomPenerbit?: string | null;
+  pomPenyelenggara?: string | null;
+  pomProvider?: string | null;
+  pomSertifikat?: string | null;
+  pomNote?: string | null;
+  notes?: string | null;
 }
 
 export function normalizePopKeterangan(val: unknown): PopKeterangan | string | null {

@@ -3127,47 +3127,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             };
 
                             // Render baris training badges
-                            const renderTrainingBadges = (name: string) => {
-                              const t = getPersonTraining(name);
-                              if (!t) return null;
-
-                              const kualifikasiStyles: Record<string, string> = {
-                                'Memenuhi Syarat': 'bg-emerald-50 text-emerald-800 border-emerald-200',
-                                'Masa Kerja Belum Cukup': 'bg-amber-50 text-amber-800 border-amber-200',
-                                'Ijazah Tidak Mendukung': 'bg-rose-50 text-rose-800 border-rose-200',
-                                'Tidak Wajib POP': 'bg-slate-100 text-slate-600 border-slate-200',
-                              };
-
-                              return (
-                                <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                                  {t.pom && (
-                                    <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-teal-600 text-white shadow-2xs">
-                                      {t.pom}
-                                    </span>
-                                  )}
-                                  {t.pop && (
-                                    <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-2xs">
-                                      {t.pop.startsWith('Batch') ? `POP · ${t.pop}` : t.pop}
-                                    </span>
-                                  )}
-                                  {t.praPop && !t.pop && !t.pom && (
-                                    <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-sky-500 text-white shadow-2xs">
-                                      Pra POP
-                                    </span>
-                                  )}
-                                  {t.kualifikasi && (
-                                    <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold border ${kualifikasiStyles[t.kualifikasi] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                      {t.kualifikasi}
-                                    </span>
-                                  )}
-                                  {t.k3 && t.k3.map((k, ki) => (
-                                    <span key={ki} className="px-1.5 py-0.2 rounded text-[8px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
-                                      {k}
-                                    </span>
-                                  ))}
-                                </div>
-                              );
-                            };
+                            // Training badges dinonaktifkan di SO agar tampilan bersih dan profesional
+                            const renderTrainingBadges = (_name: string) => null;
 
                             const renderAvatar = (emp: any, size = 'w-8 h-8 text-[10px]') => {
                               const initial = (emp?.name || '?').charAt(0).toUpperCase();
@@ -3186,43 +3147,46 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               );
                             };
 
-
-
-                            // 1. Executive Top Card (Gaya ANI Organigram dengan Foto Melayang di Atas)
+                            // 1. Executive Top Card (Gaya Resmi Organigram)
                             const renderAniExecutiveCard = (
                               emp: any,
                               roleTitle: string,
                               defaultName: string,
                               defaultNik?: string,
                               width = 'w-64',
-                              cardTheme: 'teal' | 'amber' = 'teal'
+                              cardTheme: 'teal' | 'amber' | 'slate' | 'red-dashed' = 'slate'
                             ) => {
                               const name = emp?.name || defaultName;
                               const role = emp?.jabatan || roleTitle;
                               const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (emp?.nik && isHighlighted(emp.nik)));
-                              const bgClass = cardTheme === 'amber'
-                                ? 'bg-[#F2A40D] hover:bg-[#D97706] border-[#F2A40D] text-white shadow-sm'
-                                : 'bg-[#20969D] hover:bg-[#1B8086] border-[#20969D] text-white shadow-sm';
+
+                              let borderClass = 'border-2 border-slate-900 bg-white text-slate-900 shadow-sm';
+                              let titleColor = 'text-slate-900';
+                              let nameColor = 'text-slate-800';
+                              if (cardTheme === 'red-dashed') {
+                                borderClass = 'border-2 border-dashed border-red-500 bg-white shadow-sm';
+                                titleColor = 'text-red-600';
+                                nameColor = 'text-red-600';
+                              } else if (cardTheme === 'amber') {
+                                borderClass = 'border-2 border-slate-900 bg-white text-slate-900 shadow-sm';
+                                titleColor = 'text-slate-900';
+                                nameColor = 'text-slate-800';
+                              }
 
                               return (
                                 <button
                                   type="button"
                                   onClick={() => emp && setSelectedEmployee(emp)}
-                                  className={`group relative ${width} pt-5 pb-2 px-3 rounded-2xl ${bgClass} text-center shadow-md cursor-pointer transition-all border flex flex-col items-center ${
+                                  className={`group relative ${width} py-2.5 px-3 rounded-xl ${borderClass} text-center cursor-pointer transition-all flex flex-col items-center justify-center ${
                                     hasMatch ? 'ring-4 ring-amber-400' : ''
                                   }`}
                                 >
-                                  {/* Foto Melayang di Atas Card */}
-                                  <div className="absolute -top-5 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full border-2 border-white shadow-md overflow-hidden bg-white">
-                                    {renderAvatar(emp, 'w-full h-full text-[10px]')}
-                                  </div>
-                                  <div className="w-full text-[10.5px] font-black uppercase tracking-wider text-white leading-tight">
+                                  <div className={`w-full text-[11px] font-black uppercase tracking-wider ${titleColor} leading-tight`}>
                                     {roleTitle}
                                   </div>
-                                  <div className={`w-full text-[10.5px] font-bold mt-0.5 leading-tight truncate ${cardTheme === 'amber' ? 'text-amber-100' : 'text-teal-100'}`}>
+                                  <div className={`w-full text-[10.5px] font-bold ${nameColor} italic mt-1 leading-snug whitespace-normal break-words`}>
                                     {name}
                                   </div>
-                                  {renderTrainingBadges(name)}
                                 </button>
                               );
                             };
@@ -3299,221 +3263,251 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               };
                             };
 
-                            // 3. Single Supervisor Card (Untuk 1 orang supervisor: foto di atas tengah, nama, jabatan, NIK, Shift)
-                            const renderSingleSupervisorCard = (
-                              empOrName: any,
-                              defaultRole: string,
-                              defaultNik?: string
-                            ) => {
-                              const isString = typeof empOrName === 'string';
-                              const rawName = isString ? empOrName : empOrName?.name;
-                              const emp = (empOrName && typeof empOrName === 'object' && empOrName.id)
-                                ? empOrName
-                                : (isString ? findEmp(rawName, defaultNik) : empOrName);
-                              const name = emp?.name || rawName || '-';
-                              const role = emp?.jabatan || defaultRole || '-';
-                              const nik = emp?.nik || defaultNik || '';
-                              const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (nik && isHighlighted(nik)));
-                              const shift = getEmployeeShift(emp);
+                            // 3. Official Role Card with nested shift boxes (Kotak di dalam Kotak) & Quota Stats
+                            interface OfficialRoleItem {
+                              empOrName: any;
+                              defaultRole?: string;
+                              defaultNik?: string;
+                              forcedShift?: 'A' | 'B' | 'NONSHIFT';
+                            }
 
-                              let cardClasses = 'bg-white border-2 border-[#20969D]/70 shadow-xs hover:border-[#20969D] hover:shadow-sm';
-                              let avatarClasses = 'border border-slate-200 bg-slate-200 text-slate-700';
-                              let nameClasses = 'text-slate-900 group-hover:text-[#20969D]';
-                              let roleClasses = 'text-slate-600';
-                              let shiftBadge = null;
+                            const renderOfficialRoleBox = ({
+                              title,
+                              quota,
+                              people,
+                              vacantCount = 0,
+                              splitShifts = true,
+                              customExisting,
+                              customVacant,
+                              customTotal,
+                              crewDropdown = false,
+                              crewKey = '',
+                            }: {
+                              title: string;
+                              quota: number;
+                              people: Array<OfficialRoleItem | string | any>;
+                              vacantCount?: number;
+                              splitShifts?: boolean;
+                              customExisting?: number;
+                              customVacant?: number;
+                              customTotal?: number;
+                              crewDropdown?: boolean;
+                              crewKey?: string;
+                            }) => {
+                              // Resolve person list with full name, role, NIK, and shift
+                              const resolvedList = people.map(p => {
+                                const isString = typeof p === 'string';
+                                const rawName = isString ? p : (p?.empOrName || p?.name || p);
+                                const defaultRole = (isString ? undefined : p?.defaultRole) || title;
+                                const defaultNik = isString ? undefined : p?.defaultNik;
+                                const forcedShift = isString ? undefined : p?.forcedShift;
 
-                              if (shift === 'A') {
-                                cardClasses = 'bg-blue-50/90 hover:bg-blue-100/90 border-2 border-blue-500 shadow-xs hover:shadow-sm';
-                                avatarClasses = 'border-2 border-blue-400 bg-blue-100 text-blue-800';
-                                nameClasses = 'text-blue-950 font-black group-hover:text-blue-700';
-                                roleClasses = 'text-blue-800/90';
-                                shiftBadge = (
-                                  <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-blue-600 text-white shadow-2xs mt-1">
-                                    Shift A
-                                  </span>
-                                );
-                              } else if (shift === 'B') {
-                                cardClasses = 'bg-amber-50/95 hover:bg-amber-100/95 border-2 border-amber-400 shadow-xs hover:shadow-sm';
-                                avatarClasses = 'border-2 border-amber-300 bg-amber-100 text-amber-900';
-                                nameClasses = 'text-amber-950 font-black group-hover:text-amber-700';
-                                roleClasses = 'text-amber-800/90';
-                                shiftBadge = (
-                                  <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-amber-400 text-amber-950 border border-amber-300 shadow-2xs mt-1">
-                                    Shift B
-                                  </span>
-                                );
-                              } else if (shift === 'NONSHIFT') {
-                                shiftBadge = (
-                                  <span className="px-2 py-0.5 rounded-full text-[7.5px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 mt-1">
-                                    Non Shift
-                                  </span>
-                                );
-                              }
+                                const emp = (rawName && typeof rawName === 'object' && rawName.id)
+                                  ? rawName
+                                  : findEmp(typeof rawName === 'string' ? rawName : rawName?.name, defaultNik);
 
-                              return (
-                                <button
-                                  type="button"
-                                  onClick={() => emp && setSelectedEmployee(emp)}
-                                  className={`w-full p-2.5 rounded-2xl ${cardClasses} transition-all text-center cursor-pointer flex flex-col items-center group relative ${
-                                    hasMatch ? 'ring-2 ring-emerald-500' : ''
-                                  }`}
-                                >
-                                  <div className={`w-9 h-9 xl:w-10 xl:h-10 rounded-full shadow-2xs overflow-hidden shrink-0 font-bold flex items-center justify-center text-[9px] mb-1.5 ${avatarClasses}`}>
-                                    {renderAvatar(emp, 'w-full h-full text-[9px]')}
-                                  </div>
-                                  <div className={`text-[10px] xl:text-[10.5px] font-black leading-tight w-full truncate ${nameClasses}`}>
-                                    {name}
-                                  </div>
-                                  <div className={`text-[8px] xl:text-[8.5px] font-medium leading-tight w-full truncate mt-0.5 ${roleClasses}`}>
-                                    {role}
-                                  </div>
-                                  {nik && (
-                                    <div className="text-[8px] font-mono font-bold text-slate-500 leading-tight mt-0.5">
-                                      {nik}
-                                    </div>
-                                  )}
-                                  {shiftBadge}
-                                  {renderTrainingBadges(name)}
-                                </button>
-                              );
-                            };
+                                const name = emp?.name || (typeof rawName === 'string' ? rawName : rawName?.name) || defaultRole || '-';
+                                const role = emp?.jabatan || defaultRole;
+                                const nik = emp?.nik || defaultNik;
+                                const shift = forcedShift || getEmployeeShift(emp) || 'NONSHIFT';
+                                const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (nik && isHighlighted(nik)));
 
-                            // 4. Grouped Box (Untuk SPV multi-orang dalam 1 kotak, atau Foreman / Officer, Admin / Staff)
-                            const renderGroupedBox = (
-                              title: string,
-                              people: Array<{ empOrName: any; defaultRole: string; defaultNik?: string }>,
-                              theme: 'teal' | 'amber' = 'teal'
-                            ) => {
-                              const isAmber = theme === 'amber';
-                              const borderClass = isAmber ? 'border-2 border-[#F2A40D]/90 shadow-xs' : 'border-2 border-[#20969D]/70 shadow-xs';
-                              const titleColor = isAmber ? 'text-[#D97706]' : 'text-[#20969D]';
+                                return { emp, name, role, nik, shift, hasMatch };
+                              });
 
-                              return (
-                                <div className={`w-full p-2 rounded-2xl bg-white border ${borderClass} shadow-2xs space-y-1`}>
-                                  <div className={`text-[9.5px] xl:text-[10px] font-black tracking-wider uppercase px-1 pb-1 mb-1 border-b border-slate-200 ${titleColor}`}>
-                                    {title} · {people.length}
-                                  </div>
-                                  <div className="space-y-1">
-                                    {people.map(({ empOrName, defaultRole, defaultNik }, idx) => {
-                                      const isString = typeof empOrName === 'string';
-                                      const rawName = isString ? empOrName : empOrName?.name;
-                                      const emp = (empOrName && typeof empOrName === 'object' && empOrName.id) 
-                                        ? empOrName 
-                                        : findEmp(rawName || defaultRole, defaultNik);
-                                      const name = emp?.name || rawName || defaultRole || '-';
-                                      const role = emp?.jabatan || defaultRole || '-';
-                                      const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (emp?.nik && isHighlighted(emp.nik)));
-                                      const shiftStyle = getEmployeeShiftStyle(emp);
+                              const existingCount = customExisting ?? resolvedList.length;
+                              const effVacant = customVacant ?? (vacantCount > 0 ? vacantCount : (quota > existingCount ? quota - existingCount : 0));
+                              const totalCount = customTotal ?? (existingCount + effVacant);
 
-                                      return (
-                                        <button
-                                          key={idx}
-                                          type="button"
-                                          onClick={() => emp && setSelectedEmployee(emp)}
-                                          className={`w-full flex items-center justify-between gap-1.5 py-1 px-1.5 rounded-lg transition-all text-left cursor-pointer group ${shiftStyle.boxClasses} ${
-                                            hasMatch ? 'ring-2 ring-emerald-500' : ''
-                                          }`}
-                                        >
-                                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                            <div className={`w-6 h-6 rounded-full overflow-hidden shrink-0 font-bold flex items-center justify-center text-[9px] shadow-2xs ${shiftStyle.avatarClasses}`}>
-                                              {renderAvatar(emp, 'w-full h-full text-[8.5px]')}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                              <div className={`text-[9px] xl:text-[9.5px] leading-tight truncate ${shiftStyle.nameClasses}`}>
-                                                {name}
-                                              </div>
-                                              <div className={`text-[7.5px] xl:text-[8px] leading-tight truncate ${shiftStyle.roleClasses}`}>
-                                                {role}
-                                              </div>
-                                              {renderTrainingBadges(name)}
-                                            </div>
-                                          </div>
-                                          {shiftStyle.badge}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            };
+                              // Split into Shift A, Shift B, Non Shift
+                              const shiftAPeople = resolvedList.filter(p => p.shift === 'A');
+                              const shiftBPeople = resolvedList.filter(p => p.shift === 'B');
+                              const nonShiftPeople = resolvedList.filter(p => p.shift !== 'A' && p.shift !== 'B');
 
-                            // 5. Crew Dropdown Pill (CREW · {count} dengan toggle dropdown)
-                            const renderAniCrewDropdown = (
-                              list: any[],
-                              defaultRole: string,
-                              count: number,
-                              dropdownKey: string
-                            ) => {
-                              const hasMatchingPerson = !!(q && list.some(item => {
-                                const isString = typeof item === 'string';
-                                const rawName = isString ? item : item?.name;
-                                const emp = (item && typeof item === 'object' && item.id) ? item : (isString ? findEmp(rawName) : item);
-                                const name = emp?.name || rawName || '';
-                                const role = emp?.jabatan || defaultRole || '';
-                                return isHighlighted(name) || isHighlighted(role) || (emp?.nik && isHighlighted(emp.nik));
-                              }));
+                              const hasMultipleShifts = splitShifts && (shiftAPeople.length > 0 || shiftBPeople.length > 0);
+                              const isExpanded = crewDropdown ? (!!expandedCrewSections[crewKey] || (q && resolvedList.some(p => p.hasMatch))) : true;
 
-                              const isExpanded = !!expandedCrewSections[dropdownKey] || hasMatchingPerson;
+                              let runningNumber = 1;
 
-                              return (
-                                <div className="w-full">
+                              const renderPersonRow = (p: typeof resolvedList[0], num: number) => {
+                                let rowClasses = 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 shadow-2xs';
+                                let avatarClasses = 'border border-slate-200 bg-slate-100 text-slate-700';
+                                if (p.shift === 'A') {
+                                  rowClasses = 'bg-blue-50/90 hover:bg-blue-100/90 border border-blue-200 text-blue-950 shadow-2xs';
+                                  avatarClasses = 'border border-blue-300 bg-blue-100 text-blue-800';
+                                } else if (p.shift === 'B') {
+                                  rowClasses = 'bg-amber-50/95 hover:bg-amber-100/95 border border-amber-200 text-amber-950 shadow-2xs';
+                                  avatarClasses = 'border border-amber-300 bg-amber-100 text-amber-950';
+                                }
+
+                                return (
                                   <button
+                                    key={`${p.name}-${num}`}
                                     type="button"
-                                    onClick={() => toggleCrewSection(dropdownKey)}
-                                    className={`w-full py-1.5 px-2 rounded-xl border text-center shadow-2xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                      isExpanded 
-                                        ? 'bg-teal-50 border-teal-400 text-teal-950 ring-1 ring-teal-100'
-                                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+                                    onClick={() => p.emp && setSelectedEmployee(p.emp)}
+                                    className={`w-full flex items-start gap-1.5 py-1 px-1.5 rounded-lg transition-all text-left cursor-pointer group ${rowClasses} ${
+                                      p.hasMatch ? 'ring-2 ring-emerald-500' : ''
                                     }`}
                                   >
-                                    <span className="text-[9.5px] font-black tracking-wider uppercase text-slate-700">
-                                      CREW · {count}
+                                    <span className="text-[9px] font-mono font-bold text-slate-500 w-3.5 shrink-0 text-right pt-0.5">
+                                      {num}.
                                     </span>
-                                    {isExpanded ? (
-                                      <ChevronUp className="w-3 h-3 text-slate-600 shrink-0" />
-                                    ) : (
-                                      <ChevronDown className="w-3 h-3 text-slate-600 shrink-0" />
-                                    )}
+                                    <div className={`w-5 h-5 rounded-full overflow-hidden shrink-0 font-bold flex items-center justify-center text-[8px] shadow-2xs mt-0.5 ${avatarClasses}`}>
+                                      {renderAvatar(p.emp, 'w-full h-full text-[8px]')}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-[9.5px] xl:text-[10px] font-black text-slate-900 group-hover:text-[#20969D] leading-tight whitespace-normal break-words">
+                                        {p.name}
+                                      </div>
+                                      {p.role && p.role !== title && (
+                                        <div className="text-[7.5px] text-slate-500 font-medium leading-tight whitespace-normal break-words">
+                                          {p.role}
+                                        </div>
+                                      )}
+                                    </div>
                                   </button>
+                                );
+                              };
 
+                              return (
+                                <div className="relative w-full rounded-xl bg-white border-2 border-slate-700 shadow-sm p-2 pt-2.5 transition-all text-slate-900">
+                                  {/* Official Corner Quota Badge */}
+                                  {quota > 0 && (
+                                    <div className="absolute -top-3 -right-2 px-2 py-0.5 rounded-md bg-white border-2 border-slate-800 text-slate-900 font-black text-[11px] shadow-xs tracking-tight z-20">
+                                      {quota}
+                                    </div>
+                                  )}
+
+                                  {/* Header with Title and Summary (Existing, Vacant, Total) */}
+                                  <div className="border-b border-slate-200 pb-1.5 mb-1.5 text-center">
+                                    <div className="text-[10px] xl:text-[10.5px] font-black uppercase tracking-wide text-slate-900 leading-tight whitespace-normal break-words">
+                                      {title}
+                                    </div>
+                                    {/* Summary Stats Row */}
+                                    <div className="flex items-center justify-center gap-1 mt-1 flex-wrap text-[8px] xl:text-[8.5px]">
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold">
+                                        Existing : {existingCount}
+                                      </span>
+                                      {effVacant > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold">
+                                          Vacant : {effVacant}
+                                        </span>
+                                      )}
+                                      <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-800 font-black">
+                                        Total : {totalCount}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Crew dropdown toggle button if crewDropdown */}
+                                  {crewDropdown && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleCrewSection(crewKey)}
+                                      className={`w-full py-1 px-2 rounded-lg border text-center shadow-2xs flex items-center justify-center gap-1.5 transition-all cursor-pointer mb-1.5 ${
+                                        isExpanded 
+                                          ? 'bg-teal-50 border-teal-300 text-teal-900 ring-1 ring-teal-100'
+                                          : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+                                      }`}
+                                    >
+                                      <span className="text-[8.5px] font-black tracking-wider uppercase text-slate-700">
+                                        {isExpanded ? 'Tutup Daftar Personil' : `Buka Daftar ${existingCount} Personil`}
+                                      </span>
+                                      {isExpanded ? (
+                                        <ChevronUp className="w-3 h-3 text-slate-600 shrink-0" />
+                                      ) : (
+                                        <ChevronDown className="w-3 h-3 text-slate-600 shrink-0" />
+                                      )}
+                                    </button>
+                                  )}
+
+                                  {/* Content Body */}
                                   {isExpanded && (
-                                    <div className="mt-1 space-y-1 p-1 bg-white rounded-xl border border-slate-200 shadow-inner max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in duration-200">
-                                      {list.map((item, idx) => {
-                                        const isString = typeof item === 'string';
-                                        const rawName = isString ? item : item?.name;
-                                        const emp = (item && typeof item === 'object' && item.id) ? item : (isString ? findEmp(rawName) : item);
-                                        const name = emp?.name || rawName || '-';
-                                        const role = emp?.jabatan || defaultRole || '-';
-                                        const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (emp?.nik && isHighlighted(emp.nik)));
-                                        const shiftStyle = getEmployeeShiftStyle(emp);
-
-                                        return (
-                                          <button
-                                            key={idx}
-                                            type="button"
-                                            onClick={() => emp && setSelectedEmployee(emp)}
-                                            className={`w-full flex items-center justify-between gap-1.5 py-1 px-1.5 rounded-lg transition-all text-left cursor-pointer group ${shiftStyle.boxClasses} ${
-                                              hasMatch ? 'ring-2 ring-emerald-500' : ''
-                                            }`}
-                                          >
-                                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                              <div className={`w-6 h-6 rounded-full overflow-hidden shrink-0 font-bold flex items-center justify-center text-[9px] shadow-2xs ${shiftStyle.avatarClasses}`}>
-                                                {renderAvatar(emp, 'w-full h-full text-[8.5px]')}
+                                    <div className={`space-y-1.5 ${crewDropdown ? 'max-h-60 overflow-y-auto custom-scrollbar p-1 bg-slate-50/50 rounded-lg border border-slate-200/80' : ''}`}>
+                                      {hasMultipleShifts ? (
+                                        <>
+                                          {/* Kotak di dalam kotak: SHIFT A */}
+                                          {shiftAPeople.length > 0 && (
+                                            <div className="rounded-lg bg-blue-50/70 border border-blue-200/90 p-1.5 shadow-2xs">
+                                              <div className="flex items-center justify-between pb-1 mb-1 border-b border-blue-200/60">
+                                                <div className="flex items-center gap-1">
+                                                  <span className="w-2 h-2 rounded-full bg-blue-600 shadow-2xs" />
+                                                  <span className="text-[8.5px] font-black uppercase tracking-wider text-blue-900">
+                                                    Shift A
+                                                  </span>
+                                                </div>
+                                                <span className="text-[8px] font-bold text-blue-700 bg-blue-100/80 px-1 rounded">
+                                                  {shiftAPeople.length} Orang
+                                                </span>
                                               </div>
-                                              <div className="min-w-0 flex-1">
-                                                <div className={`text-[9px] xl:text-[9.5px] leading-tight truncate ${shiftStyle.nameClasses}`}>
-                                                  {name}
-                                                </div>
-                                                <div className={`text-[7.5px] xl:text-[8px] leading-tight truncate ${shiftStyle.roleClasses}`}>
-                                                  {role}
-                                                </div>
-                                                {renderTrainingBadges(name)}
+                                              <div className="space-y-1">
+                                                {shiftAPeople.map(p => renderPersonRow(p, runningNumber++))}
                                               </div>
                                             </div>
-                                            {shiftStyle.badge}
-                                          </button>
-                                        );
-                                      })}
+                                          )}
+
+                                          {/* Kotak di dalam kotak: SHIFT B */}
+                                          {shiftBPeople.length > 0 && (
+                                            <div className="rounded-lg bg-amber-50/70 border border-amber-200/90 p-1.5 shadow-2xs">
+                                              <div className="flex items-center justify-between pb-1 mb-1 border-b border-amber-200/60">
+                                                <div className="flex items-center gap-1">
+                                                  <span className="w-2 h-2 rounded-full bg-amber-500 shadow-2xs" />
+                                                  <span className="text-[8.5px] font-black uppercase tracking-wider text-amber-950">
+                                                    Shift B
+                                                  </span>
+                                                </div>
+                                                <span className="text-[8px] font-bold text-amber-800 bg-amber-100/80 px-1 rounded">
+                                                  {shiftBPeople.length} Orang
+                                                </span>
+                                              </div>
+                                              <div className="space-y-1">
+                                                {shiftBPeople.map(p => renderPersonRow(p, runningNumber++))}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Non Shift */}
+                                          {nonShiftPeople.length > 0 && (
+                                            <div className="rounded-lg bg-slate-50 border border-slate-200 p-1.5 shadow-2xs">
+                                              <div className="flex items-center justify-between pb-1 mb-1 border-b border-slate-200">
+                                                <div className="flex items-center gap-1">
+                                                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                                  <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-700">
+                                                    Non Shift
+                                                  </span>
+                                                </div>
+                                                <span className="text-[8px] font-bold text-slate-600 bg-slate-200/70 px-1 rounded">
+                                                  {nonShiftPeople.length} Orang
+                                                </span>
+                                              </div>
+                                              <div className="space-y-1">
+                                                {nonShiftPeople.map(p => renderPersonRow(p, runningNumber++))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          {resolvedList.map(p => renderPersonRow(p, runningNumber++))}
+                                        </div>
+                                      )}
+
+                                      {/* Vacant List */}
+                                      {effVacant > 0 && (
+                                        <div className="rounded-lg bg-rose-50/40 border border-dashed border-rose-300 p-1.5 space-y-0.5">
+                                          {Array.from({ length: effVacant }).map((_, vIdx) => {
+                                            const num = runningNumber++;
+                                            return (
+                                              <div key={vIdx} className="flex items-center gap-1.5 py-0.5 px-1 text-[9px] text-rose-600 italic">
+                                                <span className="font-mono font-bold text-rose-400 w-3.5 shrink-0 text-right text-[8.5px]">{num}.</span>
+                                                <span className="bg-rose-100/70 text-rose-600 px-1.5 py-0.2 rounded border border-rose-200 text-[8px] font-mono uppercase tracking-wider">
+                                                  (Vacant)
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -3642,35 +3636,71 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                             const renderSectionSupervisor = (name: string) => {
                               if (name === 'Preparation Wet') {
-                                return renderSingleSupervisorCard(prepWetSupervisor, 'Preparation Supervisor, Wet', '04D19000564');
+                                return renderOfficialRoleBox({
+                                  title: 'Preparation Supervisor, Wet',
+                                  quota: 2,
+                                  people: [{ empOrName: prepWetSupervisor || 'Janter Jaya Barimbing', defaultRole: 'Preparation Supervisor, Wet', defaultNik: '04D19000564' }],
+                                  vacantCount: 1,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Preparation Dry') {
-                                return renderGroupedBox('SUPERVISOR', [
-                                  { empOrName: prepDrySupervisor1, defaultRole: 'Preparation Supervisor, Dry' },
-                                  { empOrName: prepDrySupervisor2, defaultRole: 'Preparation Supervisor, Dry' },
-                                ]);
+                                return renderOfficialRoleBox({
+                                  title: 'Preparation Supervisor, Dry',
+                                  quota: 2,
+                                  people: [
+                                    { empOrName: prepDrySupervisor1 || 'Ryan M Rusli', defaultRole: 'Preparation Supervisor, Dry' },
+                                    { empOrName: prepDrySupervisor2 || 'Subrandi', defaultRole: 'Preparation Supervisor, Dry' },
+                                  ],
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Inventory Control') {
-                                return renderSingleSupervisorCard(invSupervisor, 'Inventory Control Supervisor', '02D25000012');
+                                return renderOfficialRoleBox({
+                                  title: 'Inventory Control Supervisor',
+                                  quota: 1,
+                                  people: [{ empOrName: invSupervisor || 'Muhammad Nova Herisandi, S.Sos', defaultRole: 'Inventory Control Supervisor', defaultNik: '02D25000012' }],
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Maintenance') {
-                                return renderGroupedBox('SUPERVISOR', [
-                                  { empOrName: maintSupervisor1 || 'Christian Anggawijaya', defaultRole: 'Laboratory Maintenance Supervisor', defaultNik: '02D21001017' },
-                                  { empOrName: maintSupervisor2 || 'Moch. Siswanto', defaultRole: 'Laboratory Maintenance Supervisor', defaultNik: '04D21001046' },
-                                ]);
+                                return renderOfficialRoleBox({
+                                  title: 'Laboratory Maintenance Supervisor',
+                                  quota: 2,
+                                  people: [
+                                    { empOrName: maintSupervisor1 || 'Christian Anggawijaya', defaultRole: 'Laboratory Maintenance Supervisor', defaultNik: '02D21001017' },
+                                    { empOrName: maintSupervisor2 || 'Moch. Siswanto', defaultRole: 'Laboratory Maintenance Supervisor', defaultNik: '04D21001046' },
+                                  ],
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Quality Assurance') {
-                                return renderGroupedBox('SUPERVISOR', [
-                                  { empOrName: qaSupervisor2 || 'Junjunan M. Syukur', defaultRole: 'Quality Assurance Specialist', defaultNik: '04D24000042' },
-                                  { empOrName: qaSupervisor1 || 'Sukarman A. Akil, ST', defaultRole: 'Quality Assurance Specialist', defaultNik: '04D21001047' },
-                                ]);
+                                return renderOfficialRoleBox({
+                                  title: 'Quality Assurance Specialist',
+                                  quota: 2,
+                                  people: [
+                                    { empOrName: qaSupervisor1 || 'Sukarman A. Akil, ST', defaultRole: 'Quality Assurance Specialist', defaultNik: '04D21001047' },
+                                    { empOrName: qaSupervisor2 || 'Junjunan M. Syukur', defaultRole: 'Quality Assurance Specialist', defaultNik: '04D24000042' },
+                                  ],
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Laboratory') {
-                                return renderGroupedBox('SUPERVISOR', [
-                                  { empOrName: labSupervisor2 || 'Arthur Paul M. Souisa', defaultRole: 'Laboratory Supervisor', defaultNik: '02D21001045' },
-                                  { empOrName: labSupervisor1 || 'Khaufi Wirawan A.', defaultRole: 'Laboratory Supervisor', defaultNik: '02D18000192' },
-                                  { empOrName: labSupervisor3 || 'Muh. Amran Selang', defaultRole: 'Laboratory Supervisor', defaultNik: '04D21001049' },
-                                ]);
+                                return renderOfficialRoleBox({
+                                  title: 'Laboratory Supervisor',
+                                  quota: 4,
+                                  people: [
+                                    { empOrName: labSupervisor1 || 'Khaufi Wirawan A.', defaultRole: 'Laboratory Supervisor', defaultNik: '02D18000192' },
+                                    { empOrName: labSupervisor2 || 'Arthur Paul M. Souisa', defaultRole: 'Laboratory Supervisor', defaultNik: '02D21001045' },
+                                    { empOrName: labSupervisor3 || 'Muh. Amran Selang', defaultRole: 'Laboratory Supervisor', defaultNik: '04D21001049' },
+                                  ],
+                                  vacantCount: 1,
+                                  splitShifts: false,
+                                });
                               }
                               return null;
                             };
@@ -3679,56 +3709,138 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               if (name === 'Preparation Wet') {
                                 return (
                                   <div className="w-full flex flex-col items-center">
-                                    {renderGroupedBox('FOREMAN / OFFICER', prepWetForemen.map(fn => ({ empOrName: fn, defaultRole: 'Preparation Foreman, Wet' })))}
-                                    <div className="w-0 h-3 border-l-[3px] border-solid border-[#20969D] mx-auto" />
-                                    {renderAniCrewDropdown(prepWetCrews.length > 0 ? prepWetCrews : ['Crew Preparation Wet'], 'Crew, Prep Wet', 52, 'prep_wet_crew')}
+                                    {renderOfficialRoleBox({
+                                      title: 'Preparation Foreman, Wet',
+                                      quota: 14,
+                                      people: prepWetForemen.map(fn => ({ empOrName: fn, defaultRole: 'Preparation Foreman, Wet' })),
+                                      vacantCount: 2,
+                                      splitShifts: true,
+                                    })}
+                                    <div className="w-0 h-3 border-l-2 border-solid border-slate-900 mx-auto" />
+                                    {renderOfficialRoleBox({
+                                      title: 'Crew, Preparation & Laboratory',
+                                      quota: 68,
+                                      people: prepWetCrews.length > 0 ? prepWetCrews : ['Crew Preparation Wet'],
+                                      customExisting: 55,
+                                      customVacant: 13,
+                                      customTotal: 68,
+                                      splitShifts: true,
+                                      crewDropdown: true,
+                                      crewKey: 'prep_wet_crew',
+                                    })}
                                   </div>
                                 );
                               }
                               if (name === 'Preparation Dry') {
                                 return (
                                   <div className="w-full flex flex-col items-center">
-                                    {renderGroupedBox('FOREMAN / OFFICER', prepDryForemen.map(fn => ({ empOrName: fn, defaultRole: 'Preparation Foreman, Dry' })))}
-                                    <div className="w-0 h-3 border-l-[3px] border-solid border-[#20969D] mx-auto" />
-                                    {renderAniCrewDropdown(prepDryCrews.length > 0 ? prepDryCrews : ['Crew Preparation Dry'], 'Crew, Prep Dry', 34, 'prep_dry_crew')}
+                                    {renderOfficialRoleBox({
+                                      title: 'Preparation Foreman, Dry',
+                                      quota: 12,
+                                      people: prepDryForemen.map(fn => ({ empOrName: fn, defaultRole: 'Preparation Foreman, Dry' })),
+                                      vacantCount: 4,
+                                      splitShifts: true,
+                                    })}
+                                    <div className="w-0 h-3 border-l-2 border-solid border-slate-900 mx-auto" />
+                                    {renderOfficialRoleBox({
+                                      title: 'Crew, Preparation & Laboratory',
+                                      quota: 44,
+                                      people: prepDryCrews.length > 0 ? prepDryCrews : ['Crew Preparation Dry'],
+                                      customExisting: 34,
+                                      customVacant: 10,
+                                      customTotal: 44,
+                                      splitShifts: true,
+                                      crewDropdown: true,
+                                      crewKey: 'prep_dry_crew',
+                                    })}
                                   </div>
                                 );
                               }
                               if (name === 'Inventory Control') {
-                                return renderGroupedBox('ADMIN / STAFF', invStaff.map(sn => ({ empOrName: sn, defaultRole: 'Admin, Inventory Control' })), 'amber');
+                                return renderOfficialRoleBox({
+                                  title: 'Admin, Inventory Control',
+                                  quota: 3,
+                                  people: invStaff.map(sn => ({ empOrName: sn, defaultRole: 'Admin, Inventory Control' })),
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Maintenance') {
                                 return (
                                   <div className="w-full flex flex-col items-center">
-                                    {renderGroupedBox('FOREMAN / OFFICER', maintForemen.map(fn => ({ empOrName: fn, defaultRole: 'Laboratory Maintenance Foreman' })))}
-                                    <div className="w-0 h-3 border-l-[3px] border-solid border-[#20969D] mx-auto" />
-                                    {renderAniCrewDropdown(maintCrews.length > 0 ? maintCrews : ['Crew Maintenance'], 'Crew, Maintenance', 7, 'maint_crew')}
+                                    {renderOfficialRoleBox({
+                                      title: 'Laboratory Maintenance Foreman',
+                                      quota: 6,
+                                      people: maintForemen.map(fn => ({ empOrName: fn, defaultRole: 'Laboratory Maintenance Foreman' })),
+                                      vacantCount: 1,
+                                      splitShifts: true,
+                                    })}
+                                    <div className="w-0 h-3 border-l-2 border-solid border-slate-900 mx-auto" />
+                                    {renderOfficialRoleBox({
+                                      title: 'Crew, Laboratory Maintenance',
+                                      quota: 8,
+                                      people: maintCrews.length > 0 ? maintCrews : ['Crew Maintenance'],
+                                      customExisting: 4,
+                                      customVacant: 4,
+                                      customTotal: 8,
+                                      splitShifts: false,
+                                      crewDropdown: true,
+                                      crewKey: 'maint_crew',
+                                    })}
                                   </div>
                                 );
                               }
                               if (name === 'Quality Assurance') {
-                                return renderGroupedBox('FOREMAN / OFFICER', [{ empOrName: qaForemen[0], defaultRole: 'Quality Assurance Officer' }]);
+                                return renderOfficialRoleBox({
+                                  title: 'Quality Assurance Officer',
+                                  quota: 2,
+                                  people: qaForemen.map(fn => ({ empOrName: fn, defaultRole: 'Quality Assurance Officer' })),
+                                  vacantCount: 1,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Laboratory') {
                                 return (
                                   <div className="w-full flex flex-col items-center">
-                                    {renderGroupedBox('FOREMAN / OFFICER', labForemen.map(fn => ({ empOrName: fn, defaultRole: 'Laboratory Foreman' })))}
-                                    <div className="w-0 h-3 border-l-[3px] border-solid border-[#20969D] mx-auto" />
-                                    {renderAniCrewDropdown(labCrews.length > 0 ? labCrews : ['Crew Laboratory'], 'Crew, Laboratory', 30, 'lab_crew')}
+                                    {renderOfficialRoleBox({
+                                      title: 'Laboratory Foreman',
+                                      quota: 22,
+                                      people: labForemen.map(fn => ({ empOrName: fn, defaultRole: 'Laboratory Foreman' })),
+                                      vacantCount: 5,
+                                      splitShifts: true,
+                                    })}
+                                    <div className="w-0 h-3 border-l-2 border-solid border-slate-900 mx-auto" />
+                                    {renderOfficialRoleBox({
+                                      title: 'Crew, Preparation & Laboratory',
+                                      quota: 38,
+                                      people: labCrews.length > 0 ? labCrews : ['Crew Laboratory'],
+                                      customExisting: 30,
+                                      customVacant: 8,
+                                      customTotal: 38,
+                                      splitShifts: true,
+                                      crewDropdown: true,
+                                      crewKey: 'lab_crew',
+                                    })}
                                   </div>
                                 );
                               }
                               if (name === 'Administration') {
-                                return renderGroupedBox('ADMIN', adminStaffList.map(item => ({
-                                  empOrName: item,
-                                  defaultRole: 'Admin, Preparation & Laboratory'
-                                })), 'amber');
+                                return renderOfficialRoleBox({
+                                  title: 'Admin, Preparation & Laboratory',
+                                  quota: 3,
+                                  people: adminStaffList.map(item => ({
+                                    empOrName: item,
+                                    defaultRole: 'Admin, Preparation & Laboratory'
+                                  })),
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               return null;
                             };
 
                             return (
-                              <div className="w-full max-h-[88vh] overflow-y-auto overflow-x-auto lg:overflow-x-visible custom-scrollbar rounded-2xl border-t-4 border-t-[#20969D] border-b-4 border-b-[#20969D] border-x border-x-slate-200 bg-white p-3 sm:p-5 shadow-sm select-none space-y-4">
+                              <div className="w-full max-h-[88vh] overflow-y-auto overflow-x-auto custom-scrollbar rounded-2xl border-t-4 border-t-[#20969D] border-b-4 border-b-[#20969D] border-x border-x-slate-200 bg-white p-3 sm:p-5 shadow-sm select-none space-y-4">
                                 
                                 {/* ================= HEADER SO (ORGANIGRAMA PREPLAB) ================= */}
                                   <div className="w-full flex flex-col items-center justify-center pt-1 pb-3 border-b border-teal-100/80">
@@ -3744,10 +3856,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       </span>
                                     </div>
                                     <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                                      Laboratory Administration
+                                      Struktur Organisasi Preparation &amp; Laboratory
                                     </h2>
                                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                                      Struktur Organisasi Preparation & Laboratory
+                                      PT Trimegah Bangun Persada · Harita Nickel
                                     </p>
 
                                     {/* Quick Action Button & Shift Palette Note */}
@@ -3797,22 +3909,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                                   {/* LEVEL 0: SITE MANAGEMENT (HEAD OF SITE) */}
                                   <div className="flex flex-col items-center">
-                                    <div className="w-52 px-4 py-2 rounded-full bg-[#20969D] text-white text-center shadow-md border-2 border-[#1B8086]">
-                                      <div className="text-[9px] font-black uppercase tracking-wider text-[#FDE047]">
-                                        Site Management
-                                      </div>
-                                      <div className="text-[11px] font-extrabold leading-tight">
-                                        Head of Site
-                                      </div>
-                                      <div className="text-[10px] font-medium text-teal-100 mt-0.5">
-                                        Younsel Evand Roos
-                                      </div>
-                                    </div>
+                                    {renderAniExecutiveCard(
+                                      null,
+                                      'Head of Site',
+                                      'Younsel Evand Roos',
+                                      undefined,
+                                      'w-64',
+                                      'red-dashed'
+                                    )}
 
                                     {/* Garis Vertikal ke Manager */}
-                                    <div className="w-0 h-7 border-l-[3px] border-solid border-[#20969D] relative flex items-center justify-center">
-                                      <div className="w-2 h-2 rounded-full bg-[#20969D] ring-1.5 ring-white shadow-2xs absolute top-1/2 -translate-y-1/2 -translate-x-1/2" />
-                                    </div>
+                                    <div className="w-0 h-7 border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
 
                                     {/* LEVEL 1: PREPARATION & LABORATORY MANAGER */}
                                     <div className="relative">
@@ -3822,56 +3929,62 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                         'Deni Nugraha Perdiana',
                                         '04D20020842',
                                         'w-72',
-                                        'teal'
+                                        'slate'
                                       )}
                                     </div>
 
                                     {/* Garis Vertikal Turun dari Manager ke Bus Distributor */}
-                                    <div className="w-0 h-6 border-l-[3px] border-solid border-[#20969D] relative flex items-center justify-center">
-                                      {/* Garis vertikal menyatu langsung ke bus distributor di bawah */}
-                                    </div>
+                                    <div className="w-0 h-6 border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
                                   </div>
 
                                   {/* ================= DESKTOP VIEW: STRUKTUR HIERARKI GRID ================= */}
-                                  <div className="hidden lg:grid w-full items-start gap-x-1.5 xl:gap-x-2" style={{ gridTemplateColumns: `repeat(${nCols}, minmax(0, 1fr))` }}>
+                                  <div className="hidden lg:grid w-full min-w-[1350px] xl:min-w-[1520px] items-start gap-x-2.5" style={{ gridTemplateColumns: `repeat(${nCols}, minmax(0, 1fr))` }}>
                                     
                                     {/* CONNECTOR 1: Garis Pembagi Horizontal dari Manager ke 6 Cabang (Terhubung mulus tanpa celah) */}
                                     {rawGroups.map((g, gi) => (
                                       <div key={`c1-${g.key}`} className="relative h-7" style={{ gridColumn: groupSpan(gi) }}>
-                                        {gi > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-[3px] border-solid border-[#20969D]" />}
-                                        {gi < rawGroups.length - 1 && <div className="absolute top-0 left-1/2 -right-2.5 xl:-right-3 border-t-[3px] border-solid border-[#20969D]" />}
-                                        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-[3px] border-solid border-[#20969D]" />
-                                        <div className="w-2 h-2 rounded-full bg-[#20969D] ring-1.5 ring-white shadow-2xs absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10" />
+                                        {gi > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-2 border-solid border-slate-900" />}
+                                        {gi < rawGroups.length - 1 && <div className="absolute top-0 left-1/2 -right-3 xl:-right-3.5 border-t-2 border-solid border-slate-900" />}
+                                        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-2 border-solid border-slate-900" />
                                       </div>
                                     ))}
 
                                     {/* LEVEL 2: SUPERINTENDENTS vs JALUR LANGSUNG MANAGER */}
                                     {rawGroups.map((g, gi) => {
-                                      if (g.spts === null) {
-                                        // Jalur Langsung ke Manager (Inventory Control, Maintenance, QA, Administration)
-                                        return (
-                                          <div key={`s-${g.key}`} className="relative h-full min-h-[4.5rem] self-stretch flex items-center justify-center" style={{ gridColumn: groupSpan(gi) }}>
-                                            <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-[3px] border-solid border-[#20969D]" />
-                                          </div>
-                                        );
-                                      }
-                                      const isAmber = g.key === 'prep';
-                                      const sptEmp = isAmber ? prepSptEmp : labSptEmp;
+                                      const isPrep = g.key === 'prep';
+                                      const isLab = g.key === 'lab';
+                                      const isDirect = g.spts === null;
+
                                       return (
-                                        <div key={`s-${g.key}`} className="px-1 flex flex-col items-center justify-center self-stretch h-full" style={{ gridColumn: groupSpan(gi) }}>
-                                          {renderAniExecutiveCard(
-                                            sptEmp,
-                                            g.label,
-                                            isAmber ? 'Arif Maulana Lessy' : 'Tigwa Anggawikara',
-                                            isAmber ? '02D24000009' : '04D23000004',
-                                            isAmber ? 'w-56' : 'w-52',
-                                            isAmber ? 'amber' : 'teal'
+                                        <div key={`s-${g.key}`} className="relative px-1 flex flex-col items-center justify-center self-stretch h-full" style={{ gridColumn: groupSpan(gi) }}>
+                                          {/* Garis Koordinasi Horizontal Putus-Putus Antara Prep Spt & Lab Spt (Sesuai Diagram Resmi) */}
+                                          {gi === 0 && (
+                                            <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -right-3 xl:-right-3.5 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
                                           )}
-                                          <div className="w-0 flex-1 min-h-[1.25rem] border-l-[3px] border-solid border-[#20969D] relative flex items-center justify-center">
-                                            {isAmber && (
-                                              <div className="w-2 h-2 rounded-full bg-[#20969D] ring-1.5 ring-white shadow-2xs absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-10" />
-                                            )}
-                                          </div>
+                                          {(gi === 1 || gi === 2 || gi === 3) && (
+                                            <div className="absolute top-1/2 -translate-y-1/2 left-0 -right-3 xl:-right-3.5 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
+                                          )}
+                                          {gi === 4 && (
+                                            <div className="absolute top-1/2 -translate-y-1/2 left-0 right-1/2 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
+                                          )}
+
+                                          {isDirect ? (
+                                            <div className="relative h-full min-h-[4.5rem] self-stretch flex items-center justify-center z-10">
+                                              <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-2 border-solid border-slate-900" />
+                                            </div>
+                                          ) : (
+                                            <div className="flex flex-col items-center justify-center self-stretch h-full z-10">
+                                              {renderAniExecutiveCard(
+                                                isPrep ? prepSptEmp : labSptEmp,
+                                                g.label,
+                                                isPrep ? 'Arif Maulana Lessy' : 'Tigwa Anggawikara',
+                                                isPrep ? '02D24000009' : '04D23000004',
+                                                'w-56',
+                                                'slate'
+                                              )}
+                                              <div className="w-0 flex-1 min-h-[1.25rem] border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}
@@ -3879,12 +3992,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                     {/* CONNECTOR 2: Cabang Superintendent ke Kolom Seksi (Terhubung mulus tanpa celah) */}
                                     {columns.map((c, ci) => (
                                       <div key={`c2-${ci}`} className="relative h-5" style={{ gridColumn: colSpan(ci) }}>
-                                        {c.pos > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-[3px] border-solid border-[#20969D]" />}
-                                        {c.pos < c.size - 1 && <div className="absolute top-0 left-1/2 -right-2.5 xl:-right-3 border-t-[3px] border-solid border-[#20969D]" />}
-                                        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-[3px] border-solid border-[#20969D]" />
-                                        {c.size > 1 && (
-                                          <div className="w-2 h-2 rounded-full bg-[#20969D] ring-1.5 ring-white shadow-2xs absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10" />
-                                        )}
+                                        {c.pos > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-2 border-solid border-slate-900" />}
+                                        {c.pos < c.size - 1 && <div className="absolute top-0 left-1/2 -right-3 xl:-right-3.5 border-t-2 border-solid border-slate-900" />}
+                                        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-2 border-solid border-slate-900" />
                                       </div>
                                     ))}
 
@@ -3895,7 +4005,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       return (
                                         <div key={`hdr-${ci}`} className="flex flex-col items-center w-full h-full self-stretch" style={{ gridColumn: colSpan(ci) }}>
                                           {renderAniSectionBadge(displayName, total)}
-                                          <div className="w-0 flex-1 min-h-[0.75rem] border-l-[3px] border-solid border-[#20969D] mx-auto" />
+                                          <div className="w-0 flex-1 min-h-[0.75rem] border-l-2 border-solid border-slate-900 mx-auto" />
                                         </div>
                                       );
                                     })}
@@ -3908,10 +4018,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                           {spvNode ? (
                                             <>
                                               {spvNode}
-                                              <div className="w-0 flex-1 min-h-[1.25rem] border-l-[3px] border-solid border-[#20969D] mx-auto" />
+                                              <div className="w-0 flex-1 min-h-[1.25rem] border-l-2 border-solid border-slate-900 mx-auto" />
                                             </>
                                           ) : (
-                                            <div className="w-0 h-full min-h-[3rem] border-l-[3px] border-solid border-[#20969D] mx-auto" />
+                                            <div className="w-0 h-full min-h-[3rem] border-l-2 border-solid border-slate-900 mx-auto" />
                                           )}
                                         </div>
                                       );
@@ -4015,77 +4125,84 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   {/* ================= FOOTER: CONVENCIONES (KIRI) & NOTE / MPP (KANAN) ================= */}
                                   <div className="mt-6 pt-4 border-t border-slate-200 flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
                                     
-                                    {/* Kiri Bawah: Card Keterangan Gaya ANI (Convenciones) */}
-                                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 shadow-2xs text-[10px] space-y-1.5 max-w-sm">
-                                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                                        <Info className="w-3.5 h-3.5 text-[#20969D]" />
-                                        <span>Keterangan Warna</span>
+                                    {/* Kiri Bawah: Card Keterangan Shift & Catatan Resmi (Sesuai Diagram) */}
+                                    <div className="flex flex-col gap-2">
+                                      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 shadow-2xs text-[10px] space-y-1.5 max-w-sm">
+                                        <div className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                                          <Info className="w-3.5 h-3.5 text-[#20969D]" />
+                                          <span>Keterangan Shift &amp; Organigram</span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          <span className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-800 font-bold text-[9px] shadow-2xs">
+                                            Shift A (Biru)
+                                          </span>
+                                          <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 font-bold text-[9px] shadow-2xs">
+                                            Shift B (Kuning)
+                                          </span>
+                                          <span className="px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[9px]">
+                                            (Vacant) Merah
+                                          </span>
+                                        </div>
+                                        <p className="text-[9px] text-slate-500 italic mt-0.5">
+                                          Klik kartu atau baris nama karyawan untuk membuka profil lengkap.
+                                        </p>
                                       </div>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        <span className="px-2.5 py-0.5 rounded-full bg-[#20969D] text-white font-bold text-[9px] shadow-2xs">
-                                          Teal: Management &amp; Section (Shift A)
-                                        </span>
-                                        <span className="px-2.5 py-0.5 rounded-full bg-[#F2A40D] text-white font-bold text-[9px] shadow-2xs">
-                                          Amber: Operasional (Shift B)
-                                        </span>
-                                        <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-800 font-bold text-[9px] border border-slate-300">
-                                          Foreman, Staff & Crew
-                                        </span>
-                                      </div>
-                                      <p className="text-[9px] text-slate-500 italic mt-0.5">
-                                        Klik kartu atau baris nama karyawan untuk membuka profil lengkap.
-                                      </p>
-                                    </div>
 
-                                    {/* Kanan Bawah: Note Target Produksi & Ringkasan MPP */}
-                                    <div className="flex flex-col items-end gap-2">
-                                      <div className="text-[10px] italic font-semibold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-                                        Note: Target Production 36 JT TMM/Year 2026
-                                      </div>
-                                      <div className="overflow-x-auto">
-                                        <table className="border-collapse border border-slate-800 text-[9px] text-center bg-white shadow-2xs">
-                                          <thead>
-                                            <tr className="bg-slate-100">
-                                              <th colSpan={6} className="border border-slate-800 px-1.5 py-0.5 font-bold uppercase tracking-wider text-slate-800">
-                                                MPP 2026
-                                              </th>
-                                              <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 font-bold text-slate-900 bg-slate-200/80">
-                                                NEED
-                                              </th>
-                                              <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 font-bold text-slate-900 bg-slate-200/80">
-                                                EXISTING
-                                              </th>
-                                              <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 font-bold text-slate-900 bg-slate-200/80">
-                                                GAP
-                                              </th>
-                                            </tr>
-                                            <tr className="bg-slate-100 font-bold text-slate-700 text-[8.5px]">
-                                              <th className="border border-slate-800 px-1 py-0.2">1</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">2A-2C</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">3A-3C</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">4A-4C</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">5A-5C</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">6</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody className="font-semibold text-slate-800 text-[8.5px]">
-                                            <tr>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">1</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">2</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">13</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">62</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">158</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">-</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5 font-black bg-slate-50 text-slate-900">236</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5 font-black bg-slate-50 text-emerald-700">186</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5 font-black bg-slate-50 text-red-600">50</td>
-                                            </tr>
-                                          </tbody>
-                                        </table>
+                                      <div className="flex flex-col items-start text-[10px] italic font-semibold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+                                        <div>Note : Target Production 36 JT TMM/Year 2026</div>
+                                        <div className="text-slate-500 mt-0.5">Data update 10 Oktober 2026</div>
                                       </div>
                                     </div>
 
+                                    {/* Kanan Bawah: Tabel MPP 2026 (Sesuai Diagram Resmi) */}
+                                    <div className="overflow-x-auto">
+                                      <table className="border-collapse border border-slate-800 text-[9px] text-center bg-white shadow-2xs">
+                                        <thead>
+                                          <tr className="bg-slate-100">
+                                            <th colSpan={9} className="border border-slate-800 px-2 py-0.5 font-bold uppercase tracking-wider text-slate-900">
+                                              MPP 2026
+                                            </th>
+                                          </tr>
+                                          <tr className="bg-slate-100 font-bold text-slate-800 text-[8.5px]">
+                                            <th colSpan={6} className="border border-slate-800 px-2 py-0.5">
+                                              GRADE
+                                            </th>
+                                            <th rowSpan={2} className="border border-slate-800 px-2 py-0.5 font-bold text-slate-900 bg-slate-200/80">
+                                              TOTAL NEED
+                                            </th>
+                                            <th rowSpan={2} className="border border-slate-800 px-2 py-0.5 font-bold text-slate-900 bg-slate-200/80">
+                                              TOTAL MANPOWER EXISTING
+                                            </th>
+                                            <th rowSpan={2} className="border border-slate-800 px-2 py-0.5 font-bold text-slate-900 bg-slate-200/80">
+                                              GAP
+                                            </th>
+                                          </tr>
+                                          <tr className="bg-slate-100 font-bold text-slate-700 text-[8.5px]">
+                                            <th className="border border-slate-800 px-1.5 py-0.2">1</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">2A-2C</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">3A-3C</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">4A-4C</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">5A-5C</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">6</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="font-semibold text-slate-800 text-[8.5px]">
+                                          <tr>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">158</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">62</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">13</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">2</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">1</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">-</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-black bg-slate-50 text-slate-900">236</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-black bg-slate-50 text-emerald-700">186</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-black bg-slate-50 text-red-600">50</td>
+                                          </tr>
+                                        </tbody>
+                                      </table>
+                                    </div>
                                   </div>
+
                                 </div>
                               );
                             })()}

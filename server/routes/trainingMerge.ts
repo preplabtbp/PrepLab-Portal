@@ -5,11 +5,12 @@ export const PROFILE_FIELDS = ['nama', 'jabatan', 'gol', 'shift', 'bagian', 'pt'
 export const PROGRAM_FIELDS: Record<TrainingProgram, readonly (keyof ParsedTrainingRow)[]> = {
   sap: ['hazid', 'hazidStatus', 'jsa', 'jsaStatus', 'iutOtt', 'iutOttStatus', 'iai', 'iaiStatus', 'bfa', 'bfaStatus', 'bs', 'bsStatus', 'sapDetails'],
   k3: ['wah', 'wahStatus', 'loto', 'lotoStatus', 'confinedSpace', 'confinedSpaceStatus', 'fireFighting', 'fireFightingStatus'],
+  pra_pop: ['popData'],
   pop: ['popData'],
 };
 // Kolom flag keikutsertaan & nomor urut per program
-export const PROGRAM_FLAG = { sap: 'inSap', k3: 'inK3', pop: 'inPop' } as const;
-export const PROGRAM_NO = { sap: 'no', k3: 'noK3', pop: 'noPop' } as const;
+export const PROGRAM_FLAG = { sap: 'inSap', k3: 'inK3', pra_pop: 'inPop', pop: 'inPop' } as const;
+export const PROGRAM_NO = { sap: 'no', k3: 'noK3', pra_pop: 'noPop', pop: 'noPop' } as const;
 
 export interface MergeOptions {
   programs: TrainingProgram[];

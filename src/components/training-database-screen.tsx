@@ -31,6 +31,8 @@ import {
   Flame,
   ShieldCheck,
   AlertTriangle,
+  Info,
+  Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -381,18 +383,29 @@ const EMPTY_FORM: FormState = {
 const POP_FORM_KEYS = ['doh', 'praPop', 'praPopIns', 'praPopPre', 'praPopPost', 'praPopResult', 'popBatch', 'pendidikan',
   'tahunLulus', 'pengalamanTambang', 'popKeterangan', 'pom', 'pomKeterangan'] as const;
 
-const PROGRAM_LABEL: Record<TrainingProgram, string> = { sap: 'Training SAP', k3: 'Training K3', pop: 'Training Pra POP & POP' };
-const PROGRAM_FLAG_KEY = { sap: 'inSap', k3: 'inK3', pop: 'inPop' } as const;
-const PROGRAM_NO_KEY = { sap: 'no', k3: 'noK3', pop: 'noPop' } as const;
-
-// Modul dipisah 2: Training Internal (SAP & K3) dan Training External (Pra POP, POP & POM) — tampilan sama
-export type TrainingScope = 'internal' | 'external';
-const SCOPE_PROGRAMS: Record<TrainingScope, TrainingProgram[]> = { internal: ['sap', 'k3'], external: ['pop'] };
-const SCOPE_META: Record<TrainingScope, { title: string; sub: string }> = {
-  internal: { title: 'Training Internal', sub: 'Rekap Training SAP & K3' },
-  external: { title: 'Training External', sub: 'Rekap Sertifikasi Pra POP, POP & POM' },
+const PROGRAM_LABEL: Record<TrainingProgram, string> = {
+  sap: 'Training SAP',
+  k3: 'Training K3',
+  pra_pop: 'Training Pra POP',
+  pop: 'Training POP',
 };
-const inScope = (r: TrainingRecord, scope: TrainingScope) => SCOPE_PROGRAMS[scope].some(p => !!r[PROGRAM_FLAG_KEY[p]]);
+const PROGRAM_FLAG_KEY = { sap: 'inSap', k3: 'inK3', pra_pop: 'inPop', pop: 'inPop' } as const;
+const PROGRAM_NO_KEY = { sap: 'no', k3: 'noK3', pra_pop: 'noPop', pop: 'noPop' } as const;
+
+// Modul dipisah 2: Training Internal (SAP, K3 & Pra POP) dan Training External (POP, POM & Sertifikasi)
+export type TrainingScope = 'internal' | 'external';
+const SCOPE_PROGRAMS: Record<TrainingScope, TrainingProgram[]> = {
+  internal: ['sap', 'k3', 'pra_pop'],
+  external: ['pop'],
+};
+const SCOPE_META: Record<TrainingScope, { title: string; sub: string }> = {
+  internal: { title: 'Training Internal', sub: 'Rekap Training SAP, K3 & Pra POP' },
+  external: { title: 'Training External', sub: 'Rekap Sertifikasi POP, POM & Sertifikasi Eksternal' },
+};
+const inScope = (r: TrainingRecord, scope: TrainingScope) =>
+  scope === 'internal'
+    ? (!!r.inSap || !!r.inK3 || !!r.popData?.praPop || (!!r.inPop && popAttendedPra(r.popData)))
+    : (!!r.inPop);
 
 interface TrainingDatabaseScreenProps {
   inspectorNik?: string;
@@ -664,7 +677,7 @@ function TrainingAchievementDetail({ record, scope }: { record: TrainingRecord; 
                 <MyTrainingRow
                   label="POM"
                   desc="Pengawas Operasional Madya"
-                  right={popPassedPom(p) ? badge('PASS', STATUS_BADGE.PASS) : badge('Belum', 'bg-slate-100 text-slate-500 border-slate-200')}
+                  right={popPassedPom(p) ? badge('PASS', STATUS_BADGE.PASS) : <span className="text-xs font-bold text-slate-400">-</span>}
                 />
               </MyTrainingSection>
             )}
@@ -867,7 +880,7 @@ function PersonProgramCards({ record, scope }: { record: TrainingRecord; scope: 
   const a = personAchievement(record, scope);
   const rows = personTrainingRows(record, scope);
   const icon = (id: TrainingProgram) => (id === 'sap' ? <ClipboardCheck className="w-4 h-4" /> : id === 'k3' ? <HardHat className="w-4 h-4" /> : <Award className="w-4 h-4" />);
-  const programLabel: Record<TrainingProgram, string> = { sap: 'SAP', k3: 'K3', pop: 'POP/POM' };
+  const programLabel: Record<TrainingProgram, string> = { sap: 'SAP', k3: 'K3', pop: 'POP/POM', pra_pop: 'Pra POP' };
   const all: { id: TrainingProgram; title: string }[] = ([
     { id: 'sap', title: 'Training SAP' }, { id: 'k3', title: 'Training K3' }, { id: 'pop', title: 'Sertifikasi POP/POM' },
   ] as { id: TrainingProgram; title: string }[]).filter(p => SCOPE_PROGRAMS[scope].includes(p.id));
@@ -1149,7 +1162,24 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [certTypeFilter, setCertTypeFilter] = useState<string>('ALL');
 
   // Modal Kelola Sertifikasi K3 (Tambah / Edit)
-  type CertFormState = { id?: number; certType: CertType; nama: string; nik: string; jabatan: string; pt: string; tanggal: string; keterangan: string; expired: string; note: string };
+  type CertFormState = {
+    id?: number;
+    certType: string;
+    source?: 'cert' | 'pop' | 'pom';
+    recordId?: number;
+    nama: string;
+    nik: string;
+    jabatan: string;
+    pt: string;
+    penerbit?: string;
+    penyelenggara?: string;
+    provider?: string;
+    tanggal: string;
+    keterangan: string;
+    expired: string;
+    note: string;
+    sertifikat?: string;
+  };
   const [certModalForm, setCertModalForm] = useState<CertFormState | null>(null);
   const [isSavingCert, setIsSavingCert] = useState(false);
   const [certDeleteTarget, setCertDeleteTarget] = useState<TrainingCertification | null>(null);
@@ -1255,17 +1285,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   const pomPtChartData = useMemo(() => {
     const tbpPassed = pomPassedPeople.filter(r => (r.pt || 'TBP').toUpperCase().includes('TBP')).length;
-    const tbpBelum = pomBelumPeople.filter(r => (r.pt || 'TBP').toUpperCase().includes('TBP')).length;
     const gpsPassed = pomPassedPeople.filter(r => (r.pt || '').toUpperCase().includes('GPS')).length;
-    const gpsBelum = pomBelumPeople.filter(r => (r.pt || '').toUpperCase().includes('GPS')).length;
     return {
       labels: ['PT TBP', 'PT GPS'],
       datasets: [
         { label: 'Lulus POM', data: [tbpPassed, gpsPassed], backgroundColor: '#10b981', borderRadius: 6 },
-        { label: 'Belum / Proses', data: [tbpBelum, gpsBelum], backgroundColor: '#cbd5e1', borderRadius: 6 },
       ],
     };
-  }, [pomPassedPeople, pomBelumPeople]);
+  }, [pomPassedPeople]);
 
   const filteredPomRecords = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1384,13 +1411,18 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const canManage = access.canManage;
 
   const programRecords = useMemo(
-    () => records.filter(r => isExternal ? (r.inPop || getPersonCerts(r).length > 0) : !!r[PROGRAM_FLAG_KEY[program]]),
+    () => records.filter(r => {
+      if (isExternal) return r.inPop || getPersonCerts(r).length > 0;
+      if (program === 'pra_pop') return r.popData?.praPop || (r.inPop && popAttendedPra(r.popData));
+      return !!r[PROGRAM_FLAG_KEY[program]];
+    }),
     [records, program, isExternal, getPersonCerts]
   );
 
   const programCounts = useMemo(() => ({
     sap: records.filter(r => r.inSap).length,
     k3: records.filter(r => r.inK3).length,
+    pra_pop: records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).length,
     pop: records.filter(r => r.inPop).length,
   }), [records]);
 
@@ -1978,18 +2010,88 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       };
     }) : [];
     // Sertifikasi K3 & Kompetensi
-    const certItems = pCerts.map(c => {
+    const certItems: any[] = pCerts.map(c => {
       const st = certStatus(c.expired, todayYmdStr);
       const ui = CERT_STATUS_UI[st.status];
-      const warningDate = certWarningDate(c.expired);
+      const warningDate = c.warningDate || certWarningDate(c.expired);
       return {
-        program: 'Sertifikasi' as const, label: CERT_META[c.certType]?.title || c.certType,
-        desc: CERT_META[c.certType]?.issuer || '', date: c.tanggal, expiry: c.expired,
+        id: c.id,
+        certType: c.certType,
+        source: 'cert' as const,
+        program: 'Sertifikasi' as const,
+        label: CERT_META[c.certType]?.title || c.certType,
+        desc: c.penerbit || CERT_META[c.certType]?.issuer || '',
+        penerbit: c.penerbit || CERT_META[c.certType]?.issuer || 'Kemenaker / BSN / BAPETEN',
+        penyelenggara: c.penyelenggara || '-',
+        provider: c.provider || '-',
+        date: c.tanggal,
+        expiry: c.expired,
         warningDate,
-        status: st.status, daysLeft: st.daysLeft,
-        state: ui.label, stateCls: ui.cls, keterangan: c.keterangan, note: c.note,
+        status: st.status,
+        daysLeft: st.daysLeft,
+        state: ui.label,
+        stateCls: ui.cls,
+        keterangan: c.keterangan || 'Lulus',
+        note: c.note || '',
+        sertifikat: c.sertifikat || '',
       };
     });
+
+    // Requirement 4: Gabungkan Sertifikasi POP dan POM ke tabel sertifikasi
+    if (r.inPop || hasPop || p?.popBatch) {
+      const popExp = (p as any)?.popExpired || (p?.popBatch ? defaultCertExpired('pop', p.popBatch) : null);
+      const st = certStatus(popExp, todayYmdStr);
+      const ui = CERT_STATUS_UI[st.status];
+      certItems.unshift({
+        id: r.id,
+        certType: 'pop',
+        source: 'pop' as const,
+        program: 'Sertifikasi' as const,
+        label: 'Pengawas Operasional Pertama (POP)',
+        desc: 'BNSP / KESDM',
+        penerbit: (p as any)?.popPenerbit || 'BNSP / KESDM',
+        penyelenggara: (p as any)?.penyelenggara || 'PPSDM Geominerba',
+        provider: (p as any)?.provider || 'Lembaga Diklat Profesi',
+        date: p?.popBatch || (p as any)?.doh || null,
+        expiry: popExp,
+        warningDate: certWarningDate(popExp),
+        status: st.status,
+        daysLeft: st.daysLeft,
+        state: p?.popKeterangan?.toUpperCase().includes('FAIL') ? 'Belum Lulus' : (popExp ? ui.label : (p?.popBatch ? 'Aktif' : 'Terdaftar')),
+        stateCls: p?.popKeterangan?.toUpperCase().includes('FAIL') ? 'bg-rose-50 text-rose-700 border-rose-200' : (popExp ? ui.cls : 'bg-teal-50 text-teal-700 border-teal-200'),
+        keterangan: p?.popKeterangan || (p?.popBatch ? 'Kompeten / Lulus' : 'Dalam Proses'),
+        note: [p?.pendidikan && `Pendidikan: ${p.pendidikan}`, p?.tahunLulus && `Lulus: ${p.tahunLulus}`, p?.pengalamanTambang && `Pengalaman: ${p.pengalamanTambang}`].filter(Boolean).join(' · ') || (p as any)?.notes || '',
+        sertifikat: (p as any)?.popSertifikat || '',
+      });
+    }
+
+    if (r.inPop && (hasPom || p?.pom || p?.pomKeterangan)) {
+      const pomExp = (p as any)?.pomExpired || (p?.pom ? defaultCertExpired('pom', p.pom) : null);
+      const st = certStatus(pomExp, todayYmdStr);
+      const ui = CERT_STATUS_UI[st.status];
+      certItems.unshift({
+        id: r.id,
+        certType: 'pom',
+        source: 'pom' as const,
+        program: 'Sertifikasi' as const,
+        label: 'Pengawas Operasional Madya (POM)',
+        desc: 'BNSP / KESDM',
+        penerbit: (p as any)?.pomPenerbit || 'BNSP / KESDM',
+        penyelenggara: (p as any)?.pomPenyelenggara || 'PPSDM Geominerba',
+        provider: (p as any)?.pomProvider || 'Lembaga Diklat Profesi',
+        date: p?.pom || null,
+        expiry: pomExp,
+        warningDate: certWarningDate(pomExp),
+        status: st.status,
+        daysLeft: st.daysLeft,
+        state: p?.pomKeterangan === 'FAIL' ? 'Belum Lulus' : (pomExp ? ui.label : (p?.pom ? 'Aktif' : 'Terdaftar')),
+        stateCls: p?.pomKeterangan === 'FAIL' ? 'bg-rose-50 text-rose-700 border-rose-200' : (pomExp ? ui.cls : 'bg-purple-50 text-purple-700 border-purple-200'),
+        keterangan: p?.pomKeterangan || (p?.pom ? 'Kompeten / Lulus' : 'Dalam Proses'),
+        note: (p as any)?.pomNote || '',
+        sertifikat: (p as any)?.pomSertifikat || '',
+      });
+    }
+
     return { record: r, popStages, sapItems, k3Items, certItems };
   }, [globalSelectedPerson, getPersonCerts, todayYmdStr]);
 
@@ -2448,9 +2550,50 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const overviewPrograms = ([
     { id: 'sap' as const, icon: <ClipboardCheck className="w-4 h-4" />, title: 'Training SAP' },
     { id: 'k3' as const, icon: <HardHat className="w-4 h-4" />, title: 'Training K3' },
-    { id: 'pop' as const, icon: <Award className="w-4 h-4" />, title: 'Sertifikasi POP/POM' },
+    { id: 'pra_pop' as const, icon: <GraduationCap className="w-4 h-4" />, title: 'Training Pra POP' },
+    { id: 'pop' as const, icon: <Award className="w-4 h-4" />, title: 'Sertifikasi POP' },
   ]).filter(p => scopePrograms.includes(p.id));
   const summaryPieRows = isExternal ? dashboard.popPie : pieRows;
+  const openAddCertModal = () => {
+    const defaultType = externalSheet === 'pop' ? 'pop' : externalSheet === 'pom' ? 'pom' : externalSheet === 'all' || externalSheet === 'k3_kimia' ? 'ahli_k3_kimia' : externalSheet;
+    setCertModalForm({
+      certType: defaultType,
+      source: defaultType === 'pop' ? 'pop' : defaultType === 'pom' ? 'pom' : 'cert',
+      nama: '',
+      nik: '',
+      jabatan: '',
+      pt: 'TBP',
+      penerbit: defaultType === 'pop' || defaultType === 'pom' ? 'BNSP / KESDM' : (CERT_META[defaultType]?.issuer || ''),
+      penyelenggara: defaultType === 'pop' || defaultType === 'pom' ? 'PPSDM Geominerba' : '',
+      provider: defaultType === 'pop' || defaultType === 'pom' ? 'Lembaga Diklat Profesi' : '',
+      tanggal: '',
+      expired: '',
+      keterangan: 'Lulus',
+      note: '',
+      sertifikat: '',
+    });
+  };
+
+  const openEditFromCertItem = (item: any, emp: any) => {
+    setCertModalForm({
+      id: item.source === 'cert' ? item.id : undefined,
+      certType: item.certType || 'dll',
+      source: item.source || 'cert',
+      recordId: emp?.id,
+      nama: emp?.nama || item.nama || '',
+      nik: emp?.nik || item.nik || '',
+      jabatan: emp?.jabatan || item.jabatan || '',
+      pt: emp?.pt || item.pt || 'TBP',
+      penerbit: item.penerbit || '',
+      penyelenggara: item.penyelenggara || '',
+      provider: item.provider || '',
+      tanggal: item.date || '',
+      expired: item.expiry || '',
+      keterangan: item.keterangan || '',
+      note: item.note || '',
+      sertifikat: item.sertifikat || '',
+    });
+  };
   const summaryPieTotal = summaryPieRows.reduce((s, r) => s + r.value, 0);
 
   return (
@@ -2538,17 +2681,66 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
         </div>
 
-        {/* ===== Sheet Pemisah Sertifikasi Eksternal (POP, POM, K3 Kimia, K3 Listrik, ISO 17025, PPR, Juru Las, Semua) ===== */}
+        {/* ===== Dropdown List Jenis Training External (Requirement 2) ===== */}
+        {isExternal && (
+          <div className="rounded-[24px] bg-white dark:bg-slate-900 p-3.5 shadow-sm border border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+              <div className="flex items-center gap-2 shrink-0">
+                <SlidersHorizontal className="w-4 h-4" style={{ color: DASH.brand }} />
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                  Jenis Training:
+                </span>
+              </div>
+              <div className="relative flex-1 max-w-md">
+                <select
+                  value={externalSheet}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === '__ADD_TRAINING__') {
+                      openAddCertModal();
+                    } else {
+                      setExternalSheet(val as any);
+                      setSelectedNik(null);
+                      setSearchQuery('');
+                      setStatusFilter('ALL');
+                    }
+                  }}
+                  className="w-full h-11 pl-3.5 pr-9 rounded-xl font-black text-xs bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 cursor-pointer focus:outline-none focus:border-teal-500 shadow-xs appearance-none transition-colors"
+                >
+                  <option value="pop">POP (Pengawas Operasional Pertama)</option>
+                  <option value="pom">POM (Pengawas Operasional Madya)</option>
+                  <option value="all">Semua Sertifikasi Eksternal ({totalExternalCerts} Sertifikat)</option>
+                  <option value="iso_17025">ISO 17025 : 2017 ({iso17025Count} Peserta)</option>
+                  <option value="k3_kimia">K3 Kimia - Ahli &amp; Petugas ({k3KimiaCount} Peserta)</option>
+                  <option value="k3_listrik">Teknisi K3 Listrik ({k3ListrikCount} Peserta)</option>
+                  <option value="proteksi_radiasi">Petugas Proteksi Radiasi ({radiasiCount} Peserta)</option>
+                  <option value="juru_las_3">Juru Las Kelas III ({juruLasCount} Peserta)</option>
+                  <option value="dll">Dll (Sertifikasi Lainnya)</option>
+                  <option value="__ADD_TRAINING__">+ Tambahkan Training...</option>
+                </select>
+                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={openAddCertModal}
+                  className="inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl text-white font-black text-xs transition-all cursor-pointer shadow-sm hover:opacity-95 active:scale-95"
+                  style={{ backgroundColor: DASH.brand }}
+                >
+                  <Plus className="w-4 h-4" />
+                  Tambahkan Training
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===== Sheet Shortcut Pills ===== */}
         {isExternal && (
           <div className="rounded-[24px] bg-white dark:bg-slate-900 p-2.5 shadow-xs border border-slate-200/80 dark:border-slate-800">
-            <div className="flex items-center justify-between gap-2 mb-2 px-1">
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                Sheet Pemisah Program &amp; Sertifikasi
-              </span>
-              <span className="text-[10px] font-semibold text-slate-400">
-                Pilih sheet untuk mengganti diagram &amp; daftar di bawah
-              </span>
-            </div>
             <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
               {[
                 { id: 'pop', label: 'Training Pra POP & POP', short: 'Pra POP & POP', icon: <Award className="w-4 h-4" />, count: popTotalCount },
@@ -2738,45 +2930,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </div>
             </div>
 
-            {/* Tabel POP/POM */}
-            {globalPersonProfile.popStages.length > 0 && (
-              <DashCard>
-                <DashTitle title="Sertifikasi POP / POM" sub={`Masa kerja ${popMasaKerja(globalPersonProfile.record.popData) || '-'}`} />
-                <div className="overflow-x-auto -mx-1 mt-2">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-100">
-                        <th className="px-3 py-2 font-semibold">Tahap</th>
-                        <th className="px-3 py-2 font-semibold">Deskripsi</th>
-                        <th className="px-3 py-2 font-semibold">Keterangan</th>
-                        <th className="px-3 py-2 font-semibold text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {globalPersonProfile.popStages.map(s => {
-                        const isTidakPerlu = s.extra?.startsWith('Tidak Perlu');
-                        return (
-                          <tr key={s.label}>
-                            <td className="px-3 py-2.5 font-bold text-slate-900">{s.label}</td>
-                            <td className="px-3 py-2.5 text-slate-600">{s.desc}</td>
-                            <td className="px-3 py-2.5 text-slate-700 font-medium">{s.extra || '-'}</td>
-                            <td className="px-3 py-2.5 text-right">
-                              <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold border ${
-                                isTidakPerlu
-                                  ? 'bg-slate-100 text-slate-600 border-slate-200'
-                                  : s.attended ? STATUS_BADGE.PASS : 'bg-slate-100 text-slate-500 border-slate-200'
-                              }`}>
-                                {isTidakPerlu ? 'Tidak Perlu' : s.attended ? 'Telah Mengikuti' : 'Belum'}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </DashCard>
-            )}
+
 
             {/* Tabel SAP */}
             {globalPersonProfile.sapItems.length > 0 && (
@@ -2846,8 +3000,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             {globalPersonProfile.certItems.length > 0 && (
               <DashCard>
                 <DashTitle
-                  title="Sertifikasi K3 & Kompetensi"
-                  sub="Ahli K3 Kimia, K3 Listrik, ISO 17025, Proteksi Radiasi, Juru Las · Warning otomatis muncul 1 tahun (<= 365 hari) sebelum expired"
+                  title="Sertifikasi POP, POM & Sertifikasi Kompetensi"
+                  sub="Mencakup POP, POM, ISO 17025, Ahli K3 Kimia, PPR, K3 Listrik, Juru Las · Warning otomatis muncul 1 tahun (<= 365 hari) sebelum expired"
                 />
 
                 {/* Banner Peringatan jika ada sertifikasi Warning (<= 1 tahun) atau Expired */}
@@ -3032,10 +3186,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <Award className="w-4 h-4" />
                 </div>
               </div>
-              <p className="mt-3 text-xs font-semibold flex flex-wrap gap-x-3 gap-y-1">
+              <p className="mt-3 text-xs font-semibold flex flex-wrap gap-x-3 gap-y-1 items-center">
                 <span className="text-emerald-600 font-bold">{pomStats.passed} Lulus POM</span>
-                <span className="text-slate-500 font-medium">{pomStats.belum} Belum / Proses</span>
-                <span className="text-teal-700 font-black">{pomStats.pctPassed}% Kelulusan</span>
+                <span className="text-slate-500 font-medium">Sertifikasi Fleksibel</span>
               </p>
               <div className="relative mt-3">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -3055,16 +3208,16 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </DashCard>
 
             <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
-              <DashTitle title="Status Kelulusan POM" sub="Komposisi kelulusan kandidat POM" />
+              <DashTitle title="Status Kelulusan POM" sub="Personel yang telah tersertifikasi POM" />
               <div className="flex items-center gap-4">
                 <div className="w-[120px] h-[120px] shrink-0">
                   {pomStats.total > 0 && (
                     <Doughnut
                       data={{
-                        labels: ['Lulus POM', 'Belum / Proses'],
+                        labels: ['Lulus POM', 'Personel Lainnya'],
                         datasets: [{
                           data: [pomStats.passed, pomStats.belum],
-                          backgroundColor: ['#10b981', '#cbd5e1'],
+                          backgroundColor: ['#10b981', '#f1f5f9'],
                           borderColor: '#ffffff',
                           borderWidth: 3,
                         }],
@@ -3083,14 +3236,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     <span className="w-2.5 h-2.5 rounded-full mt-1 shrink-0 bg-emerald-500" />
                     <div>
                       <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-tight">Lulus POM</p>
-                      <p className="text-[11px] text-slate-500">{pomStats.passed} orang · {pomStats.pctPassed}%</p>
+                      <p className="text-[11px] text-slate-500">{pomStats.passed} orang</p>
                     </div>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="w-2.5 h-2.5 rounded-full mt-1 shrink-0 bg-slate-300" />
                     <div>
-                      <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-tight">Belum / Proses</p>
-                      <p className="text-[11px] text-slate-500">{pomStats.belum} orang · {100 - pomStats.pctPassed}%</p>
+                      <p className="text-xs font-semibold text-slate-600 leading-tight">Sifat Sertifikasi</p>
+                      <p className="text-[10px] text-slate-400">Fleksibel / Tidak Wajib</p>
                     </div>
                   </li>
                 </ul>
@@ -3395,14 +3548,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 <p className="text-[11px] text-slate-500 mt-0.5">{pomStats.pctPassed}% dari seluruh kandidat</p>
               </div>
               <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 p-4 border border-slate-200/80">
-                <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Belum / Dalam Proses</p>
-                <p className="text-3xl font-black text-slate-900 mt-1">{pomStats.belum} <span className="text-xs font-semibold text-slate-500">orang</span></p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Kandidat POP yang belum sertifikasi POM</p>
+                <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Karakter Sertifikasi</p>
+                <p className="text-xl sm:text-2xl font-black text-slate-800 mt-1">Bersifat Fleksibel</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Pengembangan kompetensi madya opsional</p>
               </div>
             </div>
 
             <DashCard className={`lg:col-span-8 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
-              <DashTitle title="Distribusi POM per Perusahaan" sub="Perbandingan lulus POM dan belum per PT" />
+              <DashTitle title="Distribusi POM per Perusahaan" sub="Distribusi pemegang sertifikasi POM per PT" />
               <div className="relative flex-1 min-h-[220px]">
                 <Bar
                   data={pomPtChartData}
@@ -3837,18 +3990,28 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
                 <button
                   type="button"
-                  onClick={() => setStatusFilter(statusFilter === 'BELUM' ? 'ALL' : 'BELUM')}
-                  className={`w-full text-left px-3.5 py-3 rounded-2xl transition-all cursor-pointer border ${statusFilter === 'BELUM' ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/60'}`}
+                  onClick={() => setStatusFilter('ALL')}
+                  className={`w-full text-left px-3.5 py-3 rounded-2xl transition-all cursor-pointer border ${statusFilter === 'ALL' ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/40' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/60'}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
-                      Belum / Proses POM
+                      <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+                      Semua Personel
                     </span>
-                    <span className="text-xs font-black text-slate-700">{pomStats.belum} orang</span>
+                    <span className="text-xs font-black text-slate-700">{pomStats.total} orang</span>
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1">Kandidat POP yang belum mengikuti atau belum lulus POM</p>
+                  <p className="text-[10px] text-slate-500 mt-1">Tampilkan seluruh data personel POP</p>
                 </button>
+
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
+                    <Info className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Sertifikasi Bersifat Fleksibel</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Sertifikasi Pengawas Operasional Madya (POM) tidak bersifat wajib mutlak bagi seluruh pemegang POP, melainkan fleksibel sesuai kebutuhan pengembangan kompetensi.
+                  </p>
+                </div>
               </div>
             </DashCard>
 
@@ -3883,7 +4046,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                           <th className="px-3 py-2.5">Masa Kerja</th>
                           <th className="px-3 py-2.5 text-center">Pra POP</th>
                           <th className="px-3 py-2.5 text-center">POP Batch</th>
-                          <th className="px-3 py-2.5 text-center">Kelulusan POM</th>
+                          <th className="px-3 py-2.5 text-center">Status POM</th>
                           <th className="px-3 py-2.5">Batch / Catatan POM</th>
                           {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
                         </tr>
@@ -3903,7 +4066,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                               {popPassedPom(r.popData) ? (
                                 <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-black border bg-emerald-50 text-emerald-800 border-emerald-200">PASS</span>
                               ) : (
-                                <span className="text-[11px] font-bold text-slate-300">Belum</span>
+                                <span className="text-xs font-semibold text-slate-400">-</span>
                               )}
                             </td>
                             <td className="px-3 py-2 text-xs text-slate-600 min-w-[140px]">{r.popData?.pom || '-'}</td>
@@ -4036,12 +4199,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </div>
               </div>
 
-              {/* Tab program */}
+              {/* Tab program (Training Internal: SAP, K3, Pra POP) */}
               {!isExternal && (
-              <div className="grid grid-cols-2 gap-1 p-1 rounded-full bg-slate-100 dark:bg-slate-800">
+              <div className="grid grid-cols-3 gap-1 p-1 rounded-full bg-slate-100 dark:bg-slate-800">
                 {([
                   { id: 'sap' as const, label: 'Training SAP', short: 'SAP' },
                   { id: 'k3' as const, label: 'Training K3', short: 'K3' },
+                  { id: 'pra_pop' as const, label: 'Training Pra POP', short: 'Pra POP' },
                 ]).map(tab => {
                   const active = program === tab.id;
                   return (
@@ -4151,18 +4315,32 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <div className="overflow-x-auto max-h-[70vh]">
                 <table className="w-full text-left border-collapse">
                   <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800">
-                    {program === 'pop' ? (
+                    {program === 'pra_pop' ? (
+                    <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-sky-50/70 border-b-2 border-sky-200">
+                      <th className="px-3 py-2.5 text-center">No</th>
+                      <th className="px-3 py-2.5">NIK</th>
+                      <th className="px-3 py-2.5">Nama</th>
+                      <th className="px-3 py-2.5">Bagian</th>
+                      <th className="px-3 py-2.5 text-center">PT</th>
+                      <th className="px-3 py-2.5 text-center">GOL</th>
+                      <th className="px-3 py-2.5 text-center">Shift</th>
+                      <th className="px-3 py-2.5 text-center">Tgl Pra POP</th>
+                      <th className="px-3 py-2.5">Instruktur</th>
+                      <th className="px-3 py-2.5 text-center">Pre-Test</th>
+                      <th className="px-3 py-2.5 text-center">Post-Test</th>
+                      <th className="px-3 py-2.5 text-center">Hasil Pra POP</th>
+                      {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
+                    </tr>
+                    ) : program === 'pop' ? (
                     <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-teal-50/70 border-b-2 border-teal-200">
                       <th className="px-3 py-2.5 text-center">No</th>
                       <th className="px-3 py-2.5">NIK</th>
                       <th className="px-3 py-2.5">Nama</th>
                       <th className="px-3 py-2.5 text-center">PT</th>
                       <th className="px-3 py-2.5" title="Dihitung dari tanggal awal bergabung (DOH)">Masa Kerja</th>
-                      <th className="px-3 py-2.5 text-center" title="Pra Pengawas Operasional Pertama">Pra POP</th>
                       <th className="px-3 py-2.5 text-center" title="Pengawas Operasional Pertama">POP</th>
                       <th className="px-3 py-2.5">Kualifikasi</th>
                       <th className="px-3 py-2.5 text-center">Keterangan POP</th>
-                      <th className="px-3 py-2.5 text-center" title="Pengawas Operasional Madya">POM</th>
                       {canManage && <th className="px-3 py-2.5 text-center">Aksi</th>}
                     </tr>
                     ) : (
@@ -4198,18 +4376,52 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                         <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{idx + 1}</td>
                         <td className="px-3 py-2 text-[11px] font-mono font-bold text-slate-800 whitespace-nowrap">{r.nik}</td>
                         <td className="px-3 py-2 text-xs font-black text-slate-950 min-w-[170px]">{r.nama}</td>
-                        {program === 'pop' ? (
+                        {program === 'pra_pop' ? (
+                          <>
+                            <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap">{r.bagian || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.gol || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-bold text-slate-800 whitespace-nowrap">{r.shift || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-mono whitespace-nowrap">{r.popData?.praPop ? formatTrainingDate(r.popData.praPop) : '-'}</td>
+                            <td className="px-3 py-2 text-[11px] text-slate-700">{r.popData?.praPopIns || '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-mono font-bold">{r.popData?.praPopPre ?? '-'}</td>
+                            <td className="px-3 py-2 text-center text-[11px] font-mono font-bold">{r.popData?.praPopPost ?? '-'}</td>
+                            <td className="px-3 py-2 text-center">{renderPraPop(r.popData)}</td>
+                            {canManage && (
+                              <td className="px-3 py-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(r)}
+                                  className="p-1 rounded-md text-slate-400 hover:text-slate-900 cursor-pointer"
+                                  title="Edit Data Pra POP"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            )}
+                          </>
+                        ) : program === 'pop' ? (
                           <>
                             <td className="px-3 py-2 text-center text-[11px] font-black text-slate-800">{r.pt || '-'}</td>
                             <td className="px-3 py-2 text-[11px] whitespace-nowrap">
                               <span className="font-bold text-slate-800">{popMasaKerja(r.popData) || '-'}</span>
                               {r.popData?.doh && <span className="block text-[10px] font-semibold text-slate-500">DOH {formatTrainingDate(r.popData.doh)}</span>}
                             </td>
-                            <td className="px-3 py-2 text-center">{renderPraPop(r.popData)}</td>
                             <td className="px-3 py-2 text-center">{renderPopBatch(r.popData)}</td>
                             <td className="px-3 py-2 min-w-[140px]">{renderKualifikasi(r.popData)}</td>
                             <td className="px-3 py-2 text-center">{renderPopKeterangan(r.popData?.popKeterangan)}</td>
-                            <td className="px-3 py-2 text-center">{renderPom(r.popData)}</td>
+                            {canManage && (
+                              <td className="px-3 py-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(r)}
+                                  className="p-1 rounded-md text-slate-400 hover:text-slate-900 cursor-pointer"
+                                  title="Edit Data POP"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            )}
                           </>
                         ) : (
                           <>
@@ -4544,23 +4756,55 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               }
               setIsSavingCert(true);
               try {
-                const autoExp = defaultCertExpired(certModalForm.certType, certModalForm.tanggal);
-                const body = {
-                  ...certModalForm,
-                  expired: certModalForm.expired || autoExp || '',
-                };
-                const url = certModalForm.id ? `/api/training-certifications/${certModalForm.id}` : '/api/training-certifications';
-                const res = await fetch(url, {
-                  method: certModalForm.id ? 'PUT' : 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(body),
-                });
-                const json = await res.json();
-                if (!res.ok || json.status !== 'success') {
-                  toast.error(json.message || 'Gagal menyimpan sertifikasi');
-                  return;
+                if (certModalForm.source === 'pop' || certModalForm.source === 'pom') {
+                  const rec = records.find(r => r.id === certModalForm.recordId || (certModalForm.nik && r.nik === certModalForm.nik));
+                  if (rec) {
+                    const curPop: any = { ...(rec.popData || {}) };
+                    if (certModalForm.source === 'pop') {
+                      curPop.popBatch = certModalForm.tanggal || curPop.popBatch;
+                      curPop.popKeterangan = certModalForm.keterangan || curPop.popKeterangan;
+                      curPop.popExpired = certModalForm.expired || curPop.popExpired;
+                      curPop.popPenerbit = certModalForm.penerbit || curPop.popPenerbit;
+                      curPop.penyelenggara = certModalForm.penyelenggara || curPop.penyelenggara;
+                      curPop.provider = certModalForm.provider || curPop.provider;
+                      curPop.popSertifikat = certModalForm.sertifikat || curPop.popSertifikat;
+                    } else {
+                      curPop.pom = certModalForm.tanggal || curPop.pom;
+                      curPop.pomKeterangan = certModalForm.keterangan || curPop.pomKeterangan;
+                      curPop.pomExpired = certModalForm.expired || curPop.pomExpired;
+                      curPop.pomPenerbit = certModalForm.penerbit || curPop.pomPenerbit;
+                      curPop.pomPenyelenggara = certModalForm.penyelenggara || curPop.pomPenyelenggara;
+                      curPop.pomProvider = certModalForm.provider || curPop.pomProvider;
+                      curPop.pomSertifikat = certModalForm.sertifikat || curPop.pomSertifikat;
+                    }
+                    const res = await fetch(`/api/training-records/${rec.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ...rec, program: 'pop', popData: curPop }),
+                    });
+                    const json = await res.json();
+                    if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memperbarui data');
+                    toast.success(`Data ${certModalForm.source.toUpperCase()} berhasil diperbarui`);
+                  }
+                } else {
+                  const autoExp = defaultCertExpired(certModalForm.certType, certModalForm.tanggal);
+                  const body = {
+                    ...certModalForm,
+                    expired: certModalForm.expired || autoExp || '',
+                  };
+                  const url = certModalForm.id ? `/api/training-certifications/${certModalForm.id}` : '/api/training-certifications';
+                  const res = await fetch(url, {
+                    method: certModalForm.id ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                  });
+                  const json = await res.json();
+                  if (!res.ok || json.status !== 'success') {
+                    toast.error(json.message || 'Gagal menyimpan sertifikasi');
+                    return;
+                  }
+                  toast.success(json.message || 'Sertifikasi berhasil disimpan');
                 }
-                toast.success(json.message);
                 setCertModalForm(null);
                 queryClient.invalidateQueries({ queryKey: ['training-certifications'] });
                 fetchRecords();
@@ -4706,6 +4950,44 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Penerbit Sertifikat</label>
+                  <Input
+                    value={certModalForm.penerbit || ''}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, penerbit: e.target.value } : null)}
+                    placeholder="BNSP / KESDM / Kemenaker / BSN / BAPETEN"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Instansi Penyelenggara</label>
+                  <Input
+                    value={certModalForm.penyelenggara || ''}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, penyelenggara: e.target.value } : null)}
+                    placeholder="PPSDM Geominerba / Internal"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Provider Training</label>
+                  <Input
+                    value={certModalForm.provider || ''}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, provider: e.target.value } : null)}
+                    placeholder="Lembaga Diklat Profesi / Provider"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Nomor / Link Dokumen Sertifikat</label>
+                  <Input
+                    value={certModalForm.sertifikat || ''}
+                    onChange={e => setCertModalForm(prev => prev ? { ...prev, sertifikat: e.target.value } : null)}
+                    placeholder="Nomor sertifikat atau link URL dokumen"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
                   <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Hasil / Keterangan</label>
                   <Input
                     value={certModalForm.keterangan}
@@ -4714,11 +4996,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   />
                 </div>
                 <div>
-                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Catatan Tambahan</label>
+                  <label className="block mb-1 font-bold text-slate-900 dark:text-slate-100">Catatan Tambahan (Note)</label>
                   <Input
                     value={certModalForm.note}
                     onChange={e => setCertModalForm(prev => prev ? { ...prev, note: e.target.value } : null)}
-                    placeholder="Nomor sertifikat / catatan"
+                    placeholder="Catatan tambahan"
                   />
                 </div>
               </div>
