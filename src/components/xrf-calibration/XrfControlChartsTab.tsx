@@ -214,10 +214,10 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   const [selectedSite, setSelectedSite] = useState<'GTS' | 'TBP'>(() => assignedSite);
 
   useEffect(() => {
-    if (!isDevOrManager && assignedSite) {
+    if (assignedSite) {
       setSelectedSite(assignedSite);
     }
-  }, [isDevOrManager, assignedSite]);
+  }, [assignedSite]);
 
   // B. Method / Technology: EDXRF vs WDXRF
   const [selectedMethod, setSelectedMethod] = useState<'EDXRF' | 'WDXRF'>('EDXRF');
@@ -761,38 +761,11 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
           
           <div className="flex flex-wrap items-center gap-3">
-            {/* 1. SITE SELECTOR (GTS vs TBP/GPS) */}
-            {isDevOrManager ? (
-              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
-                <button
-                  onClick={() => setSelectedSite('GTS')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                    selectedSite === 'GTS'
-                      ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  PT. GTS (3 EDXRF / 1 WDXRF)
-                </button>
-                <button
-                  onClick={() => setSelectedSite('TBP')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                    selectedSite === 'TBP'
-                      ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  TBP / GPS (6 EDXRF / 2 WDXRF)
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-black shadow-xs">
-                <Building2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span>{selectedSite === 'GTS' ? 'SITE: PT. GANE TAMBANG SENTOSA (GTS)' : 'SITE: PT. TRIMEGAH BANGUN PERSADA (TBP / GPS)'}</span>
-              </div>
-            )}
+            {/* 1. UNIVERSE ENTITY BADGE (STRICTLY DRIVEN BY PORTAL UNIVERSE) */}
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-black shadow-xs">
+              <Building2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>{selectedSite === 'GTS' ? 'UNIVERSE: PT. GANE TAMBANG SENTOSA (GTS)' : 'UNIVERSE: PT. TRIMEGAH BANGUN PERSADA (TBP / GPS)'}</span>
+            </div>
 
             {/* 2. METHOD SELECTOR (EDXRF vs WDXRF) */}
             <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
@@ -1038,14 +1011,13 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             </div>
             <button
               onClick={() => {
-                setSelectedSite('GTS');
                 setSelectedMethod('EDXRF');
                 setSelectedMatrix('SAPROLITE');
               }}
               className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
-              Kembali ke Data GTS EDXRF (Saprolite)
+              Reset ke Metode EDXRF (Saprolite)
             </button>
           </div>
         ) : (

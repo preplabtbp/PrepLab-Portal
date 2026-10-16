@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { 
   Activity, AlertTriangle, AlertCircle, CheckCircle2, X, 
   Download, Trash2, Filter, Layers, Sliders, Eye, RefreshCw, 
-  ChevronDown, Check, ShieldAlert, Sparkles, PlusCircle, ArrowUpDown
+  ChevronDown, Check, ShieldAlert, Sparkles, PlusCircle, ArrowUpDown,
+  LayoutGrid, Columns, RotateCcw, Building2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -41,6 +42,217 @@ interface XrfOffspecIsolationModalProps {
   instrumentThemes?: Record<string, { headerBg: string; dotColor: string; name: string }>;
 }
 
+// -------------------------------------------------------------------
+// DEDICATED SHEWHART QC CARD FOR OFFSPEC POINTS PER INSTRUMENT
+// -------------------------------------------------------------------
+interface XrfOffspecCardProps {
+  stdCode: string;
+  instCode: string;
+  instPoints: IsolatedOffspecPoint[];
+  theme: { headerBg: string; dotColor: string; name: string };
+  onSelectPoint: (p: IsolatedOffspecPoint) => void;
+}
+
+const XrfOffspecCard: React.FC<XrfOffspecCardProps> = ({
+  stdCode,
+  instCode,
+  instPoints,
+  theme,
+  onSelectPoint,
+}) => {
+  const [hoveredPt, setHoveredPt] = useState<IsolatedOffspecPoint | null>(null);
+
+  const nominal = instPoints[0]?.nominalValue || 0;
+  const stdev = instPoints[0]?.stdevFixed || 0.05;
+  const upperAction = Number((nominal + 3 * stdev).toFixed(4));
+  const upperWarning = Number((nominal + 2 * stdev).toFixed(4));
+  const lowerWarning = Number((nominal - 2 * stdev).toFixed(4));
+  const lowerAction = Number((nominal - 3 * stdev).toFixed(4));
+
+  const cardWidth = 420;
+  const cardHeight = 240;
+  const pad = { top: 20, right: 54, bottom: 30, left: 34 };
+  const plotW = cardWidth - pad.left - pad.right;
+  const plotH = cardHeight - pad.top - pad.bottom;
+
+  let yMin = lowerAction - stdev * 0.6;
+  let yMax = upperAction + stdev * 0.6;
+  instPoints.forEach(p => {
+    if (p.value < yMin) yMin = p.value - stdev * 0.3;
+    if (p.value > yMax) yMax = p.value + stdev * 0.3;
+  });
+  const span = Math.max(0.001, yMax - yMin);
+
+  const getY = (v: number) => {
+    const ratio = (v - yMin) / span;
+    return pad.top + plotH - ratio * plotH;
+  };
+
+  const yUpperAction = getY(upperAction);
+  const yUpperWarning = getY(upperWarning);
+  const yNominal = getY(nominal);
+  const yLowerWarning = getY(lowerWarning);
+  const yLowerAction = getY(lowerAction);
+
+  const actionPts = instPoints.filter(p => p.status === 'action').length;
+  const warnPts = instPoints.filter(p => p.status === 'warning').length;
+  const maxDiff = Math.max(...instPoints.map(p => Math.abs(p.diff)));
+
+  return (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs flex flex-col">
+      {/* Card Header with Instrument Theme */}
+      <div className={`py-2 px-3.5 uppercase tracking-wider text-xs border-b-2 flex items-center justify-between shadow-2xs ${theme.headerBg}`}>
+        <div className="flex items-center gap-1.5 font-black">
+          <span className="w-2.5 h-2.5 rounded-full bg-white/80" />
+          <span>{theme.name}</span>
+        </div>
+        <span className="px-2 py-0.5 rounded-md bg-black/20 text-white font-black text-[10px]">
+          {instPoints.length} Titik Off-Spec
+        </span>
+      </div>
+
+      {/* SVG Canvas */}
+      <div className="relative p-2 flex-1">
+        <svg viewBox={`0 0 ${cardWidth} ${cardHeight}`} className="w-full h-auto select-none overflow-visible">
+          {/* Plot Background */}
+          <rect
+            x={pad.left}
+            y={pad.top}
+            width={plotW}
+            height={plotH}
+            fill="#FFFFFF"
+            className="dark:fill-slate-950/60"
+            stroke="#E2E8F0"
+            strokeWidth="1"
+            rx="4"
+          />
+
+          {/* 1. Upper Action (+3σ) */}
+          <line x1={pad.left} y1={yUpperAction} x2={pad.left + plotW} y2={yUpperAction} stroke="#EF4444" strokeWidth="1.6" strokeDasharray="4 3" />
+          <text x={pad.left - 6} y={yUpperAction + 4} textAnchor="end" className="fill-red-600 dark:fill-red-400 text-[10px] font-black font-sans">UL</text>
+          <text x={pad.left + plotW + 5} y={yUpperAction + 3.5} className="fill-red-600 dark:fill-red-400 text-[9px] font-mono font-bold">{upperAction.toFixed(3)}</text>
+
+          {/* 2. Upper Warning (+2σ) */}
+          <line x1={pad.left} y1={yUpperWarning} x2={pad.left + plotW} y2={yUpperWarning} stroke="#F59E0B" strokeWidth="1.3" strokeDasharray="3 3" />
+          <text x={pad.left - 6} y={yUpperWarning + 4} textAnchor="end" className="fill-amber-500 dark:fill-amber-400 text-[10px] font-black font-sans">WL</text>
+          <text x={pad.left + plotW + 5} y={yUpperWarning + 3.5} className="fill-amber-600 dark:fill-amber-400 text-[9px] font-mono font-bold">{upperWarning.toFixed(3)}</text>
+
+          {/* 3. Expected Value (Center Line) */}
+          <line x1={pad.left} y1={yNominal} x2={pad.left + plotW} y2={yNominal} stroke="#10B981" strokeWidth="2" />
+          <text x={pad.left - 6} y={yNominal + 4} textAnchor="end" className="fill-emerald-600 dark:fill-emerald-400 text-[10px] font-black font-sans">EV</text>
+          <text x={pad.left + plotW + 5} y={yNominal + 3.5} className="fill-emerald-600 dark:fill-emerald-400 text-[9px] font-mono font-black">{nominal.toFixed(3)}</text>
+
+          {/* 4. Lower Warning (-2σ) */}
+          <line x1={pad.left} y1={yLowerWarning} x2={pad.left + plotW} y2={yLowerWarning} stroke="#F59E0B" strokeWidth="1.3" strokeDasharray="3 3" />
+          <text x={pad.left - 6} y={yLowerWarning + 4} textAnchor="end" className="fill-amber-500 dark:fill-amber-400 text-[10px] font-black font-sans">WL</text>
+          <text x={pad.left + plotW + 5} y={yLowerWarning + 3.5} className="fill-amber-600 dark:fill-amber-400 text-[9px] font-mono font-bold">{lowerWarning.toFixed(3)}</text>
+
+          {/* 5. Lower Action (-3σ) */}
+          <line x1={pad.left} y1={yLowerAction} x2={pad.left + plotW} y2={yLowerAction} stroke="#EF4444" strokeWidth="1.6" strokeDasharray="4 3" />
+          <text x={pad.left - 6} y={yLowerAction + 4} textAnchor="end" className="fill-red-600 dark:fill-red-400 text-[10px] font-black font-sans">LL</text>
+          <text x={pad.left + plotW + 5} y={yLowerAction + 3.5} className="fill-red-600 dark:fill-red-400 text-[9px] font-mono font-bold">{lowerAction.toFixed(3)}</text>
+
+          {/* Points */}
+          {instPoints.map((p, pIdx) => {
+            const cx = pad.left + ((pIdx + 0.5) / Math.max(1, instPoints.length)) * plotW;
+            const cy = getY(p.value);
+            const isAction = p.status === 'action';
+            const hasNote = Boolean(p.issue || p.solution || p.picNik);
+            const isHov = hoveredPt?.id === p.id;
+
+            return (
+              <g 
+                key={`off-card-pt-${p.id}-${pIdx}`}
+                className="cursor-pointer"
+                onClick={() => onSelectPoint(p)}
+                onMouseEnter={() => setHoveredPt(p)}
+                onMouseLeave={() => setHoveredPt(null)}
+              >
+                {/* Connecting drop line to nominal */}
+                <line
+                  x1={cx}
+                  y1={yNominal}
+                  x2={cx}
+                  y2={cy}
+                  stroke={isAction ? '#EF4444' : '#F59E0B'}
+                  strokeWidth="1"
+                  strokeDasharray="2 2"
+                  opacity="0.35"
+                />
+
+                {/* Action Pulse Ring */}
+                {isAction && (
+                  <circle cx={cx} cy={cy} r={isHov ? 9 : 7} fill="#EF4444" fillOpacity="0.25" className="animate-pulse" />
+                )}
+
+                {/* Dot */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={isHov ? 6 : 4.5}
+                  fill={isAction ? '#EF4444' : '#F59E0B'}
+                  stroke="#FFFFFF"
+                  strokeWidth="1.8"
+                  className="transition-transform duration-100 hover:scale-125"
+                />
+
+                {/* Anomaly Note Pin Marker */}
+                {hasNote && (
+                  <g transform={`translate(${cx + 4}, ${cy - 8})`}>
+                    <circle r="4" fill="#3B82F6" stroke="#FFFFFF" strokeWidth="1" />
+                    <text x="0" y="2.5" textAnchor="middle" className="fill-white text-[6.5px] font-black">N</text>
+                  </g>
+                )}
+
+                {/* Label index */}
+                <text
+                  x={cx}
+                  y={pad.top + plotH + 12}
+                  textAnchor="middle"
+                  className="fill-slate-400 text-[8.5px] font-mono"
+                >
+                  #{p.index}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Hover mini-preview */}
+        {hoveredPt && (
+          <div className="absolute bottom-2 left-2 right-2 bg-slate-900/95 text-white p-2 rounded-xl text-[10.5px] font-mono flex items-center justify-between border border-slate-700 shadow-lg pointer-events-none z-20">
+            <div>
+              <span className="font-bold text-amber-300">Run #{hoveredPt.index}:</span> {hoveredPt.value.toFixed(3)}% (Δ {hoveredPt.diff > 0 ? '+' : ''}{hoveredPt.diff.toFixed(3)})
+            </div>
+            <div className={`px-1.5 py-0.2 rounded text-[9px] font-black ${hoveredPt.status === 'action' ? 'bg-red-500 text-white' : 'bg-amber-500 text-slate-950'}`}>
+              {hoveredPt.sigmaDist > 0 ? '+' : ''}{hoveredPt.sigmaDist.toFixed(2)}σ
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Card Footer Mini Stats */}
+      <div className="px-3.5 py-2 bg-slate-50 dark:bg-slate-950/40 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10.5px]">
+        <div className="flex items-center gap-2">
+          {actionPts > 0 && (
+            <span className="font-bold text-red-600 dark:text-red-400">
+              {actionPts} Kritis (&gt;3σ)
+            </span>
+          )}
+          {warnPts > 0 && (
+            <span className="font-bold text-amber-600 dark:text-amber-400">
+              {warnPts} Warn (2-3σ)
+            </span>
+          )}
+        </div>
+        <div className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">
+          Maks |Δ|: <span className="font-bold text-slate-900 dark:text-white">{maxDiff.toFixed(3)}%</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> = ({
   isOpen,
   onClose,
@@ -56,6 +268,12 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
   const [filterSeverity, setFilterSeverity] = useState<'ALL' | 'ACTION' | 'WARNING'>('ALL');
   const [chartMode, setChartMode] = useState<'sigma' | 'raw'>('sigma');
   const [hoveredChartPoint, setHoveredChartPoint] = useState<IsolatedOffspecPoint | null>(null);
+
+  // Chart Display & Standard separation states (On-Spec layout style)
+  const [offspecDisplayMode, setOffspecDisplayMode] = useState<'standards' | 'overview'>('standards');
+  const [selectedStdTab, setSelectedStdTab] = useState<string>('ALL');
+  const [stdViewMode, setStdViewMode] = useState<'grid' | 'side-by-side'>('grid');
+  const [selectedOffspecPoint, setSelectedOffspecPoint] = useState<IsolatedOffspecPoint | null>(null);
 
   // Distinct lists for filters
   const availableInstruments = useMemo(() => {
@@ -78,6 +296,39 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
       return true;
     });
   }, [isolatedPoints, filterInstrument, filterElement, filterSeverity]);
+
+  // Group filtered points by standard (for separate standards charts)
+  const standardsWithOffspec = useMemo(() => {
+    const map = new Map<string, {
+      stdCode: string;
+      points: IsolatedOffspecPoint[];
+      instrumentsMap: Record<string, IsolatedOffspecPoint[]>;
+      actionCount: number;
+      warningCount: number;
+    }>();
+
+    filteredPoints.forEach(p => {
+      if (!map.has(p.standardCode)) {
+        map.set(p.standardCode, {
+          stdCode: p.standardCode,
+          points: [],
+          instrumentsMap: {},
+          actionCount: 0,
+          warningCount: 0,
+        });
+      }
+      const entry = map.get(p.standardCode)!;
+      entry.points.push(p);
+      if (!entry.instrumentsMap[p.instrumentCode]) {
+        entry.instrumentsMap[p.instrumentCode] = [];
+      }
+      entry.instrumentsMap[p.instrumentCode].push(p);
+      if (p.status === 'action') entry.actionCount++;
+      else entry.warningCount++;
+    });
+
+    return Array.from(map.values());
+  }, [filteredPoints]);
 
   // -----------------------------------------------------------------
   // 1. REKAPITULASI PER INSTRUMEN
@@ -431,16 +682,16 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
           </div>
 
           {/* ------------------------------------------------------------- */}
-          {/* SECTION 2: CHART TERPISAH ISOLASI DATA OFFSPEC                */}
+          {/* SECTION 2: CHART TERPISAH ISOLASI DATA OFFSPEC (PER STANDAR)  */}
           {/* ------------------------------------------------------------- */}
-          <div className="bg-slate-50/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
+          <div className="bg-slate-50/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-4">
             
             {/* Toolbar Filters for Chart */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                <span className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5 mr-1">
                   <Activity className="w-4 h-4 text-rose-500" />
-                  Grafik Sebaran Titik Off-Spec Terisolasi
+                  Grafik Off-Spec Terisolasi
                 </span>
 
                 {/* Filter Instrument Dropdown */}
@@ -481,331 +732,517 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
                 </select>
               </div>
 
-              {/* Chart Mode Toggle */}
-              <div className="flex items-center gap-1 rounded-xl bg-slate-200/60 dark:bg-slate-800 p-0.5 text-xs font-bold self-start sm:self-auto">
-                <button
-                  onClick={() => setChartMode('sigma')}
-                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                    chartMode === 'sigma'
-                      ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                  title="Skala Terstandarisasi Sigma (Z-Score)"
-                >
-                  Skala Sigma (Z)
-                </button>
-                <button
-                  onClick={() => setChartMode('raw')}
-                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                    chartMode === 'raw'
-                      ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400'
-                  }`}
-                  title="Nilai Hasil Analisa Asli (%)"
-                >
-                  Nilai Asli (%)
-                </button>
+              {/* View & Layout Mode Controls */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Mode: Standards vs Global Overview */}
+                <div className="flex items-center gap-1 rounded-xl bg-slate-200/70 dark:bg-slate-800 p-0.5 text-xs font-bold">
+                  <button
+                    onClick={() => setOffspecDisplayMode('standards')}
+                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      offspecDisplayMode === 'standards'
+                        ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400'
+                    }`}
+                    title="Chart dipisah per CRM Standard (Sama seperti Chart On-Spec)"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Per Standar (On-Spec Style)</span>
+                  </button>
+                  <button
+                    onClick={() => setOffspecDisplayMode('overview')}
+                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      offspecDisplayMode === 'overview'
+                        ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400'
+                    }`}
+                    title="Ringkasan Sebaran Multivariat dalam 1 Grafik Z-Score"
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>Ringkasan Z-Score</span>
+                  </button>
+                </div>
+
+                {/* Layout Mode (Grid vs Side-by-side) when in standards view */}
+                {offspecDisplayMode === 'standards' && (
+                  <div className="flex items-center gap-1 rounded-xl bg-slate-200/70 dark:bg-slate-800 p-0.5 text-xs font-bold">
+                    <button
+                      onClick={() => setStdViewMode('grid')}
+                      className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                        stdViewMode === 'grid'
+                          ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                      title="Tampilan Grid Responsif"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span>Grid</span>
+                    </button>
+                    <button
+                      onClick={() => setStdViewMode('side-by-side')}
+                      className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                        stdViewMode === 'side-by-side'
+                          ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                      title="Tampilan Strip Berdampingan"
+                    >
+                      <Columns className="w-3.5 h-3.5" />
+                      <span>Strip</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Sigma / Raw Toggle when in overview mode */}
+                {offspecDisplayMode === 'overview' && (
+                  <div className="flex items-center gap-1 rounded-xl bg-slate-200/60 dark:bg-slate-800 p-0.5 text-xs font-bold">
+                    <button
+                      onClick={() => setChartMode('sigma')}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                        chartMode === 'sigma'
+                          ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Skala Sigma (Z)
+                    </button>
+                    <button
+                      onClick={() => setChartMode('raw')}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                        chartMode === 'raw'
+                          ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      Nilai Asli (%)
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* SVG CANVAS */}
-            <div className="relative">
-              {filteredPoints.length === 0 ? (
-                <div className="h-48 flex flex-col items-center justify-center text-center p-6 text-slate-400">
-                  <Activity className="w-8 h-8 mb-2 opacity-40 text-rose-500" />
-                  <p className="text-xs font-bold">Tidak ada data off-spec untuk kriteria filter yang dipilih.</p>
+            {/* CONTENT RENDER: STANDARDS-SEPARATED CHARTS (DEFAULT) VS OVERVIEW */}
+            {offspecDisplayMode === 'standards' ? (
+              <div className="space-y-6">
+                {/* Standards Quick Filter Tabs */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  <button
+                    onClick={() => setSelectedStdTab('ALL')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                      selectedStdTab === 'ALL'
+                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <span>Semua Standar</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white font-black">
+                      {filteredPoints.length}
+                    </span>
+                  </button>
+
+                  {standardsWithOffspec.map(std => (
+                    <button
+                      key={`std-tab-${std.stdCode}`}
+                      onClick={() => setSelectedStdTab(std.stdCode)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                        selectedStdTab === std.stdCode
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <span>{std.stdCode}</span>
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500/20 text-rose-700 dark:text-rose-300 font-black">
+                        {std.points.length}
+                      </span>
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <svg
-                  viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-                  className="w-full h-auto select-none overflow-visible"
-                >
-                  {/* Plot Card Background */}
-                  <rect
-                    x={padding.left}
-                    y={padding.top}
-                    width={plotWidth}
-                    height={plotHeight}
-                    fill="#FFFFFF"
-                    className="dark:fill-slate-900"
-                    stroke="#E2E8F0"
-                    strokeWidth="1.2"
-                    rx="6"
-                  />
 
-                  {/* Sigma Reference Lines when chartMode === 'sigma' */}
-                  {chartMode === 'sigma' ? (
-                    <>
-                      {/* +3σ Upper Action */}
-                      <line
-                        x1={padding.left}
-                        y1={getYCoord(3.0)}
-                        x2={padding.left + plotWidth}
-                        y2={getYCoord(3.0)}
-                        stroke="#EF4444"
-                        strokeWidth="1.5"
-                        strokeDasharray="4 3"
-                      />
-                      <text
-                        x={padding.left + plotWidth + 6}
-                        y={getYCoord(3.0) + 3.5}
-                        className="fill-red-600 dark:fill-red-400 text-[9px] font-mono font-bold"
-                      >
-                        +3.0σ (Action)
-                      </text>
+                {/* Standards Render Loop */}
+                {standardsWithOffspec.length === 0 ? (
+                  <div className="h-44 flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                    <Activity className="w-8 h-8 mb-2 opacity-40 text-rose-500" />
+                    <p className="text-xs font-bold">Tidak ada data off-spec untuk kriteria filter yang dipilih.</p>
+                  </div>
+                ) : (
+                  standardsWithOffspec
+                    .filter(std => selectedStdTab === 'ALL' || std.stdCode === selectedStdTab)
+                    .map(std => {
+                      return (
+                        <div
+                          key={`offspec-std-row-${std.stdCode}`}
+                          className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-4"
+                        >
+                          {/* Standard CRM Section Banner (PINNED HEADER - ON-SPEC STYLE) */}
+                          <div className="sticky top-0 z-10 -mx-4 -mt-4 px-4 py-2.5 rounded-t-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-2xs">
+                            <div className="flex items-center gap-2">
+                              <span className="px-3.5 py-1 rounded-lg text-xs font-black bg-slate-900 text-white dark:bg-white dark:text-slate-900 tracking-wider">
+                                STANDAR: {std.stdCode}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                                {std.points.length} Titik Off-Spec Terisolasi
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs font-mono">
+                              {std.actionCount > 0 && (
+                                <span className="font-black text-rose-600 dark:text-rose-400">
+                                  {std.actionCount} Kritis (&gt;3σ)
+                                </span>
+                              )}
+                              {std.warningCount > 0 && (
+                                <span className="font-bold text-amber-600 dark:text-amber-400">
+                                  {std.warningCount} Warning (2-3σ)
+                                </span>
+                              )}
+                            </div>
+                          </div>
 
-                      {/* +2σ Upper Warning */}
-                      <line
-                        x1={padding.left}
-                        y1={getYCoord(2.0)}
-                        x2={padding.left + plotWidth}
-                        y2={getYCoord(2.0)}
-                        stroke="#F59E0B"
-                        strokeWidth="1.2"
-                        strokeDasharray="3 3"
-                      />
-                      <text
-                        x={padding.left + plotWidth + 6}
-                        y={getYCoord(2.0) + 3.5}
-                        className="fill-amber-600 dark:fill-amber-400 text-[9px] font-mono"
-                      >
-                        +2.0σ (Warn)
-                      </text>
+                          {/* Cards per Instrument for this Standard */}
+                          {stdViewMode === 'side-by-side' ? (
+                            <div className="overflow-x-auto pb-3 pt-1 scrollbar-thin">
+                              <div className="flex flex-nowrap gap-4 min-w-max">
+                                {Object.entries(std.instrumentsMap).map(([instCode, pts]) => {
+                                  const theme = instrumentThemes[instCode] || {
+                                    headerBg: 'bg-cyan-500 text-slate-950 font-black',
+                                    dotColor: getInstrumentColor(instCode),
+                                    name: pts[0]?.instrumentName || instCode,
+                                  };
+                                  return (
+                                    <div key={`card-${std.stdCode}-${instCode}`} className="w-[380px] md:w-[420px] flex-shrink-0">
+                                      <XrfOffspecCard
+                                        stdCode={std.stdCode}
+                                        instCode={instCode}
+                                        instPoints={pts}
+                                        theme={theme}
+                                        onSelectPoint={(p) => setSelectedOffspecPoint(p)}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {Object.entries(std.instrumentsMap).map(([instCode, pts]) => {
+                                const theme = instrumentThemes[instCode] || {
+                                  headerBg: 'bg-cyan-500 text-slate-950 font-black',
+                                  dotColor: getInstrumentColor(instCode),
+                                  name: pts[0]?.instrumentName || instCode,
+                                };
+                                return (
+                                  <XrfOffspecCard
+                                    key={`card-${std.stdCode}-${instCode}`}
+                                    stdCode={std.stdCode}
+                                    instCode={instCode}
+                                    instPoints={pts}
+                                    theme={theme}
+                                    onSelectPoint={(p) => setSelectedOffspecPoint(p)}
+                                  />
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            ) : (
+              /* OVERVIEW SINGLE SVG CANVAS (EXISTING) */
+              <div className="relative">
+                {filteredPoints.length === 0 ? (
+                  <div className="h-48 flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                    <Activity className="w-8 h-8 mb-2 opacity-40 text-rose-500" />
+                    <p className="text-xs font-bold">Tidak ada data off-spec untuk kriteria filter yang dipilih.</p>
+                  </div>
+                ) : (
+                  <svg
+                    viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                    className="w-full h-auto select-none overflow-visible"
+                  >
+                    {/* Plot Card Background */}
+                    <rect
+                      x={padding.left}
+                      y={padding.top}
+                      width={plotWidth}
+                      height={plotHeight}
+                      fill="#FFFFFF"
+                      className="dark:fill-slate-900"
+                      stroke="#E2E8F0"
+                      strokeWidth="1.2"
+                      rx="6"
+                    />
 
-                      {/* 0.0σ Center Line */}
-                      <line
-                        x1={padding.left}
-                        y1={getYCoord(0.0)}
-                        x2={padding.left + plotWidth}
-                        y2={getYCoord(0.0)}
-                        stroke="#10B981"
-                        strokeWidth="1.8"
-                      />
-                      <text
-                        x={padding.left + plotWidth + 6}
-                        y={getYCoord(0.0) + 3.5}
-                        className="fill-emerald-600 dark:fill-emerald-400 text-[9px] font-mono font-black"
-                      >
-                        0.0σ (Target CL)
-                      </text>
+                    {/* Sigma Reference Lines when chartMode === 'sigma' */}
+                    {chartMode === 'sigma' ? (
+                      <>
+                        {/* +3σ Upper Action */}
+                        <line
+                          x1={padding.left}
+                          y1={getYCoord(3.0)}
+                          x2={padding.left + plotWidth}
+                          y2={getYCoord(3.0)}
+                          stroke="#EF4444"
+                          strokeWidth="1.5"
+                          strokeDasharray="4 3"
+                        />
+                        <text
+                          x={padding.left + plotWidth + 6}
+                          y={getYCoord(3.0) + 3.5}
+                          className="fill-red-600 dark:fill-red-400 text-[9px] font-mono font-bold"
+                        >
+                          +3.0σ (Action)
+                        </text>
 
-                      {/* -2σ Lower Warning */}
-                      <line
-                        x1={padding.left}
-                        y1={getYCoord(-2.0)}
-                        x2={padding.left + plotWidth}
-                        y2={getYCoord(-2.0)}
-                        stroke="#F59E0B"
-                        strokeWidth="1.2"
-                        strokeDasharray="3 3"
-                      />
-                      <text
-                        x={padding.left + plotWidth + 6}
-                        y={getYCoord(-2.0) + 3.5}
-                        className="fill-amber-600 dark:fill-amber-400 text-[9px] font-mono"
-                      >
-                        -2.0σ (Warn)
-                      </text>
+                        {/* +2σ Upper Warning */}
+                        <line
+                          x1={padding.left}
+                          y1={getYCoord(2.0)}
+                          x2={padding.left + plotWidth}
+                          y2={getYCoord(2.0)}
+                          stroke="#F59E0B"
+                          strokeWidth="1.2"
+                          strokeDasharray="3 3"
+                        />
+                        <text
+                          x={padding.left + plotWidth + 6}
+                          y={getYCoord(2.0) + 3.5}
+                          className="fill-amber-600 dark:fill-amber-400 text-[9px] font-mono"
+                        >
+                          +2.0σ (Warn)
+                        </text>
 
-                      {/* -3σ Lower Action */}
-                      <line
-                        x1={padding.left}
-                        y1={getYCoord(-3.0)}
-                        x2={padding.left + plotWidth}
-                        y2={getYCoord(-3.0)}
-                        stroke="#EF4444"
-                        strokeWidth="1.5"
-                        strokeDasharray="4 3"
-                      />
-                      <text
-                        x={padding.left + plotWidth + 6}
-                        y={getYCoord(-3.0) + 3.5}
-                        className="fill-red-600 dark:fill-red-400 text-[9px] font-mono font-bold"
-                      >
-                        -3.0σ (Action)
-                      </text>
+                        {/* 0.0σ Center Line */}
+                        <line
+                          x1={padding.left}
+                          y1={getYCoord(0.0)}
+                          x2={padding.left + plotWidth}
+                          y2={getYCoord(0.0)}
+                          stroke="#10B981"
+                          strokeWidth="1.8"
+                        />
+                        <text
+                          x={padding.left + plotWidth + 6}
+                          y={getYCoord(0.0) + 3.5}
+                          className="fill-emerald-600 dark:fill-emerald-400 text-[9px] font-mono font-black"
+                        >
+                          0.0σ (Target CL)
+                        </text>
 
-                      {/* Y-Axis Ticks */}
-                      {[-4, -3, -2, -1, 0, 1, 2, 3, 4].map(val => {
+                        {/* -2σ Lower Warning */}
+                        <line
+                          x1={padding.left}
+                          y1={getYCoord(-2.0)}
+                          x2={padding.left + plotWidth}
+                          y2={getYCoord(-2.0)}
+                          stroke="#F59E0B"
+                          strokeWidth="1.2"
+                          strokeDasharray="3 3"
+                        />
+                        <text
+                          x={padding.left + plotWidth + 6}
+                          y={getYCoord(-2.0) + 3.5}
+                          className="fill-amber-600 dark:fill-amber-400 text-[9px] font-mono"
+                        >
+                          -2.0σ (Warn)
+                        </text>
+
+                        {/* -3σ Lower Action */}
+                        <line
+                          x1={padding.left}
+                          y1={getYCoord(-3.0)}
+                          x2={padding.left + plotWidth}
+                          y2={getYCoord(-3.0)}
+                          stroke="#EF4444"
+                          strokeWidth="1.5"
+                          strokeDasharray="4 3"
+                        />
+                        <text
+                          x={padding.left + plotWidth + 6}
+                          y={getYCoord(-3.0) + 3.5}
+                          className="fill-red-600 dark:fill-red-400 text-[9px] font-mono font-bold"
+                        >
+                          -3.0σ (Action)
+                        </text>
+
+                        {/* Y-Axis Ticks */}
+                        {[-4, -3, -2, -1, 0, 1, 2, 3, 4].map(val => {
+                          const y = getYCoord(val);
+                          return (
+                            <g key={`sigma-tick-${val}`}>
+                              <line
+                                x1={padding.left - 4}
+                                y1={y}
+                                x2={padding.left}
+                                y2={y}
+                                stroke="#94A3B8"
+                                strokeWidth="1"
+                              />
+                              <text
+                                x={padding.left - 7}
+                                y={y + 3.5}
+                                textAnchor="end"
+                                className="fill-slate-500 text-[9.5px] font-mono"
+                              >
+                                {val > 0 ? `+${val}σ` : `${val}σ`}
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      // Raw value gridlines
+                      [0, 0.25, 0.5, 0.75, 1].map((pct, idx) => {
+                        const val = chartData.min + pct * (chartData.max - chartData.min);
                         const y = getYCoord(val);
                         return (
-                          <g key={`sigma-tick-${val}`}>
+                          <g key={`raw-tick-${idx}`}>
                             <line
-                              x1={padding.left - 4}
+                              x1={padding.left}
                               y1={y}
-                              x2={padding.left}
+                              x2={padding.left + plotWidth}
                               y2={y}
-                              stroke="#94A3B8"
-                              strokeWidth="1"
+                              stroke="#E2E8F0"
+                              className="dark:stroke-slate-800"
+                              strokeDasharray="3 3"
                             />
                             <text
-                              x={padding.left - 7}
+                              x={padding.left - 6}
                               y={y + 3.5}
                               textAnchor="end"
                               className="fill-slate-500 text-[9.5px] font-mono"
                             >
-                              {val > 0 ? `+${val}σ` : `${val}σ`}
+                              {val.toFixed(3)}%
                             </text>
                           </g>
                         );
-                      })}
-                    </>
-                  ) : (
-                    // Raw value gridlines
-                    [0, 0.25, 0.5, 0.75, 1].map((pct, idx) => {
-                      const val = chartData.min + pct * (chartData.max - chartData.min);
-                      const y = getYCoord(val);
+                      })
+                    )}
+
+                    {/* Plotted Data Points */}
+                    {filteredPoints.map((p, idx) => {
+                      const cx = getXCoord(idx, filteredPoints.length);
+                      const val = chartMode === 'sigma' ? p.sigmaDist : p.value;
+                      const cy = getYCoord(val);
+                      const isAction = p.status === 'action';
+                      const pointColor = getInstrumentColor(p.instrumentCode);
+                      const isHovered = hoveredChartPoint?.id === p.id;
+
                       return (
-                        <g key={`raw-tick-${idx}`}>
+                        <g key={`offspec-pt-${p.id}-${idx}`}>
                           <line
-                            x1={padding.left}
-                            y1={y}
-                            x2={padding.left + plotWidth}
-                            y2={y}
-                            stroke="#E2E8F0"
-                            className="dark:stroke-slate-800"
-                            strokeDasharray="3 3"
+                            x1={cx}
+                            y1={chartMode === 'sigma' ? getYCoord(0) : getYCoord(p.nominalValue)}
+                            x2={cx}
+                            y2={cy}
+                            stroke={pointColor}
+                            strokeWidth="1"
+                            strokeDasharray="2 2"
+                            opacity="0.4"
                           />
-                          <text
-                            x={padding.left - 6}
-                            y={y + 3.5}
-                            textAnchor="end"
-                            className="fill-slate-500 text-[9.5px] font-mono"
-                          >
-                            {val.toFixed(3)}%
-                          </text>
-                        </g>
-                      );
-                    })
-                  )}
 
-                  {/* Plotted Data Points */}
-                  {filteredPoints.map((p, idx) => {
-                    const cx = getXCoord(idx, filteredPoints.length);
-                    const val = chartMode === 'sigma' ? p.sigmaDist : p.value;
-                    const cy = getYCoord(val);
-                    const isAction = p.status === 'action';
-                    const pointColor = getInstrumentColor(p.instrumentCode);
-                    const isHovered = hoveredChartPoint?.id === p.id;
+                          {isAction && (
+                            <circle
+                              cx={cx}
+                              cy={cy}
+                              r={isHovered ? 9 : 7}
+                              fill="#EF4444"
+                              fillOpacity="0.2"
+                              className="animate-pulse"
+                            />
+                          )}
 
-                    return (
-                      <g key={`offspec-pt-${p.id}-${idx}`}>
-                        {/* Connecting Line to CL */}
-                        <line
-                          x1={cx}
-                          y1={chartMode === 'sigma' ? getYCoord(0) : getYCoord(p.nominalValue)}
-                          x2={cx}
-                          y2={cy}
-                          stroke={pointColor}
-                          strokeWidth="1"
-                          strokeDasharray="2 2"
-                          opacity="0.4"
-                        />
-
-                        {/* Outer Glow / Pulse for Action points */}
-                        {isAction && (
                           <circle
                             cx={cx}
                             cy={cy}
-                            r={isHovered ? 9 : 7}
-                            fill="#EF4444"
-                            fillOpacity="0.2"
-                            className="animate-pulse"
+                            r={isHovered ? 6 : 4.5}
+                            fill={pointColor}
+                            stroke="#FFFFFF"
+                            strokeWidth="1.8"
+                            className="cursor-pointer transition-transform duration-100 hover:scale-125"
+                            onClick={() => setSelectedOffspecPoint(p)}
+                            onMouseEnter={() => setHoveredChartPoint(p)}
+                            onMouseLeave={() => setHoveredChartPoint(null)}
                           />
-                        )}
 
-                        {/* Main Dot */}
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={isHovered ? 6 : 4.5}
-                          fill={pointColor}
-                          stroke="#FFFFFF"
-                          strokeWidth="1.8"
-                          className="cursor-pointer transition-transform duration-100 hover:scale-125"
-                          onMouseEnter={() => setHoveredChartPoint(p)}
-                          onMouseLeave={() => setHoveredChartPoint(null)}
-                        />
+                          <text
+                            x={cx}
+                            y={padding.top + plotHeight + 14}
+                            textAnchor="middle"
+                            className="fill-slate-400 text-[8.5px] font-mono"
+                          >
+                            #{idx + 1}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                )}
 
-                        {/* X-axis Sequence Label */}
-                        <text
-                          x={cx}
-                          y={padding.top + plotHeight + 14}
-                          textAnchor="middle"
-                          className="fill-slate-400 text-[8.5px] font-mono"
-                        >
-                          #{idx + 1}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </svg>
-              )}
-
-              {/* Floating Tooltip inside Off-Spec Chart */}
-              {hoveredChartPoint && (
-                <div className="absolute top-2 right-4 bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-neutral-100 text-xs p-3 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 font-sans z-30 space-y-1.5 min-w-[210px] animate-in fade-in duration-100 pointer-events-none">
-                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
-                    <span className="font-bold text-slate-900 dark:text-white">
-                      {hoveredChartPoint.instrumentName}
-                    </span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800">
-                      {hoveredChartPoint.standardCode}
-                    </span>
-                  </div>
-                  <div className="space-y-1 text-[11px] font-mono">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-sans">Tanggal:</span>
-                      <span>{hoveredChartPoint.analyzedAt || hoveredChartPoint.date}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-sans">Unsur {hoveredChartPoint.element}:</span>
-                      <span className="font-bold">{hoveredChartPoint.value.toFixed(3)} %</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-sans">Acuan CL:</span>
-                      <span>{hoveredChartPoint.nominalValue.toFixed(3)} %</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-sans">Deviasi (Δ):</span>
-                      <span className={hoveredChartPoint.diff >= 0 ? 'text-emerald-600' : 'text-amber-600'}>
-                        {hoveredChartPoint.diff > 0 ? '+' : ''}{hoveredChartPoint.diff.toFixed(3)} %
+                {/* Floating Tooltip inside Off-Spec Overview Chart */}
+                {hoveredChartPoint && (
+                  <div className="absolute top-2 right-4 bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-neutral-100 text-xs p-3 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 font-sans z-30 space-y-1.5 min-w-[210px] animate-in fade-in duration-100 pointer-events-none">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {hoveredChartPoint.instrumentName}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800">
+                        {hoveredChartPoint.standardCode}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-sans">Sigma Dist:</span>
-                      <span className="font-black text-rose-600 dark:text-rose-400">
-                        {hoveredChartPoint.sigmaDist > 0 ? `+${hoveredChartPoint.sigmaDist.toFixed(2)}` : hoveredChartPoint.sigmaDist.toFixed(2)}σ
+                    <div className="space-y-1 text-[11px] font-mono">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 font-sans">Tanggal:</span>
+                        <span>{hoveredChartPoint.analyzedAt || hoveredChartPoint.date}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 font-sans">Unsur {hoveredChartPoint.element}:</span>
+                        <span className="font-bold">{hoveredChartPoint.value.toFixed(3)} %</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 font-sans">Acuan CL:</span>
+                        <span>{hoveredChartPoint.nominalValue.toFixed(3)} %</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 font-sans">Deviasi (Δ):</span>
+                        <span className={hoveredChartPoint.diff >= 0 ? 'text-emerald-600' : 'text-amber-600'}>
+                          {hoveredChartPoint.diff > 0 ? '+' : ''}{hoveredChartPoint.diff.toFixed(3)} %
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 font-sans">Sigma Dist:</span>
+                        <span className="font-black text-rose-600 dark:text-rose-400">
+                          {hoveredChartPoint.sigmaDist > 0 ? `+${hoveredChartPoint.sigmaDist.toFixed(2)}` : hoveredChartPoint.sigmaDist.toFixed(2)}σ
+                        </span>
+                      </div>
+                    </div>
+                    <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px]">
+                      <span className="text-slate-400">Status:</span>
+                      <span className={`px-2 py-0.5 rounded font-black ${
+                        hoveredChartPoint.status === 'action'
+                          ? 'bg-red-100 text-red-700 border border-red-200'
+                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}>
+                        {hoveredChartPoint.statusLabel}
                       </span>
                     </div>
                   </div>
-                  <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px]">
-                    <span className="text-slate-400">Status:</span>
-                    <span className={`px-2 py-0.5 rounded font-black ${
-                      hoveredChartPoint.status === 'action'
-                        ? 'bg-red-100 text-red-700 border border-red-200'
-                        : 'bg-amber-100 text-amber-800 border border-amber-200'
-                    }`}>
-                      {hoveredChartPoint.statusLabel}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
 
-            {/* Chart Legend of Active Instruments */}
-            <div className="flex items-center gap-3 flex-wrap pt-2 border-t border-slate-200 dark:border-slate-800">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Legenda Alat:</span>
-              {availableInstruments.map(i => (
-                <div key={`legend-${i.code}`} className="flex items-center gap-1.5 text-xs">
-                  <span 
-                    className="w-2.5 h-2.5 rounded-full" 
-                    style={{ backgroundColor: getInstrumentColor(i.code) }} 
-                  />
-                  <span className="text-slate-700 dark:text-slate-300 font-bold text-[11px]">{i.name}</span>
+                {/* Chart Legend of Active Instruments */}
+                <div className="flex items-center gap-3 flex-wrap pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Legenda Alat:</span>
+                  {availableInstruments.map(i => (
+                    <div key={`legend-${i.code}`} className="flex items-center gap-1.5 text-xs">
+                      <span 
+                        className="w-2.5 h-2.5 rounded-full" 
+                        style={{ backgroundColor: getInstrumentColor(i.code) }} 
+                      />
+                      <span className="text-slate-700 dark:text-slate-300 font-bold text-[11px]">{i.name}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* ------------------------------------------------------------- */}
@@ -963,6 +1400,139 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
             Tutup
           </button>
         </div>
+
+        {/* DETAIL & ACTION DIALOG FOR SELECTED OFFSPEC POINT */}
+        {selectedOffspecPoint && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+            onClick={() => setSelectedOffspecPoint(null)}
+          >
+            <div 
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 text-slate-800 dark:text-slate-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-2 rounded-xl ${
+                    selectedOffspecPoint.status === 'action'
+                      ? 'bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400'
+                      : 'bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400'
+                  }`}>
+                    {selectedOffspecPoint.status === 'action' ? (
+                      <AlertCircle className="w-5 h-5" />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900 dark:text-white">
+                      Detail Titik #{selectedOffspecPoint.index} Terisolasi
+                    </h4>
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      {selectedOffspecPoint.instrumentName} • {selectedOffspecPoint.standardCode}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedOffspecPoint(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Data Grid */}
+              <div className="grid grid-cols-2 gap-2.5 text-xs font-mono bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-sans">Waktu Analisa:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    {selectedOffspecPoint.analyzedAt || selectedOffspecPoint.date}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-sans">Unsur:</span>
+                  <span className="font-black text-teal-600 dark:text-teal-400">
+                    {selectedOffspecPoint.element}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-sans">Hasil Analisa:</span>
+                  <span className="font-black text-base text-slate-900 dark:text-white">
+                    {selectedOffspecPoint.value.toFixed(3)} %
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-sans">Acuan Expected Value (EV):</span>
+                  <span className="font-bold text-slate-600 dark:text-slate-300">
+                    {selectedOffspecPoint.nominalValue.toFixed(3)} %
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-sans">Deviasi (Δ):</span>
+                  <span className={`font-bold ${
+                    selectedOffspecPoint.diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+                  }`}>
+                    {selectedOffspecPoint.diff > 0 ? '+' : ''}{selectedOffspecPoint.diff.toFixed(3)} %
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-sans">Jarak Sigma:</span>
+                  <span className="font-black text-rose-600 dark:text-rose-400">
+                    {selectedOffspecPoint.sigmaDist > 0 ? `+${selectedOffspecPoint.sigmaDist.toFixed(2)}` : selectedOffspecPoint.sigmaDist.toFixed(2)}σ
+                  </span>
+                </div>
+              </div>
+
+              {/* Note / Action Section */}
+              {(selectedOffspecPoint.issue || selectedOffspecPoint.solution || selectedOffspecPoint.picName) && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs space-y-1.5">
+                  <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                    <span>Catatan Anomali & Tindakan</span>
+                  </div>
+                  {selectedOffspecPoint.issue && (
+                    <div>
+                      <span className="font-bold text-rose-600 dark:text-rose-400">Issue: </span>
+                      <span className="text-slate-700 dark:text-slate-300">{selectedOffspecPoint.issue}</span>
+                    </div>
+                  )}
+                  {selectedOffspecPoint.solution && (
+                    <div>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">Action: </span>
+                      <span className="text-slate-700 dark:text-slate-300">{selectedOffspecPoint.solution}</span>
+                    </div>
+                  )}
+                  {selectedOffspecPoint.picName && (
+                    <div className="text-[11px] text-slate-500">
+                      <span className="font-semibold">PIC: </span>
+                      <span>[{selectedOffspecPoint.picNik || '-'}] {selectedOffspecPoint.picName}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Modal Buttons */}
+              <div className="pt-2 flex items-center justify-between gap-3">
+                <button
+                  onClick={() => setSelectedOffspecPoint(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  Tutup
+                </button>
+                <button
+                  onClick={() => {
+                    onRemovePoint(selectedOffspecPoint.id);
+                    toast.success(`Titik #${selectedOffspecPoint.index} dikembalikan ke grafik kontrol utama.`);
+                    setSelectedOffspecPoint(null);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Kembalikan ke Chart Utama</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
