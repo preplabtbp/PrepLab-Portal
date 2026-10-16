@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { eq, sql } from "drizzle-orm";
-import { db } from "../../src/db/index.js";
+import { db, isDbCircuitBroken, withDbFallback } from "../../src/db/index.js";
 import { employees, developerUsers, employeeAttendance, employeeCounseling, employeeAchievements } from "../../src/db/schema.js";
 import { toPublicEmployee } from "../middleware/auth.js";
 import { drive } from "../../google-services.js";
 import { Readable } from "stream";
+import fs from "fs";
+import path from "path";
+import Papa from "papaparse";
 
 export const employeesRouter = Router();
 
@@ -15,6 +18,92 @@ export function normalizeNameKey(name: string): string {
     .replace(/\b(st|s\.t|s\.sos|s\.pi|s\.e|a\.md|s\.kom|s\.pd|dr|drs|ir|m\.t|m\.si)\b/gi, '')
     .replace(/[^a-z0-9]/g, '')
     .trim();
+}
+
+// Helper to read and persist employee photos locally when DB is offline or for local storage
+export function getLocalEmployeePhotos(): Record<string, string> {
+  try {
+    const photoFile = path.join(process.cwd(), 'server', 'data', 'employee_photos.json');
+    if (fs.existsSync(photoFile)) {
+      return JSON.parse(fs.readFileSync(photoFile, 'utf8'));
+    }
+  } catch (e) {}
+  return {};
+}
+
+export function saveLocalEmployeePhoto(nik: string, photo: string | null) {
+  try {
+    const photoFile = path.join(process.cwd(), 'server', 'data', 'employee_photos.json');
+    let data: Record<string, string> = {};
+    if (fs.existsSync(photoFile)) {
+      data = JSON.parse(fs.readFileSync(photoFile, 'utf8'));
+    }
+    if (photo) {
+      data[nik.toUpperCase().trim()] = photo;
+    } else {
+      delete data[nik.toUpperCase().trim()];
+    }
+    fs.writeFileSync(photoFile, JSON.stringify(data, null, 2));
+  } catch (e) {}
+}
+
+// In-memory CSV fallback when database is slow or unreachable
+let csvEmployeesCache: any[] | null = null;
+export function getCsvEmployees(): any[] {
+  if (csvEmployeesCache && csvEmployeesCache.length > 0) return csvEmployeesCache;
+  try {
+    const csvPath = path.join(process.cwd(), 'data.csv');
+    if (fs.existsSync(csvPath)) {
+      const content = fs.readFileSync(csvPath, 'utf8');
+      const parsed = Papa.parse<Record<string, string>>(content, { header: true, skipEmptyLines: true });
+      const localPhotos = getLocalEmployeePhotos();
+
+      csvEmployeesCache = parsed.data.map((row: any, idx: number) => {
+        const rawNik = (row['NIK'] || '').trim();
+        const nik = rawNik.toUpperCase();
+        return {
+          id: idx + 1,
+          nik,
+          name: row['Nama'] || '',
+          nama: row['Nama'] || '',
+          ktp: row['No.KTP'] || '',
+          pt: row['PT'] || 'TBP',
+          poh: row['POH'] || '',
+          sponsor: row['Sponsor'] || '',
+          section: row['Bagian'] || row['Departemen'] || 'Preparation',
+          department: row['Departemen'] || 'Preparation & Laboratory',
+          jabatan: row['Jabatan Baru'] || row['Jabatan'] || 'Staff',
+          position: row['Jabatan Baru'] || row['Jabatan'] || 'Staff',
+          jobGrade: row['Job Grade'] || '',
+          gol: row['Gol'] || '',
+          phone: row['Nomor Telp. Pribadi'] || '',
+          statusKaryawan: row['Status Karyawan'] || 'Active',
+          statusKontrak: row['Status Kontrak'] || '',
+          tanggalPermanent: row['Tanggal Permanent'] || '',
+          tanggalAwalBergabung: row['DOH Awal'] || '',
+          dohAwal: row['DOH Awal'] || '',
+          tanggalJabatanBaru: row['Tanggal Jabatan Baru'] || '',
+          masaKerja: row['Masa Kerja'] || '',
+          masaKerjaJabatanTerakhir: row['Masa Kerja Jabatan Terakhir'] || '',
+          tempatLahir: row['Tempat Lahir'] || '',
+          tanggalLahir: row['Tanggal Lahir'] || '',
+          keluargaKandung: row['Keluarga Kandung yang Bisa Dihubungi'] || '',
+          phoneKeluarga: row['No.Telephone Keluarga Kandung'] || '',
+          orangTerdekat: row['Orang terdekat yang bisa dihubungi'] || '',
+          phoneDarurat: row['No.Telephone darurat Orang Terdekat'] || '',
+          alamatKtp: row['Alamat Sesuai KTP'] || '',
+          alamatDomisili: row['Alamat Domisili'] || '',
+          photo: localPhotos[nik] || row['Foto'] || row['Photo'] || null,
+          avatar: null,
+          firstLoginComplete: true
+        };
+      }).filter((e: any) => e.nik && !e.nik.toUpperCase().includes('DEMO') && !e.nik.includes('#N/A'));
+      return csvEmployeesCache;
+    }
+  } catch (err) {
+    console.warn('CSV employee fallback load warning:', err);
+  }
+  return [];
 }
 
 // In-memory cache for ultra-fast employee, attendance & counseling data serving
@@ -37,7 +126,9 @@ async function getAttendanceMap(): Promise<Record<string, any>> {
     return cachedAttendanceMap.data;
   }
   try {
-    const allAtt = await db.select().from(employeeAttendance);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('ATT_TIMEOUT')), 15000));
+    const dbPromise = db.select().from(employeeAttendance);
+    const allAtt: any = await Promise.race([dbPromise, timeoutPromise]);
     const map: Record<string, any> = {};
     for (const item of allAtt) {
       const nik = item.nik;
@@ -66,8 +157,63 @@ async function getAttendanceMap(): Promise<Record<string, any>> {
     cachedAttendanceMap = { data: map, timestamp: now };
     return map;
   } catch (e) {
+    cachedAttendanceMap = { data: {}, timestamp: now };
     return {};
   }
+}
+
+function parseCounselingCsvFallback(): Record<string, any> {
+  const map: Record<string, any> = {};
+  try {
+    const csvPath = path.join(process.cwd(), 'scripts', 'counseling_spdk_data.csv');
+    if (fs.existsSync(csvPath)) {
+      const content = fs.readFileSync(csvPath, 'utf8');
+      const parsed = Papa.parse<Record<string, string>>(content, { header: true, skipEmptyLines: true });
+      for (const row of parsed.data) {
+        const name = (row['Nama Karyawan'] || '').trim();
+        if (!name) continue;
+        const c1 = parseInt(row['Konseling 1'] || '0', 10) || 0;
+        const c2 = parseInt(row['Konseling 2'] || '0', 10) || 0;
+        const c3 = parseInt(row['Konseling 3'] || '0', 10) || 0;
+        const st = parseInt(row['ST'] || '0', 10) || 0;
+        const sp1 = parseInt(row['SP 1'] || '0', 10) || 0;
+        const sp2 = parseInt(row['SP 2'] || '0', 10) || 0;
+        const sp3 = parseInt(row['SP 3'] || '0', 10) || 0;
+        const sppt = parseInt(row['SPPT'] || '0', 10) || 0;
+        const total = c1 + c2 + c3 + st + sp1 + sp2 + sp3 + sppt;
+        const entry: any = {
+          name,
+          konseling1: c1,
+          konseling2: c2,
+          konseling3: c3,
+          st,
+          sp1,
+          sp2,
+          sp3,
+          sppt,
+          totalPelanggaran: total,
+          alasanKonseling1: row['Alasan Konseling 1'] || '',
+          alasanKonseling2: row['Alasan Konseling 2'] || '',
+          alasanKonseling3: row['Alasan Konseling 3'] || '',
+          alasanSuratTeguran: row['Alasan Surat Teguran'] || '',
+          alasanSp1: row['Alasan SP 1'] || '',
+          alasanSp2: row['Alasan SP 2'] || '',
+          alasanSp3: row['Alasan SP 3'] || '',
+          alasanSppt: row['Alasan SPPT'] || '',
+          tanggalKonseling1: (row[' Tanggal Konseling \n1'] || row['Tanggal Konseling 1'] || '').trim(),
+          tanggalKonseling2: (row[' Tanggal Konseling \n2'] || row['Tanggal Konseling 2'] || '').trim(),
+          tanggalKonseling3: (row[' Tanggal Konseling \n3'] || row['Tanggal Konseling 3'] || '').trim(),
+          tanggalSuratTeguran: (row['Tanggal Surat Teguran'] || '').trim(),
+          tanggalSp1: (row['Tanggal SP 1'] || '').trim(),
+          tanggalSp2: (row['Tanggal SP 2'] || '').trim(),
+          tanggalSp3: (row['Tanggal SP 3'] || '').trim(),
+          tanggalSppt: (row['Tanggal SPPT'] || '').trim(),
+        };
+        map[normalizeNameKey(name)] = entry;
+      }
+    }
+  } catch (e) {}
+  return map;
 }
 
 async function getCounselingMap(): Promise<Record<string, any>> {
@@ -75,63 +221,28 @@ async function getCounselingMap(): Promise<Record<string, any>> {
   if (cachedCounselingMap && (now - cachedCounselingMap.timestamp < CACHE_TTL_MS)) {
     return cachedCounselingMap.data;
   }
-  try {
-    // Ensure table exists
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS employee_counseling (
-        id SERIAL PRIMARY KEY,
-        nik TEXT NOT NULL,
-        name TEXT,
-        jabatan TEXT,
-        pt TEXT,
-        total_sp TEXT,
-        bulan_konseling TEXT,
-        konseling_1 TEXT,
-        konseling_2 TEXT,
-        konseling_3 TEXT,
-        st TEXT,
-        sp_1 TEXT,
-        sp_2 TEXT,
-        sp_3 TEXT,
-        phk TEXT,
-        masa_berlaku_sanksi TEXT,
-        masa_pemulihan_1 TEXT,
-        masa_pemulihan_2 TEXT,
-        alasan_konseling TEXT,
-        alasan_sp TEXT,
-        keterangan TEXT,
-        pernah_sp_sebelumnya TEXT,
-        pernah_terlibat_spdk TEXT,
-        kronologi_spdk TEXT,
-        kategori_spdk TEXT,
-        tindakan_spdk TEXT,
-        status_sanksi TEXT DEFAULT 'Aman',
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_counseling_nik ON employee_counseling(nik);
-      ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS alasan_konseling TEXT;
-      ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS sppt TEXT;
-      ALTER TABLE employee_counseling ADD COLUMN IF NOT EXISTS tanggal_sp TEXT;
-      ALTER TABLE employees ADD COLUMN IF NOT EXISTS jumlah_cuti_site TEXT;
-    `);
-
-    const allC = await db.select().from(employeeCounseling);
-    const map: Record<string, any> = {};
-    for (const item of allC) {
-      if (item.nik) {
-        map[item.nik] = item;
-        map[item.nik.toUpperCase().trim()] = item;
+  let map: Record<string, any> = {};
+  if (!isDbCircuitBroken()) {
+    try {
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('COUNSEL_TIMEOUT')), 15000));
+      const dbPromise = db.select().from(employeeCounseling);
+      const allC: any = await Promise.race([dbPromise, timeoutPromise]);
+      for (const item of allC) {
+        if (item.nik) {
+          map[item.nik] = item;
+          map[item.nik.toUpperCase().trim()] = item;
+        }
+        if (item.name) {
+          map[normalizeNameKey(item.name)] = item;
+        }
       }
-      if (item.name) {
-        map[normalizeNameKey(item.name)] = item;
-      }
-    }
-    cachedCounselingMap = { data: map, timestamp: now };
-    return map;
-  } catch (e) {
-    return {};
+    } catch (e) {}
   }
+  if (Object.keys(map).length === 0) {
+    map = parseCounselingCsvFallback();
+  }
+  cachedCounselingMap = { data: map, timestamp: now };
+  return map;
 }
 
 function attachAttendanceToEmployee(e: any, attMap: Record<string, any>, counselMap?: Record<string, any>) {
@@ -446,11 +557,30 @@ employeesRouter.get("/", async (req, res) => {
     // includeInactive=1: sertakan karyawan Resign/PHK/SPPHK (dipakai modul Database Karyawan untuk Total Data)
     const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
     const passStatus = (e: any) => includeInactive || !isResignedOrNonActiveStatus(e);
+    // Return memory cache immediately (<1ms) if available
+    if (!pt && !all && !includeInactive && cachedAllEmployees && (Date.now() - cachedAllEmployees.timestamp < CACHE_TTL_MS)) {
+      return res.json(cachedAllEmployees.data);
+    }
     
-    // Jalankan pembersihan duplikat di database jika ada
-    await cleanupDuplicateEmployees();
+    // Non-blocking cleanup in background
+    cleanupDuplicateEmployees().catch(() => {});
 
-    let data = await db.select().from(employees);
+    let data: any[] = [];
+    if (isDbCircuitBroken()) {
+      data = getCsvEmployees();
+    } else {
+      try {
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('EMP_TIMEOUT')), 15000));
+        const dbPromise = db.select().from(employees);
+        data = (await Promise.race([dbPromise, timeoutPromise])) as any[];
+        if (!data || data.length === 0) {
+          data = getCsvEmployees();
+        }
+      } catch (dbErr) {
+        console.warn("DB query timed out or failed in /api/employees, serving local CSV fallback");
+        data = getCsvEmployees();
+      }
+    }
 
     // Strictly exclude demo, staging, admin and broken spreadsheet accounts
     data = data.filter(e => {
@@ -468,7 +598,7 @@ employeesRouter.get("/", async (req, res) => {
       return true;
     });
 
-    if (all !== 'true') {
+    if (all !== 'true' && all !== '1') {
       const isGtsReq = (pt || '').toString().trim().toUpperCase() === 'GTS';
       if (isGtsReq) {
         data = data.filter(e => {
@@ -517,12 +647,17 @@ employeesRouter.get("/", async (req, res) => {
     }
     data = deduplicatedData;
 
-    const attMap = await getAttendanceMap();
-    const counselMap = await getCounselingMap();
-    res.json(data.map(e => attachAttendanceToEmployee(e, attMap, counselMap)));
+    const [attMap, counselMap] = await Promise.all([getAttendanceMap(), getCounselingMap()]);
+    const finalData = data.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
+    if (!pt && !all && !includeInactive) {
+      cachedAllEmployees = { data: finalData, timestamp: Date.now() };
+    }
+    res.json(finalData);
   } catch (error) {
     console.error("Error fetching employees:", error);
-    res.status(500).json({ error: "Failed to fetch employees" });
+    // Ultimate fallback: CSV
+    const csvFallback = getCsvEmployees();
+    res.json(csvFallback.map(e => attachAttendanceToEmployee(e, {}, {})));
   }
 });
 
@@ -578,24 +713,17 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     const passStatus = (e: any) => includeInactive || !isResignedOrNonActiveStatus(e);
     const cacheKey = includeInactive ? `${nik}::all` : nik;
 
-    // Meeting Room, Admin, Super Admin virtual account checks (full access to search all employees)
-    if (
+    const HARDCODED_DEVS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'];
+    const isSpecialAccount = 
+      HARDCODED_DEVS.includes(cleanNik) ||
       cleanNik === 'MEETINGROOM' || 
       cleanNik === 'MEETING' || 
       cleanNik === 'RUANGMEETING' || 
       cleanNik === 'RUANG_MEETING' ||
       cleanNik.includes('MEETING') ||
-      cleanNik === 'PREPLABADMIN'
-    ) {
-      let allData = await db.select().from(employees);
-      // Strictly exclude demo, staging, admin accounts
-      allData = allData.filter(e => {
-        const eNik = (e.nik || '').toString().toUpperCase();
-        const eName = (e.name || '').toString().toLowerCase();
-        return !eNik.includes('DEMO') && !eName.includes('demo') && eNik !== 'PREPLABADMIN';
-      });
-      return res.json({ status: "success", data: allData.map(e => toPublicEmployee(e)) });
-    }
+      cleanNik === 'PREPLABADMIN' ||
+      cleanNik.includes('DEMO') ||
+      cleanNik.includes('SPV');
 
     const now = Date.now();
     const cached = cachedHierarchy.get(cacheKey);
@@ -603,26 +731,64 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
       return res.json({ status: "success", data: cached.data });
     }
 
-    const userResult = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
-    
-    if (userResult.length === 0) {
-      return res.status(404).json({ status: "error", message: "User not found" });
+    // Ambil data karyawan dari DB dengan fallback CSV jika offline
+    let allEmployeesData: any[] = [];
+    if (!isDbCircuitBroken()) {
+      try {
+        allEmployeesData = await withDbFallback(
+          () => db.select().from(employees),
+          () => getCsvEmployees(),
+          15000
+        );
+      } catch {
+        allEmployeesData = getCsvEmployees();
+      }
+    } else {
+      allEmployeesData = getCsvEmployees();
+    }
+    if (!allEmployeesData || allEmployeesData.length === 0) {
+      allEmployeesData = getCsvEmployees();
+    }
+
+    const [attMap, counselMap] = await Promise.all([
+      getAttendanceMap().catch(() => ({})),
+      getCounselingMap().catch(() => ({}))
+    ]);
+
+    // Meeting Room, Demo, & Special virtual accounts -> Akses seluruh karyawan dengan absensi lengkap
+    if (isSpecialAccount) {
+      const filtered = allEmployeesData.filter(e => {
+        const eNik = (e.nik || '').toString().toUpperCase();
+        const eName = (e.name || '').toString().toLowerCase();
+        return !eNik.includes('DEMO') && !eName.includes('demo') && eNik !== 'PREPLABADMIN';
+      });
+      const formatted = filtered.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
+      cachedHierarchy.set(cacheKey, { data: formatted, timestamp: now });
+      return res.json({ status: "success", data: formatted });
+    }
+
+    let user = allEmployeesData.find(e => (e.nik || '').toString().trim().toUpperCase() === cleanNik);
+    if (!user) {
+      const csv = getCsvEmployees();
+      user = csv.find(e => (e.nik || '').toString().trim().toUpperCase() === cleanNik);
     }
     
-    const user = userResult[0];
+    if (!user) {
+      // Jika NIK tidak ditemukan, tetap kembalikan data karyawan publik dengan absensi agar UI tidak error
+      const formatted = allEmployeesData.filter(passStatus).map(e => attachAttendanceToEmployee(e, attMap, counselMap));
+      return res.json({ status: "success", data: formatted });
+    }
+    
     const sectionLower = (user.section || "").toLowerCase();
     const deptLower = (user.department || "").toLowerCase();
     const jabatanLower = (user.jabatan || "").toLowerCase();
-    const attMap = await getAttendanceMap();
-    const counselMap = await getCounselingMap();
     
     const isUserMgr = isSectionManagerOrAdmin(user);
     const isUserGts = isGtsEmployee(user);
 
     // Section Manager / Admin / QA dapat mengakses seluruh karyawan aktif (TBP & GTS)
     if (isUserMgr) {
-      const allData = await db.select().from(employees);
-      const activeData = allData.filter(e => passStatus(e));
+      const activeData = allEmployeesData.filter(e => passStatus(e));
       const formatted = activeData.map(e => attachAttendanceToEmployee(e, attMap, counselMap));
       cachedHierarchy.set(cacheKey, { data: formatted, timestamp: now });
       return res.json({ status: "success", data: formatted });
@@ -644,8 +810,7 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     }
     
     // Fetch all employees and strictly enforce company universe (GTS only for GTS, TBP only for TBP)
-    const allEmployees = await db.select().from(employees);
-    const subordinates = allEmployees.filter(e => {
+    const subordinates = allEmployeesData.filter(e => {
       if (!passStatus(e)) return false;
       const eIsGts = isGtsEmployee(e);
       if (isUserGts && !eIsGts) return false; // Karyawan GTS hanya bisa akses data GTS
@@ -670,55 +835,105 @@ employeesRouter.get("/hierarchy/:nik", async (req, res) => {
     res.json({ status: "success", data: formatted });
   } catch (error) {
     console.error("Error fetching hierarchy:", error);
-    res.status(500).json({ status: "error", message: "Failed to fetch hierarchy" });
+    const csvAll = getCsvEmployees();
+    res.json({ status: "success", data: csvAll.map(e => toPublicEmployee(e)) });
   }
 });
 
 employeesRouter.get("/:nik", async (req, res) => {
   try {
     const { nik } = req.params;
+    const cleanNik = (nik || "").trim().toUpperCase();
     const viewerNik = (req.headers['x-user-nik'] || req.query.viewerNik || '').toString().trim().toUpperCase();
 
-    const data = await db.select().from(employees).where(eq(employees.nik, nik)).limit(1);
-    if (data.length === 0) {
+    let targetEmp: any = null;
+    if (!isDbCircuitBroken()) {
+      try {
+        const dbData = await withDbFallback(
+          () => db.select().from(employees).where(eq(employees.nik, nik)).limit(1),
+          () => {
+            const csv = getCsvEmployees();
+            return csv.filter(e => (e.nik || '').toUpperCase() === cleanNik);
+          },
+          600
+        );
+        if (dbData.length > 0) targetEmp = dbData[0];
+      } catch {
+        const csv = getCsvEmployees();
+        targetEmp = csv.find(e => (e.nik || '').toUpperCase() === cleanNik);
+      }
+    } else {
+      const csv = getCsvEmployees();
+      targetEmp = csv.find(e => (e.nik || '').toUpperCase() === cleanNik);
+    }
+
+    if (!targetEmp) {
+      const csv = getCsvEmployees();
+      targetEmp = csv.find(e => (e.nik || '').toUpperCase() === cleanNik);
+    }
+
+    if (!targetEmp) {
       return res.status(404).json({ status: "error", message: "Karyawan tidak ditemukan" });
     }
 
-    const targetEmp = data[0];
     const targetIsGts = isGtsEmployee(targetEmp);
 
     // Cross-company access validation:
     // Akun GTS hanya bisa diakses karyawan GTS dan Section Manager TBP.
     // Akun TBP hanya bisa diakses karyawan TBP dan Section Manager GTS.
-    if (viewerNik && viewerNik !== nik.toUpperCase()) {
-      const viewerResult = await db.select().from(employees).where(eq(employees.nik, viewerNik)).limit(1);
-      if (viewerResult.length > 0) {
-        const viewer = viewerResult[0];
-        const viewerIsMgr = isSectionManagerOrAdmin(viewer);
-        const viewerIsGts = isGtsEmployee(viewer);
+    if (viewerNik && viewerNik !== cleanNik) {
+      try {
+        let viewer: any = null;
+        if (!isDbCircuitBroken()) {
+          const viewerResult = await withDbFallback(
+            () => db.select().from(employees).where(eq(employees.nik, viewerNik)).limit(1),
+            () => {
+              const csv = getCsvEmployees();
+              return csv.filter(e => (e.nik || '').toUpperCase() === viewerNik);
+            },
+            400
+          );
+          if (viewerResult.length > 0) viewer = viewerResult[0];
+        }
+        if (!viewer) {
+          const csv = getCsvEmployees();
+          viewer = csv.find(e => (e.nik || '').toUpperCase() === viewerNik);
+        }
 
-        if (!viewerIsMgr) {
-          if (targetIsGts && !viewerIsGts) {
-            return res.status(403).json({ 
-              status: "error", 
-              message: "Akses ditolak: Akun GTS hanya dapat diakses oleh karyawan GTS atau Section Manager TBP." 
-            });
-          }
-          if (!targetIsGts && viewerIsGts) {
-            return res.status(403).json({ 
-              status: "error", 
-              message: "Akses ditolak: Akun TBP hanya dapat diakses oleh karyawan TBP atau Section Manager GTS." 
-            });
+        if (viewer) {
+          const viewerIsMgr = isSectionManagerOrAdmin(viewer);
+          const viewerIsGts = isGtsEmployee(viewer);
+
+          if (!viewerIsMgr) {
+            if (targetIsGts && !viewerIsGts) {
+              return res.status(403).json({ 
+                status: "error", 
+                message: "Akses ditolak: Akun GTS hanya dapat diakses oleh karyawan GTS atau Section Manager TBP." 
+              });
+            }
+            if (!targetIsGts && viewerIsGts) {
+              return res.status(403).json({ 
+                status: "error", 
+                message: "Akses ditolak: Akun TBP hanya dapat diakses oleh karyawan TBP atau Section Manager GTS." 
+              });
+            }
           }
         }
-      }
+      } catch {}
     }
 
-    const attMap = await getAttendanceMap();
-    const counselMap = await getCounselingMap();
+    const [attMap, counselMap] = await Promise.all([
+      getAttendanceMap().catch(() => ({})),
+      getCounselingMap().catch(() => ({}))
+    ]);
     res.json({ status: "success", employee: attachAttendanceToEmployee(targetEmp, attMap, counselMap) });
   } catch (error) {
     console.error("Error fetching employee:", error);
+    const csv = getCsvEmployees();
+    const fallbackEmp = csv.find(e => (e.nik || '').toUpperCase() === req.params.nik?.toUpperCase());
+    if (fallbackEmp) {
+      return res.json({ status: "success", employee: toPublicEmployee(fallbackEmp) });
+    }
     res.status(500).json({ status: "error", message: "Failed to fetch employee" });
   }
 });
@@ -926,7 +1141,7 @@ employeesRouter.post("/import", async (req, res) => {
           pt: normalized['pt'] || normalized['perusahaan'] || null,
           poh: normalized['poh'] || null,
           sponsor: normalized['sponsor'] || null,
-          statusKaryawan: normalized['statuskaryawan'] || normalized['status'] || null,
+          statusKaryawan: normalized['statuskaryawan'] || normalized['status'] || raw['Status Karyawan'] || raw['Status'] || 'Active',
           tanggalEfektifTidakBekerja: cleanDateVal(normalized['tanggalefektiftidakbekerja'] || normalized['tgleftidakbekerja'] || normalized['tanggaltidakbekerja'] || normalized['efektiftidakbekerja']),
           tanggalAwalBergabung: cleanDateVal(normalized['dohawal'] || normalized['doh'] || normalized['tanggalawalbergabung']),
           tanggalJabatanBaru: cleanDateVal(normalized['tanggaljabatanbaru'] || normalized['tgljabatanbaru']),

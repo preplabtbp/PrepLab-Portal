@@ -11,6 +11,8 @@ export type ApdEntry = {
   jumlah: string;
   keterangan: string;
   warningMessage: string | null;
+  baFileUrl?: string;
+  baFileName?: string;
 };
 
 export const getHistoryIgnoreCase = (history: Record<string, any[]>, key: string) => {

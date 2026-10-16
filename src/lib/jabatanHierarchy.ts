@@ -22,21 +22,22 @@
  */
 
 export const OFFICIAL_JABATAN_ORDER = [
+  'Head of Site',
   'Preparation & Laboratory Manager',
   'Preparation Superintendent',
   'Laboratory Superintendent',
   'Preparation Supervisor, Wet',
   'Preparation Supervisor, Dry',
-  'Laboratory Supervisor',
-  'Quality Assurance Specialist',
   'Inventory Control Supervisor',
   'Laboratory Maintenance Supervisor',
+  'Quality Assurance Specialist',
+  'Laboratory Supervisor',
   'Preparation Foreman, Wet',
   'Preparation Foreman, Dry',
-  'Laboratory Foreman',
-  'Quality Assurance Officer',
-  'Laboratory Maintenance Foreman',
   'Admin, Inventory Control',
+  'Laboratory Maintenance Foreman',
+  'Quality Assurance Officer',
+  'Laboratory Foreman',
   'Admin, Preparation & Laboratory',
   'Crew, Laboratory Maintenance',
   'Crew, Preparation & Laboratory',
@@ -44,8 +45,13 @@ export const OFFICIAL_JABATAN_ORDER = [
 
 /**
  * Menghitung bobot / ranking urutan jabatan
- * 0 = Tertinggi (Preparation & Laboratory Manager)
- * 17 = Terendah (Crew, Preparation & Laboratory)
+ * -1 = Head of Site
+ * 0 = Preparation & Laboratory Manager
+ * 1-2 = Superintendent (Preparation, Laboratory)
+ * 3-8 = Supervisor / Specialist (Wet, Dry, Inventory Control, Maintenance, QA, Lab)
+ * 9-14 = Foreman / Admin / Officer (Wet, Dry, Admin Inv, Maint Foreman, QA Officer, Lab Foreman)
+ * 15 = Admin, Preparation & Laboratory
+ * 16-17 = Crew (Maintenance, Prep & Lab)
  * 999 = Jabatan lainnya / tidak terdefinisi
  */
 export function getJabatanRank(rawJabatan?: string | null): number {
@@ -60,6 +66,9 @@ export function getJabatanRank(rawJabatan?: string | null): number {
     .trim();
 
   if (!j || j === '-') return 999;
+
+  // 0. Head of Site
+  if (j.includes('head of site') || j.includes('hos')) return -1;
 
   // 1. Preparation & Laboratory Manager
   if (j.includes('manager')) return 0;
@@ -77,17 +86,17 @@ export function getJabatanRank(rawJabatan?: string | null): number {
   // 5. Preparation Supervisor, Dry
   if ((j.includes('preparation') || j.includes('dry')) && j.includes('supervisor') && j.includes('dry')) return 4;
 
-  // 6. Laboratory Supervisor (bukan maintenance)
-  if (j.includes('laboratory') && j.includes('supervisor') && !j.includes('maintenance')) return 5;
+  // 6. Inventory Control Supervisor
+  if (j.includes('inventory') && j.includes('supervisor')) return 5;
 
-  // 7. Quality Assurance Specialist / Quality Assurance Supervisor
-  if ((j.includes('quality assurance') || j.includes('qa')) && (j.includes('specialist') || j.includes('supervisor'))) return 6;
+  // 7. Laboratory Maintenance Supervisor
+  if (j.includes('maintenance') && j.includes('supervisor')) return 6;
 
-  // 8. Inventory Control Supervisor
-  if (j.includes('inventory') && j.includes('supervisor')) return 7;
+  // 8. Quality Assurance Specialist / Quality Assurance Supervisor
+  if ((j.includes('quality assurance') || j.includes('qa')) && (j.includes('specialist') || j.includes('supervisor'))) return 7;
 
-  // 9. Laboratory Maintenance Supervisor
-  if (j.includes('maintenance') && j.includes('supervisor')) return 8;
+  // 9. Laboratory Supervisor (bukan maintenance)
+  if (j.includes('laboratory') && j.includes('supervisor') && !j.includes('maintenance')) return 8;
 
   // 10. Preparation Foreman, Wet (Wet Preparation Foreman)
   if (j.includes('wet') && j.includes('foreman')) return 9;
@@ -95,17 +104,17 @@ export function getJabatanRank(rawJabatan?: string | null): number {
   // 11. Preparation Foreman, Dry (Dry Preparation Foreman)
   if (j.includes('dry') && j.includes('foreman')) return 10;
 
-  // 12. Laboratory Foreman (bukan maintenance)
-  if (j.includes('laboratory') && j.includes('foreman') && !j.includes('maintenance')) return 11;
+  // 12. Admin, Inventory Control / Inventory Control Staff
+  if (j.includes('inventory') && (j.includes('admin') || j.includes('staff'))) return 11;
 
-  // 13. Quality Assurance Officer
-  if ((j.includes('quality assurance') || j.includes('qa')) && (j.includes('officer') || !j.includes('specialist'))) return 12;
+  // 13. Laboratory Maintenance Foreman
+  if (j.includes('maintenance') && j.includes('foreman')) return 12;
 
-  // 14. Laboratory Maintenance Foreman
-  if (j.includes('maintenance') && j.includes('foreman')) return 13;
+  // 14. Quality Assurance Officer
+  if ((j.includes('quality assurance') || j.includes('qa')) && (j.includes('officer') || !j.includes('specialist'))) return 13;
 
-  // 15. Admin, Inventory Control / Inventory Control Staff
-  if (j.includes('inventory') && (j.includes('admin') || j.includes('staff'))) return 14;
+  // 15. Laboratory Foreman (bukan maintenance)
+  if (j.includes('laboratory') && j.includes('foreman') && !j.includes('maintenance')) return 14;
 
   // 16. Admin, Preparation & Laboratory / Preparation Admin
   if (j.includes('admin') || j.includes('preparation admin')) return 15;
@@ -117,16 +126,44 @@ export function getJabatanRank(rawJabatan?: string | null): number {
   if (j.includes('crew')) return 17;
 
   // Fallback berdasarkan kata kunci peran jika ada variasi lain
-  if (j.includes('supervisor')) return 7.5;
-  if (j.includes('foreman')) return 11.5;
-  if (j.includes('staff') || j.includes('officer')) return 14.5;
+  if (j.includes('supervisor')) return 8.5;
+  if (j.includes('foreman')) return 14.2;
+  if (j.includes('staff') || j.includes('officer')) return 15.2;
   if (j.includes('operator') || j.includes('technician') || j.includes('helper')) return 17.5;
 
   return 999;
 }
 
 /**
+ * Menghitung urutan kolom seksi/bagian sesuai diagram Struktur Organisasi:
+ * 1 = Wet Preparation
+ * 2 = Dry Preparation
+ * 3 = Inventory Control
+ * 4 = Laboratory Maintenance
+ * 5 = Quality Assurance
+ * 6 = Laboratory
+ * 7 = Administration (Admin, Preparation & Laboratory)
+ * 99 = Lainnya
+ */
+export function getSectionRank(emp: any): number {
+  if (!emp) return 99;
+  const norm = (str?: any) => String(str || '').toLowerCase().trim();
+  const j = norm(emp.jabatan || emp['Jabatan'] || emp['Jabatan Baru']);
+  const s = norm(emp.section || emp.bagian || emp['Bagian'] || emp.department);
+
+  if (j.includes('wet') || s.includes('wet')) return 1;
+  if (j.includes('dry') || s.includes('dry')) return 2;
+  if (j.includes('inventory') || s.includes('inv')) return 3;
+  if (j.includes('maintenance') || s.includes('maint')) return 4;
+  if (j.includes('quality') || j.includes('qa') || s.includes('qa') || s.includes('quality')) return 5;
+  if (j.includes('laboratory') || s.includes('lab')) return 6;
+  if (j.includes('admin') || s.includes('admin')) return 7;
+  return 99;
+}
+
+/**
  * Pembanding (comparator) karyawan berdasarkan urutan hirarki jabatan resmi,
+ * seksi Struktur Organisasi (Wet -> Dry -> Inv -> Maint -> QA -> Lab -> Admin),
  * dan sekunder berdasarkan nama (A-Z).
  */
 export function compareEmployeesByJabatan(a: any, b: any): number {
@@ -144,8 +181,16 @@ export function compareEmployeesByJabatan(a: any, b: any): number {
     return rankA - rankB;
   }
 
-  // Jika ranking sama, urutkan nama secara alfabetis
+  // Jika ranking jabatan sama (mis. sesama Crew Prep & Lab), urutkan berdasarkan urutan Section di Struktur Organisasi
+  const secRankA = getSectionRank(a);
+  const secRankB = getSectionRank(b);
+  if (secRankA !== secRankB) {
+    return secRankA - secRankB;
+  }
+
+  // Jika ranking & section sama, urutkan nama secara alfabetis
   const nameA = String(a.name || a.nama || a['Nama'] || '').trim();
   const nameB = String(b.name || b.nama || b['Nama'] || '').trim();
   return nameA.localeCompare(nameB, 'id', { sensitivity: 'base' });
 }
+

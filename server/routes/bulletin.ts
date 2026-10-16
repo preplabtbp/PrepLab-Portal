@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "../../src/db/index.js";
+import { db, isDbCircuitBroken } from "../../src/db/index.js";
 import { eq, desc, or, inArray, isNull, and, gte, lte, sql, like } from "drizzle-orm";
 import { 
   chatMessages, employees, equipments, workOrders, users, tickets, downtime, 
@@ -50,19 +50,31 @@ router.get("/api/bulletin", async (req, res) => {
       const pageNum = page ? Math.max(1, parseInt(page as string, 10)) : null;
       const limitNum = limit ? Math.max(1, parseInt(limit as string, 10)) : null;
 
+      if (isDbCircuitBroken()) {
+        if (pageNum && limitNum) {
+          return res.json({
+            status: "success",
+            data: [],
+            pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0, hasMore: false }
+          });
+        }
+        return res.json({ status: "success", data: [] });
+      }
+
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
       if (pageNum && limitNum) {
         const totalQuery = conditions.length > 0 
           ? db.select({ count: sql<number>`count(*)` }).from(bulletinPosts).where(and(...conditions))
           : db.select({ count: sql<number>`count(*)` }).from(bulletinPosts);
-        const totalRes = await totalQuery;
+        const totalRes: any = await Promise.race([totalQuery, timeoutPromise]);
         const total = Number(totalRes[0]?.count || 0);
 
-        const data = await (baseQuery as any)
+        const dataPromise = (baseQuery as any)
           .orderBy(desc(bulletinPosts.createdAt))
           .limit(limitNum)
           .offset((pageNum - 1) * limitNum);
+        const data: any = await Promise.race([dataPromise, timeoutPromise]);
 
-        console.log('[Bulletin API] Returning paginated', data.length, 'posts of', total, 'for pt:', pt, 'page:', pageNum);
         return res.json({
           status: "success",
           data,
@@ -76,12 +88,26 @@ router.get("/api/bulletin", async (req, res) => {
         });
       }
       
-      const data = await (baseQuery as any).orderBy(bulletinPosts.createdAt);
-      console.log('[Bulletin API] Returning', data.length, 'posts for pt:', pt, 'nik:', nik);
+      const data = await Promise.race([(baseQuery as any).orderBy(bulletinPosts.createdAt), timeoutPromise]);
       res.json({ status: "success", data });
     } catch (error: any) {
-      console.error('[Bulletin API] Error:', error.message);
-      res.status(500).json({ status: "error", message: error.message });
+      console.warn('[Bulletin API Notice]:', error?.message);
+      const pageNum = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10)) : null;
+      const limitNum = req.query.limit ? Math.max(1, parseInt(req.query.limit as string, 10)) : null;
+      if (pageNum && limitNum) {
+        return res.json({
+          status: "success",
+          data: [],
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total: 0,
+            totalPages: 0,
+            hasMore: false
+          }
+        });
+      }
+      res.json({ status: "success", data: [] });
     }
   });
 

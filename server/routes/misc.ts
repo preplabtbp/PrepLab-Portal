@@ -18,6 +18,9 @@ import {
 import webpush from 'web-push';
 import { invalidateScheduleCache, fetchInspectionScheduleFromSheet, rekapInspeksiCache, REKAP_INSPEKSI_CACHE_TTL } from "./inspections.js";
 import { invalidateGamificationCache } from "./gamification.js";
+import { isDbCircuitBroken } from "../../src/db/index.js";
+import { getCsvEmployees } from "./employees.js";
+import { generateFallbackRosterData } from "./roster.js";
 
 export const router = Router();
 
@@ -29,18 +32,39 @@ router.use((req, res, next) => {
   next();
 });
 
+const FALLBACK_DEVS = [
+  { nik: '02D25000055', name: 'Muhamad Anugrah Ramadhan' },
+  { nik: '02D24000043', name: 'Muhamad Alvin Febriansyah' },
+  { nik: 'M0403240177', name: 'Aldy Aldersun Puluh' },
+  { nik: '04D21001047', name: 'Sukarman A. Akil, ST' },
+  { nik: '04D24000042', name: 'Junjunan Muhammad Syukur' },
+  { nik: 'PREPLABADMIN', name: 'Administrator PrepLab' }
+];
+let cachedDevelopers: any[] | null = null;
+let lastDevFetchTime = 0;
+
 router.get('/api/developers', async (req, res) => {
-  try {
-    const devs = await db.select().from(developerUsers);
-    res.json(devs);
-  } catch (err) {
-    console.error("Error fetching developers:", err);
-    res.json([
-      { nik: '02D25000055', name: 'Muhamad Anugrah Ramadhan' },
-      { nik: '02D24000043', name: 'Muhamad Alvin Febriansyah' },
-      { nik: 'M0403240177', name: 'Aldy Aldersun Puluh' }
-    ]);
+  if (cachedDevelopers && (Date.now() - lastDevFetchTime < 10 * 60 * 1000)) {
+    return res.json(cachedDevelopers);
   }
+  try {
+    const devs = await Promise.race([
+      db.select().from(developerUsers),
+      new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 800))
+    ]);
+    if (devs && devs.length > 0) {
+      cachedDevelopers = devs;
+      lastDevFetchTime = Date.now();
+      return res.json(devs);
+    }
+  } catch (err) {
+    // Fall through to fallback devs
+  }
+  if (!cachedDevelopers) {
+    cachedDevelopers = FALLBACK_DEVS;
+    lastDevFetchTime = Date.now();
+  }
+  res.json(cachedDevelopers);
 });
 
 // In-memory fallback array for Group Safety Reports & Feed
@@ -1007,11 +1031,37 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
     proofsPromise.catch(() => {});
     rosterPromise.catch(() => {});
 
-    // Run initial DB queries in parallel
-    const [allEmployees, allRoster] = await Promise.all([
-      db.select().from(employees),
-      rosterPromise
-    ]);
+    // Run initial DB queries in parallel with circuit breaker & timeout protection
+    let allEmployees: any[] = [];
+    let allRoster: any[] = [];
+
+    if (isDbCircuitBroken()) {
+      allEmployees = getCsvEmployees();
+      allRoster = generateFallbackRosterData();
+    } else {
+      try {
+        const timeoutEmps = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
+        const resEmps = await Promise.race([
+          Promise.all([
+            db.select().from(employees),
+            rosterPromise
+          ]),
+          timeoutEmps
+        ]) as [any[], any[]];
+        allEmployees = resEmps[0] || [];
+        allRoster = resEmps[1] || [];
+      } catch {
+        allEmployees = getCsvEmployees();
+        allRoster = generateFallbackRosterData();
+      }
+    }
+
+    if (!allEmployees || allEmployees.length === 0) {
+      allEmployees = getCsvEmployees();
+    }
+    if (!allRoster || allRoster.length === 0) {
+      allRoster = generateFallbackRosterData();
+    }
 
     // Pre-build employee lookup maps for O(1) matching (instead of nested O(n*m) loops)
     const empByNikLower = new Map<string, typeof allEmployees[0]>();
