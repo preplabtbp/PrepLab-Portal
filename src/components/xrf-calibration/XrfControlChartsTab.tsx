@@ -25,7 +25,33 @@ export const OFFICIAL_INPUT_STANDARDS_ORDER = [
   'OREAS193', 'SAP19', 'OREAS194', 'SAP', 'OREAS191', 'OREAS192', 'OREAS195',
 ];
 
+// Urutan standar resmi skema WDXRF Supermini 200 (17 Standar kontinu tanpa dipisah saprolite/limonite)
+export const WDXRF_SUPERMINI_STANDARDS_ORDER = [
+  'BLANK_A',
+  'BLANK_B',
+  'OREAS184',
+  'LIM01',
+  'LIM02',
+  'LIM03',
+  'OREAS187',
+  'LIM04',
+  'OREAS189',
+  'LIM05',
+  'OREAS190',
+  'OREAS191',
+  'OREAS192',
+  'OREAS193',
+  'SAP19',
+  'OREAS194',
+  'OREAS195',
+];
+
 export const STANDARD_DISPLAY_NAMES: Record<string, string> = {
+  'BLANK_A': 'BLANK A',
+  'BLANK_B': 'VER-BLANK B',
+  'BLANK A': 'BLANK A',
+  'BLANK B': 'VER-BLANK B',
+  'VER-BLANK B': 'VER-BLANK B',
   'LIM01': 'LIM 01',
   'LIM02': 'LIM 02',
   'LIM03': 'LIM 03',
@@ -580,9 +606,11 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     loadAvailableStandards();
   }, [selectedInstruments]);
 
-  // Auto-sync selected standards when primary matrix changes
+  // Auto-sync selected standards when primary matrix or method changes
   useEffect(() => {
-    if (selectedMatrix === 'SAPROLITE') {
+    if (selectedMethod === 'WDXRF') {
+      setSelectedStandards(WDXRF_SUPERMINI_STANDARDS_ORDER);
+    } else if (selectedMatrix === 'SAPROLITE') {
       const sapCodes = [
         'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 
         'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195'
@@ -592,7 +620,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       const limCodes = ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
       setSelectedStandards(limCodes);
     }
-  }, [selectedMatrix]);
+  }, [selectedMethod, selectedMatrix]);
 
   // Fetch chart data from backend for all selected instruments
   const fetchChartData = async () => {
@@ -602,7 +630,11 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       const params = new URLSearchParams();
       params.set('element', selectedElement);
       params.set('instruments', selectedInstruments.join(','));
-      params.set('standards', selectedStandards.length > 0 ? selectedStandards.join(',') : 'ALL');
+      
+      const standardsToQuery = selectedMethod === 'WDXRF'
+        ? Array.from(new Set([...selectedStandards, 'BLANK A', 'BLANK B', 'VER-BLANK B'])).join(',')
+        : (selectedStandards.length > 0 ? selectedStandards.join(',') : 'ALL');
+      params.set('standards', standardsToQuery);
 
       const res = await fetch(`/api/xrf/qc-chart-data?${params.toString()}`);
       const json = await res.json();
@@ -716,26 +748,43 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     }
   };
 
-  // Visible standards list strictly constrained to selected Primary Matrix
+  // Visible standards list:
+  // - If WDXRF: follow official WDXRF 17 standards schema (unified, NOT separated by saprolite/limonite)
+  // - If EDXRF: strictly constrained to selected Primary Matrix (Saprolite vs Limonite)
   const visibleStandards = useMemo(() => {
-    const isSaprolite = selectedMatrix === 'SAPROLITE';
-    const candidateCodes = isSaprolite
-      ? ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'LIM', 'SAP16', 'OREAS193', 'SAP19', 'OREAS194', 'SAP', 'OREAS191', 'OREAS192', 'OREAS195']
-      : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
+    let candidateCodes: string[] = [];
+    let matrixType = 'SAPROLITE';
+
+    if (selectedMethod === 'WDXRF') {
+      candidateCodes = WDXRF_SUPERMINI_STANDARDS_ORDER;
+      matrixType = 'SUPERMINI';
+    } else {
+      const isSaprolite = selectedMatrix === 'SAPROLITE';
+      candidateCodes = isSaprolite
+        ? ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'LIM', 'SAP16', 'OREAS193', 'SAP19', 'OREAS194', 'SAP', 'OREAS191', 'OREAS192', 'OREAS195']
+        : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
+      matrixType = isSaprolite ? 'SAPROLITE' : 'LIMONITE';
+    }
 
     const list = candidateCodes.map(code => {
-      const existing = standards.find(s => s.code === code);
+      const existing = standards.find(s => s.code === code || s.code === code.replace('_', ' ') || s.name === code);
       return {
         code,
         name: existing?.name || STANDARD_DISPLAY_NAMES[code] || code,
-        matrix: isSaprolite ? 'SAPROLITE' : 'LIMONITE',
-        count: standardCountMap[code] || 0,
+        matrix: matrixType,
+        count: standardCountMap[code] || standardCountMap[code.replace('_', ' ')] || 0,
       };
     });
 
+    if (selectedMethod === 'WDXRF') {
+      // Untuk WDXRF: tampilkan urutan skema 17 standar secara utuh dan kontinu,
+      // tidak dipisahkan saprolite/limonite dan tidak dieliminasi
+      return list;
+    }
+
     const withData = list.filter(s => s.count > 0);
     return withData.length > 0 ? withData : list;
-  }, [standards, standardCountMap, selectedMatrix]);
+  }, [standards, standardCountMap, selectedMatrix, selectedMethod]);
 
   // Standards rendered on the chart canvas (rendered directly)
   const renderedStandards = visibleStandards;
@@ -793,29 +842,36 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
               </button>
             </div>
 
-            {/* 3. PRIMARY MATRIX (SAPROLITE vs LIMONITE) */}
-            <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
-              <button
-                onClick={() => setSelectedMatrix('SAPROLITE')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                  selectedMatrix === 'SAPROLITE'
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
-              >
-                SAPROLITE (OREAS & SAP)
-              </button>
-              <button
-                onClick={() => setSelectedMatrix('LIMONITE')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                  selectedMatrix === 'LIMONITE'
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                }`}
-              >
-                LIMONITE (LIM 01-05)
-              </button>
-            </div>
+            {/* 3. PRIMARY MATRIX (SAPROLITE vs LIMONITE) - HANYA UNTUK EDXRF */}
+            {selectedMethod === 'EDXRF' ? (
+              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
+                <button
+                  onClick={() => setSelectedMatrix('SAPROLITE')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    selectedMatrix === 'SAPROLITE'
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  SAPROLITE (OREAS & SAP)
+                </button>
+                <button
+                  onClick={() => setSelectedMatrix('LIMONITE')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    selectedMatrix === 'LIMONITE'
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  LIMONITE (LIM 01-05)
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 text-xs font-black shadow-xs">
+                <Layers className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>SKEMA STANDAR WDXRF (17 STANDAR KONTINU)</span>
+              </div>
+            )}
           </div>
 
           {/* Action & Layout Controls */}
@@ -1003,28 +1059,41 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Belum Ada Data untuk Kategori {selectedSite} • {selectedMethod} • {selectedMatrix}
+                Belum Ada Data untuk Kategori {selectedSite} • {selectedMethod} {selectedMethod === 'EDXRF' ? `• ${selectedMatrix}` : ''}
               </h3>
               <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
                 Instrumen pada kategori ini belum memiliki data pengukuran yang diimpor, atau standar terpilih belum memiliki data.
               </p>
             </div>
-            <button
-              onClick={() => {
-                setSelectedMethod('EDXRF');
-                setSelectedMatrix('SAPROLITE');
-              }}
-              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-2 shadow-xs transition-all cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              Reset ke Metode EDXRF (Saprolite)
-            </button>
+            {selectedMethod === 'EDXRF' ? (
+              <button
+                onClick={() => {
+                  setSelectedMethod('EDXRF');
+                  setSelectedMatrix('SAPROLITE');
+                }}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Reset ke Metode EDXRF (Saprolite)
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setSelectedMethod('EDXRF');
+                  setSelectedMatrix('SAPROLITE');
+                }}
+                className="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-bold inline-flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+              >
+                <ArrowLeftRight className="w-4 h-4" />
+                Beralih ke Metode EDXRF
+              </button>
+            )}
           </div>
         ) : (
           renderedStandards.map(std => {
             const stdCode = std.code;
-            const stdData = currentGridData[stdCode] || {};
-            const stdCount = std.count || standardCountMap[stdCode] || 0;
+            const stdData = currentGridData[stdCode] || currentGridData[stdCode.replace('_', ' ')] || currentGridData[std.name] || {};
+            const stdCount = std.count || standardCountMap[stdCode] || standardCountMap[stdCode.replace('_', ' ')] || 0;
 
             return (
               <div 
