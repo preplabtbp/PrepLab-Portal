@@ -2659,4 +2659,215 @@ router.get("/api/daily-tasks-status", async (req, res) => {
   }
 });
 
+// ==========================================
+// P2H LABORATORIUM MULTI-LEVEL APPROVAL FLOW
+// ==========================================
+
+// 1. GET /api/inspections/p2h-lab - Ambil daftar laporan P2H Laboratorium
+router.get("/api/inspections/p2h-lab", async (req, res) => {
+  try {
+    const rows = await db.select().from(inspections)
+      .where(eq(inspections.type, 'P2H_LABORATORIUM'))
+      .orderBy(desc(inspections.date))
+      .limit(60);
+
+    const reports = rows.map(r => {
+      let dataObj: any = {};
+      try {
+        if (r.dataF) dataObj = JSON.parse(r.dataF);
+      } catch (e) {}
+
+      return {
+        id: dataObj.id || `P2H-LAB-${r.id}`,
+        dbId: r.id,
+        date: r.date?.toISOString() || new Date().toISOString(),
+        shift: r.shift || dataObj.shift || 'SHIFT SIANG',
+        inspectorName: r.inspectorName || dataObj.inspectorName || '',
+        inspectorNik: dataObj.inspectorNik || '',
+        inspectorSignatureUrl: r.signature || dataObj.signatureUrl || null,
+        inspectorSignedAt: dataObj.inspectorSignedAt || r.date?.toISOString(),
+
+        supervisorName: dataObj.supervisorName || 'Laboratorium Supervisor',
+        supervisorNik: dataObj.supervisorNik || '',
+        spvSignatureUrl: dataObj.spvSignatureUrl || null,
+        spvSignedAt: dataObj.spvSignedAt || null,
+        spvNotes: dataObj.spvNotes || '',
+
+        sptName: dataObj.sptName || 'Tigwa Anggawikara',
+        sptSignatureUrl: dataObj.sptSignatureUrl || null,
+        sptSignedAt: dataObj.sptSignedAt || null,
+        sptNotes: dataObj.sptNotes || '',
+
+        managerName: dataObj.managerName || 'Deni Nugraha Perdiana',
+        managerSignatureUrl: dataObj.managerSignatureUrl || null,
+        managerSignedAt: dataObj.managerSignedAt || null,
+        managerNotes: dataObj.managerNotes || '',
+
+        status: dataObj.status || r.status || 'PENDING_SPV',
+        isDemo: Boolean(dataObj.isDemo || r.equipmentCode === 'P2H_LAB_DEMO'),
+        toolStatuses: dataObj.toolStatuses || {},
+        logisticsCounts: dataObj.logisticsCounts || {},
+        gasInventory: dataObj.gasInventory || {},
+        calibrationWeightsCounts: dataObj.calibrationWeightsCounts || {},
+        notes: r.notes || dataObj.notes || '',
+        createdAt: dataObj.createdAt || r.date?.toISOString(),
+        updatedAt: dataObj.updatedAt || r.date?.toISOString(),
+      };
+    });
+
+    res.json(reports);
+  } catch (error: any) {
+    console.error("Failed to fetch P2H Lab reports:", error);
+    res.status(500).json({ error: "Gagal mengambil data laporan: " + error.message });
+  }
+});
+
+// 2. POST /api/inspections/p2h-lab - Simpan laporan P2H Laboratorium baru (Analyst submit)
+router.post("/api/inspections/p2h-lab", async (req, res) => {
+  try {
+    const reportData = req.body;
+    if (!reportData || !reportData.inspectorName) {
+      return res.status(400).json({ error: "Data laporan tidak lengkap" });
+    }
+
+    const isDemo = Boolean(reportData.isDemo);
+    const reportId = reportData.id || `P2H-LAB-${Date.now()}`;
+    const dateObj = reportData.date ? new Date(reportData.date) : new Date();
+
+    if (reportData.signatureUrl) {
+      reportData.signatureUrl = await compressSignatureBase64(reportData.signatureUrl, 320, 25000);
+    }
+
+    const finalReport = {
+      ...reportData,
+      id: reportId,
+      isDemo,
+      status: reportData.status || 'PENDING_SPV',
+      createdAt: reportData.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const inserted = await db.insert(inspections).values({
+      equipmentCode: isDemo ? 'P2H_LAB_DEMO' : 'P2H_LAB_MASTER',
+      equipmentName: isDemo ? '[DEMO] P2H Peralatan Laboratorium (TBP-FR-PL-LAB-04.01-01)' : 'P2H Peralatan Laboratorium (TBP-FR-PL-LAB-04.01-01)',
+      type: 'P2H_LABORATORIUM',
+      status: finalReport.status,
+      date: dateObj,
+      inspectorName: reportData.inspectorName,
+      shift: reportData.shift || 'SHIFT SIANG',
+      notes: isDemo ? `[MODE SIMULASI/DEMO] ${reportData.notes || ''}`.trim() : (reportData.notes || ''),
+      signature: finalReport.signatureUrl || null,
+      dataF: JSON.stringify(finalReport),
+      pt: 'TBP'
+    }).returning();
+
+    // HANYA kirim notifikasi & Web Push jika BUKAN mode demo!
+    if (!isDemo) {
+      try {
+        const _notif = await db.insert(notifications).values({
+          userId: null,
+          role: 'Supervisor',
+          title: 'Laporan P2H Laboratorium Baru',
+          message: `${reportData.inspectorName} (${reportData.shift}) mengirimkan laporan P2H Laboratorium untuk direview.`,
+          type: 'info',
+          link: '/inspections'
+        }).returning();
+        sendWebPush(_notif);
+      } catch(e) {}
+    } else {
+      console.log('[P2H LAB] Mode simulasi aktif - Notifikasi ke SPV & Web Push berhasil dilewati (BYPASSED)');
+    }
+
+    res.json({ success: true, report: finalReport, dbId: inserted[0]?.id });
+  } catch (error: any) {
+    console.error("Failed to save P2H Lab report:", error);
+    res.status(500).json({ error: "Gagal menyimpan laporan: " + error.message });
+  }
+});
+
+// 3. POST /api/inspections/p2h-lab/:id/sign - Review & Tanda Tangan SPV / SPT / Manager
+router.post("/api/inspections/p2h-lab/:id/sign", async (req, res) => {
+  try {
+    const reportId = req.params.id;
+    const { role, signerName, signerNik, signatureUrl, notes } = req.body;
+
+    if (!role || !signatureUrl) {
+      return res.status(400).json({ error: "Role dan tanda tangan wajib diisi" });
+    }
+
+    const compressedSig = await compressSignatureBase64(signatureUrl, 320, 25000);
+
+    const allReports = await db.select().from(inspections)
+      .where(eq(inspections.type, 'P2H_LABORATORIUM'))
+      .orderBy(desc(inspections.date))
+      .limit(50);
+
+    const match = allReports.find(r => {
+      if (String(r.id) === reportId) return true;
+      try {
+        const d = JSON.parse(r.dataF || '{}');
+        if (d.id === reportId) return true;
+      } catch(e) {}
+      return false;
+    });
+
+    if (!match) {
+      return res.status(404).json({ error: "Laporan P2H tidak ditemukan" });
+    }
+
+    let reportObj: any = {};
+    try {
+      reportObj = JSON.parse(match.dataF || '{}');
+    } catch(e) {}
+
+    const nowIso = new Date().toISOString();
+
+    if (role === 'spv') {
+      reportObj.spvSignatureUrl = compressedSig;
+      reportObj.spvSignedAt = nowIso;
+      if (signerName) reportObj.supervisorName = signerName;
+      if (signerNik) reportObj.supervisorNik = signerNik;
+      if (notes) reportObj.spvNotes = notes;
+      
+      if (!reportObj.sptSignatureUrl) {
+        reportObj.status = 'PENDING_SPT';
+      } else if (!reportObj.managerSignatureUrl) {
+        reportObj.status = 'PENDING_MANAGER';
+      } else {
+        reportObj.status = 'APPROVED';
+      }
+    } else if (role === 'spt') {
+      reportObj.sptSignatureUrl = compressedSig;
+      reportObj.sptSignedAt = nowIso;
+      if (signerName) reportObj.sptName = signerName;
+      if (notes) reportObj.sptNotes = notes;
+
+      if (!reportObj.managerSignatureUrl) {
+        reportObj.status = 'PENDING_MANAGER';
+      } else {
+        reportObj.status = 'APPROVED';
+      }
+    } else if (role === 'manager') {
+      reportObj.managerSignatureUrl = compressedSig;
+      reportObj.managerSignedAt = nowIso;
+      if (signerName) reportObj.managerName = signerName;
+      if (notes) reportObj.managerNotes = notes;
+      reportObj.status = 'APPROVED';
+    }
+
+    reportObj.updatedAt = nowIso;
+
+    await db.update(inspections).set({
+      status: reportObj.status,
+      dataF: JSON.stringify(reportObj)
+    }).where(eq(inspections.id, match.id));
+
+    res.json({ success: true, report: reportObj });
+  } catch (error: any) {
+    console.error("Failed to sign P2H Lab report:", error);
+    res.status(500).json({ error: "Gagal menandatangani laporan: " + error.message });
+  }
+});
+
+
 

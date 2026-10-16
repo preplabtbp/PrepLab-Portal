@@ -19,11 +19,12 @@ import {
   Search, Database, Shield, QrCode
 } from 'lucide-react';
 import { GuestBarcodeModal } from './GuestBarcodeModal';
-import { 
-  getISOWeek, 
-  getISOWeekYear, 
-  getISOWeekRange, 
-  getYearISOWeeksList 
+import {
+  getISOWeek,
+  getISOWeekYear,
+  getISOWeekRange,
+  getYearISOWeeksList,
+  getLastISOWeek
 } from '../utils/iso-week';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement,
@@ -240,13 +241,12 @@ export function MonitoringDashboard({
       }
     } else if (val === 'this_iso_week') {
       const now = new Date();
-      const range = getISOWeekRange(now.getFullYear(), getISOWeek(now));
+      const range = getISOWeekRange(getISOWeekYear(now), getISOWeek(now));
       start = formatDateYMD(range.start);
       end = formatDateYMD(range.end);
     } else if (val === 'last_iso_week') {
-      const now = new Date();
-      const lastWeek = Math.max(1, getISOWeek(now) - 1);
-      const range = getISOWeekRange(now.getFullYear(), lastWeek);
+      const lastWeekInfo = getLastISOWeek(new Date());
+      const range = getISOWeekRange(lastWeekInfo.year, lastWeekInfo.week);
       start = formatDateYMD(range.start);
       end = formatDateYMD(range.end);
     } else if (val.startsWith('iso_')) {
@@ -506,8 +506,8 @@ export function MonitoringDashboard({
       return `Minggu_ISO_W${String(getISOWeek(new Date())).padStart(2, '0')}_${new Date().getFullYear()}`;
     }
     if (selectedIsoWeek === 'last_iso_week') {
-      const lastWeek = Math.max(1, getISOWeek(new Date()) - 1);
-      return `Minggu_ISO_W${String(lastWeek).padStart(2, '0')}_${new Date().getFullYear()}`;
+      const lastWeekInfo = getLastISOWeek(new Date());
+      return `Minggu_ISO_W${String(lastWeekInfo.week).padStart(2, '0')}_${lastWeekInfo.year}`;
     }
     if (selectedIsoWeek.startsWith('iso_')) {
       const parts = selectedIsoWeek.split('_');
@@ -1243,7 +1243,7 @@ export function MonitoringDashboard({
 
               <optgroup label="⚡ Filter Cepat Minggu ISO">
                 <option value="this_iso_week">⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
-                <option value="last_iso_week">⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+                <option value="last_iso_week">⏮️ Minggu ISO Lalu (W{String(getLastISOWeek(new Date()).week).padStart(2, '0')})</option>
               </optgroup>
 
               <optgroup label="📋 Daftar Minggu ISO">

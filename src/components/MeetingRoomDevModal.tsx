@@ -27,6 +27,9 @@ export function MeetingRoomDevModal({ isOpen, onClose, onSuccess }: MeetingRoomD
       toast.success('Akses menu Developer berhasil diverifikasi! 🚀');
       setPassword('');
       setIsError(false);
+      try {
+        window.dispatchEvent(new CustomEvent('meetingroom-dev-unlocked'));
+      } catch {}
       onSuccess();
     } else {
       setIsError(true);

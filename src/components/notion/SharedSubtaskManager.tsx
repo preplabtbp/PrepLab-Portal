@@ -18,7 +18,8 @@ import {
   Edit2,
   Palette,
   Eye,
-  Sparkles
+  Sparkles,
+  Check
 } from 'lucide-react';
 import { 
   parseTasklist, 
@@ -44,6 +45,7 @@ import {
   formatSelectedText, 
   FormatAction 
 } from './FloatingSelectionToolbar';
+import { NotionInlineEditor } from './NotionInlineEditor';
 import { toast } from 'sonner';
 
 export interface SharedSubtaskManagerProps {
@@ -111,11 +113,31 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
   const [notesViewMode, setNotesViewMode] = useState<'visual' | 'edit'>('visual');
   const [freeformViewMode, setFreeformViewMode] = useState<'visual' | 'edit'>('visual');
 
-  // Sync state if value prop changes
+  // Ref tracking initial values before editing for "Batal" (cancel)
+  const initialNotesBeforeEditRef = useRef<string>('');
+  const initialFreeformBeforeEditRef = useRef<string>('');
+
+  // Ref tracking last value emitted by this component to prevent echo-back resets during active typing
+  const lastEmittedValueRef = useRef<string | null>(null);
+
+  const emitChange = (newVal: string) => {
+    lastEmittedValueRef.current = newVal;
+    onChange(newVal);
+  };
+
+  // Sync state if value prop changes from external sources
   React.useEffect(() => {
-    setExtraNotes(progress.cleanText || '');
-    setFreeformText(value || '');
-  }, [value, progress.cleanText]);
+    if (lastEmittedValueRef.current !== null && value === lastEmittedValueRef.current) {
+      return;
+    }
+    const freshProg = parseTasklist(value || '');
+    if (notesViewMode !== 'edit') {
+      setExtraNotes(freshProg.cleanText || '');
+    }
+    if (freeformViewMode !== 'edit') {
+      setFreeformText(value || '');
+    }
+  }, [value, notesViewMode, freeformViewMode]);
 
   // Color Picker State
   const [selectedNewColor, setSelectedNewColor] = useState<string>('default');
@@ -152,12 +174,11 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
 
     if (field === 'extraNotes') {
       const res = formatSelectedText(extraNotes, start, end, action);
-      handleExtraNotesChange(res.newText);
+      setExtraNotes(res.newText);
       setActiveSelection({ ...activeSelection, start: res.newStart, end: res.newEnd, selectedText: res.newText.substring(res.newStart, res.newEnd) });
     } else if (field === 'freeformText') {
       const res = formatSelectedText(freeformText, start, end, action);
       setFreeformText(res.newText);
-      onChange(res.newText);
       setActiveSelection({ ...activeSelection, start: res.newStart, end: res.newEnd, selectedText: res.newText.substring(res.newStart, res.newEnd) });
     } else if (field === 'newSubtask') {
       const res = formatSelectedText(newSubtaskInput, start, end, action);
@@ -178,7 +199,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
     }
     const todayStr = selectedDate || new Date().toISOString().split('T')[0];
     const updated = toggleTasklistItem(value || '', itemIndex, todayStr);
-    onChange(updated);
+    emitChange(updated);
 
     if (onSubtaskToggled) {
       const newProg = parseTasklist(updated);
@@ -199,7 +220,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
       ? applyColorToText(cleanTitle, selectedNewColor) 
       : cleanTitle;
     const updated = appendTasklistItem(value || '', titleWithColor);
-    onChange(updated);
+    emitChange(updated);
     setNewSubtaskInput('');
   };
 
@@ -210,7 +231,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
     if (!item) return;
     const coloredTitle = applyColorToText(item.text, colorKey);
     const updated = updateTasklistItemTitle(value || '', itemIndex, coloredTitle);
-    onChange(updated);
+    emitChange(updated);
     setActiveColorPickerIdx(null);
   };
 
@@ -218,7 +239,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
   const handleRemoveSubtask = (itemIndex: number) => {
     if (isReadOnly) return;
     const updated = removeTasklistItem(value || '', itemIndex);
-    onChange(updated);
+    emitChange(updated);
   };
 
   // 4. Update Subtask Title
@@ -227,7 +248,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
     const cleanTitle = editingTitleValue.trim();
     if (cleanTitle) {
       const updated = updateTasklistItemTitle(value || '', itemIndex, cleanTitle);
-      onChange(updated);
+      emitChange(updated);
     }
     setEditingTitleIdx(null);
     setEditingTitleValue('');
@@ -244,7 +265,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
     const [moved] = reordered.splice(draggedIdx, 1);
     reordered.splice(targetIdx, 0, moved);
     const updated = reorderTasklistItems(value || '', reordered);
-    onChange(updated);
+    emitChange(updated);
     setDraggedIdx(null);
     setDragOverIdx(null);
   };
@@ -282,7 +303,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
     const authorName = currentUser.name || 'PIC';
 
     const updated = addSubtaskNote(value || '', activeNoteModal.itemIndex, noteText, actionDate, actionTime, authorName);
-    onChange(updated);
+    emitChange(updated);
 
     const updatedProg = parseTasklist(updated);
     const updatedItem = updatedProg.items.find(i => i.index === activeNoteModal.itemIndex);
@@ -297,7 +318,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
   const handleDeleteNote = (noteId: string) => {
     if (isReadOnly || !activeNoteModal) return;
     const updated = removeSubtaskNote(value || '', activeNoteModal.itemIndex, noteId);
-    onChange(updated);
+    emitChange(updated);
 
     const updatedProg = parseTasklist(updated);
     const updatedItem = updatedProg.items.find(i => i.index === activeNoteModal.itemIndex);
@@ -308,11 +329,22 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
     toast.success('Catatan berhasil dihapus');
   };
 
-  // 7. Extra Notes / General Instructions Sync
-  // FIXED: Parse fresh from value prop to avoid stale state causing duplicate subtasks
-  const handleExtraNotesChange = (text: string) => {
-    setExtraNotes(text);
-    // Parse FRESH from current value prop to get the latest checklist items
+  // 7. Extra Notes & Freeform Text Management (Manual Save - No autosave per keystroke to prevent modal flickering)
+  const handleStartEditNotes = () => {
+    if (isReadOnly) return;
+    initialNotesBeforeEditRef.current = extraNotes;
+    setNotesViewMode('edit');
+  };
+
+  const handleCancelExtraNotes = () => {
+    setExtraNotes(initialNotesBeforeEditRef.current);
+    setNotesViewMode('visual');
+    setActiveSelection(null);
+  };
+
+  const handleSaveExtraNotes = (newNotesText?: string) => {
+    const textToSave = newNotesText !== undefined ? newNotesText : extraNotes;
+    setExtraNotes(textToSave);
     const freshProgress = parseTasklist(value || '');
     const checklistLines = freshProgress.items.map(item => {
       let line = `- [${item.checked ? 'x' : ' '}] ${item.text}`;
@@ -324,14 +356,76 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
     });
     const delimiter = /<br\s*\/?>/i.test(value || '') ? '<br/>' : '\n';
     let combined = '';
-    if (text.trim() && checklistLines.length > 0) {
-      combined = `${text.trim()}${delimiter}${delimiter}${checklistLines.join(delimiter)}`;
+    const trimmedNotes = textToSave.trim();
+    if (trimmedNotes && checklistLines.length > 0) {
+      combined = `${trimmedNotes}${delimiter}${delimiter}${checklistLines.join(delimiter)}`;
     } else if (checklistLines.length > 0) {
       combined = checklistLines.join(delimiter);
     } else {
-      combined = text.trim();
+      combined = trimmedNotes;
     }
-    onChange(combined);
+    emitChange(combined);
+    setNotesViewMode('visual');
+    setActiveSelection(null);
+    toast.success('Catatan berhasil diperbarui');
+  };
+
+  const handleResetTagNotes = () => {
+    const cleaned = stripColorTags(extraNotes).replace(/(\*\*|~~|\*|`)/g, '');
+    setExtraNotes(cleaned);
+    if (notesViewMode === 'visual') {
+      const freshProgress = parseTasklist(value || '');
+      const checklistLines = freshProgress.items.map(item => {
+        let line = `- [${item.checked ? 'x' : ' '}] ${item.text}`;
+        if (item.checkedDate) line += ` <!--checkedDate:${item.checkedDate}-->`;
+        if (item.notes && item.notes.length > 0) {
+          line += ` <!--notes:${JSON.stringify(item.notes)}-->`;
+        }
+        return line;
+      });
+      const delimiter = /<br\s*\/?>/i.test(value || '') ? '<br/>' : '\n';
+      let combined = '';
+      const trimmedNotes = cleaned.trim();
+      if (trimmedNotes && checklistLines.length > 0) {
+        combined = `${trimmedNotes}${delimiter}${delimiter}${checklistLines.join(delimiter)}`;
+      } else if (checklistLines.length > 0) {
+        combined = checklistLines.join(delimiter);
+      } else {
+        combined = trimmedNotes;
+      }
+      emitChange(combined);
+    }
+    toast.success('Format dan tag teks berhasil dibersihkan!');
+  };
+
+  const handleStartEditFreeform = () => {
+    if (isReadOnly) return;
+    initialFreeformBeforeEditRef.current = freeformText;
+    setFreeformViewMode('edit');
+  };
+
+  const handleCancelFreeform = () => {
+    setFreeformText(initialFreeformBeforeEditRef.current);
+    setFreeformViewMode('visual');
+    setActiveSelection(null);
+  };
+
+  const handleSaveFreeform = (newText?: string) => {
+    const textToSave = newText !== undefined ? newText : freeformText;
+    setFreeformText(textToSave);
+    emitChange(textToSave);
+    setFreeformViewMode('visual');
+    setActiveSelection(null);
+    toast.success('Keterangan berhasil diperbarui');
+  };
+
+  const handleResetTagFreeform = () => {
+    const cleaned = stripColorTags(freeformText).replace(/(\*\*|~~|\*|`)/g, '');
+    setFreeformText(cleaned);
+    if (freeformViewMode === 'visual') {
+      emitChange(cleaned);
+    }
+    toast.success('Format dan tag teks berhasil dibersihkan!');
   };
 
   // Determine progress color
@@ -679,25 +773,27 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                 Catatan Umum / Instruksi Khusus (Opsional)
               </label>
               <div className="flex items-center gap-1.5">
-                {extraNotes.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => setNotesViewMode(notesViewMode === 'visual' ? 'edit' : 'visual')}
-                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
-                    title={notesViewMode === 'visual' ? "Buka editor teks" : "Lihat tampilan visual rapi"}
-                  >
-                    {notesViewMode === 'visual' ? <Edit2 className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
-                    <span>{notesViewMode === 'visual' ? 'Edit Teks' : 'Tampilan Rapi'}</span>
-                  </button>
+                {notesViewMode === 'visual' ? (
+                  !isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={handleStartEditNotes}
+                      className="px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300"
+                      title="Buka editor teks untuk mengubah catatan"
+                    >
+                      <Edit2 className="w-2.5 h-2.5 text-teal-600" />
+                      <span>Edit Teks</span>
+                    </button>
+                  )
+                ) : (
+                  <span className="text-[10px] font-bold text-teal-700 px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200">
+                    Mode Edit Aktif
+                  </span>
                 )}
                 {extraNotes.trim() && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const cleaned = stripColorTags(extraNotes).replace(/(\*\*|~~|\*|`)/g, '');
-                      handleExtraNotesChange(cleaned);
-                      toast.success('Format dan tag teks berhasil dibersihkan!');
-                    }}
+                    onClick={handleResetTagNotes}
                     className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
                     title="Hapus semua tag warna / format yang berantakan"
                   >
@@ -708,57 +804,55 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
               </div>
             </div>
 
-            {notesViewMode === 'visual' && extraNotes.trim() ? (
-              <div 
-                onClick={() => !isReadOnly && setNotesViewMode('edit')}
-                className="w-full text-xs font-sans font-medium p-3 rounded-xl border-2 border-slate-300 bg-slate-50/90 text-[#37352f] leading-relaxed cursor-pointer hover:border-teal-500 transition-colors shadow-2xs group relative"
-                title="Klik untuk mengedit catatan ini"
-              >
+            {notesViewMode === 'visual' ? (
+              extraNotes.trim() ? (
                 <div 
-                  className="space-y-1"
-                  dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(extraNotes)) }}
-                />
-                <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
-                  <span>💡 Tampilan visual rapi (Notion)</span>
-                  <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-1">
-                    <Edit2 className="w-2.5 h-2.5" /> Klik untuk edit
+                  onClick={handleStartEditNotes}
+                  className="w-full text-xs font-sans font-medium p-3 rounded-xl border-2 border-slate-300 bg-slate-50/90 text-[#37352f] leading-relaxed cursor-pointer hover:border-teal-500 transition-colors shadow-2xs group relative"
+                  title="Klik untuk mengedit catatan ini"
+                >
+                  <div 
+                    className="space-y-1"
+                    dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(extraNotes)) }}
+                  />
+                  <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                    <span>💡 Tampilan visual rapi (Notion)</span>
+                    <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-1">
+                      <Edit2 className="w-2.5 h-2.5" /> Klik untuk edit
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div 
+                  onClick={handleStartEditNotes}
+                  className="w-full p-2.5 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 hover:bg-slate-100/80 hover:border-teal-500 text-slate-500 hover:text-teal-700 text-xs font-medium cursor-pointer transition-all flex items-center justify-between group"
+                  title="Klik untuk menambahkan catatan umum"
+                >
+                  <span className="flex items-center gap-1.5 text-[11px]">
+                    <Plus className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Belum ada catatan umum. Klik di sini untuk menambahkan...</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                    + Tulis Catatan
                   </span>
                 </div>
-              </div>
+              )
             ) : (
-              <div className="space-y-2">
-                <div className="relative">
-                  {activeSelection?.field === 'extraNotes' && (
-                    <FloatingSelectionToolbar
-                      onFormat={handleApplyFormat}
-                      onClose={() => setActiveSelection(null)}
-                    />
-                  )}
-                  <textarea
-                    rows={2}
-                    disabled={isReadOnly}
-                    value={extraNotes}
-                    onChange={(e) => handleExtraNotesChange(e.target.value)}
-                    onSelect={(e) => handleSelectText(e, 'extraNotes')}
-                    onKeyUp={(e) => handleSelectText(e, 'extraNotes')}
-                    onMouseUp={(e) => handleSelectText(e, 'extraNotes')}
-                    placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
-                    className="w-full text-xs font-sans font-bold p-2.5 rounded-xl border-2 outline-none resize-none focus:border-teal-500 bg-white text-[#37352f] border-slate-400 placeholder:text-slate-500 shadow-2xs"
-                  />
-                </div>
-
-                {/* Live rendered preview directly below editor */}
-                {extraNotes.trim() && (
-                  <div className="p-2.5 rounded-xl border border-teal-200 bg-teal-50/60 text-[#37352f] text-xs">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 block mb-1">
-                      Pratinjau Hasil Format Visual:
-                    </span>
-                    <div 
-                      className="text-xs leading-relaxed font-sans"
-                      dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(extraNotes)) }}
-                    />
-                  </div>
-                )}
+              /* Mode Edit: Real WYSIWYG Editor with FloatingNotionBubbleToolbar (Identik dengan Table Mode) */
+              <div className="w-full">
+                <NotionInlineEditor
+                  initialValue={extraNotes}
+                  fieldLabel="Catatan Umum"
+                  multiline={true}
+                  isNotionLight={true}
+                  allowTasklistMode={false}
+                  showActionButtons={true}
+                  disableOutsideClickSave={true}
+                  minHeight="85px"
+                  placeholder="Instruksi tambahan, parameter khusus, atau keterangan ringkas..."
+                  onSave={(newVal) => handleSaveExtraNotes(newVal)}
+                  onCancel={handleCancelExtraNotes}
+                />
               </div>
             )}
           </div>
@@ -769,25 +863,27 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-600">Laporan / Keterangan Bebas</span>
             <div className="flex items-center gap-1.5">
-              {freeformText.trim() && (
-                <button
-                  type="button"
-                  onClick={() => setFreeformViewMode(freeformViewMode === 'visual' ? 'edit' : 'visual')}
-                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
-                >
-                  {freeformViewMode === 'visual' ? <Edit2 className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
-                  <span>{freeformViewMode === 'visual' ? 'Edit Teks' : 'Tampilan Rapi'}</span>
-                </button>
+              {freeformViewMode === 'visual' ? (
+                !isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={handleStartEditFreeform}
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300"
+                    title="Buka editor teks untuk mengubah keterangan"
+                  >
+                    <Edit2 className="w-2.5 h-2.5 text-teal-600" />
+                    <span>Edit Teks</span>
+                  </button>
+                )
+              ) : (
+                <span className="text-[10px] font-bold text-teal-700 px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200">
+                  Mode Edit Aktif
+                </span>
               )}
               {freeformText.trim() && (
                 <button
                   type="button"
-                  onClick={() => {
-                    const cleaned = stripColorTags(freeformText).replace(/(\*\*|~~|\*|`)/g, '');
-                    setFreeformText(cleaned);
-                    onChange(cleaned);
-                    toast.success('Format dan tag teks berhasil dibersihkan!');
-                  }}
+                  onClick={handleResetTagFreeform}
                   className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
                 >
                   <Sparkles className="w-2.5 h-2.5" />
@@ -797,58 +893,55 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
             </div>
           </div>
 
-          {freeformViewMode === 'visual' && freeformText.trim() ? (
-            <div 
-              onClick={() => !isReadOnly && setFreeformViewMode('edit')}
-              className="w-full text-xs font-sans font-medium p-3.5 rounded-xl border-2 border-slate-300 bg-slate-50/90 text-[#37352f] leading-relaxed cursor-pointer hover:border-teal-500 transition-colors shadow-2xs group relative"
-            >
+          {freeformViewMode === 'visual' ? (
+            freeformText.trim() ? (
               <div 
-                className="space-y-1.5 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(freeformText)) }}
-              />
-              <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
-                <span>💡 Tampilan visual rapi (Notion)</span>
-                <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-1">
-                  <Edit2 className="w-2.5 h-2.5" /> Klik untuk edit
+                onClick={handleStartEditFreeform}
+                className="w-full text-xs font-sans font-medium p-3.5 rounded-xl border-2 border-slate-300 bg-slate-50/90 text-[#37352f] leading-relaxed cursor-pointer hover:border-teal-500 transition-colors shadow-2xs group relative"
+                title="Klik untuk mengedit keterangan ini"
+              >
+                <div 
+                  className="space-y-1.5 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(freeformText)) }}
+                />
+                <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>💡 Tampilan visual rapi (Notion)</span>
+                  <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-1">
+                    <Edit2 className="w-2.5 h-2.5" /> Klik untuk edit
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div 
+                onClick={handleStartEditFreeform}
+                className="w-full p-3.5 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 hover:bg-slate-100/80 hover:border-teal-500 text-slate-500 hover:text-teal-700 text-xs font-medium cursor-pointer transition-all flex items-center justify-between group"
+                title="Klik untuk menulis laporan atau keterangan"
+              >
+                <span className="flex items-center gap-1.5 text-xs">
+                  <Plus className="w-4 h-4 text-teal-600" />
+                  <span>Belum ada keterangan. Klik di sini untuk menulis laporan / keterangan...</span>
+                </span>
+                <span className="text-[11px] font-bold text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                  + Tulis Keterangan
                 </span>
               </div>
-            </div>
+            )
           ) : (
-            <div className="space-y-2">
-              <div className="relative">
-                {activeSelection?.field === 'freeformText' && (
-                  <FloatingSelectionToolbar
-                    onFormat={handleApplyFormat}
-                    onClose={() => setActiveSelection(null)}
-                  />
-                )}
-                <textarea
-                  rows={5}
-                  disabled={isReadOnly}
-                  value={freeformText}
-                  onChange={(e) => {
-                    setFreeformText(e.target.value);
-                    onChange(e.target.value);
-                  }}
-                  onSelect={(e) => handleSelectText(e, 'freeformText')}
-                  onKeyUp={(e) => handleSelectText(e, 'freeformText')}
-                  onMouseUp={(e) => handleSelectText(e, 'freeformText')}
-                  placeholder="Tuliskan keterangan naratif atau laporan detail..."
-                  className="w-full text-xs font-sans font-bold p-3 rounded-xl border-2 outline-none resize-y focus:border-teal-500 leading-relaxed bg-white text-[#37352f] border-slate-400 placeholder:text-slate-500 shadow-2xs"
-                />
-              </div>
-
-              {freeformText.trim() && (
-                <div className="p-2.5 rounded-xl border border-teal-200 bg-teal-50/60 text-[#37352f] text-xs">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 block mb-1">
-                    Pratinjau Hasil Format Visual:
-                  </span>
-                  <div 
-                    className="text-xs leading-relaxed font-sans"
-                    dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(freeformText)) }}
-                  />
-                </div>
-              )}
+            /* Mode Edit: Real WYSIWYG Editor with FloatingNotionBubbleToolbar (Identik dengan Table Mode) */
+            <div className="w-full">
+              <NotionInlineEditor
+                initialValue={freeformText}
+                fieldLabel="Laporan / Keterangan Bebas"
+                multiline={true}
+                isNotionLight={true}
+                allowTasklistMode={false}
+                showActionButtons={true}
+                disableOutsideClickSave={true}
+                minHeight="120px"
+                placeholder="Tuliskan keterangan naratif atau laporan detail..."
+                onSave={(newVal) => handleSaveFreeform(newVal)}
+                onCancel={handleCancelFreeform}
+              />
             </div>
           )}
           <p className="text-[11px] font-bold text-slate-500">

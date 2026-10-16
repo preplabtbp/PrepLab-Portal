@@ -25,6 +25,7 @@ import { FloatingFeedbackButton } from './components/FloatingFeedbackButton';
 import { initFontSize } from './utils/fontSize';
 import { formatAvatarUrl } from './lib/avatarUtils';
 import { setupGlobalAttachmentPaste } from './utils/attachmentPasteHelper';
+import { getUserAllowedSections } from './components/notion/logbook-section-utils';
 
 // Initialize portal-wide font scale on boot
 initFontSize();
@@ -389,14 +390,20 @@ export default function App() {
 
   const isMeetingRoom = React.useMemo(() => {
     const nik = (inspectorNik || '').toUpperCase();
-    return nik === 'MEETINGROOM' || nik === 'MEETING';
+    return nik === 'MEETINGROOM' || nik === 'MEETING' || nik === 'MEETINGROOMGTS' || nik.includes('MEETING');
   }, [inspectorNik]);
 
   const [meetingRoomDevUnlocked, setMeetingRoomDevUnlocked] = useState(false);
   const [showMeetingRoomDevModal, setShowMeetingRoomDevModal] = useState(false);
 
+  useEffect(() => {
+    const handleUnlocked = () => setMeetingRoomDevUnlocked(true);
+    window.addEventListener('meetingroom-dev-unlocked', handleUnlocked);
+    return () => window.removeEventListener('meetingroom-dev-unlocked', handleUnlocked);
+  }, []);
+
   const isDeveloper = React.useMemo(() => {
-    if (isMeetingRoom) return meetingRoomDevUnlocked;
+    if (isMeetingRoom) return true; // Akun meetingroom sebagai dev full
     if (
       inspectorNik === '02D25000055' ||
       inspectorNik === '02D24000043' ||
@@ -406,7 +413,7 @@ export default function App() {
       inspectorNik === 'preplabadmin'
     ) return true;
     return developerList.some(d => d.nik === inspectorNik);
-  }, [inspectorNik, developerList, isMeetingRoom, meetingRoomDevUnlocked]);
+  }, [inspectorNik, developerList, isMeetingRoom]);
 
   const isCrewRole = React.useMemo(() => {
     if (isMeetingRoom) return false;
@@ -424,6 +431,9 @@ export default function App() {
 
   const isMaintenanceCrew = React.useMemo(() => {
     if (!isCrewRole) return false;
+    const nik = (inspectorNik || '').trim();
+    const name = (inspectorName || '').toLowerCase();
+    if (nik === 'M0401260003' || name.includes('sarjon')) return true;
     const sec = (userProfile?.section || '').toLowerCase();
     const jab = (userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
     const role = (userProfile?.role || '').toLowerCase();
@@ -431,7 +441,7 @@ export default function App() {
            jab.includes('maint') || jab.includes('mekanik') || jab.includes('listrik') || 
            jab.includes('electric') || jab.includes('welder') || jab.includes('teknisi') ||
            role.includes('maint') || role.includes('teknisi');
-  }, [isCrewRole, userProfile]);
+  }, [isCrewRole, userProfile, inspectorNik, inspectorName]);
 
   const userDept = React.useMemo(() => {
     if (isMeetingRoom) return "ALL";
@@ -452,6 +462,40 @@ export default function App() {
     return null;
   }, [userProfile, isMeetingRoom]);
 
+  const isManager = React.useMemo(() => {
+    const jab = (userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+    const role = (userProfile?.role || '').toLowerCase();
+    return jab.includes('manager') || role.includes('manager');
+  }, [userProfile]);
+
+  const isDevOrManager = Boolean(isDeveloper || isManager);
+
+  const defaultUserUniverse: 'TBP' | 'GTS' = React.useMemo(() => {
+    return userProfile?.pt === 'GTS' ? 'GTS' : 'TBP';
+  }, [userProfile]);
+
+  const [activeUniverse, setActiveUniverse] = useState<'TBP' | 'GTS'>(() => {
+    const saved = localStorage.getItem('portal_active_universe') || localStorage.getItem('bulletin_active_universe');
+    if (saved === 'GTS' || saved === 'TBP') return saved;
+    try {
+      const p = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+      if (p.pt === 'GTS') return 'GTS';
+    } catch (e) {}
+    return 'TBP';
+  });
+
+  // Effective universe: if not dev or manager, strictly locked to defaultUserUniverse
+  const effectiveUniverse: 'TBP' | 'GTS' = isDevOrManager ? activeUniverse : defaultUserUniverse;
+
+  const handleSwitchUniverse = (targetUniv: 'TBP' | 'GTS') => {
+    if (!isDevOrManager) return;
+    setActiveUniverse(targetUniv);
+    localStorage.setItem('portal_active_universe', targetUniv);
+    localStorage.setItem('bulletin_active_universe', targetUniv);
+    window.dispatchEvent(new CustomEvent('portal-universe-changed', { detail: { universe: targetUniv } }));
+    toast.success(`Beralih ke Universe ${targetUniv === 'GTS' ? 'PT. Gane Tambang Sentosa (GTS)' : 'PT. Trimegah Bangun Persada (TBP / GPS)'}`);
+  };
+
   const isAdminOrDeveloper = React.useMemo(() => {
     if (isMeetingRoom) return true;
     if (isDeveloper) return true;
@@ -469,16 +513,6 @@ export default function App() {
     );
   }, [isDeveloper, userProfile, isMeetingRoom]);
 
-  // SPT (Superintendent) & Manager Homepage Routing
-  const isSptOrManager = React.useMemo(() => {
-    if (isMeetingRoom) return false;
-    const jab = (userProfile?.jabatan || '').toLowerCase();
-    return (
-      jab.includes('superintendent') ||
-      jab.includes('spt') ||
-      jab.includes('manager')
-    );
-  }, [userProfile, isMeetingRoom]);
 
   const [showProfileScreen, setShowProfileScreen] = useState(false);
   const [showModulesDrawer, setShowModulesDrawer] = useState(false);
@@ -776,11 +810,9 @@ export default function App() {
     }
 
     if (cleanTab === 'logbook') {
-      const activeUniv = localStorage.getItem('bulletin_active_universe');
-      const targetUniverse = isDeveloper
-        ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
-        : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
-      const userSec = userProfile?.department || userProfile?.seksi || 'Preparasi';
+      const targetUniverse = effectiveUniverse;
+      const allowedSecs = getUserAllowedSections(userProfile);
+      const userSec = allowedSecs[0] || userProfile?.department || userProfile?.seksi || 'Preparasi';
       navigate(`/bulletin/${targetUniverse}?sectionLogbook=${encodeURIComponent(userSec)}`);
       return;
     }
@@ -999,17 +1031,20 @@ export default function App() {
                   localStorage.setItem('p2h_inspector_jabatan', data.employee.jabatan || 'Crew');
                   localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
                   if (validUsername) localStorage.setItem('p2h_inspector_username', validUsername);
+                  if (data.employee?.pt === 'GTS') {
+                      localStorage.setItem('portal_active_universe', 'GTS');
+                      localStorage.setItem('bulletin_active_universe', 'GTS');
+                      setActiveUniverse('GTS');
+                  } else {
+                      localStorage.setItem('portal_active_universe', 'TBP');
+                      localStorage.setItem('bulletin_active_universe', 'TBP');
+                      setActiveUniverse('TBP');
+                  }
                   toast.success("Login berhasil");
                   setLoginStep('nik');
                   setPasswordInput('');
                   setShowPassword(false);
 
-                  const jab = (data.employee?.jabatan || '').toLowerCase();
-                  const isSuperOrMgr = jab.includes('superintendent') || jab.includes('spt') || jab.includes('manager');
-                  if (isSuperOrMgr) {
-                      const targetUniverse = data.employee?.pt === 'GTS' ? 'GTS' : 'TBP';
-                      navigate(`/bulletin/${targetUniverse}`);
-                  }
               }
           } else {
              const errMsg = data.message || 'Error login';
@@ -1527,6 +1562,47 @@ export default function App() {
             <div className="w-6 h-0.5 bg-gradient-to-r from-teal-300 to-cyan-300 rounded-full mt-1.5 opacity-75" />
           </div>
 
+          {/* Universe Switcher (Dev & Manager Only) or Assigned Entity Badge */}
+          {isDevOrManager ? (
+            <div className="w-full px-2 py-1 my-0.5 flex flex-col items-center">
+              <div className="w-full bg-black/25 p-1 rounded-xl border border-white/15 flex flex-col items-center gap-1 shadow-xs">
+                <span className="text-[7px] font-black uppercase tracking-wider text-teal-100/80">
+                  Universe
+                </span>
+                <div className="flex w-full rounded-lg bg-black/35 p-0.5 gap-0.5">
+                  <button
+                    onClick={() => handleSwitchUniverse('TBP')}
+                    className={`flex-1 py-0.5 rounded text-[8.5px] font-black transition-all cursor-pointer ${
+                      effectiveUniverse === 'TBP'
+                        ? 'bg-teal-500 text-white shadow-xs'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                    title="Universe PT Trimegah Bangun Persada (TBP / GPS)"
+                  >
+                    TBP
+                  </button>
+                  <button
+                    onClick={() => handleSwitchUniverse('GTS')}
+                    className={`flex-1 py-0.5 rounded text-[8.5px] font-black transition-all cursor-pointer ${
+                      effectiveUniverse === 'GTS'
+                        ? 'bg-teal-500 text-white shadow-xs'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                    title="Universe PT Gane Tambang Sentosa (GTS)"
+                  >
+                    GTS
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="my-0.5 px-2 py-0.5 text-center">
+              <span className="px-1.5 py-0.5 rounded bg-white/10 text-white/90 font-black text-[7.5px] uppercase tracking-wider border border-white/15">
+                {effectiveUniverse === 'GTS' ? 'PT GTS' : 'PT TBP'}
+              </span>
+            </div>
+          )}
+
           {/* Navigation Items List with Smooth Follower Notch (Merged Left & Right Rails) */}
           <div className="flex flex-col items-center w-full flex-1 gap-1 pt-1 overflow-y-auto no-scrollbar">
             {[
@@ -1549,11 +1625,7 @@ export default function App() {
                 label: 'Labnote',
                 icon: FileText,
                 onClick: () => {
-                  const activeUniv = localStorage.getItem('bulletin_active_universe');
-                  const targetUniverse = isDeveloper
-                    ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
-                    : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
-                  handleNav(`bulletin/${targetUniverse}`);
+                  handleNav(`bulletin/${effectiveUniverse}`);
                 },
                 title: 'Labnote & Pengumuman',
               },
@@ -1711,7 +1783,7 @@ export default function App() {
 
       {/* 2. Main Right Column: Top Header + Scrollable Content Area */}
       <div 
-        className="flex-1 flex flex-col h-[100dvh] relative transition-all duration-300 overflow-x-hidden overflow-y-auto"
+        className="flex-1 h-[100dvh] relative transition-all duration-300 overflow-x-hidden overflow-y-auto"
         style={{ backgroundColor: activeModuleStyle.bg, color: 'var(--text-main, #000000)' }}
       >
         {appEnv === 'staging' && (
@@ -1826,7 +1898,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className={`@container flex-1 flex flex-col w-full bg-transparent min-w-0 transition-all duration-300 ${
-        (isBulletin && bulletinFocusMode) || isEmployeeDatabase ? 'h-[100dvh] overflow-hidden p-0' : 'h-full'
+        (isBulletin && bulletinFocusMode) || isEmployeeDatabase ? 'h-[100dvh] overflow-hidden p-0' : 'min-h-full flex-1'
       }`}>
         
       <Suspense fallback={<div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>}>
@@ -1835,11 +1907,7 @@ export default function App() {
   <Route 
     path="/" 
     element={
-      isSptOrManager ? (
-        <Navigate to={`/bulletin/${userProfile?.pt === 'GTS' ? 'GTS' : 'TBP'}`} replace />
-      ) : (
-        <HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />
-      )
+      <HomeScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} onNav={handleNav} userPt={userProfile?.pt} />
     } 
   />
   <Route 
@@ -1911,17 +1979,17 @@ export default function App() {
   <Route path="/wo-maintenance-dashboard" element={<WOMaintenanceDashboard onBack={() => handleNav('home')} inspectorNik={inspectorNik!} />} />
   <Route path="/wo-dashboard" element={<WOMaintenanceDashboard onBack={() => handleNav('home')} inspectorNik={inspectorNik!} />} />
   <Route path="/bulletin/GPS" element={<Navigate to="/bulletin/TBP" replace />} />
-  <Route path="/bulletin/:pt" element={<BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} userPt={userProfile?.pt || 'TBP'} />} />
-  <Route path="/bulletin" element={<Navigate to={`/bulletin/${isDeveloper ? (localStorage.getItem('bulletin_active_universe') === 'GTS' ? 'GTS' : 'TBP') : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP')}`} replace />} />
+  <Route path="/bulletin/:pt" element={<BulletinBoard inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} userPt={effectiveUniverse} userProfile={userProfile} />} />
+  <Route path="/bulletin" element={<Navigate to={`/bulletin/${effectiveUniverse}`} replace />} />
   <Route path="/agenda" element={<AgendaDashboard key="agenda" inspectorNik={inspectorNik!} inspectorName={inspectorName!} userDept={userDept || undefined} isDeveloper={isDeveloper} />} />
   <Route path="/p5m" element={<P5MScreen onBack={() => handleNav('home')} userProfile={userProfile} />} />
   <Route path="/feedback-support" element={<FeedbackSupportScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/finance" element={<FinanceScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
   <Route path="/leaderboard" element={<LeaderboardScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} userProfile={userProfile} onBack={() => handleNav('home')} />} />
-  <Route path="/logbook" element={<Navigate to={`/bulletin/${isDeveloper ? (localStorage.getItem('bulletin_active_universe') === 'GTS' ? 'GTS' : 'TBP') : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP')}?sectionLogbook=${encodeURIComponent(userProfile?.department || userProfile?.seksi || 'Preparasi')}`} replace />} />
-  <Route path="/clinic" element={<ClinicScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/logbook" element={<Navigate to={`/bulletin/${effectiveUniverse}?sectionLogbook=${encodeURIComponent(getUserAllowedSections(userProfile)[0] || 'Preparasi')}`} replace />} />
+  <Route path="/clinic" element={<ClinicScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse} onNav={handleNav} onBack={() => handleNav('home')} />} />
   <Route path="/kunjungan-klinik" element={<Navigate to="/clinic" replace />} />
-  <Route path="/xrf-calibration" element={<XrfCalibrationScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={userProfile?.pt || 'TBP'} onBack={() => handleNav('home')} />} />
+  <Route path="/xrf-calibration" element={<XrfCalibrationScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse} onBack={() => handleNav('home')} />} />
   <Route path="/kalibrasi-xrf" element={<Navigate to="/xrf-calibration" replace />} />
   <Route path="/screen-test-smelter" element={<ScreenTestSmelterScreen inspectorName={inspectorName || 'Tamu Presentasi'} inspectorNik={inspectorNik || 'guest'} onBack={() => handleNav('home')} />} />
   <Route path="/screen-test" element={<Navigate to="/screen-test-smelter" replace />} />
@@ -2042,11 +2110,7 @@ export default function App() {
             label="Labnote" 
             active={activeTab.startsWith('bulletin')} 
             onClick={() => { 
-              const activeUniv = localStorage.getItem('bulletin_active_universe');
-              const targetUniverse = isDeveloper
-                ? (activeUniv === 'GTS' ? 'GTS' : 'TBP')
-                : (userProfile?.pt === 'GTS' ? 'GTS' : 'TBP');
-              handleNav(`bulletin/${targetUniverse}`);
+              handleNav(`bulletin/${effectiveUniverse}`);
             }} 
           />
 

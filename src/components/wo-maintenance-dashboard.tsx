@@ -24,12 +24,13 @@ import {
   getISOWeek, 
   getISOWeekYear, 
   isDateInISOWeek, 
-  isThisISOWeek, 
-  isLastISOWeek, 
-  getYearISOWeeksList, 
+  isThisISOWeek,
+  isLastISOWeek,
+  getYearISOWeeksList,
   getYearMonthsList,
   getISOWeekRange,
-  formatISOWeekLabel 
+  formatISOWeekLabel,
+  getLastISOWeek
 } from '../utils/iso-week';
 import { normalizeEquipment } from '../lib/equipmentNormalizer';
 import { parseDowntimeHours, formatDowntimeDuration, formatDowntimeDisplay } from '../lib/downtimeHelper';
@@ -993,7 +994,7 @@ export function WOMaintenanceDashboard({ onBack, inspectorNik, onNavigateToWO }:
               </optgroup>
               <optgroup label="⚡ Minggu ISO">
                 <option value="this_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⚡ Minggu ISO Ini (W{String(getISOWeek(new Date())).padStart(2, '0')})</option>
-                <option value="last_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏮️ Minggu ISO Lalu (W{String(Math.max(1, getISOWeek(new Date()) - 1)).padStart(2, '0')})</option>
+                <option value="last_iso_week" style={{ color: '#0f172a', backgroundColor: '#ffffff' }}>⏮️ Minggu ISO Lalu (W{String(getLastISOWeek(new Date()).week).padStart(2, '0')})</option>
               </optgroup>
               <optgroup label="📋 Daftar Spesifik Minggu ISO">
                 {isoWeeksList.map(iw => (

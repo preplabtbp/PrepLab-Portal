@@ -56,6 +56,27 @@ const DEFAULT_SAPROLITE_ROWS: StandardRowInput[] = [
   { standardCode: 'SAP',      sampleLabel: 'VER-SAP',      sequenceNo: 10, analyzedAt: '02:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
 ];
 
+// 3. Supermini 200 (Rigaku WDXRF GTS) 17 Standard Rows in exact sequence
+export const DEFAULT_SUPERMINI_ROWS: StandardRowInput[] = [
+  { standardCode: 'BLANK_A',  sampleLabel: 'BLANK A',       sequenceNo: 1,  analyzedAt: '00:05', ni: '0.000', co: '0.000', fe: '0.000', cao: '0.000', sio2: '0.00', al2o3: '0.00', mgo: '0.00', p: '0.000', s: '0.000', cr2o3: '0.000', mno: '0.000' },
+  { standardCode: 'BLANK_B',  sampleLabel: 'VER-BLANK B',   sequenceNo: 2,  analyzedAt: '00:10', ni: '0.000', co: '0.000', fe: '0.000', cao: '0.000', sio2: '0.00', al2o3: '0.00', mgo: '0.00', p: '0.000', s: '0.000', cr2o3: '0.000', mno: '0.000' },
+  { standardCode: 'OREAS184', sampleLabel: 'VER-OREAS184',  sequenceNo: 3,  analyzedAt: '00:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM01',    sampleLabel: 'VER-LIM01',     sequenceNo: 4,  analyzedAt: '00:20', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM02',    sampleLabel: 'VER-LIM02',     sequenceNo: 5,  analyzedAt: '00:25', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM03',    sampleLabel: 'VER-LIM03',     sequenceNo: 6,  analyzedAt: '00:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS187', sampleLabel: 'VER-OREAS187',  sequenceNo: 7,  analyzedAt: '00:35', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM04',    sampleLabel: 'VER-LIM04',     sequenceNo: 8,  analyzedAt: '00:40', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS189', sampleLabel: 'VER-OREAS189',  sequenceNo: 9,  analyzedAt: '00:45', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM05',    sampleLabel: 'VER-LIM05',     sequenceNo: 10, analyzedAt: '00:50', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS190', sampleLabel: 'VER-OREAS190',  sequenceNo: 11, analyzedAt: '00:55', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS191', sampleLabel: 'VER-OREAS191',  sequenceNo: 12, analyzedAt: '01:00', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS192', sampleLabel: 'VER-OREAS192',  sequenceNo: 13, analyzedAt: '01:05', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS193', sampleLabel: 'VER-OREAS193',  sequenceNo: 14, analyzedAt: '01:10', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'SAP19',    sampleLabel: 'VER-SAP19',     sequenceNo: 15, analyzedAt: '01:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS194', sampleLabel: 'VER-OREAS194',  sequenceNo: 16, analyzedAt: '01:20', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS195', sampleLabel: 'VER-OREAS195',  sequenceNo: 17, analyzedAt: '01:25', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+];
+
 export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   instruments,
   standards,
@@ -63,8 +84,8 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   isDevOrManager = false,
   onSuccessSave,
 }) => {
-  // 1. Matrix Application State: LIMONITE (5 rows) vs SAPROLITE (10 rows)
-  const [selectedMatrix, setSelectedMatrix] = useState<'LIMONITE' | 'SAPROLITE'>('LIMONITE');
+  // 1. Matrix Application State: LIMONITE (5 rows), SAPROLITE (10 rows), SUPERMINI (17 rows)
+  const [selectedMatrix, setSelectedMatrix] = useState<'LIMONITE' | 'SAPROLITE' | 'SUPERMINI'>('LIMONITE');
 
   // Filter instruments based on user role and assigned site
   const filteredInstruments = useMemo(() => {
@@ -121,21 +142,35 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
     }
   }, [filteredInstruments]);
 
+  // Auto switch matrix if SUPERMINI instrument is chosen
+  useEffect(() => {
+    if (selectedInstrument === 'SUPERMINI' && selectedMatrix !== 'SUPERMINI') {
+      handleMatrixChange('SUPERMINI');
+    }
+  }, [selectedInstrument]);
+
   // Handle matrix application toggle
-  const handleMatrixChange = (matrix: 'LIMONITE' | 'SAPROLITE') => {
+  const handleMatrixChange = (matrix: 'LIMONITE' | 'SAPROLITE' | 'SUPERMINI') => {
     setSelectedMatrix(matrix);
     if (matrix === 'LIMONITE') {
       setRows(DEFAULT_LIMONITE_ROWS.map((r, i) => ({
         ...r,
         sampleLabel: `VER-LIM0${i + 1} ${verificationDate}`
       })));
-    } else {
+      toast.success("Form dialihkan ke Verifikasi LIMONITE (5 Standar).");
+    } else if (matrix === 'SAPROLITE') {
       setRows(DEFAULT_SAPROLITE_ROWS.map(r => ({
         ...r,
         sampleLabel: `VER-${r.standardCode} ${verificationDate}`
       })));
+      toast.success("Form dialihkan ke Verifikasi SAPROLITE (10 Standar).");
+    } else {
+      setRows(DEFAULT_SUPERMINI_ROWS.map(r => ({
+        ...r,
+        sampleLabel: r.standardCode.startsWith('BLANK') ? r.sampleLabel : `VER-${r.standardCode} ${verificationDate}`
+      })));
+      toast.success("Form dialihkan ke Verifikasi SUPERMINI 200 WDXRF GTS (17 Standar: Blank + CRM).");
     }
-    toast.success(`Form dialihkan ke Verifikasi ${matrix} (${matrix === 'LIMONITE' ? '5 Standar' : '10 Standar'}).`);
   };
 
   // Update specific cell in row
@@ -202,7 +237,15 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
 
   // Evaluate entire row status
   const evaluateRow = (r: StandardRowInput) => {
-    const elements = selectedMatrix === 'LIMONITE' 
+    if (r.standardCode.startsWith('BLANK')) {
+      const hasAny = ['ni', 'co', 'fe', 'cao', 'sio2', 'al2o3', 'mgo', 'p', 's', 'cr2o3', 'mno'].some(k => {
+        const v = parseFloat(String(r[k as keyof StandardRowInput] ?? ''));
+        return !isNaN(v) && v >= 0;
+      });
+      return hasAny ? 'PASS' : 'EMPTY';
+    }
+
+    const elements = (selectedMatrix === 'LIMONITE' || selectedMatrix === 'SUPERMINI') 
       ? ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'P', 'S', 'Cr2O3', 'MnO']
       : ['Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO'];
 
@@ -275,11 +318,18 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         if (instruments.some(i => i.code === instCode)) {
           setSelectedInstrument(instCode);
         }
+      } else if (fullTextUpper.includes('SUPERMINI') || fullTextUpper.includes('RIGAKU') || fullTextUpper.includes('WDXRF')) {
+        if (instruments.some(i => i.code === 'SUPERMINI')) {
+          setSelectedInstrument('SUPERMINI');
+        }
       }
 
       // Detect matrix if present
       let currentMatrix = selectedMatrix;
-      if (fullTextUpper.includes('LIMONITE') || fullTextUpper.includes('LIM 0') || fullTextUpper.includes('LIM0')) {
+      if (fullTextUpper.includes('SUPERMINI') || fullTextUpper.includes('RIGAKU') || fullTextUpper.includes('BLANK A') || fullTextUpper.includes('OREAS191') || fullTextUpper.includes('OREAS192') || fullTextUpper.includes('OREAS195')) {
+        currentMatrix = 'SUPERMINI';
+        setSelectedMatrix('SUPERMINI');
+      } else if (fullTextUpper.includes('LIMONITE') || fullTextUpper.includes('LIM 0') || fullTextUpper.includes('LIM0')) {
         currentMatrix = 'LIMONITE';
         setSelectedMatrix('LIMONITE');
       } else if (fullTextUpper.includes('SAPROLITE') || fullTextUpper.includes('OREAS')) {
@@ -287,7 +337,9 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         setSelectedMatrix('SAPROLITE');
       }
 
-      const targetStandards = currentMatrix === 'LIMONITE' 
+      const targetStandards = currentMatrix === 'SUPERMINI'
+        ? ['BLANK_A', 'BLANK_B', 'OREAS184', 'LIM01', 'LIM02', 'LIM03', 'OREAS187', 'LIM04', 'OREAS189', 'LIM05', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']
+        : currentMatrix === 'LIMONITE' 
         ? ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05']
         : ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'LIM', 'SAP16', 'OREAS193', 'SAP19', 'OREAS194', 'SAP'];
 
@@ -314,15 +366,36 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           continue;
         }
 
-        // Calibration blanks (VER-BLANK WAX, VER-BLANK LICOWAX) are calibration baselines, not CRM standards
+        // Calibration blanks (skip wax blank if not Supermini blank)
         const rowText = cols.join(' ');
-        if (/BLANK/i.test(rowText)) {
+        if (/BLANK\s*(WAX|LICOWAX)/i.test(rowText)) {
+          continue;
+        }
+        if (currentMatrix !== 'SUPERMINI' && /BLANK/i.test(rowText)) {
           continue;
         }
 
         // Identify Standard Code from label/row content:
         let matchedStdCode = '';
-        if (currentMatrix === 'LIMONITE') {
+        if (currentMatrix === 'SUPERMINI') {
+          if (/BLANK\s*A\b/i.test(rowText)) matchedStdCode = 'BLANK_A';
+          else if (/(VER-)?BLANK\s*B\b/i.test(rowText)) matchedStdCode = 'BLANK_B';
+          else if (/OREAS\s*184\b/i.test(rowText)) matchedStdCode = 'OREAS184';
+          else if (/LIM\s*0?1\b/i.test(rowText)) matchedStdCode = 'LIM01';
+          else if (/LIM\s*0?2\b/i.test(rowText)) matchedStdCode = 'LIM02';
+          else if (/LIM\s*0?3\b/i.test(rowText)) matchedStdCode = 'LIM03';
+          else if (/OREAS\s*187\b/i.test(rowText)) matchedStdCode = 'OREAS187';
+          else if (/LIM\s*0?4\b/i.test(rowText)) matchedStdCode = 'LIM04';
+          else if (/OREAS\s*189\b/i.test(rowText)) matchedStdCode = 'OREAS189';
+          else if (/LIM\s*0?5\b/i.test(rowText)) matchedStdCode = 'LIM05';
+          else if (/OREAS\s*190\b/i.test(rowText)) matchedStdCode = 'OREAS190';
+          else if (/OREAS\s*191\b/i.test(rowText)) matchedStdCode = 'OREAS191';
+          else if (/OREAS\s*192\b/i.test(rowText)) matchedStdCode = 'OREAS192';
+          else if (/OREAS\s*193\b/i.test(rowText)) matchedStdCode = 'OREAS193';
+          else if (/SAP\s*19\b/i.test(rowText)) matchedStdCode = 'SAP19';
+          else if (/OREAS\s*194\b/i.test(rowText)) matchedStdCode = 'OREAS194';
+          else if (/OREAS\s*195\b/i.test(rowText)) matchedStdCode = 'OREAS195';
+        } else if (currentMatrix === 'LIMONITE') {
           if (/LIM\s*0?1\b/i.test(rowText)) matchedStdCode = 'LIM01';
           else if (/LIM\s*0?2\b/i.test(rowText)) matchedStdCode = 'LIM02';
           else if (/LIM\s*0?3\b/i.test(rowText)) matchedStdCode = 'LIM03';
@@ -498,7 +571,27 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
 
   // Pre-fill sample values
   const handleFillSampleValues = () => {
-    if (selectedMatrix === 'LIMONITE') {
+    if (selectedMatrix === 'SUPERMINI') {
+      setRows([
+        { standardCode: 'BLANK_A',  sampleLabel: 'BLANK A',       sequenceNo: 1,  analyzedAt: '00:05', ni: '0.000', co: '0.000', fe: '0.000', cao: '0.000', sio2: '0.00', al2o3: '0.00', mgo: '0.00', p: '0.000', s: '0.000', cr2o3: '0.000', mno: '0.000' },
+        { standardCode: 'BLANK_B',  sampleLabel: 'VER-BLANK B',   sequenceNo: 2,  analyzedAt: '00:10', ni: '0.000', co: '0.000', fe: '0.000', cao: '0.000', sio2: '0.00', al2o3: '0.00', mgo: '0.00', p: '0.000', s: '0.000', cr2o3: '0.000', mno: '0.000' },
+        { standardCode: 'OREAS184', sampleLabel: `VER-OREAS184 ${verificationDate}`,  sequenceNo: 3,  analyzedAt: '00:15', ni: '1.018', co: '0.089', fe: '27.48', cao: '0.214', sio2: '42.20', al2o3: '4.61', mgo: '3.04', p: '0.003', s: '0.001', cr2o3: '1.745', mno: '0.674' },
+        { standardCode: 'LIM01',    sampleLabel: `VER-LIM01 ${verificationDate}`,     sequenceNo: 4,  analyzedAt: '00:20', ni: '1.112', co: '0.140', fe: '47.55', cao: '0.028', sio2: '6.82', al2o3: '4.43', mgo: '3.16', p: '0.003', s: '0.148', cr2o3: '2.295', mno: '1.072' },
+        { standardCode: 'LIM02',    sampleLabel: `VER-LIM02 ${verificationDate}`,     sequenceNo: 5,  analyzedAt: '00:25', ni: '1.202', co: '0.132', fe: '45.61', cao: '0.058', sio2: '8.87', al2o3: '3.51', mgo: '4.96', p: '0.003', s: '0.121', cr2o3: '2.158', mno: '1.011' },
+        { standardCode: 'LIM03',    sampleLabel: `VER-LIM03 ${verificationDate}`,     sequenceNo: 6,  analyzedAt: '00:30', ni: '1.291', co: '0.135', fe: '45.25', cao: '0.048', sio2: '8.53', al2o3: '4.19', mgo: '4.83', p: '0.002', s: '0.130', cr2o3: '2.045', mno: '1.008' },
+        { standardCode: 'OREAS187', sampleLabel: `VER-OREAS187 ${verificationDate}`,  sequenceNo: 7,  analyzedAt: '00:35', ni: '1.368', co: '0.063', fe: '13.58', cao: '0.339', sio2: '46.62', al2o3: '2.79', mgo: '17.96', p: '0.001', s: '0.001', cr2o3: '0.985', mno: '0.355' },
+        { standardCode: 'LIM04',    sampleLabel: `VER-LIM04 ${verificationDate}`,     sequenceNo: 8,  analyzedAt: '00:40', ni: '1.406', co: '0.124', fe: '42.63', cao: '0.059', sio2: '10.83', al2o3: '3.85', mgo: '6.91', p: '0.003', s: '0.129', cr2o3: '1.918', mno: '0.868' },
+        { standardCode: 'OREAS189', sampleLabel: `VER-OREAS189 ${verificationDate}`,  sequenceNo: 9,  analyzedAt: '00:45', ni: '1.478', co: '0.032', fe: '10.51', cao: '0.328', sio2: '46.18', al2o3: '2.08', mgo: '23.06', p: '0.001', s: '0.000', cr2o3: '0.758', mno: '0.229' },
+        { standardCode: 'LIM05',    sampleLabel: `VER-LIM05 ${verificationDate}`,     sequenceNo: 10, analyzedAt: '00:50', ni: '1.496', co: '0.123', fe: '36.97', cao: '0.078', sio2: '15.25', al2o3: '3.54', mgo: '10.92', p: '0.003', s: '0.097', cr2o3: '1.915', mno: '0.852' },
+        { standardCode: 'OREAS190', sampleLabel: `VER-OREAS190 ${verificationDate}`,  sequenceNo: 11, analyzedAt: '00:55', ni: '1.638', co: '0.089', fe: '24.81', cao: '0.129', sio2: '38.19', al2o3: '5.98', mgo: '6.89', p: '0.001', s: '0.000', cr2o3: '1.726', mno: '0.578' },
+        { standardCode: 'OREAS191', sampleLabel: `VER-OREAS191 ${verificationDate}`,  sequenceNo: 12, analyzedAt: '01:00', ni: '1.728', co: '0.066', fe: '17.38', cao: '0.258', sio2: '47.12', al2o3: '4.19', mgo: '10.06', p: '0.003', s: '0.000', cr2o3: '1.278', mno: '0.388' },
+        { standardCode: 'OREAS192', sampleLabel: `VER-OREAS192 ${verificationDate}`,  sequenceNo: 13, analyzedAt: '01:05', ni: '1.810', co: '0.041', fe: '12.84', cao: '0.279', sio2: '38.34', al2o3: '2.67', mgo: '19.68', p: '0.001', s: '0.002', cr2o3: '0.908', mno: '0.279' },
+        { standardCode: 'OREAS193', sampleLabel: `VER-OREAS193 ${verificationDate}`,  sequenceNo: 14, analyzedAt: '01:10', ni: '1.955', co: '0.049', fe: '13.75', cao: '0.338', sio2: '40.35', al2o3: '3.07', mgo: '19.38', p: '0.002', s: '0.001', cr2o3: '1.008', mno: '0.309' },
+        { standardCode: 'SAP19',    sampleLabel: `VER-SAP19 ${verificationDate}`,     sequenceNo: 15, analyzedAt: '01:15', ni: '2.022', co: '0.066', fe: '17.36', cao: '0.069', sio2: '30.72', al2o3: '1.91', mgo: '26.02', p: '0.001', s: '0.019', cr2o3: '1.258', mno: '0.448' },
+        { standardCode: 'OREAS194', sampleLabel: `VER-OREAS194 ${verificationDate}`,  sequenceNo: 16, analyzedAt: '01:20', ni: '2.148', co: '0.042', fe: '11.67', cao: '0.289', sio2: '40.67', al2o3: '2.69', mgo: '21.78', p: '0.001', s: '0.000', cr2o3: '0.858', mno: '0.259' },
+        { standardCode: 'OREAS195', sampleLabel: `VER-OREAS195 ${verificationDate}`,  sequenceNo: 17, analyzedAt: '01:25', ni: '2.924', co: '0.048', fe: '12.73', cao: '0.378', sio2: '43.34', al2o3: '2.84', mgo: '18.06', p: '0.001', s: '0.001', cr2o3: '0.968', mno: '0.279' },
+      ]);
+    } else if (selectedMatrix === 'LIMONITE') {
       setRows([
         { standardCode: 'LIM01', sampleLabel: `VER-LIM01 ${verificationDate}`, sequenceNo: 1, analyzedAt: '00:26', ni: '1.109', co: '0.138', fe: '47.52', cao: '0.020', sio2: '6.85', al2o3: '4.45', mgo: '3.18', p: '0.003', s: '0.148', cr2o3: '2.290', mno: '1.080' },
         { standardCode: 'LIM02', sampleLabel: `VER-LIM02 ${verificationDate}`, sequenceNo: 2, analyzedAt: '01:01', ni: '1.201', co: '0.131', fe: '45.60', cao: '0.055', sio2: '8.88', al2o3: '3.52', mgo: '4.95', p: '0.003', s: '0.121', cr2o3: '2.155', mno: '1.012' },
@@ -598,28 +691,39 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             {/* Primary Matrix Tab Toggle */}
-            <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 flex-wrap gap-1">
               <button
                 onClick={() => handleMatrixChange('LIMONITE')}
-                className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
                   selectedMatrix === 'LIMONITE'
                     ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                 }`}
               >
-                <Layers className="w-4 h-4" />
-                LIMONITE (5 Standar)
+                <Layers className="w-3.5 h-3.5" />
+                LIMONITE (5 Std)
               </button>
               <button
                 onClick={() => handleMatrixChange('SAPROLITE')}
-                className={`px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
                   selectedMatrix === 'SAPROLITE'
                     ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                 }`}
               >
-                <Layers className="w-4 h-4" />
-                SAPROLITE (10 Standar)
+                <Layers className="w-3.5 h-3.5" />
+                SAPROLITE (10 Std)
+              </button>
+              <button
+                onClick={() => handleMatrixChange('SUPERMINI')}
+                className={`px-3 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  selectedMatrix === 'SUPERMINI'
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                SUPERMINI 200 (17 Std)
               </button>
             </div>
 

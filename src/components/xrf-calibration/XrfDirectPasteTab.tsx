@@ -51,7 +51,7 @@ export interface ParsedBatch {
   verificationDate: string;
   verificationTime: string;
   weekNo: number;
-  matrixType: 'SAPROLITE' | 'LIMONITE';
+  matrixType: 'SAPROLITE' | 'LIMONITE' | 'SUPERMINI';
   overallStatus: 'PASS' | 'WARNING' | 'FAIL';
   isComplete: boolean;
   notes?: string;
@@ -73,37 +73,55 @@ function getIsoWeek(dateStr: string): number {
   return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
 }
 
-// Regex Standard Extractor for Saprolite & Limonite
-function extractStandardName(rawLabel: string, matrixHint?: 'SAPROLITE' | 'LIMONITE'): { standardCode: string; displayName: string } {
+// Regex Standard Extractor for Saprolite, Limonite & Supermini 200
+function extractStandardName(rawLabel: string, _matrixHint?: 'SAPROLITE' | 'LIMONITE' | 'SUPERMINI' | 'AUTO'): { standardCode: string; displayName: string } {
   const clean = String(rawLabel || '').trim();
 
-  // 1. Cek Saprolite (OREAS 184 s/d 195 & SAP 19)
-  if (matrixHint === 'SAPROLITE' || /OREAS|SAP/i.test(clean)) {
-    const oMatch = clean.match(/OREAS\s*(184|187|189|190|191|192|193|194|195)/i);
-    if (oMatch) {
-      const num = oMatch[1];
-      return {
-        standardCode: `OREAS${num}`,
-        displayName: `OREAS ${num}`,
-      };
-    }
-    const sapMatch = clean.match(/SAP\s*(19)/i);
-    if (sapMatch) {
-      return {
-        standardCode: 'SAP19',
-        displayName: 'SAP 19',
-      };
-    }
+  // 1. Cek Blanks (BLANK A, VER-BLANK B, BLANK B)
+  if (/BLANK\s*A\b/i.test(clean)) {
+    return {
+      standardCode: 'BLANK_A',
+      displayName: 'BLANK A',
+    };
+  }
+  if (/(VER-)?BLANK\s*B\b/i.test(clean)) {
+    return {
+      standardCode: 'BLANK_B',
+      displayName: 'VER-BLANK B',
+    };
+  }
+  if (/\bBLANK\b/i.test(clean)) {
+    return {
+      standardCode: 'BLANK_A',
+      displayName: clean || 'BLANK',
+    };
   }
 
-  // 2. Cek Limonite (LIM 01 s/d LIM 05)
-  // Menangani raw LIM01, LIM 01, VER-LIM05, dsb. dan menampilkannya dengan spasi konsisten "LIM 01" s/d "LIM 05"
-  const limMatch = clean.match(/LIM\s*0?([1-5])/i);
+  // 2. Cek Limonite (LIM 01 s/d LIM 05 & LIM 13)
+  const limMatch = clean.match(/LIM\s*0?([1-5]|13)/i);
   if (limMatch) {
     const num = limMatch[1];
     return {
-      standardCode: `LIM0${num}`,
-      displayName: `LIM 0${num}`,
+      standardCode: num.length === 1 ? `LIM0${num}` : `LIM${num}`,
+      displayName: num.length === 1 ? `LIM 0${num}` : `LIM ${num}`,
+    };
+  }
+
+  // 3. Cek Saprolite & CRM (OREAS 182 s/d 195 & SAP 16, 19)
+  const oMatch = clean.match(/OREAS\s*(182|184|187|189|190|191|192|193|194|195)/i);
+  if (oMatch) {
+    const num = oMatch[1];
+    return {
+      standardCode: `OREAS${num}`,
+      displayName: `OREAS ${num}`,
+    };
+  }
+  const sapMatch = clean.match(/SAP\s*(16|19)/i);
+  if (sapMatch) {
+    const num = sapMatch[1];
+    return {
+      standardCode: `SAP${num}`,
+      displayName: `SAP ${num}`,
     };
   }
 
@@ -123,7 +141,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
   // Configuration State
   const [selectedInstrument, setSelectedInstrument] = useState<string>('EPSILON_D');
   const [autoDetectInstrument, setAutoDetectInstrument] = useState<boolean>(true);
-  const [matrixMode, setMatrixMode] = useState<'AUTO' | 'SAPROLITE' | 'LIMONITE'>('AUTO');
+  const [matrixMode, setMatrixMode] = useState<'AUTO' | 'SUPERMINI' | 'SAPROLITE' | 'LIMONITE'>('AUTO');
   const [rawText, setRawText] = useState<string>('');
   
   // Inspection & Parsing State
@@ -184,19 +202,25 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
       let currentInstCode = selectedInstrument;
       let currentInstName = instruments.find(i => i.code === selectedInstrument)?.name || selectedInstrument.replace('_', ' ');
       let currentDate = '';
-      let currentTime = '00:00';
-      let detectedMatrix: 'SAPROLITE' | 'LIMONITE' = matrixMode === 'AUTO' ? 'SAPROLITE' : matrixMode;
+      let currentTime = '08:00';
+      let detectedMatrix: 'SAPROLITE' | 'LIMONITE' | 'SUPERMINI' = 
+        matrixMode === 'AUTO' 
+          ? (selectedInstrument === 'SUPERMINI' ? 'SUPERMINI' : 'SAPROLITE') 
+          : matrixMode;
 
       const finishCurrentSet = () => {
-        if (currentItems.length === 0 || !currentDate) return;
+        if (currentItems.length === 0) return;
 
-        const dateFormatted = currentDate.replace(/[^0-9]/g, '');
-        const cleanTime = currentTime.replace(/[^0-9]/g, '').padEnd(4, '0').slice(0, 4);
+        const actualDate = currentDate || new Date().toISOString().slice(0, 10);
+        const actualTime = currentTime || '08:00';
+
+        const dateFormatted = actualDate.replace(/[^0-9]/g, '');
+        const cleanTime = actualTime.replace(/[^0-9]/g, '').padEnd(4, '0').slice(0, 4);
         const batchIdx = batches.length + 1;
         const batchCode = `VRF-${dateFormatted}-${currentInstCode.replace('_', '')}-${cleanTime}-${String(batchIdx).padStart(3, '0')}`;
         
-        // Cek kelengkapan set (Saprolite = 10, Limonite = 5)
-        const expectedCount = detectedMatrix === 'SAPROLITE' ? 10 : 5;
+        // Cek kelengkapan set (Supermini = 17, Saprolite = 10, Limonite = 5)
+        const expectedCount = detectedMatrix === 'SUPERMINI' ? 17 : detectedMatrix === 'SAPROLITE' ? 10 : 5;
         const isComplete = currentItems.length === expectedCount;
 
         // Evaluasi status keseluruhan batch
@@ -215,9 +239,9 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
           batchCode,
           instrumentCode: currentInstCode,
           instrumentName: currentInstName,
-          verificationDate: currentDate,
-          verificationTime: currentTime,
-          weekNo: getIsoWeek(currentDate),
+          verificationDate: actualDate,
+          verificationTime: actualTime,
+          weekNo: getIsoWeek(actualDate),
           matrixType: detectedMatrix,
           overallStatus,
           isComplete,
@@ -230,38 +254,72 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
       for (let i = 0; i < parsedData.length; i++) {
         const cols = (parsedData[i] || []).map(c => String(c ?? '').trim());
         
-        // Deteksi delimiter: jika baris kosong total atau whitespace saja
+        // Deteksi baris kosong total
         if (cols.length === 0 || cols.every(c => c === '')) {
           finishCurrentSet();
           continue;
         }
 
-        // Kolom A: Nomor urut (No)
-        const seqRaw = String(cols[0] || '').trim();
+        const col0 = String(cols[0] || '').trim();
 
-        // JIKA KOLOM A KOSONG -> Akhir Set Verifikasi!
-        if (seqRaw === '') {
+        // Jika Kolom 0 kosong dan sisa kolom kosong -> pembatas set
+        if (col0 === '' && cols.slice(1).every(c => c === '')) {
           finishCurrentSet();
           continue;
         }
 
-        // Cek jika baris adalah header (misal "No", "DAILY VERIFIKASI")
-        const seqNo = parseInt(seqRaw, 10);
+        let seqNo = parseInt(col0, 10);
+        let sampleLabel = '';
+        let valOffset = 4; // default Excel A-Q: [0]=No, [1]=Inst, [2]=Date, [3]=Sample, [4]=Ni...
+        let rawDateStr = '';
+        let xrfCol = '';
+
         if (isNaN(seqNo)) {
-          // Lewati baris header teks
+          // Kolom 0 bukan angka. Cek apakah ini label sampel verifikasi langsung
+          if (/BLANK|OREAS|LIM|SAP/i.test(col0)) {
+            sampleLabel = col0;
+            // Jika label adalah BLANK A dan sudah ada sampel terkumpul, ini awal set baru
+            if (/BLANK\s*A\b/i.test(sampleLabel) && currentItems.length >= 10) {
+              finishCurrentSet();
+            }
+            seqNo = currentItems.length + 1;
+            valOffset = 1; // Kolom 1 adalah Ni
+          } else {
+            // Header baris teks dilewati
+            continue;
+          }
+        } else {
+          // Kolom 0 adalah angka urut (1, 2, 3...)
+          xrfCol = String(cols[1] || '').trim().toUpperCase();
+          rawDateStr = String(cols[2] || '').trim();
+          
+          if (cols[3] && /BLANK|OREAS|LIM|SAP/i.test(cols[3])) {
+            sampleLabel = cols[3];
+            valOffset = 4;
+          } else if (cols[1] && /BLANK|OREAS|LIM|SAP/i.test(cols[1])) {
+            sampleLabel = cols[1];
+            valOffset = 2;
+          } else {
+            sampleLabel = cols[3] || cols[1] || `STD-${seqNo}`;
+            valOffset = 4;
+          }
+        }
+
+        // Skip calibration blanks (seperti VER-BLANK WAX) KECUALI Supermini BLANK A / VER-BLANK B
+        if (/BLANK\s*WAX/i.test(sampleLabel)) {
+          continue;
+        }
+        if (/BLANK/i.test(sampleLabel) && !/BLANK\s*[AB]/i.test(sampleLabel) && detectedMatrix !== 'SUPERMINI') {
           continue;
         }
 
-        // Skip calibration blanks (VER-BLANK WAX, etc.)
-        const checkLabel = String(cols[3] || '').trim();
-        if (/BLANK/i.test(checkLabel)) {
-          continue;
-        }
-
-        // Kolom B: XRF / Instrument (jika baris 1 di set berisi info alat)
-        const xrfCol = String(cols[1] || '').trim().toUpperCase();
+        // Auto-detect Instrument dari teks
         if (xrfCol && autoDetectInstrument) {
-          if (xrfCol.includes('EPSILON A') || xrfCol.includes('EPSILON_A')) {
+          if (xrfCol.includes('SUPERMINI') || xrfCol.includes('SUPER MINI')) {
+            currentInstCode = 'SUPERMINI';
+            currentInstName = 'Supermini 200';
+            detectedMatrix = 'SUPERMINI';
+          } else if (xrfCol.includes('EPSILON A') || xrfCol.includes('EPSILON_A')) {
             currentInstCode = 'EPSILON_A';
             currentInstName = 'EPSILON A';
           } else if (xrfCol.includes('EPSILON B') || xrfCol.includes('EPSILON_B')) {
@@ -279,10 +337,9 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
           }
         }
 
-        // Kolom C: Date Of Analyzed
-        const rawDateStr = String(cols[2] || '').trim();
-        let parsedIsoDate = currentDate;
-        let parsedTime = currentTime;
+        // Parse Date & Time
+        let parsedIsoDate = currentDate || new Date().toISOString().slice(0, 10);
+        let parsedTime = currentTime || '08:00';
 
         if (rawDateStr) {
           const [dPart, tPart] = rawDateStr.split(' ');
@@ -299,22 +356,21 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
           }
         }
 
-        // Kolom D: Standard Sample Code
-        const rawSampleLabel = String(cols[3] || '').trim();
-
-        // Tentukan Matrix Mode jika AUTO
+        // Deteksi Matriks jika mode AUTO
         if (matrixMode === 'AUTO') {
-          if (/OREAS|SAP/i.test(rawSampleLabel) || xrfCol.includes('SAP')) {
-            detectedMatrix = 'SAPROLITE';
-          } else if (/LIM/i.test(rawSampleLabel) || xrfCol.includes('LIM')) {
-            detectedMatrix = 'LIMONITE';
+          if (currentInstCode === 'SUPERMINI' || xrfCol.includes('SUPERMINI') || /BLANK\s*[AB]/i.test(sampleLabel)) {
+            detectedMatrix = 'SUPERMINI';
+          } else if (/OREAS|SAP/i.test(sampleLabel) || xrfCol.includes('SAP')) {
+            if (detectedMatrix !== 'SUPERMINI') detectedMatrix = 'SAPROLITE';
+          } else if (/LIM/i.test(sampleLabel) || xrfCol.includes('LIM')) {
+            if (detectedMatrix !== 'SUPERMINI') detectedMatrix = 'LIMONITE';
           }
         } else {
           detectedMatrix = matrixMode;
         }
 
-        // Normalisasi nama standar (misal LIM01 -> LIM 01, OREAS184 -> OREAS 184)
-        const { standardCode, displayName } = extractStandardName(rawSampleLabel, detectedMatrix);
+        // Normalisasi nama standar (misal BLANK A -> BLANK_A, LIM01 -> LIM01, OREAS184 -> OREAS184)
+        const { standardCode, displayName } = extractStandardName(sampleLabel, detectedMatrix);
 
         // Helper konversi float aman (handle koma, strip, #DIV/0!)
         const parseNum = (valStr: any) => {
@@ -325,26 +381,25 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
           return isNaN(n) ? 0 : n;
         };
 
-        // Kolom E s/d O: Unsur / Oksida
-        const ni = parseNum(cols[4]);
-        const co = parseNum(cols[5]);
-        const fe = parseNum(cols[6]);
-        const cao = parseNum(cols[7]);
-        const sio2 = parseNum(cols[8]);
-        const al2o3 = parseNum(cols[9]);
-        const mgo = parseNum(cols[10]);
-        const p = parseNum(cols[11]);
-        const s = parseNum(cols[12]);
-        const cr2o3 = parseNum(cols[13]);
-        const mno = parseNum(cols[14]);
+        const ni = parseNum(cols[valOffset]);
+        const co = parseNum(cols[valOffset + 1]);
+        const fe = parseNum(cols[valOffset + 2]);
+        const cao = parseNum(cols[valOffset + 3]);
+        const sio2 = parseNum(cols[valOffset + 4]);
+        const al2o3 = parseNum(cols[valOffset + 5]);
+        const mgo = parseNum(cols[valOffset + 6]);
+        const p = parseNum(cols[valOffset + 7]);
+        const s = parseNum(cols[valOffset + 8]);
+        const cr2o3 = parseNum(cols[valOffset + 9]);
+        const mno = parseNum(cols[valOffset + 10]);
 
-        // Kolom P (BC) dan Q (FeNi)
-        let bc = parseNum(cols[15]);
+        // BC dan FeNi
+        let bc = parseNum(cols[valOffset + 11]);
         if (bc === 0 && sio2 > 0) {
           bc = Number(((cao + mgo) / sio2).toFixed(2));
         }
 
-        let feNi = parseNum(cols[16]);
+        let feNi = parseNum(cols[valOffset + 12]);
         if (feNi === 0 && ni > 0) {
           feNi = Number((fe / ni).toFixed(2));
         }
@@ -370,9 +425,12 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
         const evaluations: Record<string, any> = {};
         let itemStatus: 'PASS' | 'WARNING' | 'FAIL' = 'PASS';
 
+        // Untuk Blank (BLANK A / VER-BLANK B), evaluasi selalu PASS
+        const isBlankSample = standardCode === 'BLANK_A' || standardCode === 'BLANK_B';
+
         for (const el of elementsToCheck) {
           const ref = stdRefs[el.key];
-          if (ref && ref.nominalValue > 0) {
+          if (!isBlankSample && ref && ref.nominalValue > 0) {
             const exp = ref.nominalValue;
             const stdev = ref.stdevFixed || 0.05;
             const diffPct = Number((((el.val - exp) / exp) * 100).toFixed(2));
@@ -404,7 +462,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
 
         const item: ParsedItem = {
           sequenceNo: seqNo,
-          sampleLabel: rawSampleLabel,
+          sampleLabel,
           standardCode,
           displayName,
           analyzedAt: rawDateStr || `${parsedIsoDate} ${parsedTime}`,
@@ -457,6 +515,56 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
   // -------------------------------------------------------------
   // PRESET CONTOH DATA (UNTUK UJI COBA CEPAT)
   // -------------------------------------------------------------
+  const handleCopySuperminiTemplate = () => {
+    const header = "No\tInstrument\tDate\tSample\tNi\tCo\tFe\tCaO\tSiO2\tAl2O3\tMgO\tP\tS\tCr2O3\tMnO\tBC\tFeNi";
+    const rows = [
+      "1\tSUPERMINI 200 GTS\t16/10/26 08:00\tBLANK A\t0.000\t0.000\t0.000\t0.000\t0.00\t0.00\t0.00\t0.000\t0.000\t0.000\t0.000\t0.00\t0.00",
+      "2\tSUPERMINI 200 GTS\t16/10/26 08:03\tVER-BLANK B\t0.000\t0.000\t0.000\t0.000\t0.00\t0.00\t0.00\t0.000\t0.000\t0.000\t0.000\t0.00\t0.00",
+      "3\tSUPERMINI 200 GTS\t16/10/26 08:06\tVER-OREAS184\t1.014\t0.095\t27.170\t0.230\t41.99\t4.92\t3.18\t0.015\t0.000\t1.680\t0.660\t0.08\t26.79",
+      "4\tSUPERMINI 200 GTS\t16/10/26 08:09\tVER-LIM01\t1.128\t0.150\t48.660\t0.020\t6.84\t4.47\t2.69\t0.000\t0.160\t2.350\t1.100\t0.40\t43.14",
+      "5\tSUPERMINI 200 GTS\t16/10/26 08:12\tVER-LIM02\t1.228\t0.140\t46.920\t0.060\t8.70\t3.44\t4.62\t0.000\t0.120\t2.310\t1.030\t0.54\t38.21",
+      "6\tSUPERMINI 200 GTS\t16/10/26 08:15\tVER-LIM03\t1.318\t0.150\t46.490\t0.050\t8.74\t4.12\t4.56\t0.000\t0.150\t2.190\t1.020\t0.53\t35.27",
+      "7\tSUPERMINI 200 GTS\t16/10/26 08:18\tVER-OREAS187\t1.379\t0.060\t13.650\t0.340\t45.94\t3.01\t18.50\t0.000\t0.001\t1.040\t0.350\t0.41\t9.90",
+      "8\tSUPERMINI 200 GTS\t16/10/26 08:21\tVER-LIM04\t1.435\t0.130\t43.680\t0.070\t10.98\t3.93\t6.64\t0.000\t0.120\t2.050\t0.870\t0.61\t30.44",
+      "9\tSUPERMINI 200 GTS\t16/10/26 08:24\tVER-OREAS189\t1.496\t0.032\t10.580\t0.310\t44.26\t2.17\t22.73\t0.000\t0.000\t0.830\t0.230\t0.52\t7.07",
+      "10\tSUPERMINI 200 GTS\t16/10/26 08:27\tVER-LIM05\t1.503\t0.140\t37.820\t0.090\t16.05\t3.26\t10.72\t0.000\t0.040\t2.020\t0.870\t0.67\t25.16",
+      "11\tSUPERMINI 200 GTS\t16/10/26 08:30\tVER-OREAS190\t1.624\t0.095\t25.000\t0.120\t39.77\t5.94\t7.22\t0.000\t0.000\t1.760\t0.570\t0.18\t15.39",
+      "12\tSUPERMINI 200 GTS\t16/10/26 08:33\tVER-OREAS191\t1.730\t0.067\t17.390\t0.260\t47.15\t4.20\t10.08\t0.000\t0.000\t1.280\t0.390\t0.22\t10.05",
+      "13\tSUPERMINI 200 GTS\t16/10/26 08:36\tVER-OREAS192\t1.812\t0.042\t12.850\t0.280\t38.36\t2.68\t19.72\t0.000\t0.002\t0.910\t0.280\t0.52\t7.09",
+      "14\tSUPERMINI 200 GTS\t16/10/26 08:39\tVER-OREAS193\t1.957\t0.050\t13.760\t0.340\t40.37\t3.08\t19.40\t0.000\t0.002\t1.010\t0.310\t0.49\t7.03",
+      "15\tSUPERMINI 200 GTS\t16/10/26 08:42\tVER-SAP19\t2.023\t0.067\t17.370\t0.070\t30.73\t1.92\t26.05\t0.000\t0.020\t1.260\t0.450\t0.85\t8.59",
+      "16\tSUPERMINI 200 GTS\t16/10/26 08:45\tVER-OREAS194\t2.147\t0.043\t11.680\t0.290\t40.68\t2.70\t21.79\t0.000\t0.000\t0.860\t0.260\t0.54\t5.44",
+      "17\tSUPERMINI 200 GTS\t16/10/26 08:48\tVER-OREAS195\t2.925\t0.049\t12.740\t0.380\t43.35\t2.85\t18.08\t0.000\t0.001\t0.970\t0.280\t0.43\t4.36",
+    ];
+    const text = [header, ...rows].join('\n');
+    navigator.clipboard.writeText(text);
+    toast.success('Skema template 17 standar Supermini 200 telah disalin ke clipboard! Silakan paste (Ctrl+V) ke Excel.');
+  };
+
+  const handleLoadSampleSupermini = () => {
+    const sample = `1\tSUPERMINI 200 GTS\t16/10/26 08:00\tBLANK A\t0.001\t0.000\t0.010\t0.000\t0.02\t0.01\t0.00\t0.000\t0.000\t0.000\t0.000\t0.00\t0.00
+2\t\t16/10/26 08:03\tVER-BLANK B\t0.001\t0.000\t0.010\t0.000\t0.02\t0.01\t0.00\t0.000\t0.000\t0.000\t0.000\t0.00\t0.00
+3\t\t16/10/26 08:06\tVER-OREAS184\t1.014\t0.095\t27.170\t0.230\t41.99\t4.92\t3.18\t0.015\t0.000\t1.680\t0.660\t0.08\t26.79
+4\t\t16/10/26 08:09\tVER-LIM01\t1.128\t0.150\t48.660\t0.020\t6.84\t4.47\t2.69\t0.000\t0.160\t2.350\t1.100\t0.40\t43.14
+5\t\t16/10/26 08:12\tVER-LIM02\t1.228\t0.140\t46.920\t0.060\t8.70\t3.44\t4.62\t0.000\t0.120\t2.310\t1.030\t0.54\t38.21
+6\t\t16/10/26 08:15\tVER-LIM03\t1.318\t0.150\t46.490\t0.050\t8.74\t4.12\t4.56\t0.000\t0.150\t2.190\t1.020\t0.53\t35.27
+7\t\t16/10/26 08:18\tVER-OREAS187\t1.379\t0.060\t13.650\t0.340\t45.94\t3.01\t18.50\t0.000\t0.001\t1.040\t0.350\t0.41\t9.90
+8\t\t16/10/26 08:21\tVER-LIM04\t1.435\t0.130\t43.680\t0.070\t10.98\t3.93\t6.64\t0.000\t0.120\t2.050\t0.870\t0.61\t30.44
+9\t\t16/10/26 08:24\tVER-OREAS189\t1.496\t0.032\t10.580\t0.310\t44.26\t2.17\t22.73\t0.000\t0.000\t0.830\t0.230\t0.52\t7.07
+10\t\t16/10/26 08:27\tVER-LIM05\t1.503\t0.140\t37.820\t0.090\t16.05\t3.26\t10.72\t0.000\t0.040\t2.020\t0.870\t0.67\t25.16
+11\t\t16/10/26 08:30\tVER-OREAS190\t1.624\t0.095\t25.000\t0.120\t39.77\t5.94\t7.22\t0.000\t0.000\t1.760\t0.570\t0.18\t15.39
+12\t\t16/10/26 08:33\tVER-OREAS191\t1.730\t0.067\t17.390\t0.260\t47.15\t4.20\t10.08\t0.000\t0.000\t1.280\t0.390\t0.22\t10.05
+13\t\t16/10/26 08:36\tVER-OREAS192\t1.812\t0.042\t12.850\t0.280\t38.36\t2.68\t19.72\t0.000\t0.002\t0.910\t0.280\t0.52\t7.09
+14\t\t16/10/26 08:39\tVER-OREAS193\t1.957\t0.050\t13.760\t0.340\t40.37\t3.08\t19.40\t0.000\t0.002\t1.010\t0.310\t0.49\t7.03
+15\t\t16/10/26 08:42\tVER-SAP19\t2.023\t0.067\t17.370\t0.070\t30.73\t1.92\t26.05\t0.000\t0.020\t1.260\t0.450\t0.85\t8.59
+16\t\t16/10/26 08:45\tVER-OREAS194\t2.147\t0.043\t11.680\t0.290\t40.68\t2.70\t21.79\t0.000\t0.000\t0.860\t0.260\t0.54\t5.44
+17\t\t16/10/26 08:48\tVER-OREAS195\t2.925\t0.049\t12.740\t0.380\t43.35\t2.85\t18.08\t0.000\t0.001\t0.970\t0.280\t0.43\t4.36`;
+    setRawText(sample);
+    setSelectedInstrument('SUPERMINI');
+    setMatrixMode('SUPERMINI');
+    parseRawPastedData(sample);
+  };
+
   const handleLoadSampleSaprolite = () => {
     // Replica Gambar 2 & 3
     const sample = `1\tEPSILON B SAP 04 (MYLAR)\t01/07/26 0:15\tSTD-OREAS184 B1 08/02/2026\t1.014\t0.095\t27.170\t0.230\t41.99\t4.92\t3.18\t0.015\t0.000\t1.680\t0.660\t0.08\t26.79
@@ -612,7 +720,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
           <div>
             <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
               <ClipboardPaste className="w-5 h-5 text-teal-500" />
-              Direct Paste Data Verifikasi Excel (Saprolite & Limonite)
+              Direct Paste Data Verifikasi Excel (Supermini, Saprolite & Limonite)
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Salin (*Ctrl+C*) tabel data dari Excel dari Kolom A (No) hingga Q (FeNi) lalu tempelkan (*Ctrl+V*) langsung ke sini. Pemisah antar set verifikasi otomatis dideteksi dari baris kosong (Kolom A kosong).
@@ -620,6 +728,21 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleCopySuperminiTemplate}
+              className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Salin skema 17 standar Supermini 200 ke clipboard untuk dipaste di Excel"
+            >
+              <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              📋 Salin Skema Supermini 200
+            </button>
+            <button
+              onClick={handleLoadSampleSupermini}
+              className="px-3 py-1.5 bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 hover:bg-teal-100 border border-teal-200 dark:border-teal-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-teal-500" />
+              Contoh Supermini (17 Std)
+            </button>
             <button
               onClick={handleLoadSampleSaprolite}
               className="px-3 py-1.5 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 border border-purple-200 dark:border-purple-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
@@ -659,7 +782,13 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
             </label>
             <select
               value={selectedInstrument}
-              onChange={e => setSelectedInstrument(e.target.value)}
+              onChange={e => {
+                const val = e.target.value;
+                setSelectedInstrument(val);
+                if (val === 'SUPERMINI') {
+                  setMatrixMode('SUPERMINI');
+                }
+              }}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 outline-none"
             >
               {instruments.map(inst => (
@@ -684,7 +813,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
             <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
               Aplikasi / Channel Matriks
             </label>
-            <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
               <button
                 type="button"
                 onClick={() => {
@@ -697,7 +826,21 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
                     : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
               >
-                Auto-Detect
+                Auto
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMatrixMode('SUPERMINI');
+                  if (rawText) parseRawPastedData(rawText);
+                }}
+                className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  matrixMode === 'SUPERMINI'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                Supermini (17)
               </button>
               <button
                 type="button"
@@ -729,9 +872,10 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
               </button>
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
+              {matrixMode === 'SUPERMINI' && '17 Standar GTS: BLANK A, VER-BLANK B, OREAS184, LIM01..05, OREAS187..195, SAP19'}
               {matrixMode === 'SAPROLITE' && '10 Standar: OREAS 184..195 & SAP 19'}
               {matrixMode === 'LIMONITE' && '5 Standar: LIM 01 s/d LIM 05'}
-              {matrixMode === 'AUTO' && 'Otomatis mendeteksi urutan OREAS/SAP vs LIM'}
+              {matrixMode === 'AUTO' && 'Otomatis mendeteksi urutan Supermini (17), OREAS/SAP (10) vs LIM (5)'}
             </p>
           </div>
 
@@ -961,7 +1105,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
                         {!b.isComplete && (
                           <div className="mt-1 flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
                             <AlertTriangle className="w-3 h-3" />
-                            Jumlah item tidak standar ({b.items.length} dari {b.matrixType === 'SAPROLITE' ? 10 : 5})
+                            Jumlah item tidak standar ({b.items.length} dari {b.matrixType === 'SUPERMINI' ? 17 : b.matrixType === 'SAPROLITE' ? 10 : 5})
                           </div>
                         )}
                       </div>

@@ -61,9 +61,9 @@ export function SectionHubDashboard({
   const sectionTitle = (post?.title || '').toUpperCase().trim();
 
   // Strict PT universe isolation: GTS vs TBP/GPS
-  const currentUniverse = (activePt === 'GTS' || post?.pt === 'GTS') ? 'GTS' : 'TBP';
+  const currentUniverse = (activePt === 'GTS' || post?.pt === 'GTS' || post?.universe === 'GTS') ? 'GTS' : 'TBP';
   const eligiblePosts = posts.filter(p => {
-    const pUniverse = p.pt === 'GTS' ? 'GTS' : 'TBP';
+    const pUniverse = (p.pt === 'GTS' || p.universe === 'GTS') ? 'GTS' : 'TBP';
     return pUniverse === currentUniverse;
   });
 
@@ -135,8 +135,9 @@ export function SectionHubDashboard({
         (p) => (p.title || '').replace(/^[#\s\-*]+/, '').toLowerCase().trim() === q
       );
       if (exactMatches.length > 0) {
-        const tableMatch = exactMatches.find((p) => p.content && p.content.includes('|'));
-        return tableMatch || exactMatches[0];
+        const sorted = [...exactMatches].sort((a, b) => (b.content?.length || 0) - (a.content?.length || 0));
+        const tableMatch = sorted.find((p) => p.content && p.content.includes('|'));
+        return tableMatch || sorted[0];
       }
 
       // 2. Exact match with section prefix or suffix (e.g. "Daily Laboratorium" or "Daily")
@@ -174,14 +175,14 @@ export function SectionHubDashboard({
       window.open(item.linkUrl, '_blank');
       return;
     }
-    if (item.isLogbook || item.title.toLowerCase().startsWith('logbook')) {
+    if (item.isLogbook || item.title.toLowerCase().includes('logbook')) {
       const logbookTitle = item.title;
       const logbookId = `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
       let cachedContent = '';
       try {
         cachedContent = localStorage.getItem(`preplab_logbook_content_${logbookId}`) || '';
       } catch {}
-      const defaultContent = `# ${logbookTitle}\n\n*Logbook Terpadu Seksi ${sectionTitle}: Menampilkan seluruh kegiatan Routine & Non-Routine yang sedang aktif.*\n\n| Number | Jenis Kegiatan | Keterangan | Created time | Tanggal Selesai | Status | PIC | Priority | Aktivitas | Period | Asal Halaman |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
+      const defaultContent = `# ${logbookTitle}\n\n*Integrated Section Logbook (${sectionTitle}): Active Routine & Non-Routine tasks.*\n\n| Number | Activity Name | Description | Created Time | Completion Date | Due Date | Status | PIC | Priority | Activity | Period | Source Page |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n`;
       const target = findPost(item.searchKeywords || logbookTitle) || {
         id: logbookId,
         title: logbookTitle,
@@ -218,14 +219,14 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
-          { title: 'Logbook Prosedur', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Prosedur', 'Logbook'] },
-          { title: 'SOP Preparasi', icon: '📐', searchKeywords: ['SOP Preparasi', 'Preparasi Basah', 'Preparasi Kering'] },
+          { title: 'Procedure Logbook', icon: '📔', isLogbook: true, searchKeywords: ['Procedure Logbook', 'Logbook Prosedur', 'Logbook'] },
+          { title: 'SOP Preparation', icon: '📐', searchKeywords: ['SOP Preparation', 'SOP Preparasi', 'Preparasi Basah', 'Preparasi Kering'] },
           { title: 'JSA', icon: '💼', searchKeywords: ['JSA', 'Job Safety Analysis'] },
-          { title: 'SOP Laboratorium', icon: '💈', searchKeywords: ['SOP Laboratorium', 'ED-XRF', 'LOI', 'Fused Bead'] },
+          { title: 'SOP Laboratory', icon: '💈', searchKeywords: ['SOP Laboratory', 'SOP Laboratorium', 'ED-XRF', 'LOI', 'Fused Bead'] },
           { title: 'SOP Smelter', icon: '🌐', searchKeywords: ['SOP Smelter', 'HJF', 'KPS'] },
-          { title: 'SOP Lainnya', icon: '🔗', searchKeywords: ['SOP Lainnya', 'SOP Lain'] },
-          { title: 'IK Preparasi', icon: '📐', searchKeywords: ['IK Preparasi', 'Jaw Crusher', 'Pulverizer', 'Oven'] },
-          { title: 'IK Laboratorium', icon: '💈', searchKeywords: ['IK Laboratorium', 'Zetium', 'Epsilon', 'Muffle'] },
+          { title: 'Other SOPs', icon: '🔗', searchKeywords: ['Other SOPs', 'SOP Lainnya', 'SOP Lain'] },
+          { title: 'Work Instruction Preparation (IK)', icon: '📐', searchKeywords: ['Work Instruction Preparation', 'IK Preparasi', 'Jaw Crusher', 'Pulverizer', 'Oven'] },
+          { title: 'Work Instruction Laboratory (IK)', icon: '💈', searchKeywords: ['Work Instruction Laboratory', 'IK Laboratorium', 'Zetium', 'Epsilon', 'Muffle'] },
           { title: 'Flow Chart', icon: '🔀', searchKeywords: ['Flow Chart', 'Flow Sheet'] },
           { title: 'Guidance', icon: '</>', searchKeywords: ['Guidance', 'Panduan'] },
         ],
@@ -288,15 +289,15 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
-          { title: 'Logbook Laboratorium', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Laboratorium', 'Logbook Lab', 'Logbook'] },
-          { title: 'Non Routine Laboratorium', icon: '▌', searchKeywords: ['Non Routine Laboratorium', '535', '414', 'Non Routine'] },
-          { title: 'Daily Laboratorium', icon: '▌', searchKeywords: ['Daily Laboratorium', '541', '450', 'Daily'] },
-          { title: 'Routine Laboratorium (Tentative)', icon: '▌', searchKeywords: ['Routine Laboratorium (Tentative)', 'Routine Laboratorium', '538'] },
-          { title: 'Weekly Laboratorium', icon: '▌', searchKeywords: ['Weekly Laboratorium', '542', '418'] },
-          { title: 'Monthly Laboratorium', icon: '▌', searchKeywords: ['Monthly Laboratorium', '543', '413'] },
-          { title: 'Quarterly Laboratorium', icon: '▌', searchKeywords: ['Quarterly Laboratorium', '545', '415'] },
-          { title: 'Yearly Laboratorium', icon: '▌', searchKeywords: ['Yearly Laboratorium', '549', '474'] },
-          { title: 'Biannual Laboratorium', icon: '▌', searchKeywords: ['Biannual Laboratorium', '564', '473'] },
+          { title: 'Laboratory Logbook', icon: '📔', isLogbook: true, searchKeywords: ['Laboratory Logbook', 'Logbook Laboratorium', 'Logbook Lab', 'Logbook'] },
+          { title: 'Non Routine Laboratory', icon: '▌', searchKeywords: ['535', '414', 'Non Routine Laboratory', 'Non Routine Laboratorium', 'Non Routine'] },
+          { title: 'Daily Laboratory', icon: '▌', searchKeywords: ['541', '450', 'Daily Laboratory', 'Daily Laboratorium', 'Daily'] },
+          { title: 'Routine Laboratory (Tentative)', icon: '▌', searchKeywords: ['538', 'Routine Laboratory (Tentative)', 'Routine Laboratorium (Tentative)', 'Routine Laboratorium'] },
+          { title: 'Weekly Laboratory', icon: '▌', searchKeywords: ['542', '418', 'Weekly Laboratory', 'Weekly Laboratorium'] },
+          { title: 'Monthly Laboratory', icon: '▌', searchKeywords: ['543', '413', 'Monthly Laboratory', 'Monthly Laboratorium'] },
+          { title: 'Quarterly Laboratory', icon: '▌', searchKeywords: ['545', '415', 'Quarterly Laboratory', 'Quarterly Laboratorium'] },
+          { title: 'Yearly Laboratory', icon: '▌', searchKeywords: ['549', '474', 'Yearly Laboratory', 'Yearly Laboratorium'] },
+          { title: 'Biannual Laboratory', icon: '▌', searchKeywords: ['564', '473', 'Biannual Laboratory', 'Biannual Laboratorium'] },
         ],
         rulesTitle: 'RULES',
         rulesItems: [
@@ -306,7 +307,7 @@ export function SectionHubDashboard({
           { title: 'Pengiriman TLD Badge ke Gamaxindo', icon: '📋', searchKeywords: ['Pengiriman TLD Badge ke Gamaxindo', 'Gamaxindo'] },
           { title: 'Pengiriman Surveymeter & Pendose', icon: '🖊️', searchKeywords: ['Pengiriman Surveymeter & Pendose', 'Surveymeter', 'Pendose'] },
           { title: 'Penghapusan data Asset', icon: '🗑️', searchKeywords: ['Penghapusan data Asset', 'Data Asset', 'Asset'] },
-          { title: 'Information Laboratorium', icon: '📦', searchKeywords: ['Information Laboratorium', '576'] },
+          { title: 'Laboratory Information', icon: '📦', searchKeywords: ['Laboratory Information', 'Information Laboratorium', '576'] },
         ],
         showAgenda: true,
         extraLinks: []
@@ -357,16 +358,16 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
-          { title: 'Logbook Preparasi', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Preparasi', 'Logbook Prep', 'Logbook'] },
-          { title: 'Non Routine Preparasi', icon: '▌', searchKeywords: ['Non Routine Preparasi', '636'] },
-          { title: 'Daily Preparasi', icon: '▌', searchKeywords: ['Daily Preparasi', '637'] },
-          { title: 'Weekly Preparasi', icon: '▌', searchKeywords: ['Weekly Preparasi', '638'] },
-          { title: 'Monthly Preparasi', icon: '▌', searchKeywords: ['Monthly Preparasi', '639'] },
-          { title: 'Quarterly Preparasi', icon: '▌', searchKeywords: ['Quarterly Preparasi', '640'] },
-          { title: 'Biannual Preparasi', icon: '▌', searchKeywords: ['Biannual Preparasi', '641'] },
-          { title: 'Yearly Preparasi', icon: '▌', searchKeywords: ['Yearly Preparasi', '642'] },
-          { title: 'Archived', icon: '▌', searchKeywords: ['Archived Preparasi', '634', 'Archived'] },
-          { title: 'Information Preparasi', icon: '▌', searchKeywords: ['Information Preparasi', '643'] },
+          { title: 'Preparation Logbook', icon: '📔', isLogbook: true, searchKeywords: ['Preparation Logbook', 'Logbook Preparasi', 'Logbook Prep', 'Logbook'] },
+          { title: 'Non Routine Preparation', icon: '▌', searchKeywords: ['Non Routine Preparation', 'Non Routine Preparasi', '636'] },
+          { title: 'Daily Preparation', icon: '▌', searchKeywords: ['Daily Preparation', 'Daily Preparasi', '637'] },
+          { title: 'Weekly Preparation', icon: '▌', searchKeywords: ['Weekly Preparation', 'Weekly Preparasi', '638'] },
+          { title: 'Monthly Preparation', icon: '▌', searchKeywords: ['Monthly Preparation', 'Monthly Preparasi', '639'] },
+          { title: 'Quarterly Preparation', icon: '▌', searchKeywords: ['Quarterly Preparation', 'Quarterly Preparasi', '640'] },
+          { title: 'Biannual Preparation', icon: '▌', searchKeywords: ['Biannual Preparation', 'Biannual Preparasi', '641'] },
+          { title: 'Yearly Preparation', icon: '▌', searchKeywords: ['Yearly Preparation', 'Yearly Preparasi', '642'] },
+          { title: 'Archived', icon: '▌', searchKeywords: ['Archived Preparation', 'Archived Preparasi', '634', 'Archived'] },
+          { title: 'Preparation Information', icon: '▌', searchKeywords: ['Preparation Information', 'Information Preparasi', '643'] },
         ],
         rulesTitle: 'RULES',
         rulesItems: [
@@ -385,7 +386,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
-          { title: 'Logbook Quality Assurance', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Quality Assurance', 'Logbook QA', 'Logbook'] },
+          { title: 'Quality Assurance Logbook', icon: '📔', isLogbook: true, searchKeywords: ['Quality Assurance Logbook', 'Logbook Quality Assurance', 'Logbook QA', 'Logbook'] },
           { title: 'Non Routine Quality Assurance', icon: '▌', searchKeywords: ['Non Routine Quality Assurance', '406'] },
           { title: 'Daily Quality Assurance', icon: '▌', searchKeywords: ['Daily Quality Assurance', '448'] },
           { title: 'Weekly Quality Assurance', icon: '▌', searchKeywords: ['Weekly Quality Assurance', '423'] },
@@ -396,7 +397,7 @@ export function SectionHubDashboard({
         ],
         rulesTitle: 'RULES',
         rulesItems: [
-          { title: 'Information Quality Assurance', icon: '📄', searchKeywords: ['Information Quality Assurance', '445'] },
+          { title: 'Quality Assurance Information', icon: '📄', searchKeywords: ['Quality Assurance Information', 'Information Quality Assurance', '445'] },
           { title: 'Pengajuan PTK QA', icon: '➕', searchKeywords: ['Pengajuan PTK', '77'] },
           { title: 'Weekly Mutu', icon: '🏆', searchKeywords: ['weekly mutu', '582'] },
           { title: 'Standard QC & QA SOP', icon: '📘', searchKeywords: ['Standard Methods'] },
@@ -441,7 +442,7 @@ export function SectionHubDashboard({
         bannerUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1600&q=80',
         infoTitle: 'INFO',
         infoItems: [
-          { title: 'Logbook Inventory', icon: '📔', isLogbook: true, searchKeywords: ['Logbook Inventory', 'Logbook Warehouse', 'Logbook'] },
+          { title: 'Inventory Logbook', icon: '📔', isLogbook: true, searchKeywords: ['Inventory Logbook', 'Logbook Inventory', 'Logbook Warehouse', 'Logbook'] },
           { title: 'Non Routine Inventory', icon: '▌', searchKeywords: ['Non Routine Inventory', '668', 'Non Routine Warehouse', '432', 'Non Routine'] },
           { title: 'Daily Inventory', icon: '▌', searchKeywords: ['Daily Inventory', '669', 'Daily Warehouse', '463', 'Daily'] },
           { title: 'Weekly Inventory', icon: '▌', searchKeywords: ['Weekly Inventory', '670', 'Weekly Warehouse', '431', 'Weekly'] },

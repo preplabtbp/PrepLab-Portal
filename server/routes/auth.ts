@@ -82,7 +82,34 @@ const MEETING_ROOM_USER = {
   isMeetingRoom: true
 };
 
+const MEETING_ROOM_GTS_USER = {
+  id: 999991,
+  nik: 'MEETINGROOMGTS',
+  username: 'meetingroomgts',
+  name: 'Meeting Room GTS PrepLab',
+  jabatan: 'Meeting Room Display GTS',
+  jobGrade: 'ALL',
+  section: 'ALL',
+  department: 'ALL',
+  gol: 'IV',
+  pt: 'GTS',
+  firstLoginComplete: true,
+  isAdmin: true,
+  isDeveloper: false,
+  isMeetingRoom: true
+};
+
 function resolveDemoUser(normalized: string) {
+  if (
+    normalized === 'MEETINGROOMGTS' ||
+    normalized === 'MEETING_ROOM_GTS' ||
+    normalized === 'MEETINGGTS' ||
+    normalized === 'GTSMEETING' ||
+    normalized === 'GTS_MEETING' ||
+    normalized === 'MEETING_GTS'
+  ) {
+    return MEETING_ROOM_GTS_USER;
+  }
   if (
     normalized === 'MEETING' ||
     normalized === 'MEETINGROOM' ||
@@ -180,6 +207,26 @@ function resolveDevFallbackUser(normalized: string) {
   ) || null;
 }
 
+// Helper: Retry DB queries on transient connection errors or pool timeouts
+async function queryWithRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 350): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: any) {
+    const isConnErr =
+      err?.message?.includes('timeout') ||
+      err?.message?.includes('Connection') ||
+      err?.message?.includes('terminated') ||
+      err?.code === 'ECONNRESET' ||
+      err?.code === 'ETIMEDOUT';
+    if (retries > 0 && isConnErr) {
+      console.warn(`[DB Retry] Retrying query due to connection error (${err.message}). Retries left: ${retries}`);
+      await new Promise(r => setTimeout(r, delayMs));
+      return queryWithRetry(fn, retries - 1, delayMs * 2);
+    }
+    throw err;
+  }
+}
+
 // Check NIK / Username (Sanitized: No password hash or full PII leaked)
 authRouter.post("/check-nik", async (req, res) => {
   try {
@@ -216,16 +263,18 @@ authRouter.post("/check-nik", async (req, res) => {
 
     let employee: any = null;
     try {
-      // Race DB query against a reliable 10s timeout
+      // Race DB query against a reliable 10s timeout with query retry
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 10000));
-      const dbPromise = db.select().from(employees)
-        .where(
-          or(
-            sql`UPPER(${employees.nik}) = ${normalized}`,
-            sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+      const dbPromise = queryWithRetry(() =>
+        db.select().from(employees)
+          .where(
+            or(
+              sql`UPPER(${employees.nik}) = ${normalized}`,
+              sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+            )
           )
-        )
-        .limit(1);
+          .limit(1)
+      );
 
       const employeeMatches: any = await Promise.race([dbPromise, timeoutPromise]);
       employee = employeeMatches?.[0];
@@ -277,7 +326,7 @@ authRouter.post("/login", async (req, res) => {
     const isDemoAllowed = env.ENABLE_DEMO_USER || process.env.ENABLE_DEMO_USER === 'true' || true;
     const demoUser = isDemoAllowed ? resolveDemoUser(normalized) : null;
     if (demoUser) {
-      const isMeeting = demoUser.nik === 'MEETINGROOM';
+      const isMeeting = demoUser.nik === 'MEETINGROOM' || demoUser.nik === 'MEETINGROOMGTS';
       const isPasswordValid = isMeeting
         ? (password === '123' || password === 'preplabportal')
         : (password === '112233' || password === 'spvdemo123' || password === 'demo123');
@@ -312,14 +361,16 @@ authRouter.post("/login", async (req, res) => {
     } else {
       try {
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 10000));
-        const dbPromise = db.select().from(employees)
-          .where(
-            or(
-              sql`UPPER(${employees.nik}) = ${normalized}`,
-              sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+        const dbPromise = queryWithRetry(() =>
+          db.select().from(employees)
+            .where(
+              or(
+                sql`UPPER(${employees.nik}) = ${normalized}`,
+                sql`UPPER(COALESCE(${employees.username}, '')) = ${normalized}`
+              )
             )
-          )
-          .limit(1);
+            .limit(1)
+        );
 
         const employeeMatches: any = await Promise.race([dbPromise, timeoutPromise]);
         user = employeeMatches?.[0];

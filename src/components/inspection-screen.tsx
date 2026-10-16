@@ -10,9 +10,33 @@ import { useInspection, ToolStatus, compressImage } from '../features/inspection
 
 
 
+import { P2HLaboratoryAccordionForm } from './inspection-forms/P2HLaboratoryAccordionForm';
+import { P2H_LAB_ROOMS } from '../data/p2hLaboratoryRooms';
+
 export function InspectionScreen({ inspectorName, equipmentCategories, reloadData, loading, inspectorNik }: { inspectorName: string, equipmentCategories: {category: string, tools: ToolRecord[]}[], reloadData: () => void, loading: boolean, inspectorNik: string }) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [sectionGuideOpen, setSectionGuideOpen] = useState(false);
+
+  // Ensure Laboratory category is always accessible with official 7 rooms & 66 equipment
+  const hasLabCategory = equipmentCategories.some(c => c.category.toLowerCase().includes('lab'));
+  const displayCategories = hasLabCategory ? equipmentCategories : [
+    ...equipmentCategories,
+    {
+      category: 'Laboratory',
+      tools: P2H_LAB_ROOMS.flatMap(r => r.tools).map(t => ({
+        id: t.id,
+        name: t.name,
+        location: t.room,
+        assetNumber: t.assetNumber,
+        itemCategory: t.room,
+        description: '',
+        photoUrl: '',
+        sheetOrigin: 'Laboratory',
+        rowIndex: 0
+      }))
+    }
+  ];
+
   const [statuses, setStatuses] = useState<Record<string, ToolStatus>>(() => {
     try {
       const saved = localStorage.getItem('p2h_statuses_draft');
@@ -41,10 +65,10 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
   const [savingPhoto, setSavingPhoto] = useState(false);
 
   // Helper
-  const allTools = equipmentCategories.flatMap(c => c.tools);
+  const allTools = displayCategories.flatMap(c => c.tools);
   const currentTool = allTools.find(t => t.id === selectedToolId);
 
-  const currentCategoryObj = equipmentCategories.find(c => c.category === activeCategory);
+  const currentCategoryObj = displayCategories.find(c => c.category === activeCategory);
   const currentTools = currentCategoryObj?.tools || [];
 
   // Issue Form State
@@ -244,14 +268,15 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
 
       {loading ? (
          <div className="flex justify-center p-8"><Activity className="animate-spin text-teal-600 w-8 h-8" /></div>
-      ) : equipmentCategories.length === 0 ? (
+      ) : displayCategories.length === 0 ? (
          <Card className="text-center text-sm p-8 text-slate-500">
             Database alat belum tersedia. <br/>Pastikan Spreadsheet memilki sheet <b>data_Alat_Prep_Basah</b>, <b>data_Alat_Prep_Kering</b>, dsb dengan format kolom yang benar dan sudah ditautkan dengan valid GAS API.
          </Card>
       ) : activeCategory === null ? (
         <div className="space-y-4 pb-6 mt-6">
           <h3 className="text-lg font-medium text-slate-800 tracking-tight">Pilih Section Inspeksi</h3>
-          {equipmentCategories.map((cat, idx) => {
+          {displayCategories.map((cat, idx) => {
+             const isLab = cat.category.toLowerCase().includes('lab');
              const checkedCount = cat.tools.filter(t => statuses[t.id]?.condition).length;
              const isDone = checkedCount > 0 && checkedCount === cat.tools.length;
              return (
@@ -261,10 +286,17 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
                       <Layers className="w-6 h-6" />
                     </div>
                     <div className="flex-1">
-                      <div className="font-semibold text-slate-700">{cat.category}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-700">{cat.category}</span>
+                        {isLab && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300">
+                            7 Ruangan • Form TBP-FR-PL-LAB-04.01-01
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1.5">
                         {isDone && <CheckCircle2 className="w-4 h-4 text-teal-500" />}
-                        {checkedCount} / {cat.tools.length} Peralatan
+                        {isLab ? '66 Peralatan Terbagi per Ruangan' : `${checkedCount} / ${cat.tools.length} Peralatan`}
                       </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-teal-400 transition-colors" />
@@ -276,6 +308,13 @@ export function InspectionScreen({ inspectorName, equipmentCategories, reloadDat
              );
           })}
         </div>
+      ) : activeCategory.toLowerCase().includes('lab') ? (
+        <P2HLaboratoryAccordionForm
+          inspectorName={inspectorName}
+          inspectorNik={inspectorNik}
+          onBack={() => setActiveCategory(null)}
+          devOptions={parsedDevOptions}
+        />
       ) : (
         <>
           <div className="flex items-center gap-2 mb-2">

@@ -588,7 +588,10 @@ export const resolveInternalTicket = async (data: any) => {
 export const getRosterData = async (params?: any) => {
   try {
     const url = (params?.force || params?.refresh) ? '/api/roster?refresh=true' : '/api/roster';
-    const res = await fetch(url);
+    const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('p2h_token') || localStorage.getItem('token')) : '';
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(url, { headers, credentials: 'include' });
     if (!res.ok) {
       throw new Error('Failed to fetch roster');
     }

@@ -13,8 +13,83 @@ export function translateDisplayText(text: string): string {
     .replace(/\bADMINISTRASI\b/g, 'ADMINISTRATION')
     .replace(/\bAdministrasi\b/gi, 'Administration')
     .replace(/\bPROSEDUR\b/g, 'PROCEDURE')
-    .replace(/\bProsedur\b/gi, 'Procedure');
+    .replace(/\bProsedur\b/gi, 'Procedure')
+    .replace(/\bINFORMASI\b/g, 'INFORMATION')
+    .replace(/\bInformasi\b/gi, 'Information')
+    .replace(/\bHARIAN\b/g, 'DAILY')
+    .replace(/\bHarian\b/gi, 'Daily')
+    .replace(/\bMINGGUAN\b/g, 'WEEKLY')
+    .replace(/\bMingguan\b/gi, 'Weekly')
+    .replace(/\bBULANAN\b/g, 'MONTHLY')
+    .replace(/\bBulanan\b/gi, 'Monthly')
+    .replace(/\bTAHUNAN\b/g, 'YEARLY')
+    .replace(/\bTahunan\b/gi, 'Yearly')
+    .replace(/\bSELESAI\b/g, 'COMPLETED')
+    .replace(/\bSelesai\b/gi, 'Completed')
+    .replace(/\bCATATAN\b/g, 'NOTES')
+    .replace(/\bCatatan\b/gi, 'Notes');
 }
+
+/**
+ * Visual display translator for table column headers from Indonesian to English
+ */
+export function getDisplayColumnHeader(colHeader: string): string {
+  if (!colHeader) return '';
+  const colLower = colHeader.toLowerCase().trim();
+  
+  if (
+    colLower.includes('tanggal selesai') || 
+    colLower.includes('completed') || 
+    colLower.includes('aktual selesai') || 
+    colLower === 'selesai' || 
+    colLower.includes('waktu selesai')
+  ) {
+    return 'Completion Date';
+  }
+  if (
+    colLower.includes('due') || 
+    colLower.includes('deadline') || 
+    colLower.includes('target') || 
+    colLower.includes('jatuh tempo') || 
+    colLower.includes('batas waktu')
+  ) {
+    return 'Due Date';
+  }
+  if (
+    colLower.includes('jenis kegiatan') || 
+    colLower.includes('nama kegiatan') || 
+    colLower.includes('judul kegiatan') ||
+    colLower === 'kegiatan'
+  ) {
+    return 'Activity Name';
+  }
+  if (colLower === 'keterangan' || colLower === 'catatan') {
+    return 'Description';
+  }
+  if (colLower === 'prioritas' || colLower === 'priority') {
+    return 'Priority';
+  }
+  if (colLower === 'status') {
+    return 'Status';
+  }
+  if (colLower === 'aktivitas') {
+    return 'Activity';
+  }
+  if (colLower === 'kategori') {
+    return 'Category';
+  }
+  if (colLower === 'asal halaman') {
+    return 'Source Page';
+  }
+  if (colLower === 'created time' || colLower === 'tanggal dibuat' || colLower === 'waktu dibuat') {
+    return 'Created Time';
+  }
+  if (colLower === 'nomor' || colLower === 'no') {
+    return 'Number';
+  }
+  return translateDisplayText(colHeader);
+}
+
 
 import type { TableRowData } from '../NotionDatabaseTable';
 export type { TableRowData };
@@ -172,7 +247,7 @@ export function isLogbookPost(post: any): boolean {
   const idStr = String(post.id || '').toLowerCase();
   if (idStr.startsWith('logbook-') || idStr === 'logbook') return true;
   const title = (post.title || '').toLowerCase().trim();
-  return title.startsWith('logbook') || title.startsWith('log book');
+  return title.includes('logbook') || title.includes('log book');
 }
 
 /**
@@ -206,6 +281,93 @@ export function getSectionFromPost(post: any): string {
 
   return cat || 'General';
 }
+
+/**
+ * Resolves allowed section names for a given user profile.
+ * Non-dev and non-manager personnel are restricted to their own section's labnote.
+ */
+export function getUserAllowedSections(userProfile?: any): string[] {
+  let profile = userProfile;
+  if (!profile) {
+    try {
+      profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
+    } catch {}
+  }
+  const nik = (profile?.nik || localStorage.getItem('p2h_inspector_nik') || '').trim();
+  const name = (profile?.name || localStorage.getItem('p2h_inspector_name') || '').toLowerCase();
+  const jab = (profile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+  const sec = (profile?.section || profile?.seksi || localStorage.getItem('p2h_inspector_section') || '').toLowerCase();
+  const dept = (profile?.department || profile?.departemen || localStorage.getItem('p2h_inspector_dept') || '').toLowerCase();
+
+  const allowed: string[] = [];
+
+  const checkText = (text: string) => {
+    if (text.includes('qa') || text.includes('mutu') || text.includes('quality') || text.includes('iso')) {
+      allowed.push('Manajemen Mutu', 'Quality Assurance');
+    }
+    if (text.includes('maint') || text.includes('pemeliharaan') || text.includes('teknik') || text.includes('mekanik') || text.includes('listrik')) {
+      allowed.push('Maintenance');
+    }
+    if (text.includes('invent') || text.includes('gudang') || text.includes('warehouse') || text.includes('logistic') || text.includes('logistik')) {
+      allowed.push('Inventory');
+    }
+    if (text.includes('admin') || text.includes('adm') || text.includes('hr') || text.includes('personalia')) {
+      allowed.push('Administrasi');
+    }
+    if (text.includes('prep') || text.includes('crush') || text.includes('dry') || text.includes('wet')) {
+      allowed.push('Preparasi');
+    }
+    if (text.includes('lab') || text.includes('aas') || text.includes('xrf') || text.includes('analyst') || text.includes('kimia')) {
+      if (!text.includes('maintenance')) {
+        allowed.push('Laboratorium');
+      }
+    }
+  };
+
+  // 1. Cek section terlebih dahulu (paling spesifik)
+  checkText(sec);
+
+  // 2. Jika belum ditemukan, cek dept
+  if (allowed.length === 0) {
+    checkText(dept);
+  }
+
+  // 3. Jika belum ditemukan, cek jabatan
+  if (allowed.length === 0) {
+    checkText(jab);
+  }
+
+  // Hak Akses Khusus: Sarjon Jaya Putra (NIK: M0401260003) diberikan akses ke Labnote Maintenance
+  if (nik === 'M0401260003' || name.includes('sarjon')) {
+    allowed.push('Maintenance');
+  }
+
+  // 4. Default fallback jika masih kosong
+  if (allowed.length === 0) {
+    allowed.push('Preparasi');
+  }
+
+  return [...new Set(allowed)];
+}
+
+/**
+ * Checks whether user has permission to access a specific labnote section.
+ * Developers and Managers have unrestricted access to all sections.
+ */
+export function isUserAllowedToAccessSection(
+  sectionName: string, 
+  userProfile?: any, 
+  isDevOrManager?: boolean
+): boolean {
+  if (isDevOrManager) return true;
+  const clean = sectionName.replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+  if (clean === 'prosedur' || clean === 'general issue' || clean === 'general' || clean === 'information') {
+    return true;
+  }
+  const allowed = getUserAllowedSections(userProfile).map(s => s.toLowerCase());
+  return allowed.some(s => s === clean || clean.includes(s) || s.includes(clean));
+}
+
 
 /**
  * Determines if a row represents an ACTIVE task (belum selesai).

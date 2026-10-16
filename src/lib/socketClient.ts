@@ -27,6 +27,12 @@ export function getGlobalSocket(): Socket {
       timeout: 15000,
       transports: ['websocket', 'polling'],
       autoConnect: true,
+      auth: (cb) => {
+        const token = typeof window !== 'undefined' 
+          ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '') 
+          : '';
+        cb({ token });
+      }
     });
 
     globalSocket.on('connect', () => {

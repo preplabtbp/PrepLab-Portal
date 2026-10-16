@@ -26,7 +26,7 @@ import {
 } from './tasklist-utils';
 import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './FloatingSelectionToolbar';
 
-interface NotionInlineEditorProps {
+export interface NotionInlineEditorProps {
   initialValue: string;
   fieldLabel: string;
   onSave: (val: string) => void;
@@ -34,6 +34,10 @@ interface NotionInlineEditorProps {
   multiline?: boolean;
   isNotionLight?: boolean;
   allowTasklistMode?: boolean;
+  showActionButtons?: boolean;
+  disableOutsideClickSave?: boolean;
+  minHeight?: string;
+  placeholder?: string;
 }
 
 export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
@@ -43,7 +47,11 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
   onCancel,
   multiline = true,
   isNotionLight = true,
-  allowTasklistMode = true
+  allowTasklistMode = true,
+  showActionButtons = false,
+  disableOutsideClickSave = false,
+  minHeight,
+  placeholder
 }) => {
   // --- SINGLE LINE MODE (e.g. Judul Kegiatan, Completed Time) ---
   const [singleText, setSingleText] = useState(initialValue || '');
@@ -224,6 +232,10 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
       onCancel={onCancel}
       isNotionLight={isNotionLight}
       allowTasklistMode={allowTasklistMode}
+      showActionButtons={showActionButtons}
+      disableOutsideClickSave={disableOutsideClickSave}
+      minHeight={minHeight}
+      placeholder={placeholder}
     />
   );
 };
@@ -236,7 +248,22 @@ const NotionMultilineDispatcher: React.FC<{
   onCancel: () => void;
   isNotionLight: boolean;
   allowTasklistMode?: boolean;
-}> = ({ initialValue, fieldLabel, onSave, onCancel, isNotionLight, allowTasklistMode = true }) => {
+  showActionButtons?: boolean;
+  disableOutsideClickSave?: boolean;
+  minHeight?: string;
+  placeholder?: string;
+}> = ({ 
+  initialValue, 
+  fieldLabel, 
+  onSave, 
+  onCancel, 
+  isNotionLight, 
+  allowTasklistMode = true,
+  showActionButtons = false,
+  disableOutsideClickSave = false,
+  minHeight,
+  placeholder
+}) => {
   const parsed = parseTasklist(initialValue);
   const [mode, setMode] = useState<'tasklist' | 'freeform'>(() => 
     (allowTasklistMode && parsed.hasTasklist) ? 'tasklist' : 'freeform'
@@ -265,6 +292,10 @@ const NotionMultilineDispatcher: React.FC<{
       onSave={onSave}
       onCancel={onCancel}
       allowTasklistMode={allowTasklistMode}
+      showActionButtons={showActionButtons}
+      disableOutsideClickSave={disableOutsideClickSave}
+      minHeight={minHeight}
+      placeholder={placeholder}
       onSwitchToTasklist={(text) => {
         if (!allowTasklistMode) return;
         setCurrentVal(text);
@@ -1315,6 +1346,10 @@ interface NotionMultilineBubbleEditorProps {
   onSwitchToTasklist: (text: string) => void;
   isNotionLight: boolean;
   allowTasklistMode?: boolean;
+  showActionButtons?: boolean;
+  disableOutsideClickSave?: boolean;
+  minHeight?: string;
+  placeholder?: string;
 }
 
 const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = ({
@@ -1324,7 +1359,11 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
   onCancel,
   onSwitchToTasklist,
   isNotionLight,
-  allowTasklistMode = true
+  allowTasklistMode = true,
+  showActionButtons = false,
+  disableOutsideClickSave = false,
+  minHeight,
+  placeholder
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -1421,6 +1460,8 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
 
   // Outside click to save (Pure Notion in-place auto save)
   useEffect(() => {
+    if (disableOutsideClickSave) return;
+
     const handleOutsideClick = (e: MouseEvent) => {
       const target = e.target as Node;
       if (isColorMenuOpen) return;
@@ -1438,7 +1479,7 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [getCleanMarkdown, onSave, isColorMenuOpen]);
+  }, [getCleanMarkdown, onSave, isColorMenuOpen, disableOutsideClickSave]);
 
   // Apply rich text formatting
   const execCmd = (cmd: string, val: string | undefined = undefined) => {
@@ -1799,13 +1840,41 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
         suppressContentEditableWarning
         onKeyDown={handleKeyDown}
         onMouseUp={updateBubblePosition}
-        className="outline-none min-h-[36px] max-h-[360px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-sans selection:bg-[#cce2ff] p-1.5"
+        data-placeholder={placeholder || 'Tulis catatan atau rincian keterangan...'}
+        className="outline-none max-h-[380px] overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap font-sans selection:bg-[#cce2ff] p-2 empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:pointer-events-none"
         style={{
+          minHeight: minHeight || '50px',
           color: isNotionLight ? '#0f172a' : '#f8fafc',
           caretColor: isNotionLight ? '#0f172a' : '#38bdf8',
           lineHeight: '1.6'
         }}
       />
+
+      {/* Bottom Action Bar */}
+      {showActionButtons && (
+        <div className="flex items-center justify-between pt-2 px-2 pb-1 border-t border-slate-200 dark:border-slate-700/60 mt-1">
+          <p className="text-[10px] text-slate-500 font-medium">
+            💡 Sorot teks untuk memberi format warna/tebal. Klik <strong className="text-teal-700 dark:text-teal-400">Selesai Edit</strong> untuk menyimpan.
+          </p>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={() => onSave(getCleanMarkdown())}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black text-white bg-teal-600 hover:bg-teal-700 active:scale-95 transition-all shadow-xs cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5 stroke-[3]" />
+              <span>Selesai Edit</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Floating Notion Bubble Toolbar in Freeform Mode */}
       <FloatingNotionBubbleToolbar

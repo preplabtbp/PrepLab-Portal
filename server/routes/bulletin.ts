@@ -29,7 +29,7 @@ router.get("/api/bulletin", async (req, res) => {
       
       // If pt === 'ALL' or (isSuperUser and no pt specified), return all bulletin posts
       if (pt === 'ALL' || (isSuperUser && !pt)) {
-        console.log('[Bulletin API] Unrestricted access granted for user:', nik, 'pt:', pt);
+        // unrestricted access
       } else if (pt === 'GTS') {
         conditions.push(eq(bulletinPosts.pt, 'GTS'));
       } else {

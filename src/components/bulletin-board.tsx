@@ -3,7 +3,7 @@ import { translateDisplayText } from './notion/logbook-section-utils';
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
 import { NotionDatabaseTable, TableRowData } from "./NotionDatabaseTable";
-import { isLogbookPost, getSectionFromPost, getLogbookTableData, aggregateSectionActiveTasks, KNOWN_SECTIONS } from "./notion/logbook-section-utils";
+import { isLogbookPost, getSectionFromPost, getLogbookTableData, aggregateSectionActiveTasks, KNOWN_SECTIONS, getUserAllowedSections, isUserAllowedToAccessSection } from "./notion/logbook-section-utils";
 import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
 import { PortalImagePickerModal } from "./PortalImagePickerModal";
 import { BannerCover } from "./BannerCover";
@@ -90,16 +90,43 @@ export function BulletinBoard({
   inspectorNik,
   isDeveloper,
   userPt,
+  userProfile,
 }: {
   inspectorName: string;
   inspectorNik: string;
   isDeveloper?: boolean;
   userPt?: string;
+  userProfile?: any;
 }) {
   const { pt } = useParams();
   const navigate = useNavigate();
   const isSuperAdmin = inspectorNik === '02D24000043' || inspectorNik === '02D25000055' || inspectorNik === 'M0403240177' || inspectorNik === 'preplabadmin';
   const isDev = Boolean(isDeveloper || isSuperAdmin);
+  const isManager = Boolean(
+    userProfile?.jabatan?.toLowerCase().includes('manager') ||
+    userProfile?.section?.toLowerCase().includes('manager') ||
+    userProfile?.department?.toLowerCase().includes('manager') ||
+    userProfile?.role?.toLowerCase().includes('manager') ||
+    (localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase().includes('manager')
+  );
+  const canAccessAllSections = Boolean(isDev || isManager);
+  const userAllowedSections = useMemo(() => {
+    if (canAccessAllSections) return KNOWN_SECTIONS as readonly string[];
+    return getUserAllowedSections(userProfile);
+  }, [canAccessAllSections, userProfile]);
+
+  const displayedSections = useMemo(() => {
+    if (canAccessAllSections) {
+      return KNOWN_SECTIONS.slice(0, 6);
+    }
+    return KNOWN_SECTIONS.filter(s => userAllowedSections.includes(s));
+  }, [canAccessAllSections, userAllowedSections]);
+
+  const dropdownSections = useMemo(() => {
+    if (canAccessAllSections) return KNOWN_SECTIONS;
+    return KNOWN_SECTIONS.filter(s => userAllowedSections.includes(s));
+  }, [canAccessAllSections, userAllowedSections]);
+
   const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -114,6 +141,12 @@ export function BulletinBoard({
       if (cached && targetId) {
         const parsed = JSON.parse(cached);
         if (parsed && String(parsed.id) === String(targetId)) {
+          if (!canAccessAllSections && isLogbookPost(parsed)) {
+            const sec = getSectionFromPost(parsed);
+            if (!isUserAllowedToAccessSection(sec, userProfile, canAccessAllSections)) {
+              return null;
+            }
+          }
           return parsed;
         }
       }
@@ -328,7 +361,6 @@ export function BulletinBoard({
       const targetPt = isDev ? "ALL" : userUniverse;
       const fetchUrl =
         `/api/bulletin?pt=${targetPt}&nik=${encodeURIComponent(inspectorNik || "")}&_t=${Date.now()}`;
-      console.log("[Bulletin] Fetching:", fetchUrl, "isDev:", isDev);
       const res = await fetch(fetchUrl, {
         cache: "no-store",
         headers: {
@@ -558,6 +590,15 @@ export function BulletinBoard({
     // Use latest post from `posts` state if available to avoid stale post closures
     const freshPost = (posts && posts.length > 0) ? (posts.find(p => String(p.id) === String(post.id)) || post) : post;
 
+    // Permission Guard: Restrict labnote access per section for regular personnel
+    if (!canAccessAllSections && isLogbookPost(freshPost)) {
+      const sec = getSectionFromPost(freshPost);
+      if (!isUserAllowedToAccessSection(sec, userProfile, canAccessAllSections)) {
+        toast.error(`Akses ditolak: Dokumen Labnote ${sec} hanya dapat diakses oleh seksi ${userAllowedSections.join(', ')}.`);
+        return;
+      }
+    }
+
     setNavHistory((prev) => {
       const idx = prev.findIndex((h) => h?.id === freshPost.id);
       if (idx !== -1) {
@@ -594,6 +635,17 @@ export function BulletinBoard({
   // Open Unified Logbook for a specific section (loads cached content if available)
   const openSectionLogbook = useCallback((sectionName: string) => {
     const cleanSection = sectionName.replace(/^[#\s\-*]+/, '').trim();
+
+    // Guard: Prevent unauthorized section labnote access for non-dev / non-manager
+    if (!canAccessAllSections && !isUserAllowedToAccessSection(cleanSection, userProfile, canAccessAllSections)) {
+      const fallbackSec = userAllowedSections[0] || 'Preparasi';
+      toast.error(`Akses dibatasi: Anda hanya dapat mengakses Labnote seksi ${userAllowedSections.join(', ')}.`);
+      if (cleanSection.toLowerCase() !== fallbackSec.toLowerCase()) {
+        openSectionLogbook(fallbackSec);
+      }
+      return;
+    }
+
     const logbookTitle = `Logbook ${cleanSection}`;
     const targetUniverse = selectedPtFilter !== 'ALL' ? selectedPtFilter : userUniverse;
     const logbookId = `logbook-${cleanSection.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
@@ -621,7 +673,7 @@ export function BulletinBoard({
 
     navigateToPost(target);
     setShowLogbookDropdown(false);
-  }, [selectedPtFilter, userUniverse, navigateToPost]);
+  }, [selectedPtFilter, userUniverse, navigateToPost, canAccessAllSections, userAllowedSections, userProfile]);
 
   // Listen for live post updates from Logbook direct mutations
   useEffect(() => {
@@ -650,23 +702,42 @@ export function BulletinBoard({
       }
       const urlLogbook = params.get("logbook") || params.get("sectionLogbook");
       if (urlLogbook && !selectedPost) {
-        openSectionLogbook(urlLogbook === 'true' ? 'Preparasi' : urlLogbook);
+        const rawSec = urlLogbook === 'true' ? (userAllowedSections[0] || 'Preparasi') : urlLogbook;
+        if (!canAccessAllSections && !isUserAllowedToAccessSection(rawSec, userProfile, canAccessAllSections)) {
+          toast.error(`Akses ditolak: Anda hanya dapat mengakses Labnote seksi ${userAllowedSections.join(', ')}.`);
+          openSectionLogbook(userAllowedSections[0] || 'Preparasi');
+          return;
+        }
+        openSectionLogbook(rawSec);
         return;
       }
       if (targetId && String(targetId).startsWith('logbook-') && !selectedPost) {
         const secPart = String(targetId).replace(/^logbook-/, '');
+        if (!canAccessAllSections && !isUserAllowedToAccessSection(secPart, userProfile, canAccessAllSections)) {
+          toast.error(`Akses ditolak: Anda hanya dapat mengakses Labnote seksi ${userAllowedSections.join(', ')}.`);
+          openSectionLogbook(userAllowedSections[0] || 'Preparasi');
+          return;
+        }
         openSectionLogbook(secPart);
         return;
       }
       if (targetId && !selectedPost) {
         const target = posts.find((p) => String(p.id) === String(targetId));
         if (target) {
+          if (!canAccessAllSections && isLogbookPost(target)) {
+            const sec = getSectionFromPost(target);
+            if (!isUserAllowedToAccessSection(sec, userProfile, canAccessAllSections)) {
+              toast.error(`Akses ditolak: Dokumen Labnote ${sec} hanya dapat diakses oleh personil seksi ${userAllowedSections.join(', ')}.`);
+              openSectionLogbook(userAllowedSections[0] || 'Preparasi');
+              return;
+            }
+          }
           setSelectedPost(target);
           addRecentPost(target.id);
         }
       }
     } catch (e) {}
-  }, [posts, addRecentPost, selectedPost, openSectionLogbook]);
+  }, [posts, addRecentPost, selectedPost, openSectionLogbook, canAccessAllSections, userAllowedSections, userProfile]);
 
   // Go back to previous history or parent
   const goBack = () => {
@@ -868,6 +939,15 @@ export function BulletinBoard({
         return pPt === 'TBP' || pPt === 'GPS' || pPt === 'TBP_GPS';
       });
     }
+    if (!canAccessAllSections) {
+      list = list.filter((p) => {
+        if (isLogbookPost(p)) {
+          const sec = getSectionFromPost(p);
+          return isUserAllowedToAccessSection(sec, userProfile, canAccessAllSections);
+        }
+        return true;
+      });
+    }
     if (sidebarTab === "folders") {
       list = list.filter(isFolderPost);
     }
@@ -877,7 +957,7 @@ export function BulletinBoard({
       const title = (p.title || "").toLowerCase();
       return title.includes(q);
     });
-  }, [posts, searchQuery, sidebarTab, isFolderPost, selectedPtFilter]);
+  }, [posts, searchQuery, sidebarTab, isFolderPost, selectedPtFilter, canAccessAllSections, userProfile]);
 
   const folderCount = useMemo(() => {
     const list = selectedPtFilter !== "ALL"
@@ -1072,19 +1152,30 @@ export function BulletinBoard({
   // Clean beforeText to strip redundant document titles and empty headings
   const cleanBeforeTableText = useMemo(() => {
     if (!parsedTableData?.beforeText) return '';
-    const postTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+    const rawPostTitle = (selectedPost?.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+    const normalizedPostTitle = translateDisplayText(rawPostTitle).trim().toLowerCase();
+
     const lines = parsedTableData.beforeText.split('\n');
     const filteredLines = lines.filter(line => {
       const cleanLine = line.replace(/^[#\s\-*]+/, '').trim().toLowerCase();
       if (!cleanLine) return false;
-      // If line duplicates document/table title
-      if (cleanLine === postTitle || (cleanLine.length > 3 && (postTitle === cleanLine || postTitle.includes(cleanLine) || cleanLine.includes(postTitle)))) {
+      const normalizedLine = translateDisplayText(cleanLine).trim().toLowerCase();
+
+      // If line duplicates document/table title (either exact or through English/Indonesian normalization)
+      const isDuplicate = 
+        cleanLine === rawPostTitle ||
+        normalizedLine === normalizedPostTitle ||
+        (cleanLine.length > 3 && (rawPostTitle.includes(cleanLine) || cleanLine.includes(rawPostTitle))) ||
+        (normalizedLine.length > 3 && (normalizedPostTitle.includes(normalizedLine) || normalizedLine.includes(normalizedPostTitle)));
+
+      if (isDuplicate) {
         return false;
       }
       return true;
     });
     return filteredLines.join('\n').trim();
   }, [parsedTableData, selectedPost]);
+
 
   // Compute upcoming meetings from agenda
   const upcomingMeetings = useMemo(() => {
@@ -1166,9 +1257,19 @@ export function BulletinBoard({
     if (posts.length === 0) return [];
     
     const targetUniverse = selectedPtFilter !== "ALL" ? selectedPtFilter : null;
-    const basePosts = targetUniverse 
+    let basePosts = targetUniverse 
       ? posts.filter((p) => (p.pt === "GTS" ? "GTS" : "TBP") === targetUniverse)
       : posts;
+
+    if (!canAccessAllSections) {
+      basePosts = basePosts.filter((p) => {
+        if (isLogbookPost(p)) {
+          const sec = getSectionFromPost(p);
+          return isUserAllowedToAccessSection(sec, userProfile, canAccessAllSections);
+        }
+        return true;
+      });
+    }
 
     // First, map saved recent IDs
     const matched = recentPostIds
@@ -1180,7 +1281,7 @@ export function BulletinBoard({
     const fallbackPosts = basePosts.filter((p) => !matchedIds.has(p.id)).slice(0, 10 - matched.length);
 
     return [...matched, ...fallbackPosts];
-  }, [posts, recentPostIds, selectedPtFilter]);
+  }, [posts, recentPostIds, selectedPtFilter, canAccessAllSections, userProfile]);
 
   // AI Meeting Note Generator using local formatting + intelligent summarizer
   const handleGenerateAiMeeting = () => {
@@ -1347,7 +1448,7 @@ ${aiMeetingNotes
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="font-bold text-xs truncate tracking-tight text-slate-900">
-                    Prep & Lab Bulletin
+                    Prep & Lab Labnote
                   </span>
                   {isDev && (
                     <span className="text-xs font-mono text-teal-600 font-semibold tracking-wider">
@@ -1573,8 +1674,8 @@ ${aiMeetingNotes
                   Aktif
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-1">
-                {KNOWN_SECTIONS.slice(0, 6).map((sec) => {
+              <div className={`grid ${displayedSections.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-1`}>
+                {displayedSections.map((sec) => {
                   const isActive = isLogbookPost(selectedPost) && getSectionFromPost(selectedPost) === sec;
                   return (
                     <button
@@ -1633,7 +1734,7 @@ ${aiMeetingNotes
                       title={title}
                     >
                       {icon}
-                      <span className="truncate flex-1">{title}</span>
+                      <span className="truncate flex-1">{translateDisplayText(title)}</span>
                       {post.pt && isDev && (
                         <span 
                           className="text-[9px] px-1 py-0.2 rounded font-mono font-bold"
@@ -1819,7 +1920,7 @@ ${aiMeetingNotes
                     </button>
                   </div>
                   <div className="py-1 max-h-64 overflow-y-auto">
-                    {KNOWN_SECTIONS.map((sec) => (
+                    {dropdownSections.map((sec) => (
                       <button
                         key={sec}
                         onClick={() => openSectionLogbook(sec)}
