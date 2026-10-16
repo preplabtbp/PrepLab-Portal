@@ -188,7 +188,7 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
   },
   {
     id: 'training-external',
-    title: 'Training External',
+    title: 'Sertifikasi',
     desc: 'Rekap sertifikasi Pra POP, POP & POM per karyawan',
     category: 'Administrasi & SDM',
     icon: <GraduationCap className="w-5 h-5" />,

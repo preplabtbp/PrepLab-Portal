@@ -345,9 +345,7 @@ const k3BadgeOf = (s: K3State) =>
 // ===== Sertifikasi Pengawas Operasional (Pra POP / POP / POM) =====
 // Tidak ada masa berlaku — dihitung jumlah karyawan yang telah mengikuti tiap tahap
 const POP_STAGES = [
-  { key: 'praPop', label: 'Pra POP', desc: 'Pra Pengawas Operasional Pertama', attended: (p?: PopData | null) => popAttendedPra(p) },
   { key: 'pop', label: 'POP', desc: 'Pengawas Operasional Pertama', attended: (p?: PopData | null) => popAttendedPop(p) },
-  { key: 'pom', label: 'POM', desc: 'Pengawas Operasional Madya', attended: (p?: PopData | null) => popPassedPom(p) },
 ] as const;
 const POP_KETERANGAN_STYLE: Record<PopKeterangan, string> = {
   PASS: 'bg-[#e0f4f7] text-[#0e7490] border-[#a5f3fc]',
@@ -400,7 +398,7 @@ const SCOPE_PROGRAMS: Record<TrainingScope, TrainingProgram[]> = {
 };
 const SCOPE_META: Record<TrainingScope, { title: string; sub: string }> = {
   internal: { title: 'Training Internal', sub: 'Rekap Training SAP, K3 & Pra POP' },
-  external: { title: 'Training External', sub: 'Rekap Sertifikasi POP, POM & Sertifikasi Eksternal' },
+  external: { title: 'Sertifikasi', sub: 'Rekap Sertifikasi POP, POM & Sertifikasi Eksternal' },
 };
 const inScope = (r: TrainingRecord, scope: TrainingScope) =>
   scope === 'internal'
@@ -728,7 +726,7 @@ function personTrainingRows(r: TrainingRecord, scope?: TrainingScope): PersonTra
       let text = 'Belum';
       let cls = belum;
 
-      if (s.key === 'praPop') {
+      if ((s.key as string) === 'praPop') {
         if (directPra) {
           ok = true;
           text = 'Telah Mengikuti';
@@ -748,7 +746,7 @@ function personTrainingRows(r: TrainingRecord, scope?: TrainingScope): PersonTra
           text = 'Tidak Perlu';
           cls = 'bg-slate-100 text-slate-600 border-slate-200';
         }
-      } else if (s.key === 'pom') {
+      } else if ((s.key as string) === 'pom') {
         if (hasPom) {
           ok = true;
           text = p?.pom || 'PASS';
@@ -758,7 +756,7 @@ function personTrainingRows(r: TrainingRecord, scope?: TrainingScope): PersonTra
 
       rows.push({
         program: 'POP/POM', label: s.label, desc: s.desc,
-        date: s.key === 'praPop' ? p?.praPop ?? null : null, until: null,
+        date: (s.key as string) === 'praPop' ? p?.praPop ?? null : null, until: null,
         badge: { text, cls },
         ok,
       });
@@ -1436,29 +1434,18 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const stats = useMemo(() => {
     const total = programRecords.length;
     let latest = '';
-    if (program === 'pop') {
+    if (program === 'pra_pop') {
       programRecords.forEach(r => {
         const v = r.popData?.praPop;
         if (v && v > latest) latest = v;
       });
-      // Jumlah yang telah mengikuti tiap tahap + Sertifikasi K3 & Kompetensi
+      const passed = programRecords.filter(r => popAttendedPra(r.popData)).length;
       const coverage = [
-        ...POP_STAGES.map(s => ({
-          key: s.key as string,
-          label: s.label,
-          desc: s.desc,
-          done: programRecords.filter(r => s.attended(r.popData)).length,
-          warning: 0,
-          expired: 0,
-          pending: 0,
-          target: total,
-          exempt: 0,
-        })),
         {
-          key: 'cert_k3',
-          label: 'Sertifikasi K3 & Kompetensi',
-          desc: 'Ahli/Petugas K3 Kimia, Radiasi, Listrik, Las, ISO 17025',
-          done: programRecords.filter(r => getPersonCerts(r).length > 0).length,
+          key: 'pra_pop',
+          label: 'Training Pra POP',
+          desc: 'Pelatihan Internal Persiapan Pengawas Operasional Pertama',
+          done: passed,
           warning: 0,
           expired: 0,
           pending: 0,
@@ -1466,8 +1453,29 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           exempt: 0,
         },
       ];
+      return { total, latest, coverage, cardA: passed, cardB: total - passed };
+    }
+    if (program === 'pop') {
+      programRecords.forEach(r => {
+        const v = r.popData?.popBatch || r.popData?.popExpired;
+        if (v && v > latest) latest = v;
+      });
+      const popDone = programRecords.filter(r => popAttendedPop(r.popData)).length;
       const memenuhi = programRecords.filter(r => r.popData?.popKeterangan === 'PASS').length;
-      return { total, latest, coverage, cardA: coverage[1].done, cardB: memenuhi };
+      const coverage = [
+        {
+          key: 'pop',
+          label: 'Sertifikasi POP',
+          desc: 'Pengawas Operasional Pertama',
+          done: popDone,
+          warning: 0,
+          expired: 0,
+          pending: 0,
+          target: total,
+          exempt: 0,
+        },
+      ];
+      return { total, latest, coverage, cardA: popDone, cardB: memenuhi };
     }
     const allDateKeys = program === 'sap' ? SAP_TRAININGS.map(t => t.key) : K3_TRAININGS.map(t => t.key);
     programRecords.forEach(r => allDateKeys.forEach(k => {
@@ -1607,7 +1615,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       // Training External: satu kartu per tahap sertifikasi
       stageCards: POP_STAGES.map(s => ({
         key: s.key as string, label: s.label, sub: s.desc, count: stageCount(s), total: popPeople.length,
-        spark: s.key === 'praPop' ? spark(popDates) : null, latest: s.key === 'praPop' ? latestOf(popDates) : '',
+        spark: s.key === 'pop' ? spark(popDates) : null, latest: s.key === 'pop' ? latestOf(popDates) : '',
       })),
     };
   }, [records, isExternal]);
@@ -1627,9 +1635,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     const juruLas = certRows.filter(c => c.certType === 'juru_las_3').length;
 
     const rows = [
-      { label: 'Pra POP', category: 'Training', value: praPopCount, color: '#0284c7' },
-      { label: 'POP', category: 'Training', value: popCount, color: '#0d9488' },
-      { label: 'POM', category: 'Training', value: pomCount, color: '#10b981' },
+      { label: 'POP', category: 'Sertifikasi', value: popCount, color: '#0d9488' },
+      { label: 'POM', category: 'Sertifikasi', value: pomCount, color: '#10b981' },
       { label: 'K3 Kimia', category: 'Sertifikasi', value: k3Kimia, color: '#8b5cf6' },
       { label: 'K3 Listrik', category: 'Sertifikasi', value: k3Listrik, color: '#ec4899' },
       { label: 'ISO 17025', category: 'Sertifikasi', value: iso17025, color: '#f59e0b' },
@@ -1957,7 +1964,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     const popStages = r.inPop ? POP_STAGES.map(s => {
       let attended = false;
       let extra: string | null = null;
-      if (s.key === 'praPop') {
+      if ((s.key as string) === 'praPop') {
         if (directPra) {
           attended = true;
           extra = p?.praPop ? formatTrainingDate(p.praPop) : 'Telah Mengikuti';
@@ -1976,7 +1983,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           attended = true;
           extra = 'Tidak Perlu (Sudah POM)';
         }
-      } else if (s.key === 'pom') {
+      } else if ((s.key as string) === 'pom') {
         if (hasPom) {
           attended = true;
           extra = p?.pom || (p?.pomKeterangan === 'PASS' ? 'PASS' : null);
@@ -2598,7 +2605,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   return (
     <div className="min-h-screen pb-16 transition-colors duration-200" style={{ backgroundColor: DASH.bg }}>
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-3 sm:space-y-4">
+      <div className="w-full max-w-full px-3 sm:px-6 lg:px-8 py-3 sm:py-5 space-y-3 sm:space-y-4">
         {/* ===== Top bar: garis aksen Teal atas & badge Manpower seperti foto referensi ===== */}
         <div className="rounded-[26px] bg-white dark:bg-slate-900 px-3 sm:px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-[0_1px_3px_rgba(35,161,175,0.08)] border-t-[5px]" style={{ borderTopColor: DASH.brand }}>
           <div className="flex items-center gap-3 min-w-0">
@@ -2688,7 +2695,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <div className="flex items-center gap-2 shrink-0">
                 <SlidersHorizontal className="w-4 h-4" style={{ color: DASH.brand }} />
                 <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                  Jenis Training:
+                  Jenis Sertifikasi:
                 </span>
               </div>
               <div className="relative flex-1 max-w-md">
@@ -2716,7 +2723,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <option value="proteksi_radiasi">Petugas Proteksi Radiasi ({radiasiCount} Peserta)</option>
                   <option value="juru_las_3">Juru Las Kelas III ({juruLasCount} Peserta)</option>
                   <option value="dll">Dll (Sertifikasi Lainnya)</option>
-                  <option value="__ADD_TRAINING__">+ Tambahkan Training...</option>
+                  <option value="__ADD_TRAINING__">+ Tambahkan Sertifikasi...</option>
                 </select>
                 <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -2731,56 +2738,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   style={{ backgroundColor: DASH.brand }}
                 >
                   <Plus className="w-4 h-4" />
-                  Tambahkan Training
+                  Tambahkan Sertifikasi
                 </button>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* ===== Sheet Shortcut Pills ===== */}
-        {isExternal && (
-          <div className="rounded-[24px] bg-white dark:bg-slate-900 p-2.5 shadow-xs border border-slate-200/80 dark:border-slate-800">
-            <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
-              {[
-                { id: 'pop', label: 'Training Pra POP & POP', short: 'Pra POP & POP', icon: <Award className="w-4 h-4" />, count: popTotalCount },
-                { id: 'pom', label: 'Training POM', short: 'POM', icon: <Award className="w-4 h-4" />, count: pomPassedCount },
-                { id: 'k3_kimia', label: 'K3 Kimia', short: 'K3 Kimia', icon: <FlaskConical className="w-4 h-4" />, count: k3KimiaCount },
-                { id: 'k3_listrik', label: 'K3 Listrik', short: 'K3 Listrik', icon: <Zap className="w-4 h-4" />, count: k3ListrikCount },
-                { id: 'iso_17025', label: 'ISO 17025', short: 'ISO 17025', icon: <FileCheck className="w-4 h-4" />, count: iso17025Count },
-                { id: 'proteksi_radiasi', label: 'Proteksi Radiasi', short: 'Radiasi', icon: <Radio className="w-4 h-4" />, count: radiasiCount },
-                { id: 'juru_las_3', label: 'Juru Las', short: 'Las III', icon: <Flame className="w-4 h-4" />, count: juruLasCount },
-                { id: 'all', label: 'Semua Sertifikasi', short: 'Semua', icon: <ShieldCheck className="w-4 h-4" />, count: totalExternalCerts },
-              ].map(sheet => {
-                const active = externalSheet === sheet.id;
-                return (
-                  <button
-                    key={sheet.id}
-                    type="button"
-                    onClick={() => {
-                      setExternalSheet(sheet.id as any);
-                      setSelectedNik(null);
-                      setSearchQuery('');
-                      setStatusFilter('ALL');
-                    }}
-                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
-                      active
-                        ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25 scale-[1.01]'
-                        : 'text-slate-700 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700'
-                    }`}
-                  >
-                    {sheet.icon}
-                    <span>{sheet.label}</span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-black tabular-nums ${
-                        active ? 'bg-white/25 text-white' : 'bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200'
-                      }`}
-                    >
-                      {sheet.count}
-                    </span>
-                  </button>
-                );
-              })}
             </div>
           </div>
         )}
@@ -4034,7 +3994,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </div>
 
                 <div className="hidden md:block rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-                  <div className="overflow-x-auto max-h-[70vh]">
+                  <div className="overflow-x-auto w-full">
                     <table className="w-full text-left border-collapse">
                       <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800">
                         <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-teal-50/70 border-b-2 border-teal-200">
@@ -4375,7 +4335,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                       <tr key={r.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                         <td className="px-3 py-2 text-center text-[11px] font-mono font-bold text-slate-600">{idx + 1}</td>
                         <td className="px-3 py-2 text-[11px] font-mono font-bold text-slate-800 whitespace-nowrap">{r.nik}</td>
-                        <td className="px-3 py-2 text-xs font-black text-slate-950 min-w-[170px]">{r.nama}</td>
+                        <td className="px-3 py-2 text-xs font-black text-slate-950 whitespace-nowrap min-w-[200px]">{r.nama}</td>
                         {program === 'pra_pop' ? (
                           <>
                             <td className="px-3 py-2 text-[11px] font-semibold text-slate-700 whitespace-nowrap">{r.bagian || '-'}</td>
