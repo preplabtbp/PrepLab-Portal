@@ -84,6 +84,7 @@ import { trainingCertificationsRouter } from "./server/routes/trainingCertificat
 import { userPreferencesRouter } from "./server/routes/userPreferences.js";
 import { galleryRouter } from "./server/routes/gallery.js";
 import { xrfRouter, ensureXrfTables } from "./server/routes/xrfCalibration.js";
+import { signatureRouter } from "./server/routes/signature.js";
 import { syncRosterData, initRosterCron } from "./src/syncRoster.js";
 
 async function initDbSchema() {
@@ -1650,6 +1651,7 @@ const app = express();
   app.use("/api/xrf", xrfRouter);
   app.use("/api/user", userPreferencesRouter);
   app.use(galleryRouter);
+  app.use("/api/signature", signatureRouter);
 
   // --- PRESENCE ROUTES ---
   app.get('/api/presence/online', async (req, res) => {

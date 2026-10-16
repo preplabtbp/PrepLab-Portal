@@ -361,7 +361,7 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
                </Button>
                <SignatureCanvas
                   ref={sigPadRef}
-                  penColor="#1e293b"
+                  penColor="#000000"
                   canvasProps={{ className: 'w-full h-40 block touch-none cursor-crosshair' }}
                 />
             </div>

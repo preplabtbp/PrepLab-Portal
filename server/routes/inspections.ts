@@ -2692,7 +2692,7 @@ router.get("/api/inspections/p2h-lab", async (req, res) => {
         shift: r.shift || dataObj.shift || 'SHIFT SIANG',
         inspectorName: r.inspectorName || dataObj.inspectorName || '',
         inspectorNik: dataObj.inspectorNik || '',
-        inspectorSignatureUrl: r.signature || dataObj.signatureUrl || null,
+        inspectorSignatureUrl: r.signature || dataObj.inspectorSignatureUrl || dataObj.signatureUrl || null,
         inspectorSignedAt: dataObj.inspectorSignedAt || r.date?.toISOString(),
 
         supervisorName: dataObj.supervisorName || 'Laboratorium Supervisor',
@@ -2742,14 +2742,20 @@ router.post("/api/inspections/p2h-lab", async (req, res) => {
     const reportId = reportData.id || `P2H-LAB-${Date.now()}`;
     const dateObj = reportData.date ? new Date(reportData.date) : new Date();
 
-    if (reportData.signatureUrl) {
-      reportData.signatureUrl = await compressSignatureBase64(reportData.signatureUrl, 320, 25000);
+    const rawSig = reportData.signatureUrl || reportData.inspectorSignatureUrl || null;
+    let compressedSig: string | null = null;
+    if (rawSig) {
+      compressedSig = await compressSignatureBase64(rawSig, 320, 25000);
+      reportData.signatureUrl = compressedSig;
+      reportData.inspectorSignatureUrl = compressedSig;
     }
 
     const finalReport = {
       ...reportData,
       id: reportId,
       isDemo,
+      signatureUrl: compressedSig || rawSig || null,
+      inspectorSignatureUrl: compressedSig || rawSig || null,
       status: reportData.status || 'PENDING_SPV',
       createdAt: reportData.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -2764,7 +2770,7 @@ router.post("/api/inspections/p2h-lab", async (req, res) => {
       inspectorName: reportData.inspectorName,
       shift: reportData.shift || 'SHIFT SIANG',
       notes: isDemo ? `[MODE SIMULASI/DEMO] ${reportData.notes || ''}`.trim() : (reportData.notes || ''),
-      signature: finalReport.signatureUrl || null,
+      signature: compressedSig || rawSig || null,
       dataF: JSON.stringify(finalReport),
       pt: 'TBP'
     }).returning();
@@ -2855,12 +2861,18 @@ router.post("/api/inspections/p2h-lab/:id/sign", async (req, res) => {
       } else {
         reportObj.status = 'APPROVED';
       }
+      if (req.body.leaveApproval) {
+        reportObj.sptLeaveApproval = req.body.leaveApproval;
+      }
     } else if (role === 'manager') {
       reportObj.managerSignatureUrl = compressedSig;
       reportObj.managerSignedAt = nowIso;
       if (signerName) reportObj.managerName = signerName;
       if (notes) reportObj.managerNotes = notes;
       reportObj.status = 'APPROVED';
+      if (req.body.leaveApproval) {
+        reportObj.managerLeaveApproval = req.body.leaveApproval;
+      }
     }
 
     reportObj.updatedAt = nowIso;

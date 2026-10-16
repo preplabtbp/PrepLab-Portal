@@ -12,7 +12,7 @@ import { FoodReportModal } from './food-report-modal';
 import { SimplifiedInspectionModal } from './SimplifiedInspectionModal';
 import { SimplifiedP5mModal } from './SimplifiedP5mModal';
 import QuotesPoolModal, { CommunityQuoteItem } from './QuotesPoolModal';
-import { DevRoleplaySwitcher, getSimulatedProfile, SimulatedProfile } from './DevRoleplaySwitcher';
+import { getSimulatedProfile, SimulatedProfile } from './DevRoleplaySwitcher';
 import { LeadershipDashboardModal } from './LeadershipDashboardModal';
 import { getDailySkenaQuote, SkenaQuote } from '../utils/skena-quotes';
 import { isPicTemuanRole, getOpenFindingsForSupervisor } from '../utils/inspection-pic-matcher';

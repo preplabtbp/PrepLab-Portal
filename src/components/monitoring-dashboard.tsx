@@ -2570,7 +2570,7 @@ export function MonitoringDashboard({
                 <div className="border-2 border-dashed border-amber-300 rounded-xl bg-white overflow-hidden shadow-inner">
                   <SignatureCanvas
                     ref={manualSigPadRef}
-                    penColor="#1e293b"
+                    penColor="#000000"
                     canvasProps={{ className: 'w-full h-36 block touch-none cursor-crosshair' }}
                   />
                 </div>
@@ -2686,7 +2686,7 @@ export function MonitoringDashboard({
                 <div className="border-2 border-dashed border-indigo-300 rounded-xl bg-white overflow-hidden shadow-inner">
                   <SignatureCanvas
                     ref={dedicatedSigPadRef}
-                    penColor="#1e293b"
+                    penColor="#000000"
                     canvasProps={{ className: 'w-full h-40 block touch-none cursor-crosshair' }}
                   />
                 </div>

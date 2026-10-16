@@ -32,7 +32,11 @@ import {
   X,
   UserCheck,
   RefreshCw,
-  FileText
+  FileText,
+  KeyRound,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Button, Card, Input } from '../ui';
 import {
@@ -131,7 +135,17 @@ export function P2HLaboratoryAccordionForm({
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.toolStatuses) return parsed.toolStatuses;
+        if (parsed.toolStatuses) {
+          // Sanitize any legacy '-' values into 'N/A'
+          Object.keys(parsed.toolStatuses).forEach(k => {
+            const s = parsed.toolStatuses[k];
+            if (s.bodyDalam === '-') s.bodyDalam = 'N/A';
+            if (s.bodyLuar === '-') s.bodyLuar = 'N/A';
+            if (s.filter === '-') s.filter = 'N/A';
+            if (s.elektrikal === '-') s.elektrikal = 'N/A';
+          });
+          return parsed.toolStatuses;
+        }
       }
     } catch (e) {
       console.warn('Gagal membaca draft P2H Lab', e);
@@ -143,11 +157,11 @@ export function P2HLaboratoryAccordionForm({
       for (const tool of room.tools) {
         const isSpare = (tool.defaultNotes || '').toUpperCase().includes('SPARE') || tool.defaultCondition === 'Spare';
         initial[tool.id] = isSpare ? {
-          bodyDalam: '-',
-          bodyLuar: '-',
-          filter: '-',
+          bodyDalam: 'N/A',
+          bodyLuar: 'N/A',
+          filter: 'N/A',
           kondisi: 'Spare',
-          elektrikal: '-',
+          elektrikal: 'N/A',
           keterangan: 'SPARE'
         } : {
           bodyDalam: 'Bersih',
@@ -268,6 +282,62 @@ export function P2HLaboratoryAccordionForm({
   const [saveSignatureToProfile, setSaveSignatureToProfile] = useState<boolean>(true);
   const [activeMainTab, setActiveMainTab] = useState<'form' | 'approval'>('form');
   const sigCanvasRef = useRef<SignatureCanvas | null>(null);
+
+  // Encrypted Server Signature Integration
+  const [hasServerSignature, setHasServerSignature] = useState(false);
+  const [manualCanvasMode, setManualCanvasMode] = useState(false);
+  const [unlockPinModalOpen, setUnlockPinModalOpen] = useState(false);
+  const [pinUnlockInput, setPinUnlockInput] = useState('');
+  const [showUnlockPin, setShowUnlockPin] = useState(false);
+  const [unlockingPin, setUnlockingPin] = useState(false);
+
+  useEffect(() => {
+    const checkServerSig = async () => {
+      try {
+        const token = localStorage.getItem('p2h_token') || localStorage.getItem('token') || '';
+        const res = await fetch('/api/signature/status', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const data = await res.json();
+        if (data.success && data.hasSignature && data.hasPin) {
+          setHasServerSignature(true);
+        }
+      } catch (e) {}
+    };
+    checkServerSig();
+  }, []);
+
+  const handleUnlockServerSignature = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!pinUnlockInput || !/^\d{6}$/.test(pinUnlockInput)) {
+      return toast.error('Masukkan 6 digit PIN tanda tangan Anda');
+    }
+    setUnlockingPin(true);
+    try {
+      const token = localStorage.getItem('p2h_token') || localStorage.getItem('token') || '';
+      const res = await fetch('/api/signature/unlock', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ pin: pinUnlockInput })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'PIN tanda tangan salah');
+
+      setSavedSignatureUrl(data.signatureData);
+      setUseSavedSignature(true);
+      setManualCanvasMode(false);
+      setUnlockPinModalOpen(false);
+      setPinUnlockInput('');
+      toast.success('Tanda tangan profil dari Pengaturan berhasil diterapkan!');
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal membuka tanda tangan');
+    } finally {
+      setUnlockingPin(false);
+    }
+  };
 
   // References to scroll targets
   const roomRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -468,11 +538,11 @@ export function P2HLaboratoryAccordionForm({
         const isSpare = (tool.defaultNotes || '').toUpperCase().includes('SPARE') || tool.defaultCondition === 'Spare';
         if (isSpare) {
           next[tool.id] = {
-            bodyDalam: '-',
-            bodyLuar: '-',
-            filter: '-',
+            bodyDalam: 'N/A',
+            bodyLuar: 'N/A',
+            filter: 'N/A',
             kondisi: 'Spare',
-            elektrikal: '-',
+            elektrikal: 'N/A',
             keterangan: 'SPARE'
           };
         } else {
@@ -506,13 +576,13 @@ export function P2HLaboratoryAccordionForm({
       };
       const updated = { ...current, [field]: value };
 
-      // Jika kondisi diubah jadi 'Spare' atau keterangan mengandung 'SPARE', otomatis set semua kategori '-'
-      if ((field === 'kondisi' && (value === 'Spare' || value === '-')) || 
+      // Jika kondisi diubah jadi 'Spare' atau keterangan mengandung 'SPARE', otomatis set semua kategori 'N/A'
+      if ((field === 'kondisi' && (value === 'Spare')) || 
           (field === 'keterangan' && typeof value === 'string' && value.toUpperCase().includes('SPARE'))) {
-        updated.bodyDalam = '-';
-        updated.bodyLuar = '-';
-        updated.filter = '-';
-        updated.elektrikal = '-';
+        updated.bodyDalam = 'N/A';
+        updated.bodyLuar = 'N/A';
+        updated.filter = 'N/A';
+        updated.elektrikal = 'N/A';
         if (!updated.keterangan || updated.keterangan === '') {
           updated.keterangan = 'SPARE';
         }
@@ -536,22 +606,20 @@ export function P2HLaboratoryAccordionForm({
     let finalSignatureUrl = savedSignatureUrl;
     const hasCanvasDrawn = sigCanvasRef.current && !sigCanvasRef.current.isEmpty();
 
-    if (!useSavedSignature || !savedSignatureUrl) {
-      if (!hasCanvasDrawn && !savedSignatureUrl) {
+    if (!finalSignatureUrl) {
+      if (manualCanvasMode && hasCanvasDrawn && sigCanvasRef.current) {
+        finalSignatureUrl = getSafeSignatureDataUrl(sigCanvasRef.current);
+      } else if (hasServerSignature) {
+        const signEl = roomRefs.current['pengesahan'];
+        if (signEl) signEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setUnlockPinModalOpen(true);
+        return toast.info('Silakan masukkan 6 digit PIN Tanda Tangan Anda untuk mengesahkan formulir');
+      } else if (hasCanvasDrawn && sigCanvasRef.current) {
+        finalSignatureUrl = getSafeSignatureDataUrl(sigCanvasRef.current);
+      } else {
         const signEl = roomRefs.current['pengesahan'];
         if (signEl) signEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return toast.error('Silakan bubuhkan tanda tangan Foreman / Analis pada kolom TTD di bawah!');
-      }
-      if (hasCanvasDrawn && sigCanvasRef.current) {
-        finalSignatureUrl = getSafeSignatureDataUrl(sigCanvasRef.current);
-        if (saveSignatureToProfile && finalSignatureUrl) {
-          try {
-            localStorage.setItem(SAVED_SIG_KEY, finalSignatureUrl);
-            setSavedSignatureUrl(finalSignatureUrl);
-          } catch (e) {
-            console.warn('Gagal menyimpan TTD ke local storage', e);
-          }
-        }
       }
     }
 
@@ -614,6 +682,7 @@ export function P2HLaboratoryAccordionForm({
         inspectorName,
         inspectorNik,
         inspectorSignatureUrl: finalSignatureUrl,
+        signatureUrl: finalSignatureUrl,
         inspectorSignedAt: new Date().toISOString(),
         supervisorName,
         supervisorNik: selectedSpvNik,
@@ -832,8 +901,8 @@ export function P2HLaboratoryAccordionForm({
         />
       ) : (
         <>
-          {/* RUANGAN SELECTOR CARD (STICKY DROPDOWN FOR MOBILE & DESKTOP) */}
-          <div className="sticky top-0 z-30 p-2.5 sm:p-3 bg-[var(--card-bg)]/95 backdrop-blur-md border border-[var(--border-main)] rounded-2xl shadow-sm transition-all">
+          {/* RUANGAN SELECTOR CARD (STICKY DROPDOWN ONLY) */}
+          <div className="sticky top-14 sm:top-16 z-30 p-2 sm:p-2.5 bg-[var(--card-bg)]/95 backdrop-blur-md border border-[var(--border-main)] rounded-2xl shadow-sm transition-all">
             <div className="flex items-center gap-2">
               <div className="relative flex-1 min-w-0">
                 <select
@@ -1058,14 +1127,13 @@ export function P2HLaboratoryAccordionForm({
                                   className={`w-full py-1.5 px-2 rounded-xl text-xs font-bold border transition-colors ${
                                     st.bodyDalam === 'Bersih'
                                       ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
-                                      : st.bodyDalam === '-'
+                                      : st.bodyDalam === 'N/A'
                                       ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
                                       : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300'
                                   }`}
                                 >
                                   <option value="Bersih">Bersih</option>
                                   <option value="Kotor">Kotor</option>
-                                  <option value="-">-</option>
                                   <option value="N/A">N/A</option>
                                 </select>
                               </div>
@@ -1081,14 +1149,13 @@ export function P2HLaboratoryAccordionForm({
                                   className={`w-full py-1.5 px-2 rounded-xl text-xs font-bold border transition-colors ${
                                     st.bodyLuar === 'Bersih'
                                       ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
-                                      : st.bodyLuar === '-'
+                                      : st.bodyLuar === 'N/A'
                                       ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
                                       : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300'
                                   }`}
                                 >
                                   <option value="Bersih">Bersih</option>
                                   <option value="Kotor">Kotor</option>
-                                  <option value="-">-</option>
                                   <option value="N/A">N/A</option>
                                 </select>
                               </div>
@@ -1099,11 +1166,11 @@ export function P2HLaboratoryAccordionForm({
                                   Filter
                                 </label>
                                 <select
-                                  disabled={!tool.hasFilter && st.filter !== '-'}
+                                  disabled={!tool.hasFilter && st.filter !== 'N/A'}
                                   value={st.filter}
                                   onChange={(e) => updateToolStatus(tool.id, 'filter', e.target.value)}
                                   className={`w-full py-1.5 px-2 rounded-xl text-xs font-bold border transition-colors ${
-                                    st.filter === '-' || !tool.hasFilter
+                                    st.filter === 'N/A' || !tool.hasFilter
                                       ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400'
                                       : st.filter === 'Bersih'
                                       ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
@@ -1112,7 +1179,6 @@ export function P2HLaboratoryAccordionForm({
                                 >
                                   <option value="Bersih">Bersih</option>
                                   <option value="Kotor">Kotor</option>
-                                  <option value="-">-</option>
                                   <option value="N/A">N/A</option>
                                 </select>
                               </div>
@@ -1130,7 +1196,7 @@ export function P2HLaboratoryAccordionForm({
                                       ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
                                       : st.kondisi === 'Breakdown'
                                       ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300'
-                                      : st.kondisi === 'Spare' || st.kondisi === '-'
+                                      : st.kondisi === 'Spare'
                                       ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300'
                                       : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300'
                                   }`}
@@ -1139,7 +1205,6 @@ export function P2HLaboratoryAccordionForm({
                                   <option value="Standby">Standby</option>
                                   <option value="Breakdown">Breakdown</option>
                                   <option value="Spare">Spare</option>
-                                  <option value="-">-</option>
                                   <option value="Scrap">Scrap</option>
                                 </select>
                               </div>
@@ -1162,7 +1227,6 @@ export function P2HLaboratoryAccordionForm({
                                 >
                                   <option value="Normal">Normal</option>
                                   <option value="Abnormal">Abnormal</option>
-                                  <option value="-">-</option>
                                   <option value="N/A">N/A</option>
                                 </select>
                               </div>
@@ -1603,26 +1667,31 @@ export function P2HLaboratoryAccordionForm({
                 {savedSignatureUrl && (
                   <button
                     type="button"
-                    onClick={() => setUseSavedSignature(!useSavedSignature)}
-                    className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline"
+                    onClick={() => {
+                      setSavedSignatureUrl(null);
+                      setManualCanvasMode(false);
+                      setPinUnlockInput('');
+                    }}
+                    className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
                   >
-                    {useSavedSignature ? 'Ganti / Buat Baru' : 'Gunakan TTD Tersimpan'}
+                    Kunci Kembali TTD
                   </button>
                 )}
               </div>
 
-              {savedSignatureUrl && useSavedSignature ? (
-                <div className="p-3.5 rounded-xl border border-teal-500/40 bg-teal-50/50 dark:bg-teal-950/20 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-32 h-16 bg-white dark:bg-slate-900 rounded-lg border border-teal-300 dark:border-teal-800 flex items-center justify-center p-1 overflow-hidden shadow-xs">
-                      <img src={savedSignatureUrl} alt="TTD Profil" className="max-h-full max-w-full object-contain" />
+              {savedSignatureUrl ? (
+                /* TTD Sudah Terbuka / Diterapkan */
+                <div className="p-3.5 rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-wrap items-center justify-between gap-4 shadow-xs">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-36 h-20 bg-white dark:bg-slate-900 rounded-xl border border-emerald-300 dark:border-emerald-800 flex items-center justify-center p-1.5 overflow-hidden shadow-inner">
+                      <img src={savedSignatureUrl} alt="TTD Resmi Akun" className="max-h-full max-w-full object-contain" />
                     </div>
                     <div>
-                      <div className="text-xs font-bold text-teal-800 dark:text-teal-200 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" /> TTD Profil Aktif
+                      <div className="text-xs font-bold text-emerald-800 dark:text-emerald-200 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> TTD Resmi Terverifikasi
                       </div>
-                      <div className="text-[11px] text-teal-700/80 dark:text-teal-300/80 mt-0.5">
-                        Tersimpan di perangkat untuk P2H cepat harian.
+                      <div className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">
+                        Tanda tangan resmi dari Pengaturan Akun siap disematkan.
                       </div>
                     </div>
                   </div>
@@ -1630,25 +1699,110 @@ export function P2HLaboratoryAccordionForm({
                   <button
                     type="button"
                     onClick={() => {
-                      try {
-                        localStorage.removeItem(SAVED_SIG_KEY);
-                        setSavedSignatureUrl(null);
-                        setUseSavedSignature(false);
-                        toast.info('Tanda tangan tersimpan telah dihapus');
-                      } catch {}
+                      setSavedSignatureUrl(null);
+                      setManualCanvasMode(true);
                     }}
-                    className="text-xs text-rose-500 hover:text-rose-600 p-2 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                    title="Hapus TTD dari Profil"
+                    className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-semibold px-2.5 py-1.5 rounded-lg border border-[var(--border-main)] hover:bg-[var(--card-bg)] transition-colors"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    Ganti Gambar Manual
                   </button>
                 </div>
+              ) : hasServerSignature && !manualCanvasMode ? (
+                /* TTD Terdaftar di Setting Tapi Belum Masukkan PIN -> Tampilkan Box PIN Langsung */
+                <div className="p-4 rounded-2xl border-2 border-teal-500/40 bg-teal-50/40 dark:bg-teal-950/20 space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-900/60 flex items-center justify-center text-teal-700 dark:text-teal-300">
+                        <KeyRound className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-bold text-teal-950 dark:text-teal-200">
+                        Tanda Tangan Terdaftar (Pengaturan Akun)
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                      Terenkripsi AES-256
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                    Tanda tangan Anda telah terdaftar di Pengaturan. Masukkan <strong>6 Digit PIN</strong> Anda untuk membubuhkan tanda tangan resmi ke laporan P2H ini:
+                  </p>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type={showUnlockPin ? 'text' : 'password'}
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={pinUnlockInput}
+                        onChange={(e) => setPinUnlockInput(e.target.value.replace(/\D/g, ''))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleUnlockServerSignature();
+                          }
+                        }}
+                        placeholder="Ketik 6 Digit PIN Tanda Tangan"
+                        className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3.5 py-2.5 text-center text-sm font-mono tracking-widest font-black text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-teal-500/40 shadow-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowUnlockPin(!showUnlockPin)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showUnlockPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    <Button
+                      type="button"
+                      disabled={unlockingPin || pinUnlockInput.length !== 6}
+                      onClick={() => handleUnlockServerSignature()}
+                      className="px-4 py-2.5 text-xs font-bold shadow-xs shrink-0 cursor-pointer"
+                      style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+                    >
+                      {unlockingPin ? 'Membuka...' : 'Terapkan TTD'}
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 text-[11px]">
+                    <span className="text-slate-400">
+                      🔒 Terproteksi PIN pribadi
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setManualCanvasMode(true)}
+                      className="text-teal-600 dark:text-teal-400 font-semibold hover:underline cursor-pointer"
+                    >
+                      Atau gambar manual di canvas
+                    </button>
+                  </div>
+                </div>
               ) : (
+                /* Fallback Manual Canvas Mode */
                 <div className="space-y-2">
+                  {hasServerSignature && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setManualCanvasMode(false)}
+                        className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
+                      >
+                        <KeyRound className="w-3 h-3" /> Kembali ke TTD Terdaftar (PIN)
+                      </button>
+                    </div>
+                  )}
+
+                  {!hasServerSignature && (
+                    <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+                      Anda belum mendaftarkan tanda tangan di menu Pengaturan. Silakan gambar di canvas bawah ini, atau atur di menu Pengaturan agar tidak perlu gambar ulang setiap hari.
+                    </div>
+                  )}
+
                   <div className="border border-[var(--border-main)] rounded-xl overflow-hidden bg-white dark:bg-slate-900 relative">
                     <SignatureCanvas
                       ref={sigCanvasRef}
-                      penColor="#0f766e"
+                      penColor="#000000"
                       canvasProps={{
                         className: 'w-full h-36 cursor-crosshair'
                       }}
@@ -1661,18 +1815,6 @@ export function P2HLaboratoryAccordionForm({
                       <RotateCcw className="w-3 h-3" /> Bersihkan
                     </button>
                   </div>
-
-                  <label className="flex items-center gap-2 text-xs text-[var(--text-main)] cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={saveSignatureToProfile}
-                      onChange={(e) => setSaveSignatureToProfile(e.target.checked)}
-                      className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300 dark:border-slate-700"
-                    />
-                    <span className="font-medium">
-                      Simpan tanda tangan ini ke profil saya (tidak perlu gambar ulang setiap hari)
-                    </span>
-                  </label>
                 </div>
               )}
             </div>
@@ -1922,6 +2064,73 @@ export function P2HLaboratoryAccordionForm({
           </div>
         </div>
       </div>
+
+      {/* PIN Unlock Modal for Encrypted Signature */}
+      {unlockPinModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-xl overflow-hidden p-5 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--border-main)]">
+              <div className="flex items-center gap-2 text-teal-600 dark:text-teal-400 font-bold text-sm">
+                <KeyRound className="w-4 h-4" /> Buka Tanda Tangan Terenkripsi
+              </div>
+              <button
+                type="button"
+                onClick={() => setUnlockPinModalOpen(false)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUnlockServerSignature} className="space-y-4">
+              <p className="text-xs text-[var(--text-muted)] text-center">
+                Masukkan 6 digit PIN tanda tangan Anda untuk memuat tanda tangan terenkripsi AES-256 dari profil akun:
+              </p>
+
+              <div>
+                <input
+                  type={showUnlockPin ? 'text' : 'password'}
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoFocus
+                  value={pinUnlockInput}
+                  onChange={(e) => setPinUnlockInput(e.target.value.replace(/\D/g, ''))}
+                  placeholder="• • • • • •"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl py-2.5 text-center text-xl font-mono tracking-widest font-black text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+                />
+                <div className="flex justify-between items-center mt-2 px-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowUnlockPin(!showUnlockPin)}
+                    className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-main)] font-semibold flex items-center gap-1"
+                  >
+                    {showUnlockPin ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                    {showUnlockPin ? 'Sembunyikan PIN' : 'Tampilkan PIN'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setUnlockPinModalOpen(false)}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--input-bg)] border border-[var(--border-main)]"
+                >
+                  Batal
+                </button>
+                <Button
+                  type="submit"
+                  disabled={unlockingPin || pinUnlockInput.length !== 6}
+                  className="flex-1 text-xs font-bold py-2 shadow-xs cursor-pointer"
+                  style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+                >
+                  {unlockingPin ? 'Membuka...' : 'Buka TTD'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       </>
       )}
     </div>

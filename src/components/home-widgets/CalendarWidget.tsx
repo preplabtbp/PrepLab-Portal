@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, 
-  RotateCcw, Edit3, Check, Trash2, BookmarkCheck, Sparkles 
+  RotateCcw, Edit3, Check, Trash2, BookmarkCheck, Sparkles, ArrowRight 
 } from 'lucide-react';
 import { WidgetSize } from './types';
 
@@ -11,6 +12,7 @@ interface CalendarWidgetProps {
 }
 
 export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
+  const navigate = useNavigate();
   const today = new Date();
   const [currentDate, setCurrentDate] = useState<Date>(today);
   const [selectedDate, setSelectedDate] = useState<Date>(today);
@@ -226,80 +228,130 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
 
         {/* Side Memo Panel (Always visible in 2x, or bottom preview in 1x) */}
         {size === '2x' ? (
-          <div className="sm:col-span-5 h-full flex flex-col justify-between p-2.5 rounded-xl bg-slate-100/90 border border-slate-300 text-xs">
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-extrabold text-[11px] text-black dark:text-black flex items-center gap-1">
-                  <BookmarkCheck className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>{selectedDayFormatted}</span>
-                </span>
-                {notes[selectedKey] && !isEditingNote && (
-                  <button
-                    type="button"
-                    onClick={handleDeleteNote}
-                    className="text-rose-600 hover:text-rose-700 p-0.5 rounded cursor-pointer"
-                    title="Hapus Memo"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-
-              {isEditingNote ? (
-                <div className="space-y-1.5">
-                  <textarea
-                    value={memoInput}
-                    onChange={(e) => setMemoInput(e.target.value)}
-                    placeholder="Tulis agenda / catatan tanggal ini..."
-                    rows={2}
-                    className="w-full text-xs p-2 rounded-lg bg-white border border-slate-300 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 resize-none text-black placeholder:text-slate-500 font-medium"
-                    autoFocus
-                  />
-                  <div className="flex items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingNote(false)}
-                      className="px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 hover:bg-slate-200 cursor-pointer"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveNote}
-                      className="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-600 text-white flex items-center gap-1 shadow-xs cursor-pointer"
-                    >
-                      <Check className="w-2.5 h-2.5" />
-                      <span>Simpan</span>
-                    </button>
-                  </div>
+          <div className="sm:col-span-5 h-full flex flex-col justify-between p-2.5 rounded-2xl bg-slate-100/90 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 text-xs">
+            <div className="space-y-2">
+              {/* Tombol Menu Agenda Personal */}
+              <button
+                type="button"
+                onClick={() => navigate('/agenda')}
+                className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-xs transition-all text-left cursor-pointer group active:scale-[0.98]"
+                title="Buka Menu Agenda Personal (Jadwal & kegiatan)"
+              >
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <CalendarIcon className="w-4 h-4" />
                 </div>
-              ) : (
-                <div
-                  onClick={() => setIsEditingNote(true)}
-                  className="min-h-[52px] p-2 rounded-lg bg-white border border-dashed border-slate-300 cursor-pointer hover:border-indigo-500 transition-all flex flex-col justify-center"
-                >
-                  {notes[selectedKey] ? (
-                    <p className="text-[11px] text-black font-semibold line-clamp-3 leading-relaxed">
-                      {notes[selectedKey]}
-                    </p>
-                  ) : (
-                    <div className="text-center text-[10px] text-slate-800 font-bold flex items-center justify-center gap-1">
-                      <Edit3 className="w-3 h-3 text-indigo-600" />
-                      <span>Klik untuk tambah catatan</span>
-                    </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-xs text-[var(--text-main)] group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center justify-between">
+                    <span>Agenda Personal</span>
+                    <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600 dark:text-indigo-400" />
+                  </h4>
+                  <p className="text-[10px] text-[var(--text-muted)] truncate">
+                    Jadwal &amp; kegiatan
+                  </p>
+                </div>
+              </button>
+
+              <div className="pt-0.5">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="font-extrabold text-[11px] text-black dark:text-black flex items-center gap-1">
+                    <BookmarkCheck className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{selectedDayFormatted}</span>
+                  </span>
+                  {notes[selectedKey] && !isEditingNote && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteNote}
+                      className="text-rose-600 hover:text-rose-700 p-0.5 rounded cursor-pointer"
+                      title="Hapus Memo"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   )}
                 </div>
-              )}
+
+                {isEditingNote ? (
+                  <div className="space-y-1.5">
+                    <textarea
+                      value={memoInput}
+                      onChange={(e) => setMemoInput(e.target.value)}
+                      placeholder="Tulis agenda / catatan tanggal ini..."
+                      rows={2}
+                      className="w-full text-xs p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 resize-none text-black dark:text-white placeholder:text-slate-500 font-medium"
+                      autoFocus
+                    />
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingNote(false)}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 hover:bg-slate-200 cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveNote}
+                        className="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-600 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                      >
+                        <Check className="w-2.5 h-2.5" />
+                        <span>Simpan</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => setIsEditingNote(true)}
+                    className="min-h-[46px] p-2 rounded-lg bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 cursor-pointer hover:border-indigo-500 transition-all flex flex-col justify-center"
+                  >
+                    {notes[selectedKey] ? (
+                      <p className="text-[11px] text-black dark:text-slate-200 font-semibold line-clamp-2 leading-relaxed">
+                        {notes[selectedKey]}
+                      </p>
+                    ) : (
+                      <div className="text-center text-[10px] text-slate-800 dark:text-slate-300 font-bold flex items-center justify-center gap-1">
+                        <Edit3 className="w-3 h-3 text-indigo-600" />
+                        <span>Klik untuk tambah catatan</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="mt-2 text-[9.5px] text-black font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-              <span>Titik biru menandakan tanggal beragenda</span>
+            <div className="mt-2 pt-1 border-t border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between text-[9.5px]">
+              <span className="text-black dark:text-slate-400 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                Titik biru = tanggal beragenda
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate('/agenda')}
+                className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+              >
+                Buka Agenda →
+              </button>
             </div>
           </div>
         ) : (
           /* In 1x Size: Compact Bottom Memo Strip */
-          <div className="pt-1.5 border-t border-slate-200">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+            <button
+              type="button"
+              onClick={() => navigate('/agenda')}
+              className="w-full flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 text-xs font-bold transition-all cursor-pointer group shadow-2xs"
+              title="Buka Menu Agenda Personal"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center shrink-0">
+                  <CalendarIcon className="w-3.5 h-3.5" />
+                </div>
+                <div className="text-left">
+                  <div className="text-[11px] font-bold text-[var(--text-main)] group-hover:text-indigo-600 transition-colors">Agenda Personal</div>
+                  <div className="text-[9px] text-[var(--text-muted)] leading-none">Jadwal &amp; kegiatan</div>
+                </div>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+
             {notes[selectedKey] ? (
               <div className="text-[10px] p-1.5 rounded-lg bg-indigo-50 text-black border border-indigo-200 truncate">
                 <span className="font-extrabold text-black">{selectedDate.getDate()} {monthNames[selectedDate.getMonth()].slice(0, 3)}:</span> <span className="font-semibold text-black">{notes[selectedKey]}</span>

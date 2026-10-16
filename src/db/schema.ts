@@ -63,6 +63,11 @@ export const employees = pgTable('employees', {
   catatan: text('catatan'),
   firstLoginComplete: boolean('first_login_complete').default(false),
   homeTutorialCompleted: boolean('home_tutorial_completed').default(false),
+  signatureEncrypted: text('signature_encrypted'),
+  signatureIv: text('signature_iv'),
+  signatureTag: text('signature_tag'),
+  signaturePinHash: text('signature_pin_hash'),
+  signatureUpdatedAt: timestamp('signature_updated_at'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

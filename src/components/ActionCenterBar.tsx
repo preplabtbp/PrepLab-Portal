@@ -24,12 +24,15 @@ import {
   Download,
   ExternalLink,
   ChevronLeft,
-  GraduationCap
+  GraduationCap,
+  MapPin,
+  Layers
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getOpenFindingsForSupervisor, isPicTemuanRole } from '../utils/inspection-pic-matcher';
 import { getKtaObligation } from './GroupReportScreen';
 import { formatProofImageUrl } from './SimplifiedInspectionModal';
+import { CompactFindingPreview } from './StructuredFindingList';
 import type { TrainingAlert } from '../utils/training-import';
 
 interface ActionCenterBarProps {
@@ -89,6 +92,197 @@ function parseLvTicket(ticket: any) {
     damageDetail: cleanDesc || desc,
     formattedDate
   };
+}
+
+export type FindingSectionKey = 'ALL' | 'lab' | 'prep' | 'gudang' | 'lainnya';
+
+export const FINDINGS_SECTIONS_CONFIG: Record<'lab' | 'prep' | 'gudang' | 'lainnya', {
+  id: 'lab' | 'prep' | 'gudang' | 'lainnya';
+  label: string;
+  shortLabel: string;
+  icon: string;
+  badgeBg: string;
+  border: string;
+  accentColor: string;
+}> = {
+  lab: {
+    id: 'lab',
+    label: 'Area Laboratorium',
+    shortLabel: 'Lab',
+    icon: '🧪',
+    badgeBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+    border: 'border-indigo-200 dark:border-indigo-800',
+    accentColor: 'text-indigo-600 dark:text-indigo-400'
+  },
+  prep: {
+    id: 'prep',
+    label: 'Area Preparasi',
+    shortLabel: 'Prep',
+    icon: '🚜',
+    badgeBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+    border: 'border-amber-200 dark:border-amber-800',
+    accentColor: 'text-amber-600 dark:text-amber-400'
+  },
+  gudang: {
+    id: 'gudang',
+    label: 'Gudang & Fasilitas Penunjang',
+    shortLabel: 'Gudang',
+    icon: '📦',
+    badgeBg: 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800',
+    border: 'border-teal-200 dark:border-teal-800',
+    accentColor: 'text-teal-600 dark:text-teal-400'
+  },
+  lainnya: {
+    id: 'lainnya',
+    label: 'Umum & Area Lainnya',
+    shortLabel: 'Umum',
+    icon: '🏢',
+    badgeBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+    border: 'border-slate-200 dark:border-slate-700',
+    accentColor: 'text-slate-600 dark:text-slate-400'
+  }
+};
+
+export function getFindingSection(finding: any): 'lab' | 'prep' | 'gudang' | 'lainnya' {
+  const combined = [
+    finding.location,
+    finding.category,
+    finding.area,
+    finding.workArea,
+    finding.section,
+    finding.unitName,
+    finding.description,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  // 1. Gudang & Fasilitas Penunjang (kontainer, pantry, transit, storage, workshop, bengkel, arsip, genset)
+  if (
+    combined.includes('gudang') ||
+    combined.includes('warehouse') ||
+    combined.includes('kontainer') ||
+    combined.includes('storage') ||
+    combined.includes('workshop') ||
+    combined.includes('bengkel') ||
+    combined.includes('pantry') ||
+    combined.includes('transit') ||
+    combined.includes('limbah') ||
+    combined.includes('tps') ||
+    combined.includes('arsip') ||
+    combined.includes('genset') ||
+    combined.includes('penunjang')
+  ) {
+    return 'gudang';
+  }
+
+  // 2. Preparasi
+  if (
+    combined.includes('prep') ||
+    combined.includes('preparasi') ||
+    combined.includes('crush') ||
+    combined.includes('pulveriz') ||
+    combined.includes('jaw') ||
+    combined.includes('splitter') ||
+    combined.includes('ring mill') ||
+    combined.includes('ringmill') ||
+    combined.includes('ayakan') ||
+    combined.includes('sieve') ||
+    combined.includes('dryer')
+  ) {
+    return 'prep';
+  }
+
+  // 3. Laboratorium
+  if (
+    combined.includes('lab') ||
+    combined.includes('laboratorium') ||
+    combined.includes('fusion') ||
+    combined.includes('timbang') ||
+    combined.includes('scrubber') ||
+    combined.includes('xrf') ||
+    combined.includes('wet') ||
+    combined.includes('instrumen') ||
+    combined.includes('balance') ||
+    combined.includes('neraca') ||
+    combined.includes('chiller') ||
+    combined.includes('spectro') ||
+    combined.includes('aas') ||
+    combined.includes('titrasi') ||
+    combined.includes('lemari asam')
+  ) {
+    return 'lab';
+  }
+
+  // 4. Perkakas / Grinder
+  if (combined.includes('grinder') || combined.includes('perkakas')) {
+    return 'prep';
+  }
+
+  return 'lainnya';
+}
+
+export interface ClusteredFindingGroup {
+  groupKey: string;
+  title: string;
+  icon: string;
+  category: string;
+  isMulti: boolean;
+  findings: any[];
+  locationsSummary: string;
+}
+
+export function clusterFindings(findings: any[]): ClusteredFindingGroup[] {
+  const groupMap = new Map<string, ClusteredFindingGroup>();
+
+  findings.forEach((finding, idx) => {
+    const desc = String(finding.description || '').toLowerCase();
+    const cat = String(finding.category || '').toLowerCase();
+
+    let key = '';
+    let title = '';
+    let icon = '🔍';
+    let groupCat = finding.category || 'Temuan K3';
+
+    if (cat.includes('p3k') || desc.includes('kotak p3k') || desc.includes('aquades') || desc.includes('alkohol 70')) {
+      key = 'cluster_p3k';
+      title = 'Kekurangan Stok Item Kotak P3K';
+      icon = '🩹';
+      groupCat = 'Kotak P3K';
+    } else if (cat.includes('perkakas') || desc.includes('grinder') || desc.includes('makita')) {
+      key = 'cluster_grinder';
+      title = 'Kerusakan Perkakas Grinder Cordless (Makita)';
+      icon = '⚙️';
+      groupCat = 'Perkakas Tangan';
+    } else if (cat.includes('apd') || desc.includes('ketidakpatuhan apd') || desc.includes('kepatuhan apd')) {
+      key = 'cluster_apd';
+      title = 'Ketidakpatuhan APD Personil';
+      icon = '🦺';
+      groupCat = 'Kepatuhan APD';
+    } else {
+      const ticketCode = finding.ticketId || finding.ticket_id || finding.id || `single_${idx}`;
+      key = `single_${ticketCode}`;
+      title = finding.category || 'Temuan Terencana';
+      icon = '🔍';
+    }
+
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        groupKey: key,
+        title,
+        icon,
+        category: groupCat,
+        isMulti: false,
+        findings: [finding],
+        locationsSummary: finding.location || '-'
+      });
+    } else {
+      const g = groupMap.get(key)!;
+      g.findings.push(finding);
+      g.isMulti = true;
+      const locs = Array.from(new Set(g.findings.map(f => f.location).filter(Boolean)));
+      g.locationsSummary = locs.join(', ') || '-';
+    }
+  });
+
+  return Array.from(groupMap.values());
 }
 
 export function ActionCenterBar({
@@ -169,6 +363,56 @@ export function ActionCenterBar({
 
   const [showLvDamageModal, setShowLvDamageModal] = useState<boolean>(false);
   const [openFindings, setOpenFindings] = useState<any[]>([]);
+  const [isFindingsExpanded, setIsFindingsExpanded] = useState<boolean>(false);
+  const [expandedFindingId, setExpandedFindingId] = useState<string | null>(null);
+  const [findingsSectionFilter, setFindingsSectionFilter] = useState<FindingSectionKey>('ALL');
+  const [expandedSectionKeys, setExpandedSectionKeys] = useState<Set<string>>(() => new Set(['prep', 'lab', 'gudang', 'lainnya']));
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
+
+  const toggleFindingSectionCollapse = (secKey: string) => {
+    setExpandedSectionKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(secKey)) next.delete(secKey);
+      else next.add(secKey);
+      return next;
+    });
+  };
+
+  const { clusteredBySection, sectionCounts, totalClusteredCount } = useMemo(() => {
+    const rawGroups: Record<'lab' | 'prep' | 'gudang' | 'lainnya', any[]> = {
+      lab: [],
+      prep: [],
+      gudang: [],
+      lainnya: []
+    };
+    const counts = { ALL: openFindings.length, lab: 0, prep: 0, gudang: 0, lainnya: 0 };
+
+    openFindings.forEach(f => {
+      const sec = getFindingSection(f);
+      rawGroups[sec].push(f);
+      counts[sec]++;
+    });
+
+    const clusteredGroups: Record<'lab' | 'prep' | 'gudang' | 'lainnya', ClusteredFindingGroup[]> = {
+      lab: clusterFindings(rawGroups.lab),
+      prep: clusterFindings(rawGroups.prep),
+      gudang: clusterFindings(rawGroups.gudang),
+      lainnya: clusterFindings(rawGroups.lainnya)
+    };
+
+    const totalGroups = 
+      clusteredGroups.lab.length + 
+      clusteredGroups.prep.length + 
+      clusteredGroups.gudang.length + 
+      clusteredGroups.lainnya.length;
+
+    return {
+      rawFindingsBySection: rawGroups,
+      clusteredBySection: clusteredGroups,
+      sectionCounts: counts,
+      totalClusteredCount: totalGroups
+    };
+  }, [openFindings]);
   const [lvDamageTickets, setLvDamageTickets] = useState<any[]>([]);
   const [maintenanceWorkOrders, setMaintenanceWorkOrders] = useState<any[]>(() => {
     try {
@@ -813,8 +1057,7 @@ export function ActionCenterBar({
       }
       window.dispatchEvent(new CustomEvent('open-simplified-p5m-modal'));
     } else if (destination === 'findings') {
-      if (onNav) onNav('sap-dashboard');
-      else navigate('/sap-dashboard');
+      setIsFindingsExpanded(prev => !prev);
     } else if (destination === 'p2h') {
       if (stateParams?.category) {
         try {
@@ -1112,6 +1355,31 @@ export function ActionCenterBar({
                             <span>Tinjau Laporan</span>
                           </button>
                         </div>
+                      ) : cat.id === 'findings' ? (
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-black border flex items-center gap-1 ${
+                            cat.isPending 
+                              ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30' 
+                              : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'
+                          }`}>
+                            <span>{cat.count}</span>
+                            <span className="hidden sm:inline font-bold text-[9.5px]">Pending</span>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => setIsFindingsExpanded(prev => !prev)}
+                            className={`py-1 px-2.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95 border ${
+                              isFindingsExpanded
+                                ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                                : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/25'
+                            }`}
+                            title="Buka / tutup rincian temuan K3"
+                          >
+                            <span>{isFindingsExpanded ? 'Tutup' : 'Lihat Rincian'}</span>
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isFindingsExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                        </div>
                       ) : cat.isPending ? (
                         <span className="px-2 py-0.5 rounded-full text-[10.5px] font-black bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-1">
                           <span>{cat.count}</span>
@@ -1182,6 +1450,392 @@ export function ActionCenterBar({
                       )}
                     </div>
                   </div>
+
+                  {/* Dropdown Rincian Temuan Terbuka K3 */}
+                  {cat.id === 'findings' && isFindingsExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="ml-2 sm:ml-6 mt-1 mb-2 p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-850 border border-rose-200/80 dark:border-rose-900/40 shadow-xs space-y-3"
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                          <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">
+                            Daftar Temuan K3 Terbuka ({openFindings.length})
+                          </h4>
+                          <span className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                            {totalClusteredCount} Isu Dikelompokkan
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onNav) onNav('sap-dashboard');
+                            else navigate('/sap-dashboard');
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 text-[11px] font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
+                          title="Buka seluruh temuan di SAP Dashboard"
+                        >
+                          <span>Buka Dashboard</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      {openFindings.length === 0 ? (
+                        <div className="py-4 text-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Seluruh temuan K3 di area Anda telah selesai ditindaklanjuti.</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* 1. Quick Section Filter Pills */}
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setFindingsSectionFilter('ALL')}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 border ${
+                                findingsSectionFilter === 'ALL'
+                                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-2xs'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-200 dark:hover:bg-slate-750'
+                              }`}
+                            >
+                              Semua Seksi ({openFindings.length})
+                            </button>
+
+                            {(['lab', 'prep', 'gudang', 'lainnya'] as const).map(secKey => {
+                              const secCfg = FINDINGS_SECTIONS_CONFIG[secKey];
+                              const count = sectionCounts[secKey] || 0;
+                              if (count === 0 && findingsSectionFilter !== secKey) return null;
+                              const isActive = findingsSectionFilter === secKey;
+
+                              return (
+                                <button
+                                  key={secKey}
+                                  type="button"
+                                  onClick={() => setFindingsSectionFilter(secKey)}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 border ${
+                                    isActive
+                                      ? `${secCfg.badgeBg} shadow-2xs ring-1 ring-offset-1`
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-200 dark:hover:bg-slate-750'
+                                  }`}
+                                >
+                                  <span>{secCfg.icon}</span>
+                                  <span>{secCfg.shortLabel}</span>
+                                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                                    isActive ? 'bg-white/70 dark:bg-slate-900/60' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                  }`}>
+                                    {count}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* 2. Grouped Sections / Findings List */}
+                          <div className="space-y-3">
+                            {(['lab', 'prep', 'gudang', 'lainnya'] as const).map(secKey => {
+                              if (findingsSectionFilter !== 'ALL' && findingsSectionFilter !== secKey) return null;
+                              const rawItems = clusteredBySection[secKey];
+                              const rawCount = sectionCounts[secKey] || 0;
+                              if (rawCount === 0) return null;
+
+                              const secCfg = FINDINGS_SECTIONS_CONFIG[secKey];
+                              const isSecExpanded = expandedSectionKeys.has(secKey);
+
+                              return (
+                                <div key={secKey} className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 overflow-hidden shadow-2xs">
+                                  {/* Section Header Accordion */}
+                                  <div
+                                    onClick={() => toggleFindingSectionCollapse(secKey)}
+                                    className="flex items-center justify-between p-2.5 px-3 bg-white dark:bg-slate-850 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer select-none transition-colors border-b border-slate-100 dark:border-slate-800"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="text-sm">{secCfg.icon}</span>
+                                      <span className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide truncate">
+                                        {secCfg.label}
+                                      </span>
+                                      <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${secCfg.badgeBg}`}>
+                                        {rawCount} Temuan • {rawItems.length} Kelompok
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0 text-slate-400">
+                                      <span className="text-[10px] font-medium hidden sm:inline">
+                                        {isSecExpanded ? 'Sembunyikan' : 'Tampilkan'}
+                                      </span>
+                                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isSecExpanded ? 'rotate-180' : ''}`} />
+                                    </div>
+                                  </div>
+
+                                  {/* Section Content */}
+                                  {isSecExpanded && (
+                                    <div className="p-2 sm:p-2.5 space-y-1.5 animate-in fade-in duration-150">
+                                      {rawItems.map((group, gIdx) => {
+                                        // A. CONSOLIDATED GROUP (Multi-tickets merged)
+                                        if (group.isMulti) {
+                                          const isGroupOpen = expandedGroupKey === group.groupKey;
+                                          return (
+                                            <div
+                                              key={group.groupKey}
+                                              className={`rounded-xl border transition-all overflow-hidden ${
+                                                isGroupOpen
+                                                  ? 'bg-white dark:bg-slate-800 border-rose-300 dark:border-rose-800 ring-1 ring-rose-400/20'
+                                                  : 'bg-white dark:bg-slate-800/90 hover:bg-slate-50 dark:hover:bg-slate-750 border-slate-200 dark:border-slate-700/80'
+                                              }`}
+                                            >
+                                              {/* Group Header */}
+                                              <div
+                                                onClick={() => setExpandedGroupKey(prev => prev === group.groupKey ? null : group.groupKey)}
+                                                className="flex items-center justify-between p-2.5 px-3 cursor-pointer select-none gap-2"
+                                              >
+                                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                  <span className="text-sm shrink-0">{group.icon}</span>
+                                                  <div className="min-w-0">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                                        {group.title}
+                                                      </span>
+                                                      <span className="bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/25 text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
+                                                        {group.findings.length} Tiket Digabung
+                                                      </span>
+                                                    </div>
+                                                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
+                                                      Lokasi: {group.locationsSummary}
+                                                    </p>
+                                                  </div>
+                                                </div>
+
+                                                <div className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-500 shrink-0">
+                                                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isGroupOpen ? 'rotate-180 text-rose-600' : ''}`} />
+                                                </div>
+                                              </div>
+
+                                              {/* Group Expanded Tickets Sub-list */}
+                                              {isGroupOpen && (
+                                                <div className="p-3 pt-2 border-t border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-850/60 space-y-2">
+                                                  <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                                                    <Layers className="w-3.5 h-3.5 text-rose-500" />
+                                                    <span>Rincian {group.findings.length} tiket dalam kelompok ini:</span>
+                                                  </div>
+
+                                                  <div className="space-y-1.5">
+                                                    {group.findings.map((f: any, fIdx: number) => {
+                                                      const tCode = f.ticketId || f.ticket_id || `#TIC-${fIdx + 1}`;
+                                                      const photo = f.photoUrl || f.photo || f.evidencePhoto || null;
+                                                      const isSubExpanded = expandedFindingId === `${group.groupKey}_${tCode}_${fIdx}`;
+
+                                                      return (
+                                                        <div
+                                                          key={f.id || tCode || fIdx}
+                                                          className="p-2 sm:p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1.5"
+                                                        >
+                                                          <div className="flex items-center justify-between gap-2">
+                                                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                                              <span className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">
+                                                                {tCode}
+                                                              </span>
+                                                              <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20">
+                                                                {f.status || 'OPEN'}
+                                                              </span>
+                                                              {f.location && (
+                                                                <span className="flex items-center gap-0.5 text-[10px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.5 rounded font-medium truncate max-w-[150px]">
+                                                                  <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                                                  <span className="truncate">{f.location}</span>
+                                                                </span>
+                                                              )}
+                                                            </div>
+
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                              {photo && (
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() => {
+                                                                    setLightboxData({
+                                                                      isOpen: true,
+                                                                      title: `Bukti Temuan ${tCode}`,
+                                                                      subtitle: `${f.category || 'Temuan K3'} • ${f.location || ''}`,
+                                                                      images: [{ url: photo, label: f.description || 'Foto Temuan' }],
+                                                                      currentIndex: 0
+                                                                    });
+                                                                  }}
+                                                                  className="text-[10.5px] font-bold text-amber-600 hover:text-amber-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                                >
+                                                                  <Camera className="w-3 h-3" />
+                                                                  <span>Foto</span>
+                                                                </button>
+                                                              )}
+                                                              <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                  if (onNav) onNav('sap-dashboard');
+                                                                  else navigate('/sap-dashboard');
+                                                                }}
+                                                                className="text-[10.5px] font-bold text-teal-600 hover:text-teal-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                              >
+                                                                <span>Tindak Lanjut</span>
+                                                                <ChevronRight className="w-3 h-3" />
+                                                              </button>
+                                                            </div>
+                                                          </div>
+
+                                                          <p className="text-xs text-slate-700 dark:text-slate-300 leading-snug">
+                                                            {String(f.description || '').replace(/^1[\.\)]\s*/, '').trim() || 'Tidak ada deskripsi rinci.'}
+                                                          </p>
+
+                                                          <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                                            <span>Pelapor: <strong className="text-slate-600 dark:text-slate-300">{f.inspectorName || f.requestorName || '-'}</strong></span>
+                                                            {f.date && <span>• {String(f.date).slice(0, 10)}</span>}
+                                                          </div>
+                                                        </div>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        }
+
+                                        // B. SINGLE FINDING CARD (Single non-clustered issue)
+                                        const singleFinding = group.findings[0];
+                                        const isHigh = (singleFinding.priority || '').toUpperCase() === 'HIGH' || 
+                                                       (singleFinding.risk || '').toLowerCase().includes('tinggi') || 
+                                                       (singleFinding.risk || '').toLowerCase().includes('fatality');
+                                        const photoSrc = singleFinding.photoUrl || singleFinding.photo || singleFinding.evidencePhoto || null;
+                                        const ticketCode = singleFinding.ticketId || singleFinding.ticket_id || `#TIC-${gIdx + 1}`;
+                                        const isProgress = (singleFinding.status || '').toUpperCase() === 'PROGRESS';
+                                        const itemKey = String(singleFinding.id || ticketCode || gIdx);
+                                        const isItemExpanded = expandedFindingId === itemKey;
+                                        const rawDesc = String(singleFinding.description || '').replace(/^1[\.\)]\s*/, '').replace(/[\r\n]+/g, ' ').trim();
+
+                                        return (
+                                          <div
+                                            key={itemKey}
+                                            className={`rounded-xl border transition-all shadow-2xs overflow-hidden ${
+                                              isItemExpanded 
+                                                ? 'bg-white dark:bg-slate-800 border-rose-300 dark:border-rose-800 ring-1 ring-rose-400/20' 
+                                                : 'bg-white dark:bg-slate-800/90 hover:bg-slate-50 dark:hover:bg-slate-750 border-slate-200 dark:border-slate-700/80'
+                                            }`}
+                                          >
+                                            {/* Single Accordion Header */}
+                                            <div
+                                              onClick={() => setExpandedFindingId(prev => prev === itemKey ? null : itemKey)}
+                                              className="flex items-center justify-between p-2 sm:p-2.5 px-3 cursor-pointer select-none gap-2"
+                                            >
+                                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <span className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100 shrink-0">
+                                                  {ticketCode}
+                                                </span>
+                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${
+                                                  isProgress 
+                                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25'
+                                                    : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/25'
+                                                }`}>
+                                                  {singleFinding.status || 'OPEN'}
+                                                </span>
+                                                {isHigh && (
+                                                  <span className="bg-rose-600 text-white text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded-full shrink-0">
+                                                    High
+                                                  </span>
+                                                )}
+                                                {singleFinding.category && (
+                                                  <span className="text-[9.5px] font-semibold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded border border-teal-200/60 dark:border-teal-800/60 shrink-0 hidden sm:inline-block truncate max-w-[140px]">
+                                                    {singleFinding.category}
+                                                  </span>
+                                                )}
+                                                <span className="text-xs text-slate-500 dark:text-slate-400 truncate min-w-0 hidden md:inline">
+                                                  {rawDesc || 'Tidak ada deskripsi'}
+                                                </span>
+                                              </div>
+
+                                              <div className="flex items-center gap-2 shrink-0">
+                                                {singleFinding.location && (
+                                                  <span className="flex items-center gap-1 text-[10px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-md font-medium truncate max-w-[120px] sm:max-w-none">
+                                                    <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                                    <span className="truncate">{singleFinding.location}</span>
+                                                  </span>
+                                                )}
+                                                <div className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-500">
+                                                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isItemExpanded ? 'rotate-180 text-rose-600' : ''}`} />
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            {/* Single Accordion Body */}
+                                            {isItemExpanded && (
+                                              <div className="p-3 pt-2.5 border-t border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-850/60 space-y-2 animate-in fade-in duration-150">
+                                                {singleFinding.category && (
+                                                  <div className="sm:hidden text-[10px] font-semibold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded border border-teal-200/60 dark:border-teal-800/60 inline-block">
+                                                    {singleFinding.category}
+                                                  </div>
+                                                )}
+
+                                                <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed bg-white dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/70 dark:border-slate-800">
+                                                  <CompactFindingPreview description={singleFinding.description} maxItems={5} />
+                                                </div>
+
+                                                {singleFinding.recommendation && (
+                                                  <p className="text-[11px] text-teal-800 dark:text-teal-300 bg-teal-50/70 dark:bg-teal-950/30 p-2 rounded-lg border border-teal-100 dark:border-teal-900/40">
+                                                    <strong className="font-semibold">Rekomendasi Tindakan:</strong> {singleFinding.recommendation}
+                                                  </p>
+                                                )}
+
+                                                <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
+                                                  <span className="truncate">
+                                                    Pelapor: <strong className="text-slate-700 dark:text-slate-300 font-semibold">{singleFinding.inspectorName || singleFinding.requestorName || '-'}</strong>
+                                                    {singleFinding.date ? ` • ${String(singleFinding.date).slice(0, 10)}` : ''}
+                                                  </span>
+
+                                                  <div className="flex items-center gap-2 shrink-0">
+                                                    {photoSrc && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          setLightboxData({
+                                                            isOpen: true,
+                                                            title: `Bukti Temuan ${ticketCode}`,
+                                                            subtitle: `${singleFinding.category || 'Temuan K3'} • ${singleFinding.location || ''}`,
+                                                            images: [{ url: photoSrc, label: singleFinding.description || 'Foto Temuan' }],
+                                                            currentIndex: 0
+                                                          });
+                                                        }}
+                                                        className="inline-flex items-center gap-1 font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                                                      >
+                                                        <Camera className="w-3 h-3" />
+                                                        <span>Lihat Foto</span>
+                                                      </button>
+                                                    )}
+
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        if (onNav) onNav('sap-dashboard');
+                                                        else navigate('/sap-dashboard');
+                                                      }}
+                                                      className="inline-flex items-center gap-0.5 font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+                                                    >
+                                                      <span>Tindak Lanjut</span>
+                                                      <ChevronRight className="w-3 h-3" />
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
 
                   {/* Rincian training WARNING / EXPIRED (tetap tampil sampai training diperbarui) */}
                   {cat.id === 'training' && (
@@ -1367,6 +2021,13 @@ export function ActionCenterBar({
                           <img
                             src={formattedImg}
                             alt="Bukti Kerusakan"
+                            onError={(e) => {
+                              const raw = photoSrc;
+                              const driveMatch = raw?.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || raw?.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                              if (driveMatch) {
+                                e.currentTarget.src = `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+                              }
+                            }}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             loading="lazy"
                           />
@@ -1497,6 +2158,13 @@ export function ActionCenterBar({
                 <img
                   src={formatProofImageUrl(lightboxData.images[lightboxData.currentIndex].url)}
                   alt="Bukti Screenshot"
+                  onError={(e) => {
+                    const raw = lightboxData.images[lightboxData.currentIndex]?.url;
+                    const driveMatch = raw?.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || raw?.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                    if (driveMatch) {
+                      e.currentTarget.src = `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+                    }
+                  }}
                   className="max-w-full max-h-[64vh] object-contain rounded-xl shadow-lg"
                 />
               )}

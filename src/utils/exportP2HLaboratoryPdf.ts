@@ -1,6 +1,7 @@
 import { P2H_LOGISTICS_ITEMS, P2HGasInventory } from '../data/p2hLaboratoryRooms';
 import { P2HToolRecordStatus } from './exportP2HLaboratoryExcel';
 import { TBP_HEADER_LOGO_BASE64 } from './tbpLogoBase64';
+import { ensureSignatureIsBlack } from './signatureUtils';
 
 export interface ExportP2HLaboratoryPdfParams {
   inspectorName: string;
@@ -200,6 +201,19 @@ export async function exportP2HLaboratoryPdf(params: ExportP2HLaboratoryPdfParam
   const dayName = dateObj.toLocaleDateString('id-ID', { weekday: 'long' }).toUpperCase();
   const dateFormatted = dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
 
+  // Convert all signatures to pure black (#000000) for clean official document print
+  const [
+    blackSignatureUrl,
+    blackSpvSignatureUrl,
+    blackSptSignatureUrl,
+    blackManagerSignatureUrl
+  ] = await Promise.all([
+    ensureSignatureIsBlack(signatureUrl),
+    ensureSignatureIsBlack(spvSignatureUrl),
+    ensureSignatureIsBlack(sptSignatureUrl),
+    ensureSignatureIsBlack(managerSignatureUrl),
+  ]);
+
   // Create an off-screen render container attached to DOM
   // Width 960px, Height 1498px corresponds exactly to printable F4 (205 mm x 320 mm)
   const container = document.createElement('div');
@@ -237,10 +251,10 @@ export async function exportP2HLaboratoryPdf(params: ExportP2HLaboratoryPdfParam
     gasInventory,
     calibrationWeightsCounts,
     supervisorName: supervisorName || 'Laboratorium Supervisor',
-    signatureUrl,
-    spvSignatureUrl,
-    sptSignatureUrl,
-    managerSignatureUrl,
+    signatureUrl: blackSignatureUrl,
+    spvSignatureUrl: blackSpvSignatureUrl,
+    sptSignatureUrl: blackSptSignatureUrl,
+    managerSignatureUrl: blackManagerSignatureUrl,
     spvNotes,
     sptNotes,
     managerNotes,
@@ -649,7 +663,7 @@ function formatBatuTimbangValue(val?: string | number): string {
             <!-- 1. ANALIS / FOREMAN TTD -->
             <td style="border: 1px solid #000000; padding: 2px; text-align: center;">
               ${signatureUrl ? `
-                <img src="${signatureUrl}" alt="TTD Foreman" style="max-height: 38px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto;" />
+                <img src="${signatureUrl}" alt="TTD Foreman" style="max-height: 38px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto; filter: brightness(0);" />
               ` : `
                 <div style="font-size: 7.5px; color: #000000; font-style: italic;">[ Tervalidasi Sistem ]</div>
               `}
@@ -657,7 +671,7 @@ function formatBatuTimbangValue(val?: string | number): string {
             <!-- 2. SPV LAB TTD SPACE -->
             <td style="border: 1px solid #000000; padding: 2px; text-align: center;">
               ${spvSignatureUrl ? `
-                <img src="${spvSignatureUrl}" alt="TTD SPV" style="max-height: 38px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto;" />
+                <img src="${spvSignatureUrl}" alt="TTD SPV" style="max-height: 38px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto; filter: brightness(0);" />
               ` : `
                 <div style="font-size: 7.5px; color: #000000; font-style: italic;">-</div>
               `}
@@ -665,7 +679,7 @@ function formatBatuTimbangValue(val?: string | number): string {
             <!-- 3. SUPERINTENDENT TTD SPACE -->
             <td style="border: 1px solid #000000; padding: 2px; text-align: center;">
               ${sptSignatureUrl ? `
-                <img src="${sptSignatureUrl}" alt="TTD SPT" style="max-height: 38px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto;" />
+                <img src="${sptSignatureUrl}" alt="TTD SPT" style="max-height: 38px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto; filter: brightness(0);" />
               ` : `
                 <div style="font-size: 7.5px; color: #000000; font-style: italic;">-</div>
               `}
@@ -673,7 +687,7 @@ function formatBatuTimbangValue(val?: string | number): string {
             <!-- 4. MANAGER TTD SPACE -->
             <td style="border: 1px solid #000000; padding: 2px; text-align: center;">
               ${managerSignatureUrl ? `
-                <img src="${managerSignatureUrl}" alt="TTD Manager" style="max-height: 38px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto;" />
+                <img src="${managerSignatureUrl}" alt="TTD Manager" style="max-height: 38px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto; filter: brightness(0);" />
               ` : `
                 <div style="font-size: 7.5px; color: #000000; font-style: italic;">-</div>
               `}

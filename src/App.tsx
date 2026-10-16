@@ -1607,18 +1607,18 @@ export default function App() {
           <div className="flex flex-col items-center w-full flex-1 gap-1 pt-1 overflow-y-auto no-scrollbar">
             {[
               {
-                id: 'modules',
-                label: 'Menu',
-                icon: LayoutGrid,
-                onClick: () => setShowModulesDrawer(true),
-                title: 'Buka Semua Menu & Modul Portal',
-              },
-              {
                 id: 'home',
                 label: 'Home',
                 icon: Home,
                 onClick: () => handleNav('home'),
                 title: 'Beranda / Home',
+              },
+              {
+                id: 'modules',
+                label: 'Menu',
+                icon: LayoutGrid,
+                onClick: () => setShowModulesDrawer(true),
+                title: 'Buka Semua Menu & Modul Portal',
               },
               {
                 id: 'bulletin',

@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { getAppSettings } from '../sheets-api';
 import { PageHeader } from './PageHeader';
 import { FONT_SIZE_OPTIONS, FontSizeOption, applyFontSize, getStoredFontSize } from '../utils/fontSize';
+import { SignatureSettingsCard } from './SignatureSettingsCard';
+import { DevRoleplaySwitcher } from './DevRoleplaySwitcher';
 
 export function SettingsScreen({ 
   inspectorName, 
@@ -29,6 +31,17 @@ export function SettingsScreen({
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   
+  // Developer Check
+  const isDeveloper = 
+    inspectorNik === '02D25000055' || 
+    inspectorNik === '02D24000043' || 
+    inspectorNik === '04D21001047' || 
+    inspectorNik === '04D24000042' ||
+    inspectorNik === 'M0403240177' ||
+    inspectorNik === 'preplabadmin' ||
+    inspectorNik === '02D250000' ||
+    localStorage.getItem('p2h_is_developer') === 'true';
+
   // Admin only
   const [resetNik, setResetNik] = useState('');
   const [resetNewPass, setResetNewPass] = useState('');
@@ -41,7 +54,7 @@ export function SettingsScreen({
       setEmail(p.email || '');
     } catch(e) {}
     
-    if (inspectorNik === '02D250000') {
+    if (isDeveloper) {
        getAppSettings().then(res => {
           if (res && res.success && res.data) {
              const found = res.data.find((s: any) => s.settingKey === 'WA_TARGET_NUMBER');
@@ -49,7 +62,7 @@ export function SettingsScreen({
           }
        }).catch(e => console.error(e));
     }
-  }, [inspectorNik]);
+  }, [inspectorNik, isDeveloper]);
 
   const handleUpdatePassword = async () => {
     if (!oldPassword || !newPassword) return toast.error('Isi password lama dan baru');
@@ -146,47 +159,55 @@ export function SettingsScreen({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Card Profil & Keamanan */}
-          <Card className="space-y-4">
-            <h3 
-              className="text-base font-bold flex items-center gap-2 pb-3 border-b" 
-              style={{ 
-                color: 'var(--primary, #2A9D8F)', 
-                borderColor: 'var(--border-main, #E2E8F0)' 
-              }}
-            >
-              <User className="w-5 h-5" />
-              Profil & Keamanan
-            </h3>
-            
-            <div className="space-y-3">
-               <Input 
-                 label="Alamat Email (Untuk Reset Password)" 
-                 type="email"
-                 value={email}
-                 onChange={e => setEmail(e.target.value)}
-               />
-               <Input 
-                 label="Password Lama" 
-                 type="password"
-                 value={oldPassword}
-                 onChange={e => setOldPassword(e.target.value)}
-               />
-               <Input 
-                 label="Password Baru" 
-                 type="password"
-                 value={newPassword}
-                 onChange={e => setNewPassword(e.target.value)}
-               />
-               <Button 
-                 onClick={handleUpdatePassword} 
-                 className="w-full mt-2 font-bold shadow-xs" 
-                 style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
-               >
-                 Simpan Perubahan
-               </Button>
-            </div>
-          </Card>
+          <div className="space-y-6">
+            {/* Card Profil & Keamanan */}
+            <Card className="space-y-4">
+              <h3 
+                className="text-base font-bold flex items-center gap-2 pb-3 border-b" 
+                style={{ 
+                  color: 'var(--primary, #2A9D8F)', 
+                  borderColor: 'var(--border-main, #E2E8F0)' 
+                }}
+              >
+                <User className="w-5 h-5" />
+                Profil & Keamanan Akun
+              </h3>
+              
+              <div className="space-y-3">
+                 <Input 
+                   label="Alamat Email (Untuk Reset Password)" 
+                   type="email"
+                   value={email}
+                   onChange={e => setEmail(e.target.value)}
+                 />
+                 <Input 
+                   label="Password Lama" 
+                   type="password"
+                   value={oldPassword}
+                   onChange={e => setOldPassword(e.target.value)}
+                 />
+                 <Input 
+                   label="Password Baru" 
+                   type="password"
+                   value={newPassword}
+                   onChange={e => setNewPassword(e.target.value)}
+                 />
+                 <Button 
+                   onClick={handleUpdatePassword} 
+                   className="w-full mt-2 font-bold shadow-xs cursor-pointer" 
+                   style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+                 >
+                   Simpan Perubahan
+                 </Button>
+              </div>
+            </Card>
+
+            {/* Card Tanda Tangan & PIN Keamanan (Terenkripsi AES-256-GCM) */}
+            <SignatureSettingsCard 
+              inspectorNik={inspectorNik} 
+              inspectorName={inspectorName} 
+            />
+          </div>
           
           <div className="space-y-6">
             {/* Card Notifikasi & Suara */}
@@ -362,7 +383,7 @@ export function SettingsScreen({
               </button>
             </Card>
 
-            {inspectorNik === '02D250000' && (
+            {isDeveloper && (
               <Card 
                 className="space-y-4 border-l-4" 
                 style={{ borderLeftColor: '#F43F5E' }}
@@ -372,48 +393,67 @@ export function SettingsScreen({
                   style={{ borderColor: 'var(--border-main, #E2E8F0)' }}
                 >
                   <ShieldAlert className="w-5 h-5" />
-                  Developer Admin
+                  Developer Mode & Roleplay
                 </h3>
-                <p className="text-xs mb-2" style={{ color: 'var(--text-muted, #64748B)' }}>
-                  Reset password akun karyawan (Bypass)
-                </p>
-                <Input 
-                  label="NIK Target" 
-                  value={resetNik}
-                  onChange={e => setResetNik(e.target.value)}
-                />
-                <Input 
-                  label="Password Baru" 
-                  value={resetNewPass}
-                  onChange={e => setResetNewPass(e.target.value)}
-                />
-                <Button variant="danger" onClick={handleAdminReset} className="w-full mt-2 font-bold">
-                  Force Reset Password
-                </Button>
+
+                {/* Simulasi Peran Operasional (Role Switcher) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Simulasi Peran / Jabatan (Role Switcher)
+                  </label>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Uji coba hak akses, tata letak menu, dan dashboard operasional langsung dengan akun Anda.
+                  </p>
+                  <DevRoleplaySwitcher />
+                </div>
                 
-                <h3 
-                  className="text-sm font-bold flex items-center gap-2 pt-4 pb-2 border-b mt-4"
-                  style={{ color: 'var(--text-main, #1E293B)', borderColor: 'var(--border-main, #E2E8F0)' }}
-                >
-                  Target Notifikasi WhatsApp
-                </h3>
-                <p className="text-xs mb-2" style={{ color: 'var(--text-muted, #64748B)' }}>
-                  Jika diisi, modal kirim WA akan langsung menuju ke nomor/PIC ini. (Format: 62812...)
-                </p>
-                <div className="flex gap-2">
-                   <Input 
-                      value={waTarget}
-                      onChange={e => setWaTarget(e.target.value)}
-                      placeholder="628..."
-                      containerClassName="flex-1 !mb-0"
-                   />
-                   <Button 
-                     onClick={handleSaveWaTarget} 
-                     className="shrink-0 font-bold"
-                     style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
-                   >
-                     Simpan
-                   </Button>
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Reset Password Akun Karyawan (Bypass)
+                  </h4>
+                  <p className="text-xs mb-2" style={{ color: 'var(--text-muted, #64748B)' }}>
+                    Reset password akun karyawan secara langsung tanpa konfirmasi email.
+                  </p>
+                  <Input 
+                    label="NIK Target" 
+                    value={resetNik}
+                    onChange={e => setResetNik(e.target.value)}
+                  />
+                  <Input 
+                    label="Password Baru" 
+                    value={resetNewPass}
+                    onChange={e => setResetNewPass(e.target.value)}
+                  />
+                  <Button variant="danger" onClick={handleAdminReset} className="w-full mt-2 font-bold">
+                    Force Reset Password
+                  </Button>
+                </div>
+                
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                  <h4 
+                    className="text-sm font-bold flex items-center gap-2"
+                    style={{ color: 'var(--text-main, #1E293B)' }}
+                  >
+                    Target Notifikasi WhatsApp
+                  </h4>
+                  <p className="text-xs" style={{ color: 'var(--text-muted, #64748B)' }}>
+                    Jika diisi, modal kirim WA akan langsung menuju ke nomor/PIC ini. (Format: 62812...)
+                  </p>
+                  <div className="flex gap-2">
+                     <Input 
+                        value={waTarget}
+                        onChange={e => setWaTarget(e.target.value)}
+                        placeholder="628..."
+                        containerClassName="flex-1 !mb-0"
+                     />
+                     <Button 
+                       onClick={handleSaveWaTarget} 
+                       className="shrink-0 font-bold"
+                       style={{ backgroundColor: 'var(--primary, #2A9D8F)', color: '#FFFFFF' }}
+                     >
+                       Simpan
+                     </Button>
+                  </div>
                 </div>
               </Card>
             )}

@@ -53,11 +53,11 @@ export function formatProofImageUrl(url?: string | null): string {
 
   let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (match) {
-    return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1200`;
+    return `/api/drive/view/${match[1]}`;
   }
   match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   if (match) {
-    return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1200`;
+    return `/api/drive/view/${match[1]}`;
   }
   return url;
 }
