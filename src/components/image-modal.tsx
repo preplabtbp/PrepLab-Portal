@@ -1,13 +1,23 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, ZoomIn, ZoomOut, RotateCw, RotateCcw, Download, ExternalLink, Move } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { X, ZoomIn, ZoomOut, RotateCw, RotateCcw, Download, ExternalLink, Move, ChevronLeft, ChevronRight } from 'lucide-react';
+
+export interface ImageModalItem {
+  url: string;
+  title?: string;
+  driveViewUrl?: string;
+  driveDownloadUrl?: string;
+}
 
 export interface ImageModalProps {
-  imageUrl: string | null;
+  imageUrl?: string | null;
   isOpen?: boolean;
   title?: string;
   driveViewUrl?: string;
   driveDownloadUrl?: string;
   onClose: () => void;
+  images?: ImageModalItem[];
+  currentIndex?: number;
+  onIndexChange?: (newIndex: number) => void;
 }
 
 export function ImageModal({
@@ -17,11 +27,31 @@ export function ImageModal({
   driveViewUrl,
   driveDownloadUrl,
   onClose,
+  images,
+  currentIndex,
+  onIndexChange,
 }: ImageModalProps) {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [rotation, setRotation] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Gallery mode state
+  const [internalIndex, setInternalIndex] = useState(currentIndex ?? 0);
+
+  useEffect(() => {
+    if (currentIndex !== undefined) {
+      setInternalIndex(currentIndex);
+    }
+  }, [currentIndex]);
+
+  const hasMultipleImages = Boolean(images && images.length > 1);
+  const currentItem = hasMultipleImages && images ? images[internalIndex] : null;
+
+  const activeUrl = currentItem?.url || imageUrl;
+  const activeTitle = currentItem?.title || title || 'Image Preview';
+  const activeDriveViewUrl = currentItem?.driveViewUrl || driveViewUrl;
+  const activeDriveDownloadUrl = currentItem?.driveDownloadUrl || driveDownloadUrl;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragMoved = useRef(false);
@@ -35,13 +65,28 @@ export function ImageModal({
   const touchStartCenterRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastTapTimeRef = useRef<number>(0);
 
+  // Gallery navigation handlers
+  const handlePrev = useCallback(() => {
+    if (!images || images.length <= 1) return;
+    const nextIdx = (internalIndex - 1 + images.length) % images.length;
+    setInternalIndex(nextIdx);
+    onIndexChange?.(nextIdx);
+  }, [images, internalIndex, onIndexChange]);
+
+  const handleNext = useCallback(() => {
+    if (!images || images.length <= 1) return;
+    const nextIdx = (internalIndex + 1) % images.length;
+    setInternalIndex(nextIdx);
+    onIndexChange?.(nextIdx);
+  }, [images, internalIndex, onIndexChange]);
+
   // Extract Google Drive ID if present
   const driveId = (() => {
-    if (!imageUrl || imageUrl === '-') return null;
+    if (!activeUrl || activeUrl === '-') return null;
     // Base64 and Blob images are inline data, not Google Drive URLs
-    if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) return null;
+    if (activeUrl.startsWith('data:') || activeUrl.startsWith('blob:')) return null;
 
-    const str = `${imageUrl} ${driveViewUrl || ''} ${driveDownloadUrl || ''}`;
+    const str = `${activeUrl} ${activeDriveViewUrl || ''} ${activeDriveDownloadUrl || ''}`;
     // Must contain Google Drive related domain or explicit drive view pattern
     if (!str.includes('drive.google.com') && !str.includes('docs.google.com') && !str.includes('googleusercontent.com')) {
       return null;
@@ -54,17 +99,17 @@ export function ImageModal({
     return match ? match[1] : null;
   })();
 
-  const highResUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w2500` : imageUrl;
-  const directDriveView = driveViewUrl || (driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : null);
-  const directDownloadUrl = driveDownloadUrl || (driveId ? `https://drive.google.com/uc?id=${driveId}&export=download` : (imageUrl || null));
+  const highResUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w2500` : activeUrl;
+  const directDriveView = activeDriveViewUrl || (driveId ? `https://drive.google.com/file/d/${driveId}/view?usp=sharing` : null);
+  const directDownloadUrl = activeDriveDownloadUrl || (driveId ? `https://drive.google.com/uc?id=${driveId}&export=download` : (activeUrl || null));
 
-  // Reset zoom & pan when image changes
+  // Reset zoom & pan when active image changes
   useEffect(() => {
     setScale(1);
     setPosition({ x: 0, y: 0 });
     setRotation(0);
     isDragMoved.current = false;
-  }, [imageUrl]);
+  }, [activeUrl]);
 
   // Handle Ctrl+Wheel and Wheel zoom with passive: false to prevent browser page zoom
   useEffect(() => {
@@ -132,6 +177,12 @@ export function ImageModal({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePrev();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleNext();
       } else if (e.key === '+' || e.key === '=') {
         setScale((prev) => Math.min(prev + 0.25, 6));
       } else if (e.key === '-' || e.key === '_') {
@@ -151,7 +202,7 @@ export function ImageModal({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, handlePrev, handleNext]);
 
   // Mouse pan handlers on container/image
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -305,7 +356,7 @@ export function ImageModal({
     }
   };
 
-  if (!imageUrl || (isOpen !== undefined && !isOpen)) return null;
+  if (!activeUrl || (isOpen !== undefined && !isOpen)) return null;
 
   return (
     <div
@@ -317,8 +368,13 @@ export function ImageModal({
         className="absolute top-0 inset-x-0 z-30 px-3 md:px-4 py-2.5 md:py-3 bg-gradient-to-b from-black/90 via-black/50 to-transparent flex items-center justify-between gap-2 md:gap-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 min-w-0 max-w-[35%] md:max-w-[40%] text-white/90">
-          <span className="text-xs md:text-sm font-semibold truncate drop-shadow">{title}</span>
+        <div className="flex items-center gap-2 min-w-0 max-w-[40%] md:max-w-[45%] text-white/90">
+          {hasMultipleImages && images && (
+            <span className="px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[10px] md:text-xs font-mono font-bold shrink-0">
+              {internalIndex + 1} / {images.length}
+            </span>
+          )}
+          <span className="text-xs md:text-sm font-semibold truncate drop-shadow" title={activeTitle}>{activeTitle}</span>
         </div>
 
         {/* Action Buttons & Zoom Bar */}
@@ -380,7 +436,7 @@ export function ImageModal({
               href={directDownloadUrl}
               target="_blank"
               rel="noopener noreferrer"
-              download={imageUrl.startsWith('data:') ? 'foto_temuan.jpg' : undefined}
+              download={activeUrl.startsWith('data:') ? (activeTitle.endsWith('.jpg') || activeTitle.endsWith('.png') ? activeTitle : 'foto_lampiran.jpg') : undefined}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold shadow-lg transition-all active:scale-95"
             >
               <Download className="w-3.5 h-3.5" /> Download
@@ -398,6 +454,37 @@ export function ImageModal({
           </button>
         </div>
       </div>
+
+      {/* Floating Previous & Next Navigation Buttons */}
+      {hasMultipleImages && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePrev();
+            }}
+            className="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 z-40 p-2.5 md:p-3.5 rounded-full bg-black/60 hover:bg-teal-600/90 text-white/90 hover:text-white border border-white/20 backdrop-blur-md transition-all hover:scale-110 active:scale-95 shadow-2xl cursor-pointer group touch-manipulation"
+            title="Foto Sebelumnya (Arrow Left ←)"
+            aria-label="Foto Sebelumnya"
+          >
+            <ChevronLeft className="w-5 h-5 md:w-6 md:h-6 transition-transform group-hover:-translate-x-0.5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleNext();
+            }}
+            className="absolute right-2 md:right-6 top-1/2 -translate-y-1/2 z-40 p-2.5 md:p-3.5 rounded-full bg-black/60 hover:bg-teal-600/90 text-white/90 hover:text-white border border-white/20 backdrop-blur-md transition-all hover:scale-110 active:scale-95 shadow-2xl cursor-pointer group touch-manipulation"
+            title="Foto Berikutnya (Arrow Right →)"
+            aria-label="Foto Berikutnya"
+          >
+            <ChevronRight className="w-5 h-5 md:w-6 md:h-6 transition-transform group-hover:translate-x-0.5" />
+          </button>
+        </>
+      )}
 
       {/* Main Image Container with Drag, Pinch Zoom & Pan */}
       <div
@@ -425,7 +512,7 @@ export function ImageModal({
         >
           <img
             src={highResUrl}
-            alt={title}
+            alt={activeTitle}
             referrerPolicy="no-referrer"
             draggable={false}
             className="max-w-[92vw] max-h-[82vh] object-contain rounded-lg shadow-2xl pointer-events-none select-none"
@@ -446,12 +533,18 @@ export function ImageModal({
         className="absolute bottom-3 inset-x-0 z-20 flex justify-center pointer-events-none px-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-3.5 py-1.5 bg-black/70 backdrop-blur-md rounded-full border border-white/10 text-[10px] md:text-[11px] text-slate-300 font-medium flex items-center gap-2 md:gap-3 shadow-lg text-center">
+        <div className="px-3.5 py-1.5 bg-black/70 backdrop-blur-md rounded-full border border-white/10 text-[10px] md:text-[11px] text-slate-300 font-medium flex items-center gap-2 md:gap-3 shadow-lg text-center flex-wrap justify-center">
           <span className="flex items-center gap-1">
             <Move className="w-3 h-3 text-teal-400" /> Pinch / Drag untuk Zoom & Geser
           </span>
           <span className="opacity-40">•</span>
           <span>Double-tap untuk Zoom</span>
+          {hasMultipleImages && (
+            <>
+              <span className="opacity-40">•</span>
+              <span className="text-teal-300 font-semibold">← / → Pindah Foto</span>
+            </>
+          )}
         </div>
       </div>
     </div>

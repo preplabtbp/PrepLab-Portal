@@ -1399,3 +1399,90 @@ export const GbaCoffeeUrn: React.FC<{ x: number; y: number }> = ({ x, y }) => (
     <rect x="8" y="1" width="1" height="1" fill="#FFFFFF" opacity="0.6" />
   </g>
 );
+
+/**
+ * Facility Exit Door to Gazebo Lounge (32x40 pixels)
+ * High-precision GBA pixel art double industrial sliding glass door with glowing EXIT LOUNGE sign and hazard door mat.
+ */
+export const GbaFacilityExitDoor: React.FC<{
+  x: number;
+  y: number;
+  isHovered?: boolean;
+  onClick?: () => void;
+}> = ({ x, y, isHovered, onClick }) => (
+  <g 
+    transform={`translate(${x * 16}, ${y * 16})`} 
+    className="cursor-pointer group select-none"
+    onClick={onClick}
+  >
+    <title>🚪 Pintu Keluar ke Gazebo Lounge TBP (Klik untuk keluar ke Gazebo)</title>
+    {/* Wall recess shadow */}
+    <rect x="0" y="0" width="32" height="38" fill="#0A0E1A" opacity="0.6" />
+
+    {/* Concrete lintel / door architrave */}
+    <rect x="0" y="0" width="32" height="3" fill="#334155" stroke="#1E293B" strokeWidth="0.6" />
+    <rect x="1" y="1" width="30" height="1" fill="#475569" />
+
+    {/* Illuminated Emergency Exit Sign (Green LED Box) */}
+    <g transform="translate(4, 4)">
+      <rect x="0" y="0" width="24" height="6" rx="1" fill="#064E3B" stroke="#059669" strokeWidth="0.5" />
+      <rect x="1" y="1" width="22" height="4" fill="#047857" />
+      {/* Running person icon + EXIT text */}
+      <text x="12" y="4.3" textAnchor="middle" fontSize="3.1" fontWeight="900" fill="#A7F3D0" fontFamily="monospace">
+        EXIT ➡️ LOUNGE
+      </text>
+      {/* Subtle pulsing green glow */}
+      <rect x="1" y="1" width="22" height="4" fill="#34D399" opacity="0.15">
+        <animate attributeName="opacity" values="0.1;0.35;0.1" dur="2s" repeatCount="indefinite" />
+      </rect>
+    </g>
+
+    {/* Automatic Motion Sensor Dome */}
+    <rect x="14" y="10.5" width="4" height="1.5" rx="0.5" fill="#1E293B" />
+    <circle cx="16" cy="11.2" r="0.6" fill="#10B981">
+      <animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" repeatCount="indefinite" />
+    </circle>
+
+    {/* Outer Heavy Steel Door Frame */}
+    <rect x="2" y="12" width="28" height="24" fill="none" stroke="#1E293B" strokeWidth="1" />
+    <rect x="1.5" y="12" width="1.5" height="24" fill="#475569" />
+    <rect x="29" y="12" width="1.5" height="24" fill="#475569" />
+
+    {/* Left Glass Door Panel */}
+    <rect x="3" y="13" width="12.5" height="21" fill="#0F172A" stroke="#334155" strokeWidth="0.5" />
+    <rect x="4" y="14" width="10.5" height="19" fill="#0369A1" opacity="0.35" />
+    {/* Outdoor mountain/greenery tint visible through tinted glass */}
+    <rect x="4" y="22" width="10.5" height="11" fill="#059669" opacity="0.25" />
+    {/* Diagonal Glass Specular Reflection Highlight */}
+    <line x1="5" y1="15" x2="13" y2="29" stroke="#E0F2FE" strokeWidth="0.8" opacity="0.4" />
+    {/* Vertical Stainless Handle Bar */}
+    <rect x="13.5" y="20" width="1.2" height="7" fill="#E2E8F0" stroke="#0F172A" strokeWidth="0.4" />
+
+    {/* Right Glass Door Panel */}
+    <rect x="16.5" y="13" width="12.5" height="21" fill="#0F172A" stroke="#334155" strokeWidth="0.5" />
+    <rect x="17.5" y="14" width="10.5" height="19" fill="#0369A1" opacity="0.35" />
+    <rect x="17.5" y="22" width="10.5" height="11" fill="#059669" opacity="0.25" />
+    <line x1="18.5" y1="15" x2="26.5" y2="29" stroke="#E0F2FE" strokeWidth="0.8" opacity="0.4" />
+    {/* Vertical Stainless Handle Bar */}
+    <rect x="17.3" y="20" width="1.2" height="7" fill="#E2E8F0" stroke="#0F172A" strokeWidth="0.4" />
+
+    {/* Center Glass Gap / Seal Strip */}
+    <line x1="16" y1="12" x2="16" y2="34" stroke="#0F172A" strokeWidth="0.8" />
+
+    {/* Threshold Safety Door Mat (Hazard Yellow & Black Striped Paving) */}
+    <g transform="translate(1, 34)">
+      <rect x="0" y="0" width="30" height="4" fill="#0F172A" />
+      <rect x="0.5" y="0.5" width="29" height="3" fill="#FACC15" />
+      {/* Black diagonal hazard lines */}
+      {[2, 7, 12, 17, 22, 27].map((hx) => (
+        <line key={`haz-${hx}`} x1={hx} y1="0.5" x2={hx + 2} y2="3.5" stroke="#0F172A" strokeWidth="1.2" />
+      ))}
+    </g>
+
+    {/* Interactive Hover Golden Frame Glow */}
+    {isHovered && (
+      <rect x="1" y="2" width="30" height="36" fill="none" stroke="#F59E0B" strokeWidth="0.8" opacity="0.9" rx="1" />
+    )}
+  </g>
+);
+

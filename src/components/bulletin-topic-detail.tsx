@@ -33,7 +33,14 @@ export function BulletinTopicDetail({
   const [isEditing, setIsEditing] = useState(false);
   const [currentData, setCurrentData] = useState({ number: '0', jenisKegiatan: '', keterangan: '', pic: '', status: '', priority: '' });
   const [formData, setFormData] = useState({ number: '0', jenisKegiatan: '', keterangan: '', pic: '', status: '', priority: '' });
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{
+    url: string;
+    title?: string;
+    driveViewUrl?: string;
+    driveDownloadUrl?: string;
+    images?: Array<{ url: string; title?: string; driveViewUrl?: string; driveDownloadUrl?: string }>;
+    currentIndex?: number;
+  } | null>(null);
 
   const [commentToDelete, setCommentToDelete] = useState<number | null>(null);
   const [showDeleteTopicConfirm, setShowDeleteTopicConfirm] = useState(false);
@@ -127,8 +134,7 @@ export function BulletinTopicDetail({
     content: string;
   } | null>(null);
 
-  const handleCommentFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawFiles = e.target.files ? Array.from(e.target.files) : [];
+  const processAndUploadBulletinFiles = async (rawFiles: File[]) => {
     if (rawFiles.length === 0) return;
     setIsUploadingFile(true);
     const toastId = toast.loading(`Mengompres dan mengunggah ${rawFiles.length} lampiran...`, { id: 'upload-bulletin' });
@@ -158,7 +164,41 @@ export function BulletinTopicDetail({
       toast.error('Gagal mengunggah lampiran', { id: 'upload-bulletin' });
     } finally {
       setIsUploadingFile(false);
-      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleCommentFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFiles = e.target.files ? Array.from(e.target.files) : [];
+    if (rawFiles.length === 0) return;
+    await processAndUploadBulletinFiles(rawFiles);
+    if (e.target) e.target.value = '';
+  };
+
+  // Handler paste screenshot/gambar langsung di kolom komentar bulletin (Ctrl+V)
+  const handleCommentPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const clipboardItems = e.clipboardData?.items;
+    if (!clipboardItems) return;
+
+    const imageFiles: File[] = [];
+    for (let i = 0; i < clipboardItems.length; i++) {
+      const item = clipboardItems[i];
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile();
+        if (blob) {
+          const now = new Date();
+          const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+          const ext = blob.type.split('/')[1] || 'png';
+          const filename = blob.name && blob.name !== 'image.png' 
+            ? blob.name 
+            : `pasted_bulletin_${timestamp}_${i + 1}.${ext}`;
+          imageFiles.push(new File([blob], filename, { type: blob.type }));
+        }
+      }
+    }
+
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      await processAndUploadBulletinFiles(imageFiles);
     }
   };
 
@@ -243,6 +283,33 @@ export function BulletinTopicDetail({
     });
     return list;
   }, [comments]);
+
+  const allTopicImages = useMemo(() => {
+    return attachments
+      .filter((att) => att.isImage)
+      .map((att) => ({
+        url: att.directUrl || att.url,
+        title: att.caption ? `${att.name} — "${att.caption}"` : att.name,
+        driveViewUrl: att.driveViewUrl,
+        driveDownloadUrl: att.driveDownloadUrl
+      }));
+  }, [attachments]);
+
+  const handleOpenImagePreview = (targetUrl: string, name?: string, caption?: string, driveViewUrl?: string, driveDownloadUrl?: string) => {
+    const foundIdx = allTopicImages.findIndex((img) => img.url === targetUrl);
+    const currentIndex = foundIdx >= 0 ? foundIdx : 0;
+    const fallbackItem = {
+      url: targetUrl,
+      title: caption ? `${name || 'Foto'} — "${caption}"` : (name || 'Foto Lampiran'),
+      driveViewUrl,
+      driveDownloadUrl
+    };
+    setPreviewImage({
+      ...(foundIdx >= 0 ? allTopicImages[foundIdx] : fallbackItem),
+      images: allTopicImages.length > 0 ? allTopicImages : [fallbackItem],
+      currentIndex
+    });
+  };
 
   const handleDeleteAttachment = async (commentId: number, attachmentUrl: string, attachmentName: string) => {
     if (!confirm(`Hapus lampiran "${attachmentName}" dari topik ini?\n\nCatatan: Teks komentar Anda (jika ada) akan tetap tersimpan.`)) return;
@@ -463,7 +530,7 @@ export function BulletinTopicDetail({
                           <td className="px-3 py-2 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1.5">
                               <button
-                                onClick={() => att.isImage ? setPreviewImage(att.directUrl || att.url) : window.open(att.driveViewUrl || att.url, '_blank', 'noopener,noreferrer')}
+                                onClick={() => att.isImage ? handleOpenImagePreview(att.directUrl || att.url, att.name, att.caption, att.driveViewUrl, att.driveDownloadUrl) : window.open(att.driveViewUrl || att.url, '_blank', 'noopener,noreferrer')}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-blue-600 rounded-lg text-[11px] font-semibold text-slate-700 transition-all shadow-2xs"
                               >
                                 <ExternalLink className="w-3 h-3" /> Buka
@@ -603,7 +670,7 @@ export function BulletinTopicDetail({
                                           <div 
                                             key={idx}
                                             className="relative cursor-zoom-in rounded-xl overflow-hidden border border-slate-200 bg-slate-100 inline-block group/img shadow-sm max-w-[260px]"
-                                            onClick={() => setPreviewImage(att.directUrl || att.url)}
+                                            onClick={() => handleOpenImagePreview(att.directUrl || att.url, att.name, att.caption, att.driveViewUrl, att.driveDownloadUrl)}
                                             title={`Klik untuk memperbesar: ${att.name}${att.caption ? ` (${att.caption})` : ''}`}
                                           >
                                             <div className="w-full h-44 bg-slate-100 flex items-center justify-center overflow-hidden">
@@ -810,11 +877,12 @@ export function BulletinTopicDetail({
                         </label>
                        
                        <textarea 
-                         placeholder="Tulis update atau pesan... (Enter untuk kirim)" 
+                         placeholder="Tulis update atau pesan... (Enter untuk kirim, bisa Ctrl+V / Paste gambar)" 
                          className="w-full bg-transparent border-none focus:ring-0 text-sm py-2 px-1 resize-none min-h-[40px] max-h-[120px] text-slate-700 placeholder:text-slate-400"
                          value={newComment}
                          rows={newComment.split('\n').length > 1 ? Math.min(newComment.split('\n').length, 4) : 1}
                          onChange={e => setNewComment(e.target.value)}
+                         onPaste={handleCommentPaste}
                          onKeyDown={e => {
                            if (e.key === 'Enter' && !e.shiftKey) {
                              e.preventDefault();
@@ -838,11 +906,15 @@ export function BulletinTopicDetail({
           </div>
        </div>
 
-      {/* Image Preview Modal with Zoom, Pan, Rotate */}
+      {/* Image Preview Modal with Zoom, Pan, Rotate & Gallery Navigation */}
       {previewImage && (
         <ImageModal
-          imageUrl={previewImage}
-          title="Image Attachment Preview"
+          imageUrl={previewImage.url}
+          title={previewImage.title || "Image Attachment Preview"}
+          driveViewUrl={previewImage.driveViewUrl}
+          driveDownloadUrl={previewImage.driveDownloadUrl}
+          images={previewImage.images}
+          currentIndex={previewImage.currentIndex}
           onClose={() => setPreviewImage(null)}
         />
       )}

@@ -176,6 +176,15 @@ export const DominoHalfPips: React.FC<{ value: number; size?: 'sm' | 'md' }> = (
   );
 };
 
+// Safe Avatar Renderer (handles base64 image data URLs, web URLs, or emoji icons)
+export const renderAvatarNode = (avatar?: string | null, fallback: string = '👤', sizeClass = 'w-6 h-6') => {
+  if (!avatar) return <span className="inline-block text-base">{fallback}</span>;
+  if (avatar.startsWith('data:') || avatar.startsWith('http') || avatar.startsWith('/')) {
+    return <img src={avatar} alt="Avatar" className={`${sizeClass} rounded-full object-cover inline-block shadow-xs border border-emerald-400/40`} />;
+  }
+  return <span className="inline-block text-base">{avatar}</span>;
+};
+
 // ── SVG PIP RENDERER FOR 2D SERPENTINE BOARD ──
 function renderSvgPips(val: number, cx: number, cy: number, spanX: number, spanY: number) {
   const r = 2.1;
@@ -718,7 +727,7 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
               <div className={`px-4 py-1.5 rounded-2xl border flex items-center gap-2 shadow-lg transition-all ${
                 currentTurnIndex === 2 ? 'bg-amber-950/90 border-amber-400 ring-2 ring-amber-400/50' : 'bg-slate-900/80 border-slate-700'
               }`}>
-                <span className="text-lg">{seats[2]?.avatar || '🔨'}</span>
+                {renderAvatarNode(seats[2]?.avatar, '🔨', 'w-6 h-6')}
                 <div>
                   <span className="text-xs font-black text-white">{seats[2]?.name}</span>
                   <span className="text-[10px] text-slate-400 ml-1.5">({seats[2]?.handCount || 0} kartu)</span>
@@ -731,12 +740,14 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
                 )}
               </div>
             ) : (
-              <button
-                onClick={() => handleSit(2)}
-                className="px-3 py-1 rounded-xl bg-slate-900/60 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/60 text-slate-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
-              >
-                <UserPlus className="w-3.5 h-3.5" /> Duduk (Utara)
-              </button>
+              (!isPlaying || roundWinner) && mySeatIdx === -1 && (
+                <button
+                  onClick={() => handleSit(2)}
+                  className="px-3 py-1 rounded-xl bg-slate-900/60 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/60 text-slate-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> Duduk (Utara)
+                </button>
+              )
             )}
             {/* Top Cards Back Cover */}
             <div className="flex items-center gap-1 mt-1">
@@ -754,7 +765,7 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
                 <div className={`px-3 py-1.5 rounded-2xl border flex flex-col items-center gap-1 shadow-lg transition-all ${
                   currentTurnIndex === 1 ? 'bg-purple-950/90 border-purple-400 ring-2 ring-purple-400/50' : 'bg-slate-900/80 border-slate-700'
                 }`}>
-                  <span className="text-2xl">{seats[1]?.avatar || '👻'}</span>
+                  {renderAvatarNode(seats[1]?.avatar, '👻', 'w-8 h-8')}
                   <span className="text-xs font-black text-white text-center truncate max-w-[90px]">{seats[1]?.name}</span>
                   <span className="text-[10px] text-slate-400">({seats[1]?.handCount || 0} kartu)</span>
                   {seats[1]?.isBot && <span className="text-[9px] text-purple-400 font-mono">[BOT]</span>}
@@ -765,12 +776,14 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
                   )}
                 </div>
               ) : (
-                <button
-                  onClick={() => handleSit(1)}
-                  className="px-2.5 py-1 rounded-xl bg-slate-900/60 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/60 text-slate-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
-                >
-                  <UserPlus className="w-3.5 h-3.5" /> Duduk (Barat)
-                </button>
+                (!isPlaying || roundWinner) && mySeatIdx === -1 && (
+                  <button
+                    onClick={() => handleSit(1)}
+                    className="px-2.5 py-1 rounded-xl bg-slate-900/60 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/60 text-slate-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> Duduk (Barat)
+                  </button>
+                )
               )}
               <div className="flex flex-col gap-0.5 mt-2">
                 {Array.from({ length: seats[1]?.handCount || 0 }).map((_, i) => (
@@ -903,7 +916,7 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
                 <div className={`px-3 py-1.5 rounded-2xl border flex flex-col items-center gap-1 shadow-lg transition-all ${
                   currentTurnIndex === 3 ? 'bg-blue-950/90 border-blue-400 ring-2 ring-blue-400/50' : 'bg-slate-900/80 border-slate-700'
                 }`}>
-                  <span className="text-2xl">{seats[3]?.avatar || '📋'}</span>
+                  {renderAvatarNode(seats[3]?.avatar, '📋', 'w-8 h-8')}
                   <span className="text-xs font-black text-white text-center truncate max-w-[90px]">{seats[3]?.name}</span>
                   <span className="text-[10px] text-slate-400">({seats[3]?.handCount || 0} kartu)</span>
                   {seats[3]?.isBot && <span className="text-[9px] text-purple-400 font-mono">[BOT]</span>}
@@ -914,12 +927,14 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
                   )}
                 </div>
               ) : (
-                <button
-                  onClick={() => handleSit(3)}
-                  className="px-2.5 py-1 rounded-xl bg-slate-900/60 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/60 text-slate-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
-                >
-                  <UserPlus className="w-3.5 h-3.5" /> Duduk (Timur)
-                </button>
+                (!isPlaying || roundWinner) && mySeatIdx === -1 && (
+                  <button
+                    onClick={() => handleSit(3)}
+                    className="px-2.5 py-1 rounded-xl bg-slate-900/60 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/60 text-slate-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> Duduk (Timur)
+                  </button>
+                )
               )}
               <div className="flex flex-col gap-0.5 mt-2">
                 {Array.from({ length: seats[3]?.handCount || 0 }).map((_, i) => (
@@ -1011,7 +1026,10 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
 
                 {/* Player Info Badge */}
                 <div className="mt-1 flex items-center gap-2 text-xs font-black text-emerald-400">
-                  <span>{playerAvatar || '👷'} {playerName} (Anda - Kursi {mySeatIdx === 0 ? 'Selatan' : mySeatIdx === 1 ? 'Barat' : mySeatIdx === 2 ? 'Utara' : 'Timur'})</span>
+                  <div className="flex items-center gap-1.5">
+                    {renderAvatarNode(playerAvatar, '👷', 'w-5 h-5')}
+                    <span>{playerName} (Anda - Kursi {mySeatIdx === 0 ? 'Selatan' : mySeatIdx === 1 ? 'Barat' : mySeatIdx === 2 ? 'Utara' : 'Timur'})</span>
+                  </div>
                   <span>•</span>
                   <span className={isMyTurn ? 'text-amber-400 animate-pulse' : 'text-slate-400'}>
                     {isMyTurn ? 'GILIRAN ANDA' : `Giliran: ${activeTurnPlayer?.name || 'Menunggu...'}`}

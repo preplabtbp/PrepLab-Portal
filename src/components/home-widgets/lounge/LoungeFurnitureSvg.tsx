@@ -755,4 +755,63 @@ export const GbaUndergroundLantern: React.FC<{
   );
 };
 
+// 11. GAZEBO TERRACE ENTRANCE DOORWAY (Pintu Masuk Terhubung dari Gedung Lab ke Gazebo)
+export const GbaGazeboTerraceEntranceDoor: React.FC<{
+  x?: number;
+  y?: number;
+  className?: string;
+  isHovered?: boolean;
+  onClick?: () => void;
+}> = ({ x = 0, y = 0, className = '', isHovered = false, onClick }) => {
+  return (
+    <svg
+      x={x}
+      y={y}
+      width={24}
+      height={38}
+      viewBox="0 0 24 38"
+      className={`select-none overflow-visible cursor-pointer group ${className} ${
+        isHovered ? 'filter drop-shadow(0 0 5px #F59E0B)' : ''
+      }`}
+      style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
+      onClick={onClick}
+    >
+      <title>🚪 Pintu Masuk Gazebo dari Gedung Laboratorium (Klik untuk kembali ke Lab)</title>
+      {/* Concrete Facility Wall Extension */}
+      <rect x="0" y="0" width="24" height="34" fill="#334155" stroke="#1E293B" strokeWidth="0.6" />
+      <rect x="1" y="1" width="22" height="3" fill="#475569" />
+
+      {/* Signboard Header Plaque */}
+      <rect x="2" y="4" width="20" height="5" rx="0.5" fill="#0F172A" stroke="#38BDF8" strokeWidth="0.5" />
+      <text x="12" y="7.8" textAnchor="middle" fontSize="2.8" fontWeight="900" fill="#BAE6FD" fontFamily="monospace">
+        LAB PREP ⬅️
+      </text>
+
+      {/* Recessed Doorway Arch */}
+      <rect x="3" y="10" width="18" height="24" fill="#0A0E1A" />
+      <rect x="4" y="11" width="16" height="23" fill="#0284C7" opacity="0.3" />
+
+      {/* Glass Sliding Panels with Specular Reflection Line */}
+      <line x1="6" y1="13" x2="16" y2="30" stroke="#FFFFFF" strokeWidth="0.8" opacity="0.4" />
+      <rect x="11" y="18" width="1" height="7" fill="#E2E8F0" />
+
+      {/* Welcome Entrance Floor Threshold / Mat */}
+      <rect x="2" y="34" width="20" height="3" fill="#0F172A" />
+      <rect x="3" y="34.5" width="18" height="2" fill="#15803D" />
+      <text x="12" y="36.2" textAnchor="middle" fontSize="2.2" fontWeight="bold" fill="#BBF7D0" fontFamily="monospace">
+        TERAS K3
+      </text>
+
+      {/* Soft welcoming indicator arrow pointing into gazebo */}
+      <g transform="translate(18, 22)">
+        <polygon points="0,0 4,2.5 0,5" fill="#FBBF24" opacity="0.9">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" repeatCount="indefinite" />
+          <animate attributeName="transform" type="translate" values="0,0; 2,0; 0,0" dur="1.5s" repeatCount="indefinite" />
+        </polygon>
+      </g>
+    </svg>
+  );
+};
+
+
 
