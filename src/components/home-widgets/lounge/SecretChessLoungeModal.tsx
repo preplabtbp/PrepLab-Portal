@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, Trophy, Volume2, VolumeX, Sparkles, RotateCcw, Award } from 'lucide-react';
+import { X, Trophy, Volume2, VolumeX, Sparkles, RotateCcw, Award, UserPlus, LogOut, ArrowUpDown } from 'lucide-react';
+import { getGlobalSocket } from '../../../lib/socketClient';
 
 export type PieceColor = 'w' | 'b';
 export type PieceType = 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
@@ -12,58 +13,43 @@ export interface ChessPiece {
 
 export type BoardState = (ChessPiece | null)[][];
 
+export interface ChessSeatPlayer {
+  nik: string;
+  name: string;
+  avatar?: string;
+  socketId: string;
+}
+
 interface SecretChessLoungeModalProps {
   isOpen: boolean;
   onClose: () => void;
   playerName: string;
+  playerNik?: string;
+  playerAvatar?: string;
   soundEnabled?: boolean;
 }
 
 // Initial 8x8 Chess Board Setup
 const INITIAL_BOARD: BoardState = [
   [
-    { type: 'r', color: 'b' },
-    { type: 'n', color: 'b' },
-    { type: 'b', color: 'b' },
-    { type: 'q', color: 'b' },
-    { type: 'k', color: 'b' },
-    { type: 'b', color: 'b' },
-    { type: 'n', color: 'b' },
-    { type: 'r', color: 'b' }
+    { type: 'r', color: 'b' }, { type: 'n', color: 'b' }, { type: 'b', color: 'b' }, { type: 'q', color: 'b' },
+    { type: 'k', color: 'b' }, { type: 'b', color: 'b' }, { type: 'n', color: 'b' }, { type: 'r', color: 'b' }
   ],
   [
-    { type: 'p', color: 'b' },
-    { type: 'p', color: 'b' },
-    { type: 'p', color: 'b' },
-    { type: 'p', color: 'b' },
-    { type: 'p', color: 'b' },
-    { type: 'p', color: 'b' },
-    { type: 'p', color: 'b' },
-    { type: 'p', color: 'b' }
+    { type: 'p', color: 'b' }, { type: 'p', color: 'b' }, { type: 'p', color: 'b' }, { type: 'p', color: 'b' },
+    { type: 'p', color: 'b' }, { type: 'p', color: 'b' }, { type: 'p', color: 'b' }, { type: 'p', color: 'b' }
   ],
   Array(8).fill(null),
   Array(8).fill(null),
   Array(8).fill(null),
   Array(8).fill(null),
   [
-    { type: 'p', color: 'w' },
-    { type: 'p', color: 'w' },
-    { type: 'p', color: 'w' },
-    { type: 'p', color: 'w' },
-    { type: 'p', color: 'w' },
-    { type: 'p', color: 'w' },
-    { type: 'p', color: 'w' },
-    { type: 'p', color: 'w' }
+    { type: 'p', color: 'w' }, { type: 'p', color: 'w' }, { type: 'p', color: 'w' }, { type: 'p', color: 'w' },
+    { type: 'p', color: 'w' }, { type: 'p', color: 'w' }, { type: 'p', color: 'w' }, { type: 'p', color: 'w' }
   ],
   [
-    { type: 'r', color: 'w' },
-    { type: 'n', color: 'w' },
-    { type: 'b', color: 'w' },
-    { type: 'q', color: 'w' },
-    { type: 'k', color: 'w' },
-    { type: 'b', color: 'w' },
-    { type: 'n', color: 'w' },
-    { type: 'r', color: 'w' }
+    { type: 'r', color: 'w' }, { type: 'n', color: 'w' }, { type: 'b', color: 'w' }, { type: 'q', color: 'w' },
+    { type: 'k', color: 'w' }, { type: 'b', color: 'w' }, { type: 'n', color: 'w' }, { type: 'r', color: 'w' }
   ]
 ];
 
@@ -94,7 +80,6 @@ function playChessAudio(type: 'move' | 'capture' | 'check' | 'win' | 'click') {
     const now = ctx.currentTime;
 
     if (type === 'move') {
-      // Wood piece knock
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'triangle';
@@ -107,7 +92,6 @@ function playChessAudio(type: 'move' | 'capture' | 'check' | 'win' | 'click') {
       osc.start(now);
       osc.stop(now + 0.08);
     } else if (type === 'capture') {
-      // Snappy resonant wood slam
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'square';
@@ -120,7 +104,6 @@ function playChessAudio(type: 'move' | 'capture' | 'check' | 'win' | 'click') {
       osc.start(now);
       osc.stop(now + 0.1);
     } else if (type === 'check') {
-      // Alert ding
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
@@ -133,7 +116,6 @@ function playChessAudio(type: 'move' | 'capture' | 'check' | 'win' | 'click') {
       osc.start(now);
       osc.stop(now + 0.25);
     } else if (type === 'win') {
-      // Fanfare
       const notes = [523.25, 659.25, 783.99, 1046.50];
       notes.forEach((freq, i) => {
         const osc = ctx.createOscillator();
@@ -166,35 +148,102 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
   isOpen,
   onClose,
   playerName,
+  playerNik,
+  playerAvatar,
   soundEnabled = true
 }) => {
   const [board, setBoard] = useState<BoardState>(INITIAL_BOARD);
-  const [currentTurn, setCurrentTurn] = useState<PieceColor>('w'); // 'w' = Player, 'b' = Bot
+  const [currentTurn, setCurrentTurn] = useState<PieceColor>('w');
   const [selectedSquare, setSelectedSquare] = useState<{ r: number; c: number } | null>(null);
   const [soundOn, setSoundOn] = useState(soundEnabled);
-  const [gameAnnouncement, setGameAnnouncement] = useState('Giliran Anda (Bidak Putih) melangkah.');
+  const [gameAnnouncement, setGameAnnouncement] = useState('Papan catur siap. Ambil kursi Bidak Putih atau Hitam.');
   const [isCheck, setIsCheck] = useState<PieceColor | null>(null);
   const [winner, setWinner] = useState<string | null>(null);
   const [capturedByWhite, setCapturedByWhite] = useState<ChessPiece[]>([]);
   const [capturedByBlack, setCapturedByBlack] = useState<ChessPiece[]>([]);
+  const [whiteSeat, setWhiteSeat] = useState<ChessSeatPlayer | null>(null);
+  const [blackSeat, setBlackSeat] = useState<ChessSeatPlayer | null>(null);
+  const [vsAiMode, setVsAiMode] = useState<boolean>(false);
+  const [isFlipped, setIsFlipped] = useState<boolean>(false);
+
+  const effectiveNik = playerNik || playerName;
 
   const playSfx = useCallback((type: 'move' | 'capture' | 'check' | 'win' | 'click') => {
     if (soundOn) playChessAudio(type);
   }, [soundOn]);
 
-  const resetGame = () => {
-    setBoard(INITIAL_BOARD.map(row => row.map(cell => cell ? { ...cell } : null)));
-    setCurrentTurn('w');
-    setSelectedSquare(null);
-    setIsCheck(null);
-    setWinner(null);
-    setCapturedByWhite([]);
-    setCapturedByBlack([]);
-    setGameAnnouncement('Permainan catur baru dimulai! Giliran Anda (Putih).');
+  // Which side is this user seated as?
+  const mySide: PieceColor | null = useMemo(() => {
+    if (whiteSeat && whiteSeat.nik === effectiveNik) return 'w';
+    if (blackSeat && blackSeat.nik === effectiveNik) return 'b';
+    return null;
+  }, [whiteSeat, blackSeat, effectiveNik]);
+
+  // Auto flip if playing Black
+  useEffect(() => {
+    if (mySide === 'b') {
+      setIsFlipped(true);
+    } else if (mySide === 'w') {
+      setIsFlipped(false);
+    }
+  }, [mySide]);
+
+  // ── SOCKET.IO MULTIPLAYER SYNC ──
+  useEffect(() => {
+    if (!isOpen) return;
+    const socket = getGlobalSocket();
+
+    const handleSync = (state: any) => {
+      if (state.board) setBoard(state.board);
+      if (state.currentTurn) setCurrentTurn(state.currentTurn);
+      if (state.isCheck !== undefined) setIsCheck(state.isCheck);
+      if (state.winner !== undefined) {
+        if (state.winner && !winner) playSfx('win');
+        setWinner(state.winner);
+      }
+      if (state.gameAnnouncement) setGameAnnouncement(state.gameAnnouncement);
+      if (state.capturedByWhite) setCapturedByWhite(state.capturedByWhite);
+      if (state.capturedByBlack) setCapturedByBlack(state.capturedByBlack);
+      if (state.whiteSeat !== undefined) setWhiteSeat(state.whiteSeat);
+      if (state.blackSeat !== undefined) setBlackSeat(state.blackSeat);
+    };
+
+    socket.on('chess:sync', handleSync);
+    socket.emit('chess:get_state');
+
+    return () => {
+      socket.off('chess:sync', handleSync);
+    };
+  }, [isOpen, playSfx, winner]);
+
+  // Handle Seat Taking
+  const handleSit = (side: 'w' | 'b') => {
     playSfx('click');
+    const socket = getGlobalSocket();
+    socket.emit('chess:sit', {
+      side,
+      nik: effectiveNik,
+      name: playerName,
+      avatar: playerAvatar
+    });
   };
 
-  // Check if a square (targetR, targetC) is under attack by any piece of attackerColor
+  // Handle Standing Up
+  const handleStand = (side: 'w' | 'b') => {
+    playSfx('click');
+    const socket = getGlobalSocket();
+    socket.emit('chess:stand', { side });
+  };
+
+  // Handle Reset Game
+  const resetGame = () => {
+    playSfx('click');
+    const socket = getGlobalSocket();
+    socket.emit('chess:reset');
+    setSelectedSquare(null);
+  };
+
+  // Check if a square is under attack
   const isSquareAttacked = useCallback((b: BoardState, tr: number, tc: number, attackerColor: PieceColor): boolean => {
     const isInside = (nr: number, nc: number) => nr >= 0 && nr < 8 && nc >= 0 && nc < 8;
 
@@ -235,7 +284,7 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
       }
     }
 
-    // 4. Rook & Queen straight rays (Fix: prevents King moving into line of fire of enemy Rook!)
+    // 4. Rook & Queen straight rays
     const straightDirs: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     for (const [dr, dc] of straightDirs) {
       let step = 1;
@@ -270,13 +319,12 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
     return false;
   }, []);
 
-  // Calculate Candidate Moves for a given piece at (row, col)
+  // Pseudo-legal moves
   const getPseudoLegalMoves = useCallback((b: BoardState, r: number, c: number): { r: number; c: number; isCapture: boolean }[] => {
     const piece = b[r][c];
     if (!piece) return [];
     const color = piece.color;
     const moves: { r: number; c: number; isCapture: boolean }[] = [];
-
     const isInside = (nr: number, nc: number) => nr >= 0 && nr < 8 && nc >= 0 && nc < 8;
 
     if (piece.type === 'p') {
@@ -369,7 +417,7 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
     return moves;
   }, []);
 
-  // Strict Legal Moves: Filters out moves that leave or put the King under check/attack
+  // Strict Legal Moves
   const getLegalMoves = useCallback((b: BoardState, r: number, c: number): { r: number; c: number; isCapture: boolean }[] => {
     const candidateMoves = getPseudoLegalMoves(b, r, c);
     const piece = b[r][c];
@@ -378,12 +426,10 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
     const enemyColor: PieceColor = color === 'w' ? 'b' : 'w';
 
     return candidateMoves.filter(m => {
-      // Simulate move on cloned board
       const simBoard = b.map(row => row.map(cell => cell ? { ...cell } : null));
       simBoard[m.r][m.c] = simBoard[r][c];
       simBoard[r][c] = null;
 
-      // Locate our King's position
       let kingR = -1;
       let kingC = -1;
       for (let kr = 0; kr < 8; kr++) {
@@ -399,18 +445,17 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
       }
 
       if (kingR === -1) return false;
-      // If King would be attacked by any enemy piece (e.g. Rook), the move is ILLEGAL!
       return !isSquareAttacked(simBoard, kingR, kingC, enemyColor);
     });
   }, [getPseudoLegalMoves, isSquareAttacked]);
 
-  // Currently available moves for highlighted square
+  // Available moves for highlighted square
   const highlightedMoves = useMemo(() => {
     if (!selectedSquare) return [];
     return getLegalMoves(board, selectedSquare.r, selectedSquare.c);
   }, [board, selectedSquare, getLegalMoves]);
 
-  // Execute Move
+  // Execute Move & Broadcast via Socket
   const makeMove = useCallback((fromR: number, fromC: number, toR: number, toC: number) => {
     const movingPiece = board[fromR][fromC];
     if (!movingPiece) return;
@@ -418,62 +463,66 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
     const targetPiece = board[toR][toC];
     const isCapture = Boolean(targetPiece);
 
-    // Create next board
     const nextBoard = board.map(row => row.map(cell => (cell ? { ...cell } : null)));
     nextBoard[fromR][fromC] = null;
 
-    // Pawn Promotion to Queen
     if (movingPiece.type === 'p' && (toR === 0 || toR === 7)) {
       nextBoard[toR][toC] = { type: 'q', color: movingPiece.color, hasMoved: true };
     } else {
       nextBoard[toR][toC] = { ...movingPiece, hasMoved: true };
     }
 
-    // Update captured pieces
+    const nextCapturedByWhite = [...capturedByWhite];
+    const nextCapturedByBlack = [...capturedByBlack];
     if (targetPiece) {
       if (movingPiece.color === 'w') {
-        setCapturedByWhite(prev => [...prev, targetPiece]);
+        nextCapturedByWhite.push(targetPiece);
       } else {
-        setCapturedByBlack(prev => [...prev, targetPiece]);
+        nextCapturedByBlack.push(targetPiece);
       }
     }
 
-    setBoard(nextBoard);
-    setSelectedSquare(null);
-
-    // Audio SFX
     if (isCapture) {
       playSfx('capture');
     } else {
       playSfx('move');
     }
 
-    // Check Win (King Capture)
+    let nextWinner: string | null = null;
+    let announcement = '';
+
     if (targetPiece && targetPiece.type === 'k') {
       playSfx('win');
-      const winName = movingPiece.color === 'w' ? playerName : 'Master Catur Tambang';
-      setWinner(winName);
-      setGameAnnouncement(`🏆 SKAKMAT! ${winName} memenangkan duel catur!`);
-      return;
-    }
-
-    // Switch Turn
-    const nextTurn = movingPiece.color === 'w' ? 'b' : 'w';
-    setCurrentTurn(nextTurn);
-
-    if (nextTurn === 'b') {
-      setGameAnnouncement('Master Catur Tambang (Hitam) sedang berpikir...');
+      const moverName = movingPiece.color === 'w' ? (whiteSeat?.name || 'Putih') : (blackSeat?.name || 'Hitam');
+      nextWinner = moverName;
+      announcement = `🏆 SKAKMAT! ${moverName} memenangkan pertandingan catur!`;
     } else {
-      setGameAnnouncement('Giliran Anda (Putih) melangkah.');
+      const nextTurn = movingPiece.color === 'w' ? 'b' : 'w';
+      const moverName = movingPiece.color === 'w' ? (whiteSeat?.name || 'Putih') : (blackSeat?.name || 'Hitam');
+      const nextPlayerName = nextTurn === 'w' ? (whiteSeat?.name || 'Putih') : (blackSeat?.name || 'Hitam');
+      announcement = `${moverName} melangkah. Giliran: ${nextPlayerName} (${nextTurn === 'w' ? 'Putih' : 'Hitam'}).`;
     }
-  }, [board, playerName, playSfx]);
 
-  // AI Bot (Black) Movement Engine
+    const nextTurn = movingPiece.color === 'w' ? 'b' : 'w';
+    setSelectedSquare(null);
+
+    // Broadcast move to all lounge clients via Socket.io
+    const socket = getGlobalSocket();
+    socket.emit('chess:move', {
+      board: nextBoard,
+      nextTurn,
+      winner: nextWinner,
+      announcement,
+      capturedByWhite: nextCapturedByWhite,
+      capturedByBlack: nextCapturedByBlack
+    });
+  }, [board, capturedByWhite, capturedByBlack, whiteSeat, blackSeat, playSfx]);
+
+  // AI Solo fallback if user turns on AI mode and Black seat is empty
   useEffect(() => {
-    if (currentTurn !== 'b' || winner || !isOpen) return;
+    if (!vsAiMode || blackSeat || currentTurn !== 'b' || winner || !isOpen) return;
 
     const timer = setTimeout(() => {
-      // Collect all legal moves for all Black pieces
       const allBotMoves: { fromR: number; fromC: number; toR: number; toC: number; score: number }[] = [];
 
       for (let r = 0; r < 8; r++) {
@@ -484,61 +533,52 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
             legals.forEach(m => {
               const target = board[m.r][m.c];
               let score = 0;
-              if (target) {
-                score = PIECE_VALUES[target.type] * 10;
-              }
-              // Center control bias
-              if (m.r >= 3 && m.r <= 4 && m.c >= 3 && m.c <= 4) {
-                score += 5;
-              }
-              allBotMoves.push({
-                fromR: r,
-                fromC: c,
-                toR: m.r,
-                toC: m.c,
-                score
-              });
+              if (target) score = PIECE_VALUES[target.type] * 10;
+              if (m.r >= 3 && m.r <= 4 && m.c >= 3 && m.c <= 4) score += 5;
+              allBotMoves.push({ fromR: r, fromC: c, toR: m.r, toC: m.c, score });
             });
           }
         }
       }
 
       if (allBotMoves.length === 0) {
-        // Stalemate / Win
         playSfx('win');
-        setWinner(playerName);
-        setGameAnnouncement(`🏆 SKAKMAT! ${playerName} memenangkan duel catur!`);
+        const winName = whiteSeat?.name || playerName;
+        setWinner(winName);
         return;
       }
 
-      // Sort by score descending and add slight randomness for variety
       allBotMoves.sort((a, b) => b.score - a.score);
       const topPicks = allBotMoves.filter(m => m.score === allBotMoves[0].score);
       const chosen = topPicks[Math.floor(Math.random() * topPicks.length)] || allBotMoves[0];
-
       makeMove(chosen.fromR, chosen.fromC, chosen.toR, chosen.toC);
-    }, 700);
+    }, 800);
 
     return () => clearTimeout(timer);
-  }, [currentTurn, winner, isOpen, board, getLegalMoves, makeMove, playSfx, playerName]);
+  }, [vsAiMode, blackSeat, currentTurn, winner, isOpen, board, getLegalMoves, makeMove, whiteSeat, playerName, playSfx]);
 
-  // Square Click Handler for Player (White)
+  // Click on a square
   const handleSquareClick = (r: number, c: number) => {
-    if (currentTurn !== 'w' || winner) return;
+    if (winner) return;
+
+    // Permissions check: user can only move their seated color
+    // If user is not seated at all, allow spectating only
+    if (mySide && mySide !== currentTurn) return;
+    if (!mySide) return;
 
     const clickedPiece = board[r][c];
 
-    // If already selected, check if clicked square is a valid target move
+    // If already have selected square and clicking on a highlighted destination
     if (selectedSquare) {
-      const isTargetMove = highlightedMoves.some(m => m.r === r && m.c === c);
-      if (isTargetMove) {
+      const isTargetLegal = highlightedMoves.some(m => m.r === r && m.c === c);
+      if (isTargetLegal) {
         makeMove(selectedSquare.r, selectedSquare.c, r, c);
         return;
       }
     }
 
-    // Select White piece
-    if (clickedPiece && clickedPiece.color === 'w') {
+    // Select piece if matching current turn and user's color
+    if (clickedPiece && clickedPiece.color === currentTurn && clickedPiece.color === mySide) {
       setSelectedSquare({ r, c });
       playSfx('click');
     } else {
@@ -548,37 +588,49 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Board coordinates according to flip view
+  const rowIndices = isFlipped ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+  const colIndices = isFlipped ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 animate-in fade-in duration-300 select-none"
+      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300 select-none"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-2xl max-h-[92vh] rounded-3xl bg-[#090D16] border-2 border-amber-500/50 text-slate-100 shadow-[0_0_60px_rgba(245,158,11,0.25)] flex flex-col overflow-hidden relative"
+        className="w-full max-w-4xl h-[95vh] max-h-[880px] rounded-3xl bg-[#0F172A] border-2 border-amber-500/50 text-slate-100 shadow-[0_0_60px_rgba(245,158,11,0.25)] flex flex-col overflow-hidden relative"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Header Bar */}
-        <div className="px-5 py-3 border-b border-amber-500/30 bg-slate-950/80 flex items-center justify-between z-10">
+        {/* Top Header */}
+        <div className="px-5 py-3 border-b border-amber-500/30 bg-slate-950/85 flex items-center justify-between z-10 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-950/90 border border-amber-400/60 flex items-center justify-center text-xl shadow-inner">
+            <div className="w-10 h-10 rounded-2xl bg-amber-950/90 border border-amber-400/60 flex items-center justify-center text-2xl shadow-inner">
               ♟️
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono font-black uppercase tracking-wider text-amber-400">
-                  Meja Catur 2 Kursi
+                  Meja Catur 2 Pemain
                 </span>
                 <span className="text-[9px] px-1.5 py-0.5 bg-emerald-950/90 text-emerald-300 font-bold rounded-md border border-emerald-800 flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5" /> UNDERGROUND BUNKER
+                  <Sparkles className="w-2.5 h-2.5" /> MULTIPLAYER ONLINE REAL-TIME
                 </span>
               </div>
               <h3 className="text-sm sm:text-base font-black text-white tracking-wide">
-                Duel Catur PrepLab ({playerName} vs Master Catur Tambang)
+                Duel Catur Bawah Tanah Tambang (Underground Chess)
               </h3>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsFlipped(!isFlipped)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-amber-950/50 transition-colors cursor-pointer"
+              title="Balik Posisi Papan (Flip View)"
+            >
+              <ArrowUpDown className="w-4 h-4" />
+            </button>
             <button
               type="button"
               onClick={() => setSoundOn(!soundOn)}
@@ -598,78 +650,127 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
           </div>
         </div>
 
-        {/* Ticker Status Bar */}
-        <div className="px-5 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between text-xs font-mono z-10">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${currentTurn === 'w' ? 'bg-amber-400 animate-pulse' : 'bg-purple-400'}`} />
-            <span className="text-slate-200 font-bold tracking-wide">
+        {/* Ticker & Status Bar */}
+        <div className="px-5 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between text-xs font-mono z-10 shrink-0">
+          <div className="flex items-center gap-2 truncate">
+            <span className="animate-pulse text-amber-400">●</span>
+            <span className="text-slate-200 font-bold tracking-wide truncate">
               {gameAnnouncement}
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={resetGame}
-            className="text-[11px] text-slate-400 hover:text-amber-300 transition-colors flex items-center gap-1 cursor-pointer"
-          >
-            <RotateCcw className="w-3 h-3" /> Ulang Pertandingan
-          </button>
-        </div>
-
-        {/* Opponent Info (Top) */}
-        <div className="px-5 py-1.5 bg-slate-900/60 border-b border-slate-800/80 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-base">🤖</span>
-            <span className="font-bold text-purple-300">Master Catur Tambang (Hitam)</span>
-          </div>
-          {/* Captured pieces by Black */}
-          <div className="flex items-center gap-1 text-slate-200 text-sm">
-            {capturedByBlack.map((p, i) => (
-              <span key={`cb-${i}`} title={PIECE_SYMBOLS[p.type].name}>
-                {PIECE_SYMBOLS[p.type].w}
-              </span>
-            ))}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={resetGame}
+              className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer active:scale-95"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reset Papan
+            </button>
           </div>
         </div>
 
-        {/* Main Chess Board Area */}
-        <div className="flex-1 p-4 flex items-center justify-center overflow-auto">
-          <div className="relative p-2 rounded-2xl bg-amber-950/80 border-4 border-amber-800/80 shadow-2xl">
-            {/* 8x8 Grid */}
-            <div className="grid grid-cols-8 grid-rows-8 w-[280px] h-[280px] sm:w-[360px] sm:h-[360px] border border-amber-900">
-              {board.map((row, r) =>
-                row.map((piece, c) => {
-                  const isDark = (r + c) % 2 === 1;
+        {/* ── CHESS ARENA (2 PLAYERS & 8x8 BOARD) ── */}
+        <div className="flex-1 p-3 flex flex-col justify-between items-center overflow-hidden bg-[#0A0E1A]">
+          {/* BLACK PLAYER BAR (TOP) */}
+          <div className="w-full max-w-[480px] flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-md z-10 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-slate-950 border border-slate-600 flex items-center justify-center text-xl shadow-inner">
+                {blackSeat?.avatar || '♟️'}
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-black text-white">
+                    {blackSeat ? blackSeat.name : 'Bidak Hitam (Kursi Kosong)'}
+                  </span>
+                  {blackSeat && blackSeat.nik === effectiveNik && (
+                    <span className="text-[9px] px-1 bg-amber-500/20 text-amber-300 font-mono rounded">ANDA</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                  <span>Bidak Tereliminasi:</span>
+                  <span className="text-slate-200 font-serif">
+                    {capturedByWhite.map((p, i) => PIECE_SYMBOLS[p.type].b).join(' ')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {currentTurn === 'b' && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse font-mono font-bold">
+                  GILIRAN HITAM
+                </span>
+              )}
+              {blackSeat ? (
+                blackSeat.nik === effectiveNik && (
+                  <button onClick={() => handleStand('b')} className="text-slate-400 hover:text-red-400 text-xs p-1" title="Berdiri">
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                )
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleSit('b')}
+                    className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-amber-950/80 border border-slate-600 hover:border-amber-500/60 text-slate-300 hover:text-amber-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <UserPlus className="w-3 h-3" /> Ambil Hitam
+                  </button>
+                  <button
+                    onClick={() => setVsAiMode(!vsAiMode)}
+                    className={`px-2 py-1 rounded-xl border text-[10px] font-mono cursor-pointer transition-all ${
+                      vsAiMode ? 'bg-purple-950 border-purple-400 text-purple-300' : 'bg-slate-800 border-slate-700 text-slate-400'
+                    }`}
+                    title="Aktifkan AI Bunker jika bermain solo"
+                  >
+                    AI Bot {vsAiMode ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 8x8 CHESS BOARD */}
+          <div className="my-auto relative p-2.5 rounded-3xl bg-[#2D1B10] border-4 border-[#5E3A1E] shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
+            <div className="grid grid-cols-8 grid-rows-8 w-[320px] h-[320px] sm:w-[420px] sm:h-[420px] rounded-xl overflow-hidden border border-amber-900/60 shadow-inner">
+              {rowIndices.map((r) =>
+                colIndices.map((c) => {
+                  const piece = board[r][c];
+                  const isLight = (r + c) % 2 === 0;
                   const isSelected = selectedSquare?.r === r && selectedSquare?.c === c;
                   const isLegalTarget = highlightedMoves.some(m => m.r === r && m.c === c);
-                  const isCaptureTarget = isLegalTarget && Boolean(piece);
+                  const isCheckSquare = piece?.type === 'k' && piece?.color === isCheck;
 
                   return (
                     <div
                       key={`sq-${r}-${c}`}
                       onClick={() => handleSquareClick(r, c)}
                       className={`relative flex items-center justify-center cursor-pointer transition-all ${
-                        isDark ? 'bg-[#78350F]' : 'bg-[#F3E8D2]'
-                      } ${isSelected ? 'ring-4 ring-amber-400 z-10' : ''}`}
+                        isLight ? 'bg-[#F2D7B4]' : 'bg-[#B58863]'
+                      } ${isSelected ? 'ring-3 ring-amber-400 bg-amber-300/80 z-10' : ''} ${
+                        isCheckSquare ? 'bg-red-600/80 ring-3 ring-red-400 animate-pulse' : ''
+                      }`}
                     >
-                      {/* Legal Move Dot Marker */}
-                      {isLegalTarget && !isCaptureTarget && (
-                        <div className="w-3 h-3 rounded-full bg-emerald-400 opacity-80 animate-pulse pointer-events-none" />
+                      {/* Destination Highlight Dot or Ring */}
+                      {isLegalTarget && (
+                        <div
+                          className={`absolute z-10 pointer-events-none rounded-full ${
+                            piece
+                              ? 'w-full h-full border-4 border-red-500/80 bg-red-500/20'
+                              : 'w-3.5 h-3.5 bg-emerald-600/80 shadow-md ring-2 ring-emerald-300'
+                          }`}
+                        />
                       )}
 
-                      {/* Capture Target Marker */}
-                      {isCaptureTarget && (
-                        <div className="absolute inset-1 rounded-full border-2 border-red-500 bg-red-500/20 animate-pulse pointer-events-none" />
-                      )}
-
-                      {/* Piece Character */}
+                      {/* Chess Piece Symbol */}
                       {piece && (
                         <span
-                          className={`text-2xl sm:text-3xl font-black select-none transition-transform hover:scale-110 ${
+                          className={`font-serif text-3xl sm:text-4xl transition-transform select-none ${
                             piece.color === 'w'
-                              ? 'text-amber-100 drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)]'
-                              : 'text-slate-950 drop-shadow-[0_1px_2px_rgba(255,255,255,0.4)]'
-                          }`}
+                              ? 'text-[#FFFFFF] drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)]'
+                              : 'text-[#1E293B] drop-shadow-[0_2px_4px_rgba(255,255,255,0.4)]'
+                          } ${isSelected ? 'scale-115 -translate-y-1' : 'hover:scale-105'}`}
+                          title={`${piece.color === 'w' ? 'Putih' : 'Hitam'} ${PIECE_SYMBOLS[piece.type].name}`}
                         >
                           {piece.color === 'w' ? PIECE_SYMBOLS[piece.type].w : PIECE_SYMBOLS[piece.type].b}
                         </span>
@@ -680,21 +781,52 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
               )}
             </div>
           </div>
-        </div>
 
-        {/* Player Info (Bottom) */}
-        <div className="px-5 py-2 bg-slate-900/80 border-t border-slate-800/80 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-base">👷</span>
-            <span className="font-bold text-amber-300">{playerName} (Putih - Giliran Anda)</span>
-          </div>
-          {/* Captured pieces by White */}
-          <div className="flex items-center gap-1 text-slate-200 text-sm">
-            {capturedByWhite.map((p, i) => (
-              <span key={`cw-${i}`} title={PIECE_SYMBOLS[p.type].name}>
-                {PIECE_SYMBOLS[p.type].b}
-              </span>
-            ))}
+          {/* WHITE PLAYER BAR (BOTTOM) */}
+          <div className="w-full max-w-[480px] flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-md z-10 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center text-xl shadow-inner text-slate-900">
+                {whiteSeat?.avatar || '♟️'}
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-black text-white">
+                    {whiteSeat ? whiteSeat.name : 'Bidak Putih (Kursi Kosong)'}
+                  </span>
+                  {whiteSeat && whiteSeat.nik === effectiveNik && (
+                    <span className="text-[9px] px-1 bg-amber-500/20 text-amber-300 font-mono rounded">ANDA</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                  <span>Bidak Tereliminasi:</span>
+                  <span className="text-slate-200 font-serif">
+                    {capturedByBlack.map((p, i) => PIECE_SYMBOLS[p.type].w).join(' ')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {currentTurn === 'w' && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse font-mono font-bold">
+                  GILIRAN PUTIH
+                </span>
+              )}
+              {whiteSeat ? (
+                whiteSeat.nik === effectiveNik && (
+                  <button onClick={() => handleStand('w')} className="text-slate-400 hover:text-red-400 text-xs p-1" title="Berdiri">
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                )
+              ) : (
+                <button
+                  onClick={() => handleSit('w')}
+                  className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-emerald-950/80 border border-slate-600 hover:border-emerald-500/60 text-slate-300 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+                >
+                  <UserPlus className="w-3 h-3" /> Ambil Putih
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

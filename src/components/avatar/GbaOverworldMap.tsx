@@ -547,6 +547,70 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
     });
   }, [otherPlayers]);
 
+  // Contextual Sitting at Domino Table then Open Modal
+  const handleSeatAtDominoTable = useCallback((targetSeat: 'top' | 'bottom' | 'left' | 'right' = 'bottom') => {
+    const dominoSlots: Record<'top' | 'bottom' | 'left' | 'right', { x: number; y: number; facing: 'down' | 'up' | 'left' | 'right' }> = {
+      top: { x: 3.8, y: 3.45, facing: 'down' },
+      bottom: { x: 3.8, y: 5.75, facing: 'up' },
+      left: { x: 2.2, y: 4.6, facing: 'right' },
+      right: { x: 5.4, y: 4.6, facing: 'left' }
+    };
+    const chosen = dominoSlots[targetSeat] || dominoSlots.bottom;
+
+    // Check if player is already sitting at this exact slot
+    const isAlreadySittingHere = 
+      Math.abs(movementRef.current.currentX - chosen.x) < 0.25 && 
+      Math.abs(movementRef.current.currentY - chosen.y) < 0.25 &&
+      actionState === 'sit';
+
+    if (isAlreadySittingHere) {
+      if (onOpenDominoGame) onOpenDominoGame(targetSeat);
+      return;
+    }
+
+    startMoveTo(chosen.x, chosen.y, {
+      action: 'sit',
+      facing: chosen.facing,
+      speech: `🀄 Duduk di Kursi ${targetSeat.toUpperCase()} Meja Gaple...`,
+      callback: () => {
+        // Ensure avatar is visibly seated first, then open game modal with a short smooth transition
+        setTimeout(() => {
+          if (onOpenDominoGame) onOpenDominoGame(targetSeat);
+        }, 350);
+      }
+    });
+  }, [actionState, startMoveTo, onOpenDominoGame]);
+
+  // Contextual Sitting at Chess Table then Open Modal
+  const handleSeatAtChessTable = useCallback((targetSeat: 'left' | 'right' = 'left') => {
+    const chessSlots: Record<'left' | 'right', { x: number; y: number; facing: 'right' | 'left' }> = {
+      left: { x: 7.4, y: 4.6, facing: 'right' },
+      right: { x: 10.2, y: 4.6, facing: 'left' }
+    };
+    const chosen = chessSlots[targetSeat] || chessSlots.left;
+
+    const isAlreadySittingHere = 
+      Math.abs(movementRef.current.currentX - chosen.x) < 0.25 && 
+      Math.abs(movementRef.current.currentY - chosen.y) < 0.25 &&
+      actionState === 'sit';
+
+    if (isAlreadySittingHere) {
+      if (onOpenChessGame) onOpenChessGame(targetSeat);
+      return;
+    }
+
+    startMoveTo(chosen.x, chosen.y, {
+      action: 'sit',
+      facing: chosen.facing,
+      speech: `♟️ Duduk di Kursi ${targetSeat === 'left' ? 'Putih' : 'Hitam'} Meja Catur...`,
+      callback: () => {
+        setTimeout(() => {
+          if (onOpenChessGame) onOpenChessGame(targetSeat);
+        }, 350);
+      }
+    });
+  }, [actionState, startMoveTo, onOpenChessGame]);
+
   // Direct Tap Interaction Handler (With 100% Precise SVG Coordinates)
   const handleDirectTap = useCallback((tx: number, ty: number) => {
     // 1. Lounge Door (Col 8.5..10.5, Row 4.8..6.5 in interior rooms)
@@ -692,44 +756,22 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
       // 2. Meja Gaple 4 Kursi: (x: 2.0..5.8, y: 3.2..6.2)
       if (tx >= 2.0 && tx <= 5.8 && ty >= 3.2 && ty <= 6.2) {
         const dominoSlots = [
-          { x: 3.8, y: 3.45, facing: 'down' as const, seat: 'top' as const },
-          { x: 3.8, y: 5.75, facing: 'up' as const, seat: 'bottom' as const },
-          { x: 2.2, y: 4.6, facing: 'right' as const, seat: 'left' as const },
-          { x: 5.4, y: 4.6, facing: 'left' as const, seat: 'right' as const }
+          { seat: 'top' as const, x: 3.8, y: 3.45 },
+          { seat: 'bottom' as const, x: 3.8, y: 5.75 },
+          { seat: 'left' as const, x: 2.2, y: 4.6 },
+          { seat: 'right' as const, x: 5.4, y: 4.6 }
         ];
         const sortedSlots = [...dominoSlots].sort((a, b) => 
           Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty)
         );
-        const chosen = sortedSlots[0];
-        startMoveTo(chosen.x, chosen.y, {
-          action: 'sit',
-          facing: chosen.facing,
-          speech: `🀄 Duduk di Kursi ${chosen.seat.toUpperCase()} Meja Gaple...`,
-          callback: () => {
-            if (onOpenDominoGame) onOpenDominoGame(chosen.seat);
-          }
-        });
+        handleSeatAtDominoTable(sortedSlots[0].seat);
         return;
       }
 
       // 3. Meja Catur 2 Kursi: (x: 7.2..10.6, y: 3.2..6.2)
       if (tx >= 7.2 && tx <= 10.6 && ty >= 3.2 && ty <= 6.2) {
-        const chessSlots = [
-          { x: 7.4, y: 4.6, facing: 'right' as const, seat: 'left' as const },
-          { x: 10.2, y: 4.6, facing: 'left' as const, seat: 'right' as const }
-        ];
-        const sortedSlots = [...chessSlots].sort((a, b) => 
-          Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty)
-        );
-        const chosen = sortedSlots[0];
-        startMoveTo(chosen.x, chosen.y, {
-          action: 'sit',
-          facing: chosen.facing,
-          speech: `♟️ Duduk di Kursi ${chosen.seat === 'left' ? 'Putih' : 'Hitam'} Meja Catur...`,
-          callback: () => {
-            if (onOpenChessGame) onOpenChessGame(chosen.seat);
-          }
-        });
+        const chosenSeat = tx < 8.8 ? 'left' : 'right';
+        handleSeatAtChessTable(chosenSeat);
         return;
       }
 
@@ -1461,24 +1503,16 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
               {/* 5. Center-Left: 4-Seater Domino (Gaple) Table */}
               <g transform="translate(36, 52)">
                 <GbaUndergroundDominoTable 
-                  onClick={() => {
-                    if (onOpenDominoGame) onOpenDominoGame('bottom');
-                  }}
-                  onSeatClick={(seat) => {
-                    if (onOpenDominoGame) onOpenDominoGame(seat);
-                  }}
+                  onClick={() => handleSeatAtDominoTable('bottom')}
+                  onSeatClick={(seat) => handleSeatAtDominoTable(seat)}
                 />
               </g>
 
               {/* 6. Center-Right: 2-Seater Chess Table */}
               <g transform="translate(122, 56)">
                 <GbaUndergroundChessTable 
-                  onClick={() => {
-                    if (onOpenChessGame) onOpenChessGame('left');
-                  }}
-                  onSeatClick={(seat) => {
-                    if (onOpenChessGame) onOpenChessGame(seat);
-                  }}
+                  onClick={() => handleSeatAtChessTable('left')}
+                  onSeatClick={(seat) => handleSeatAtChessTable(seat)}
                 />
               </g>
 

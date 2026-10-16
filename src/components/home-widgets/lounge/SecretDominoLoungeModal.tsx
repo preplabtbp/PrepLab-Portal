@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { X, Trophy, Volume2, VolumeX, Sparkles, RotateCcw, ArrowLeft, ArrowRight, ShieldAlert, Award } from 'lucide-react';
+import { X, Trophy, Volume2, VolumeX, Sparkles, RotateCcw, ArrowLeft, ArrowRight, UserPlus, LogOut } from 'lucide-react';
+import { getGlobalSocket } from '../../../lib/socketClient';
 
 export interface DominoTile {
   id: string;
@@ -9,57 +10,43 @@ export interface DominoTile {
 
 export interface PlacedChainTile {
   id: string;
-  val1: number; // Left/Inward half
-  val2: number; // Right/Outward half
+  val1: number;
+  val2: number;
   isBalak: boolean;
   playedBy: string;
+  isOrigin?: boolean;
 }
 
-export interface DominoPlayer {
-  id: string;
+export interface DominoSeatPlayer {
+  seatIdx: number;
+  nik: string;
   name: string;
-  title: string;
-  avatar: string;
-  hand: DominoTile[];
-  isBot: boolean;
+  avatar?: string;
+  socketId: string;
+  isBot?: boolean;
+  handCount: number;
 }
 
 interface SecretDominoLoungeModalProps {
   isOpen: boolean;
   onClose: () => void;
   playerName: string;
+  playerNik?: string;
+  playerAvatar?: string;
   soundEnabled?: boolean;
 }
 
 // 28 Standard Indonesian Domino (Gaple) Tiles
 const ALL_DOMINO_TILES: DominoTile[] = [
-  { id: '0-0', left: 0, right: 0 },
-  { id: '0-1', left: 0, right: 1 },
-  { id: '0-2', left: 0, right: 2 },
-  { id: '0-3', left: 0, right: 3 },
-  { id: '0-4', left: 0, right: 4 },
-  { id: '0-5', left: 0, right: 5 },
-  { id: '0-6', left: 0, right: 6 },
-  { id: '1-1', left: 1, right: 1 },
-  { id: '1-2', left: 1, right: 2 },
-  { id: '1-3', left: 1, right: 3 },
-  { id: '1-4', left: 1, right: 4 },
-  { id: '1-5', left: 1, right: 5 },
-  { id: '1-6', left: 1, right: 6 },
-  { id: '2-2', left: 2, right: 2 },
-  { id: '2-3', left: 2, right: 3 },
-  { id: '2-4', left: 2, right: 4 },
-  { id: '2-5', left: 2, right: 5 },
-  { id: '2-6', left: 2, right: 6 },
-  { id: '3-3', left: 3, right: 3 },
-  { id: '3-4', left: 3, right: 4 },
-  { id: '3-5', left: 3, right: 5 },
-  { id: '3-6', left: 3, right: 6 },
-  { id: '4-4', left: 4, right: 4 },
-  { id: '4-5', left: 4, right: 5 },
-  { id: '4-6', left: 4, right: 6 },
-  { id: '5-5', left: 5, right: 5 },
-  { id: '5-6', left: 5, right: 6 },
+  { id: '0-0', left: 0, right: 0 }, { id: '0-1', left: 0, right: 1 }, { id: '0-2', left: 0, right: 2 },
+  { id: '0-3', left: 0, right: 3 }, { id: '0-4', left: 0, right: 4 }, { id: '0-5', left: 0, right: 5 },
+  { id: '0-6', left: 0, right: 6 }, { id: '1-1', left: 1, right: 1 }, { id: '1-2', left: 1, right: 2 },
+  { id: '1-3', left: 1, right: 3 }, { id: '1-4', left: 1, right: 4 }, { id: '1-5', left: 1, right: 5 },
+  { id: '1-6', left: 1, right: 6 }, { id: '2-2', left: 2, right: 2 }, { id: '2-3', left: 2, right: 3 },
+  { id: '2-4', left: 2, right: 4 }, { id: '2-5', left: 2, right: 5 }, { id: '2-6', left: 2, right: 6 },
+  { id: '3-3', left: 3, right: 3 }, { id: '3-4', left: 3, right: 4 }, { id: '3-5', left: 3, right: 5 },
+  { id: '3-6', left: 3, right: 6 }, { id: '4-4', left: 4, right: 4 }, { id: '4-5', left: 4, right: 5 },
+  { id: '4-6', left: 4, right: 6 }, { id: '5-5', left: 5, right: 5 }, { id: '5-6', left: 5, right: 6 },
   { id: '6-6', left: 6, right: 6 }
 ];
 
@@ -136,7 +123,7 @@ function playDominoAudio(type: 'clack' | 'pass' | 'win' | 'deal' | 'click') {
   } catch {}
 }
 
-// Render Red Domino Pips for One Half (0 to 6 dots)
+// Render Red Domino Pips for One Half (0 to 6 dots) for DOM elements
 export const DominoHalfPips: React.FC<{ value: number; size?: 'sm' | 'md' }> = ({ value, size = 'md' }) => {
   const dotSize = size === 'sm' ? 'w-1 h-1' : 'w-1.5 h-1.5';
 
@@ -189,27 +176,309 @@ export const DominoHalfPips: React.FC<{ value: number; size?: 'sm' | 'md' }> = (
   );
 };
 
+// ── SVG PIP RENDERER FOR 2D SERPENTINE BOARD ──
+function renderSvgPips(val: number, cx: number, cy: number, spanX: number, spanY: number) {
+  const r = 2.1;
+  const color = '#DC2626';
+  const dx = spanX * 0.32;
+  const dy = spanY * 0.32;
+
+  switch (val) {
+    case 1:
+      return [<circle key="c1" cx={cx} cy={cy} r={r} fill={color} />];
+    case 2:
+      return [
+        <circle key="c1" cx={cx - dx} cy={cy - dy} r={r} fill={color} />,
+        <circle key="c2" cx={cx + dx} cy={cy + dy} r={r} fill={color} />
+      ];
+    case 3:
+      return [
+        <circle key="c1" cx={cx - dx} cy={cy - dy} r={r} fill={color} />,
+        <circle key="c2" cx={cx} cy={cy} r={r} fill={color} />,
+        <circle key="c3" cx={cx + dx} cy={cy + dy} r={r} fill={color} />
+      ];
+    case 4:
+      return [
+        <circle key="c1" cx={cx - dx} cy={cy - dy} r={r} fill={color} />,
+        <circle key="c2" cx={cx + dx} cy={cy - dy} r={r} fill={color} />,
+        <circle key="c3" cx={cx - dx} cy={cy + dy} r={r} fill={color} />,
+        <circle key="c4" cx={cx + dx} cy={cy + dy} r={r} fill={color} />
+      ];
+    case 5:
+      return [
+        <circle key="c1" cx={cx - dx} cy={cy - dy} r={r} fill={color} />,
+        <circle key="c2" cx={cx + dx} cy={cy - dy} r={r} fill={color} />,
+        <circle key="c3" cx={cx} cy={cy} r={r} fill={color} />,
+        <circle key="c4" cx={cx - dx} cy={cy + dy} r={r} fill={color} />,
+        <circle key="c5" cx={cx + dx} cy={cy + dy} r={r} fill={color} />
+      ];
+    case 6:
+      // If horizontal half vs vertical half
+      if (spanX > spanY) {
+        return [
+          <circle key="c1" cx={cx - dx} cy={cy - dy} r={r} fill={color} />,
+          <circle key="c2" cx={cx} cy={cy - dy} r={r} fill={color} />,
+          <circle key="c3" cx={cx + dx} cy={cy - dy} r={r} fill={color} />,
+          <circle key="c4" cx={cx - dx} cy={cy + dy} r={r} fill={color} />,
+          <circle key="c5" cx={cx} cy={cy + dy} r={r} fill={color} />,
+          <circle key="c6" cx={cx + dx} cy={cy + dy} r={r} fill={color} />
+        ];
+      } else {
+        return [
+          <circle key="c1" cx={cx - dx} cy={cy - dy} r={r} fill={color} />,
+          <circle key="c2" cx={cx + dx} cy={cy - dy} r={r} fill={color} />,
+          <circle key="c3" cx={cx - dx} cy={cy} r={r} fill={color} />,
+          <circle key="c4" cx={cx + dx} cy={cy} r={r} fill={color} />,
+          <circle key="c5" cx={cx - dx} cy={cy + dy} r={r} fill={color} />,
+          <circle key="c6" cx={cx + dx} cy={cy + dy} r={r} fill={color} />
+        ];
+      }
+    default:
+      return [];
+  }
+}
+
+// ── SERPENTINE DOMINO LAYOUT COMPUTATION (MATCHING IMAGE 2) ──
+interface LayoutTile {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  val1: number;
+  val2: number;
+  isBalak: boolean;
+  playedBy: string;
+  isVertical: boolean;
+  isLeftEnd: boolean;
+  isRightEnd: boolean;
+}
+
+function computeSerpentineLayout(boardChain: PlacedChainTile[]): LayoutTile[] {
+  if (boardChain.length === 0) return [];
+
+  // Table boundaries in SVG coords (740 x 250)
+  const MID_Y = 125;
+  const TOP_Y = 46;
+  const BOT_Y = 204;
+  const MAX_RIGHT = 660;
+  const MIN_LEFT = 80;
+  const GAP = 2;
+
+  const NORM_LONG = 46;
+  const NORM_SHORT = 23;
+
+  // Find origin tile
+  let originIdx = boardChain.findIndex(t => t.isOrigin);
+  if (originIdx === -1) originIdx = Math.floor(boardChain.length / 2);
+
+  const result: (LayoutTile | null)[] = Array(boardChain.length).fill(null);
+
+  // 1. Layout Origin Tile at center
+  const orig = boardChain[originIdx];
+  const origIsVert = orig.isBalak;
+  const origW = origIsVert ? NORM_SHORT : NORM_LONG;
+  const origH = origIsVert ? NORM_LONG : NORM_SHORT;
+  const origX = 370;
+  const origY = MID_Y;
+
+  result[originIdx] = {
+    id: orig.id,
+    x: origX,
+    y: origY,
+    w: origW,
+    h: origH,
+    val1: orig.val1,
+    val2: orig.val2,
+    isBalak: orig.isBalak,
+    playedBy: orig.playedBy,
+    isVertical: origIsVert,
+    isLeftEnd: originIdx === 0,
+    isRightEnd: originIdx === boardChain.length - 1
+  };
+
+  // 2. Right Branch (from originIdx + 1 to boardChain.length - 1)
+  let prevTile = result[originIdx]!;
+  let headingRight: 'EAST' | 'SOUTH' | 'WEST' = 'EAST';
+
+  for (let i = originIdx + 1; i < boardChain.length; i++) {
+    const tile = boardChain[i];
+    // In horizontal runs: normal is horizontal, balak is vertical
+    // In vertical runs: normal is vertical, balak is horizontal
+    let isVert = false;
+    if (headingRight === 'EAST' || headingRight === 'WEST') {
+      isVert = tile.isBalak;
+    } else {
+      isVert = !tile.isBalak;
+    }
+
+    let w = isVert ? NORM_SHORT : NORM_LONG;
+    let h = isVert ? NORM_LONG : NORM_SHORT;
+    let x = prevTile.x;
+    let y = prevTile.y;
+
+    if (headingRight === 'EAST') {
+      const nextRightX = prevTile.x + prevTile.w / 2 + GAP + w / 2;
+      if (nextRightX > MAX_RIGHT) {
+        // TURN SOUTH
+        headingRight = 'SOUTH';
+        isVert = !tile.isBalak;
+        w = isVert ? NORM_SHORT : NORM_LONG;
+        h = isVert ? NORM_LONG : NORM_SHORT;
+        x = prevTile.x;
+        y = prevTile.y + prevTile.h / 2 + GAP + h / 2;
+      } else {
+        x = nextRightX;
+        y = MID_Y;
+      }
+    } else if (headingRight === 'SOUTH') {
+      const nextBottomY = prevTile.y + prevTile.h / 2 + GAP + h / 2;
+      if (nextBottomY > BOT_Y) {
+        // TURN WEST
+        headingRight = 'WEST';
+        isVert = tile.isBalak;
+        w = isVert ? NORM_SHORT : NORM_LONG;
+        h = isVert ? NORM_LONG : NORM_SHORT;
+        y = BOT_Y;
+        x = prevTile.x - prevTile.w / 2 - GAP - w / 2;
+      } else {
+        x = prevTile.x;
+        y = nextBottomY;
+      }
+    } else if (headingRight === 'WEST') {
+      // Continue westward on bottom row
+      isVert = tile.isBalak;
+      w = isVert ? NORM_SHORT : NORM_LONG;
+      h = isVert ? NORM_LONG : NORM_SHORT;
+      x = prevTile.x - prevTile.w / 2 - GAP - w / 2;
+      y = BOT_Y;
+    }
+
+    const item: LayoutTile = {
+      id: tile.id,
+      x,
+      y,
+      w,
+      h,
+      val1: tile.val1,
+      val2: tile.val2,
+      isBalak: tile.isBalak,
+      playedBy: tile.playedBy,
+      isVertical: isVert,
+      isLeftEnd: i === 0,
+      isRightEnd: i === boardChain.length - 1
+    };
+    result[i] = item;
+    prevTile = item;
+  }
+
+  // 3. Left Branch (from originIdx - 1 down to 0)
+  prevTile = result[originIdx]!;
+  let headingLeft: 'WEST' | 'NORTH' | 'EAST' = 'WEST';
+
+  for (let i = originIdx - 1; i >= 0; i--) {
+    const tile = boardChain[i];
+    let isVert = false;
+    if (headingLeft === 'WEST' || headingLeft === 'EAST') {
+      isVert = tile.isBalak;
+    } else {
+      isVert = !tile.isBalak;
+    }
+
+    let w = isVert ? NORM_SHORT : NORM_LONG;
+    let h = isVert ? NORM_LONG : NORM_SHORT;
+    let x = prevTile.x;
+    let y = prevTile.y;
+
+    if (headingLeft === 'WEST') {
+      const nextLeftX = prevTile.x - prevTile.w / 2 - GAP - w / 2;
+      if (nextLeftX < MIN_LEFT) {
+        // TURN NORTH
+        headingLeft = 'NORTH';
+        isVert = !tile.isBalak;
+        w = isVert ? NORM_SHORT : NORM_LONG;
+        h = isVert ? NORM_LONG : NORM_SHORT;
+        x = prevTile.x;
+        y = prevTile.y - prevTile.h / 2 - GAP - h / 2;
+      } else {
+        x = nextLeftX;
+        y = MID_Y;
+      }
+    } else if (headingLeft === 'NORTH') {
+      const nextTopY = prevTile.y - prevTile.h / 2 - GAP - h / 2;
+      if (nextTopY < TOP_Y) {
+        // TURN EAST
+        headingLeft = 'EAST';
+        isVert = tile.isBalak;
+        w = isVert ? NORM_SHORT : NORM_LONG;
+        h = isVert ? NORM_LONG : NORM_SHORT;
+        y = TOP_Y;
+        x = prevTile.x + prevTile.w / 2 + GAP + w / 2;
+      } else {
+        x = prevTile.x;
+        y = nextTopY;
+      }
+    } else if (headingLeft === 'EAST') {
+      // Continue eastward on top row
+      isVert = tile.isBalak;
+      w = isVert ? NORM_SHORT : NORM_LONG;
+      h = isVert ? NORM_LONG : NORM_SHORT;
+      x = prevTile.x + prevTile.w / 2 + GAP + w / 2;
+      y = TOP_Y;
+    }
+
+    const item: LayoutTile = {
+      id: tile.id,
+      x,
+      y,
+      w,
+      h,
+      val1: tile.val1,
+      val2: tile.val2,
+      isBalak: tile.isBalak,
+      playedBy: tile.playedBy,
+      isVertical: isVert,
+      isLeftEnd: i === 0,
+      isRightEnd: i === boardChain.length - 1
+    };
+    result[i] = item;
+    prevTile = item;
+  }
+
+  return result.filter(Boolean) as LayoutTile[];
+}
+
 export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = ({
   isOpen,
   onClose,
   playerName,
+  playerNik,
+  playerAvatar,
   soundEnabled = true
 }) => {
-  const [players, setPlayers] = useState<DominoPlayer[]>([]);
+  const [seats, setSeats] = useState<(DominoSeatPlayer | null)[]>([null, null, null, null]);
   const [boardChain, setBoardChain] = useState<PlacedChainTile[]>([]);
   const [currentTurnIndex, setCurrentTurnIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [roundWinner, setRoundWinner] = useState<string | null>(null);
   const [consecutivePasses, setConsecutivePasses] = useState<number>(0);
-  const [gameAnnouncement, setGameAnnouncement] = useState<string>('Tekan Mulai untuk membagikan kartu Gaple.');
+  const [gameAnnouncement, setGameAnnouncement] = useState<string>('Menunggu pemain mengambil kursi dan menekan Mulai...');
+  const [myHand, setMyHand] = useState<DominoTile[]>([]);
   const [soundOn, setSoundOn] = useState<boolean>(soundEnabled);
   const [pendingChoiceTile, setPendingChoiceTile] = useState<DominoTile | null>(null);
+
+  const effectiveNik = playerNik || playerName;
 
   const playSfx = useCallback((type: 'clack' | 'pass' | 'win' | 'deal' | 'click') => {
     if (soundOn) playDominoAudio(type);
   }, [soundOn]);
 
-  // Open Ends of the chain
+  // Which seat does current user occupy (if any)?
+  const mySeatIdx = useMemo(() => {
+    return seats.findIndex(s => s && s.nik === effectiveNik);
+  }, [seats, effectiveNik]);
+
+  // Open ends of the chain
   const openEnds = useMemo(() => {
     if (boardChain.length === 0) return null;
     return {
@@ -218,44 +487,7 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
     };
   }, [boardChain]);
 
-  // Serpentine Snake Path with authentic 90-degree corner connectors
-  const serpentineRows = useMemo(() => {
-    if (boardChain.length === 0) return [];
-
-    const MAX_TILES_PER_ROW = 5;
-    const rows: {
-      direction: 'ltr' | 'rtl';
-      tiles: PlacedChainTile[];
-      cornerAfter?: PlacedChainTile;
-    }[] = [];
-
-    let i = 0;
-    let rowCount = 0;
-
-    while (i < boardChain.length) {
-      const direction: 'ltr' | 'rtl' = rowCount % 2 === 0 ? 'ltr' : 'rtl';
-      const tiles: PlacedChainTile[] = [];
-
-      for (let j = 0; j < MAX_TILES_PER_ROW && i < boardChain.length; j++) {
-        tiles.push(boardChain[i]);
-        i++;
-      }
-
-      let cornerAfter: PlacedChainTile | undefined = undefined;
-      // If there are still more tiles, the very next tile acts as the 90° corner bend!
-      if (i < boardChain.length) {
-        cornerAfter = boardChain[i];
-        i++;
-      }
-
-      rows.push({ direction, tiles, cornerAfter });
-      rowCount++;
-    }
-
-    return rows;
-  }, [boardChain]);
-
-  // Check if tile is playable on ends
+  // Check playable sides
   const getPlayableSides = useCallback((tile: DominoTile, ends: { left: number; right: number } | null) => {
     if (!ends) return { canLeft: true, canRight: true };
     const canLeft = tile.left === ends.left || tile.right === ends.left;
@@ -263,291 +495,154 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
     return { canLeft, canRight };
   }, []);
 
-  // Initialize and Deal Round
-  const startNewGame = useCallback(() => {
-    playSfx('deal');
-    const shuffled = [...ALL_DOMINO_TILES].sort(() => Math.random() - 0.5);
+  // ── SOCKET.IO MULTIPLAYER EVENT LISTENERS ──
+  useEffect(() => {
+    if (!isOpen) return;
+    const socket = getGlobalSocket();
 
-    const initialPlayers: DominoPlayer[] = [
-      {
-        id: 'p1',
-        name: playerName,
-        title: 'Ranger',
-        avatar: '👷',
-        isBot: false,
-        hand: shuffled.slice(0, 7)
-      },
-      {
-        id: 'p2',
-        name: 'Mba Hantu',
-        title: 'Hantu Pojok',
-        avatar: '👻',
-        isBot: true,
-        hand: shuffled.slice(7, 14)
-      },
-      {
-        id: 'p3',
-        name: 'Mas Pulverizer',
-        title: 'Operator Mill',
-        avatar: '🔨',
-        isBot: true,
-        hand: shuffled.slice(14, 21)
-      },
-      {
-        id: 'p4',
-        name: 'Pak Mandor',
-        title: 'Pengawas K3',
-        avatar: '📋',
-        isBot: true,
-        hand: shuffled.slice(21, 28)
+    const handleSync = (state: any) => {
+      if (state.seats) setSeats(state.seats);
+      if (state.boardChain) {
+        setBoardChain(prev => {
+          if (prev.length !== state.boardChain.length && state.boardChain.length > 0) {
+            playSfx('clack');
+          }
+          return state.boardChain;
+        });
       }
-    ];
+      if (typeof state.currentTurnIndex === 'number') setCurrentTurnIndex(state.currentTurnIndex);
+      if (typeof state.isPlaying === 'boolean') setIsPlaying(state.isPlaying);
+      if (state.roundWinner !== undefined) {
+        if (state.roundWinner && !roundWinner) playSfx('win');
+        setRoundWinner(state.roundWinner);
+      }
+      if (typeof state.consecutivePasses === 'number') setConsecutivePasses(state.consecutivePasses);
+      if (state.gameAnnouncement) setGameAnnouncement(state.gameAnnouncement);
+    };
 
-    // Find who holds the highest balak (6-6 > 5-5 > 4-4 ...) to start the game
-    let starterIdx = 0;
-    let highestBalakVal = -1;
+    const handleYourHand = (hand: DominoTile[]) => {
+      setMyHand(hand || []);
+      playSfx('deal');
+    };
 
-    initialPlayers.forEach((p, pIdx) => {
-      p.hand.forEach(t => {
-        if (t.left === t.right && t.left > highestBalakVal) {
-          highestBalakVal = t.left;
-          starterIdx = pIdx;
-        }
-      });
+    socket.on('domino:sync', handleSync);
+    socket.on('domino:your_hand', handleYourHand);
+
+    // Initial state request
+    socket.emit('domino:get_state', { nik: effectiveNik });
+
+    return () => {
+      socket.off('domino:sync', handleSync);
+      socket.off('domino:your_hand', handleYourHand);
+    };
+  }, [isOpen, effectiveNik, playSfx, roundWinner]);
+
+  // Handle user sitting at seat
+  const handleSit = (seatIdx: number) => {
+    playSfx('click');
+    const socket = getGlobalSocket();
+    socket.emit('domino:sit', {
+      seatIdx,
+      nik: effectiveNik,
+      name: playerName,
+      avatar: playerAvatar
     });
+  };
 
-    setPlayers(initialPlayers);
-    setBoardChain([]);
-    setCurrentTurnIndex(starterIdx);
-    setConsecutivePasses(0);
-    setRoundWinner(null);
-    setPendingChoiceTile(null);
-    setIsPlaying(true);
+  // Handle user standing up
+  const handleStand = (seatIdx: number) => {
+    playSfx('click');
+    const socket = getGlobalSocket();
+    socket.emit('domino:stand', { seatIdx });
+  };
 
-    const starter = initialPlayers[starterIdx];
-    if (highestBalakVal >= 0) {
-      setGameAnnouncement(`${starter.name} memegang Balak [${highestBalakVal}|${highestBalakVal}] dan berhak membuka putaran!`);
-    } else {
-      setGameAnnouncement(`Putaran dimulai! Giliran pertama: ${starter.name}`);
-    }
-  }, [playerName, playSfx]);
+  // Start round
+  const handleStartRound = () => {
+    playSfx('click');
+    const socket = getGlobalSocket();
+    socket.emit('domino:start_round');
+  };
 
-  // Execute Placing a Tile on Left or Right
-  const placeTileOnChain = useCallback((tile: DominoTile, side: 'left' | 'right', playerIdx: number) => {
-    playSfx('clack');
-    const isBalak = tile.left === tile.right;
-    const player = players[playerIdx];
+  // Reset table
+  const handleResetTable = () => {
+    playSfx('click');
+    const socket = getGlobalSocket();
+    socket.emit('domino:reset');
+    setMyHand([]);
+  };
 
-    setBoardChain(prev => {
-      if (prev.length === 0) {
-        // First tile placed in center
-        return [{
-          id: `${tile.id}-${Date.now()}`,
-          val1: tile.left,
-          val2: tile.right,
-          isBalak,
-          playedBy: player.name
-        }];
-      }
-
-      const currentLeft = prev[0].val1;
-      const currentRight = prev[prev.length - 1].val2;
-
-      if (side === 'left') {
-        // Tile connects to left. The matching half touches currentLeft (becomes val2 of new head)
-        let val1 = tile.left;
-        let val2 = tile.right;
-        if (tile.right === currentLeft) {
-          val1 = tile.left;
-          val2 = tile.right;
-        } else {
-          val1 = tile.right;
-          val2 = tile.left;
-        }
-        return [{
-          id: `${tile.id}-${Date.now()}`,
-          val1,
-          val2,
-          isBalak,
-          playedBy: player.name
-        }, ...prev];
-      } else {
-        // Tile connects to right. The matching half touches currentRight (becomes val1 of new tail)
-        let val1 = tile.left;
-        let val2 = tile.right;
-        if (tile.left === currentRight) {
-          val1 = tile.left;
-          val2 = tile.right;
-        } else {
-          val1 = tile.right;
-          val2 = tile.left;
-        }
-        return [...prev, {
-          id: `${tile.id}-${Date.now()}`,
-          val1,
-          val2,
-          isBalak,
-          playedBy: player.name
-        }];
-      }
-    });
-
-    // Remove tile from player's hand
-    const nextHand = player.hand.filter(t => t.id !== tile.id);
-    setPlayers(prev => prev.map((p, idx) => idx === playerIdx ? { ...p, hand: nextHand } : p));
-    setConsecutivePasses(0);
-    setPendingChoiceTile(null);
-
-    // Check GAPLE Win
-    if (nextHand.length === 0) {
-      playSfx('win');
-      setRoundWinner(player.name);
-      setIsPlaying(false);
-      setGameAnnouncement(`🎉 GAPLEEE! ${player.name} berhasil menghabiskan semua balak dan memenangkan putaran!`);
-      return;
-    }
-
-    // Advance turn
-    setGameAnnouncement(`${player.name} meletakkan balak [${tile.left}|${tile.right}].`);
-    setCurrentTurnIndex((playerIdx + 1) % 4);
-  }, [players, playSfx]);
-
-  // Player clicks tile in hand
-  const handlePlayerTileClick = (tile: DominoTile) => {
-    if (currentTurnIndex !== 0 || !isPlaying || roundWinner) return;
+  // Play tile
+  const handleTileClick = (tile: DominoTile) => {
+    if (mySeatIdx === -1 || currentTurnIndex !== mySeatIdx || !isPlaying || roundWinner) return;
 
     if (boardChain.length === 0) {
-      // First card can be placed directly
-      placeTileOnChain(tile, 'left', 0);
+      const socket = getGlobalSocket();
+      socket.emit('domino:play_tile', { tileId: tile.id, side: 'left', nik: effectiveNik });
       return;
     }
 
     const { canLeft, canRight } = getPlayableSides(tile, openEnds);
 
     if (canLeft && canRight && openEnds?.left !== openEnds?.right) {
-      // Ambiguous: player must choose left or right end
       setPendingChoiceTile(tile);
       playSfx('click');
     } else if (canLeft) {
-      placeTileOnChain(tile, 'left', 0);
+      const socket = getGlobalSocket();
+      socket.emit('domino:play_tile', { tileId: tile.id, side: 'left', nik: effectiveNik });
     } else if (canRight) {
-      placeTileOnChain(tile, 'right', 0);
+      const socket = getGlobalSocket();
+      socket.emit('domino:play_tile', { tileId: tile.id, side: 'right', nik: effectiveNik });
     }
   };
 
-  // Player Passes Turn
-  const handlePassTurn = () => {
-    if (currentTurnIndex !== 0 || !isPlaying || roundWinner) return;
+  // Confirm tile side choice
+  const handleConfirmChoice = (side: 'left' | 'right') => {
+    if (!pendingChoiceTile) return;
+    const socket = getGlobalSocket();
+    socket.emit('domino:play_tile', { tileId: pendingChoiceTile.id, side, nik: effectiveNik });
+    setPendingChoiceTile(null);
+  };
+
+  // Pass turn
+  const handlePass = () => {
+    if (mySeatIdx === -1 || currentTurnIndex !== mySeatIdx || !isPlaying || roundWinner) return;
     playSfx('pass');
-    setGameAnnouncement(`${players[0].name} lewat (pass)!`);
-    const nextPassCount = consecutivePasses + 1;
-    setConsecutivePasses(nextPassCount);
-
-    // If 4 consecutive passes = BUNTU / DEADLOCK!
-    if (nextPassCount >= 4) {
-      handleDeadlockWin();
-      return;
-    }
-
-    setCurrentTurnIndex(1);
+    const socket = getGlobalSocket();
+    socket.emit('domino:pass', { nik: effectiveNik });
   };
 
-  // Calculate Deadlock / Buntu Winner (Lowest Pip Total in Hand)
-  const handleDeadlockWin = () => {
-    playSfx('win');
-    setIsPlaying(false);
-
-    let minPips = 999;
-    let winPlayer = players[0];
-
-    players.forEach(p => {
-      const sum = p.hand.reduce((acc, t) => acc + t.left + t.right, 0);
-      if (sum < minPips) {
-        minPips = sum;
-        winPlayer = p;
-      }
-    });
-
-    setRoundWinner(winPlayer.name);
-    setGameAnnouncement(`⚠️ MEJA BUNTU! Semua pemain lewat berturut-turut. ${winPlayer.name} menang dengan sisa ${minPips} titik merah terendah!`);
-  };
-
-  // Bot Turn Automation Engine
-  useEffect(() => {
-    if (!isPlaying || roundWinner || currentTurnIndex === 0) return;
-
-    const bot = players[currentTurnIndex];
-    if (!bot || !bot.isBot) return;
-
-    const timer = setTimeout(() => {
-      if (boardChain.length === 0) {
-        // Place first tile (prefer balak)
-        const highestBalak = bot.hand.filter(t => t.left === t.right).sort((a, b) => b.left - a.left)[0];
-        const tileToPlay = highestBalak || bot.hand[0];
-        placeTileOnChain(tileToPlay, 'left', currentTurnIndex);
-        return;
-      }
-
-      // Check for playable tile in bot hand
-      let chosenMove: { tile: DominoTile; side: 'left' | 'right' } | null = null;
-
-      for (const t of bot.hand) {
-        const { canLeft, canRight } = getPlayableSides(t, openEnds);
-        if (canLeft) {
-          chosenMove = { tile: t, side: 'left' };
-          break;
-        }
-        if (canRight) {
-          chosenMove = { tile: t, side: 'right' };
-          break;
-        }
-      }
-
-      if (chosenMove) {
-        placeTileOnChain(chosenMove.tile, chosenMove.side, currentTurnIndex);
-      } else {
-        // Bot Passes
-        playSfx('pass');
-        setGameAnnouncement(`${bot.name} tidak memiliki balak yang cocok (Lewat!).`);
-        const nextPassCount = consecutivePasses + 1;
-        setConsecutivePasses(nextPassCount);
-
-        if (nextPassCount >= 4) {
-          handleDeadlockWin();
-          return;
-        }
-
-        setCurrentTurnIndex((currentTurnIndex + 1) % 4);
-      }
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [currentTurnIndex, isPlaying, roundWinner, boardChain, openEnds, players, consecutivePasses, getPlayableSides, placeTileOnChain, playSfx]);
-
-  // Check if player has valid move
+  // Check if player has moves in hand
   const playerHasMove = useMemo(() => {
     if (!isPlaying || boardChain.length === 0) return true;
-    return players[0]?.hand.some(t => {
+    return myHand.some(t => {
       const { canLeft, canRight } = getPlayableSides(t, openEnds);
       return canLeft || canRight;
     });
-  }, [isPlaying, boardChain, players, openEnds, getPlayableSides]);
+  }, [isPlaying, boardChain, myHand, openEnds, getPlayableSides]);
+
+  // Compute 2D serpentine SVG layout
+  const layoutTiles = useMemo(() => {
+    return computeSerpentineLayout(boardChain);
+  }, [boardChain]);
 
   if (!isOpen) return null;
 
+  const activeTurnPlayer = seats[currentTurnIndex];
+  const isMyTurn = mySeatIdx !== -1 && currentTurnIndex === mySeatIdx;
+
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 animate-in fade-in duration-300 select-none"
+      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300 select-none"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-5xl h-[94vh] max-h-[860px] rounded-3xl bg-[#090D16] border-2 border-emerald-500/50 text-slate-100 shadow-[0_0_60px_rgba(16,185,129,0.3)] flex flex-col overflow-hidden relative"
+        className="w-full max-w-6xl h-[95vh] max-h-[890px] rounded-3xl bg-[#090D16] border-2 border-emerald-500/50 text-slate-100 shadow-[0_0_60px_rgba(16,185,129,0.3)] flex flex-col overflow-hidden relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Header Bar */}
-        <div className="px-5 py-3 border-b border-emerald-500/30 bg-slate-950/80 flex items-center justify-between z-10">
+        <div className="px-5 py-3 border-b border-emerald-500/30 bg-slate-950/85 flex items-center justify-between z-10 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-950/90 border border-emerald-400/60 flex items-center justify-center text-xl shadow-inner">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-950/90 border border-emerald-400/60 flex items-center justify-center text-2xl shadow-inner">
               🀄
             </div>
             <div>
@@ -556,11 +651,11 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
                   Meja Gaple 4 Kursi
                 </span>
                 <span className="text-[9px] px-1.5 py-0.5 bg-purple-950/90 text-purple-300 font-bold rounded-md border border-purple-800 flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5" /> KLUB BAWAH TANAH
+                  <Sparkles className="w-2.5 h-2.5" /> MULTIPLAYER ONLINE REAL-TIME
                 </span>
               </div>
               <h3 className="text-sm sm:text-base font-black text-white tracking-wide">
-                Permainan Gaple Indonesia (Domino Titik Merah & Kereta Balak)
+                Permainan Gaple Indonesia (Domino Serpentine 2D Titik Merah)
               </h3>
             </div>
           </div>
@@ -586,7 +681,7 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
         </div>
 
         {/* Ticker Status Bar */}
-        <div className="px-5 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between text-xs font-mono z-10">
+        <div className="px-5 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between text-xs font-mono z-10 shrink-0">
           <div className="flex items-center gap-2">
             <span className="animate-pulse text-emerald-400">●</span>
             <span className="text-slate-200 font-bold tracking-wide">
@@ -598,247 +693,338 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
             {!isPlaying ? (
               <button
                 type="button"
-                onClick={startNewGame}
-                className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer active:scale-95"
+                onClick={handleStartRound}
+                className="px-3.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer active:scale-95"
               >
-                <span>🀄 Kocok & Bagikan Kartu</span>
+                <span>🀄 Mulai / Kocok Kartu</span>
               </button>
             ) : (
               <button
                 type="button"
-                onClick={startNewGame}
+                onClick={handleResetTable}
                 className="text-[11px] text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
               >
-                <RotateCcw className="w-3 h-3" /> Ulang Putaran
+                <RotateCcw className="w-3 h-3" /> Reset Meja
               </button>
             )}
           </div>
         </div>
 
         {/* ── MAIN 4-PLAYER GREEN FELT GAPLE TABLE ── */}
-        <div className="flex-1 relative flex flex-col justify-between p-3 overflow-hidden bg-[#0A1612]">
-          {/* TOP PLAYER: Mas Pulverizer */}
-          <div className="flex flex-col items-center z-10">
-            <div className={`px-4 py-1.5 rounded-2xl border flex items-center gap-2 shadow-lg transition-all ${
-              currentTurnIndex === 2 ? 'bg-amber-950/90 border-amber-400 ring-2 ring-amber-400/50' : 'bg-slate-900/80 border-slate-700'
-            }`}>
-              <span className="text-lg">🔨</span>
-              <div>
-                <span className="text-xs font-black text-white">Mas Pulverizer</span>
-                <span className="text-[10px] text-slate-400 ml-1.5">({players[2]?.hand.length || 0} kartu)</span>
+        <div className="flex-1 relative flex flex-col justify-between p-2 sm:p-3 overflow-hidden bg-[#0A1612]">
+          {/* TOP SEAT (Seat 2 - North) */}
+          <div className="flex flex-col items-center z-10 shrink-0">
+            {seats[2] ? (
+              <div className={`px-4 py-1.5 rounded-2xl border flex items-center gap-2 shadow-lg transition-all ${
+                currentTurnIndex === 2 ? 'bg-amber-950/90 border-amber-400 ring-2 ring-amber-400/50' : 'bg-slate-900/80 border-slate-700'
+              }`}>
+                <span className="text-lg">{seats[2]?.avatar || '🔨'}</span>
+                <div>
+                  <span className="text-xs font-black text-white">{seats[2]?.name}</span>
+                  <span className="text-[10px] text-slate-400 ml-1.5">({seats[2]?.handCount || 0} kartu)</span>
+                  {seats[2]?.isBot && <span className="text-[9px] text-purple-400 ml-1 font-mono">[BOT]</span>}
+                </div>
+                {seats[2]?.nik === effectiveNik && (
+                  <button onClick={() => handleStand(2)} className="ml-2 text-slate-400 hover:text-red-400 text-[10px]" title="Berdiri">
+                    <LogOut className="w-3 h-3" />
+                  </button>
+                )}
               </div>
-            </div>
+            ) : (
+              <button
+                onClick={() => handleSit(2)}
+                className="px-3 py-1 rounded-xl bg-slate-900/60 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/60 text-slate-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+              >
+                <UserPlus className="w-3.5 h-3.5" /> Duduk (Utara)
+              </button>
+            )}
             {/* Top Cards Back Cover */}
             <div className="flex items-center gap-1 mt-1">
-              {Array.from({ length: players[2]?.hand.length || 0 }).map((_, i) => (
-                <div key={`p2-c-${i}`} className="w-4 h-7 rounded-sm bg-slate-800 border border-slate-600 shadow-sm" />
+              {Array.from({ length: seats[2]?.handCount || 0 }).map((_, i) => (
+                <div key={`p2-c-${i}`} className="w-3.5 h-6 rounded-xs bg-slate-800 border border-slate-600 shadow-xs" />
               ))}
             </div>
           </div>
 
-          {/* MIDDLE ROW: Left Player, Felt Chain Table, Right Player */}
-          <div className="flex-1 flex items-center justify-between px-2 gap-2 my-2 min-h-0">
-            {/* LEFT PLAYER: Mba Hantu */}
-            <div className="flex flex-col items-center w-28 z-10">
-              <div className={`px-3 py-1.5 rounded-2xl border flex flex-col items-center gap-1 shadow-lg transition-all ${
-                currentTurnIndex === 1 ? 'bg-purple-950/90 border-purple-400 ring-2 ring-purple-400/50' : 'bg-slate-900/80 border-slate-700'
-              }`}>
-                <span className="text-2xl">👻</span>
-                <span className="text-xs font-black text-white text-center">Mba Hantu</span>
-                <span className="text-[10px] text-slate-400">({players[1]?.hand.length || 0} kartu)</span>
-              </div>
+          {/* MIDDLE ROW: West Seat (Left), 2D Serpentine Felt Table, East Seat (Right) */}
+          <div className="flex-1 flex items-center justify-between px-1 gap-2 my-1 min-h-0">
+            {/* LEFT SEAT (Seat 1 - West) */}
+            <div className="flex flex-col items-center w-28 z-10 shrink-0">
+              {seats[1] ? (
+                <div className={`px-3 py-1.5 rounded-2xl border flex flex-col items-center gap-1 shadow-lg transition-all ${
+                  currentTurnIndex === 1 ? 'bg-purple-950/90 border-purple-400 ring-2 ring-purple-400/50' : 'bg-slate-900/80 border-slate-700'
+                }`}>
+                  <span className="text-2xl">{seats[1]?.avatar || '👻'}</span>
+                  <span className="text-xs font-black text-white text-center truncate max-w-[90px]">{seats[1]?.name}</span>
+                  <span className="text-[10px] text-slate-400">({seats[1]?.handCount || 0} kartu)</span>
+                  {seats[1]?.isBot && <span className="text-[9px] text-purple-400 font-mono">[BOT]</span>}
+                  {seats[1]?.nik === effectiveNik && (
+                    <button onClick={() => handleStand(1)} className="text-slate-400 hover:text-red-400 text-[10px] mt-0.5" title="Berdiri">
+                      <LogOut className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleSit(1)}
+                  className="px-2.5 py-1 rounded-xl bg-slate-900/60 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/60 text-slate-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> Duduk (Barat)
+                </button>
+              )}
               <div className="flex flex-col gap-0.5 mt-2">
-                {Array.from({ length: players[1]?.hand.length || 0 }).map((_, i) => (
-                  <div key={`p1-c-${i}`} className="w-7 h-3 rounded-sm bg-slate-800 border border-slate-600" />
+                {Array.from({ length: seats[1]?.handCount || 0 }).map((_, i) => (
+                  <div key={`p1-c-${i}`} className="w-6 h-3 rounded-xs bg-slate-800 border border-slate-600" />
                 ))}
               </div>
             </div>
 
-            {/* ── THE FELT DOMINO CHAIN BOARD (KERETA BALAK MENYAMBUNG) ── */}
-            <div className="flex-1 h-full max-h-[360px] rounded-3xl bg-[#064E3B] border-4 border-[#047857] shadow-inner p-4 flex flex-col justify-center items-center overflow-auto relative">
-              {/* Table watermark */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
-                <span className="text-8xl font-black text-emerald-200 font-mono tracking-widest">GAPLE</span>
+            {/* ── THE 2D SERPENTINE FELT DOMINO BOARD (CONTOH GAMBAR 2) ── */}
+            <div className="flex-1 h-full min-h-[220px] max-h-[460px] rounded-3xl bg-[#064E3B] border-4 border-[#047857] shadow-[inset_0_4px_30px_rgba(0,0,0,0.5)] p-1 flex items-center justify-center relative overflow-hidden">
+              {/* Felt watermark */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none select-none">
+                <span className="text-7xl sm:text-8xl font-black text-emerald-200 font-mono tracking-widest">GAPLE</span>
               </div>
 
               {boardChain.length === 0 ? (
-                <div className="text-center text-emerald-300/70 text-xs font-mono">
-                  Menunggu kartu balak pembuka diletakkan di tengah meja...
+                <div className="text-center text-emerald-300/80 text-xs font-mono py-12 flex flex-col items-center gap-2 z-10">
+                  <span className="text-3xl animate-bounce">🀄</span>
+                  <span>Meja bersih. Tekan "Mulai / Kocok Kartu" untuk membuka putaran balak.</span>
                 </div>
               ) : (
-                /* The Continuous Serpentine Train of Connected Domino Tiles with 90° Corner Turns */
-                <div className="flex flex-col items-center gap-1.5 max-w-3xl py-2 z-10 w-full">
-                  {serpentineRows.map((row, rIdx) => (
-                    <React.Fragment key={`serp-row-${rIdx}`}>
-                      {/* Horizontal Run */}
-                      <div 
-                        className={`flex items-center gap-1.5 w-full ${
-                          row.direction === 'ltr' ? 'flex-row justify-start pl-6' : 'flex-row-reverse justify-start pr-6'
-                        }`}
-                      >
-                        {row.tiles.map((item) => (
-                          <div
-                            key={item.id}
-                            className={`relative flex rounded-md bg-[#FFFDF7] border-2 border-slate-400 shadow-md ${
-                              item.isBalak
-                                ? 'flex-col w-7 h-14 items-center justify-between p-1 bg-amber-50 border-amber-500 shrink-0'
-                                : 'flex-row w-14 h-7 items-center justify-between p-1 shrink-0'
-                            }`}
-                            title={`[${item.val1}|${item.val2}] ${item.isBalak ? '(Balak Vertikal)' : '(Horizontal)'} oleh ${item.playedBy}`}
-                          >
-                            {item.isBalak ? (
-                              <>
-                                <DominoHalfPips value={item.val1} size="sm" />
-                                <div className="w-full h-0.5 bg-red-600" />
-                                <DominoHalfPips value={item.val2} size="sm" />
-                              </>
-                            ) : (
-                              <>
-                                <DominoHalfPips value={item.val1} size="sm" />
-                                <div className="h-full w-0.5 bg-red-600" />
-                                <DominoHalfPips value={item.val2} size="sm" />
-                              </>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                /* High-fidelity 2D Vector Serpentine SVG Canvas matching Image 2 */
+                <svg
+                  viewBox="0 0 740 250"
+                  className="w-full h-full max-h-full z-10 drop-shadow-md select-none"
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <defs>
+                    <filter id="tile-shadow" x="-10%" y="-10%" width="125%" height="125%">
+                      <feDropShadow dx="1" dy="1.5" stdDeviation="1.2" floodColor="#000000" floodOpacity="0.45" />
+                    </filter>
+                    <linearGradient id="tile-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#FFFFFC" />
+                      <stop offset="100%" stopColor="#F5F2EB" />
+                    </linearGradient>
+                    <linearGradient id="balak-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#FFFDF0" />
+                      <stop offset="100%" stopColor="#F9F5DE" />
+                    </linearGradient>
+                  </defs>
 
-                      {/* 90-Degree Corner Turn Connector (Belok Vertikal ke Bawah) */}
-                      {row.cornerAfter && (
-                        <div 
-                          className={`w-full flex ${
-                            row.direction === 'ltr' ? 'justify-end pr-8' : 'justify-start pl-8'
-                          } my-0.5`}
-                        >
-                          <div className="relative group/corner flex items-center gap-1.5">
-                            {row.direction === 'ltr' && (
-                              <span className="text-[10px] text-amber-300 font-mono font-bold animate-pulse">
-                                ↷ Belok 90°
-                              </span>
-                            )}
-                            <div
-                              className="relative flex flex-col w-7 h-14 items-center justify-between p-1 rounded-md bg-amber-100 border-2 border-amber-600 shadow-lg ring-2 ring-amber-400/50"
-                              title={`[${row.cornerAfter.val1}|${row.cornerAfter.val2}] (Sudut 90° Tikungan Kereta)`}
-                            >
-                              <DominoHalfPips value={row.cornerAfter.val1} size="sm" />
-                              <div className="w-full h-0.5 bg-red-600" />
-                              <DominoHalfPips value={row.cornerAfter.val2} size="sm" />
-                            </div>
-                            {row.direction === 'rtl' && (
-                              <span className="text-[10px] text-amber-300 font-mono font-bold animate-pulse">
-                                ↶ Belok 90°
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </div>
-              )}
+                  {/* Serpentine Connected Tiles */}
+                  {layoutTiles.map((t) => {
+                    const halfW = t.isVertical ? t.w : t.w / 2;
+                    const halfH = t.isVertical ? t.h / 2 : t.h;
+                    const cx1 = t.isVertical ? t.x : t.x - t.w / 4;
+                    const cy1 = t.isVertical ? t.y - t.h / 4 : t.y;
+                    const cx2 = t.isVertical ? t.x : t.x + t.w / 4;
+                    const cy2 = t.isVertical ? t.y + t.h / 4 : t.y;
 
-              {/* Open Ends Indicator */}
-              {openEnds && (
-                <div className="absolute bottom-2 flex items-center gap-4 bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-500/40 text-[11px] font-mono text-emerald-300">
-                  <span>Ujung Kiri: <strong className="text-white text-xs">{openEnds.left}</strong></span>
-                  <span>|</span>
-                  <span>Ujung Kanan: <strong className="text-white text-xs">{openEnds.right}</strong></span>
-                </div>
+                    return (
+                      <g key={t.id} className="transition-transform duration-300">
+                        {/* Tile Body */}
+                        <rect
+                          x={t.x - t.w / 2}
+                          y={t.y - t.h / 2}
+                          width={t.w}
+                          height={t.h}
+                          rx={3}
+                          fill={t.isBalak ? 'url(#balak-grad)' : 'url(#tile-grad)'}
+                          stroke={t.isBalak ? '#B45309' : '#9CA3AF'}
+                          strokeWidth={t.isBalak ? '1.2' : '0.8'}
+                          filter="url(#tile-shadow)"
+                        />
+
+                        {/* Dividing Line */}
+                        {t.isVertical ? (
+                          <line
+                            x1={t.x - t.w / 2 + 1.5}
+                            y1={t.y}
+                            x2={t.x + t.w / 2 - 1.5}
+                            y2={t.y}
+                            stroke="#DC2626"
+                            strokeWidth={1.4}
+                            strokeLinecap="round"
+                          />
+                        ) : (
+                          <line
+                            x1={t.x}
+                            y1={t.y - t.h / 2 + 1.5}
+                            x2={t.x}
+                            y2={t.y + t.h / 2 - 1.5}
+                            stroke="#DC2626"
+                            strokeWidth={1.4}
+                            strokeLinecap="round"
+                          />
+                        )}
+
+                        {/* Red Pips (Half 1 & Half 2) */}
+                        {renderSvgPips(t.val1, cx1, cy1, halfW, halfH)}
+                        {renderSvgPips(t.val2, cx2, cy2, halfW, halfH)}
+
+                        {/* Left End Indicator Ring */}
+                        {t.isLeftEnd && openEnds && (
+                          <circle
+                            cx={cx1}
+                            cy={cy1}
+                            r={8}
+                            fill="none"
+                            stroke="#F59E0B"
+                            strokeWidth="1.8"
+                            strokeDasharray="2 2"
+                            className="animate-spin origin-center"
+                          />
+                        )}
+
+                        {/* Right End Indicator Ring */}
+                        {t.isRightEnd && openEnds && (
+                          <circle
+                            cx={cx2}
+                            cy={cy2}
+                            r={8}
+                            fill="none"
+                            stroke="#10B981"
+                            strokeWidth="1.8"
+                            strokeDasharray="2 2"
+                            className="animate-spin origin-center"
+                          />
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
               )}
             </div>
 
-            {/* RIGHT PLAYER: Pak Mandor */}
-            <div className="flex flex-col items-center w-28 z-10">
-              <div className={`px-3 py-1.5 rounded-2xl border flex flex-col items-center gap-1 shadow-lg transition-all ${
-                currentTurnIndex === 3 ? 'bg-cyan-950/90 border-cyan-400 ring-2 ring-cyan-400/50' : 'bg-slate-900/80 border-slate-700'
-              }`}>
-                <span className="text-2xl">📋</span>
-                <span className="text-xs font-black text-white text-center">Pak Mandor</span>
-                <span className="text-[10px] text-slate-400">({players[3]?.hand.length || 0} kartu)</span>
-              </div>
+            {/* RIGHT SEAT (Seat 3 - East) */}
+            <div className="flex flex-col items-center w-28 z-10 shrink-0">
+              {seats[3] ? (
+                <div className={`px-3 py-1.5 rounded-2xl border flex flex-col items-center gap-1 shadow-lg transition-all ${
+                  currentTurnIndex === 3 ? 'bg-blue-950/90 border-blue-400 ring-2 ring-blue-400/50' : 'bg-slate-900/80 border-slate-700'
+                }`}>
+                  <span className="text-2xl">{seats[3]?.avatar || '📋'}</span>
+                  <span className="text-xs font-black text-white text-center truncate max-w-[90px]">{seats[3]?.name}</span>
+                  <span className="text-[10px] text-slate-400">({seats[3]?.handCount || 0} kartu)</span>
+                  {seats[3]?.isBot && <span className="text-[9px] text-purple-400 font-mono">[BOT]</span>}
+                  {seats[3]?.nik === effectiveNik && (
+                    <button onClick={() => handleStand(3)} className="text-slate-400 hover:text-red-400 text-[10px] mt-0.5" title="Berdiri">
+                      <LogOut className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleSit(3)}
+                  className="px-2.5 py-1 rounded-xl bg-slate-900/60 hover:bg-emerald-950/80 border border-slate-700 hover:border-emerald-500/60 text-slate-400 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> Duduk (Timur)
+                </button>
+              )}
               <div className="flex flex-col gap-0.5 mt-2">
-                {Array.from({ length: players[3]?.hand.length || 0 }).map((_, i) => (
-                  <div key={`p3-c-${i}`} className="w-7 h-3 rounded-sm bg-slate-800 border border-slate-600" />
+                {Array.from({ length: seats[3]?.handCount || 0 }).map((_, i) => (
+                  <div key={`p3-c-${i}`} className="w-6 h-3 rounded-xs bg-slate-800 border border-slate-600" />
                 ))}
               </div>
             </div>
           </div>
 
-          {/* BOTTOM PLAYER: You (Ranger) */}
-          <div className="flex flex-col items-center z-10">
-            {/* Ambiguous Choice Modal (Left or Right) */}
-            {pendingChoiceTile && openEnds && (
-              <div className="mb-2 p-2.5 rounded-2xl bg-slate-900/95 border-2 border-emerald-400 shadow-2xl flex items-center gap-3 animate-in zoom-in-95">
-                <span className="text-xs font-bold text-white">Sambung ke ujung mana?</span>
+          {/* BOTTOM SEAT & PLAYER CONTROLS (Seat 0 - South) */}
+          <div className="flex flex-col items-center z-10 shrink-0 mt-1">
+            {/* If player is not seated at all */}
+            {mySeatIdx === -1 ? (
+              <div className="flex items-center gap-2 p-2 rounded-2xl bg-slate-900/90 border border-emerald-500/30">
+                <span className="text-xs text-slate-300 font-bold">Anda belum mengambil kursi di meja ini:</span>
                 <button
-                  type="button"
-                  onClick={() => placeTileOnChain(pendingChoiceTile, 'left', 0)}
-                  className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer"
+                  onClick={() => handleSit(0)}
+                  className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 cursor-pointer shadow-md"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" /> Ujung Kiri ({openEnds.left})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => placeTileOnChain(pendingChoiceTile, 'right', 0)}
-                  className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer"
-                >
-                  Ujung Kanan ({openEnds.right}) <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPendingChoiceTile(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
+                  <UserPlus className="w-3.5 h-3.5" /> Ambil Kursi Bawah (Selatan)
                 </button>
               </div>
-            )}
-
-            {/* Hand Tiles Tray */}
-            <div className="flex items-center gap-2 p-2 rounded-2xl bg-slate-950/90 border border-emerald-500/40 shadow-2xl">
-              {players[0]?.hand.map((tile) => {
-                const { canLeft, canRight } = getPlayableSides(tile, openEnds);
-                const isPlayable = isPlaying && currentTurnIndex === 0 && (canLeft || canRight);
-                const isBalak = tile.left === tile.right;
-
-                return (
-                  <div
-                    key={tile.id}
-                    onClick={() => isPlayable && handlePlayerTileClick(tile)}
-                    className={`relative w-9 h-18 rounded-lg border-2 flex flex-col items-center justify-between p-1 transition-all ${
-                      isPlayable
-                        ? 'cursor-pointer hover:-translate-y-2 bg-[#FFFDF7] border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.5)] ring-2 ring-emerald-400/50'
-                        : 'opacity-50 bg-[#E2E8F0] border-slate-600 cursor-not-allowed'
-                    } ${isBalak ? 'bg-amber-50 border-amber-400' : ''}`}
-                    title={`Kartu [${tile.left}|${tile.right}] ${isBalak ? '(Balak Kembar)' : ''}`}
-                  >
-                    <DominoHalfPips value={tile.left} size="md" />
-                    <div className="w-full h-0.5 bg-red-600 my-0.5" />
-                    <DominoHalfPips value={tile.right} size="md" />
+            ) : (
+              <>
+                {/* Ambiguous Choice Modal (Left or Right) */}
+                {pendingChoiceTile && openEnds && (
+                  <div className="mb-2 p-2.5 rounded-2xl bg-slate-900/95 border-2 border-emerald-400 shadow-2xl flex items-center gap-3 animate-in zoom-in-95">
+                    <span className="text-xs font-bold text-white">Sambung ke ujung mana?</span>
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmChoice('left')}
+                      className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" /> Ujung Kiri ({openEnds.left})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmChoice('right')}
+                      className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer"
+                    >
+                      Ujung Kanan ({openEnds.right}) <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingChoiceTile(null)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
-                );
-              })}
+                )}
 
-              {/* Pass Button when no moves */}
-              {isPlaying && currentTurnIndex === 0 && !playerHasMove && (
-                <button
-                  type="button"
-                  onClick={handlePassTurn}
-                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg animate-bounce cursor-pointer"
-                >
-                  Lewat (Pass)!
-                </button>
-              )}
-            </div>
+                {/* Hand Tiles Tray */}
+                <div className="flex items-center gap-2 p-2 rounded-2xl bg-slate-950/90 border border-emerald-500/40 shadow-2xl overflow-x-auto max-w-full">
+                  {myHand.map((tile) => {
+                    const { canLeft, canRight } = getPlayableSides(tile, openEnds);
+                    const isPlayable = isPlaying && isMyTurn && (canLeft || canRight);
+                    const isBalak = tile.left === tile.right;
 
-            {/* Player Info Badge */}
-            <div className="mt-1 flex items-center gap-2 text-xs font-black text-emerald-400">
-              <span>👷 {playerName} (Anda)</span>
-              <span>•</span>
-              <span className={currentTurnIndex === 0 ? 'text-amber-400 animate-pulse' : 'text-slate-400'}>
-                {currentTurnIndex === 0 ? 'GILIRAN ANDA' : 'Menunggu giliran...'}
-              </span>
-            </div>
+                    return (
+                      <div
+                        key={tile.id}
+                        onClick={() => isPlayable && handleTileClick(tile)}
+                        className={`relative w-9 h-18 rounded-lg border-2 flex flex-col items-center justify-between p-1 transition-all shrink-0 ${
+                          isPlayable
+                            ? 'cursor-pointer hover:-translate-y-2 bg-[#FFFDF7] border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.5)] ring-2 ring-emerald-400/50'
+                            : 'opacity-50 bg-[#E2E8F0] border-slate-600 cursor-not-allowed'
+                        } ${isBalak ? 'bg-amber-50 border-amber-400' : ''}`}
+                        title={`Kartu [${tile.left}|${tile.right}] ${isBalak ? '(Balak Kembar)' : ''}`}
+                      >
+                        <DominoHalfPips value={tile.left} size="md" />
+                        <div className="w-full h-0.5 bg-red-600 my-0.5" />
+                        <DominoHalfPips value={tile.right} size="md" />
+                      </div>
+                    );
+                  })}
+
+                  {/* Pass Button when no moves */}
+                  {isPlaying && isMyTurn && !playerHasMove && (
+                    <button
+                      type="button"
+                      onClick={handlePass}
+                      className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg animate-bounce cursor-pointer shrink-0"
+                    >
+                      Lewat (Pass)!
+                    </button>
+                  )}
+                </div>
+
+                {/* Player Info Badge */}
+                <div className="mt-1 flex items-center gap-2 text-xs font-black text-emerald-400">
+                  <span>{playerAvatar || '👷'} {playerName} (Anda - Kursi {mySeatIdx === 0 ? 'Selatan' : mySeatIdx === 1 ? 'Barat' : mySeatIdx === 2 ? 'Utara' : 'Timur'})</span>
+                  <span>•</span>
+                  <span className={isMyTurn ? 'text-amber-400 animate-pulse' : 'text-slate-400'}>
+                    {isMyTurn ? 'GILIRAN ANDA' : `Giliran: ${activeTurnPlayer?.name || 'Menunggu...'}`}
+                  </span>
+                  <button
+                    onClick={() => handleStand(mySeatIdx)}
+                    className="ml-3 text-[10px] text-slate-400 hover:text-red-400 flex items-center gap-1 cursor-pointer"
+                  >
+                    <LogOut className="w-3 h-3" /> Berdiri
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

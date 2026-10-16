@@ -564,6 +564,110 @@ const app = express();
     return Array.from(userMap.values());
   };
 
+  // --- REAL-TIME UNDERGROUND BUNKER LOUNGE GAMES (GAPLE 4-PLAYER & CATUR 2-PLAYER) ---
+  interface DominoSeatPlayer {
+    seatIdx: number; // 0: Bottom, 1: Left, 2: Top, 3: Right
+    nik: string;
+    name: string;
+    avatar?: string;
+    socketId: string;
+    isBot?: boolean;
+    handCount: number;
+  }
+
+  interface DominoChainTileState {
+    id: string;
+    val1: number;
+    val2: number;
+    isBalak: boolean;
+    playedBy: string;
+    isOrigin?: boolean;
+  }
+
+  const ALL_DOMINO_CARDS = [
+    { id: '0-0', left: 0, right: 0 }, { id: '0-1', left: 0, right: 1 }, { id: '0-2', left: 0, right: 2 },
+    { id: '0-3', left: 0, right: 3 }, { id: '0-4', left: 0, right: 4 }, { id: '0-5', left: 0, right: 5 },
+    { id: '0-6', left: 0, right: 6 }, { id: '1-1', left: 1, right: 1 }, { id: '1-2', left: 1, right: 2 },
+    { id: '1-3', left: 1, right: 3 }, { id: '1-4', left: 1, right: 4 }, { id: '1-5', left: 1, right: 5 },
+    { id: '1-6', left: 1, right: 6 }, { id: '2-2', left: 2, right: 2 }, { id: '2-3', left: 2, right: 3 },
+    { id: '2-4', left: 2, right: 4 }, { id: '2-5', left: 2, right: 5 }, { id: '2-6', left: 2, right: 6 },
+    { id: '3-3', left: 3, right: 3 }, { id: '3-4', left: 3, right: 4 }, { id: '3-5', left: 3, right: 5 },
+    { id: '3-6', left: 3, right: 6 }, { id: '4-4', left: 4, right: 4 }, { id: '4-5', left: 4, right: 5 },
+    { id: '4-6', left: 4, right: 6 }, { id: '5-5', left: 5, right: 5 }, { id: '5-6', left: 5, right: 6 },
+    { id: '6-6', left: 6, right: 6 }
+  ];
+
+  const dominoLoungeState = {
+    seats: (Array(4).fill(null) as (DominoSeatPlayer | null)[]),
+    boardChain: [] as DominoChainTileState[],
+    currentTurnIndex: 0,
+    isPlaying: false,
+    roundWinner: null as string | null,
+    consecutivePasses: 0,
+    gameAnnouncement: 'Menunggu pemain mengambil kursi dan menekan Mulai Permainan...',
+    hands: new Map<string, { id: string; left: number; right: number }[]>()
+  };
+
+  const getPublicDominoState = () => {
+    return {
+      seats: dominoLoungeState.seats,
+      boardChain: dominoLoungeState.boardChain,
+      currentTurnIndex: dominoLoungeState.currentTurnIndex,
+      isPlaying: dominoLoungeState.isPlaying,
+      roundWinner: dominoLoungeState.roundWinner,
+      consecutivePasses: dominoLoungeState.consecutivePasses,
+      gameAnnouncement: dominoLoungeState.gameAnnouncement,
+      openEnds: dominoLoungeState.boardChain.length === 0 ? null : {
+        left: dominoLoungeState.boardChain[0].val1,
+        right: dominoLoungeState.boardChain[dominoLoungeState.boardChain.length - 1].val2
+      }
+    };
+  };
+
+  // CHESS REAL-TIME STATE
+  interface ChessSeatPlayer {
+    nik: string;
+    name: string;
+    avatar?: string;
+    socketId: string;
+  }
+
+  const INITIAL_SERVER_CHESS_BOARD = [
+    [
+      { type: 'r', color: 'b' }, { type: 'n', color: 'b' }, { type: 'b', color: 'b' },
+      { type: 'q', color: 'b' }, { type: 'k', color: 'b' }, { type: 'b', color: 'b' },
+      { type: 'n', color: 'b' }, { type: 'r', color: 'b' }
+    ],
+    [
+      { type: 'p', color: 'b' }, { type: 'p', color: 'b' }, { type: 'p', color: 'b' },
+      { type: 'p', color: 'b' }, { type: 'p', color: 'b' }, { type: 'p', color: 'b' },
+      { type: 'p', color: 'b' }, { type: 'p', color: 'b' }
+    ],
+    Array(8).fill(null), Array(8).fill(null), Array(8).fill(null), Array(8).fill(null),
+    [
+      { type: 'p', color: 'w' }, { type: 'p', color: 'w' }, { type: 'p', color: 'w' },
+      { type: 'p', color: 'w' }, { type: 'p', color: 'w' }, { type: 'p', color: 'w' },
+      { type: 'p', color: 'w' }, { type: 'p', color: 'w' }
+    ],
+    [
+      { type: 'r', color: 'w' }, { type: 'n', color: 'w' }, { type: 'b', color: 'w' },
+      { type: 'q', color: 'w' }, { type: 'k', color: 'w' }, { type: 'b', color: 'w' },
+      { type: 'n', color: 'w' }, { type: 'r', color: 'w' }
+    ]
+  ];
+
+  const chessLoungeState = {
+    whiteSeat: null as ChessSeatPlayer | null,
+    blackSeat: null as ChessSeatPlayer | null,
+    board: JSON.parse(JSON.stringify(INITIAL_SERVER_CHESS_BOARD)),
+    currentTurn: 'w' as 'w' | 'b',
+    isCheck: null as 'w' | 'b' | null,
+    winner: null as string | null,
+    capturedByWhite: [] as any[],
+    capturedByBlack: [] as any[],
+    gameAnnouncement: 'Menunggu pemain mengambil posisi Putih & Hitam...'
+  };
+
   const cleanupStaleLoungeAvatars = () => {
     const activeSocketIds = new Set(onlineSockets.keys());
     for (const [nik, avatar] of loungeAvatars.entries()) {
@@ -804,6 +908,370 @@ const app = express();
       broadcastPresence();
     });
 
+    // ==========================================
+    // DOMINO / GAPLE MULTIPLAYER SOCKET EVENTS
+    // ==========================================
+    socket.on('domino:get_state', (data?: { nik?: string }) => {
+      if (data?.nik) socket.data.nik = data.nik;
+      socket.emit('domino:sync', getPublicDominoState());
+      const myNik = socket.data.nik || data?.nik;
+      if (myNik && dominoLoungeState.hands.has(myNik)) {
+        socket.emit('domino:your_hand', dominoLoungeState.hands.get(myNik) || []);
+      }
+    });
+
+    socket.on('domino:sit', (data: { seatIdx: number; nik: string; name: string; avatar?: string }) => {
+      if (typeof data.seatIdx !== 'number' || data.seatIdx < 0 || data.seatIdx > 3) return;
+      if (data.nik) socket.data.nik = data.nik;
+      if (data.name) socket.data.name = data.name;
+      const playerNik = socket.data.nik || data.nik;
+      const playerName = socket.data.name || data.name || playerNik;
+
+      // Unseat from other seats if already seated
+      for (let i = 0; i < 4; i++) {
+        if (dominoLoungeState.seats[i]?.nik === playerNik) {
+          dominoLoungeState.seats[i] = null;
+        }
+      }
+
+      dominoLoungeState.seats[data.seatIdx] = {
+        seatIdx: data.seatIdx,
+        nik: playerNik,
+        name: playerName,
+        avatar: data.avatar,
+        socketId: socket.id,
+        isBot: false,
+        handCount: (dominoLoungeState.hands.get(playerNik) || []).length
+      };
+
+      io.to('lounge').emit('domino:sync', getPublicDominoState());
+    });
+
+    socket.on('domino:stand', (data: { seatIdx: number }) => {
+      if (typeof data.seatIdx === 'number' && data.seatIdx >= 0 && data.seatIdx < 4) {
+        dominoLoungeState.seats[data.seatIdx] = null;
+        io.to('lounge').emit('domino:sync', getPublicDominoState());
+      }
+    });
+
+    const triggerDominoBotTurn = () => {
+      setTimeout(() => {
+        if (!dominoLoungeState.isPlaying || dominoLoungeState.roundWinner) return;
+        const curPlayer = dominoLoungeState.seats[dominoLoungeState.currentTurnIndex];
+        if (!curPlayer || !curPlayer.isBot) return;
+
+        const hand = dominoLoungeState.hands.get(curPlayer.nik) || [];
+        if (hand.length === 0) return;
+
+        // If board is empty
+        if (dominoLoungeState.boardChain.length === 0) {
+          const highestBalak = hand.filter(t => t.left === t.right).sort((a, b) => b.left - a.left)[0];
+          const tileToPlay = highestBalak || hand[0];
+          executePlayTile(curPlayer, tileToPlay, 'left');
+          return;
+        }
+
+        const openLeft = dominoLoungeState.boardChain[0].val1;
+        const openRight = dominoLoungeState.boardChain[dominoLoungeState.boardChain.length - 1].val2;
+
+        let chosenMove: { tile: typeof hand[0]; side: 'left' | 'right' } | null = null;
+        for (const t of hand) {
+          if (t.left === openLeft || t.right === openLeft) {
+            chosenMove = { tile: t, side: 'left' };
+            break;
+          }
+          if (t.left === openRight || t.right === openRight) {
+            chosenMove = { tile: t, side: 'right' };
+            break;
+          }
+        }
+
+        if (chosenMove) {
+          executePlayTile(curPlayer, chosenMove.tile, chosenMove.side);
+        } else {
+          executePassTurn(curPlayer);
+        }
+      }, 1000);
+    };
+
+    const executePlayTile = (player: DominoSeatPlayer, tile: { id: string; left: number; right: number }, side: 'left' | 'right') => {
+      const hand = dominoLoungeState.hands.get(player.nik) || [];
+      const tileIdx = hand.findIndex(t => t.id === tile.id);
+      if (tileIdx === -1 && !player.isBot) return;
+
+      const isBalak = tile.left === tile.right;
+      let newTile: DominoChainTileState;
+
+      if (dominoLoungeState.boardChain.length === 0) {
+        newTile = {
+          id: `${tile.id}-${Date.now()}`,
+          val1: tile.left,
+          val2: tile.right,
+          isBalak,
+          playedBy: player.name,
+          isOrigin: true
+        };
+        dominoLoungeState.boardChain = [newTile];
+      } else {
+        const curLeft = dominoLoungeState.boardChain[0].val1;
+        const curRight = dominoLoungeState.boardChain[dominoLoungeState.boardChain.length - 1].val2;
+
+        if (side === 'left') {
+          let val1 = tile.left;
+          let val2 = tile.right;
+          if (tile.right === curLeft) {
+            val1 = tile.left;
+            val2 = tile.right;
+          } else {
+            val1 = tile.right;
+            val2 = tile.left;
+          }
+          newTile = {
+            id: `${tile.id}-${Date.now()}`,
+            val1,
+            val2,
+            isBalak,
+            playedBy: player.name
+          };
+          dominoLoungeState.boardChain.unshift(newTile);
+        } else {
+          let val1 = tile.left;
+          let val2 = tile.right;
+          if (tile.left === curRight) {
+            val1 = tile.left;
+            val2 = tile.right;
+          } else {
+            val1 = tile.right;
+            val2 = tile.left;
+          }
+          newTile = {
+            id: `${tile.id}-${Date.now()}`,
+            val1,
+            val2,
+            isBalak,
+            playedBy: player.name
+          };
+          dominoLoungeState.boardChain.push(newTile);
+        }
+      }
+
+      // Remove from hand
+      const nextHand = hand.filter(t => t.id !== tile.id);
+      dominoLoungeState.hands.set(player.nik, nextHand);
+      player.handCount = nextHand.length;
+      dominoLoungeState.consecutivePasses = 0;
+
+      // Check win
+      if (nextHand.length === 0) {
+        dominoLoungeState.roundWinner = player.name;
+        dominoLoungeState.isPlaying = false;
+        dominoLoungeState.gameAnnouncement = `🎉 GAPLEEE! ${player.name} berhasil menghabiskan semua balak dan memenangkan putaran!`;
+      } else {
+        dominoLoungeState.currentTurnIndex = (dominoLoungeState.currentTurnIndex + 1) % 4;
+        const nextPlayer = dominoLoungeState.seats[dominoLoungeState.currentTurnIndex]!;
+        dominoLoungeState.gameAnnouncement = `${player.name} meletakkan balak [${tile.left}|${tile.right}]. Giliran: ${nextPlayer.name}`;
+      }
+
+      // Notify the player with updated private hand
+      if (!player.isBot) {
+        const targetSocket = io.sockets.sockets.get(player.socketId);
+        if (targetSocket) targetSocket.emit('domino:your_hand', nextHand);
+      }
+
+      io.to('lounge').emit('domino:sync', getPublicDominoState());
+
+      // If next player is bot, trigger bot move
+      const nextP = dominoLoungeState.seats[dominoLoungeState.currentTurnIndex];
+      if (dominoLoungeState.isPlaying && nextP && nextP.isBot) {
+        triggerDominoBotTurn();
+      }
+    };
+
+    const executePassTurn = (player: DominoSeatPlayer) => {
+      dominoLoungeState.consecutivePasses += 1;
+      if (dominoLoungeState.consecutivePasses >= 4) {
+        // DEADLOCK / GAPLE TUTUP
+        dominoLoungeState.isPlaying = false;
+        let minPips = 999;
+        let winner = player;
+
+        for (const p of dominoLoungeState.seats) {
+          if (!p) continue;
+          const pHand = dominoLoungeState.hands.get(p.nik) || [];
+          const sum = pHand.reduce((acc, t) => acc + t.left + t.right, 0);
+          if (sum < minPips) {
+            minPips = sum;
+            winner = p;
+          }
+        }
+
+        dominoLoungeState.roundWinner = winner.name;
+        dominoLoungeState.gameAnnouncement = `🔒 GAPLE TUTUP (BUNTU)! ${winner.name} menang dengan sisa nilai balak terendah (${minPips} titik)!`;
+      } else {
+        dominoLoungeState.currentTurnIndex = (dominoLoungeState.currentTurnIndex + 1) % 4;
+        const nextPlayer = dominoLoungeState.seats[dominoLoungeState.currentTurnIndex]!;
+        dominoLoungeState.gameAnnouncement = `${player.name} tidak memiliki balak yang cocok (Lewat!). Giliran: ${nextPlayer.name}`;
+      }
+
+      io.to('lounge').emit('domino:sync', getPublicDominoState());
+
+      const nextP = dominoLoungeState.seats[dominoLoungeState.currentTurnIndex];
+      if (dominoLoungeState.isPlaying && nextP && nextP.isBot) {
+        triggerDominoBotTurn();
+      }
+    };
+
+    socket.on('domino:start_round', () => {
+      const botNames = [
+        { name: 'Ranger Tamu', avatar: '👷' },
+        { name: 'Mba Hantu', avatar: '👻' },
+        { name: 'Mas Pulverizer', avatar: '🔨' },
+        { name: 'Pak Mandor', avatar: '📋' }
+      ];
+
+      for (let i = 0; i < 4; i++) {
+        if (!dominoLoungeState.seats[i]) {
+          const botId = `bot_${i}`;
+          dominoLoungeState.seats[i] = {
+            seatIdx: i,
+            nik: botId,
+            name: botNames[i].name,
+            avatar: botNames[i].avatar,
+            socketId: 'bot',
+            isBot: true,
+            handCount: 7
+          };
+        }
+      }
+
+      const shuffled = [...ALL_DOMINO_CARDS].sort(() => Math.random() - 0.5);
+      dominoLoungeState.hands.clear();
+
+      let starterIdx = 0;
+      let highestBalak = -1;
+
+      for (let i = 0; i < 4; i++) {
+        const hand = shuffled.slice(i * 7, (i + 1) * 7);
+        const player = dominoLoungeState.seats[i]!;
+        dominoLoungeState.hands.set(player.nik, hand);
+        player.handCount = 7;
+
+        hand.forEach(t => {
+          if (t.left === t.right && t.left > highestBalak) {
+            highestBalak = t.left;
+            starterIdx = i;
+          }
+        });
+
+        if (!player.isBot) {
+          const targetSocket = io.sockets.sockets.get(player.socketId);
+          if (targetSocket) {
+            targetSocket.emit('domino:your_hand', hand);
+          }
+        }
+      }
+
+      dominoLoungeState.boardChain = [];
+      dominoLoungeState.currentTurnIndex = starterIdx;
+      dominoLoungeState.isPlaying = true;
+      dominoLoungeState.roundWinner = null;
+      dominoLoungeState.consecutivePasses = 0;
+
+      const starter = dominoLoungeState.seats[starterIdx]!;
+      dominoLoungeState.gameAnnouncement = highestBalak >= 0
+        ? `${starter.name} memegang Balak [${highestBalak}|${highestBalak}] dan berhak membuka putaran!`
+        : `Putaran dimulai! Giliran pertama: ${starter.name}`;
+
+      io.to('lounge').emit('domino:sync', getPublicDominoState());
+
+      if (starter.isBot) {
+        triggerDominoBotTurn();
+      }
+    });
+
+    socket.on('domino:play_tile', (data: { tileId: string; side: 'left' | 'right'; nik?: string }) => {
+      if (!dominoLoungeState.isPlaying || dominoLoungeState.roundWinner) return;
+      const curPlayer = dominoLoungeState.seats[dominoLoungeState.currentTurnIndex];
+      const playerNik = socket.data.nik || data.nik;
+      if (!curPlayer || curPlayer.nik !== playerNik) return;
+
+      const hand = dominoLoungeState.hands.get(playerNik) || [];
+      const targetTile = hand.find(t => t.id === data.tileId);
+      if (!targetTile) return;
+
+      executePlayTile(curPlayer, targetTile, data.side);
+    });
+
+    socket.on('domino:pass', (data?: { nik?: string }) => {
+      if (!dominoLoungeState.isPlaying || dominoLoungeState.roundWinner) return;
+      const curPlayer = dominoLoungeState.seats[dominoLoungeState.currentTurnIndex];
+      const playerNik = socket.data.nik || data?.nik;
+      if (!curPlayer || curPlayer.nik !== playerNik) return;
+
+      executePassTurn(curPlayer);
+    });
+
+    socket.on('domino:reset', () => {
+      dominoLoungeState.boardChain = [];
+      dominoLoungeState.isPlaying = false;
+      dominoLoungeState.roundWinner = null;
+      dominoLoungeState.consecutivePasses = 0;
+      dominoLoungeState.gameAnnouncement = 'Meja Gaple direset. Siap untuk putaran baru!';
+      dominoLoungeState.hands.clear();
+      dominoLoungeState.seats.forEach(s => { if (s) s.handCount = 0; });
+      io.to('lounge').emit('domino:sync', getPublicDominoState());
+    });
+
+    // ==========================================
+    // CHESS MULTIPLAYER SOCKET EVENTS
+    // ==========================================
+    socket.on('chess:get_state', () => {
+      socket.emit('chess:sync', chessLoungeState);
+    });
+
+    socket.on('chess:sit', (data: { side: 'w' | 'b'; nik: string; name: string; avatar?: string }) => {
+      const playerNik = socket.data.nik || data.nik;
+      const playerName = socket.data.name || data.name || playerNik;
+
+      if (data.side === 'w') {
+        chessLoungeState.whiteSeat = { nik: playerNik, name: playerName, avatar: data.avatar, socketId: socket.id };
+      } else {
+        chessLoungeState.blackSeat = { nik: playerNik, name: playerName, avatar: data.avatar, socketId: socket.id };
+      }
+
+      chessLoungeState.gameAnnouncement = `${playerName} mengambil posisi bidak ${data.side === 'w' ? 'PUTIH' : 'HITAM'}.`;
+      io.to('lounge').emit('chess:sync', chessLoungeState);
+    });
+
+    socket.on('chess:stand', (data: { side: 'w' | 'b' }) => {
+      if (data.side === 'w') chessLoungeState.whiteSeat = null;
+      if (data.side === 'b') chessLoungeState.blackSeat = null;
+      io.to('lounge').emit('chess:sync', chessLoungeState);
+    });
+
+    socket.on('chess:move', (data: { board: any; nextTurn: 'w' | 'b'; isCheck?: any; winner?: any; announcement?: string; capturedByWhite?: any[]; capturedByBlack?: any[] }) => {
+      chessLoungeState.board = data.board;
+      chessLoungeState.currentTurn = data.nextTurn;
+      chessLoungeState.isCheck = data.isCheck || null;
+      chessLoungeState.winner = data.winner || null;
+      if (data.announcement) chessLoungeState.gameAnnouncement = data.announcement;
+      if (data.capturedByWhite) chessLoungeState.capturedByWhite = data.capturedByWhite;
+      if (data.capturedByBlack) chessLoungeState.capturedByBlack = data.capturedByBlack;
+
+      io.to('lounge').emit('chess:sync', chessLoungeState);
+    });
+
+    socket.on('chess:reset', () => {
+      chessLoungeState.board = JSON.parse(JSON.stringify(INITIAL_SERVER_CHESS_BOARD));
+      chessLoungeState.currentTurn = 'w';
+      chessLoungeState.isCheck = null;
+      chessLoungeState.winner = null;
+      chessLoungeState.capturedByWhite = [];
+      chessLoungeState.capturedByBlack = [];
+      chessLoungeState.gameAnnouncement = 'Papan catur direset. Siap untuk pertandingan baru!';
+      io.to('lounge').emit('chess:sync', chessLoungeState);
+    });
+
     socket.on('chat:clear', async (data) => {
       try {
         const room = data?.room || 'global';
@@ -1025,6 +1493,33 @@ const app = express();
         }
       }
       emitRoomUsers('lounge');
+
+      // Clean up domino seats if matching socket or nik
+      let dominoSeatChanged = false;
+      for (let i = 0; i < 4; i++) {
+        const s = dominoLoungeState.seats[i];
+        if (s && !s.isBot && (s.socketId === socket.id || (user?.nik && s.nik === user.nik) || (socket.data.nik && s.nik === socket.data.nik))) {
+          dominoLoungeState.seats[i] = null;
+          dominoSeatChanged = true;
+        }
+      }
+      if (dominoSeatChanged) {
+        io.to('lounge').emit('domino:sync', getPublicDominoState());
+      }
+
+      // Clean up chess seats if matching socket or nik
+      let chessSeatChanged = false;
+      if (chessLoungeState.whiteSeat && (chessLoungeState.whiteSeat.socketId === socket.id || (user?.nik && chessLoungeState.whiteSeat.nik === user.nik) || (socket.data.nik && chessLoungeState.whiteSeat.nik === socket.data.nik))) {
+        chessLoungeState.whiteSeat = null;
+        chessSeatChanged = true;
+      }
+      if (chessLoungeState.blackSeat && (chessLoungeState.blackSeat.socketId === socket.id || (user?.nik && chessLoungeState.blackSeat.nik === user.nik) || (socket.data.nik && chessLoungeState.blackSeat.nik === socket.data.nik))) {
+        chessLoungeState.blackSeat = null;
+        chessSeatChanged = true;
+      }
+      if (chessSeatChanged) {
+        io.to('lounge').emit('chess:sync', chessLoungeState);
+      }
     });
   });
 

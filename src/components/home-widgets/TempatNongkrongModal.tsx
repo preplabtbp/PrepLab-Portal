@@ -1326,6 +1326,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
         isOpen={showSecretDominoModal}
         onClose={() => setShowSecretDominoModal(false)}
         playerName={effectiveUsername}
+        playerNik={userNik}
+        playerAvatar={avatarUrl || undefined}
         soundEnabled={soundEnabled}
       />
 
@@ -1334,6 +1336,8 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
         isOpen={showSecretChessModal}
         onClose={() => setShowSecretChessModal(false)}
         playerName={effectiveUsername}
+        playerNik={userNik}
+        playerAvatar={avatarUrl || undefined}
         soundEnabled={soundEnabled}
       />
     </div>

@@ -831,7 +831,7 @@ export function extractMarkdownTableFromContent(content: string): {
         const isLogbookMatch = rowStr.match(/<!--is-logbook:([^>]+)-->/);
 
         const isPin = rowStr.includes('<!--pin') || rowStr.includes('<!pin') || rowStr.includes('<!--pinned');
-        const cleanTitle = (rowObj['Jenis kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '')
+        const cleanTitle = (rowObj['Activity Name'] || rowObj['Activity'] || rowObj['Jenis kegiatan'] || rowObj['Jenis Kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '')
           .replace(/^↳\s*/, '')
           .replace(/<!--[\s\S]*?-->/g, '')
           .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
