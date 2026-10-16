@@ -321,7 +321,11 @@ export function P2HLaboratoryAccordionForm({
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ pin: pinUnlockInput })
+        body: JSON.stringify({ 
+          pin: pinUnlockInput,
+          nik: inspectorNik,
+          name: inspectorName 
+        })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || 'PIN tanda tangan salah');
