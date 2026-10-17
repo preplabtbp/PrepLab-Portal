@@ -293,8 +293,9 @@ export function getUserAllowedSections(userProfile?: any): string[] {
       profile = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
     } catch {}
   }
-  const nik = (profile?.nik || localStorage.getItem('p2h_inspector_nik') || '').trim();
-  const name = (profile?.name || localStorage.getItem('p2h_inspector_name') || '').toLowerCase();
+  const nik = (profile?.nik || profile?.NIK || localStorage.getItem('p2h_inspector_nik') || '').trim();
+  const name = (profile?.name || profile?.nama || profile?.Nama || localStorage.getItem('p2h_inspector_name') || '').toLowerCase();
+  const uname = (profile?.username || localStorage.getItem('p2h_inspector_username') || '').toLowerCase();
   const jab = (profile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
   const sec = (profile?.section || profile?.seksi || localStorage.getItem('p2h_inspector_section') || '').toLowerCase();
   const dept = (profile?.department || profile?.departemen || localStorage.getItem('p2h_inspector_dept') || '').toLowerCase();
@@ -338,7 +339,7 @@ export function getUserAllowedSections(userProfile?: any): string[] {
   }
 
   // Hak Akses Khusus: Sarjon Jaya Putra (NIK: M0401260003) diberikan akses ke Labnote Maintenance
-  if (nik === 'M0401260003' || name.includes('sarjon')) {
+  if (nik === 'M0401260003' || name.includes('sarjon') || uname.includes('sarjon')) {
     allowed.push('Maintenance');
   }
 

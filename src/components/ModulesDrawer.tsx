@@ -92,7 +92,12 @@ export function ModulesDrawer({
     inspectorNik === 'M0403240177';   // Aldy Aldersun Puluh
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
   const isLab = isMeetingRoom || userSection.toLowerCase().includes('laboratory') || isDeveloper;
-  const isMaintenance = isMeetingRoom || userSection.toLowerCase().includes('maintenance') || isDeveloper;
+  const isMaintenance = 
+    isMeetingRoom || 
+    userSection.toLowerCase().includes('maintenance') || 
+    isDeveloper || 
+    inspectorNik === 'M0401260003' || 
+    inspectorName?.toLowerCase().includes('sarjon');
   const hasInventoryAccess = true;
   const isQA = isMeetingRoom || userSection.toLowerCase().includes('qa') || userSection.toLowerCase().includes('quality assurance') || isDeveloper;
   const isCrew = isMeetingRoom ? false : userJabatan.toLowerCase().includes('crew');

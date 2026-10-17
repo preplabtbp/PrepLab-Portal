@@ -42,18 +42,18 @@ const DEFAULT_LIMONITE_ROWS: StandardRowInput[] = [
   { standardCode: 'LIM05', sampleLabel: 'VER-LIM05', sequenceNo: 5, analyzedAt: '01:11', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
 ];
 
-// 2. Saprolite 10 Standard Rows in exact sequence
+// 2. Saprolite 10 Standard Rows in exact sequence (SOP Lab Aktual)
 const DEFAULT_SAPROLITE_ROWS: StandardRowInput[] = [
   { standardCode: 'OREAS184', sampleLabel: 'VER-OREAS184', sequenceNo: 1, analyzedAt: '00:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
   { standardCode: 'OREAS187', sampleLabel: 'VER-OREAS187', sequenceNo: 2, analyzedAt: '00:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
   { standardCode: 'OREAS189', sampleLabel: 'VER-OREAS189', sequenceNo: 3, analyzedAt: '00:45', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
   { standardCode: 'OREAS190', sampleLabel: 'VER-OREAS190', sequenceNo: 4, analyzedAt: '01:00', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'LIM',      sampleLabel: 'VER-LIM',      sequenceNo: 5, analyzedAt: '01:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'SAP16',    sampleLabel: 'VER-SAP16',    sequenceNo: 6, analyzedAt: '01:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS191', sampleLabel: 'VER-OREAS191', sequenceNo: 5, analyzedAt: '01:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS192', sampleLabel: 'VER-OREAS192', sequenceNo: 6, analyzedAt: '01:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
   { standardCode: 'OREAS193', sampleLabel: 'VER-OREAS193', sequenceNo: 7, analyzedAt: '01:45', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
   { standardCode: 'SAP19',    sampleLabel: 'VER-SAP19',    sequenceNo: 8, analyzedAt: '02:00', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
   { standardCode: 'OREAS194', sampleLabel: 'VER-OREAS194', sequenceNo: 9, analyzedAt: '02:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'SAP',      sampleLabel: 'VER-SAP',      sequenceNo: 10, analyzedAt: '02:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS195', sampleLabel: 'VER-OREAS195', sequenceNo: 10, analyzedAt: '02:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
 ];
 
 // 3. Supermini 200 (Rigaku WDXRF GTS) 17 Standard Rows in exact sequence
@@ -341,7 +341,7 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         ? ['BLANK_A', 'BLANK_B', 'OREAS184', 'LIM01', 'LIM02', 'LIM03', 'OREAS187', 'LIM04', 'OREAS189', 'LIM05', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']
         : currentMatrix === 'LIMONITE' 
         ? ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05']
-        : ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'LIM', 'SAP16', 'OREAS193', 'SAP19', 'OREAS194', 'SAP'];
+        : ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195'];
 
       // Helper to clean numeric text (handle comma decimal, strip, N/A)
       const cleanVal = (val: any): string => {
@@ -406,10 +406,13 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           else if (/OREAS\s*187\b/i.test(rowText)) matchedStdCode = 'OREAS187';
           else if (/OREAS\s*189\b/i.test(rowText)) matchedStdCode = 'OREAS189';
           else if (/OREAS\s*190\b/i.test(rowText)) matchedStdCode = 'OREAS190';
-          else if (/SAP\s*16\b/i.test(rowText)) matchedStdCode = 'SAP16';
+          else if (/OREAS\s*191\b/i.test(rowText)) matchedStdCode = 'OREAS191';
+          else if (/OREAS\s*192\b/i.test(rowText)) matchedStdCode = 'OREAS192';
           else if (/OREAS\s*193\b/i.test(rowText)) matchedStdCode = 'OREAS193';
           else if (/SAP\s*19\b/i.test(rowText)) matchedStdCode = 'SAP19';
           else if (/OREAS\s*194\b/i.test(rowText)) matchedStdCode = 'OREAS194';
+          else if (/OREAS\s*195\b/i.test(rowText)) matchedStdCode = 'OREAS195';
+          else if (/SAP\s*16\b/i.test(rowText)) matchedStdCode = 'SAP16';
           else if (/(^|\b)VER-LIM\b/i.test(rowText) || (/\bLIM\b/i.test(rowText) && !/LIM\s*0?[1-5]/i.test(rowText))) matchedStdCode = 'LIM';
           else if (/(^|\b)VER-SAP\b/i.test(rowText) || (/\bSAP\b/i.test(rowText) && !/SAP\s*(16|19)/i.test(rowText))) matchedStdCode = 'SAP';
         }
@@ -605,12 +608,12 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
         { standardCode: 'OREAS187', sampleLabel: `VER-OREAS187 ${verificationDate}`, sequenceNo: 2, analyzedAt: '00:30', ni: '1.368', co: '0.063', fe: '13.58', cao: '0.339', sio2: '46.62', al2o3: '2.79', mgo: '17.96', p: '', s: '', cr2o3: '0.985', mno: '0.355' },
         { standardCode: 'OREAS189', sampleLabel: `VER-OREAS189 ${verificationDate}`, sequenceNo: 3, analyzedAt: '00:45', ni: '1.478', co: '0.032', fe: '10.51', cao: '0.328', sio2: '46.18', al2o3: '2.08', mgo: '23.06', p: '', s: '', cr2o3: '0.758', mno: '0.229' },
         { standardCode: 'OREAS190', sampleLabel: `VER-OREAS190 ${verificationDate}`, sequenceNo: 4, analyzedAt: '01:00', ni: '1.638', co: '0.089', fe: '24.81', cao: '0.129', sio2: '38.19', al2o3: '5.98', mgo: '6.89', p: '', s: '', cr2o3: '1.726', mno: '0.578' },
-        { standardCode: 'LIM',      sampleLabel: `VER-LIM ${verificationDate}`,      sequenceNo: 5, analyzedAt: '01:15', ni: '1.710', co: '0.244', fe: '23.86', cao: '0.011', sio2: '26.44', al2o3: '1.41', mgo: '20.75', p: '', s: '', cr2o3: '2.288', mno: '0.506' },
-        { standardCode: 'SAP16',    sampleLabel: `VER-SAP16 ${verificationDate}`,    sequenceNo: 6, analyzedAt: '01:30', ni: '1.764', co: '0.088', fe: '29.71', cao: '0.079', sio2: '21.46', al2o3: '3.41', mgo: '15.42', p: '', s: '', cr2o3: '2.524', mno: '0.702' },
+        { standardCode: 'OREAS191', sampleLabel: `VER-OREAS191 ${verificationDate}`, sequenceNo: 5, analyzedAt: '01:15', ni: '1.751', co: '0.067', fe: '17.35', cao: '0.281', sio2: '47.92', al2o3: '4.26', mgo: '10.04', p: '', s: '', cr2o3: '1.218', mno: '0.401' },
+        { standardCode: 'OREAS192', sampleLabel: `VER-OREAS192 ${verificationDate}`, sequenceNo: 6, analyzedAt: '01:30', ni: '1.770', co: '0.040', fe: '12.64', cao: '0.312', sio2: '43.55', al2o3: '2.75', mgo: '21.30', p: '', s: '', cr2o3: '0.908', mno: '0.279' },
         { standardCode: 'OREAS193', sampleLabel: `VER-OREAS193 ${verificationDate}`, sequenceNo: 7, analyzedAt: '01:45', ni: '1.928', co: '0.049', fe: '13.64', cao: '0.360', sio2: '42.68', al2o3: '3.07', mgo: '20.22', p: '', s: '', cr2o3: '0.960', mno: '0.316' },
         { standardCode: 'SAP19',    sampleLabel: `VER-SAP19 ${verificationDate}`,    sequenceNo: 8, analyzedAt: '02:00', ni: '2.028', co: '0.065', fe: '17.53', cao: '0.067', sio2: '31.51', al2o3: '1.69', mgo: '25.18', p: '', s: '', cr2o3: '1.162', mno: '0.448' },
         { standardCode: 'OREAS194', sampleLabel: `VER-OREAS194 ${verificationDate}`, sequenceNo: 9, analyzedAt: '02:15', ni: '2.128', co: '0.042', fe: '11.51', cao: '0.309', sio2: '42.98', al2o3: '2.73', mgo: '22.80', p: '', s: '', cr2o3: '0.817', mno: '0.260' },
-        { standardCode: 'SAP',      sampleLabel: `VER-SAP ${verificationDate}`,      sequenceNo: 10, analyzedAt: '02:30', ni: '2.298', co: '0.129', fe: '9.89', cao: '0.010', sio2: '36.35', al2o3: '0.96', mgo: '30.38', p: '', s: '', cr2o3: '1.976', mno: '0.219' },
+        { standardCode: 'OREAS195', sampleLabel: `VER-OREAS195 ${verificationDate}`, sequenceNo: 10, analyzedAt: '02:30', ni: '2.942', co: '0.048', fe: '12.77', cao: '0.388', sio2: '43.98', al2o3: '3.12', mgo: '18.99', p: '', s: '', cr2o3: '0.958', mno: '0.288' },
       ]);
     }
     toast.success(`Berhasil memuat contoh data analisa ${selectedMatrix}!`);

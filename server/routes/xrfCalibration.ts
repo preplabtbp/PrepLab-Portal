@@ -170,6 +170,48 @@ async function seedInitialXrfData() {
       });
     }
 
+    // Pastikan data instrumen TBP dan GTS memiliki site & methodType yang benar
+    try {
+      await db.execute(sql`UPDATE xrf_instruments SET site = 'TBP' WHERE code IN ('EPSILON_C', 'EPSILON_E', 'EPSILON_F', 'EPSILON_G', 'EPSILON_H', 'S2_PUMA', 'ZETIUM_A', 'ZETIUM_B');`);
+      await db.execute(sql`UPDATE xrf_instruments SET site = 'GTS' WHERE code IN ('EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI');`);
+      await db.execute(sql`UPDATE xrf_instruments SET method_type = 'WDXRF' WHERE code IN ('SUPERMINI', 'ZETIUM_A', 'ZETIUM_B');`);
+      await db.execute(sql`UPDATE xrf_instruments SET method_type = 'EDXRF' WHERE code NOT IN ('SUPERMINI', 'ZETIUM_A', 'ZETIUM_B');`);
+
+      // Remediasi historical data: Perbaiki urutan 5 (LIM -> OREAS191), 6 (SAP16 -> OREAS192), 10 (SAP -> OREAS195) pada batch Saprolite
+      await db.execute(sql`
+        UPDATE xrf_verification_items
+        SET standard_code = 'OREAS191',
+            sample_label = REPLACE(sample_label, 'VER-LIM', 'VER-OREAS191')
+        WHERE (standard_code = 'LIM' OR standard_code = 'VER-LIM')
+          AND sequence_no = 5
+          AND verification_id IN (
+            SELECT DISTINCT verification_id FROM xrf_verification_items WHERE standard_code IN ('OREAS184', 'OREAS187')
+          );
+      `);
+      await db.execute(sql`
+        UPDATE xrf_verification_items
+        SET standard_code = 'OREAS192',
+            sample_label = REPLACE(sample_label, 'VER-SAP16', 'VER-OREAS192')
+        WHERE (standard_code = 'SAP16' OR standard_code = 'VER-SAP16')
+          AND sequence_no = 6
+          AND verification_id IN (
+            SELECT DISTINCT verification_id FROM xrf_verification_items WHERE standard_code IN ('OREAS184', 'OREAS187')
+          );
+      `);
+      await db.execute(sql`
+        UPDATE xrf_verification_items
+        SET standard_code = 'OREAS195',
+            sample_label = REPLACE(sample_label, 'VER-SAP', 'VER-OREAS195')
+        WHERE (standard_code = 'SAP' OR standard_code = 'VER-SAP')
+          AND sequence_no = 10
+          AND verification_id IN (
+            SELECT DISTINCT verification_id FROM xrf_verification_items WHERE standard_code IN ('OREAS184', 'OREAS187')
+          );
+      `);
+    } catch (migErr: any) {
+      console.warn("[XRF Migration] Note:", migErr.message);
+    }
+
     // 2. Seed Standards
     const existingStds = await db.select().from(xrfStandards).limit(1);
     if (existingStds.length === 0) {
@@ -511,15 +553,150 @@ xrfRouter.get("/instruments", async (_req, res) => {
     }
 
     const rows = await db.select().from(xrfInstruments).orderBy(asc(xrfInstruments.id));
-    const enriched = rows.map(r => ({
-      ...r,
-      site: r.site || (['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(r.code) ? 'GTS' : 'TBP'),
-      methodType: r.methodType || (['SUPERMINI', 'ZETIUM_A', 'ZETIUM_B'].includes(r.code) ? 'WDXRF' : 'EDXRF'),
-      measurementCount: countsMap[r.code] || 0,
-      hasData: (countsMap[r.code] || 0) > 0,
-    }));
+    const enriched = rows.map(r => {
+      const isKnownGts = ['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(r.code);
+      const isKnownTbp = ['EPSILON_C', 'EPSILON_E', 'EPSILON_F', 'EPSILON_G', 'EPSILON_H', 'S2_PUMA', 'ZETIUM_A', 'ZETIUM_B'].includes(r.code);
+      const site = isKnownGts ? 'GTS' : (isKnownTbp ? 'TBP' : (r.site || 'TBP'));
+      const isKnownWdxrf = ['SUPERMINI', 'ZETIUM_A', 'ZETIUM_B'].includes(r.code);
+      const methodType = isKnownWdxrf ? 'WDXRF' : (r.methodType || 'EDXRF');
+
+      return {
+        ...r,
+        site,
+        methodType,
+        measurementCount: countsMap[r.code] || 0,
+        hasData: (countsMap[r.code] || 0) > 0,
+      };
+    });
 
     return res.json({ success: true, data: enriched });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 1b. POST Tambah Alat XRF Baru Langsung dari Portal UI
+xrfRouter.post("/instruments", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const { code, name, brandModel, channelType, colorTag, site, methodType } = req.body;
+    
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ success: false, error: "Nama alat wajib diisi." });
+    }
+
+    const cleanCode = (code || name)
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '_')
+      .replace(/_+/g, '_');
+
+    if (!cleanCode) {
+      return res.status(400).json({ success: false, error: "Kode alat tidak valid." });
+    }
+
+    const existing = await db.select().from(xrfInstruments).where(eq(xrfInstruments.code, cleanCode)).limit(1);
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, error: `Alat dengan kode '${cleanCode}' sudah terdaftar di database.` });
+    }
+
+    const inserted = await db.insert(xrfInstruments).values({
+      code: cleanCode,
+      name: name.trim(),
+      brandModel: brandModel?.trim() || 'PANalytical Epsilon 4',
+      channelType: channelType?.trim() || 'ALL',
+      colorTag: colorTag?.trim() || 'teal',
+      site: (site === 'GTS' || site === 'TBP') ? site : 'TBP',
+      methodType: (methodType === 'WDXRF' || methodType === 'EDXRF') ? methodType : 'EDXRF',
+      isActive: true,
+    }).returning();
+
+    invalidateXrfChartCache();
+
+    return res.json({
+      success: true,
+      message: `Instrumen ${name} (${cleanCode}) berhasil ditambahkan ke ${site}.`,
+      data: inserted[0],
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 1c. PUT Update Detail Alat XRF
+xrfRouter.put("/instruments/:id", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ success: false, error: "ID alat tidak valid." });
+    }
+
+    const { name, brandModel, channelType, colorTag, site, methodType, isActive } = req.body;
+
+    const updated = await db.update(xrfInstruments)
+      .set({
+        ...(name ? { name: name.trim() } : {}),
+        ...(brandModel ? { brandModel: brandModel.trim() } : {}),
+        ...(channelType ? { channelType: channelType.trim() } : {}),
+        ...(colorTag ? { colorTag: colorTag.trim() } : {}),
+        ...(site ? { site: site === 'GTS' ? 'GTS' : 'TBP' } : {}),
+        ...(methodType ? { methodType: methodType === 'WDXRF' ? 'WDXRF' : 'EDXRF' } : {}),
+        ...(typeof isActive === 'boolean' ? { isActive } : {}),
+      })
+      .where(eq(xrfInstruments.id, id))
+      .returning();
+
+    invalidateXrfChartCache();
+
+    return res.json({
+      success: true,
+      message: "Instrumen berhasil diperbarui.",
+      data: updated[0],
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 1d. DELETE Hapus atau Nonaktifkan Alat XRF
+xrfRouter.delete("/instruments/:id", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ success: false, error: "ID alat tidak valid." });
+    }
+
+    const inst = await db.select().from(xrfInstruments).where(eq(xrfInstruments.id, id)).limit(1);
+    if (inst.length === 0) {
+      return res.status(404).json({ success: false, error: "Instrumen tidak ditemukan." });
+    }
+
+    // Periksa apakah alat memiliki riwayat verifikasi
+    const verCount = await db.select({ count: sql<number>`count(*)` })
+      .from(xrfVerifications)
+      .where(eq(xrfVerifications.instrumentCode, inst[0].code));
+    
+    const count = Number(verCount[0]?.count) || 0;
+    if (count > 0) {
+      // Soft-delete (nonaktifkan) jika sudah ada data verifikasi agar riwayat tidak rusak
+      await db.update(xrfInstruments).set({ isActive: false }).where(eq(xrfInstruments.id, id));
+      invalidateXrfChartCache();
+      return res.json({
+        success: true,
+        message: `Instrumen ${inst[0].name} dinonaktifkan (memiliki ${count} batch verifikasi).`,
+      });
+    }
+
+    // Hard delete jika belum pernah ada data pengukuran
+    await db.delete(xrfInstruments).where(eq(xrfInstruments.id, id));
+    invalidateXrfChartCache();
+
+    return res.json({
+      success: true,
+      message: `Instrumen ${inst[0].name} berhasil dihapus dari sistem.`,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }

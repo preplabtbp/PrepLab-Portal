@@ -588,11 +588,12 @@ export default function App() {
   useEffect(() => {
     if (!isCrewRole) return;
     const path = location.pathname.replace(/^\//, '');
-    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'settings', 'logbook'];
     if (isMaintenanceCrew) {
-      allowedCrewPaths.push('wo-list');
+      allowedCrewPaths.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
     }
-    if (path && !allowedCrewPaths.includes(path)) {
+    const isAllowed = allowedCrewPaths.includes(path) || path.startsWith('bulletin');
+    if (path && !isAllowed) {
       navigate('/', { replace: true });
     }
   }, [isCrewRole, isMaintenanceCrew, location.pathname, navigate]);
@@ -802,11 +803,11 @@ export default function App() {
 
     // Role guard for Crew: restrict navigation to allowed modules only
     if (isCrewRole) {
-      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'settings', 'logbook'];
       if (isMaintenanceCrew) {
-        allowedCrewTabs.push('wo-list');
+        allowedCrewTabs.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
       }
-      if (!allowedCrewTabs.includes(cleanTab)) {
+      if (!allowedCrewTabs.includes(cleanTab) && !cleanTab.startsWith('bulletin')) {
         toast.error('Akses modul ini tidak tersedia untuk akun Crew.');
         navigate('/');
         return;

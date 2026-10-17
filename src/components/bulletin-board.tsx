@@ -56,7 +56,9 @@ import {
   Minimize2,
   Maximize2,
   ClipboardList,
+  BookOpen,
 } from "lucide-react";
+import { CompanyLibraryHub, LibraryDocType } from './notion/CompanyLibraryHub';
 import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
@@ -174,6 +176,8 @@ export function BulletinBoard({
   const [sidebarTab, setSidebarTab] = useState<"all" | "folders">("all");
   const [showAllPostsView, setShowAllPostsView] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(true);
+  const [isLibraryActive, setIsLibraryActive] = useState<boolean>(false);
+  const [libraryDocType, setLibraryDocType] = useState<LibraryDocType>('ALL');
 
   // Sync focus mode state from portal layout
   useEffect(() => {
@@ -570,6 +574,7 @@ export function BulletinBoard({
 
   // Navigate to specific post and maintain history
   const navigateToPost = (post: any | null) => {
+    setIsLibraryActive(false);
     if (post === null) {
       setNavHistory([]);
       setSelectedPost(null);
@@ -674,6 +679,22 @@ export function BulletinBoard({
     navigateToPost(target);
     setShowLogbookDropdown(false);
   }, [selectedPtFilter, userUniverse, navigateToPost, canAccessAllSections, userAllowedSections, userProfile]);
+
+  // Open Company Library Hub (SOP, JSA, IK, Safety Flash, MSDS)
+  const openLibraryHub = useCallback((filterType: LibraryDocType = 'ALL') => {
+    setSelectedPost(null);
+    setIsEditing(false);
+    setLibraryDocType(filterType);
+    setIsLibraryActive(true);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("page");
+      url.searchParams.delete("postId");
+      localStorage.removeItem("preplab_active_bulletin_page");
+      sessionStorage.removeItem("preplab_cached_selected_post");
+      window.history.replaceState({}, "", url.toString());
+    } catch {}
+  }, []);
 
   // Listen for live post updates from Logbook direct mutations
   useEffect(() => {
@@ -1547,11 +1568,14 @@ ${aiMeetingNotes
             >
               {/* Home Pill */}
               <button
-                onClick={() => navigateToPost(null)}
+                onClick={() => {
+                  setIsLibraryActive(false);
+                  navigateToPost(null);
+                }}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer"
                 style={{
-                  backgroundColor: (!selectedPost && !isEditing) ? '#2A9D8F' : '#f1f1ef',
-                  color: (!selectedPost && !isEditing) ? '#ffffff' : '#334155'
+                  backgroundColor: (!selectedPost && !isEditing && !isLibraryActive) ? '#2A9D8F' : '#f1f1ef',
+                  color: (!selectedPost && !isEditing && !isLibraryActive) ? '#ffffff' : '#334155'
                 }}
                 title="Beranda Dashboard"
               >
@@ -1696,6 +1720,95 @@ ${aiMeetingNotes
               </div>
             </div>
 
+            {/* Company Library Navigation (Dokumen Resmi & K3) */}
+            <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <div className="text-xs font-semibold mb-1.5 tracking-wide flex items-center justify-between text-amber-400">
+                <span className="flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Library (Dokumen Resmi)</span>
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                  K3 & Mutu
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openLibraryHub('ALL')}
+                className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between ${
+                  isLibraryActive && libraryDocType === 'ALL'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs'
+                    : 'text-slate-200 hover:bg-slate-800/60 hover:text-white'
+                }`}
+                title="Pusat Dokumen Resmi & K3 Perusahaan"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">📚</span>
+                  <span className="truncate">Buka Pusat Dokumen & K3</span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 opacity-60 shrink-0" />
+              </button>
+
+              {/* Quick Sub-Categories Pills */}
+              <div className="grid grid-cols-2 gap-1 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => openLibraryHub('SAFETY_FLASH')}
+                  className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1.5 truncate ${
+                    isLibraryActive && libraryDocType === 'SAFETY_FLASH'
+                      ? 'bg-rose-500/25 text-rose-300 border border-rose-500/40 font-bold'
+                      : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                  }`}
+                  title="Safety Flash & Peringatan K3"
+                >
+                  <span>🚨</span>
+                  <span className="truncate">Safety Flash</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openLibraryHub('SOP')}
+                  className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1.5 truncate ${
+                    isLibraryActive && libraryDocType === 'SOP'
+                      ? 'bg-sky-500/25 text-sky-300 border border-sky-500/40 font-bold'
+                      : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                  }`}
+                  title="SOP & JSA Operasional"
+                >
+                  <span>📘</span>
+                  <span className="truncate">SOP & JSA</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openLibraryHub('IK')}
+                  className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1.5 truncate ${
+                    isLibraryActive && libraryDocType === 'IK'
+                      ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 font-bold'
+                      : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                  }`}
+                  title="Instruksi Kerja (IK)"
+                >
+                  <span>📋</span>
+                  <span className="truncate">Instruksi Kerja</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openLibraryHub('MSDS')}
+                  className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1.5 truncate ${
+                    isLibraryActive && libraryDocType === 'MSDS'
+                      ? 'bg-purple-500/25 text-purple-300 border border-purple-500/40 font-bold'
+                      : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                  }`}
+                  title="MSDS & Lembar Bahan B3"
+                >
+                  <span>🧪</span>
+                  <span className="truncate">MSDS / B3</span>
+                </button>
+              </div>
+            </div>
+
             {/* Recents Section */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 custom-scrollbar">
               <div className="text-xs font-semibold mb-1.5 tracking-wide flex items-center justify-between" style={{ color: 'var(--text-muted, #94a3b8)' }}>
@@ -1828,16 +1941,29 @@ ${aiMeetingNotes
             >
               {/* Root Dashboard Link */}
               <button
-                onClick={() => navigateToPost(null)}
+                onClick={() => {
+                  setIsLibraryActive(false);
+                  navigateToPost(null);
+                }}
                 className="flex items-center gap-1 px-1.5 py-1 rounded-md transition-colors flex-shrink-0 cursor-pointer hover:opacity-80"
                 style={{
-                  color: (!selectedPost && !isEditing) ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
-                  fontWeight: (!selectedPost && !isEditing) ? 'bold' : 'normal'
+                  color: (!selectedPost && !isEditing && !isLibraryActive) ? 'var(--primary, #2A9D8F)' : 'var(--text-muted, #94a3b8)',
+                  fontWeight: (!selectedPost && !isEditing && !isLibraryActive) ? 'bold' : 'normal'
                 }}
               >
                 <Home className="w-3.5 h-3.5" />
                 <span>Dashboard</span>
               </button>
+
+              {isLibraryActive && (
+                <>
+                  <ChevronRight className="w-3 h-3 opacity-40 flex-shrink-0" />
+                  <span className="px-1.5 py-0.5 rounded-md text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 flex items-center gap-1">
+                    <BookOpen className="w-3 h-3" />
+                    <span>Company Library</span>
+                  </span>
+                </>
+              )}
 
               {/* Breadcrumb Steps */}
               {breadcrumbTrail.map((crumb, idx) => {
@@ -2027,6 +2153,28 @@ ${aiMeetingNotes
                     <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
                     <span className="text-xs font-medium text-slate-400">Memuat halaman dokumen...</span>
                   </div>
+                );
+              }
+
+              if (isLibraryActive) {
+                return (
+                  <CompanyLibraryHub
+                    posts={selectedPtFilter !== "ALL" ? posts.filter((p) => {
+                      const pPt = (p.pt || 'TBP').toUpperCase();
+                      if (selectedPtFilter === 'GTS') return pPt === 'GTS';
+                      return pPt === 'TBP' || pPt === 'GPS' || pPt === 'TBP_GPS';
+                    }) : posts}
+                    onSelectPost={(post) => {
+                      setIsLibraryActive(false);
+                      navigateToPost(post);
+                    }}
+                    onRefreshPosts={fetchPosts}
+                    activeUniverse={selectedPtFilter}
+                    inspectorNik={inspectorNik}
+                    inspectorName={inspectorName}
+                    userRole={userProfile?.role}
+                    initialTypeFilter={libraryDocType}
+                  />
                 );
               }
 
