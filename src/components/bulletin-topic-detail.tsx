@@ -198,19 +198,20 @@ export function BulletinTopicDetail({
 
     if (imageFiles.length > 0) {
       e.preventDefault();
+      e.stopPropagation();
       await processAndUploadBulletinFiles(imageFiles);
     }
   };
 
   const submitComment = async () => {
     const hasFiles = selectedFiles.length > 0;
-    const finalContent = newComment.trim() || (fileCaption.trim() ? `📎 ${selectedFiles[0]?.name}\n\n${fileCaption.trim()}` : (hasFiles ? 'Sent attachments' : ''));
+    const finalContent = newComment.trim() || (hasFiles ? 'Sent attachments' : '');
     if (!finalContent && !hasFiles) return;
     try {
-      const fileUrlPayload = hasFiles ? JSON.stringify(selectedFiles.map((f, idx) => ({
+      const fileUrlPayload = hasFiles ? JSON.stringify(selectedFiles.map((f) => ({
         url: f.url,
         name: f.name,
-        caption: idx === 0 ? fileCaption.trim() : '',
+        caption: '',
         directUrl: f.url,
         isImage: f.isImage
       }))) : null;

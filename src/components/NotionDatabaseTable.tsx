@@ -118,6 +118,7 @@ export interface CommentAttachmentItem {
   id?: string;
   name: string;
   url: string;
+  previewUrl?: string;
   directUrl?: string;
   driveViewUrl?: string;
   driveDownloadUrl?: string;
@@ -382,7 +383,7 @@ export const NotionAttachmentGrid = ({
   onPreview
 }: {
   attachments: CommentAttachmentItem[];
-  onPreview: (att: CommentAttachmentItem) => void;
+  onPreview: (att: CommentAttachmentItem, contextImages?: CommentAttachmentItem[]) => void;
 }) => {
   if (!attachments || attachments.length === 0) return null;
 
@@ -402,14 +403,14 @@ export const NotionAttachmentGrid = ({
             <NotionAttachmentThumbnail
               key={att.id || idx}
               attachment={att}
-              onPreview={onPreview}
+              onPreview={(target) => onPreview(target, images)}
             />
           ))}
           {overflowImage && (
             <NotionAttachmentThumbnail
               key={overflowImage.id || 'overflow'}
               attachment={overflowImage}
-              onPreview={onPreview}
+              onPreview={(target) => onPreview(target, images)}
               overlayBadge={`+${overflowCount}`}
             />
           )}
@@ -1387,22 +1388,81 @@ export function NotionDatabaseTable({
     return [];
   });
 
+  // Helpers untuk mendapatkan judul dan keterangan baris sebelum deklarasi getRowVal
+  const getRawRowTitle = useCallback((r: TableRowData): string => {
+    if (!r) return '';
+    return (
+      r['Activity Name'] || 
+      r['Jenis kegiatan'] || 
+      r['Jenis Kegiatan'] || 
+      r['Name'] || 
+      r['= Name'] || 
+      r['Judul'] || 
+      r['Title'] || 
+      r['Nama kegiatan'] || 
+      r['Task'] || 
+      ''
+    ).trim();
+  }, []);
+
+  const getRawRowDesc = useCallback((r: TableRowData): string => {
+    if (!r) return '';
+    return (
+      r['Description'] || 
+      r['Keterangan'] || 
+      r['Deskripsi'] || 
+      r['Catatan'] || 
+      r['Rincian'] || 
+      ''
+    ).trim();
+  }, []);
+
   // Helper untuk mengecek apakah baris di-pin
   const isRowPinned = useCallback((row: TableRowData): boolean => {
     if (!row) return false;
-    if (String(row.isPinned) === 'true' || (row as any).isPinned === true || String((row as any)._pinned) === 'true' || (row as any)._pinned === true) return true;
-    const ket = typeof row['Keterangan'] === 'string' ? row['Keterangan'] : String(row['Keterangan'] || '');
-    if (ket.includes('<!--pin') || ket.includes('<!pin') || ket.includes('<!--pinned')) return true;
-    const jk = typeof row['Jenis kegiatan'] === 'string' ? row['Jenis kegiatan'] : String(row['Jenis kegiatan'] || '');
-    if (jk.includes('<!--pin') || jk.includes('<!pin') || jk.includes('<!--pinned')) return true;
+
+    // 1. Explicit unpinned takes absolute priority!
+    if (
+      row.isPinned === 'false' || 
+      (row as any).isPinned === false || 
+      (row as any)._pinned === 'false' || 
+      (row as any)._pinned === false
+    ) {
+      return false;
+    }
+
+    // 2. Explicit pinned status
+    if (
+      row.isPinned === 'true' || 
+      (row as any).isPinned === true || 
+      (row as any)._pinned === 'true' || 
+      (row as any)._pinned === true
+    ) {
+      return true;
+    }
+
+    // 3. Persistent key in pinnedRowKeys
     const rowId = row.id ? String(row.id) : '';
     if (rowId && pinnedRowKeys.includes(rowId)) return true;
-    const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+
+    const rawTitle = getRawRowTitle(row);
+    const cleanTitle = getDisplayTitle(rawTitle);
+    const strippedTitle = stripColorTags(cleanTitle);
     if (cleanTitle && pinnedRowKeys.includes(cleanTitle)) return true;
+    if (strippedTitle && pinnedRowKeys.includes(strippedTitle)) return true;
+
     const taskCode = row.taskCode || row['Task ID'] || row['ID Task'];
     if (taskCode && pinnedRowKeys.includes(String(taskCode))) return true;
+
+    // 4. HTML comment tags in cells (Keterangan, Description, Jenis kegiatan, Activity Name)
+    const ket = getRawRowDesc(row);
+    if (ket.includes('<!--pin') || ket.includes('<!pin') || ket.includes('<!--pinned')) return true;
+
+    const jk = getRawRowTitle(row);
+    if (jk.includes('<!--pin') || jk.includes('<!pin') || jk.includes('<!--pinned')) return true;
+
     return false;
-  }, [pinnedRowKeys]);
+  }, [pinnedRowKeys, getRawRowTitle, getRawRowDesc]);
 
   // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys saat rows prop dimuat
   useEffect(() => {
@@ -1412,10 +1472,27 @@ export function NotionDatabaseTable({
       let changed = false;
       rows.forEach(r => {
         if (!isSubItemRow(r)) {
-          const ket = r['Keterangan'] || '';
-          const jk = r['Jenis kegiatan'] || '';
-          const isPinTag = ket.includes('<!--pin') || ket.includes('<!pin') || ket.includes('<!--pinned') || jk.includes('<!--pin') || jk.includes('<!pin') || r.isPinned === 'true';
-          const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+          // If explicitly unpinned, do not restore!
+          if (
+            r.isPinned === 'false' || 
+            (r as any).isPinned === false || 
+            (r as any)._pinned === 'false' || 
+            (r as any)._pinned === false
+          ) {
+            return;
+          }
+          const ket = getRawRowDesc(r);
+          const jk = getRawRowTitle(r);
+          const isPinTag = 
+            r.isPinned === 'true' || 
+            (r as any).isPinned === true || 
+            ket.includes('<!--pin') || 
+            ket.includes('<!pin') || 
+            ket.includes('<!--pinned') || 
+            jk.includes('<!--pin') || 
+            jk.includes('<!pin');
+
+          const cleanTitle = stripColorTags(getDisplayTitle(jk));
           const key = r.id ? String(r.id) : cleanTitle;
           if (isPinTag && key && !nextKeys.includes(key)) {
             nextKeys.push(key);
@@ -1431,7 +1508,7 @@ export function NotionDatabaseTable({
       }
       return prevKeys;
     });
-  }, [rows, tablePinStorageKey]);
+  }, [rows, tablePinStorageKey, getRawRowTitle, getRawRowDesc]);
 
   // Handler toggle pin / unpin baris task
   const handleTogglePinRow = async (targetRowOrIndex: TableRowData | number) => {
@@ -1475,20 +1552,26 @@ export function NotionDatabaseTable({
 
     const newPinnedState = !currentlyPinned;
     const rowId = targetRow.id ? String(targetRow.id) : '';
-    const jkRaw = targetRow['Jenis kegiatan'] || targetRow['Name'] || targetRow['Judul'] || '';
-    const cleanTitle = jkRaw.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+    const rawTitle = getRawRowTitle(targetRow);
+    const cleanTitle = getDisplayTitle(rawTitle);
+    const strippedTitle = stripColorTags(cleanTitle);
     const taskCode = targetRow.taskCode || targetRow['Task ID'] || targetRow['ID Task'] || '';
 
     // Bersihkan semua kemungkinan key untuk task ini agar tidak ada duplikasi atau residual
     const keysToRemove = new Set<string>();
     if (rowId) keysToRemove.add(rowId);
+    if (rawTitle) keysToRemove.add(rawTitle);
     if (cleanTitle) keysToRemove.add(cleanTitle);
+    if (strippedTitle) keysToRemove.add(strippedTitle);
     if (taskCode) keysToRemove.add(String(taskCode));
 
-    let nextPinnedKeys = pinnedRowKeys.filter(k => !keysToRemove.has(k));
+    let nextPinnedKeys = pinnedRowKeys.filter(k => {
+      const kClean = stripColorTags(getDisplayTitle(k));
+      return !keysToRemove.has(k) && !keysToRemove.has(kClean);
+    });
 
     if (newPinnedState) {
-      const keyToAdd = rowId || cleanTitle || (taskCode ? String(taskCode) : '');
+      const keyToAdd = rowId || strippedTitle || cleanTitle || (taskCode ? String(taskCode) : '');
       if (keyToAdd && !nextPinnedKeys.includes(keyToAdd)) {
         nextPinnedKeys.push(keyToAdd);
       }
@@ -1505,20 +1588,28 @@ export function NotionDatabaseTable({
     updatedRow.isPinned = newPinnedState ? 'true' : 'false';
     (updatedRow as any)._pinned = newPinnedState ? 'true' : 'false';
 
-    // Simpan atau hapus penanda <!--pin--> di kolom Keterangan dan Jenis kegiatan
-    let ket = updatedRow['Keterangan'] || '';
-    let jk = updatedRow['Jenis kegiatan'] || '';
-
     if (newPinnedState) {
-      if (!ket.includes('<!--pin-->')) {
-        ket = `${ket} <!--pin-->`.trim();
+      // Find the description or remarks column to append <!--pin-->
+      const descKey = Object.keys(updatedRow).find(k => {
+        const kl = k.toLowerCase().trim();
+        return kl === 'keterangan' || kl === 'description' || kl === 'deskripsi' || kl === 'catatan';
+      }) || 'Keterangan';
+      let curDesc = updatedRow[descKey] || '';
+      if (!curDesc.includes('<!--pin-->')) {
+        updatedRow[descKey] = `${curDesc} <!--pin-->`.trim();
       }
     } else {
-      ket = ket.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
-      jk = jk.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
+      // Clean ALL pin comments from ALL properties of this row
+      for (const k of Object.keys(updatedRow)) {
+        if (typeof updatedRow[k] === 'string') {
+          updatedRow[k] = updatedRow[k]
+            .replace(/<!--\s*pin.*?-->/gi, '')
+            .replace(/<!-?\s*pinned.*?-->/gi, '')
+            .replace(/<!pin.*?>/gi, '')
+            .trim();
+        }
+      }
     }
-    updatedRow['Keterangan'] = ket;
-    updatedRow['Jenis kegiatan'] = jk;
 
     nextRows[rowIndex] = updatedRow;
     setLocalRows(nextRows);
@@ -2977,13 +3068,34 @@ export function NotionDatabaseTable({
   }, [galleryItems]);
 
   // Handler seragam untuk preview attachment (gambar via ImageModal dengan gallery list, dokumen via tab baru)
-  const handlePreviewAttachment = (att: CommentAttachmentItem) => {
+  const handlePreviewAttachment = (
+    att: CommentAttachmentItem,
+    contextImages?: Array<{ name?: string; url?: string; previewUrl?: string; isImage?: boolean; directUrl?: string; driveViewUrl?: string; driveDownloadUrl?: string; caption?: string }>
+  ) => {
     if (att.isImage) {
-      const targetUrl = att.directUrl || att.url;
+      const targetUrl = att.previewUrl || att.directUrl || att.url;
       const targetDriveId = att.id || extractDriveId(targetUrl);
 
-      const foundIdx = imageGalleryList.findIndex((img) => {
+      // Gunakan contextImages jika disediakan (misal dari foto-foto yang sedang ter-paste di selectedFiles atau grup attachment)
+      const activeGallery = (contextImages && contextImages.length > 0)
+        ? contextImages
+            .filter((f) => f.isImage !== false)
+            .map((f) => {
+              const u = f.previewUrl || f.directUrl || f.url || '';
+              const dId = extractDriveId(u);
+              return {
+                url: u,
+                title: f.caption ? `${f.name || 'Foto'} — "${f.caption}"` : (f.name || 'Foto'),
+                driveViewUrl: f.driveViewUrl || (dId ? `https://drive.google.com/file/d/${dId}/view?usp=sharing` : undefined),
+                driveDownloadUrl: f.driveDownloadUrl || (dId ? `https://drive.google.com/uc?id=${dId}&export=download` : undefined)
+              };
+            })
+        : imageGalleryList;
+
+      const foundIdx = activeGallery.findIndex((img) => {
         if (img.url === targetUrl) return true;
+        if (att.url && img.url === att.url) return true;
+        if (att.previewUrl && img.url === att.previewUrl) return true;
         if (targetDriveId && (img.url.includes(targetDriveId) || (img.driveViewUrl && img.driveViewUrl.includes(targetDriveId)))) return true;
         if (att.driveViewUrl && img.driveViewUrl === att.driveViewUrl) return true;
         return false;
@@ -2998,8 +3110,8 @@ export function NotionDatabaseTable({
       };
 
       setPreviewImage({
-        ...(foundIdx >= 0 ? imageGalleryList[foundIdx] : fallbackItem),
-        images: imageGalleryList.length > 0 ? imageGalleryList : [fallbackItem],
+        ...(foundIdx >= 0 ? activeGallery[foundIdx] : fallbackItem),
+        images: activeGallery.length > 0 ? activeGallery : [fallbackItem],
         currentIndex: currentIndex
       });
     } else if (att.driveViewUrl) {
@@ -4853,7 +4965,7 @@ export function NotionDatabaseTable({
     e.preventDefault();
     if (submittingComment || isSubmittingCommentRef.current) return;
     const hasFiles = selectedFiles.length > 0 || selectedFile !== null;
-    const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name || 'Lampiran'}\n\n${commentFileCaption.trim()}` : (hasFiles ? `📎 Lampiran` : ''));
+    const finalContent = commentText.trim() || (hasFiles ? `📎 Lampiran` : '');
     if (!finalContent && !hasFiles) return;
     const targetPostId = getEffectivePostId(selectedRow);
     if (!targetPostId) {
@@ -4868,21 +4980,16 @@ export function NotionDatabaseTable({
     try {
       isSubmittingCommentRef.current = true;
       setSubmittingComment(true);
-      const allFilesPayload = selectedFiles.length > 0
-        ? selectedFiles.map((f, idx) => ({
+      const filesToSave = selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : []);
+      const allFilesPayload = filesToSave.length > 0
+        ? filesToSave.map((f) => ({
             url: f.url,
             name: f.name,
-            caption: idx === 0 ? commentFileCaption.trim() : (f.caption || ''),
+            caption: (f as any).caption || '',
             directUrl: f.url,
             isImage: f.isImage
           }))
-        : selectedFile ? [{
-            url: selectedFile.url,
-            name: selectedFile.name,
-            caption: commentFileCaption.trim(),
-            directUrl: selectedFile.url,
-            isImage: selectedFile.isImage
-          }] : null;
+        : null;
 
       const fileUrlPayload = allFilesPayload ? JSON.stringify(allFilesPayload) : null;
 
@@ -5070,9 +5177,29 @@ export function NotionDatabaseTable({
 
     if (imageFiles.length > 0) {
       e.preventDefault();
+      e.stopPropagation();
       await processAndUploadCommentFiles(imageFiles);
     }
   };
+
+  // Listen to global portal:image_pasted when task detail modal is open
+  useEffect(() => {
+    if (!selectedRow) return;
+
+    const handlePortalImagePasted = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ file: File; base64: string }>;
+      if (customEvent.detail?.file) {
+        customEvent.preventDefault();
+        customEvent.stopPropagation();
+        await processAndUploadCommentFiles([customEvent.detail.file]);
+      }
+    };
+
+    window.addEventListener('portal:image_pasted', handlePortalImagePasted);
+    return () => {
+      window.removeEventListener('portal:image_pasted', handlePortalImagePasted);
+    };
+  }, [selectedRow]);
 
   // Edit comment
   const handleSaveEditComment = async (commentId: number) => {
@@ -10768,6 +10895,7 @@ export function NotionDatabaseTable({
                             ref={galleryFileInputRef}
                             onChange={handleGalleryFileSelect}
                             accept="image/*,.pdf,.doc,.docx"
+                            data-no-global-paste="true"
                             className="hidden"
                           />
                           <button
@@ -11478,87 +11606,121 @@ export function NotionDatabaseTable({
                           </div>
                         )}
 
-                        {/* Selected Attachment Preview with Caption */}
-                        {(selectedFiles.length > 0 || selectedFile) && (
+                        {/* Main Comment Area with Avatar & Single Textarea (Notion Style) */}
+                        <div className="flex items-start gap-3">
+                          {/* User Avatar */}
                           <div 
-                            className="p-2.5 rounded-xl border space-y-2 animate-in fade-in shadow-xs"
+                            className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 select-none shadow-xs mt-0.5"
                             style={{
-                              backgroundColor: 'var(--input-bg, #1a1a1a)',
-                              borderColor: 'rgba(20, 184, 166, 0.45)'
+                              backgroundColor: 'rgba(20, 184, 166, 0.2)',
+                              border: '1px solid rgba(20, 184, 166, 0.4)',
+                              color: '#2dd4bf'
                             }}
+                            title={currentAuthorName || 'Personil'}
                           >
-                            <div className="flex items-center justify-between text-xs font-semibold text-teal-400">
-                              <span>Lampiran ({selectedFiles.length || 1} file siap dikirim):</span>
-                              <button
-                                type="button"
-                                onClick={() => { setSelectedFiles([]); setSelectedFile(null); setCommentFileCaption(''); }}
-                                className="text-[11px] text-rose-400 hover:underline cursor-pointer"
-                              >
-                                Hapus Semua
-                              </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {(selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : [])).map((f, fIdx) => (
-                                <div key={fIdx} className="relative flex items-center gap-2 p-1.5 pr-2.5 rounded-lg bg-teal-950/40 border border-teal-500/30">
-                                  {f.isImage && (f.previewUrl || f.url) ? (
-                                    <img src={f.previewUrl || f.url} alt={f.name} className="w-8 h-8 object-cover rounded border border-teal-500/40 shrink-0" />
-                                  ) : (
-                                    <Paperclip className="w-4 h-4 text-teal-400 shrink-0" />
-                                  )}
-                                  <span className="text-[11px] font-medium text-teal-200 truncate max-w-[120px]" title={f.name}>{f.name}</span>
+                            {(currentAuthorName || 'U').charAt(0).toUpperCase()}
+                          </div>
+
+                          {/* Input Box and Attached Images */}
+                          <div className="flex-1 min-w-0 space-y-2.5">
+                            <textarea
+                              id="notion-comment-textarea"
+                              rows={2}
+                              value={commentText}
+                              onChange={(e) => setCommentText(e.target.value)}
+                              onPaste={handleCommentPaste}
+                              placeholder={
+                                replyingTo 
+                                  ? `Tulis tanggapan untuk ${replyingTo.authorName}... (Bisa langsung paste gambar / Ctrl+V)` 
+                                  : `Add a comment... (Bisa langsung paste gambar / Ctrl+V)`
+                              }
+                              className="w-full p-2.5 px-3 rounded-xl border focus:border-teal-500 outline-none leading-relaxed text-xs sm:text-sm resize-none transition-colors"
+                              style={{
+                                backgroundColor: 'var(--input-bg, #202020)',
+                                borderColor: 'var(--border-main, #334155)',
+                                color: 'var(--text-main, #f1f5f9)'
+                              }}
+                            />
+
+                            {/* Pasted / Attached Images - Notion Cards Layout */}
+                            {(selectedFiles.length > 0 || selectedFile) && (
+                              <div className="space-y-1.5 animate-in fade-in duration-200">
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-teal-400 px-0.5">
+                                  <span>Gambar / Lampiran ({selectedFiles.length || 1}):</span>
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      const updated = selectedFiles.filter((_, idx) => idx !== fIdx);
-                                      setSelectedFiles(updated);
-                                      if (updated.length === 0) setSelectedFile(null);
-                                    }}
-                                    className="p-0.5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded cursor-pointer"
+                                    onClick={() => { setSelectedFiles([]); setSelectedFile(null); setCommentFileCaption(''); }}
+                                    className="text-[11px] text-rose-400 hover:text-rose-300 hover:underline cursor-pointer"
                                   >
-                                    <X className="w-3 h-3" />
+                                    Hapus Semua
                                   </button>
                                 </div>
-                              ))}
-                            </div>
-                            <div className="flex items-center gap-1.5 pt-1">
-                              <input
-                                type="text"
-                                value={commentFileCaption}
-                                onChange={(e) => setCommentFileCaption(e.target.value)}
-                                placeholder="Tambahkan caption gambar/lampiran (opsional)..."
-                                className="w-full text-xs px-2.5 py-1.5 rounded-lg border focus:border-teal-500 outline-none leading-relaxed"
-                                style={{
-                                  backgroundColor: 'var(--card-bg, #141414)',
-                                  borderColor: 'var(--border-main, #334155)',
-                                  color: 'var(--text-main, #f1f5f9)'
-                                }}
-                              />
-                            </div>
+                                
+                                {/* Horizontal row of cards, identical to Notion reference */}
+                                <div className="flex flex-wrap items-center gap-3">
+                                  {(selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : [])).map((f, fIdx) => (
+                                    <div 
+                                      key={fIdx} 
+                                      className="group relative rounded-xl overflow-hidden border border-slate-200 dark:border-neutral-700/80 bg-slate-50 dark:bg-neutral-800/80 shadow-xs hover:shadow-md transition-all flex flex-col w-36 sm:w-44 shrink-0"
+                                    >
+                                      {f.isImage && (f.previewUrl || f.url) ? (
+                                        <div 
+                                          className="relative w-full h-24 sm:h-28 bg-black/20 overflow-hidden cursor-pointer"
+                                          onClick={() => {
+                                            const currentList = selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : []);
+                                            handlePreviewAttachment(
+                                              { name: f.name, url: f.previewUrl || f.url, previewUrl: f.previewUrl, directUrl: f.url, isImage: true },
+                                              currentList
+                                            );
+                                          }}
+                                          title="Klik untuk melihat perbesaran (Bisa digeser dengan arrow keyboard ← →)"
+                                        >
+                                          <img 
+                                            src={f.previewUrl || f.url} 
+                                            alt={f.name} 
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
+                                          />
+                                          <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <Maximize2 className="w-4 h-4 text-white drop-shadow" />
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="w-full h-24 sm:h-28 flex flex-col items-center justify-center gap-1.5 p-2 bg-slate-100 dark:bg-neutral-900 text-teal-500">
+                                          <Paperclip className="w-6 h-6" />
+                                          <span className="text-[10px] text-slate-400 font-mono">Dokumen</span>
+                                        </div>
+                                      )}
+
+                                      {/* Delete button (X) top right */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const updated = selectedFiles.filter((_, idx) => idx !== fIdx);
+                                          setSelectedFiles(updated);
+                                          if (updated.length === 0) setSelectedFile(null);
+                                        }}
+                                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 hover:bg-rose-600 text-white flex items-center justify-center transition-colors shadow-xs cursor-pointer z-10"
+                                        title="Hapus foto ini"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+
+                                      {/* Bottom caption / name bar */}
+                                      <div className="p-1.5 px-2 bg-slate-100/95 dark:bg-neutral-900/95 border-t border-slate-200/50 dark:border-neutral-800 flex items-center justify-between text-[10px]">
+                                        <span className="truncate text-slate-700 dark:text-slate-300 font-medium max-w-[130px]" title={f.name}>
+                                          {f.name}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
 
-                        <textarea
-                          id="notion-comment-textarea"
-                          rows={2}
-                          value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
-                          onPaste={handleCommentPaste}
-                          placeholder={
-                            replyingTo 
-                              ? `Tulis tanggapan untuk ${replyingTo.authorName}... (Bisa paste gambar / Ctrl+V)` 
-                              : selectedFile
-                              ? `Tulis catatan tambahan untuk lampiran (opsional)...`
-                              : `Tulis komentar... (Bisa langsung paste gambar / Ctrl+V)`
-                          }
-                          className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none leading-relaxed text-xs resize-none"
-                          style={{
-                            backgroundColor: 'var(--input-bg, #202020)',
-                            borderColor: 'var(--border-main, #334155)',
-                            color: 'var(--text-main, #f1f5f9)'
-                          }}
-                        />
-
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/30 dark:border-neutral-800">
                           <div className="flex items-center gap-2">
                             <input
                               type="file"
@@ -11578,7 +11740,7 @@ export function NotionDatabaseTable({
                                 borderColor: 'var(--border-main, #334155)',
                                 color: 'var(--text-muted, #94a3b8)'
                               }}
-                              title="Lampirkan foto atau dokumen ke diskusi"
+                              title="Lampirkan foto atau dokumen ke diskusi (bisa pilih lebih dari 1)"
                             >
                               {isUploadingCommentFile ? <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-400" /> : <Paperclip className="w-3.5 h-3.5 text-teal-400" />}
                               <span>{isUploadingCommentFile ? 'Mengunggah...' : 'Lampirkan Foto'}</span>
@@ -11605,7 +11767,7 @@ export function NotionDatabaseTable({
 
                           <Button
                             type="submit"
-                            disabled={submittingComment || isUploadingCommentFile || (!commentText.trim() && !selectedFile)}
+                            disabled={submittingComment || isUploadingCommentFile || (!commentText.trim() && selectedFiles.length === 0 && !selectedFile)}
                             className="!w-auto text-xs px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {submittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : replyingTo ? <Reply className="w-3.5 h-3.5 mr-1.5 rotate-180" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
