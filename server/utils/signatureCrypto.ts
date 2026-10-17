@@ -1,10 +1,10 @@
 import crypto from 'crypto';
 
 // Master key derived from dedicated TTD_ENCRYPTION_KEY or stable system master key
-// NOTE: Must NOT use JWT_SECRET exclusively as primary key because JWT_SECRET differs between
-// localhost and Cloud Run production, which would prevent signatures encrypted on one from
-// being decrypted on the other against the shared Cloud SQL database.
-const STABLE_DEFAULT_SECRET = 'preplab-secure-ttd-master-key-2026-tbp-obi';
+// NOTE: Must include the verified seed key (7f8b9e1c...) so signatures registered locally
+// or on Cloud Run can be decrypted across both environments seamlessly.
+const STABLE_DEFAULT_SECRET = '7f8b9e1c3a5d7e9f0b2d4f6a8c0e2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f';
+const FALLBACK_SECRET_OBI = 'preplab-secure-ttd-master-key-2026-tbp-obi';
 const PRIMARY_SECRET = process.env.TTD_ENCRYPTION_KEY || STABLE_DEFAULT_SECRET;
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(PRIMARY_SECRET).digest();
 
@@ -53,6 +53,8 @@ export function decryptSignature(encrypted: EncryptedSignature): string {
   const candidateSecrets = [
     PRIMARY_SECRET,
     STABLE_DEFAULT_SECRET,
+    FALLBACK_SECRET_OBI,
+    process.env.TTD_ENCRYPTION_KEY,
     process.env.JWT_SECRET,
   ].filter((s): s is string => typeof s === 'string' && s.length > 0);
 
