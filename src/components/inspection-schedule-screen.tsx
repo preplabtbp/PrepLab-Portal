@@ -13,7 +13,7 @@ import { PageHeader } from './PageHeader';
 import { INSPECTION_29_AGENDAS, matchTicketToAgenda, InspectionAgendaItem } from '../utils/inspection-pic-matcher';
 import { getISOWeek, getISOWeekYear } from '../utils/iso-week';
 import {
-  PlanMember, ShiftGroup, ruleError, shiftMismatch, agendaShortName
+  PlanMember, ShiftGroup, ruleError, shiftMismatch, agendaShortName, agendaCapacity
 } from '../utils/inspection-schedule-rules';
 import { getRekapWeek, getRekapWeekRange, EmployeeAvatar, photoForCapture, initials } from './safety-rekap-screen';
 
@@ -692,7 +692,12 @@ function PlanEditModal({ target, members, agendaShifts, history, photoOf, onClos
       .sort((a, b) => Number(!!a.agendaId) - Number(!!b.agendaId) || a.name.localeCompare(b.name));
   }, [members, query]);
 
-  const error = person && agendaId ? ruleError(person, agendaId) : null;
+  // Agenda sudah penuh (tanpa menghitung karyawan yang sedang diedit), mis. Tabung Gas maks. 1 orang
+  const isFull = (id: number) =>
+    members.filter(m => !m.isCuti && m.agendaId === id && planKey(m) !== personKey).length >= agendaCapacity(id);
+  const error = person && agendaId
+    ? ruleError(person, agendaId) || (isFull(agendaId) ? `"${agendaShortName(agendaId)}" hanya untuk ${agendaCapacity(agendaId)} orang petugas` : null)
+    : null;
   const warnings = person && agendaId
     ? memberWarnings(history, agendaId, person, person, agendaShifts[agendaId] || null).filter(w => w.level === 'warn')
     : [];
@@ -777,7 +782,8 @@ function PlanEditModal({ target, members, agendaShifts, history, photoOf, onClos
                   <optgroup key={g} label={`Shift ${g}${g === 'Siang' ? ' + Nonshift' : ''}`}>
                     {INSPECTION_29_AGENDAS.filter(a => (agendaShifts[a.id] || 'Siang') === g).map(a => {
                       const blocked = person ? ruleError(person, a.id) : null;
-                      return <option key={a.id} value={a.id} disabled={!!blocked}>#{a.id} {a.name}{blocked ? ' (dilarang)' : ''}</option>;
+                      const full = !blocked && isFull(a.id);
+                      return <option key={a.id} value={a.id} disabled={!!blocked || full}>#{a.id} {a.name}{blocked ? ' (dilarang)' : full ? ' (penuh)' : ''}</option>;
                     })}
                   </optgroup>
                 ))}
@@ -1350,6 +1356,14 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         else if (pm.agendaId) byAgenda.set(pm.agendaId, [...(byAgenda.get(pm.agendaId) || []), member]);
         else unassignedList.push(member);
       });
+      // Jadwal lama yang melebihi kapasitas agenda (mis. Tabung Gas > 1 orang) → tandai petugas berlebih
+      byAgenda.forEach((list, id) => {
+        const cap = agendaCapacity(id);
+        if (list.length <= cap) return;
+        [...list].sort((a, b) => a.roleIndex - b.roleIndex).slice(cap).forEach(m => {
+          m.warnings = [{ level: 'error', text: `Agenda ini hanya untuk ${cap} orang petugas` }, ...(m.warnings || [])];
+        });
+      });
     } else schedule.forEach((s: any) => {
       const member: Member = {
         no: s.no, name: s.name, jabatan: s.jabatan || '', shift: s.shift || '',
@@ -1541,7 +1555,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
             );
           })}
         </div>
-        {canEdit && c.agenda && (
+        {canEdit && c.agenda && c.members.length < agendaCapacity(c.agenda.id) && (
           <button
             onClick={() => requestEdit({ kind: 'agenda', agendaId: c.agenda!.id })}
             className="mx-4 mb-3 h-8 rounded-xl border border-dashed border-[var(--border-main)] text-[11px] font-bold text-[var(--text-muted)] hover:text-[var(--primary)] hover:border-[var(--primary)] flex items-center justify-center gap-1.5 cursor-pointer"

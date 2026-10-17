@@ -4,7 +4,7 @@ import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { employees, inspectionSchedulePlans, notifications } from "../../src/db/schema.js";
 import { INSPECTION_29_AGENDAS, matchTicketToAgenda } from "../../src/utils/inspection-pic-matcher.js";
 import {
-  PlanMember, ShiftGroup, DEFAULT_AGENDA_SHIFT, APD_TEAM_AGENDAS, poolOf, ruleError, agendaName, isSeniorGol
+  PlanMember, ShiftGroup, DEFAULT_AGENDA_SHIFT, APD_TEAM_AGENDAS, poolOf, ruleError, agendaName, isSeniorGol, agendaCapacity
 } from "../../src/utils/inspection-schedule-rules.js";
 import { loadLeaveRoster } from "./roster.js";
 import { fetchInspectionScheduleFromSheet, invalidateScheduleCache } from "./inspections.js";
@@ -206,7 +206,8 @@ export function randomizeGroups(
     // 2) Sisa karyawan menjadi pendamping, merata ke agenda dengan petugas paling sedikit
     const rest = people.filter(m => m.agendaId === null).sort(() => Math.random() - 0.5);
     for (const m of rest) {
-      const options = agendas.filter(id => !ruleError(m, id));
+      // Agenda berkapasitas (mis. Tabung Gas = 1 orang) tidak diberi pendamping
+      const options = agendas.filter(id => !ruleError(m, id) && count.get(id)! < agendaCapacity(id));
       if (!options.length) continue;
       const best = options.reduce((b, id) => {
         const score = count.get(id)! * 100 + penalty(m, id);
@@ -230,6 +231,20 @@ export function randomizeGroups(
 const GOL_ORDER: Record<string, number> = { V: 0, IV: 1, III: 2, II: 3 };
 function golRank(gol: string): number {
   return GOL_ORDER[(gol || '').trim().toUpperCase()] ?? 9;
+}
+
+// Agenda yang melebihi kapasitas (mis. Tabung Gas > 1 orang): daftar nama agenda yang bermasalah
+function capacityViolations(members: PlanMember[]): string[] {
+  const counts = new Map<number, number>();
+  members.forEach(m => { if (!m.isCuti && m.agendaId) counts.set(m.agendaId, (counts.get(m.agendaId) || 0) + 1); });
+  return Array.from(counts.entries()).filter(([id, n]) => n > agendaCapacity(id)).map(([id]) => `${agendaName(id)} (maks. ${agendaCapacity(id)} orang)`);
+}
+
+// Pangkas petugas di atas kapasitas (dipakai saat menyalin jadwal Google Sheet): sisakan urutan teratas
+function trimToCapacity(members: PlanMember[]) {
+  const byAgenda = new Map<number, PlanMember[]>();
+  members.forEach(m => { if (!m.isCuti && m.agendaId) byAgenda.set(m.agendaId, [...(byAgenda.get(m.agendaId) || []), m]); });
+  byAgenda.forEach((list, id) => list.sort((a, b) => a.roleIndex - b.roleIndex).slice(agendaCapacity(id)).forEach(m => { m.agendaId = null; m.roleIndex = 1; }));
 }
 
 function normalizeRoles(members: PlanMember[]) {
@@ -408,6 +423,7 @@ inspectionPlannerRouter.post("/api/inspection-plan/from-sheet", async (req, res)
         });
       }
     }
+    trimToCapacity(members);
     const plan = await savePlan(period, members, computeAgendaShifts(members), 'manual', userNikOf(req));
     res.json({ success: true, period, plan });
   } catch (error: any) {
@@ -433,6 +449,8 @@ inspectionPlannerRouter.put("/api/inspection-plan", async (req, res) => {
       agendaId: Number.isInteger(m.agendaId) && INSPECTION_29_AGENDAS.some(a => a.id === m.agendaId) ? m.agendaId : null,
       roleIndex: Math.max(1, parseInt(m.roleIndex, 10) || 1), isCuti: !!m.isCuti, codes: Array.isArray(m.codes) ? m.codes : undefined
     }));
+    const overCapacity = capacityViolations(members);
+    if (overCapacity.length) return res.status(400).json({ success: false, message: `Melebihi batas petugas: ${overCapacity.join(', ')}` });
     const agendaShifts = (existing?.agendaShifts as Record<number, ShiftGroup>) || computeAgendaShifts(members);
     const plan = await savePlan(period, members, agendaShifts, 'manual', userNikOf(req));
     res.json({ success: true, period, plan });

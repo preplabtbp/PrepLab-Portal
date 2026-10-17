@@ -38,6 +38,13 @@ const SENIOR_GOL = new Set(['III', 'IV', 'V']);
 // Inspeksi Harian Pra Pakai Tabung Gas Bertekanan: hanya Section Laboratory, Shift Siang / Nonshift
 export const LAB_ONLY_AGENDA = 18;
 
+// Batas jumlah petugas per agenda (agenda lain tidak dibatasi)
+export const AGENDA_MAX_MEMBERS: Record<number, number> = { [LAB_ONLY_AGENDA]: 1 };
+
+export function agendaCapacity(agendaId: number): number {
+  return AGENDA_MAX_MEMBERS[agendaId] ?? Infinity;
+}
+
 export function isLabSection(section: string): boolean {
   return /^lab/i.test((section || '').trim());
 }
