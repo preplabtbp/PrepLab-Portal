@@ -4,10 +4,11 @@ import {
   CalendarRange, RefreshCw, ImageDown, Search, ArrowLeft, Moon, Sun, Clock, CheckCircle2,
   CircleDashed, Palmtree, UserX, StickyNote, FlaskConical, Wrench, Layers, Boxes, Users, AlertCircle,
   ChevronLeft, ChevronRight, RotateCcw, Shuffle, Pencil, Maximize2, Minimize2, Plus, X, Trash2, AlertTriangle,
-  Table2, FileSpreadsheet, CalendarDays, CopyPlus
+  Table2, FileSpreadsheet, CalendarDays, CopyPlus, ClipboardCheck
 } from 'lucide-react';
 import { Select } from './ui';
 import { toPng } from 'html-to-image';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from './PageHeader';
 import { INSPECTION_29_AGENDAS, matchTicketToAgenda, InspectionAgendaItem } from '../utils/inspection-pic-matcher';
 import { getISOWeek, getISOWeekYear } from '../utils/iso-week';
@@ -1019,6 +1020,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
   const [busy, setBusy] = useState('');
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [cutiConflicts, setCutiConflicts] = useState<string[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -1413,6 +1415,13 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         description="Jadwal inspeksi terencana mingguan Preparasi & Laboratorium (periode Sabtu – Jumat)"
         icon={<CalendarRange />}
       >
+        <button
+          onClick={() => navigate('/safety-rekap')}
+          className="h-9 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+          title="Buka modul Rekap KTA/TTA & Inspeksi"
+        >
+          <ClipboardCheck className="w-4 h-4" /> Rekap KTA/TTA & Inspeksi
+        </button>
         <button
           onClick={() => setFullscreen(f => !f)}
           className="h-9 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
