@@ -161,12 +161,37 @@ export async function processSignatureImage(
 
   rawCtx.drawImage(img, 0, 0, targetW, targetH);
 
+  // Create blurred low-frequency background canvas for adaptive local illumination normalization.
+  // This extracts the ambient paper brightness & shadows without the thin high-frequency ink strokes.
+  const bgCanvas = document.createElement('canvas');
+  bgCanvas.width = targetW;
+  bgCanvas.height = targetH;
+  const bgCtx = bgCanvas.getContext('2d');
+  if (!bgCtx) throw new Error('Canvas Background context tidak didukung');
+
+  // Fast 2-stage multi-scale box-downscale blur (works 100% reliably in all browsers)
+  const scaleDownW = Math.max(16, Math.round(targetW / 24));
+  const scaleDownH = Math.max(16, Math.round(targetH / 24));
+  const mini = document.createElement('canvas');
+  mini.width = scaleDownW;
+  mini.height = scaleDownH;
+  const miniCtx = mini.getContext('2d');
+  if (miniCtx) {
+    miniCtx.drawImage(rawCanvas, 0, 0, scaleDownW, scaleDownH);
+    bgCtx.imageSmoothingEnabled = true;
+    bgCtx.imageSmoothingQuality = 'high';
+    bgCtx.drawImage(mini, 0, 0, targetW, targetH);
+  } else {
+    bgCtx.drawImage(rawCanvas, 0, 0, targetW, targetH);
+  }
+
   const estimatedBg = estimateBackgroundLightness(rawCtx, targetW, targetH);
-  const effectiveThreshold = options.threshold > 0 ? options.threshold : Math.max(120, estimatedBg - 20);
 
   const imgData = rawCtx.getImageData(0, 0, targetW, targetH);
   const pixels = imgData.data;
   const numPixels = pixels.length;
+
+  const bgData = bgCtx.getImageData(0, 0, targetW, targetH).data;
 
   // Ink color definition
   let targetR = 0;
@@ -183,8 +208,18 @@ export async function processSignatureImage(
     targetB = 0;
   }
 
-  const smoothness = Math.max(5, options.smoothness);
   const contrast = Math.max(1.0, options.contrast);
+
+  // Calculate dynamic sensitivity from user threshold option (default 205):
+  // Higher threshold = more sensitive (picks up thinner ballpoint strokes)
+  // Lower threshold = stricter (only solid dark strokes, cleans heavier shadows)
+  const sensitivityFactor = Math.max(0.2, Math.min(2.0, (options.threshold - 90) / 115));
+  const targetDiff = Math.max(10, Math.round(52 - sensitivityFactor * 26));
+  const targetDrop = Math.max(0.08, 0.30 - sensitivityFactor * 0.14);
+
+  const startDiff = Math.max(6, targetDiff - 8);
+  const ramp = Math.max(8, Math.min(28, options.smoothness * 0.6));
+  const fullDiff = startDiff + ramp;
 
   // Bounding box for auto-trim
   let minX = targetW;
@@ -194,17 +229,20 @@ export async function processSignatureImage(
   let hasInk = false;
 
   for (let i = 0; i < numPixels; i += 4) {
-    let r = pixels[i];
-    let g = pixels[i + 1];
-    let b = pixels[i + 2];
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
     const originalA = pixels[i + 3];
 
     if (originalA === 0) {
       continue;
     }
 
-    // Perceived luminance
+    // Perceived luminance of raw pixel
     let lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+    // Perceived luminance of local paper illumination
+    const bgLum = Math.max(30, 0.299 * bgData[i] + 0.587 * bgData[i + 1] + 0.114 * bgData[i + 2]);
 
     if (options.invert) {
       lum = 255 - lum;
@@ -215,14 +253,17 @@ export async function processSignatureImage(
       lum = Math.min(255, Math.max(0, lum));
     }
 
-    // Background removal
+    // Contrast drop relative to local background paper
+    const diff = bgLum - lum;
+    const dropRatio = diff / bgLum;
+
+    // Background removal: Ink is detected when pixel is significantly darker than local paper
     let alpha = 0;
-    if (lum < effectiveThreshold) {
-      const diff = effectiveThreshold - lum;
-      if (diff >= smoothness) {
+    if (diff > startDiff && dropRatio > (targetDrop * 0.72)) {
+      if (diff >= fullDiff) {
         alpha = 255;
       } else {
-        const factor = diff / smoothness;
+        const factor = (diff - startDiff) / ramp;
         alpha = Math.round(255 * (factor * (2 - factor)));
       }
     }
