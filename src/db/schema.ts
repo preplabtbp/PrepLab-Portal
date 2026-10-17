@@ -1079,7 +1079,8 @@ export const safetyRekapEdits = pgTable('safety_rekap_edits', {
   year: integer('year').notNull(),
   nik: text('nik').notNull(),
   name: text('name'),
-  isCuti: boolean('is_cuti'),
+  isCuti: boolean('is_cuti'), // lama; digantikan absenceStatus
+  absenceStatus: text('absence_status'), // NULL = otomatis, '' = hadir/wajib, 'CUTI' | 'IZIN' | 'DINAS' | 'RESIGN' | 'NEW_HIRE'
   ktaDone: boolean('kta_done'),
   tglKta: text('tgl_kta'), // '' = kosongkan, '-' = tidak wajib (sel hitam)
   tglTta1: text('tgl_tta1'),

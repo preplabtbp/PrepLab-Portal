@@ -29,6 +29,7 @@ async function ensureSafetyRekapEditsTable() {
     updated_at TIMESTAMP DEFAULT NOW()
   );`);
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_safety_rekap_edits_week_nik ON safety_rekap_edits(year, week, nik);`);
+  await db.execute(sql`ALTER TABLE safety_rekap_edits ADD COLUMN IF NOT EXISTS absence_status TEXT;`);
   tableEnsured = true;
 }
 
@@ -43,6 +44,15 @@ function cleanDateValue(v: unknown): string | null {
   const s = String(v).trim();
   if (s === '' || s === '-') return s;
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+
+const ABSENCE_STATUSES = ['CUTI', 'IZIN', 'DINAS', 'RESIGN', 'NEW_HIRE'];
+
+// null = otomatis, '' = hadir (wajib lapor), atau salah satu ABSENCE_STATUSES
+function cleanAbsence(v: unknown): string | null {
+  if (v === '') return '';
+  const s = String(v ?? '').trim().toUpperCase();
+  return ABSENCE_STATUSES.includes(s) ? s : null;
 }
 
 function cleanBool(v: unknown): boolean | null {
@@ -77,7 +87,8 @@ safetyRekapRouter.put('/api/safety-rekap/edits', async (req, res) => {
     const values = {
       week, year, nik,
       name: b.name ? String(b.name) : null,
-      isCuti: cleanBool(b.isCuti),
+      isCuti: null,
+      absenceStatus: cleanAbsence(b.absenceStatus),
       ktaDone: cleanBool(b.ktaDone),
       tglKta: cleanDateValue(b.tglKta),
       tglTta1: cleanDateValue(b.tglTta1),

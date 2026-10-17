@@ -30,8 +30,48 @@ const EDITOR_NIKS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042',
 // Nilai sel tanggal: 'YYYY-MM-DD', '√' (sudah tanpa tanggal), '' (wajib tapi belum), null (tidak wajib → sel gelap)
 type DateVal = string | null;
 
+// Status ketidakhadiran: personil dengan status ini tidak dihitung dalam target mingguan
+type Absence = 'CUTI' | 'IZIN' | 'DINAS' | 'RESIGN' | 'NEW_HIRE';
+
+const ABSENCE_OPTIONS: Record<Absence, {
+  label: string; screen: string; chip: string; print: string; printText: string; excel: string;
+}> = {
+  CUTI: {
+    label: 'Cuti', excel: 'CUTI',
+    screen: 'bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300',
+    chip: 'bg-violet-100 text-violet-800 ring-violet-300 dark:bg-violet-500/20 dark:text-violet-200 dark:ring-violet-500/40',
+    print: '#E9D5FF', printText: '#5B21B6'
+  },
+  IZIN: {
+    label: 'Izin', excel: 'IZIN',
+    screen: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300',
+    chip: 'bg-yellow-100 text-yellow-800 ring-yellow-300 dark:bg-yellow-500/20 dark:text-yellow-200 dark:ring-yellow-500/40',
+    print: '#FEF08A', printText: '#854D0E'
+  },
+  DINAS: {
+    label: 'Dinas Luar', excel: 'DINAS LUAR',
+    screen: 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300',
+    chip: 'bg-orange-100 text-orange-800 ring-orange-300 dark:bg-orange-500/20 dark:text-orange-200 dark:ring-orange-500/40',
+    print: '#FED7AA', printText: '#9A3412'
+  },
+  RESIGN: {
+    label: 'Resign', excel: 'RESIGN',
+    screen: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+    chip: 'bg-red-100 text-red-800 ring-red-300 dark:bg-red-500/20 dark:text-red-200 dark:ring-red-500/40',
+    print: '#FECACA', printText: '#991B1B'
+  },
+  NEW_HIRE: {
+    label: 'New Hire', excel: 'NEW HIRE',
+    screen: 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300',
+    chip: 'bg-sky-100 text-sky-800 ring-sky-300 dark:bg-sky-500/20 dark:text-sky-200 dark:ring-sky-500/40',
+    print: '#BAE6FD', printText: '#075985'
+  }
+};
+const ABSENCE_KEYS = Object.keys(ABSENCE_OPTIONS) as Absence[];
+
 interface RekapValues {
-  isCuti: boolean;
+  absence: Absence | null;
+  isCuti: boolean; // true bila absence terisi (dikecualikan dari target)
   ktaDone: boolean;
   tglKta: DateVal;
   tglTta1: DateVal;
@@ -152,8 +192,14 @@ function applyEdit(auto: RekapValues, edit: any): RekapValues {
   const date = (stored: any, fallback: DateVal): DateVal =>
     stored === null || stored === undefined ? fallback : stored === '-' ? null : stored;
   const bool = (stored: any, fallback: boolean) => (typeof stored === 'boolean' ? stored : fallback);
+  // absenceStatus: null = otomatis (data lama is_cuti tetap dihormati), '' = hadir, selain itu status
+  let absence: Absence | null = auto.absence;
+  if (edit.absenceStatus === '') absence = null;
+  else if (edit.absenceStatus && ABSENCE_KEYS.includes(edit.absenceStatus)) absence = edit.absenceStatus;
+  else if (typeof edit.isCuti === 'boolean') absence = edit.isCuti ? 'CUTI' : null;
   return {
-    isCuti: bool(edit.isCuti, auto.isCuti),
+    absence,
+    isCuti: absence !== null,
     ktaDone: bool(edit.ktaDone, auto.ktaDone),
     tglKta: date(edit.tglKta, auto.tglKta),
     tglTta1: date(edit.tglTta1, auto.tglTta1),
@@ -205,15 +251,18 @@ function EmployeeAvatar({ name, photo, className = 'w-8 h-8 text-[11px]' }: { na
 }
 
 interface RekapSummary {
-  total: number; cuti: number; kta: number; insp: number;
+  total: number; cuti: number; kta: number; insp: number; absence: Record<Absence, number>;
   lengkap: number; belum: number; ktaPct: number; inspPct: number;
 }
 
-// Ringkasan gaya Excel: ADA (√) / CUTI/IZIN/DINAS / TIDAK ADA KTA/TTA/INSPEKSI
+// Ringkasan gaya Excel: ADA (√) / status ketidakhadiran (warna pastel) / TIDAK ADA KTA/TTA/INSPEKSI
 function SummaryRows({ summary, variant }: { summary: RekapSummary; variant: 'screen' | 'print' }) {
-  const items = [
+  const items: { label: string; kta: number; insp: number; cls: string; style?: React.CSSProperties }[] = [
     { label: 'ADA (√)', kta: summary.kta, insp: summary.insp, cls: variant === 'print' ? 'bg-white text-slate-900' : 'bg-[var(--card-bg)] text-[var(--text-main)]' },
-    { label: 'CUTI / IZIN / DINAS', kta: summary.cuti, insp: summary.cuti, cls: 'bg-sky-500 text-white' },
+    ...ABSENCE_KEYS.map(k => ({
+      label: ABSENCE_OPTIONS[k].excel, kta: summary.absence[k], insp: summary.absence[k], cls: '',
+      style: { backgroundColor: ABSENCE_OPTIONS[k].print, color: ABSENCE_OPTIONS[k].printText }
+    })),
     { label: 'TIDAK ADA KTA/TTA / INSPEKSI', kta: summary.total - summary.kta, insp: summary.total - summary.insp, cls: 'bg-rose-600 text-white' }
   ];
   const border = variant === 'print' ? 'border-slate-400' : 'border-[var(--border-main)]';
@@ -229,7 +278,7 @@ function SummaryRows({ summary, variant }: { summary: RekapSummary; variant: 'sc
       <tbody>
         {items.map(it => (
           <tr key={it.label}>
-            <td className={`border ${border} px-3 py-1.5 font-bold text-center ${it.cls}`}>{it.label}</td>
+            <td className={`border ${border} px-3 py-1.5 font-bold text-center ${it.cls}`} style={it.style}>{it.label}</td>
             <td className={`border ${border} px-3 py-1.5 text-center font-black tabular-nums`}>{it.kta}</td>
             <td className={`border ${border} px-3 py-1.5 text-center font-black tabular-nums`}>{it.insp}</td>
           </tr>
@@ -297,8 +346,10 @@ const RekapReportSheet = React.forwardRef<HTMLDivElement, {
                 </td>
                 <td className={`${td} text-center font-mono`}>{r.nik}</td>
                 <td className={td}>{r.jabatan}</td>
-                {r.isCuti ? (
-                  <td colSpan={7} className={`${td} text-center font-bold text-white bg-sky-500`}>CUTI / IZIN / DINAS</td>
+                {r.absence ? (
+                  <td colSpan={7} className={`${td} text-center font-bold tracking-wide`} style={{ backgroundColor: ABSENCE_OPTIONS[r.absence].print, color: ABSENCE_OPTIONS[r.absence].printText }}>
+                    {ABSENCE_OPTIONS[r.absence].excel}
+                  </td>
                 ) : (
                   <>
                     {check(r.ktaDone)}
@@ -399,7 +450,8 @@ interface EditDialogProps {
 }
 
 function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSaved }: EditDialogProps) {
-  const [isCuti, setIsCuti] = useState(row.isCuti);
+  const [absence, setAbsence] = useState<Absence | null>(row.absence);
+  const isCuti = absence !== null;
   const [ktaDone, setKtaDone] = useState(row.ktaDone);
   const [tglKta, setTglKta] = useState(dateToForm(row.tglKta));
   const [tglTta1, setTglTta1] = useState(dateToForm(row.tglTta1));
@@ -439,7 +491,8 @@ function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSave
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           week, year, nik: row.nik, name: row.name,
-          isCuti: diffBool(isCuti, a.isCuti),
+          // null = ikut otomatis, '' = hadir (wajib lapor)
+          absenceStatus: absence === a.absence ? null : (absence ?? ''),
           ktaDone: diffBool(ktaDone, a.ktaDone),
           tglKta: diffDate(tglKta, a.tglKta),
           tglTta1: diffDate(tglTta1, a.tglTta1),
@@ -493,12 +546,40 @@ function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSave
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-          <label className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] cursor-pointer">
-            <span className="flex items-center gap-2 text-sm font-semibold text-[var(--text-main)]">
-              <Palmtree className="w-4 h-4 text-sky-500" /> Personil sedang cuti / off minggu ini
-            </span>
-            <input type="checkbox" checked={isCuti} onChange={e => setIsCuti(e.target.checked)} className="w-4 h-4 accent-sky-600 cursor-pointer" />
-          </label>
+          <section className="space-y-2">
+            <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[var(--text-muted)]">
+              <Palmtree className="w-4 h-4" /> Status Kehadiran Minggu Ini
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setAbsence(null)}
+                className={`h-8 px-3 rounded-full text-xs font-bold ring-1 ring-inset cursor-pointer transition-all ${
+                  absence === null
+                    ? 'bg-emerald-600 text-white ring-emerald-600 shadow-sm'
+                    : 'bg-[var(--input-bg)] text-[var(--text-muted)] ring-[var(--border-main)] hover:text-[var(--text-main)]'
+                }`}
+              >
+                Hadir (Wajib Lapor)
+              </button>
+              {ABSENCE_KEYS.map(k => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setAbsence(k)}
+                  className={`h-8 px-3 rounded-full text-xs font-bold ring-1 ring-inset cursor-pointer transition-all ${ABSENCE_OPTIONS[k].chip} ${
+                    absence === k ? 'ring-2 shadow-sm scale-105' : 'opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  {absence === k && <CheckCircle2 className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />}
+                  {ABSENCE_OPTIONS[k].label}
+                </button>
+              ))}
+            </div>
+            {isCuti && (
+              <p className="text-[11px] text-[var(--text-muted)]">Personil berstatus {ABSENCE_OPTIONS[absence!].label} tidak dihitung dalam target mingguan.</p>
+            )}
+          </section>
 
           <fieldset disabled={isCuti} className={`space-y-5 ${isCuti ? 'opacity-40' : ''}`}>
             <section className="space-y-3">
@@ -682,13 +763,16 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         entry = {
           nik: emp.nik, name: emp.name || '-', jabatan: emp.jabatan || '-',
           auto: {
-            isCuti, ktaDone: false, tglKta: '', tglTta1: '', tglTta2: null,
+            absence: isCuti ? 'CUTI' : null, isCuti, ktaDone: false, tglKta: '', tglTta1: '', tglTta2: null,
             inspeksiDone: false, keteranganInspeksi: '', tglInspeksi: ''
           }
         };
         map.set(key, entry);
       }
-      if (isCuti) entry.auto.isCuti = true;
+      if (isCuti) {
+        entry.auto.isCuti = true;
+        entry.auto.absence = 'CUTI';
+      }
       return entry;
     };
 
@@ -728,9 +812,12 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     const active = allRows.filter(r => !r.isCuti);
     const kta = active.filter(r => r.ktaDone).length;
     const insp = active.filter(r => r.inspeksiDone).length;
+    const absence = Object.fromEntries(ABSENCE_KEYS.map(k => [k, 0])) as Record<Absence, number>;
+    allRows.forEach(r => { if (r.absence) absence[r.absence]++; });
     return {
       total: active.length,
       cuti: allRows.length - active.length,
+      absence,
       kta, insp,
       lengkap: active.filter(r => r.ktaDone && r.inspeksiDone).length,
       belum: active.filter(r => !r.ktaDone || !r.inspeksiDone).length,
@@ -772,23 +859,24 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
   const handleDownloadExcel = () => {
     try {
       const header = ['NO', 'Nama Karyawan', 'NIK', 'Jabatan', '(KTA/TTA)', 'TANGGAL KTA', 'TANGGAL TTA 1', 'TANGGAL TTA 2', '(INSPEKSI)', 'KETERANGAN INSPEKSI', 'TANGGAL INSPEKSI'];
-      const dateVal = (v: DateVal, cuti: boolean) => (cuti ? 'CUTI' : v === null ? '-' : formatShortDate(v));
+      const absLabel = (r: RekapRow) => (r.absence ? ABSENCE_OPTIONS[r.absence].excel : '');
+      const dateVal = (v: DateVal, r: RekapRow) => (r.absence ? absLabel(r) : v === null ? '-' : formatShortDate(v));
       const aoa: any[][] = [
         [reportMonth],
         [rangeLabel],
         header,
         ...allRows.map((r, i) => [
           i + 1, r.name, r.nik, r.jabatan,
-          r.isCuti ? 'CUTI' : r.ktaDone ? '√' : '',
-          dateVal(r.tglKta, r.isCuti), dateVal(r.tglTta1, r.isCuti), dateVal(r.tglTta2, r.isCuti),
-          r.isCuti ? 'CUTI' : r.inspeksiDone ? '√' : '',
-          r.isCuti ? 'CUTI' : r.keteranganInspeksi,
+          r.absence ? absLabel(r) : r.ktaDone ? '√' : '',
+          dateVal(r.tglKta, r), dateVal(r.tglTta1, r), dateVal(r.tglTta2, r),
+          r.absence ? absLabel(r) : r.inspeksiDone ? '√' : '',
+          r.absence ? absLabel(r) : r.keteranganInspeksi,
           r.isCuti ? '' : formatShortDate(r.tglInspeksi)
         ]),
         [],
         ['', 'RINGKASAN', '', '', 'KTA/TTA', '', '', '', 'INSPEKSI'],
         ['', 'ADA (√)', '', '', summary.kta, '', '', '', summary.insp],
-        ['', 'CUTI/IZIN/DINAS', '', '', summary.cuti, '', '', '', summary.cuti],
+        ...ABSENCE_KEYS.map(k => ['', ABSENCE_OPTIONS[k].excel, '', '', summary.absence[k], '', '', '', summary.absence[k]]),
         ['', 'TIDAK ADA KTA/TTA /INSPEKSI', '', '', summary.total - summary.kta, '', '', '', summary.total - summary.insp]
       ];
       const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -841,7 +929,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     { id: 'ALL', label: 'Semua', count: allRows.length },
     { id: 'BELUM', label: 'Belum Lengkap', count: summary.belum },
     { id: 'LENGKAP', label: 'Lengkap', count: summary.lengkap },
-    { id: 'CUTI', label: 'Cuti', count: summary.cuti }
+    { id: 'CUTI', label: 'Tidak Hadir / Non-Target', count: summary.cuti }
   ];
 
   const th = 'px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-b border-[var(--border-main)] whitespace-nowrap';
@@ -911,9 +999,16 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
               </div>
             ))}
             <div className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl p-4 shadow-sm">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Cuti / Off</p>
-              <p className="text-2xl font-black text-sky-600 dark:text-sky-400 mt-1">{summary.cuti}</p>
-              <p className="text-[11px] text-[var(--text-muted)] mt-1">Tidak dihitung dalam target</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Tidak Hadir / Non-Target</p>
+              <p className="text-2xl font-black text-violet-600 dark:text-violet-400 mt-1">{summary.cuti}</p>
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {ABSENCE_KEYS.filter(k => summary.absence[k] > 0).map(k => (
+                  <span key={k} className={`px-1.5 py-px rounded text-[10px] font-bold ${ABSENCE_OPTIONS[k].screen}`}>
+                    {ABSENCE_OPTIONS[k].label} {summary.absence[k]}
+                  </span>
+                ))}
+                {summary.cuti === 0 && <span className="text-[11px] text-[var(--text-muted)]">Tidak dihitung dalam target</span>}
+              </div>
             </div>
           </div>
 
@@ -1051,10 +1146,11 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                       </td>
                       <td className={`${td} text-[var(--text-muted)] min-w-[180px]`}>{r.jabatan}</td>
 
-                      {r.isCuti ? (
-                        <td colSpan={7} className={`${td} border-l border-l-[var(--border-main)] bg-sky-500/[0.06]`}>
-                          <div className="flex items-center justify-center gap-2 text-sky-700 dark:text-sky-400 text-xs font-bold">
-                            <Palmtree className="w-4 h-4" /> CUTI / OFF ROSTER — tidak termasuk target minggu ini
+                      {r.absence ? (
+                        <td colSpan={7} className={`${td} border-l border-l-[var(--border-main)] ${ABSENCE_OPTIONS[r.absence].screen}`}>
+                          <div className="flex items-center justify-center gap-2 text-xs font-bold tracking-wide">
+                            <Palmtree className="w-4 h-4" /> {ABSENCE_OPTIONS[r.absence].excel}
+                            <span className="font-medium opacity-70">— tidak termasuk target minggu ini</span>
                           </div>
                         </td>
                       ) : (
