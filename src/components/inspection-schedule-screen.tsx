@@ -146,9 +146,6 @@ function findAgenda(title: string): InspectionAgendaItem | null {
   return INSPECTION_29_AGENDAS.find(a => a.name.toLowerCase() === t) || matchTicketToAgenda({ category: title });
 }
 
-function formatDdMmYyyy(d: Date) {
-  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
-}
 
 function formatShort(ts?: string | null) {
   if (!ts) return '';
@@ -169,95 +166,156 @@ function buildWeekOptions(year: number, currentWeek: number) {
   return options;
 }
 
-// ─── Lembar PNG (warna tetap seperti jadwal Excel) ──────────────────────────
+// ─── Lembar PNG (warna kategori tetap seperti jadwal Excel) ─────────────────
+
+// Warna aksen cetak per kategori (garis atas kartu & judul bagian)
+const PRINT_ACCENT: Record<Category, string> = { PREP: '#548235', LAB: '#2F75B5', MAINT: '#C65911', OTHER: '#BF8F00' };
 
 const ScheduleSheet = React.forwardRef<HTMLDivElement, {
-  title: string; cards: AgendaCard[]; cuti: Member[]; nonActive: { name: string; note: string }[];
+  week: number; periodLabel: string; sourceLabel: string;
+  cards: AgendaCard[]; cuti: Member[]; nonActive: { name: string; note: string }[];
   photoOf: (name: string) => string | undefined;
-}>(({ title, cards, cuti, nonActive, photoOf }, ref) => {
-  const cutiCols = 4;
-  const perCol = Math.max(8, Math.ceil(cuti.length / cutiCols));
-  return (
-    <div ref={ref} style={{ width: 1800 }} className="bg-white p-6 font-sans text-slate-900">
-      <div className="text-center py-3 mb-5 font-black text-2xl tracking-wide" style={{ backgroundColor: '#FFFF00', border: '2px solid #000' }}>
-        {title}
+}>(({ week, periodLabel, sourceLabel, cards, cuti, nonActive, photoOf }, ref) => {
+  const assigned = cards.filter(c => c.members.length > 0);
+  const people = assigned.reduce((n, c) => n + c.members.length, 0);
+  const malam = cards.filter(c => c.shift === 'Malam').length;
+  const groups = CATEGORY_ORDER.map(k => ({ key: k, cards: cards.filter(c => c.category === k) })).filter(g => g.cards.length);
+
+  const shiftPill = (shift: AgendaCard['shift']) => {
+    const cfg = shift === 'Malam' ? { bg: '#3730A3', fg: '#FFFFFF', icon: <Moon className="w-3 h-3" /> }
+      : shift === 'Siang' ? { bg: '#FBBF24', fg: '#451A03', icon: <Sun className="w-3 h-3" /> }
+        : { bg: '#64748B', fg: '#FFFFFF', icon: <Clock className="w-3 h-3" /> };
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ backgroundColor: cfg.bg, color: cfg.fg }}>
+        {cfg.icon} {shift ? `Shift ${shift}` : 'Shift -'}
+      </span>
+    );
+  };
+
+  const avatar = (name: string, size: string) => {
+    const photo = photoForCapture(photoOf(name));
+    return (
+      <div className={`relative ${size} shrink-0 rounded-full overflow-hidden bg-slate-200 text-slate-600 text-[9px] font-black flex items-center justify-center`}>
+        {initials(name)}
+        {photo && <img src={photo} alt="" className="absolute inset-0 w-full h-full object-cover" />}
       </div>
-      <div className="grid grid-cols-5 gap-4">
-        {cards.map(c => {
-          const cat = CATEGORY[c.category];
-          return (
-            <div key={c.key} className="flex flex-col" style={{ border: '2px solid #1f2937' }}>
-              <div className="px-2 py-1.5 text-center font-bold text-[13px] leading-snug" style={{ backgroundColor: cat.print }}>{c.title}</div>
-              <div className="px-2 py-1 text-center font-bold text-[13px]" style={{ backgroundColor: cat.print, borderTop: `1px solid ${cat.printBorder}` }}>
-                {c.shift ? `Shift ${c.shift}` : '-'}
-              </div>
-              <div className="px-2 py-1.5 space-y-1 min-h-[74px]">
-                {c.members.length === 0 && <p className="text-[12px] italic text-slate-400">Belum ada petugas</p>}
-                {c.members.map((m, i) => {
-                  const photo = photoForCapture(photoOf(m.name));
-                  return (
-                    <div key={m.name} className="flex items-center gap-2 text-[13px]">
-                      <span className="w-4 text-right">{i + 1}</span>
-                      <div className="relative w-6 h-6 shrink-0 rounded-full overflow-hidden bg-slate-200 text-[9px] font-black flex items-center justify-center">
-                        {initials(m.name)}
-                        {photo && <img src={photo} alt="" className="absolute inset-0 w-full h-full object-cover" />}
-                      </div>
-                      <span className="flex-1">{m.name}</span>
-                      {m.isCompleted && <span className="text-[11px] font-bold" style={{ color: '#15803D' }}>✓</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-        <div className="flex flex-col justify-center px-4 py-3 rounded-2xl" style={{ border: '2px solid #1f2937' }}>
-          <p className="text-[13px] font-bold mb-2">Ket. Warna Table/Kotak Jadwal Inspeksi :</p>
+    );
+  };
+
+  return (
+    <div ref={ref} style={{ width: 1800 }} className="bg-white p-8 font-sans text-slate-900">
+      {/* Kop */}
+      <div className="flex items-end justify-between border-b-4 border-slate-900 pb-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Departemen Preparation & Laboratory · K3 Inspeksi Terencana</p>
+          <h1 className="text-[30px] leading-tight font-black">Jadwal Inspeksi Mingguan Preparasi & Laboratorium</h1>
+          <p className="text-sm text-slate-600 mt-1">29 agenda inspeksi K3 terencana · Periode Sabtu – Jumat · Sumber: {sourceLabel}</p>
+        </div>
+        <div className="text-right shrink-0 pl-6">
+          <div className="inline-block px-4 py-1.5 rounded-lg text-2xl font-black" style={{ backgroundColor: '#FFE600', color: '#111827' }}>WEEK {week}</div>
+          <p className="text-sm font-semibold text-slate-600 mt-1 whitespace-nowrap">Periode {periodLabel}</p>
+        </div>
+      </div>
+
+      {/* Ringkasan & legenda */}
+      <div className="flex flex-wrap items-center gap-2 mt-4 mb-5">
+        <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-900 text-white">Agenda terjadwal: {assigned.length}/{cards.length}</span>
+        <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">Petugas: {people} orang</span>
+        <span className="px-3 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: '#E0E7FF', color: '#3730A3' }}>Agenda Shift Malam: {malam}</span>
+        <span className="px-3 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>Agenda Shift Siang: {cards.length - malam}</span>
+        <span className="px-3 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: '#EDE9FE', color: '#5B21B6' }}>Cuti: {cuti.length}</span>
+        <div className="ml-auto flex items-center gap-4">
           {CATEGORY_ORDER.map(k => (
-            <div key={k} className="flex items-center gap-3 text-base font-bold">
-              <span className="w-8 h-5 rounded" style={{ backgroundColor: CATEGORY[k].print, border: '1px solid #64748b' }} />
-              = {CATEGORY[k].label}
-            </div>
+            <span key={k} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+              <span className="w-4 h-4 rounded" style={{ backgroundColor: CATEGORY[k].print, border: `2px solid ${PRINT_ACCENT[k]}` }} /> {CATEGORY[k].label}
+            </span>
           ))}
         </div>
       </div>
 
-      <div className="mt-4 text-[13px] italic">
-        <p className="font-bold not-italic">Note</p>
-        {NOTES.map((n, i) => <p key={n}>{i + 1}. {n}</p>)}
+      {/* Agenda per area */}
+      <div className="space-y-5">
+        {groups.map(g => (
+          <div key={g.key}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-1.5 h-5 rounded-full" style={{ backgroundColor: PRINT_ACCENT[g.key] }} />
+              <h2 className="text-sm font-black uppercase tracking-[0.15em]" style={{ color: PRINT_ACCENT[g.key] }}>{CATEGORY[g.key].label}</h2>
+              <span className="text-xs font-semibold text-slate-400">{g.cards.length} agenda</span>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+            <div className="grid grid-cols-5 gap-3">
+              {g.cards.map(c => (
+                <div key={c.key} className="flex flex-col rounded-xl overflow-hidden border border-slate-300" style={{ borderTop: `4px solid ${PRINT_ACCENT[c.category]}` }}>
+                  <div className="px-3 pt-2 pb-2" style={{ backgroundColor: CATEGORY[c.category].print }}>
+                    <div className="flex items-start gap-2">
+                      <p className="flex-1 text-[12.5px] font-bold leading-snug">{c.title}</p>
+                      {c.agenda && <span className="shrink-0 text-[10px] font-black text-slate-500">#{c.agenda.id}</span>}
+                    </div>
+                    <div className="mt-1.5">{shiftPill(c.shift)}</div>
+                  </div>
+                  <div className="flex-1 px-3 py-2 space-y-1.5 min-h-[64px]">
+                    {c.members.length === 0 && <p className="text-[11px] italic text-slate-400">Belum ada petugas</p>}
+                    {c.members.map(m => (
+                      <div key={m.name} className="flex items-center gap-2">
+                        {avatar(m.name, 'w-7 h-7')}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12.5px] font-semibold leading-tight">{m.name}</p>
+                          <p className="text-[10px] text-slate-500 leading-tight">{m.roleIndex === 1 ? 'Inspektor Utama' : 'Pendamping'}</p>
+                        </div>
+                        {m.isCompleted && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: '#DCFCE7', color: '#15803D' }}>✓ Selesai</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
-      <div className="mt-3 flex gap-6 items-start">
-        <div className="flex-1">
-          <p className="font-black italic text-lg mb-1">Daftar Karyawan Yang Cuti untuk Pengisian KTA/TTA & Inspeksi :</p>
-          <div className="grid grid-cols-4" style={{ border: '2px solid #1f2937' }}>
-            {Array.from({ length: cutiCols }).map((_, col) => (
-              <div key={col}>
-                {Array.from({ length: perCol }).map((__, row) => {
-                  const idx = col * perCol + row;
-                  return (
-                    <div key={row} className="flex text-[13px] font-semibold" style={{ borderBottom: '1px solid #94a3b8', borderRight: '1px solid #94a3b8' }}>
-                      <span className="w-8 text-center" style={{ borderRight: '1px solid #94a3b8' }}>{idx + 1}</span>
-                      <span className="px-1.5 flex-1 truncate">{cuti[idx]?.name || ' '}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+      {/* Cuti, non-aktif & catatan */}
+      <div className="mt-6 grid grid-cols-[1fr_340px] gap-5 items-start">
+        <div className="rounded-xl border border-slate-300 overflow-hidden">
+          <div className="px-4 py-2 flex items-center justify-between" style={{ backgroundColor: '#EDE9FE' }}>
+            <p className="text-sm font-black" style={{ color: '#5B21B6' }}>Daftar Karyawan Cuti untuk Pengisian KTA/TTA & Inspeksi</p>
+            <span className="text-xs font-bold" style={{ color: '#5B21B6' }}>{cuti.length} orang</span>
           </div>
+          {cuti.length === 0 ? (
+            <p className="px-4 py-3 text-xs italic text-slate-400">Tidak ada karyawan cuti.</p>
+          ) : (
+            <div className="grid grid-cols-4 gap-x-4 gap-y-1.5 px-4 py-3">
+              {cuti.map((m, i) => (
+                <div key={m.name} className="flex items-center gap-2 text-[12px] min-w-0">
+                  <span className="w-5 text-right text-slate-400 tabular-nums">{i + 1}</span>
+                  {avatar(m.name, 'w-5 h-5')}
+                  <span className="font-semibold truncate">{m.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="w-[320px]">
-          <p className="font-bold italic text-[12px] mb-1 text-right">Daftar Karyawan yang Resign/Dinas/Mutasi/Sakit/New Hire :</p>
-          <div style={{ border: '2px solid #1f2937' }}>
-            {Array.from({ length: Math.max(8, nonActive.length) }).map((_, i) => (
-              <div key={i} className="flex text-[13px] font-semibold" style={{ borderBottom: '1px solid #94a3b8' }}>
-                <span className="w-8 text-center" style={{ borderRight: '1px solid #94a3b8' }}>{nonActive[i] ? i + 1 : ' '}</span>
-                <span className="px-1.5 flex-1 truncate">{nonActive[i] ? `${nonActive[i].name}${nonActive[i].note ? ` (${nonActive[i].note})` : ''}` : ''}</span>
-              </div>
-            ))}
+        <div className="space-y-3">
+          <div className="rounded-xl border border-slate-300 overflow-hidden">
+            <p className="px-4 py-2 text-sm font-black" style={{ backgroundColor: '#FFE4E6', color: '#9F1239' }}>Resign / Dinas / Mutasi / Sakit / New Hire</p>
+            <div className="px-4 py-2.5 space-y-1">
+              {nonActive.length === 0
+                ? <p className="text-xs italic text-slate-400">Tidak ada.</p>
+                : nonActive.map((n, i) => <p key={n.name} className="text-[12px] font-semibold">{i + 1}. {n.name}{n.note ? <span className="text-slate-500 font-normal capitalize"> ({n.note})</span> : null}</p>)}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-300 px-4 py-2.5">
+            <p className="text-sm font-black mb-1">Catatan</p>
+            <ol className="list-decimal pl-4 space-y-0.5 text-[12px] text-slate-600">
+              {NOTES.map(n => <li key={n}>{n}</li>)}
+            </ol>
           </div>
         </div>
       </div>
+
+      <p className="mt-5 pt-3 border-t border-slate-200 text-[11px] text-slate-500 flex justify-between gap-6">
+        <span>Agenda Shift Malam diisi karyawan roster N; Shift Siang diisi karyawan roster D / Nonshift. ✓ Selesai = laporan inspeksi sudah terkirim.</span>
+        <span className="whitespace-nowrap">Diekspor dari PrepLab Portal · {new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}</span>
+      </p>
     </div>
   );
 });
@@ -975,7 +1033,6 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     const startPart = s.getMonth() === e.getMonth() ? `${s.getDate()}` : `${s.getDate()} ${MONTHS_FULL[s.getMonth()]}`;
     return `${startPart} - ${e.getDate()} ${MONTHS_FULL[e.getMonth()]} ${e.getFullYear()}`;
   }, [period]);
-  const sheetTitle = `JADWAL INSPEKSI PREPARASI - LAB WEEK ${selectedWeek} ( ${formatDdMmYyyy(period.start)} - ${formatDdMmYyyy(period.end)} )`;
 
   // Foto karyawan dari modul Database Karyawan (jadwal hanya memuat nama)
   useEffect(() => {
@@ -1688,7 +1745,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       {/* Lembar tersembunyi untuk ekspor PNG */}
       {exportingPng && (
         <div aria-hidden style={{ position: 'fixed', left: -20000, top: 0, pointerEvents: 'none' }}>
-          <ScheduleSheet ref={captureRef} title={sheetTitle} cards={cards} cuti={cuti} nonActive={nonActive} photoOf={photoOf} />
+          <ScheduleSheet ref={captureRef} week={selectedWeek} periodLabel={rangeLabel} sourceLabel={plan ? 'Jadwal Portal (Database Roster Prep & Lab)' : 'Google Sheet Jadwal Inspeksi'} cards={cards} cuti={cuti} nonActive={nonActive} photoOf={photoOf} />
         </div>
       )}
     </div>
