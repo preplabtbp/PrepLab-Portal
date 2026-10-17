@@ -703,7 +703,8 @@ let leaveRosterCache: { data: any[]; timestamp: number } | null = null;
 function leaveCategory(code: string): string {
   const c = code.toUpperCase();
   if (!c || c === '-') return 'KOSONG';
-  if (ONSITE_CODES.has(c)) return 'ONSITE';
+  // CS (Cuti Site) tetap di site → tidak dihitung tidak onsite
+  if (ONSITE_CODES.has(c) || /^CS\d*$/.test(c)) return 'ONSITE';
   if (c === 'TRV') return 'TRV';
   if (c === 'SS') return 'SS';
   if (c === 'SL') return 'SL';
@@ -804,7 +805,7 @@ router.get("/api/roster/leave-control", async (req, res) => {
         days: dates.map(d => ({ date: d, code: emp.days[d] || '', category: leaveCategory(emp.days[d] || '') })),
         leaveStart: start,
         leaveEnd: end,
-        returnDate: ONSITE_CODES.has(returnCode) ? nextDay : null,
+        returnDate: leaveCategory(returnCode) === 'ONSITE' ? nextDay : null,
         returnCode: returnCode || null,
         totalDays: Math.round((new Date(`${end}T12:00:00Z`).getTime() - new Date(`${start}T12:00:00Z`).getTime()) / 86400000) + 1
       });
