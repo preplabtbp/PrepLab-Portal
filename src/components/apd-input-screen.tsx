@@ -1491,7 +1491,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
             return (
               <div
                 className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
-                onClick={() => { setSelectedApdModal(null); setBaKerusakanFile(null); }}
+                onClick={handleCloseModal}
               >
                 <div
                   className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[88vh] overflow-hidden animate-in zoom-in-95 duration-200"
@@ -1504,13 +1504,20 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                         <Shield className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-800 leading-snug">{apd}</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">Detail riwayat & kelayakan pengambilan APD</p>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-bold text-slate-800 leading-snug">{apd}</h3>
+                          {canEditApdHistory && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                              Mode Kelola Aktif
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">Detail riwayat &amp; kelayakan pengambilan APD</p>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setSelectedApdModal(null); setBaKerusakanFile(null); }}
+                      onClick={handleCloseModal}
                       className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                       title="Tutup"
                     >
@@ -1568,10 +1575,65 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                     {/* Riwayat Pengambilan */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Riwayat Pengambilan ({totalTakes} data tanggal)
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <History className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Riwayat Pengambilan ({totalTakes} data)</span>
                         </h4>
+
+                        {canEditApdHistory && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAddManualForm(!showAddManualForm);
+                              setManualCustomDate(format(new Date(), 'yyyy-MM-dd'));
+                            }}
+                            className="text-xs font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200 transition-all flex items-center gap-1 cursor-pointer"
+                            title="Tambah catatan riwayat pengambilan APD secara manual"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>+ Tambah Tanggal</span>
+                          </button>
+                        )}
                       </div>
+
+                      {/* Form Tambah Manual */}
+                      {canEditApdHistory && showAddManualForm && (
+                        <div className="p-3 rounded-2xl bg-purple-50/90 border border-purple-200 space-y-2.5 mb-3 animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                              <PlusCircle className="w-3.5 h-3.5 text-purple-600" />
+                              Tambah Catatan Pengambilan Manual
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowAddManualForm(false)}
+                              className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-purple-700">
+                            Pilih tanggal pengambilan untuk dicatat ke riwayat APD <strong>{apd}</strong>:
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="date"
+                              value={manualCustomDate}
+                              onChange={e => setManualCustomDate(e.target.value)}
+                              className="flex-1 px-3 py-1.5 text-xs bg-white border border-purple-300 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-purple-400"
+                            />
+                            <button
+                              type="button"
+                              disabled={isAddingManualHistory}
+                              onClick={() => handleAddManualHistory(manualCustomDate)}
+                              className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                            >
+                              {isAddingManualHistory ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              <span>Simpan</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {totalTakes > 0 ? (
                         <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -1588,6 +1650,86 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                               }
                             } catch (e) {}
 
+                            // Render baris dalam mode EDIT TANGGAL
+                            if (canEditApdHistory && editingEntryIdx === idx) {
+                              return (
+                                <div key={idx} className="p-2.5 rounded-xl bg-purple-50/80 border border-purple-300 space-y-2 animate-in fade-in">
+                                  <div className="flex items-center justify-between text-xs font-bold text-purple-900">
+                                    <span className="flex items-center gap-1">
+                                      <Pencil className="w-3.5 h-3.5 text-purple-600" />
+                                      Ganti Tanggal Pengambilan Ke-{idx + 1}
+                                    </span>
+                                    <span className="text-[10px] text-purple-600 font-normal">Pilih tanggal baru</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="date"
+                                      value={editDateValue}
+                                      onChange={e => setEditDateValue(e.target.value)}
+                                      className="flex-1 px-3 py-1.5 text-xs bg-white border border-purple-300 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={isSavingEdit}
+                                      onClick={() => handleSaveEditDate(histObj, editDateValue)}
+                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                                      title="Simpan Perubahan Tanggal"
+                                    >
+                                      {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                      <span>Simpan</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isSavingEdit}
+                                      onClick={() => setEditingEntryIdx(null)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                                      title="Batal"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                      <span>Batal</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Render baris dalam mode KONFIRMASI HAPUS
+                            if (canEditApdHistory && confirmDeleteIdx === idx) {
+                              return (
+                                <div key={idx} className="p-3 rounded-xl bg-rose-50 border border-rose-300 space-y-2 animate-in fade-in">
+                                  <div className="flex items-start gap-2 text-rose-900 text-xs">
+                                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="font-bold">Konfirmasi Hapus Riwayat Pengambilan</p>
+                                      <p className="text-[11px] text-rose-700 mt-0.5">
+                                        Yakin ingin menghapus catatan pengambilan ke-{idx + 1} tanggal <strong>{displayDate}</strong>?
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-end gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      disabled={isDeletingHistory}
+                                      onClick={() => setConfirmDeleteIdx(null)}
+                                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
+                                    >
+                                      Batal
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isDeletingHistory}
+                                      onClick={() => handleDeleteHistory(histObj)}
+                                      className="px-3 py-1 text-xs font-bold rounded-lg bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 cursor-pointer disabled:opacity-50 shadow-xs"
+                                    >
+                                      {isDeletingHistory ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                      <span>Ya, Hapus</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Render baris normal
                             return (
                               <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100/60 transition-colors">
                                 <div className="flex items-center gap-2">
@@ -1596,47 +1738,79 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                                   </span>
                                   <div className="flex items-center gap-1.5 text-slate-700 text-xs font-medium">
                                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                    <span>{displayDate}</span>
+                                    <span className="font-mono">{displayDate}</span>
                                   </div>
                                 </div>
 
-                                {hUrl ? (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      setPreviewDoc({
-                                        url: hUrl,
-                                        title: apd,
-                                        date: displayDate,
-                                        employeeName: employeeData.nama,
-                                        nik: employeeData.nik
-                                      });
-                                    }}
-                                    className="flex items-center gap-1.5 text-teal-700 bg-teal-50 shadow-xs px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-teal-200 hover:bg-teal-100 hover:border-teal-300 transition-all cursor-pointer"
-                                    title="Buka dokumen bukti pengambilan"
-                                  >
-                                    <FileText className="w-3.5 h-3.5 text-teal-600" />
-                                    <span>Bukti PDF</span>
-                                    <ExternalLink className="w-3 h-3 text-teal-500" />
-                                  </button>
-                                ) : (
-                                  <label className="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white text-purple-700 hover:bg-purple-50 border border-purple-200 text-xs font-semibold transition-colors">
-                                    {uploadingApd?.nik === employeeData.nik && uploadingApd?.apd === apd && uploadingApd?.date === hDate ? (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                      <Upload className="w-3.5 h-3.5" />
-                                    )}
-                                    <span>Upload</span>
-                                    <input
-                                      type="file"
-                                      accept="application/pdf,image/*"
-                                      className="hidden"
-                                      onChange={(e) => handleUploadProof(employeeData.nik, apd, hDate, e)}
-                                      disabled={!!uploadingApd}
-                                    />
-                                  </label>
-                                )}
+                                <div className="flex items-center gap-1.5">
+                                  {hUrl ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        setPreviewDoc({
+                                          url: hUrl,
+                                          title: apd,
+                                          date: displayDate,
+                                          employeeName: employeeData.nama,
+                                          nik: employeeData.nik
+                                        });
+                                      }}
+                                      className="flex items-center gap-1.5 text-teal-700 bg-teal-50 shadow-xs px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-teal-200 hover:bg-teal-100 hover:border-teal-300 transition-all cursor-pointer"
+                                      title="Buka dokumen bukti pengambilan"
+                                    >
+                                      <FileText className="w-3.5 h-3.5 text-teal-600" />
+                                      <span>Bukti PDF</span>
+                                      <ExternalLink className="w-3 h-3 text-teal-500" />
+                                    </button>
+                                  ) : (
+                                    <label className="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white text-purple-700 hover:bg-purple-50 border border-purple-200 text-xs font-semibold transition-colors">
+                                      {uploadingApd?.nik === employeeData.nik && uploadingApd?.apd === apd && uploadingApd?.date === hDate ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Upload className="w-3.5 h-3.5" />
+                                      )}
+                                      <span>Upload</span>
+                                      <input
+                                        type="file"
+                                        accept="application/pdf,image/*"
+                                        className="hidden"
+                                        onChange={(e) => handleUploadProof(employeeData.nik, apd, hDate, e)}
+                                        disabled={!!uploadingApd}
+                                      />
+                                    </label>
+                                  )}
+
+                                  {/* Tombol Aksi Kelola: Ganti Tanggal & Hapus (Hanya untuk Inventory Control, Developer, Manager) */}
+                                  {canEditApdHistory && (
+                                    <div className="flex items-center gap-1 pl-1 border-l border-slate-200">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingEntryIdx(idx);
+                                          try {
+                                            const parsed = parseISO(hDate);
+                                            setEditDateValue(format(parsed, 'yyyy-MM-dd'));
+                                          } catch {
+                                            setEditDateValue(hDate.slice(0, 10));
+                                          }
+                                        }}
+                                        className="p-1 rounded-lg text-slate-500 hover:text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
+                                        title="Ganti Tanggal Pengambilan"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmDeleteIdx(idx)}
+                                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                        title="Hapus Catatan Pengambilan Ini"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
@@ -1644,6 +1818,16 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                       ) : (
                         <div className="text-xs text-rose-600 bg-rose-50/70 p-4 rounded-xl border border-rose-200 border-dashed text-center">
                           Belum ada riwayat tanggal pengambilan sebelumnya.
+                        </div>
+                      )}
+
+                      {/* Info Read-Only bila bukan Inventory Control, Developer, atau Manager */}
+                      {!canEditApdHistory && (
+                        <div className="mt-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2 text-slate-500 text-[11px]">
+                          <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>
+                            Pengeditan, perubahan tanggal, dan penghapusan riwayat APD hanya dapat dilakukan oleh <strong>Section Inventory Control</strong>, <strong>Developer</strong>, dan <strong>Manager</strong>.
+                          </span>
                         </div>
                       )}
                     </div>
