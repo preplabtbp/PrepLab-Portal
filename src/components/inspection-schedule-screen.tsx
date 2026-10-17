@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { toast } from 'sonner';
 import {
   CalendarRange, RefreshCw, ImageDown, Search, ArrowLeft, Moon, Sun, Clock, CheckCircle2,
-  CircleDashed, Palmtree, UserX, StickyNote, FlaskConical, Wrench, Layers, Boxes, Users, AlertCircle
+  CircleDashed, Palmtree, UserX, StickyNote, FlaskConical, Wrench, Layers, Boxes, Users, AlertCircle,
+  ChevronLeft, ChevronRight, RotateCcw
 } from 'lucide-react';
+import { Select } from './ui';
 import { toPng } from 'html-to-image';
 import { PageHeader } from './PageHeader';
 import { INSPECTION_29_AGENDAS, matchTicketToAgenda, InspectionAgendaItem } from '../utils/inspection-pic-matcher';
@@ -17,6 +19,7 @@ interface InspectionScheduleScreenProps {
 }
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const MONTHS_FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
 // ─── Kategori area (warna kartu sesuai legenda jadwal) ──────────────────────
 
@@ -106,6 +109,19 @@ function formatShort(ts?: string | null) {
   if (!ts) return '';
   const d = new Date(ts);
   return isNaN(d.getTime()) ? '' : `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+}
+
+// Pilihan week sama persis dengan modul Rekap KTA/TTA & Inspeksi (periode Sabtu – Jumat)
+function buildWeekOptions(year: number, currentWeek: number) {
+  const options: { value: string; label: string }[] = [];
+  for (let w = Math.min(53, currentWeek + 1); w >= Math.max(1, currentWeek - 8); w--) {
+    const { start: s, end: e } = getRekapWeekRange(year, w);
+    options.push({
+      value: `W${w}`,
+      label: `Week ${w} (${s.getDate()} ${MONTHS_SHORT[s.getMonth()]} - ${e.getDate()} ${MONTHS_SHORT[e.getMonth()]})${w === currentWeek ? ' [Aktif]' : ''}`
+    });
+  }
+  return options;
 }
 
 // ─── Lembar PNG (warna tetap seperti jadwal Excel) ──────────────────────────
@@ -266,7 +282,7 @@ const LeaveSheet = React.forwardRef<HTMLDivElement, {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Prep & Lab · Jadwal Inspeksi</p>
           <h1 className="text-3xl font-black">Kontrol Cuti Karyawan</h1>
-          <p className="text-sm text-slate-600 mt-0.5">Filter: {filterLabel} · Sumber: Database Roster Prep & Lab</p>
+          <p className="text-sm text-slate-600 mt-0.5">Gol II – V · Filter: {filterLabel} · Sumber: Database Roster Prep & Lab</p>
         </div>
         <div className="text-right">
           <p className="text-xl font-black">Senin – Rabu</p>
@@ -433,7 +449,7 @@ function LeaveControlPanel({ period, photoOf }: { period: { start: Date }; photo
           <div>
             <h3 className="text-base font-black text-[var(--text-main)] leading-tight">Kontrol Cuti Karyawan</h3>
             <p className="text-xs text-[var(--text-muted)]">
-              Roster Senin – Rabu ({formatIsoLong(dates[0])} – {formatIsoLong(dates[2])}) · sumber: Database Roster Prep & Lab
+              Gol II – V · Roster Senin – Rabu ({formatIsoLong(dates[0])} – {formatIsoLong(dates[2])}) · sumber: Database Roster Prep & Lab
             </p>
           </div>
         </div>
@@ -565,9 +581,14 @@ function LeaveControlPanel({ period, photoOf }: { period: { start: Date }; photo
 export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }: InspectionScheduleScreenProps) {
   const today = useMemo(() => new Date(), []);
   const { week: currentWeek, year: currentYear } = useMemo(() => getRekapWeek(today), [today]);
-  // Google Sheet jadwal hanya menyimpan jadwal minggu berjalan (sheet "CurrentWeek"),
-  // jadi layar ini selalu menampilkan week aktif (periode Sabtu – Jumat).
-  const selectedWeek = currentWeek;
+  // Week & periode mengikuti modul Rekap KTA/TTA (Sabtu – Jumat). Google Sheet jadwal hanya menyimpan
+  // jadwal minggu berjalan (sheet "CurrentWeek"), jadi kartu agenda hanya tersedia untuk week aktif;
+  // Kontrol Cuti (roster) tersedia untuk semua week.
+  const weekOptions = useMemo(() => buildWeekOptions(currentYear, currentWeek), [currentYear, currentWeek]);
+  const minWeek = Math.max(1, currentWeek - 8);
+  const maxWeek = Math.min(53, currentWeek + 1);
+  const [selectedWeek, setSelectedWeek] = useState(currentWeek);
+  const isActiveWeek = selectedWeek === currentWeek;
   const [schedule, setSchedule] = useState<any[]>([]);
   const [agendaShifts, setAgendaShifts] = useState<{ no: number; agenda: string; shift: string }[]>([]);
   const [sheetName, setSheetName] = useState('');
@@ -580,6 +601,12 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
   const captureRef = useRef<HTMLDivElement>(null);
 
   const period = useMemo(() => getRekapWeekRange(currentYear, selectedWeek), [currentYear, selectedWeek]);
+  // Label periode sama dengan modul Rekap KTA/TTA, mis. "17 - 23 Oktober 2026"
+  const rangeLabel = useMemo(() => {
+    const s = period.start, e = period.end;
+    const startPart = s.getMonth() === e.getMonth() ? `${s.getDate()}` : `${s.getDate()} ${MONTHS_FULL[s.getMonth()]}`;
+    return `${startPart} - ${e.getDate()} ${MONTHS_FULL[e.getMonth()]} ${e.getFullYear()}`;
+  }, [period]);
   const sheetTitle = `JADWAL INSPEKSI PREPARASI - LAB WEEK ${selectedWeek} ( ${formatDdMmYyyy(period.start)} - ${formatDdMmYyyy(period.end)} )`;
 
   // Foto karyawan dari modul Database Karyawan (jadwal hanya memuat nama)
@@ -622,7 +649,16 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     }
   }, [currentYear]);
 
-  useEffect(() => { fetchSchedule(selectedWeek); }, [selectedWeek, fetchSchedule]);
+  useEffect(() => {
+    if (isActiveWeek) {
+      fetchSchedule(selectedWeek);
+    } else {
+      setSchedule([]);
+      setAgendaShifts([]);
+      setSheetName('');
+      setLoadError(`Jadwal agenda Week ${selectedWeek} tidak tersedia — Google Sheet jadwal hanya menyimpan jadwal week aktif (Week ${currentWeek}).`);
+    }
+  }, [selectedWeek, isActiveWeek, currentWeek, fetchSchedule]);
 
   // Susun 29 kartu agenda + agenda tambahan yang tidak dikenali
   const { cards, cuti, nonActive } = useMemo(() => {
@@ -814,15 +850,48 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         <div className="bg-gradient-to-r from-yellow-300 via-yellow-200 to-amber-200 dark:from-yellow-500/25 dark:via-yellow-500/15 dark:to-amber-500/15 px-4 py-3 text-center">
           <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-yellow-900/70 dark:text-yellow-200/70">Jadwal Inspeksi Preparasi – Lab</p>
           <h2 className="text-base sm:text-xl font-black text-yellow-950 dark:text-yellow-100">
-            WEEK {selectedWeek} <span className="font-bold">({formatDdMmYyyy(period.start)} – {formatDdMmYyyy(period.end)})</span>
+            WEEK {selectedWeek} <span className="font-bold">· {rangeLabel}</span>
           </h2>
+          <span className={`inline-flex items-center gap-1.5 mt-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${isActiveWeek ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-white'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isActiveWeek ? 'bg-white animate-pulse' : 'bg-slate-300'}`} />
+            {isActiveWeek ? 'Periode Aktif' : `Arsip ${selectedWeek}`}
+          </span>
         </div>
       </div>
 
       {/* Toolbar */}
       <div className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl p-3 shadow-sm flex flex-col xl:flex-row xl:items-center gap-2">
-        <div className="h-10 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] flex items-center gap-2 text-sm font-semibold text-[var(--text-main)] whitespace-nowrap">
-          <CalendarRange className="w-4 h-4 text-[var(--primary)]" /> Week {selectedWeek} [Aktif]
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setSelectedWeek(w => Math.max(minWeek, w - 1))}
+            disabled={selectedWeek <= minWeek}
+            className="h-10 w-10 shrink-0 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] hover:bg-[var(--bg-main)] text-[var(--text-main)] flex items-center justify-center cursor-pointer disabled:opacity-40"
+            title="Week sebelumnya"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div className="w-64 [&>div]:mb-0">
+            <Select value={`W${selectedWeek}`} onChange={e => setSelectedWeek(parseInt(e.target.value.replace(/\D/g, ''), 10))}>
+              {weekOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+          </div>
+          <button
+            onClick={() => setSelectedWeek(w => Math.min(maxWeek, w + 1))}
+            disabled={selectedWeek >= maxWeek}
+            className="h-10 w-10 shrink-0 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] hover:bg-[var(--bg-main)] text-[var(--text-main)] flex items-center justify-center cursor-pointer disabled:opacity-40"
+            title="Week berikutnya"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          {!isActiveWeek && (
+            <button
+              onClick={() => setSelectedWeek(currentWeek)}
+              className="h-10 px-3 shrink-0 rounded-xl bg-[var(--primary)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              title="Kembali ke week aktif"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Week Aktif
+            </button>
+          )}
         </div>
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -836,7 +905,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         <div className="flex gap-2">
           <button
             onClick={() => fetchSchedule(selectedWeek, true)}
-            disabled={loading}
+            disabled={loading || !isActiveWeek}
             className="h-10 flex-1 xl:flex-none px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] hover:bg-[var(--bg-main)] text-[var(--text-main)] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Segarkan
@@ -910,7 +979,9 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         <div className="py-14 px-4 text-center bg-[var(--card-bg)] border border-dashed border-[var(--border-main)] rounded-2xl">
           <CalendarRange className="w-10 h-10 mx-auto text-[var(--text-muted)] opacity-50" />
           <p className="mt-3 text-sm font-semibold text-[var(--text-main)]">{loadError}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">Tekan Segarkan setelah Google Sheet jadwal diperbarui.</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            {isActiveWeek ? 'Tekan Segarkan setelah Google Sheet jadwal diperbarui.' : 'Kontrol Cuti di bawah tetap menampilkan roster week ini.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-6">

@@ -686,14 +686,16 @@ setTimeout(() => {
 // Dibaca langsung dari Google Sheet "Database Roster Prep & Lab" (tab Rooster_Staff & Rooster_Crew)
 const LEAVE_ROSTER_SHEET_ID = "1iijlFReGxHyMiFAbd0J5-yfs1udWvZo4ydrJJKJBCNo";
 const LEAVE_ROSTER_TABS = [
-  { type: 'Staff', sheet: 'Rooster_Staff', colSection: 5, dateStartCol: 15 },
-  { type: 'Crew', sheet: 'Rooster_Crew', colSection: 4, dateStartCol: 14 }
+  { type: 'Staff', sheet: 'Rooster_Staff', colSection: 5, colGol: 6, dateStartCol: 15 },
+  { type: 'Crew', sheet: 'Rooster_Crew', colSection: 4, colGol: 5, dateStartCol: 14 }
 ];
 const LEAVE_RESIGNED_NIKS = new Set([
   '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
   'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419'
 ]);
 const ONSITE_CODES = new Set(['D', 'N', 'OFF', 'LS']);
+// Kontrol cuti hanya untuk karyawan Gol II – V (crew Gol I tidak termasuk)
+const LEAVE_CONTROL_GOL = new Set(['II', 'III', 'IV', 'V']);
 const LEAVE_CACHE_TTL = 10 * 60 * 1000;
 let leaveRosterCache: { data: any[]; timestamp: number } | null = null;
 
@@ -743,7 +745,7 @@ async function loadLeaveRoster(force = false): Promise<any[]> {
       if (!nik || !name || nik.includes('#') || LEAVE_RESIGNED_NIKS.has(nik.toUpperCase())) continue;
       const days: Record<string, string> = {};
       dateCols.forEach((iso, i) => { if (iso) days[iso] = (r[i] || '').trim().toUpperCase(); });
-      result.push({ nik, name, jabatan: (r[3] || '').trim(), section: (r[tab.colSection] || '').trim(), type: tab.type, days });
+      result.push({ nik, name, jabatan: (r[3] || '').trim(), section: (r[tab.colSection] || '').trim(), gol: (r[tab.colGol] || '').trim().toUpperCase(), type: tab.type, days });
     }
   }
   leaveRosterCache = { data: result, timestamp: Date.now() };
@@ -757,7 +759,7 @@ function shiftIsoDate(iso: string, delta: number): string {
 }
 
 // GET /api/roster/leave-control?dates=2026-10-19,2026-10-20,2026-10-21
-// Karyawan yang tidak onsite (Cuti/Izin/SS/SL/TRV/dll.) pada tanggal-tanggal tsb, beserta awal & akhir cuti.
+// Karyawan Gol II – V yang tidak onsite (Cuti/Izin/SS/SL/TRV/dll.) pada tanggal-tanggal tsb, beserta awal & akhir cuti.
 // Awal = hari pertama blok non-onsite; Akhir = hari terakhir sebelum kode berganti ke D/N/OFF/LS.
 router.get("/api/roster/leave-control", async (req, res) => {
   try {
@@ -768,6 +770,7 @@ router.get("/api/roster/leave-control", async (req, res) => {
     let onsiteCount = 0;
     const list: any[] = [];
     for (const emp of all) {
+      if (!LEAVE_CONTROL_GOL.has(emp.gol)) continue;
       const codes = dates.map(d => emp.days[d] || '');
       if (codes.every(c => !c || c === '-')) continue; // tidak ada data roster (belum bergabung / non-aktif)
       const firstOff = dates.find(d => {
@@ -796,7 +799,7 @@ router.get("/api/roster/leave-control", async (req, res) => {
       const main = Object.entries(blockCats).filter(([k]) => k !== 'TRV').sort((a, b) => b[1] - a[1])[0]?.[0] || 'TRV';
 
       list.push({
-        nik: emp.nik, name: emp.name, jabatan: emp.jabatan, section: emp.section, type: emp.type,
+        nik: emp.nik, name: emp.name, jabatan: emp.jabatan, section: emp.section, gol: emp.gol, type: emp.type,
         category: main,
         days: dates.map(d => ({ date: d, code: emp.days[d] || '', category: leaveCategory(emp.days[d] || '') })),
         leaveStart: start,
