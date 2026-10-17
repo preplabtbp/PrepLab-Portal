@@ -45,7 +45,8 @@ import {
   FileText, BarChart3, ChevronRight, ChevronDown, ChevronUp, ExternalLink, CheckCircle2, AlertTriangle, Fingerprint, 
   Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, 
   Plus, Edit3, ShieldAlert, Scale, Gavel, Clock, AlertOctagon, Info, ShieldCheck,
-  HeartHandshake, CalendarRange, Trophy, Award, Trash2, StickyNote, Check, UserX
+  HeartHandshake, CalendarRange, Trophy, Award, Trash2, StickyNote, Check, UserX,
+  UserPlus, UserCheck, RotateCcw
 } from 'lucide-react';
 import { Card, Input, Button } from './ui';
 import { motion, AnimatePresence } from 'motion/react';
@@ -59,8 +60,49 @@ import { calculateRosterLeave } from '../lib/rosterLeave';
 import { getEmployeeTenureInfo } from '../lib/tenureUtils';
 import { compareEmployeesByJabatan, getJabatanRank } from '../lib/jabatanHierarchy';
 
+const KNOWN_RESIGNED_NIKS = new Set([
+  '04D24000052', // Fikri Lisantri Fahmi
+  '02D23000050', // Kevin Gibran Mamoto
+  '04D25000062', // M. Bagus Ihza Ai Rizki
+  '04D25000045', // Kevin Murheza
+  'M0405240291', // Ade Wijaya
+  'M0210190719', // La Ode Ali Wara
+  '04D26000012', // Nurhafiz Syahputra
+  'M0404220419', // M Tarmizi
+  'M0206250798', // Ardi Waiyolu
+  'M0403240137', // Taufik Mulyadi
+  'M0210230886', // Salim Hi. Hasan
+  'M0201250027', // Fasrul La Udi
+  'M0203220110', // Rifa Nuridi
+  'M0403240143', // M. Fiky Aciman
+  'M0402230177', // Faisal Bakri
+  'M0402260053', // Muhammad Irfan Fadli
+  'M0205250595', // Darwan Alimudin
+]);
+
 export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
   if (!empOrStatus) return false;
+  
+  if (typeof empOrStatus === 'object') {
+    const rawNik = String(empOrStatus.nik || '').trim().toUpperCase();
+    if (rawNik && KNOWN_RESIGNED_NIKS.has(rawNik)) return true;
+
+    // Cek jika ada tanggal efektif tidak bekerja
+    const eff = empOrStatus.tanggalEfektifTidakBekerja || empOrStatus.tanggal_efektif_tidak_bekerja;
+    if (eff && eff !== '-' && eff !== '0' && eff !== '#N/A' && String(eff).trim()) {
+      return true;
+    }
+
+    // Cek keterangan / catatan / alasan / statusMess / statusKontrak
+    const rawKet = String(empOrStatus.keterangan || empOrStatus.alasan || empOrStatus.catatan || empOrStatus.statusMess || empOrStatus.statusKontrak || '').toUpperCase();
+    if (rawKet.includes('RESIGN') || rawKet.includes('PHK') || rawKet.includes('SPPHK') || rawKet.includes('KELUAR') || rawKet.includes('BERHENTI')) {
+      return true;
+    }
+
+    const sec = String(empOrStatus.section || empOrStatus.bagian || '').trim().toUpperCase();
+    if (sec.includes('#N/A')) return true;
+  }
+
   const status = typeof empOrStatus === 'string'
     ? empOrStatus
     : (empOrStatus.statusKaryawan || empOrStatus.status_karyawan || empOrStatus.status || empOrStatus['Status Karyawan'] || empOrStatus['Status'] || '');
@@ -71,14 +113,14 @@ export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
     s.includes('MUTASI') ||
     s.includes('SPPHK') ||
     s.includes('KELUAR') ||
+    s.includes('BERHENTI') ||
     s.includes('INACTIVE') ||
     s.includes('NONAKTIF') ||
-    s.includes('NON AKTIF')
+    s.includes('NON AKTIF') ||
+    s.includes('HABIS KONTRAK')
   ) {
     return true;
   }
-  const sec = typeof empOrStatus === 'object' ? String(empOrStatus.section || empOrStatus.bagian || '').trim().toUpperCase() : '';
-  if (sec.includes('#N/A')) return true;
   return false;
 }
 
@@ -412,6 +454,194 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     dotBg: string;
     entries: Array<{ tanggal: string; alasan: string }>;
   } | null>(null);
+
+  // SO Vacant Dynamic Assignments State (Persisted in localStorage)
+  const SO_ASSIGNMENTS_STORAGE_KEY = 'preplab_so_vacant_assignments_v1';
+  const [soAssignments, setSoAssignments] = useState<Record<string, Array<{
+    id: string;
+    name: string;
+    nik?: string;
+    jabatan: string;
+    shift: 'A' | 'B' | 'NONSHIFT';
+    section?: string;
+    pt?: string;
+    addedAt: string;
+  }>>>(() => {
+    try {
+      const raw = localStorage.getItem(SO_ASSIGNMENTS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
+    return {};
+  });
+
+  const saveSoAssignments = (updated: Record<string, any[]>) => {
+    setSoAssignments(updated);
+    try {
+      localStorage.setItem(SO_ASSIGNMENTS_STORAGE_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed saving SO assignments', e);
+    }
+  };
+
+  // State Modal Isi Posisi Vacant di SO
+  const [fillVacantModal, setFillVacantModal] = useState<{
+    isOpen: boolean;
+    roleKey: string;
+    title: string;
+    quota: number;
+    existingCount: number;
+    effVacant: number;
+    totalCount: number;
+    sectionName?: string;
+  } | null>(null);
+
+  const [fillVacantTab, setFillVacantTab] = useState<'existing' | 'new'>('existing');
+  const [vacantSearchEmp, setVacantSearchEmp] = useState('');
+  const [vacantSelectedEmp, setVacantSelectedEmp] = useState<any | null>(null);
+  const [vacantShift, setVacantShift] = useState<'A' | 'B' | 'NONSHIFT'>('A');
+
+  // Input manual karyawan baru untuk vacant
+  const [newVacantName, setNewVacantName] = useState('');
+  const [newVacantNik, setNewVacantNik] = useState('');
+  const [newVacantPt, setNewVacantPt] = useState('PT Trimegah Bangun Persada');
+  const [isSavingVacant, setIsSavingVacant] = useState(false);
+
+  const handleAssignExistingToVacant = () => {
+    if (!fillVacantModal || !vacantSelectedEmp) {
+      toast.error('Pilih karyawan terlebih dahulu');
+      return;
+    }
+    const roleKey = fillVacantModal.roleKey;
+    const newAssignment = {
+      id: `assign_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: vacantSelectedEmp.name,
+      nik: vacantSelectedEmp.nik || '',
+      jabatan: fillVacantModal.title,
+      shift: vacantShift,
+      section: fillVacantModal.sectionName || fillVacantModal.title,
+      pt: vacantSelectedEmp.pt || 'PT Trimegah Bangun Persada',
+      addedAt: new Date().toISOString()
+    };
+
+    const currentList = soAssignments[roleKey] || [];
+    const updated = {
+      ...soAssignments,
+      [roleKey]: [...currentList, newAssignment]
+    };
+    saveSoAssignments(updated);
+    toast.success(`${vacantSelectedEmp.name} berhasil ditugaskan ke ${fillVacantModal.title}`, {
+      description: `Jumlah Vacant berkurang 1 dan Existing bertambah 1 (${vacantShift === 'A' ? 'Shift A' : vacantShift === 'B' ? 'Shift B' : 'Non Shift'}).`
+    });
+    setFillVacantModal(null);
+    setVacantSelectedEmp(null);
+    setVacantSearchEmp('');
+  };
+
+  const handleCreateNewEmployeeForVacant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fillVacantModal) return;
+    if (!newVacantName.trim()) {
+      toast.error('Nama karyawan wajib diisi');
+      return;
+    }
+
+    setIsSavingVacant(true);
+    const finalNik = newVacantNik.trim() || `EMP${Date.now().toString().slice(-6)}`;
+    const roleKey = fillVacantModal.roleKey;
+
+    const newEmpPayload: Record<string, any> = {
+      name: newVacantName.trim(),
+      nik: finalNik,
+      jabatan: fillVacantModal.title,
+      section: fillVacantModal.sectionName || fillVacantModal.title,
+      department: 'Preparation & Laboratory',
+      pt: newVacantPt,
+      shift: vacantShift === 'NONSHIFT' ? 'Non Shift' : `Shift ${vacantShift}`,
+      statusKaryawan: 'Aktif',
+      statusKontrak: 'PKWT',
+      editorNik: inspectorNik
+    };
+
+    try {
+      // 1. Simpan ke backend database API jika online
+      try {
+        const res = await fetch('/api/employees', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-nik': inspectorNik
+          },
+          body: JSON.stringify(newEmpPayload)
+        });
+        if (res.ok) {
+          const resJson = await res.json();
+          if (resJson.data) {
+            newEmpPayload.nik = resJson.data.nik || finalNik;
+          }
+        }
+      } catch (apiErr) {
+        console.warn('API save fallback to local state', apiErr);
+      }
+
+      // 2. Tambah ke local employees list
+      setEmployees(prev => {
+        const next = [newEmpPayload, ...prev.filter(e => e.nik !== finalNik)];
+        try {
+          const cacheStr = JSON.stringify(next);
+          localStorage.setItem(cacheKey, cacheStr);
+          sessionStorage.setItem(cacheKey, cacheStr);
+        } catch {}
+        return next;
+      });
+
+      // 3. Masukkan ke penugasan SO
+      const newAssignment = {
+        id: `assign_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name: newVacantName.trim(),
+        nik: finalNik,
+        jabatan: fillVacantModal.title,
+        shift: vacantShift,
+        section: fillVacantModal.sectionName || fillVacantModal.title,
+        pt: newVacantPt,
+        addedAt: new Date().toISOString()
+      };
+
+      const currentList = soAssignments[roleKey] || [];
+      const updated = {
+        ...soAssignments,
+        [roleKey]: [...currentList, newAssignment]
+      };
+      saveSoAssignments(updated);
+
+      toast.success(`Karyawan baru ${newVacantName.trim()} berhasil ditambahkan!`, {
+        description: `Posisi ${fillVacantModal.title}: Vacant berkurang 1 dan Existing bertambah 1.`
+      });
+
+      setFillVacantModal(null);
+      setNewVacantName('');
+      setNewVacantNik('');
+    } catch (err: any) {
+      toast.error('Gagal menambahkan karyawan: ' + err.message);
+    } finally {
+      setIsSavingVacant(false);
+    }
+  };
+
+  const handleRemoveVacantAssignment = (roleKey: string, assignmentId: string, personName: string) => {
+    const currentList = soAssignments[roleKey] || [];
+    const updatedList = currentList.filter(item => item.id !== assignmentId);
+    const updated = {
+      ...soAssignments,
+      [roleKey]: updatedList
+    };
+    saveSoAssignments(updated);
+    toast.info(`Penugasan ${personName} dibatalkan`, {
+      description: 'Posisi telah dikembalikan menjadi Vacant (+1 Vacant, -1 Existing).'
+    });
+  };
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -753,6 +983,16 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
     return { label: 'User', color: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' };
   }, [inspectorNik, developerList, employees]);
+
+  // Hak akses Khusus Edit SO pada Posisi Vacant:
+  // HANYA untuk Section Administrasi, Developer, dan Manager
+  const canEditSOVacant = useMemo(() => {
+    if (userRoleBadge.label === 'Developer' || userRoleBadge.label === 'Admin' || userRoleBadge.label === 'Manager') {
+      return true;
+    }
+    if (isLocalHostEnv) return true;
+    return false;
+  }, [userRoleBadge, isLocalHostEnv]);
 
   const fetchEmployees = async (silent = false) => {
     if (!silent && employees.length === 0) {
@@ -2392,7 +2632,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       transition={{ duration: 0.25 }}
                       className="overflow-hidden"
                     >
-                      <div className="bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-xl p-4 sm:p-5 relative mt-2">
+                      <div className={`bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-2xl shadow-xl relative mt-2 ${
+                        activeStatDetail === 'active' ? 'p-2 sm:p-3' : 'p-4 sm:p-5'
+                      }`}>
                         {/* Header Drawer */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
                           <div className="flex items-center gap-2.5">
@@ -2991,6 +3233,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               'Moch.Siswanto': { pop: 'Batch (2023)', kualifikasi: 'Memenuhi Syarat' },
                               'Valdi Pratama': { praPop: true, pop: 'Batch 4', kualifikasi: 'Memenuhi Syarat' },
                               'Raldy Chevien Aryando D': { praPop: true, kualifikasi: 'Tidak Wajib POP' },
+                              'Nyong Dokolamo': { praPop: true, kualifikasi: 'Ijazah Tidak Mendukung' },
                               'Nyong Dokolomo': { praPop: true, kualifikasi: 'Ijazah Tidak Mendukung' },
                               'Murti Tamisari Harun': { praPop: true, pop: 'Batch 6', kualifikasi: 'Memenuhi Syarat' },
                               'Hariyanto Aludin': { kualifikasi: 'Ijazah Tidak Mendukung' },
@@ -3050,6 +3293,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               'yulianus t. mangando': { nik: '02D25000057', name: 'Yulianus Tiku Mangando' },
                               'yulianus tiku mangando': { nik: '02D25000057', name: 'Yulianus Tiku Mangando' },
                               'mahardian muhamad f': { nik: '04D25000055', name: 'Mahardian Muhamad Firdaus' },
+                              'nyong dokolamo': { nik: 'M0405190523', name: 'Nyong Dokolamo' },
+                              'nyong dokolomo': { nik: 'M0405190523', name: 'Nyong Dokolamo' },
+                              'nyong dokulamo': { nik: 'M0405190523', name: 'Nyong Dokolamo' },
+                              'm. ardiyan syah darmawan': { nik: '04D25000064', name: 'Muhammad Ardiyan Syah Darmawan' },
                             };
 
                             const normEmpKey = (s: string) => String(s || '').toLowerCase()
@@ -3088,19 +3335,24 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             };
 
                             const findEmp = (rawName: string, preferredNik?: string) => {
-                              const pool = (employees && employees.length > 0) ? employees : activeEmployeesList;
+                              // Prioritaskan activeEmployeesList agar personil yang aktif selalu diutamakan dibanding yang resign/non-aktif
+                              const pool = (activeEmployeesList && activeEmployeesList.length > 0) ? activeEmployeesList : (employees || []);
                               if (preferredNik) {
                                 const byNik = pool.find(e => String(e.nik || '').toUpperCase() === preferredNik.toUpperCase());
                                 if (byNik) return byNik;
+                                const byNikAll = employees?.find(e => String(e.nik || '').toUpperCase() === preferredNik.toUpperCase());
+                                if (byNikAll) return byNikAll;
                               }
                               const cleanLower = String(rawName || '').toLowerCase().trim();
                               if (SO_NAME_ALIASES[cleanLower]) {
                                 const alias = SO_NAME_ALIASES[cleanLower];
-                                const byNik = pool.find(e => String(e.nik || '').toUpperCase() === alias.nik.toUpperCase());
+                                const byNik = pool.find(e => String(e.nik || '').toUpperCase() === alias.nik.toUpperCase()) ||
+                                              employees?.find(e => String(e.nik || '').toUpperCase() === alias.nik.toUpperCase());
                                 if (byNik) return byNik;
                               }
                               const targetKey = normEmpKey(rawName);
-                              const exact = pool.find(e => normEmpKey(e.name) === targetKey);
+                              const exact = pool.find(e => normEmpKey(e.name) === targetKey) ||
+                                            employees?.find(e => normEmpKey(e.name) === targetKey);
                               if (exact) return exact;
 
                               const cleanWords = cleanLower
@@ -3114,8 +3366,21 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 const tokenMatch = pool.find(e => {
                                   const eWords = (e.name || '').toLowerCase();
                                   return cleanWords.every(w => eWords.includes(w));
+                                }) || employees?.find(e => {
+                                  const eWords = (e.name || '').toLowerCase();
+                                  return cleanWords.every(w => eWords.includes(w));
                                 });
                                 if (tokenMatch) return tokenMatch;
+
+                                // Fallback: match by distinctive tokens (>= 4 chars), e.g. "nyong", "dokolamo", "dokolomo"
+                                const looseMatch = pool.find(e => {
+                                  const eLower = (e.name || '').toLowerCase();
+                                  return cleanWords.some(w => w.length >= 4 && (eLower.includes(w) || (w.includes('dokol') && eLower.includes('dokol'))));
+                                }) || employees?.find(e => {
+                                  const eLower = (e.name || '').toLowerCase();
+                                  return cleanWords.some(w => w.length >= 4 && (eLower.includes(w) || (w.includes('dokol') && eLower.includes('dokol'))));
+                                });
+                                if (looseMatch) return looseMatch;
                               }
 
                               return null;
@@ -3127,47 +3392,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             };
 
                             // Render baris training badges
-                            const renderTrainingBadges = (name: string) => {
-                              const t = getPersonTraining(name);
-                              if (!t) return null;
-
-                              const kualifikasiStyles: Record<string, string> = {
-                                'Memenuhi Syarat': 'bg-emerald-50 text-emerald-800 border-emerald-200',
-                                'Masa Kerja Belum Cukup': 'bg-amber-50 text-amber-800 border-amber-200',
-                                'Ijazah Tidak Mendukung': 'bg-rose-50 text-rose-800 border-rose-200',
-                                'Tidak Wajib POP': 'bg-slate-100 text-slate-600 border-slate-200',
-                              };
-
-                              return (
-                                <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                                  {t.pom && (
-                                    <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-teal-600 text-white shadow-2xs">
-                                      {t.pom}
-                                    </span>
-                                  )}
-                                  {t.pop && (
-                                    <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-2xs">
-                                      {t.pop.startsWith('Batch') ? `POP · ${t.pop}` : t.pop}
-                                    </span>
-                                  )}
-                                  {t.praPop && !t.pop && !t.pom && (
-                                    <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-sky-500 text-white shadow-2xs">
-                                      Pra POP
-                                    </span>
-                                  )}
-                                  {t.kualifikasi && (
-                                    <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold border ${kualifikasiStyles[t.kualifikasi] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                                      {t.kualifikasi}
-                                    </span>
-                                  )}
-                                  {t.k3 && t.k3.map((k, ki) => (
-                                    <span key={ki} className="px-1.5 py-0.2 rounded text-[8px] font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
-                                      {k}
-                                    </span>
-                                  ))}
-                                </div>
-                              );
-                            };
+                            // Training badges dinonaktifkan di SO agar tampilan bersih dan profesional
+                            const renderTrainingBadges = (_name: string) => null;
 
                             const renderAvatar = (emp: any, size = 'w-8 h-8 text-[10px]') => {
                               const initial = (emp?.name || '?').charAt(0).toUpperCase();
@@ -3186,43 +3412,91 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               );
                             };
 
-
-
-                            // 1. Executive Top Card (Gaya ANI Organigram dengan Foto Melayang di Atas)
+                            // 1. Executive Top Card (Gaya Resmi Organigram)
+                            // 1. Executive Top Card (Gaya Resmi Organigram)
                             const renderAniExecutiveCard = (
                               emp: any,
                               roleTitle: string,
                               defaultName: string,
                               defaultNik?: string,
                               width = 'w-64',
-                              cardTheme: 'teal' | 'amber' = 'teal'
+                              cardTheme: 'teal' | 'amber' | 'slate' | 'red-dashed' = 'slate'
                             ) => {
-                              const name = emp?.name || defaultName;
-                              const role = emp?.jabatan || roleTitle;
-                              const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (emp?.nik && isHighlighted(emp.nik)));
-                              const bgClass = cardTheme === 'amber'
-                                ? 'bg-[#F2A40D] hover:bg-[#D97706] border-[#F2A40D] text-white shadow-sm'
-                                : 'bg-[#20969D] hover:bg-[#1B8086] border-[#20969D] text-white shadow-sm';
+                              const isHeadOfSite = cardTheme === 'red-dashed' || roleTitle.toLowerCase().includes('head of site');
+                              const resolvedEmp = emp || findEmp(defaultName, defaultNik);
+                              const name = resolvedEmp?.name || defaultName;
+                              const role = resolvedEmp?.jabatan || roleTitle;
+                              const nik = resolvedEmp?.nik || defaultNik;
+                              const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (nik && isHighlighted(nik)));
+
+                              const targetEmp = resolvedEmp || {
+                                id: `virtual-${defaultName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                                name: defaultName,
+                                nik: defaultNik || '-',
+                                jabatan: roleTitle,
+                                department: 'Preparation & Laboratory',
+                                section: roleTitle,
+                                status_karyawan: 'Aktif',
+                              };
+
+                              // Khusus HEAD OF SITE: Tidak perlu foto/avatar dan tidak perlu buka profil (Hanya Nama dan Jabatan saja)
+                              if (isHeadOfSite) {
+                                return (
+                                  <div
+                                    className={`relative ${width} py-2.5 px-3 rounded-xl border-2 border-dashed border-red-500 bg-white shadow-sm text-center flex flex-col items-center justify-center select-text cursor-default ${
+                                      hasMatch ? 'ring-4 ring-amber-400' : ''
+                                    }`}
+                                  >
+                                    {/* Role Title / Jabatan */}
+                                    <div className="w-full text-[11px] xl:text-[11.5px] font-black uppercase tracking-wider text-red-600 leading-tight">
+                                      {roleTitle}
+                                    </div>
+
+                                    {/* Nama Karyawan */}
+                                    <div className="w-full text-[11px] xl:text-[12px] font-black text-teal-700 italic leading-tight whitespace-normal break-words mt-1">
+                                      {name}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              const borderClass = 'border-2 border-slate-900 bg-white text-slate-900 shadow-sm hover:border-[#20969D] hover:shadow-md';
+                              const titleColor = 'text-slate-900';
+                              const nameColor = 'text-slate-900';
+                              const ringColor = 'ring-2 ring-slate-300 group-hover:ring-[#20969D]';
 
                               return (
                                 <button
                                   type="button"
-                                  onClick={() => emp && setSelectedEmployee(emp)}
-                                  className={`group relative ${width} pt-5 pb-2 px-3 rounded-2xl ${bgClass} text-center shadow-md cursor-pointer transition-all border flex flex-col items-center ${
+                                  onClick={() => setSelectedEmployee(targetEmp)}
+                                  title={`Klik untuk melihat detail profil ${name}`}
+                                  className={`group relative ${width} py-2 px-3 rounded-xl ${borderClass} text-center cursor-pointer transition-all flex flex-col items-center justify-center hover:-translate-y-0.5 active:scale-[0.98] ${
                                     hasMatch ? 'ring-4 ring-amber-400' : ''
                                   }`}
                                 >
-                                  {/* Foto Melayang di Atas Card */}
-                                  <div className="absolute -top-5 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full border-2 border-white shadow-md overflow-hidden bg-white">
-                                    {renderAvatar(emp, 'w-full h-full text-[10px]')}
-                                  </div>
-                                  <div className="w-full text-[10.5px] font-black uppercase tracking-wider text-white leading-tight">
+                                  {/* Role Title */}
+                                  <div className={`w-full text-[10.5px] xl:text-[11px] font-black uppercase tracking-wider ${titleColor} leading-tight`}>
                                     {roleTitle}
                                   </div>
-                                  <div className={`w-full text-[10.5px] font-bold mt-0.5 leading-tight truncate ${cardTheme === 'amber' ? 'text-amber-100' : 'text-teal-100'}`}>
+
+                                  {/* Foto / Avatar */}
+                                  <div className="my-1.5 relative">
+                                    <div className={`rounded-full p-0.5 shadow-xs transition-all group-hover:scale-105 ${ringColor}`}>
+                                      {renderAvatar(resolvedEmp || targetEmp, 'w-11 h-11 xl:w-12 xl:h-12 text-xs font-black')}
+                                    </div>
+                                  </div>
+
+                                  {/* Nama Karyawan */}
+                                  <div className={`w-full text-[10.5px] xl:text-[11px] font-black ${nameColor} italic leading-tight whitespace-normal break-words group-hover:text-[#20969D] transition-colors`}>
                                     {name}
                                   </div>
-                                  {renderTrainingBadges(name)}
+
+                                  {/* NIK Opsional */}
+                                  {nik && nik !== '-' && (
+                                    <div className="text-[8.5px] font-mono font-semibold text-slate-500 mt-0.5 leading-none">
+                                      NIK: {nik}
+                                    </div>
+                                  )}
                                 </button>
                               );
                             };
@@ -3299,221 +3573,404 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               };
                             };
 
-                            // 3. Single Supervisor Card (Untuk 1 orang supervisor: foto di atas tengah, nama, jabatan, NIK, Shift)
-                            const renderSingleSupervisorCard = (
-                              empOrName: any,
-                              defaultRole: string,
-                              defaultNik?: string
-                            ) => {
-                              const isString = typeof empOrName === 'string';
-                              const rawName = isString ? empOrName : empOrName?.name;
-                              const emp = (empOrName && typeof empOrName === 'object' && empOrName.id)
-                                ? empOrName
-                                : (isString ? findEmp(rawName, defaultNik) : empOrName);
-                              const name = emp?.name || rawName || '-';
-                              const role = emp?.jabatan || defaultRole || '-';
-                              const nik = emp?.nik || defaultNik || '';
-                              const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (nik && isHighlighted(nik)));
-                              const shift = getEmployeeShift(emp);
+                            // 3. Official Role Card with nested shift boxes (Kotak di dalam Kotak) & Quota Stats
+                            interface OfficialRoleItem {
+                              empOrName: any;
+                              defaultRole?: string;
+                              defaultNik?: string;
+                              forcedShift?: 'A' | 'B' | 'NONSHIFT';
+                              isCustomAssigned?: boolean;
+                              assignmentId?: string;
+                            }
 
-                              let cardClasses = 'bg-white border-2 border-[#20969D]/70 shadow-xs hover:border-[#20969D] hover:shadow-sm';
-                              let avatarClasses = 'border border-slate-200 bg-slate-200 text-slate-700';
-                              let nameClasses = 'text-slate-900 group-hover:text-[#20969D]';
-                              let roleClasses = 'text-slate-600';
-                              let shiftBadge = null;
+                            const renderOfficialRoleBox = ({
+                              title,
+                              quota,
+                              people,
+                              vacantCount = 0,
+                              splitShifts = true,
+                              customExisting,
+                              customVacant,
+                              customTotal,
+                              crewDropdown = false,
+                              crewKey = '',
+                            }: {
+                              title: string;
+                              quota: number;
+                              people: Array<OfficialRoleItem | string | any>;
+                              vacantCount?: number;
+                              splitShifts?: boolean;
+                              customExisting?: number;
+                              customVacant?: number;
+                              customTotal?: number;
+                              crewDropdown?: boolean;
+                              crewKey?: string;
+                            }) => {
+                              const effectiveKey = crewKey || title.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                              const customAssigned = soAssignments[effectiveKey] || [];
 
-                              if (shift === 'A') {
-                                cardClasses = 'bg-blue-50/90 hover:bg-blue-100/90 border-2 border-blue-500 shadow-xs hover:shadow-sm';
-                                avatarClasses = 'border-2 border-blue-400 bg-blue-100 text-blue-800';
-                                nameClasses = 'text-blue-950 font-black group-hover:text-blue-700';
-                                roleClasses = 'text-blue-800/90';
-                                shiftBadge = (
-                                  <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-blue-600 text-white shadow-2xs mt-1">
-                                    Shift A
-                                  </span>
-                                );
-                              } else if (shift === 'B') {
-                                cardClasses = 'bg-amber-50/95 hover:bg-amber-100/95 border-2 border-amber-400 shadow-xs hover:shadow-sm';
-                                avatarClasses = 'border-2 border-amber-300 bg-amber-100 text-amber-900';
-                                nameClasses = 'text-amber-950 font-black group-hover:text-amber-700';
-                                roleClasses = 'text-amber-800/90';
-                                shiftBadge = (
-                                  <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-amber-400 text-amber-950 border border-amber-300 shadow-2xs mt-1">
-                                    Shift B
-                                  </span>
-                                );
-                              } else if (shift === 'NONSHIFT') {
-                                shiftBadge = (
-                                  <span className="px-2 py-0.5 rounded-full text-[7.5px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 mt-1">
-                                    Non Shift
-                                  </span>
-                                );
-                              }
+                              const customAssignedItems = customAssigned.map(a => {
+                                const existingEmp = findEmp(a.name, a.nik);
+                                return {
+                                  empOrName: existingEmp || {
+                                    id: a.id,
+                                    name: a.name,
+                                    nik: a.nik || '-',
+                                    jabatan: a.jabatan || title,
+                                    department: 'Preparation & Laboratory',
+                                    section: a.section || title,
+                                    status_karyawan: 'Aktif',
+                                    shift: a.shift === 'NONSHIFT' ? 'Non Shift' : `Shift ${a.shift}`,
+                                  },
+                                  defaultRole: a.jabatan || title,
+                                  defaultNik: a.nik,
+                                  forcedShift: a.shift,
+                                  isCustomAssigned: true,
+                                  assignmentId: a.id,
+                                };
+                              });
 
-                              return (
-                                <button
-                                  type="button"
-                                  onClick={() => emp && setSelectedEmployee(emp)}
-                                  className={`w-full p-2.5 rounded-2xl ${cardClasses} transition-all text-center cursor-pointer flex flex-col items-center group relative ${
-                                    hasMatch ? 'ring-2 ring-emerald-500' : ''
-                                  }`}
-                                >
-                                  <div className={`w-9 h-9 xl:w-10 xl:h-10 rounded-full shadow-2xs overflow-hidden shrink-0 font-bold flex items-center justify-center text-[9px] mb-1.5 ${avatarClasses}`}>
-                                    {renderAvatar(emp, 'w-full h-full text-[9px]')}
-                                  </div>
-                                  <div className={`text-[10px] xl:text-[10.5px] font-black leading-tight w-full truncate ${nameClasses}`}>
-                                    {name}
-                                  </div>
-                                  <div className={`text-[8px] xl:text-[8.5px] font-medium leading-tight w-full truncate mt-0.5 ${roleClasses}`}>
-                                    {role}
-                                  </div>
-                                  {nik && (
-                                    <div className="text-[8px] font-mono font-bold text-slate-500 leading-tight mt-0.5">
-                                      {nik}
-                                    </div>
-                                  )}
-                                  {shiftBadge}
-                                  {renderTrainingBadges(name)}
-                                </button>
-                              );
-                            };
+                              const combinedPeople = [...people, ...customAssignedItems];
 
-                            // 4. Grouped Box (Untuk SPV multi-orang dalam 1 kotak, atau Foreman / Officer, Admin / Staff)
-                            const renderGroupedBox = (
-                              title: string,
-                              people: Array<{ empOrName: any; defaultRole: string; defaultNik?: string }>,
-                              theme: 'teal' | 'amber' = 'teal'
-                            ) => {
-                              const isAmber = theme === 'amber';
-                              const borderClass = isAmber ? 'border-2 border-[#F2A40D]/90 shadow-xs' : 'border-2 border-[#20969D]/70 shadow-xs';
-                              const titleColor = isAmber ? 'text-[#D97706]' : 'text-[#20969D]';
+                              // Resolve person list with full name, role, NIK, and shift
+                              const resolvedList = combinedPeople.map(p => {
+                                const isString = typeof p === 'string';
+                                const rawName = isString ? p : (p?.empOrName || p?.name || p);
+                                const defaultRole = (isString ? undefined : p?.defaultRole) || title;
+                                const defaultNik = isString ? undefined : p?.defaultNik;
+                                const forcedShift = isString ? undefined : p?.forcedShift;
 
-                              return (
-                                <div className={`w-full p-2 rounded-2xl bg-white border ${borderClass} shadow-2xs space-y-1`}>
-                                  <div className={`text-[9.5px] xl:text-[10px] font-black tracking-wider uppercase px-1 pb-1 mb-1 border-b border-slate-200 ${titleColor}`}>
-                                    {title} · {people.length}
-                                  </div>
-                                  <div className="space-y-1">
-                                    {people.map(({ empOrName, defaultRole, defaultNik }, idx) => {
-                                      const isString = typeof empOrName === 'string';
-                                      const rawName = isString ? empOrName : empOrName?.name;
-                                      const emp = (empOrName && typeof empOrName === 'object' && empOrName.id) 
-                                        ? empOrName 
-                                        : findEmp(rawName || defaultRole, defaultNik);
-                                      const name = emp?.name || rawName || defaultRole || '-';
-                                      const role = emp?.jabatan || defaultRole || '-';
-                                      const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (emp?.nik && isHighlighted(emp.nik)));
-                                      const shiftStyle = getEmployeeShiftStyle(emp);
+                                const emp = (rawName && typeof rawName === 'object' && rawName.id)
+                                  ? rawName
+                                  : findEmp(typeof rawName === 'string' ? rawName : rawName?.name, defaultNik);
 
-                                      return (
-                                        <button
-                                          key={idx}
-                                          type="button"
-                                          onClick={() => emp && setSelectedEmployee(emp)}
-                                          className={`w-full flex items-center justify-between gap-1.5 py-1 px-1.5 rounded-lg transition-all text-left cursor-pointer group ${shiftStyle.boxClasses} ${
-                                            hasMatch ? 'ring-2 ring-emerald-500' : ''
-                                          }`}
-                                        >
-                                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                            <div className={`w-6 h-6 rounded-full overflow-hidden shrink-0 font-bold flex items-center justify-center text-[9px] shadow-2xs ${shiftStyle.avatarClasses}`}>
-                                              {renderAvatar(emp, 'w-full h-full text-[8.5px]')}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                              <div className={`text-[9px] xl:text-[9.5px] leading-tight truncate ${shiftStyle.nameClasses}`}>
-                                                {name}
-                                              </div>
-                                              <div className={`text-[7.5px] xl:text-[8px] leading-tight truncate ${shiftStyle.roleClasses}`}>
-                                                {role}
-                                              </div>
-                                              {renderTrainingBadges(name)}
-                                            </div>
-                                          </div>
-                                          {shiftStyle.badge}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            };
+                                const name = emp?.name || (typeof rawName === 'string' ? rawName : rawName?.name) || defaultRole || '-';
+                                const role = emp?.jabatan || defaultRole;
+                                const nik = emp?.nik || defaultNik;
+                                const shift = forcedShift || getEmployeeShift(emp) || 'NONSHIFT';
+                                const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (nik && isHighlighted(nik)));
 
-                            // 5. Crew Dropdown Pill (CREW · {count} dengan toggle dropdown)
-                            const renderAniCrewDropdown = (
-                              list: any[],
-                              defaultRole: string,
-                              count: number,
-                              dropdownKey: string
-                            ) => {
-                              const hasMatchingPerson = !!(q && list.some(item => {
-                                const isString = typeof item === 'string';
-                                const rawName = isString ? item : item?.name;
-                                const emp = (item && typeof item === 'object' && item.id) ? item : (isString ? findEmp(rawName) : item);
-                                const name = emp?.name || rawName || '';
-                                const role = emp?.jabatan || defaultRole || '';
-                                return isHighlighted(name) || isHighlighted(role) || (emp?.nik && isHighlighted(emp.nik));
-                              }));
+                                const isCustomAssigned = isString ? false : !!p?.isCustomAssigned;
+                                const assignmentId = isString ? undefined : p?.assignmentId;
+                                return { emp, name, role, nik, shift, hasMatch, isCustomAssigned, assignmentId };
+                              });
 
-                              const isExpanded = !!expandedCrewSections[dropdownKey] || hasMatchingPerson;
+                              // Saring personil yang sudah resign atau non-aktif agar tidak muncul di diagram SO
+                              const activeResolvedList = resolvedList.filter(p => {
+                                if (p.emp && isResignedOrNonActiveStatus(p.emp)) return false;
+                                const rawNik = String(p.nik || p.emp?.nik || '').trim().toUpperCase();
+                                if (rawNik && KNOWN_RESIGNED_NIKS.has(rawNik)) return false;
+                                const match = findEmp(p.name, p.nik);
+                                if (match && isResignedOrNonActiveStatus(match)) return false;
+                                return true;
+                              });
 
-                              return (
-                                <div className="w-full">
+                              const activeExistingFromPeople = activeResolvedList.filter(p => !p.isCustomAssigned).length;
+                              const baseExisting = customExisting ?? activeExistingFromPeople;
+                              const filledCount = activeResolvedList.filter(p => p.isCustomAssigned).length;
+                              const existingCount = baseExisting + filledCount;
+                              const effVacant = Math.max(0, quota > 0 ? (quota - existingCount) : ((customVacant ?? vacantCount) - filledCount));
+                              const totalCount = customTotal ?? (quota > 0 ? Math.max(quota, existingCount + effVacant) : (existingCount + effVacant));
+
+                              // Split into Shift A, Shift B, Non Shift
+                              const shiftAPeople = activeResolvedList.filter(p => p.shift === 'A');
+                              const shiftBPeople = activeResolvedList.filter(p => p.shift === 'B');
+                              const nonShiftPeople = activeResolvedList.filter(p => p.shift !== 'A' && p.shift !== 'B');
+
+                              const hasMultipleShifts = splitShifts && (shiftAPeople.length > 0 || shiftBPeople.length > 0);
+                              const isExpanded = crewDropdown ? (!!expandedCrewSections[crewKey] || (q && activeResolvedList.some(p => p.hasMatch))) : true;
+
+                              let runningNumber = 1;
+
+                              const renderPersonRow = (p: typeof resolvedList[0], num: number) => {
+                                let rowClasses = 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 shadow-2xs';
+                                let avatarClasses = 'border border-slate-200 bg-slate-100 text-slate-700';
+                                if (p.shift === 'A') {
+                                  rowClasses = 'bg-blue-50/90 hover:bg-blue-100/90 border border-blue-200 text-blue-950 shadow-2xs';
+                                  avatarClasses = 'border border-blue-300 bg-blue-100 text-blue-800';
+                                } else if (p.shift === 'B') {
+                                  rowClasses = 'bg-amber-50/95 hover:bg-amber-100/95 border border-amber-200 text-amber-950 shadow-2xs';
+                                  avatarClasses = 'border border-amber-300 bg-amber-100 text-amber-950';
+                                }
+
+                                const targetEmp = p.emp || {
+                                  id: `virtual-${p.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+                                  name: p.name,
+                                  nik: p.nik || '-',
+                                  jabatan: p.role || title,
+                                  department: 'Preparation & Laboratory',
+                                  section: title,
+                                  status_karyawan: 'Aktif',
+                                  shift: p.shift === 'NONSHIFT' ? 'Non Shift' : `Shift ${p.shift}`,
+                                };
+
+                                return (
                                   <button
+                                    key={`${p.name}-${num}`}
                                     type="button"
-                                    onClick={() => toggleCrewSection(dropdownKey)}
-                                    className={`w-full py-1.5 px-2 rounded-xl border text-center shadow-2xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                      isExpanded 
-                                        ? 'bg-teal-50 border-teal-400 text-teal-950 ring-1 ring-teal-100'
-                                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+                                    onClick={() => {
+                                      if (p.emp && p.emp.nik && p.emp.nik !== '-') {
+                                        setSelectedEmployee(p.emp);
+                                      } else {
+                                        const pool = (employees && employees.length > 0) ? employees : activeEmployeesList;
+                                        const found = pool.find(e => 
+                                          (p.nik && p.nik !== '-' && String(e.nik || '').toUpperCase() === String(p.nik).toUpperCase()) ||
+                                          normEmpKey(e.name) === normEmpKey(p.name) ||
+                                          (e.name && p.name && (e.name.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(e.name.toLowerCase())))
+                                        );
+                                        setSelectedEmployee(found || targetEmp);
+                                      }
+                                    }}
+                                    title={`Klik untuk melihat detail profil ${p.name}`}
+                                    className={`w-full flex items-start gap-1.5 py-1 px-1.5 rounded-lg transition-all text-left cursor-pointer group hover:shadow-xs active:scale-[0.99] ${rowClasses} ${
+                                      p.hasMatch ? 'ring-2 ring-emerald-500' : ''
                                     }`}
                                   >
-                                    <span className="text-[9.5px] font-black tracking-wider uppercase text-slate-700">
-                                      CREW · {count}
+                                    <span className="text-[9px] font-mono font-bold text-slate-500 w-3.5 shrink-0 text-right pt-0.5">
+                                      {num}.
                                     </span>
-                                    {isExpanded ? (
-                                      <ChevronUp className="w-3 h-3 text-slate-600 shrink-0" />
-                                    ) : (
-                                      <ChevronDown className="w-3 h-3 text-slate-600 shrink-0" />
+                                    <div className={`w-5 h-5 rounded-full overflow-hidden shrink-0 font-bold flex items-center justify-center text-[8px] shadow-2xs mt-0.5 ${avatarClasses}`}>
+                                      {renderAvatar(p.emp || targetEmp, 'w-full h-full text-[8px]')}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-[9.5px] xl:text-[10px] font-black text-slate-900 group-hover:text-[#20969D] leading-tight whitespace-normal break-words">
+                                        {p.name}
+                                      </div>
+                                      {p.role && p.role !== title && (
+                                        <div className="text-[7.5px] text-slate-500 font-medium leading-tight whitespace-normal break-words">
+                                          {p.role}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {p.isCustomAssigned && canEditSOVacant && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm(`Batalkan penugasan ${p.name} dari ${title}? Posisi akan kembali menjadi Vacant.`)) {
+                                            handleRemoveVacantAssignment(effectiveKey, p.assignmentId!, p.name);
+                                          }
+                                        }}
+                                        className="p-1 rounded-md text-rose-500 hover:text-rose-700 hover:bg-rose-100/80 transition-colors shrink-0 ml-1 cursor-pointer"
+                                        title="Batalkan penugasan (kembalikan ke Vacant)"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
                                     )}
                                   </button>
+                                );
+                              };
 
+                              return (
+                                <div className="relative w-full rounded-xl bg-white border-2 border-slate-700 shadow-sm p-2 pt-2.5 transition-all text-slate-900">
+                                  {/* Official Corner Quota Badge */}
+                                  {quota > 0 && (
+                                    <div className="absolute -top-3 -right-2 px-2 py-0.5 rounded-md bg-white border-2 border-slate-800 text-slate-900 font-black text-[11px] shadow-xs tracking-tight z-20">
+                                      {quota}
+                                    </div>
+                                  )}
+
+                                  {/* Header with Title and Summary (Existing, Vacant, Total) */}
+                                  <div className="border-b border-slate-200 pb-1.5 mb-1.5 text-center">
+                                    <div className="text-[10px] xl:text-[10.5px] font-black uppercase tracking-wide text-slate-900 leading-tight whitespace-normal break-words">
+                                      {title}
+                                    </div>
+                                    {/* Summary Stats Row */}
+                                    <div className="flex items-center justify-center gap-1 mt-1 flex-wrap text-[8px] xl:text-[8.5px]">
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold">
+                                        Existing : {existingCount}
+                                      </span>
+                                      {effVacant > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (canEditSOVacant) {
+                                              setFillVacantModal({
+                                                isOpen: true,
+                                                roleKey: effectiveKey,
+                                                title,
+                                                quota,
+                                                existingCount,
+                                                effVacant,
+                                                totalCount,
+                                                sectionName: title,
+                                              });
+                                              setFillVacantTab('existing');
+                                              setVacantSelectedEmp(null);
+                                              setVacantSearchEmp('');
+                                              setNewVacantName('');
+                                              setNewVacantNik('');
+                                            } else {
+                                              toast.info('Hanya Section Administrasi, Developer, dan Manager yang memiliki hak akses untuk mengisi posisi Vacant.');
+                                            }
+                                          }}
+                                          className={`px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold flex items-center gap-0.5 ${
+                                            canEditSOVacant ? 'hover:bg-rose-100 hover:border-rose-400 cursor-pointer shadow-2xs active:scale-95' : ''
+                                          }`}
+                                          title={canEditSOVacant ? 'Klik untuk isi posisi Vacant' : undefined}
+                                        >
+                                          <span>Vacant : {effVacant}</span>
+                                          {canEditSOVacant && <Plus className="w-2.5 h-2.5 text-rose-600" />}
+                                        </button>
+                                      )}
+                                      <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-800 font-black">
+                                        Total : {totalCount}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Crew dropdown toggle button if crewDropdown */}
+                                  {crewDropdown && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleCrewSection(crewKey)}
+                                      className={`w-full py-1 px-2 rounded-lg border text-center shadow-2xs flex items-center justify-center gap-1.5 transition-all cursor-pointer mb-1.5 ${
+                                        isExpanded 
+                                          ? 'bg-teal-50 border-teal-300 text-teal-900 ring-1 ring-teal-100'
+                                          : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+                                      }`}
+                                    >
+                                      <span className="text-[8.5px] font-black tracking-wider uppercase text-slate-700">
+                                        {isExpanded ? 'Tutup Daftar Personil' : `Buka Daftar ${existingCount} Personil`}
+                                      </span>
+                                      {isExpanded ? (
+                                        <ChevronUp className="w-3 h-3 text-slate-600 shrink-0" />
+                                      ) : (
+                                        <ChevronDown className="w-3 h-3 text-slate-600 shrink-0" />
+                                      )}
+                                    </button>
+                                  )}
+
+                                  {/* Content Body */}
                                   {isExpanded && (
-                                    <div className="mt-1 space-y-1 p-1 bg-white rounded-xl border border-slate-200 shadow-inner max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in duration-200">
-                                      {list.map((item, idx) => {
-                                        const isString = typeof item === 'string';
-                                        const rawName = isString ? item : item?.name;
-                                        const emp = (item && typeof item === 'object' && item.id) ? item : (isString ? findEmp(rawName) : item);
-                                        const name = emp?.name || rawName || '-';
-                                        const role = emp?.jabatan || defaultRole || '-';
-                                        const hasMatch = q && (isHighlighted(name) || isHighlighted(role) || (emp?.nik && isHighlighted(emp.nik)));
-                                        const shiftStyle = getEmployeeShiftStyle(emp);
-
-                                        return (
-                                          <button
-                                            key={idx}
-                                            type="button"
-                                            onClick={() => emp && setSelectedEmployee(emp)}
-                                            className={`w-full flex items-center justify-between gap-1.5 py-1 px-1.5 rounded-lg transition-all text-left cursor-pointer group ${shiftStyle.boxClasses} ${
-                                              hasMatch ? 'ring-2 ring-emerald-500' : ''
-                                            }`}
-                                          >
-                                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                              <div className={`w-6 h-6 rounded-full overflow-hidden shrink-0 font-bold flex items-center justify-center text-[9px] shadow-2xs ${shiftStyle.avatarClasses}`}>
-                                                {renderAvatar(emp, 'w-full h-full text-[8.5px]')}
+                                    <div className={`space-y-1.5 ${crewDropdown ? 'max-h-60 overflow-y-auto custom-scrollbar p-1 bg-slate-50/50 rounded-lg border border-slate-200/80' : ''}`}>
+                                      {hasMultipleShifts ? (
+                                        <>
+                                          {/* Kotak di dalam kotak: SHIFT A */}
+                                          {shiftAPeople.length > 0 && (
+                                            <div className="rounded-lg bg-blue-50/70 border border-blue-200/90 p-1.5 shadow-2xs">
+                                              <div className="flex items-center justify-between pb-1 mb-1 border-b border-blue-200/60">
+                                                <div className="flex items-center gap-1">
+                                                  <span className="w-2 h-2 rounded-full bg-blue-600 shadow-2xs" />
+                                                  <span className="text-[8.5px] font-black uppercase tracking-wider text-blue-900">
+                                                    Shift A
+                                                  </span>
+                                                </div>
+                                                <span className="text-[8px] font-bold text-blue-700 bg-blue-100/80 px-1 rounded">
+                                                  {shiftAPeople.length} Orang
+                                                </span>
                                               </div>
-                                              <div className="min-w-0 flex-1">
-                                                <div className={`text-[9px] xl:text-[9.5px] leading-tight truncate ${shiftStyle.nameClasses}`}>
-                                                  {name}
-                                                </div>
-                                                <div className={`text-[7.5px] xl:text-[8px] leading-tight truncate ${shiftStyle.roleClasses}`}>
-                                                  {role}
-                                                </div>
-                                                {renderTrainingBadges(name)}
+                                              <div className="space-y-1">
+                                                {shiftAPeople.map(p => renderPersonRow(p, runningNumber++))}
                                               </div>
                                             </div>
-                                            {shiftStyle.badge}
-                                          </button>
-                                        );
-                                      })}
+                                          )}
+
+                                          {/* Kotak di dalam kotak: SHIFT B */}
+                                          {shiftBPeople.length > 0 && (
+                                            <div className="rounded-lg bg-amber-50/70 border border-amber-200/90 p-1.5 shadow-2xs">
+                                              <div className="flex items-center justify-between pb-1 mb-1 border-b border-amber-200/60">
+                                                <div className="flex items-center gap-1">
+                                                  <span className="w-2 h-2 rounded-full bg-amber-500 shadow-2xs" />
+                                                  <span className="text-[8.5px] font-black uppercase tracking-wider text-amber-950">
+                                                    Shift B
+                                                  </span>
+                                                </div>
+                                                <span className="text-[8px] font-bold text-amber-800 bg-amber-100/80 px-1 rounded">
+                                                  {shiftBPeople.length} Orang
+                                                </span>
+                                              </div>
+                                              <div className="space-y-1">
+                                                {shiftBPeople.map(p => renderPersonRow(p, runningNumber++))}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Non Shift */}
+                                          {nonShiftPeople.length > 0 && (
+                                            <div className="rounded-lg bg-slate-50 border border-slate-200 p-1.5 shadow-2xs">
+                                              <div className="flex items-center justify-between pb-1 mb-1 border-b border-slate-200">
+                                                <div className="flex items-center gap-1">
+                                                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                                  <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-700">
+                                                    Non Shift
+                                                  </span>
+                                                </div>
+                                                <span className="text-[8px] font-bold text-slate-600 bg-slate-200/70 px-1 rounded">
+                                                  {nonShiftPeople.length} Orang
+                                                </span>
+                                              </div>
+                                              <div className="space-y-1">
+                                                {nonShiftPeople.map(p => renderPersonRow(p, runningNumber++))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          {activeResolvedList.map(p => renderPersonRow(p, runningNumber++))}
+                                        </div>
+                                      )}
+
+                                      {/* Vacant List */}
+                                       {effVacant > 0 && (
+                                         <div className="rounded-lg bg-rose-50/50 border border-dashed border-rose-300 p-1.5 space-y-1">
+                                           {Array.from({ length: effVacant }).map((_, vIdx) => {
+                                             const num = runningNumber++;
+                                             return (
+                                               <button
+                                                 key={vIdx}
+                                                 type="button"
+                                                 onClick={() => {
+                                                   if (canEditSOVacant) {
+                                                     setFillVacantModal({
+                                                       isOpen: true,
+                                                       roleKey: effectiveKey,
+                                                       title,
+                                                       quota,
+                                                       existingCount,
+                                                       effVacant,
+                                                       totalCount,
+                                                       sectionName: title,
+                                                     });
+                                                     setFillVacantTab('existing');
+                                                     setVacantSelectedEmp(null);
+                                                     setVacantSearchEmp('');
+                                                     setNewVacantName('');
+                                                     setNewVacantNik('');
+                                                   } else {
+                                                     toast.info('Hanya Section Administrasi, Developer, dan Manager yang memiliki hak akses untuk mengisi posisi Vacant.');
+                                                   }
+                                                 }}
+                                                 className={`w-full flex items-center justify-between gap-1.5 py-1 px-1.5 rounded-md text-[9px] transition-all text-left ${
+                                                   canEditSOVacant
+                                                     ? 'bg-white hover:bg-rose-100/90 border border-rose-200 cursor-pointer shadow-2xs hover:shadow-xs hover:border-rose-400 group/vac active:scale-[0.99]'
+                                                     : 'bg-transparent text-rose-600'
+                                                 }`}
+                                                 title={canEditSOVacant ? `Klik untuk mengisi posisi Vacant: ${title}` : `Posisi Vacant: ${title}`}
+                                               >
+                                                 <div className="flex items-center gap-1.5 min-w-0">
+                                                   <span className="font-mono font-bold text-rose-400 w-3.5 shrink-0 text-right text-[8.5px]">{num}.</span>
+                                                   <span className="bg-rose-100 text-rose-700 px-1.5 py-0.2 rounded border border-rose-200 font-black text-[8px] font-mono uppercase tracking-wider">
+                                                     (Vacant)
+                                                   </span>
+                                                   <span className="text-[8px] text-rose-500 italic truncate font-medium">
+                                                     {canEditSOVacant ? 'Klik untuk tambah / isi karyawan' : 'Belum Terisi'}
+                                                   </span>
+                                                 </div>
+
+                                                 {canEditSOVacant && (
+                                                   <div className="flex items-center gap-1 shrink-0">
+                                                     <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white font-extrabold text-[7.5px] uppercase tracking-wider flex items-center gap-0.5 shadow-2xs group-hover/vac:bg-rose-700">
+                                                       <Plus className="w-2.5 h-2.5" /> Isi
+                                                     </span>
+                                                   </div>
+                                                 )}
+                                               </button>
+                                             );
+                                           })}
+                                         </div>
+                                       )}
                                     </div>
                                   )}
                                 </div>
@@ -3521,6 +3978,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             };
 
                             // Ambil personil dari activeEmployeesList berdasarkan seksi / jabatan
+                            const headOfSiteEmp = findEmp('Younsel Evand Roos');
                             const managerEmp = findEmp('Deni Nugraha Perdiana', '04D20020842');
                             const prepSptEmp = findEmp('Arif Maulana Lessy', '02D24000009');
                             const labSptEmp = findEmp('Tigwa Anggawikara', '04D23000004');
@@ -3528,7 +3986,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                             // 1. Preparation Wet
                             const prepWetSupervisor = findEmp('Janter Jaya Barimbing', '04D19000564');
                             const prepWetForemen = [
-                              'Nyong Dokolomo', 'Roy Marten Bobrikit', 'Hariyanto Aludin', 'Rusli Rorano',
+                              'Nyong Dokolamo', 'Roy Marten Bobrikit', 'Hariyanto Aludin', 'Rusli Rorano',
                               'Arsun Lantia', 'Murti Tamisari Harun', 'Karolus Megawanto Lebang', "Mohamad Noer Syafi'i",
                               'Taufikir, S.Pi', 'Mahardian Muhamad F', 'Muhammad Atha Ghali', 'M. Ardiyan Syah Darmawan'
                             ];
@@ -3642,35 +4100,71 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                             const renderSectionSupervisor = (name: string) => {
                               if (name === 'Preparation Wet') {
-                                return renderSingleSupervisorCard(prepWetSupervisor, 'Preparation Supervisor, Wet', '04D19000564');
+                                return renderOfficialRoleBox({
+                                  title: 'Preparation Supervisor, Wet',
+                                  quota: 2,
+                                  people: [{ empOrName: prepWetSupervisor || 'Janter Jaya Barimbing', defaultRole: 'Preparation Supervisor, Wet', defaultNik: '04D19000564' }],
+                                  vacantCount: 1,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Preparation Dry') {
-                                return renderGroupedBox('SUPERVISOR', [
-                                  { empOrName: prepDrySupervisor1, defaultRole: 'Preparation Supervisor, Dry' },
-                                  { empOrName: prepDrySupervisor2, defaultRole: 'Preparation Supervisor, Dry' },
-                                ]);
+                                return renderOfficialRoleBox({
+                                  title: 'Preparation Supervisor, Dry',
+                                  quota: 2,
+                                  people: [
+                                    { empOrName: prepDrySupervisor1 || 'Ryan M Rusli', defaultRole: 'Preparation Supervisor, Dry' },
+                                    { empOrName: prepDrySupervisor2 || 'Subrandi', defaultRole: 'Preparation Supervisor, Dry' },
+                                  ],
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Inventory Control') {
-                                return renderSingleSupervisorCard(invSupervisor, 'Inventory Control Supervisor', '02D25000012');
+                                return renderOfficialRoleBox({
+                                  title: 'Inventory Control Supervisor',
+                                  quota: 1,
+                                  people: [{ empOrName: invSupervisor || 'Muhammad Nova Herisandi, S.Sos', defaultRole: 'Inventory Control Supervisor', defaultNik: '02D25000012' }],
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Maintenance') {
-                                return renderGroupedBox('SUPERVISOR', [
-                                  { empOrName: maintSupervisor1 || 'Christian Anggawijaya', defaultRole: 'Laboratory Maintenance Supervisor', defaultNik: '02D21001017' },
-                                  { empOrName: maintSupervisor2 || 'Moch. Siswanto', defaultRole: 'Laboratory Maintenance Supervisor', defaultNik: '04D21001046' },
-                                ]);
+                                return renderOfficialRoleBox({
+                                  title: 'Laboratory Maintenance Supervisor',
+                                  quota: 2,
+                                  people: [
+                                    { empOrName: maintSupervisor1 || 'Christian Anggawijaya', defaultRole: 'Laboratory Maintenance Supervisor', defaultNik: '02D21001017' },
+                                    { empOrName: maintSupervisor2 || 'Moch. Siswanto', defaultRole: 'Laboratory Maintenance Supervisor', defaultNik: '04D21001046' },
+                                  ],
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Quality Assurance') {
-                                return renderGroupedBox('SUPERVISOR', [
-                                  { empOrName: qaSupervisor2 || 'Junjunan M. Syukur', defaultRole: 'Quality Assurance Specialist', defaultNik: '04D24000042' },
-                                  { empOrName: qaSupervisor1 || 'Sukarman A. Akil, ST', defaultRole: 'Quality Assurance Specialist', defaultNik: '04D21001047' },
-                                ]);
+                                return renderOfficialRoleBox({
+                                  title: 'Quality Assurance Specialist',
+                                  quota: 2,
+                                  people: [
+                                    { empOrName: qaSupervisor1 || 'Sukarman A. Akil, ST', defaultRole: 'Quality Assurance Specialist', defaultNik: '04D21001047' },
+                                    { empOrName: qaSupervisor2 || 'Junjunan M. Syukur', defaultRole: 'Quality Assurance Specialist', defaultNik: '04D24000042' },
+                                  ],
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Laboratory') {
-                                return renderGroupedBox('SUPERVISOR', [
-                                  { empOrName: labSupervisor2 || 'Arthur Paul M. Souisa', defaultRole: 'Laboratory Supervisor', defaultNik: '02D21001045' },
-                                  { empOrName: labSupervisor1 || 'Khaufi Wirawan A.', defaultRole: 'Laboratory Supervisor', defaultNik: '02D18000192' },
-                                  { empOrName: labSupervisor3 || 'Muh. Amran Selang', defaultRole: 'Laboratory Supervisor', defaultNik: '04D21001049' },
-                                ]);
+                                return renderOfficialRoleBox({
+                                  title: 'Laboratory Supervisor',
+                                  quota: 4,
+                                  people: [
+                                    { empOrName: labSupervisor1 || 'Khaufi Wirawan A.', defaultRole: 'Laboratory Supervisor', defaultNik: '02D18000192' },
+                                    { empOrName: labSupervisor2 || 'Arthur Paul M. Souisa', defaultRole: 'Laboratory Supervisor', defaultNik: '02D21001045' },
+                                    { empOrName: labSupervisor3 || 'Muh. Amran Selang', defaultRole: 'Laboratory Supervisor', defaultNik: '04D21001049' },
+                                  ],
+                                  vacantCount: 1,
+                                  splitShifts: false,
+                                });
                               }
                               return null;
                             };
@@ -3679,56 +4173,138 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               if (name === 'Preparation Wet') {
                                 return (
                                   <div className="w-full flex flex-col items-center">
-                                    {renderGroupedBox('FOREMAN / OFFICER', prepWetForemen.map(fn => ({ empOrName: fn, defaultRole: 'Preparation Foreman, Wet' })))}
-                                    <div className="w-0 h-3 border-l-[3px] border-solid border-[#20969D] mx-auto" />
-                                    {renderAniCrewDropdown(prepWetCrews.length > 0 ? prepWetCrews : ['Crew Preparation Wet'], 'Crew, Prep Wet', 52, 'prep_wet_crew')}
+                                    {renderOfficialRoleBox({
+                                      title: 'Preparation Foreman, Wet',
+                                      quota: 14,
+                                      people: prepWetForemen.map(fn => ({ empOrName: fn, defaultRole: 'Preparation Foreman, Wet' })),
+                                      vacantCount: 2,
+                                      splitShifts: true,
+                                    })}
+                                    <div className="w-0 h-3 border-l-2 border-solid border-slate-900 mx-auto" />
+                                    {renderOfficialRoleBox({
+                                      title: 'Crew, Preparation & Laboratory',
+                                      quota: 68,
+                                      people: prepWetCrews.length > 0 ? prepWetCrews : ['Crew Preparation Wet'],
+                                      customExisting: 55,
+                                      customVacant: 13,
+                                      customTotal: 68,
+                                      splitShifts: true,
+                                      crewDropdown: true,
+                                      crewKey: 'prep_wet_crew',
+                                    })}
                                   </div>
                                 );
                               }
                               if (name === 'Preparation Dry') {
                                 return (
                                   <div className="w-full flex flex-col items-center">
-                                    {renderGroupedBox('FOREMAN / OFFICER', prepDryForemen.map(fn => ({ empOrName: fn, defaultRole: 'Preparation Foreman, Dry' })))}
-                                    <div className="w-0 h-3 border-l-[3px] border-solid border-[#20969D] mx-auto" />
-                                    {renderAniCrewDropdown(prepDryCrews.length > 0 ? prepDryCrews : ['Crew Preparation Dry'], 'Crew, Prep Dry', 34, 'prep_dry_crew')}
+                                    {renderOfficialRoleBox({
+                                      title: 'Preparation Foreman, Dry',
+                                      quota: 12,
+                                      people: prepDryForemen.map(fn => ({ empOrName: fn, defaultRole: 'Preparation Foreman, Dry' })),
+                                      vacantCount: 4,
+                                      splitShifts: true,
+                                    })}
+                                    <div className="w-0 h-3 border-l-2 border-solid border-slate-900 mx-auto" />
+                                    {renderOfficialRoleBox({
+                                      title: 'Crew, Preparation & Laboratory',
+                                      quota: 44,
+                                      people: prepDryCrews.length > 0 ? prepDryCrews : ['Crew Preparation Dry'],
+                                      customExisting: 34,
+                                      customVacant: 10,
+                                      customTotal: 44,
+                                      splitShifts: true,
+                                      crewDropdown: true,
+                                      crewKey: 'prep_dry_crew',
+                                    })}
                                   </div>
                                 );
                               }
                               if (name === 'Inventory Control') {
-                                return renderGroupedBox('ADMIN / STAFF', invStaff.map(sn => ({ empOrName: sn, defaultRole: 'Admin, Inventory Control' })), 'amber');
+                                return renderOfficialRoleBox({
+                                  title: 'Admin, Inventory Control',
+                                  quota: 3,
+                                  people: invStaff.map(sn => ({ empOrName: sn, defaultRole: 'Admin, Inventory Control' })),
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Maintenance') {
                                 return (
                                   <div className="w-full flex flex-col items-center">
-                                    {renderGroupedBox('FOREMAN / OFFICER', maintForemen.map(fn => ({ empOrName: fn, defaultRole: 'Laboratory Maintenance Foreman' })))}
-                                    <div className="w-0 h-3 border-l-[3px] border-solid border-[#20969D] mx-auto" />
-                                    {renderAniCrewDropdown(maintCrews.length > 0 ? maintCrews : ['Crew Maintenance'], 'Crew, Maintenance', 7, 'maint_crew')}
+                                    {renderOfficialRoleBox({
+                                      title: 'Laboratory Maintenance Foreman',
+                                      quota: 6,
+                                      people: maintForemen.map(fn => ({ empOrName: fn, defaultRole: 'Laboratory Maintenance Foreman' })),
+                                      vacantCount: 1,
+                                      splitShifts: true,
+                                    })}
+                                    <div className="w-0 h-3 border-l-2 border-solid border-slate-900 mx-auto" />
+                                    {renderOfficialRoleBox({
+                                      title: 'Crew, Laboratory Maintenance',
+                                      quota: 8,
+                                      people: maintCrews.length > 0 ? maintCrews : ['Crew Maintenance'],
+                                      customExisting: 4,
+                                      customVacant: 4,
+                                      customTotal: 8,
+                                      splitShifts: false,
+                                      crewDropdown: true,
+                                      crewKey: 'maint_crew',
+                                    })}
                                   </div>
                                 );
                               }
                               if (name === 'Quality Assurance') {
-                                return renderGroupedBox('FOREMAN / OFFICER', [{ empOrName: qaForemen[0], defaultRole: 'Quality Assurance Officer' }]);
+                                return renderOfficialRoleBox({
+                                  title: 'Quality Assurance Officer',
+                                  quota: 2,
+                                  people: qaForemen.map(fn => ({ empOrName: fn, defaultRole: 'Quality Assurance Officer' })),
+                                  vacantCount: 1,
+                                  splitShifts: false,
+                                });
                               }
                               if (name === 'Laboratory') {
                                 return (
                                   <div className="w-full flex flex-col items-center">
-                                    {renderGroupedBox('FOREMAN / OFFICER', labForemen.map(fn => ({ empOrName: fn, defaultRole: 'Laboratory Foreman' })))}
-                                    <div className="w-0 h-3 border-l-[3px] border-solid border-[#20969D] mx-auto" />
-                                    {renderAniCrewDropdown(labCrews.length > 0 ? labCrews : ['Crew Laboratory'], 'Crew, Laboratory', 30, 'lab_crew')}
+                                    {renderOfficialRoleBox({
+                                      title: 'Laboratory Foreman',
+                                      quota: 22,
+                                      people: labForemen.map(fn => ({ empOrName: fn, defaultRole: 'Laboratory Foreman' })),
+                                      vacantCount: 5,
+                                      splitShifts: true,
+                                    })}
+                                    <div className="w-0 h-3 border-l-2 border-solid border-slate-900 mx-auto" />
+                                    {renderOfficialRoleBox({
+                                      title: 'Crew, Preparation & Laboratory',
+                                      quota: 38,
+                                      people: labCrews.length > 0 ? labCrews : ['Crew Laboratory'],
+                                      customExisting: 30,
+                                      customVacant: 8,
+                                      customTotal: 38,
+                                      splitShifts: true,
+                                      crewDropdown: true,
+                                      crewKey: 'lab_crew',
+                                    })}
                                   </div>
                                 );
                               }
                               if (name === 'Administration') {
-                                return renderGroupedBox('ADMIN', adminStaffList.map(item => ({
-                                  empOrName: item,
-                                  defaultRole: 'Admin, Preparation & Laboratory'
-                                })), 'amber');
+                                return renderOfficialRoleBox({
+                                  title: 'Admin, Preparation & Laboratory',
+                                  quota: 3,
+                                  people: adminStaffList.map(item => ({
+                                    empOrName: item,
+                                    defaultRole: 'Admin, Preparation & Laboratory'
+                                  })),
+                                  vacantCount: 0,
+                                  splitShifts: false,
+                                });
                               }
                               return null;
                             };
 
                             return (
-                              <div className="w-full max-h-[88vh] overflow-y-auto overflow-x-auto lg:overflow-x-visible custom-scrollbar rounded-2xl border-t-4 border-t-[#20969D] border-b-4 border-b-[#20969D] border-x border-x-slate-200 bg-white p-3 sm:p-5 shadow-sm select-none space-y-4">
+                              <div className="w-full max-h-[88vh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-2xl border-t-4 border-t-[#20969D] border-b-4 border-b-[#20969D] border-x border-x-slate-200 bg-white p-2.5 sm:p-3.5 xl:p-4 shadow-sm select-none space-y-4">
                                 
                                 {/* ================= HEADER SO (ORGANIGRAMA PREPLAB) ================= */}
                                   <div className="w-full flex flex-col items-center justify-center pt-1 pb-3 border-b border-teal-100/80">
@@ -3744,10 +4320,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       </span>
                                     </div>
                                     <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                                      Laboratory Administration
+                                      Struktur Organisasi Preparation &amp; Laboratory
                                     </h2>
                                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                                      Struktur Organisasi Preparation & Laboratory
+                                      PT Trimegah Bangun Persada · Harita Nickel
                                     </p>
 
                                     {/* Quick Action Button & Shift Palette Note */}
@@ -3797,22 +4373,17 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                                   {/* LEVEL 0: SITE MANAGEMENT (HEAD OF SITE) */}
                                   <div className="flex flex-col items-center">
-                                    <div className="w-52 px-4 py-2 rounded-full bg-[#20969D] text-white text-center shadow-md border-2 border-[#1B8086]">
-                                      <div className="text-[9px] font-black uppercase tracking-wider text-[#FDE047]">
-                                        Site Management
-                                      </div>
-                                      <div className="text-[11px] font-extrabold leading-tight">
-                                        Head of Site
-                                      </div>
-                                      <div className="text-[10px] font-medium text-teal-100 mt-0.5">
-                                        Younsel Evand Roos
-                                      </div>
-                                    </div>
+                                    {renderAniExecutiveCard(
+                                      headOfSiteEmp,
+                                      'Head of Site',
+                                      'Younsel Evand Roos',
+                                      undefined,
+                                      'w-64',
+                                      'red-dashed'
+                                    )}
 
                                     {/* Garis Vertikal ke Manager */}
-                                    <div className="w-0 h-7 border-l-[3px] border-solid border-[#20969D] relative flex items-center justify-center">
-                                      <div className="w-2 h-2 rounded-full bg-[#20969D] ring-1.5 ring-white shadow-2xs absolute top-1/2 -translate-y-1/2 -translate-x-1/2" />
-                                    </div>
+                                    <div className="w-0 h-7 border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
 
                                     {/* LEVEL 1: PREPARATION & LABORATORY MANAGER */}
                                     <div className="relative">
@@ -3822,14 +4393,12 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                         'Deni Nugraha Perdiana',
                                         '04D20020842',
                                         'w-72',
-                                        'teal'
+                                        'slate'
                                       )}
                                     </div>
 
                                     {/* Garis Vertikal Turun dari Manager ke Bus Distributor */}
-                                    <div className="w-0 h-6 border-l-[3px] border-solid border-[#20969D] relative flex items-center justify-center">
-                                      {/* Garis vertikal menyatu langsung ke bus distributor di bawah */}
-                                    </div>
+                                    <div className="w-0 h-6 border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
                                   </div>
 
                                   {/* ================= DESKTOP VIEW: STRUKTUR HIERARKI GRID ================= */}
@@ -3838,40 +4407,48 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                     {/* CONNECTOR 1: Garis Pembagi Horizontal dari Manager ke 6 Cabang (Terhubung mulus tanpa celah) */}
                                     {rawGroups.map((g, gi) => (
                                       <div key={`c1-${g.key}`} className="relative h-7" style={{ gridColumn: groupSpan(gi) }}>
-                                        {gi > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-[3px] border-solid border-[#20969D]" />}
-                                        {gi < rawGroups.length - 1 && <div className="absolute top-0 left-1/2 -right-2.5 xl:-right-3 border-t-[3px] border-solid border-[#20969D]" />}
-                                        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-[3px] border-solid border-[#20969D]" />
-                                        <div className="w-2 h-2 rounded-full bg-[#20969D] ring-1.5 ring-white shadow-2xs absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10" />
+                                        {gi > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-2 border-solid border-slate-900" />}
+                                        {gi < rawGroups.length - 1 && <div className="absolute top-0 left-1/2 -right-1.5 xl:-right-2 border-t-2 border-solid border-slate-900" />}
+                                        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-2 border-solid border-slate-900" />
                                       </div>
                                     ))}
 
                                     {/* LEVEL 2: SUPERINTENDENTS vs JALUR LANGSUNG MANAGER */}
                                     {rawGroups.map((g, gi) => {
-                                      if (g.spts === null) {
-                                        // Jalur Langsung ke Manager (Inventory Control, Maintenance, QA, Administration)
-                                        return (
-                                          <div key={`s-${g.key}`} className="relative h-full min-h-[4.5rem] self-stretch flex items-center justify-center" style={{ gridColumn: groupSpan(gi) }}>
-                                            <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-[3px] border-solid border-[#20969D]" />
-                                          </div>
-                                        );
-                                      }
-                                      const isAmber = g.key === 'prep';
-                                      const sptEmp = isAmber ? prepSptEmp : labSptEmp;
+                                      const isPrep = g.key === 'prep';
+                                      const isLab = g.key === 'lab';
+                                      const isDirect = g.spts === null;
+
                                       return (
-                                        <div key={`s-${g.key}`} className="px-1 flex flex-col items-center justify-center self-stretch h-full" style={{ gridColumn: groupSpan(gi) }}>
-                                          {renderAniExecutiveCard(
-                                            sptEmp,
-                                            g.label,
-                                            isAmber ? 'Arif Maulana Lessy' : 'Tigwa Anggawikara',
-                                            isAmber ? '02D24000009' : '04D23000004',
-                                            isAmber ? 'w-56' : 'w-52',
-                                            isAmber ? 'amber' : 'teal'
+                                        <div key={`s-${g.key}`} className="relative px-0.5 xl:px-1 flex flex-col items-center justify-center self-stretch h-full" style={{ gridColumn: groupSpan(gi) }}>
+                                          {/* Garis Koordinasi Horizontal Putus-Putus Antara Prep Spt & Lab Spt (Sesuai Diagram Resmi) */}
+                                          {gi === 0 && (
+                                            <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -right-1.5 xl:-right-2 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
                                           )}
-                                          <div className="w-0 flex-1 min-h-[1.25rem] border-l-[3px] border-solid border-[#20969D] relative flex items-center justify-center">
-                                            {isAmber && (
-                                              <div className="w-2 h-2 rounded-full bg-[#20969D] ring-1.5 ring-white shadow-2xs absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-10" />
-                                            )}
-                                          </div>
+                                          {(gi === 1 || gi === 2 || gi === 3) && (
+                                            <div className="absolute top-1/2 -translate-y-1/2 left-0 -right-1.5 xl:-right-2 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
+                                          )}
+                                          {gi === 4 && (
+                                            <div className="absolute top-1/2 -translate-y-1/2 left-0 right-1/2 border-t-2 border-dashed border-slate-700 pointer-events-none z-0" />
+                                          )}
+
+                                          {isDirect ? (
+                                            <div className="relative h-full min-h-[4.5rem] self-stretch flex items-center justify-center z-10">
+                                              <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-2 border-solid border-slate-900" />
+                                            </div>
+                                          ) : (
+                                            <div className="flex flex-col items-center justify-center self-stretch h-full z-10">
+                                              {renderAniExecutiveCard(
+                                                isPrep ? prepSptEmp : labSptEmp,
+                                                g.label,
+                                                isPrep ? 'Arif Maulana Lessy' : 'Tigwa Anggawikara',
+                                                isPrep ? '02D24000009' : '04D23000004',
+                                                isPrep ? 'w-52 xl:w-56' : 'w-full max-w-[195px] xl:max-w-[210px]',
+                                                'slate'
+                                              )}
+                                              <div className="w-0 flex-1 min-h-[1.25rem] border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}
@@ -3879,12 +4456,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                     {/* CONNECTOR 2: Cabang Superintendent ke Kolom Seksi (Terhubung mulus tanpa celah) */}
                                     {columns.map((c, ci) => (
                                       <div key={`c2-${ci}`} className="relative h-5" style={{ gridColumn: colSpan(ci) }}>
-                                        {c.pos > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-[3px] border-solid border-[#20969D]" />}
-                                        {c.pos < c.size - 1 && <div className="absolute top-0 left-1/2 -right-2.5 xl:-right-3 border-t-[3px] border-solid border-[#20969D]" />}
-                                        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-[3px] border-solid border-[#20969D]" />
-                                        {c.size > 1 && (
-                                          <div className="w-2 h-2 rounded-full bg-[#20969D] ring-1.5 ring-white shadow-2xs absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10" />
-                                        )}
+                                        {c.pos > 0 && <div className="absolute top-0 left-0 right-1/2 border-t-2 border-solid border-slate-900" />}
+                                        {c.pos < c.size - 1 && <div className="absolute top-0 left-1/2 -right-1.5 xl:-right-2 border-t-2 border-solid border-slate-900" />}
+                                        <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0 border-l-2 border-solid border-slate-900" />
                                       </div>
                                     ))}
 
@@ -3895,7 +4469,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       return (
                                         <div key={`hdr-${ci}`} className="flex flex-col items-center w-full h-full self-stretch" style={{ gridColumn: colSpan(ci) }}>
                                           {renderAniSectionBadge(displayName, total)}
-                                          <div className="w-0 flex-1 min-h-[0.75rem] border-l-[3px] border-solid border-[#20969D] mx-auto" />
+                                          <div className="w-0 flex-1 min-h-[0.75rem] border-l-2 border-solid border-slate-900 mx-auto" />
                                         </div>
                                       );
                                     })}
@@ -3908,10 +4482,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                           {spvNode ? (
                                             <>
                                               {spvNode}
-                                              <div className="w-0 flex-1 min-h-[1.25rem] border-l-[3px] border-solid border-[#20969D] mx-auto" />
+                                              <div className="w-0 flex-1 min-h-[1.25rem] border-l-2 border-solid border-slate-900 mx-auto" />
                                             </>
                                           ) : (
-                                            <div className="w-0 h-full min-h-[3rem] border-l-[3px] border-solid border-[#20969D] mx-auto" />
+                                            <div className="w-0 h-full min-h-[3rem] border-l-2 border-solid border-slate-900 mx-auto" />
                                           )}
                                         </div>
                                       );
@@ -4015,77 +4589,84 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                   {/* ================= FOOTER: CONVENCIONES (KIRI) & NOTE / MPP (KANAN) ================= */}
                                   <div className="mt-6 pt-4 border-t border-slate-200 flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
                                     
-                                    {/* Kiri Bawah: Card Keterangan Gaya ANI (Convenciones) */}
-                                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 shadow-2xs text-[10px] space-y-1.5 max-w-sm">
-                                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                                        <Info className="w-3.5 h-3.5 text-[#20969D]" />
-                                        <span>Keterangan Warna</span>
+                                    {/* Kiri Bawah: Card Keterangan Shift & Catatan Resmi (Sesuai Diagram) */}
+                                    <div className="flex flex-col gap-2">
+                                      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 shadow-2xs text-[10px] space-y-1.5 max-w-sm">
+                                        <div className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                                          <Info className="w-3.5 h-3.5 text-[#20969D]" />
+                                          <span>Keterangan Shift &amp; Organigram</span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          <span className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-800 font-bold text-[9px] shadow-2xs">
+                                            Shift A (Biru)
+                                          </span>
+                                          <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 font-bold text-[9px] shadow-2xs">
+                                            Shift B (Kuning)
+                                          </span>
+                                          <span className="px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[9px]">
+                                            (Vacant) Merah
+                                          </span>
+                                        </div>
+                                        <p className="text-[9px] text-slate-500 italic mt-0.5">
+                                          Klik kartu atau baris nama karyawan untuk membuka profil lengkap.
+                                        </p>
                                       </div>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        <span className="px-2.5 py-0.5 rounded-full bg-[#20969D] text-white font-bold text-[9px] shadow-2xs">
-                                          Teal: Management &amp; Section (Shift A)
-                                        </span>
-                                        <span className="px-2.5 py-0.5 rounded-full bg-[#F2A40D] text-white font-bold text-[9px] shadow-2xs">
-                                          Amber: Operasional (Shift B)
-                                        </span>
-                                        <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-800 font-bold text-[9px] border border-slate-300">
-                                          Foreman, Staff & Crew
-                                        </span>
-                                      </div>
-                                      <p className="text-[9px] text-slate-500 italic mt-0.5">
-                                        Klik kartu atau baris nama karyawan untuk membuka profil lengkap.
-                                      </p>
-                                    </div>
 
-                                    {/* Kanan Bawah: Note Target Produksi & Ringkasan MPP */}
-                                    <div className="flex flex-col items-end gap-2">
-                                      <div className="text-[10px] italic font-semibold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-                                        Note: Target Production 36 JT TMM/Year 2026
-                                      </div>
-                                      <div className="overflow-x-auto">
-                                        <table className="border-collapse border border-slate-800 text-[9px] text-center bg-white shadow-2xs">
-                                          <thead>
-                                            <tr className="bg-slate-100">
-                                              <th colSpan={6} className="border border-slate-800 px-1.5 py-0.5 font-bold uppercase tracking-wider text-slate-800">
-                                                MPP 2026
-                                              </th>
-                                              <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 font-bold text-slate-900 bg-slate-200/80">
-                                                NEED
-                                              </th>
-                                              <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 font-bold text-slate-900 bg-slate-200/80">
-                                                EXISTING
-                                              </th>
-                                              <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 font-bold text-slate-900 bg-slate-200/80">
-                                                GAP
-                                              </th>
-                                            </tr>
-                                            <tr className="bg-slate-100 font-bold text-slate-700 text-[8.5px]">
-                                              <th className="border border-slate-800 px-1 py-0.2">1</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">2A-2C</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">3A-3C</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">4A-4C</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">5A-5C</th>
-                                              <th className="border border-slate-800 px-1 py-0.2">6</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody className="font-semibold text-slate-800 text-[8.5px]">
-                                            <tr>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">1</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">2</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">13</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">62</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">158</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5">-</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5 font-black bg-slate-50 text-slate-900">236</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5 font-black bg-slate-50 text-emerald-700">186</td>
-                                              <td className="border border-slate-800 px-1.5 py-0.5 font-black bg-slate-50 text-red-600">50</td>
-                                            </tr>
-                                          </tbody>
-                                        </table>
+                                      <div className="flex flex-col items-start text-[10px] italic font-semibold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+                                        <div>Note : Target Production 36 JT TMM/Year 2026</div>
+                                        <div className="text-slate-500 mt-0.5">Data update 10 Oktober 2026</div>
                                       </div>
                                     </div>
 
+                                    {/* Kanan Bawah: Tabel MPP 2026 (Sesuai Diagram Resmi) */}
+                                    <div className="overflow-x-auto">
+                                      <table className="border-collapse border border-slate-800 text-[9px] text-center bg-white shadow-2xs">
+                                        <thead>
+                                          <tr className="bg-slate-100">
+                                            <th colSpan={9} className="border border-slate-800 px-2 py-0.5 font-bold uppercase tracking-wider text-slate-900">
+                                              MPP 2026
+                                            </th>
+                                          </tr>
+                                          <tr className="bg-slate-100 font-bold text-slate-800 text-[8.5px]">
+                                            <th colSpan={6} className="border border-slate-800 px-2 py-0.5">
+                                              GRADE
+                                            </th>
+                                            <th rowSpan={2} className="border border-slate-800 px-2 py-0.5 font-bold text-slate-900 bg-slate-200/80">
+                                              TOTAL NEED
+                                            </th>
+                                            <th rowSpan={2} className="border border-slate-800 px-2 py-0.5 font-bold text-slate-900 bg-slate-200/80">
+                                              TOTAL MANPOWER EXISTING
+                                            </th>
+                                            <th rowSpan={2} className="border border-slate-800 px-2 py-0.5 font-bold text-slate-900 bg-slate-200/80">
+                                              GAP
+                                            </th>
+                                          </tr>
+                                          <tr className="bg-slate-100 font-bold text-slate-700 text-[8.5px]">
+                                            <th className="border border-slate-800 px-1.5 py-0.2">1</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">2A-2C</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">3A-3C</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">4A-4C</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">5A-5C</th>
+                                            <th className="border border-slate-800 px-1.5 py-0.2">6</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="font-semibold text-slate-800 text-[8.5px]">
+                                          <tr>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">158</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">62</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">13</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">2</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">1</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-bold">-</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-black bg-slate-50 text-slate-900">236</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-black bg-slate-50 text-emerald-700">186</td>
+                                            <td className="border border-slate-800 px-2 py-0.5 font-black bg-slate-50 text-red-600">50</td>
+                                          </tr>
+                                        </tbody>
+                                      </table>
+                                    </div>
                                   </div>
+
                                 </div>
                               );
                             })()}
@@ -6536,6 +7117,407 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                 className="ml-auto px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition-colors"
               >
                 Tutup Jendela
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Isi Posisi Vacant di Struktur Organisasi (Khusus Section Administrasi, Developer, dan Manager) */}
+      {fillVacantModal && (
+        <div 
+          onClick={() => setFillVacantModal(null)}
+          className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col text-slate-900"
+          >
+            {/* Header Modal */}
+            <div className="p-5 border-b border-slate-200 bg-gradient-to-r from-teal-50 via-cyan-50/40 to-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#20969D] text-white flex items-center justify-center font-black text-sm shadow-md">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-base text-slate-900 leading-tight">
+                      Isi Posisi Vacant
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-extrabold bg-[#e6f7f9] text-[#135e69] border border-[#a2e0e8]">
+                      {userRoleBadge.label}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-600 mt-0.5 uppercase tracking-wide">
+                    {fillVacantModal.title}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFillVacantModal(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quota & Role Info Card */}
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
+              <div className="text-slate-600 font-medium">
+                Seksi: <span className="font-bold text-slate-800">{fillVacantModal.sectionName || fillVacantModal.title}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Existing: {fillVacantModal.existingCount}
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
+                  Vacant: {fillVacantModal.effVacant}
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">
+                  Total: {fillVacantModal.totalCount}
+                </span>
+              </div>
+            </div>
+
+            {/* Tab Nav: Pilih Dari Database vs Tambah Karyawan Baru */}
+            <div className="flex border-b border-slate-200 px-5 pt-3 gap-2 bg-white">
+              <button
+                type="button"
+                onClick={() => setFillVacantTab('existing')}
+                className={`pb-2.5 px-3 text-xs font-black flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                  fillVacantTab === 'existing'
+                    ? 'border-[#20969D] text-[#20969D]'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>Pilih Karyawan Yang Ada</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFillVacantTab('new')}
+                className={`pb-2.5 px-3 text-xs font-black flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                  fillVacantTab === 'new'
+                    ? 'border-[#20969D] text-[#20969D]'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Tambah Karyawan Baru</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto max-h-[60vh] space-y-4">
+              {fillVacantTab === 'existing' ? (
+                /* TAB 1: PILIH DARI KARYAWAN YANG ADA */
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Cari Karyawan (Nama / NIK)
+                    </label>
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={vacantSearchEmp}
+                        onChange={(e) => setVacantSearchEmp(e.target.value)}
+                        placeholder="Ketik nama atau NIK karyawan..."
+                        className="w-full pl-9 pr-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#20969D]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* List Hasil Pencarian */}
+                  {vacantSearchEmp.trim() && (
+                    <div className="max-h-40 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl p-1 space-y-1 bg-slate-50/50">
+                      {employees
+                        .filter(e => {
+                          const q = vacantSearchEmp.toLowerCase();
+                          return (e.name || '').toLowerCase().includes(q) || (e.nik || '').toLowerCase().includes(q);
+                        })
+                        .slice(0, 6)
+                        .map(emp => (
+                          <div
+                            key={emp.nik || emp.id}
+                            onClick={() => {
+                              setVacantSelectedEmp(emp);
+                              setVacantSearchEmp('');
+                            }}
+                            className={`p-2 rounded-lg flex items-center justify-between text-xs cursor-pointer transition-colors ${
+                              vacantSelectedEmp?.nik === emp.nik
+                                ? 'bg-teal-100 text-teal-900 font-bold border border-teal-300'
+                                : 'hover:bg-white text-slate-800'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-slate-900 truncate">{emp.name}</div>
+                              <div className="text-[10px] text-slate-500 font-mono truncate">
+                                NIK: {emp.nik || '-'} • {emp.jabatan || 'Belum ada jabatan'}
+                              </div>
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 shrink-0 ml-2">
+                              Pilih
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                  {/* Karyawan Terpilih */}
+                  {vacantSelectedEmp ? (
+                    <div className="p-3.5 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-teal-700 block mb-0.5">
+                          Karyawan Dipilih:
+                        </span>
+                        <div className="text-sm font-black text-slate-900 truncate">
+                          {vacantSelectedEmp.name}
+                        </div>
+                        <div className="text-xs text-slate-600 font-mono mt-0.5">
+                          NIK: {vacantSelectedEmp.nik || '-'} • Jabatan: {vacantSelectedEmp.jabatan || '-'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setVacantSelectedEmp(null)}
+                        className="text-xs text-rose-600 hover:text-rose-800 font-bold ml-2 shrink-0 px-2 py-1 rounded hover:bg-rose-50"
+                      >
+                        Ganti
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-slate-50 border border-dashed border-slate-300 text-center text-xs text-slate-500">
+                      Silakan cari dan pilih karyawan yang akan ditugaskan ke posisi ini.
+                    </div>
+                  )}
+
+                  {/* Pilihan Shift */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Pilih Pembagian Shift di SO
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('A')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'A'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-blue-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-blue-300" />
+                        Shift A
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('B')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'B'
+                            ? 'bg-amber-400 text-amber-950 border-amber-400 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-amber-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-amber-600" />
+                        Shift B
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('NONSHIFT')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'NONSHIFT'
+                            ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-slate-300" />
+                        Non Shift
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tombol Simpan Penugasan */}
+                  <button
+                    type="button"
+                    onClick={handleAssignExistingToVacant}
+                    disabled={!vacantSelectedEmp}
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#20969D] hover:bg-[#1b7f85] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer active:scale-95"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>Tugaskan ke Posisi Ini (Vacant -1, Existing +1)</span>
+                  </button>
+                </div>
+              ) : (
+                /* TAB 2: TAMBAH KARYAWAN BARU */
+                <form onSubmit={handleCreateNewEmployeeForVacant} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Nama Lengkap Karyawan <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newVacantName}
+                      onChange={(e) => setNewVacantName(e.target.value)}
+                      placeholder="Contoh: Budi Santoso"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#20969D] font-medium"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        NIK Karyawan <span className="text-slate-400 font-normal">(Opsional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={newVacantNik}
+                        onChange={(e) => setNewVacantNik(e.target.value)}
+                        placeholder="Contoh: 04D25000099"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#20969D] font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Perusahaan (PT)
+                      </label>
+                      <select
+                        value={newVacantPt}
+                        onChange={(e) => setNewVacantPt(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#20969D] font-medium bg-white"
+                      >
+                        <option value="PT Trimegah Bangun Persada">PT Trimegah Bangun Persada (TBP)</option>
+                        <option value="PT Gane Tambang Sentosa">PT Gane Tambang Sentosa (GTS)</option>
+                        <option value="PT Gebe Prima Sentosa">PT Gebe Prima Sentosa (GPS)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Jabatan di SO
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={fillVacantModal.title}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100 text-slate-600 font-bold"
+                    />
+                  </div>
+
+                  {/* Pilihan Shift */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Pilih Pembagian Shift
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('A')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'A'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-blue-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-blue-300" />
+                        Shift A
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('B')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'B'
+                            ? 'bg-amber-400 text-amber-950 border-amber-400 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-amber-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-amber-600" />
+                        Shift B
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacantShift('NONSHIFT')}
+                        className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          vacantShift === 'NONSHIFT'
+                            ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-sm bg-slate-300" />
+                        Non Shift
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingVacant}
+                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer active:scale-95 mt-2"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>{isSavingVacant ? 'Menyimpan...' : 'Simpan & Masukkan ke Posisi Vacant'}</span>
+                  </button>
+                </form>
+              )}
+
+              {/* DAFTAR PENUGASAN YANG SUDAH ADA DI POSISI INI */}
+              {((soAssignments[fillVacantModal.roleKey] || []).length > 0) && (
+                <div className="pt-4 border-t border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-700">
+                      Karyawan Ditugaskan di Posisi Ini ({(soAssignments[fillVacantModal.roleKey] || []).length}):
+                    </span>
+                    <span className="text-[10px] text-slate-500 italic">
+                      Dapat dibatalkan jika salah penugasan
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {(soAssignments[fillVacantModal.roleKey] || []).map((assigned, aIdx) => (
+                      <div
+                        key={assigned.id}
+                        className="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-slate-900 truncate">
+                            {aIdx + 1}. {assigned.name}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-2">
+                            <span>NIK: {assigned.nik || '-'}</span>
+                            <span className="px-1.5 py-0.2 rounded font-bold bg-white border border-slate-200 text-slate-700">
+                              {assigned.shift === 'NONSHIFT' ? 'Non Shift' : `Shift ${assigned.shift}`}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveVacantAssignment(fillVacantModal.roleKey, assigned.id, assigned.name)}
+                          className="px-2.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 text-[10px] font-bold flex items-center gap-1 transition-colors ml-2 shrink-0 cursor-pointer"
+                          title="Batalkan penugasan dan kembalikan ke Vacant"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Hapus</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-[10px] text-slate-500 italic">
+                * Posisi terisi otomatis mengurangi jumlah Vacant dan menambah Existing.
+              </span>
+              <button
+                type="button"
+                onClick={() => setFillVacantModal(null)}
+                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold cursor-pointer transition-colors"
+              >
+                Tutup
               </button>
             </div>
           </div>

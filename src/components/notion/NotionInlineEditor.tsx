@@ -19,6 +19,7 @@ import {
   SubtaskNote,
   markdownToVisualHtml, 
   visualHtmlToMarkdown, 
+  formatTitleToVisualHtml,
   NOTION_COLORS,
   NOTION_HIGHLIGHT_COLORS,
   isCursorAtStartOfListItem,
@@ -38,6 +39,7 @@ export interface NotionInlineEditorProps {
   disableOutsideClickSave?: boolean;
   minHeight?: string;
   placeholder?: string;
+  isPinned?: boolean;
 }
 
 export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
@@ -51,175 +53,21 @@ export const NotionInlineEditor: React.FC<NotionInlineEditorProps> = ({
   showActionButtons = false,
   disableOutsideClickSave = false,
   minHeight,
-  placeholder
+  placeholder,
+  isPinned = false
 }) => {
   // --- SINGLE LINE MODE (e.g. Judul Kegiatan, Completed Time) ---
-  const [singleText, setSingleText] = useState(initialValue || '');
-  const singleInputRef = useRef<HTMLInputElement>(null);
-  const singleContainerRef = useRef<HTMLDivElement>(null);
-
-  // Floating Selection Toolbar State for Single Line Input
-  const [activeSelection, setActiveSelection] = useState<{
-    start: number;
-    end: number;
-    selectedText: string;
-  } | null>(null);
-  const [bubblePos, setBubblePos] = useState<{ top: number; left: number } | null>(null);
-  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
-  const bubbleRef = useRef<HTMLDivElement>(null);
-
-  const handleSelectText = (e: React.SyntheticEvent<HTMLInputElement>) => {
-    const target = e.currentTarget;
-    const start = target.selectionStart ?? 0;
-    const end = target.selectionEnd ?? 0;
-    if (end > start) {
-      setActiveSelection({ start, end, selectedText: target.value.substring(start, end) });
-      const rect = singleContainerRef.current?.getBoundingClientRect();
-      if (rect) {
-        setBubblePos({
-          top: Math.max(10, rect.top - 50),
-          left: Math.max(10, rect.left + 8)
-        });
-      }
-    } else {
-      if (!isColorMenuOpen) {
-        setActiveSelection(null);
-        setBubblePos(null);
-      }
-    }
-  };
-
-  const handleFormat = (action: FormatAction) => {
-    if (!activeSelection) return;
-    const res = formatSelectedText(singleText, activeSelection.start, activeSelection.end, action);
-    setSingleText(res.newText);
-    setActiveSelection({
-      start: res.newStart,
-      end: res.newEnd,
-      selectedText: res.newText.substring(res.newStart, res.newEnd)
-    });
-  };
-
-  // Capture Escape at window level with capture phase to prevent page navigation
-  useEffect(() => {
-    const onWindowKeyDownCapture = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        onCancel();
-      }
-    };
-    window.addEventListener('keydown', onWindowKeyDownCapture, true);
-    return () => {
-      window.removeEventListener('keydown', onWindowKeyDownCapture, true);
-    };
-  }, [onCancel]);
-
-  // Only set initial focus and end-selection ONCE on mount, NOT on every keystroke
-  useEffect(() => {
-    if (!multiline && singleInputRef.current) {
-      singleInputRef.current.focus();
-      const len = singleInputRef.current.value.length;
-      singleInputRef.current.setSelectionRange(len, len);
-    }
-  }, [multiline]);
-
-  // Outside click auto-save for single-line mode
-  useEffect(() => {
-    if (multiline) return;
-    const handleOutsideClick = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (isColorMenuOpen) return;
-      if (
-        singleContainerRef.current && !singleContainerRef.current.contains(target) &&
-        (!bubbleRef.current || !bubbleRef.current.contains(target)) &&
-        !(target instanceof Element && target.closest('[data-notion-bubble-toolbar="true"]'))
-      ) {
-        onSave(singleText);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [multiline, singleText, onSave, isColorMenuOpen]);
-
   if (!multiline) {
-    const handleKeyDownSingle = (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.nativeEvent?.stopImmediatePropagation();
-        onCancel();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        onSave(singleText);
-      }
-    };
-
     return (
-      <div
-        ref={singleContainerRef}
-        data-notion-inline-editor="true"
-        onClick={(e) => e.stopPropagation()}
-        className="w-full rounded-lg border p-1.5 font-sans text-[13px] leading-normal transition-all shadow-xs relative"
-        style={{
-          backgroundColor: isNotionLight ? '#ffffff' : '#1e1e1e',
-          color: isNotionLight ? '#0f172a' : '#f8fafc',
-          borderColor: isNotionLight ? '#cbd5e1' : '#475569',
-        }}
-      >
-        {bubblePos && activeSelection && (
-          <FloatingNotionBubbleToolbar
-            bubblePos={bubblePos}
-            bubbleRef={bubbleRef}
-            isColorMenuOpen={isColorMenuOpen}
-            setIsColorMenuOpen={setIsColorMenuOpen}
-            onApplyColor={(_hex, colorKey) => handleFormat({ color: colorKey })}
-            onApplyHighlight={(_hex, highlightKey) => handleFormat({ highlight: highlightKey })}
-            onExecCmd={(cmd) => {
-              if (cmd === 'bold') handleFormat('bold');
-              else if (cmd === 'italic') handleFormat('italic');
-              else if (cmd === 'underline') handleFormat('underline');
-              else if (cmd === 'strikeThrough') handleFormat('strike');
-              else if (cmd === 'code') handleFormat('code');
-            }}
-            onClearFormat={() => handleFormat('clear')}
-            onInsertLink={() => {
-              const url = prompt('Masukkan tautan URL (contoh: https://...):');
-              if (url) handleFormat({ link: url });
-            }}
-            isNotionLight={isNotionLight}
-          />
-        )}
-        <input
-          ref={singleInputRef}
-          type="text"
-          value={singleText}
-          onChange={(e) => setSingleText(e.target.value)}
-          onSelect={handleSelectText}
-          onKeyUp={handleSelectText}
-          onMouseUp={handleSelectText}
-          onKeyDown={handleKeyDownSingle}
-          onBlur={(e) => {
-            const rel = e.relatedTarget as Node | null;
-            if (isColorMenuOpen) return;
-            if (rel && (bubbleRef.current?.contains(rel) || (rel instanceof Element && rel.closest('[data-notion-bubble-toolbar="true"]')))) {
-              return;
-            }
-            if (!singleContainerRef.current?.contains(rel)) {
-              onSave(singleText);
-            }
-          }}
-          placeholder={`Tulis ${fieldLabel.toLowerCase()}...`}
-          className="w-full text-xs font-normal px-1 py-0.5 rounded bg-transparent outline-none"
-          style={{ 
-            color: isNotionLight ? '#0f172a' : '#f8fafc',
-            caretColor: isNotionLight ? '#0f172a' : '#38bdf8' 
-          }}
-        />
-      </div>
+      <NotionSingleLineBubbleEditor
+        initialValue={initialValue}
+        fieldLabel={fieldLabel}
+        onSave={onSave}
+        onCancel={onCancel}
+        isNotionLight={isNotionLight}
+        placeholder={placeholder}
+        isPinned={isPinned}
+      />
     );
   }
 
@@ -398,7 +246,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         {/* Text Color Popover (No text labels, authentic Notion palette + 1 custom color selector) */}
         {activeSubmenu === 'text' && (
           <div 
-            className="absolute top-full left-0 mt-2 p-2 rounded-2xl border shadow-2xl z-[100000] animate-in fade-in zoom-in-95 duration-100"
+            className="absolute top-full left-0 mt-2 p-2.5 rounded-2xl border shadow-2xl z-[100000] w-[216px] animate-in fade-in zoom-in-95 duration-100"
             style={{
               backgroundColor: isNotionLight ? '#ffffff' : '#1e293b',
               borderColor: isNotionLight ? '#cbd5e1' : '#475569',
@@ -406,7 +254,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
             }}
             onMouseDown={(e) => e.preventDefault()}
           >
-            <div className="grid grid-cols-6 gap-2">
+            <div className="grid grid-cols-6 gap-2 place-items-center">
               {/* Default (Hitam) */}
               <button
                 type="button"
@@ -415,7 +263,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
                   onApplyColor(NOTION_COLORS.default.hex, 'default');
                   closeSubmenu();
                 }}
-                className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-[#37352f]"
+                className="w-6 h-6 rounded-full shrink-0 border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-[#37352f]"
                 title="Default (Hitam)"
               />
 
@@ -432,7 +280,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
                       onApplyColor(conf.hex, key);
                       closeSubmenu();
                     }}
-                    className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center"
+                    className="w-6 h-6 rounded-full shrink-0 border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center"
                     style={{ backgroundColor: conf.hex }}
                     title={conf.label}
                   />
@@ -441,7 +289,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
 
               {/* +1 Selector Warna Custom */}
               <label
-                className="relative w-6 h-6 rounded-full p-[1.5px] hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-gradient-to-tr from-rose-500 via-amber-400 via-emerald-400 to-indigo-500"
+                className="relative w-6 h-6 rounded-full shrink-0 p-[1.5px] hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-gradient-to-tr from-rose-500 via-amber-400 via-emerald-400 to-indigo-500"
                 title="Pilih Warna Kustom..."
                 onMouseDown={(e) => e.preventDefault()}
               >
@@ -489,7 +337,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
         {/* Highlight Popover (No text labels, authentic Notion pastel palette + 1 custom highlight selector) */}
         {activeSubmenu === 'highlight' && (
           <div 
-            className="absolute top-full left-0 mt-2 p-2 rounded-2xl border shadow-2xl z-[100000] animate-in fade-in zoom-in-95 duration-100"
+            className="absolute top-full left-0 mt-2 p-2.5 rounded-2xl border shadow-2xl z-[100000] w-[216px] animate-in fade-in zoom-in-95 duration-100"
             style={{
               backgroundColor: isNotionLight ? '#ffffff' : '#1e293b',
               borderColor: isNotionLight ? '#cbd5e1' : '#475569',
@@ -497,7 +345,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
             }}
             onMouseDown={(e) => e.preventDefault()}
           >
-            <div className="grid grid-cols-6 gap-2">
+            <div className="grid grid-cols-6 gap-2 place-items-center">
               {/* Tanpa Highlight */}
               <button
                 type="button"
@@ -506,7 +354,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
                   onApplyHighlight('transparent', 'default');
                   closeSubmenu();
                 }}
-                className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-transparent relative overflow-hidden"
+                className="w-6 h-6 rounded-full shrink-0 border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-transparent relative overflow-hidden"
                 title="Tanpa Highlight"
               >
                 <span className="w-full h-[1.5px] bg-rose-500 rotate-45 transform" />
@@ -525,7 +373,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
                       onApplyHighlight(conf.hex, key);
                       closeSubmenu();
                     }}
-                    className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center"
+                    className="w-6 h-6 rounded-full shrink-0 border border-slate-300 dark:border-slate-600 hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center"
                     style={{ backgroundColor: conf.hex }}
                     title={conf.label}
                   />
@@ -534,7 +382,7 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
 
               {/* +1 Selector Warna Highlight Custom */}
               <label
-                className="relative w-6 h-6 rounded-full p-[1.5px] hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-gradient-to-tr from-amber-400 via-rose-400 to-teal-400"
+                className="relative w-6 h-6 rounded-full shrink-0 p-[1.5px] hover:scale-125 transition-transform cursor-pointer shadow-2xs flex items-center justify-center bg-gradient-to-tr from-amber-400 via-rose-400 to-teal-400"
                 title="Highlight Kustom..."
                 onMouseDown={(e) => e.preventDefault()}
               >
@@ -673,6 +521,416 @@ export const FloatingNotionBubbleToolbar: React.FC<FloatingNotionBubbleToolbarPr
       </button>
     </div>,
     document.body
+  );
+};
+
+// =========================================================================
+// 0. SINGLE LINE WYSIWYG BUBBLE EDITOR (For Table Cells e.g. Activity Name)
+// =========================================================================
+
+interface NotionSingleLineBubbleEditorProps {
+  initialValue: string;
+  fieldLabel: string;
+  onSave: (val: string) => void;
+  onCancel: () => void;
+  isNotionLight: boolean;
+  placeholder?: string;
+  isPinned?: boolean;
+}
+
+const NotionSingleLineBubbleEditor: React.FC<NotionSingleLineBubbleEditorProps> = ({
+  initialValue,
+  fieldLabel,
+  onSave,
+  onCancel,
+  isNotionLight,
+  placeholder,
+  isPinned = false
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const [bubblePos, setBubblePos] = useState<{ top: number; left: number } | null>(null);
+  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
+  const lastSavedRangeRef = useRef<Range | null>(null);
+
+  // Initialize content on mount with visual HTML
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = formatTitleToVisualHtml(initialValue || '');
+      // Focus and place cursor at end
+      try {
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(editorRef.current);
+        range.collapse(false);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      } catch (e) {}
+    }
+  }, []);
+
+  // Update bubble position when text is selected inside single-line editor
+  const updateBubblePosition = useCallback(() => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      if (!isColorMenuOpen) {
+        setBubblePos(null);
+      }
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+    if (!editorRef.current || !editorRef.current.contains(range.commonAncestorContainer)) {
+      setBubblePos(null);
+      return;
+    }
+
+    const text = sel.toString().trim();
+    if (!text) {
+      setBubblePos(null);
+      return;
+    }
+
+    lastSavedRangeRef.current = range.cloneRange();
+    const rect = range.getBoundingClientRect();
+    const bubbleWidth = 320;
+    const bubbleHeight = 40;
+    const left = Math.max(16, Math.min(window.innerWidth - bubbleWidth - 16, rect.left + rect.width / 2 - bubbleWidth / 2));
+    const top = rect.top >= bubbleHeight + 14 ? rect.top - bubbleHeight - 8 : rect.bottom + 8;
+
+    setBubblePos({ top, left });
+  }, [isColorMenuOpen]);
+
+  useEffect(() => {
+    const onSelectionChange = () => {
+      updateBubblePosition();
+    };
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', onSelectionChange);
+    };
+  }, [updateBubblePosition]);
+
+  // Clean and serialize content to markdown / Notion tags
+  const getCleanTitle = useCallback((): string => {
+    if (!editorRef.current) return '';
+    const raw = visualHtmlToMarkdown(editorRef.current.innerHTML);
+    return raw.replace(/[\r\n]+/g, ' ').trim();
+  }, []);
+
+  // Outside click to save
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (isColorMenuOpen) return;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        (!bubbleRef.current || !bubbleRef.current.contains(target)) &&
+        !(target instanceof Element && target.closest('[data-notion-bubble-toolbar="true"]'))
+      ) {
+        onSave(getCleanTitle());
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [getCleanTitle, onSave, isColorMenuOpen]);
+
+  // Exec rich text formatting command
+  const execCmd = (cmd: string, val: string | undefined = undefined) => {
+    const sel = window.getSelection();
+    if (lastSavedRangeRef.current && sel) {
+      sel.removeAllRanges();
+      sel.addRange(lastSavedRangeRef.current);
+    }
+    document.execCommand(cmd, false, val);
+    updateBubblePosition();
+  };
+
+  // Apply Notion Color Tag to selected text in real-time
+  const handleApplyColor = (hex: string, colorKey: string) => {
+    const sel = window.getSelection();
+    let range: Range | null = null;
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      range = sel.getRangeAt(0);
+    } else if (lastSavedRangeRef.current) {
+      range = lastSavedRangeRef.current;
+    }
+
+    if (!range) return;
+
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    let colorAncestor: HTMLElement | null = null;
+    let node: Node | null = range.commonAncestorContainer;
+    while (node && node !== editorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.tagName === 'SPAN' && (el.hasAttribute('data-color') || el.style.color)) {
+          colorAncestor = el;
+          break;
+        }
+      }
+      node = node.parentNode;
+    }
+
+    if (colorKey === 'default') {
+      if (colorAncestor && colorAncestor.textContent?.trim() === range.toString().trim()) {
+        colorAncestor.removeAttribute('data-color');
+        colorAncestor.style.color = '';
+        if (!colorAncestor.getAttribute('style')?.trim() && !colorAncestor.getAttribute('data-bg')) {
+          const parent = colorAncestor.parentNode;
+          while (colorAncestor.firstChild) {
+            parent?.insertBefore(colorAncestor.firstChild, colorAncestor);
+          }
+          parent?.removeChild(colorAncestor);
+        }
+      } else {
+        try {
+          const contents = range.extractContents();
+          contents.querySelectorAll?.('span[data-color], span[style*="color"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-color');
+            (el as HTMLElement).style.color = '';
+          });
+          range.insertNode(contents);
+        } catch (e) {
+          document.execCommand('removeFormat');
+        }
+      }
+    } else {
+      if (colorAncestor && colorAncestor.textContent?.trim() === range.toString().trim()) {
+        colorAncestor.style.color = hex;
+        colorAncestor.setAttribute('data-color', colorKey);
+        if (sel) {
+          const newRange = document.createRange();
+          newRange.selectNodeContents(colorAncestor);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          lastSavedRangeRef.current = newRange.cloneRange();
+        }
+      } else {
+        const span = document.createElement('span');
+        span.style.color = hex;
+        span.setAttribute('data-color', colorKey);
+
+        try {
+          const contents = range.extractContents();
+          if (contents.querySelectorAll) {
+            contents.querySelectorAll('span[data-color], span[style*="color"]').forEach((el) => {
+              (el as HTMLElement).removeAttribute('data-color');
+              (el as HTMLElement).style.color = '';
+              if (!el.getAttribute('style')?.trim() && !el.getAttribute('data-bg')) {
+                const parent = el.parentNode;
+                while (el.firstChild) {
+                  parent?.insertBefore(el.firstChild, el);
+                }
+                parent?.removeChild(el);
+              }
+            });
+          }
+          span.appendChild(contents);
+          range.insertNode(span);
+
+          if (sel) {
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            lastSavedRangeRef.current = newRange.cloneRange();
+          }
+        } catch (err) {
+          document.execCommand('styleWithCSS', false, 'true');
+          document.execCommand('foreColor', false, hex);
+        }
+      }
+    }
+
+    setIsColorMenuOpen(false);
+  };
+
+  // Apply Highlight
+  const handleApplyHighlight = (hex: string, highlightKey: string) => {
+    const sel = window.getSelection();
+    let range: Range | null = null;
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      range = sel.getRangeAt(0);
+    } else if (lastSavedRangeRef.current) {
+      range = lastSavedRangeRef.current;
+    }
+
+    if (!range) return;
+
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    let bgAncestor: HTMLElement | null = null;
+    let node: Node | null = range.commonAncestorContainer;
+    while (node && node !== editorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (el.tagName === 'SPAN' && (el.hasAttribute('data-bg') || el.style.backgroundColor)) {
+          bgAncestor = el;
+          break;
+        }
+      }
+      node = node.parentNode;
+    }
+
+    if (highlightKey === 'default' || hex === 'transparent') {
+      if (bgAncestor && bgAncestor.textContent?.trim() === range.toString().trim()) {
+        bgAncestor.removeAttribute('data-bg');
+        bgAncestor.style.backgroundColor = '';
+        bgAncestor.style.padding = '';
+        bgAncestor.style.borderRadius = '';
+        if (!bgAncestor.getAttribute('style')?.trim() && !bgAncestor.getAttribute('data-color')) {
+          const parent = bgAncestor.parentNode;
+          while (bgAncestor.firstChild) {
+            parent?.insertBefore(bgAncestor.firstChild, bgAncestor);
+          }
+          parent?.removeChild(bgAncestor);
+        }
+      } else {
+        try {
+          const contents = range.extractContents();
+          contents.querySelectorAll?.('span[data-bg], span[style*="background"]').forEach((el) => {
+            (el as HTMLElement).removeAttribute('data-bg');
+            (el as HTMLElement).style.backgroundColor = '';
+            (el as HTMLElement).style.padding = '';
+            (el as HTMLElement).style.borderRadius = '';
+          });
+          range.insertNode(contents);
+        } catch (e) {
+          document.execCommand('removeFormat');
+        }
+      }
+    } else {
+      if (bgAncestor && bgAncestor.textContent?.trim() === range.toString().trim()) {
+        bgAncestor.style.backgroundColor = hex;
+        bgAncestor.style.padding = '1px 3px';
+        bgAncestor.style.borderRadius = '3px';
+        bgAncestor.setAttribute('data-bg', highlightKey);
+        if (sel) {
+          const newRange = document.createRange();
+          newRange.selectNodeContents(bgAncestor);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          lastSavedRangeRef.current = newRange.cloneRange();
+        }
+      } else {
+        const span = document.createElement('span');
+        span.style.backgroundColor = hex;
+        span.style.padding = '1px 3px';
+        span.style.borderRadius = '3px';
+        span.setAttribute('data-bg', highlightKey);
+
+        try {
+          const contents = range.extractContents();
+          if (contents.querySelectorAll) {
+            contents.querySelectorAll('span[data-bg], span[style*="background"]').forEach((el) => {
+              (el as HTMLElement).removeAttribute('data-bg');
+              (el as HTMLElement).style.backgroundColor = '';
+              (el as HTMLElement).style.padding = '';
+              (el as HTMLElement).style.borderRadius = '';
+              if (!el.getAttribute('style')?.trim() && !el.getAttribute('data-color')) {
+                const parent = el.parentNode;
+                while (el.firstChild) {
+                  parent?.insertBefore(el.firstChild, el);
+                }
+                parent?.removeChild(el);
+              }
+            });
+          }
+          span.appendChild(contents);
+          range.insertNode(span);
+
+          if (sel) {
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            lastSavedRangeRef.current = newRange.cloneRange();
+          }
+        } catch (err) {}
+      }
+    }
+
+    setIsColorMenuOpen(false);
+  };
+
+  const handleClearFormat = () => {
+    execCmd('removeFormat');
+    setIsColorMenuOpen(false);
+    setBubblePos(null);
+  };
+
+  // Keyboard events: Enter to save, Escape to cancel
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onSave(getCleanTitle());
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      data-notion-inline-editor="true"
+      onClick={(e) => e.stopPropagation()}
+      className="w-full flex items-center min-w-[140px] rounded-md border border-teal-500/80 shadow-xs relative bg-white dark:bg-[#1e1e1e] ring-1 ring-teal-500/30"
+      style={{
+        color: isNotionLight ? '#0f172a' : '#f8fafc',
+      }}
+    >
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onKeyDown={handleKeyDown}
+        onMouseUp={updateBubblePosition}
+        data-placeholder={placeholder || `Tulis ${fieldLabel.toLowerCase()}...`}
+        className={`w-full text-xs font-semibold px-2 py-1 outline-none whitespace-nowrap overflow-x-auto no-scrollbar selection:bg-[#cce2ff] empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:pointer-events-none ${
+          isPinned ? 'text-blue-600 dark:text-blue-400 font-bold' : ''
+        }`}
+        style={{
+          color: isPinned 
+            ? (isNotionLight ? '#2563eb' : '#60a5fa')
+            : (isNotionLight ? '#0f172a' : '#f8fafc'),
+          caretColor: isPinned
+            ? (isNotionLight ? '#2563eb' : '#60a5fa')
+            : (isNotionLight ? '#0f172a' : '#38bdf8'),
+        }}
+      />
+
+      <FloatingNotionBubbleToolbar
+        bubblePos={bubblePos}
+        bubbleRef={bubbleRef}
+        isColorMenuOpen={isColorMenuOpen}
+        setIsColorMenuOpen={setIsColorMenuOpen}
+        onApplyColor={handleApplyColor}
+        onApplyHighlight={handleApplyHighlight}
+        onExecCmd={execCmd}
+        onClearFormat={handleClearFormat}
+        onInsertLink={() => {
+          const url = prompt('Masukkan tautan URL:');
+          if (url) execCmd('createLink', url);
+        }}
+        onToggleBullet={() => {}}
+        isBulletActive={false}
+        isNotionLight={isNotionLight}
+      />
+    </div>
   );
 };
 

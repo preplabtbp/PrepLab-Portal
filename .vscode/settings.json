@@ -1,7 +1,7 @@
 {
   "workbench.startupEditor": "readme",
   "css.lint.unknownAtRules": "ignore",
-  "google.cloud.project": "project-054e3351-b8d1-42f7-9c8",
+  "google.cloud.project": "project-fb3f17fa-83ad-4261-9ad",
   "google.cloud.region": "asia-southeast2",
   "google.cloud.location": "asia-southeast2",
   "google.cloud.bigquery.location": "asia-southeast2"

@@ -277,6 +277,8 @@ export const apdHistory = pgTable('apd_history', {
   dateTaken: timestamp('date_taken').defaultNow(),
   photoUrl: text('photo_url'),
   pt: text('pt').default('TBP'),
+  isDeleted: boolean('is_deleted').default(false),
+  originalDateKey: text('original_date_key'),
 });
 
 // --- APD Documents ---
@@ -878,10 +880,14 @@ export const trainingCertifications = pgTable('training_certifications', {
   nama: text('nama').notNull(),
   jabatan: text('jabatan'),
   pt: text('pt'), // 'TBP' | 'GPS'
+  penerbit: text('penerbit'), // mis. 'BNSP / KESDM', 'Kemenaker', 'BSN / KAN'
+  penyelenggara: text('penyelenggara'), // mis. 'PPSDM Geominerba', 'Internal'
+  provider: text('provider'), // mis. 'Lembaga Diklat Profesi'
   tanggal: text('tanggal'), // Tanggal training / ujian 'YYYY-MM-DD'
   keterangan: text('keterangan'), // mis. 'Lulus'
   expired: text('expired'), // Tanggal expired 'YYYY-MM-DD'
   note: text('note'),
+  sertifikat: text('sertifikat'), // Link URL atau nomor sertifikat
   updatedBy: text('updated_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

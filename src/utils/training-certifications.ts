@@ -1,9 +1,19 @@
 // Sertifikasi K3 & Kompetensi (Training External) — jenis sertifikat, masa berlaku & status expired.
 
-export type CertType = 'iso_17025' | 'ahli_k3_kimia' | 'petugas_k3_kimia' | 'proteksi_radiasi' | 'teknisi_k3_listrik' | 'juru_las_3';
+export type CertType =
+  | 'pop'
+  | 'pom'
+  | 'iso_17025'
+  | 'ahli_k3_kimia'
+  | 'petugas_k3_kimia'
+  | 'proteksi_radiasi'
+  | 'teknisi_k3_listrik'
+  | 'juru_las_3'
+  | 'dll'
+  | string;
 
 export interface CertMeta {
-  type: CertType;
+  type: string;
   title: string;
   /** Masa berlaku sertifikat dalam tahun (null = belum diketahui) */
   validYears: number | null;
@@ -13,27 +23,35 @@ export interface CertMeta {
 }
 
 export const CERT_TYPES: CertMeta[] = [
+  { type: 'pop', title: 'Pengawas Operasional Pertama (POP)', validYears: 5, issuer: 'BNSP / KESDM', color: '#ccfbf1' },
+  { type: 'pom', title: 'Pengawas Operasional Madya (POM)', validYears: 5, issuer: 'BNSP / KESDM', color: '#ede9fe' },
   { type: 'iso_17025', title: 'ISO 17025 : 2017 Sistem Manajemen Laboratorium', validYears: 3, issuer: 'BSN / KAN', color: '#fef08a' },
   { type: 'ahli_k3_kimia', title: 'Ahli K3 Kimia', validYears: 3, issuer: 'Kemenaker', color: '#fefce8' },
   { type: 'petugas_k3_kimia', title: 'Petugas K3 Kimia', validYears: 5, issuer: 'Kemenaker', color: '#e5e7eb' },
   { type: 'proteksi_radiasi', title: 'Petugas Proteksi Radiasi', validYears: 5, issuer: 'BAPETEN', color: '#a5f3fc' },
   { type: 'teknisi_k3_listrik', title: 'Teknisi K3 Listrik', validYears: 3, issuer: 'Kemenaker', color: '#d9f99d' },
   { type: 'juru_las_3', title: 'Juru Las Kelas III', validYears: null, issuer: 'Kemenaker', color: '#d9f99d' },
+  { type: 'dll', title: 'Sertifikasi Lainnya (Dll)', validYears: null, issuer: 'Lainnya', color: '#e2e8f0' },
 ];
-export const CERT_META: Record<CertType, CertMeta> = Object.fromEntries(CERT_TYPES.map(c => [c.type, c])) as Record<CertType, CertMeta>;
-export const isCertType = (v: unknown): v is CertType => typeof v === 'string' && v in CERT_META;
+export const CERT_META: Record<string, CertMeta> = Object.fromEntries(CERT_TYPES.map(c => [c.type, c]));
+export const isCertType = (v: unknown): v is CertType => typeof v === 'string';
 
 export interface TrainingCertification {
   id: number;
-  certType: CertType;
+  certType: string;
   nik: string | null;
   nama: string;
   jabatan: string | null;
   pt: string | null;
+  penerbit?: string | null;
+  penyelenggara?: string | null;
+  provider?: string | null;
   tanggal: string | null;
   keterangan: string | null;
   expired: string | null;
+  warningDate?: string | null;
   note: string | null;
+  sertifikat?: string | null;
 }
 
 /** Tanggal expired otomatis = tanggal training + masa berlaku (bila tanggal expired belum diisi) */

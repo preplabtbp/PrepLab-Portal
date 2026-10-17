@@ -273,7 +273,10 @@ signatureRouter.post("/unlock", requireAuth, async (req: any, res) => {
     });
   } catch (error: any) {
     console.error("[Signature /unlock] Error:", error);
-    return res.status(500).json({ success: false, message: "Gagal membuka tanda tangan terenkripsi" });
+    return res.status(500).json({ 
+      success: false, 
+      message: `Gagal membuka tanda tangan: ${error?.message || error}` 
+    });
   }
 });
 

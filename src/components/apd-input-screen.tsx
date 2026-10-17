@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield, ChevronLeft, ChevronRight, Lock, Table, List, Check, Pencil, ShieldCheck, History, Sparkles } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { Button, Input, Select } from './ui';
 
@@ -8,7 +8,7 @@ import { addMonths, isBefore, parseISO, format, startOfDay } from 'date-fns';
 import { useApdInput, ApdEntry, getHistoryIgnoreCase } from '../features/apd/hooks/useApdInput';
 import { parseGoogleDriveId } from '../lib/p5m-flyer';
 
-import { getApdSettings, getApdHistoryByNik, recordApdTakes, getEmployees, addEmployee, generateApdDocument, uploadApdProof, uploadPhotoToDrive } from '../sheets-api';
+import { getApdSettings, getApdHistoryByNik, recordApdTakes, getEmployees, addEmployee, generateApdDocument, uploadApdProof, uploadPhotoToDrive, updateApdHistoryDate, deleteApdHistoryEntry, addManualApdHistory } from '../sheets-api';
 import { PageHeader } from './PageHeader';
 
 const APD_TYPES = [
@@ -25,8 +25,77 @@ const APD_TYPES = [
   "Sepatu Safety"
 ];
 
+// Role check: Hanya Section Inventory Control, Developer, dan Manager yang memiliki hak akses edit/hapus/ganti tanggal
+export const checkCanEditApdHistory = (
+  userNik?: string | null,
+  userName?: string | null,
+  allEmployees: any[] = []
+): { canEdit: boolean; roleLabel: string } => {
+  const cleanNik = (userNik || '').trim().toUpperCase();
+  const cleanName = (userName || '').trim().toLowerCase();
 
+  // 1. Developer Check (Berdasarkan NIK terdaftar Developer & System Admin)
+  const devNiks = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN', 'MEETINGROOM', 'MEETINGROOMGTS'];
+  if (devNiks.includes(cleanNik)) {
+    return { canEdit: true, roleLabel: 'Developer' };
+  }
 
+  // Cek profil dari localStorage
+  let savedProfile: any = null;
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('p2h_inspector_profile') : null;
+    if (raw) savedProfile = JSON.parse(raw);
+  } catch {}
+
+  const profileSec = (savedProfile?.section || savedProfile?.department || savedProfile?.bagian || '').toLowerCase();
+  const profileJab = (savedProfile?.jabatan || (typeof localStorage !== 'undefined' ? localStorage.getItem('p2h_inspector_jabatan') : '') || '').toLowerCase();
+  const profileRole = (savedProfile?.role || '').toLowerCase();
+
+  if (profileRole.includes('dev') || profileJab.includes('developer')) {
+    return { canEdit: true, roleLabel: 'Developer' };
+  }
+
+  // 2. Manager Check
+  const managerNiks = ['04D20020842']; // Pak Deni Nugraha Perdiana
+  if (managerNiks.includes(cleanNik) || profileJab.includes('manager') || profileRole.includes('manager')) {
+    return { canEdit: true, roleLabel: 'Manager' };
+  }
+
+  // 3. Section Inventory Control Check
+  const isInventory = (text: string) => {
+    const t = text.toLowerCase();
+    return t.includes('inventory') || t.includes('gudang') || t.includes('warehouse') || t.includes('logistik') || t.includes('logistic');
+  };
+
+  if (isInventory(profileSec) || isInventory(profileJab) || isInventory(profileRole)) {
+    return { canEdit: true, roleLabel: 'Section Inventory Control' };
+  }
+
+  // Cek pencocokan karyawan di database
+  const matchedEmp = allEmployees.find(e => {
+    const eNik = (e.nik || '').toUpperCase().trim();
+    const eName = (e.name || e.nama || '').toLowerCase().trim();
+    return (cleanNik && eNik === cleanNik) || (cleanName && eName === cleanName);
+  });
+
+  if (matchedEmp) {
+    const empSec = (matchedEmp.section || matchedEmp.department || matchedEmp.bagian || '').toLowerCase();
+    const empJab = (matchedEmp.jabatan || '').toLowerCase();
+    const empRole = (matchedEmp.role || '').toLowerCase();
+
+    if (empRole.includes('dev') || empJab.includes('developer')) {
+      return { canEdit: true, roleLabel: 'Developer' };
+    }
+    if (empJab.includes('manager') || empRole.includes('manager') || (matchedEmp.nik || '').toUpperCase() === '04D20020842') {
+      return { canEdit: true, roleLabel: 'Manager' };
+    }
+    if (isInventory(empSec) || isInventory(empJab) || isInventory(empRole)) {
+      return { canEdit: true, roleLabel: 'Section Inventory Control' };
+    }
+  }
+
+  return { canEdit: false, roleLabel: 'Unauthorized' };
+};
 
 const getIntervalIgnoreCase = (intervals: Record<string, number>, key: string) => {
   if (!intervals) return 0;
@@ -73,11 +142,222 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
 
   // State untuk jendela mengambang detail APD
   const [selectedApdModal, setSelectedApdModal] = useState<string | null>(null);
+  // State untuk mode tampilan APD: 'table' (Tabel) atau 'list' (Data List)
+  const [apdViewMode, setApdViewMode] = useState<'table' | 'list'>('table');
+  const [apdFilterQuery, setApdFilterQuery] = useState('');
+  const [apdStatusTab, setApdStatusTab] = useState<'all' | 'eligible' | 'waiting' | 'never'>('all');
   const pcScrollRef = useRef<HTMLDivElement>(null);
 
   // State untuk upload BA Kerusakan Barang (PDF) jika belum waktunya pengambilan
   const [baKerusakanFile, setBaKerusakanFile] = useState<{ file?: File; name: string; url?: string } | null>(null);
   const [isUploadingBa, setIsUploadingBa] = useState(false);
+
+  // Access control: Hanya Section Inventory Control, Developer, dan Manager
+  const permissionInfo = useMemo(() => {
+    return checkCanEditApdHistory(inspectorNik, inspectorName, employees);
+  }, [inspectorNik, inspectorName, employees]);
+  const canEditApdHistory = permissionInfo.canEdit;
+
+  // History edit & delete states
+  const [editingEntryIdx, setEditingEntryIdx] = useState<number | null>(null);
+  const [editDateValue, setEditDateValue] = useState<string>('');
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+
+  const [confirmDeleteIdx, setConfirmDeleteIdx] = useState<number | null>(null);
+  const [isDeletingHistory, setIsDeletingHistory] = useState<boolean>(false);
+
+  const [showAddManualForm, setShowAddManualForm] = useState<boolean>(false);
+  const [manualCustomDate, setManualCustomDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [isAddingManualHistory, setIsAddingManualHistory] = useState<boolean>(false);
+
+  const handleCloseModal = () => {
+    setSelectedApdModal(null);
+    setBaKerusakanFile(null);
+    setEditingEntryIdx(null);
+    setConfirmDeleteIdx(null);
+    setShowAddManualForm(false);
+  };
+
+  const handleSaveEditDate = async (histObj: any, newDateStr: string) => {
+    if (!canEditApdHistory) {
+      toast.error('Akses ditolak. Pengeditan riwayat hanya untuk Section Inventory Control, Developer & Manager.');
+      return;
+    }
+    if (!newDateStr) {
+      toast.error('Silakan tentukan tanggal baru');
+      return;
+    }
+    if (!selectedApdModal || !employeeData) return;
+    const apd = selectedApdModal;
+    setIsSavingEdit(true);
+    try {
+      const rawOldDate = typeof histObj === 'string' ? histObj : histObj.date;
+      const res = await updateApdHistoryDate({
+        id: histObj.id,
+        nik: employeeData.nik,
+        itemName: apd,
+        newDate: newDateStr,
+        oldDate: rawOldDate,
+        updaterNik: inspectorNik,
+        updaterName: inspectorName
+      });
+
+      if (res && res.status === 'ok') {
+        let displayFormatted = newDateStr;
+        try {
+          displayFormatted = format(parseISO(newDateStr), 'dd/MM/yyyy');
+        } catch {}
+        toast.success(`Tanggal pengambilan ${apd} berhasil diubah ke ${displayFormatted}!`);
+
+        setEmployeeData((prev: any) => {
+          if (!prev) return prev;
+          const newHist = { ...prev.history };
+          const list = getHistoryIgnoreCase(newHist, apd) || [];
+          const foundKey = Object.keys(newHist).find(k => k.toLowerCase() === apd.toLowerCase()) || apd;
+
+          const updatedList = list.map((item: any) => {
+            const itemId = typeof item === 'object' ? item.id : undefined;
+            const itemDate = typeof item === 'string' ? item : item.date;
+            if ((histObj.id && itemId === histObj.id) || itemDate === rawOldDate) {
+              return typeof item === 'object'
+                ? { ...item, date: newDateStr }
+                : { date: newDateStr, url: '' };
+            }
+            return item;
+          });
+
+          updatedList.sort((a: any, b: any) => {
+            const dA = new Date(typeof a === 'string' ? a : a.date).getTime();
+            const dB = new Date(typeof b === 'string' ? b : b.date).getTime();
+            return dA - dB;
+          });
+
+          newHist[foundKey] = updatedList;
+          return { ...prev, history: newHist };
+        });
+        setEditingEntryIdx(null);
+      } else {
+        toast.error(res?.error || 'Gagal mengubah tanggal riwayat');
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Terjadi kesalahan saat menyimpan perubahan tanggal');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleDeleteHistory = async (histObj: any) => {
+    if (!canEditApdHistory) {
+      toast.error('Akses ditolak. Penghapusan riwayat hanya untuk Section Inventory Control, Developer & Manager.');
+      return;
+    }
+    if (!selectedApdModal || !employeeData) return;
+    const apd = selectedApdModal;
+    setIsDeletingHistory(true);
+    try {
+      const rawDate = typeof histObj === 'string' ? histObj : histObj.date;
+      const res = await deleteApdHistoryEntry({
+        id: histObj.id,
+        nik: employeeData.nik,
+        itemName: apd,
+        date: rawDate,
+        updaterNik: inspectorNik,
+        updaterName: inspectorName
+      });
+
+      if (res && res.status === 'ok') {
+        toast.success(`Riwayat pengambilan ${apd} berhasil dihapus!`);
+
+        setEmployeeData((prev: any) => {
+          if (!prev) return prev;
+          const newHist = { ...prev.history };
+          const list = getHistoryIgnoreCase(newHist, apd) || [];
+          const foundKey = Object.keys(newHist).find(k => k.toLowerCase() === apd.toLowerCase()) || apd;
+
+          const updatedList = list.filter((item: any) => {
+            const itemId = typeof item === 'object' ? item.id : undefined;
+            const itemDate = typeof item === 'string' ? item : item.date;
+            if (histObj.id && itemId) {
+              return itemId !== histObj.id;
+            }
+            return itemDate !== rawDate;
+          });
+
+          newHist[foundKey] = updatedList;
+          return { ...prev, history: newHist };
+        });
+        setConfirmDeleteIdx(null);
+      } else {
+        toast.error(res?.error || 'Gagal menghapus riwayat');
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Terjadi kesalahan saat menghapus data riwayat');
+    } finally {
+      setIsDeletingHistory(false);
+    }
+  };
+
+  const handleAddManualHistory = async (customDateStr: string) => {
+    if (!canEditApdHistory) {
+      toast.error('Akses ditolak. Penambahan riwayat hanya untuk Section Inventory Control, Developer & Manager.');
+      return;
+    }
+    if (!customDateStr) {
+      toast.error('Silakan tentukan tanggal pengambilan');
+      return;
+    }
+    if (!selectedApdModal || !employeeData) return;
+    const apd = selectedApdModal;
+    setIsAddingManualHistory(true);
+    try {
+      const res = await addManualApdHistory({
+        nik: employeeData.nik,
+        nama: employeeData.nama,
+        itemName: apd,
+        dateTaken: customDateStr,
+        updaterNik: inspectorNik
+      });
+
+      if (res && res.status === 'ok') {
+        let displayFormatted = customDateStr;
+        try {
+          displayFormatted = format(parseISO(customDateStr), 'dd/MM/yyyy');
+        } catch {}
+        toast.success(`Riwayat pengambilan ${apd} pada tanggal ${displayFormatted} berhasil ditambahkan!`);
+
+        const newEntry = res.data ? {
+          id: res.data.id,
+          date: customDateStr,
+          url: res.data.photoUrl || ''
+        } : { date: customDateStr, url: '' };
+
+        setEmployeeData((prev: any) => {
+          if (!prev) return prev;
+          const newHist = { ...prev.history };
+          const list = getHistoryIgnoreCase(newHist, apd) || [];
+          const foundKey = Object.keys(newHist).find(k => k.toLowerCase() === apd.toLowerCase()) || apd;
+          const updatedList = [...list, newEntry];
+          updatedList.sort((a: any, b: any) => {
+            const dA = new Date(typeof a === 'string' ? a : a.date).getTime();
+            const dB = new Date(typeof b === 'string' ? b : b.date).getTime();
+            return dA - dB;
+          });
+          newHist[foundKey] = updatedList;
+          return { ...prev, history: newHist };
+        });
+        setShowAddManualForm(false);
+      } else {
+        toast.error(res?.error || 'Gagal menambahkan riwayat');
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Terjadi kesalahan saat menambahkan riwayat');
+    } finally {
+      setIsAddingManualHistory(false);
+    }
+  };
 
   const handleUploadBaKerusakan = async (apdName: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -237,6 +517,116 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
     } 
     return null;
   };
+
+  const getApdSummaryItem = (apd: string) => {
+    const historyList = getHistoryIgnoreCase(employeeData?.history, apd) || [];
+    const totalTakes = historyList.length;
+    const warningMsg = getIntervalWarning(apd, format(new Date(), 'yyyy-MM-dd'), employeeData?.history);
+    const isEligible = !warningMsg;
+    const intervalMonths = getIntervalIgnoreCase(intervals, apd) || 0;
+
+    let lastDateDisplay: string | null = null;
+    let nextAllowedDateDisplay: string | null = null;
+
+    if (totalTakes > 0) {
+      const lastHist = historyList[historyList.length - 1];
+      const lastRaw = typeof lastHist === 'string' ? lastHist : lastHist?.date;
+      if (lastRaw) {
+        try {
+          const parsed = parseISO(lastRaw);
+          lastDateDisplay = format(parsed, 'dd/MM/yyyy');
+          if (intervalMonths > 0) {
+            const nextDate = addMonths(parsed, intervalMonths);
+            nextAllowedDateDisplay = format(nextDate, 'dd/MM/yyyy');
+          }
+        } catch {
+          lastDateDisplay = lastRaw;
+        }
+      }
+    }
+
+    const isInDraft = entries.some(e => e.apd.toLowerCase() === apd.toLowerCase());
+
+    return {
+      apd,
+      historyList,
+      totalTakes,
+      warningMsg,
+      isEligible,
+      intervalMonths,
+      lastDateDisplay,
+      nextAllowedDateDisplay,
+      isInDraft
+    };
+  };
+
+  const handleQuickAddToDraft = (apd: string) => {
+    const isAlreadyInDraft = entries.some(e => e.apd.toLowerCase() === apd.toLowerCase());
+    if (isAlreadyInDraft) {
+      toast.info(`${apd} sudah ada di dalam draft pengambilan.`);
+      document.getElementById('apd-input-form')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    const warningMsg = getIntervalWarning(apd, tanggal, employeeData?.history);
+    if (warningMsg) {
+      setSelectedApdModal(apd);
+      toast.warning(`Pengambilan ${apd} belum waktunya sesuai interval. Silakan lampirkan BA Kerusakan Barang jika mendesak.`);
+      return;
+    }
+
+    setEntries(prev => [...prev, {
+      id: Math.random().toString(36).substr(2, 9),
+      apd: apd,
+      ukuran: '-',
+      jumlah: '1',
+      keterangan: '',
+      warningMessage: null,
+      baFileUrl: '',
+      baFileName: '',
+    }]);
+    setShowAddedPopup(apd);
+    toast.success(`${apd} berhasil ditambahkan ke draft form!`);
+    setTimeout(() => {
+      document.getElementById('apd-input-form')?.scrollIntoView({ behavior: 'smooth' });
+    }, 120);
+  };
+
+  const allApdItems = useMemo(() => {
+    if (!employeeData) return [];
+    return APD_TYPES.map(apd => getApdSummaryItem(apd));
+  }, [employeeData, intervals, tanggal, entries]);
+
+  const apdCounts = useMemo(() => {
+    let eligible = 0;
+    let waiting = 0;
+    let never = 0;
+    allApdItems.forEach(item => {
+      if (item.totalTakes === 0) never++;
+      else if (item.isEligible) eligible++;
+      else waiting++;
+    });
+    return { all: allApdItems.length, eligible, waiting, never };
+  }, [allApdItems]);
+
+  const filteredApdItems = useMemo(() => {
+    return allApdItems.filter(item => {
+      if (apdFilterQuery.trim()) {
+        const q = apdFilterQuery.toLowerCase().trim();
+        if (!item.apd.toLowerCase().includes(q)) return false;
+      }
+      if (apdStatusTab === 'eligible') {
+        return item.isEligible && item.totalTakes > 0;
+      }
+      if (apdStatusTab === 'waiting') {
+        return !item.isEligible && item.totalTakes > 0;
+      }
+      if (apdStatusTab === 'never') {
+        return item.totalTakes === 0;
+      }
+      return true;
+    });
+  }, [allApdItems, apdFilterQuery, apdStatusTab]);
 
   const updateEntry = (id: string, field: keyof ApdEntry, value: string) => {
     setEntries(prev => prev.map(entry => {
@@ -637,191 +1027,455 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
             </div>
           </div>
 
-          {/* Daftar APD: Versi PC dibuat memanjang (horizontal scroll), Versi Mobile Phone dibuat Portrait */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
+          {/* Status & Riwayat Pengambilan APD: Mode Tabel & Data List */}
+          <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 space-y-4">
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
-                <h4 className="font-bold text-slate-800 text-sm sm:text-base">Status & Riwayat Pengambilan APD</h4>
-                <p className="text-xs text-slate-500">Klik kartu APD untuk melihat detail riwayat dan menambah ke draft form input.</p>
-              </div>
-              <div className="hidden sm:flex items-center gap-3">
-                <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-400" /> Belum ada pengambilan</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300" /> Sudah pernah diambil</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                    <Shield className="w-4 h-4" />
+                  </div>
+                  <h4 className="font-bold text-slate-800 text-base sm:text-lg">Status &amp; Riwayat Pengambilan APD</h4>
                 </div>
-                {/* Tombol Geser Horizontal untuk PC */}
-                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+                <div className="flex flex-wrap items-center gap-2.5 mt-1.5">
+                  <p className="text-xs text-slate-500">
+                    Daftar 11 jenis APD resmi, riwayat pengambilan terakhir, dan status kelayakan masa interval penggantian.
+                  </p>
+                  {canEditApdHistory ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                      <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                      Akses Edit Aktif: {permissionInfo.roleLabel}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title="Hanya Section Inventory Control, Developer, dan Manager yang dapat mengedit/menghapus riwayat">
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      Mode Read-Only (Hanya Lihat)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Toggle Table vs Data List */}
+              <div className="flex items-center gap-2 self-start md:self-auto">
+                <div className="flex items-center p-1 rounded-2xl bg-slate-100 border border-slate-200 gap-1">
                   <button
                     type="button"
-                    onClick={() => pcScrollRef.current?.scrollBy({ left: -320, behavior: 'smooth' })}
-                    className="p-1 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
-                    title="Geser ke kiri"
+                    onClick={() => setApdViewMode('table')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      apdViewMode === 'table'
+                        ? 'bg-white text-purple-700 shadow-xs ring-1 ring-slate-200'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                    title="Tampilan Tabel"
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <Table className="w-3.5 h-3.5" />
+                    <span>Tabel</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => pcScrollRef.current?.scrollBy({ left: 320, behavior: 'smooth' })}
-                    className="p-1 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all cursor-pointer"
-                    title="Geser ke kanan"
+                    onClick={() => setApdViewMode('list')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      apdViewMode === 'list'
+                        ? 'bg-white text-purple-700 shadow-xs ring-1 ring-slate-200'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                    title="Tampilan Data List"
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <List className="w-3.5 h-3.5" />
+                    <span>Data List</span>
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Versi PC (Desktop): Memanjang seperti Foto dengan tata letak profesional & presisi */}
-            <div
-              ref={pcScrollRef}
-              className="hidden sm:flex items-stretch gap-3.5 overflow-x-auto pb-3 pt-1 px-1 snap-x scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100"
-            >
-              {APD_TYPES.map(apd => {
-                const historyList = getHistoryIgnoreCase(employeeData.history, apd) || [];
-                const totalTakes = historyList.length;
-                const warningMsg = getIntervalWarning(apd, format(new Date(), 'yyyy-MM-dd'), employeeData.history);
-                const isEligible = !warningMsg;
+            {/* Filter & Search Toolbar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Status Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setApdStatusTab('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                    apdStatusTab === 'all'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
+                  }`}
+                >
+                  Semua ({apdCounts.all})
+                </button>
 
-                let lastDateDisplay: string | null = null;
-                if (totalTakes > 0) {
-                  const lastHist = historyList[historyList.length - 1];
-                  const lastRaw = typeof lastHist === 'string' ? lastHist : lastHist?.date;
-                  if (lastRaw) {
-                    try {
-                      lastDateDisplay = format(parseISO(lastRaw), 'dd/MM/yyyy');
-                    } catch {
-                      lastDateDisplay = lastRaw;
-                    }
-                  }
-                }
+                <button
+                  type="button"
+                  onClick={() => setApdStatusTab('eligible')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                    apdStatusTab === 'eligible'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Bisa Diambil ({apdCounts.eligible})
+                </button>
 
-                const isEmpty = totalTakes === 0;
+                <button
+                  type="button"
+                  onClick={() => setApdStatusTab('waiting')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                    apdStatusTab === 'waiting'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  Belum Waktunya ({apdCounts.waiting})
+                </button>
 
-                return (
-                  <div
-                    key={apd}
-                    onClick={() => setSelectedApdModal(apd)}
-                    className={`h-[148px] min-w-[210px] md:min-w-[230px] lg:min-w-[245px] flex-1 shrink-0 rounded-2xl p-4 border transition-all cursor-pointer select-none flex flex-col justify-between snap-start hover:-translate-y-1 hover:shadow-md ${
-                      isEmpty
-                        ? 'bg-rose-50/40 border-rose-200/90 hover:border-rose-300 hover:bg-rose-50/70 shadow-2xs'
-                        : 'bg-white border-slate-200/90 hover:border-purple-300 shadow-2xs'
-                    }`}
-                    title="Klik untuk membuka rincian pengambilan APD"
+                <button
+                  type="button"
+                  onClick={() => setApdStatusTab('never')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                    apdStatusTab === 'never'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                  Belum Pernah ({apdCounts.never})
+                </button>
+              </div>
+
+              {/* Search Box */}
+              <div className="relative w-full sm:w-64">
+                <Input
+                  type="text"
+                  placeholder="Cari jenis APD..."
+                  value={apdFilterQuery}
+                  onChange={e => setApdFilterQuery(e.target.value)}
+                  className="pl-8 py-1.5 text-xs h-9"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                {apdFilterQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setApdFilterQuery('')}
+                    className="text-slate-400 hover:text-slate-600 text-xs absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer"
                   >
-                    {/* Header: Title */}
-                    <div className="h-8 flex items-center justify-center text-center">
-                      <span className={`text-[11.5px] font-bold uppercase tracking-wider line-clamp-2 leading-tight ${isEmpty ? 'text-rose-800' : 'text-slate-700'}`}>
-                        {apd}
-                      </span>
-                    </div>
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
 
-                    {/* Middle: Prominent Number & Unit */}
-                    <div className="my-auto text-center py-1">
-                      <div className="flex items-baseline justify-center gap-1.5">
-                        <span className={`text-3xl sm:text-4xl font-black tracking-tight ${isEmpty ? 'text-rose-600' : 'text-slate-900'}`}>
-                          {totalTakes}
-                        </span>
-                        <span className={`text-xs font-semibold ${isEmpty ? 'text-rose-500' : 'text-slate-500'}`}>
-                          kali
-                        </span>
-                      </div>
-                    </div>
+            {/* TABEL VIEW */}
+            {apdViewMode === 'table' && (
+              <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-2xs bg-white">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-600 text-[11px] uppercase tracking-wider font-extrabold select-none">
+                      <th className="py-3 px-3 text-center w-12">No.</th>
+                      <th className="py-3 px-4">Jenis Alat Pelindung Diri (APD)</th>
+                      <th className="py-3 px-3 text-center">Masa Interval</th>
+                      <th className="py-3 px-3 text-center">Total Pengambilan</th>
+                      <th className="py-3 px-3 text-center">Pengambilan Terakhir</th>
+                      <th className="py-3 px-3 text-center">Jadwal Penggantian</th>
+                      <th className="py-3 px-3 text-center">Status Kelayakan</th>
+                      <th className="py-3 px-4 text-center w-48">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredApdItems.length > 0 ? (
+                      filteredApdItems.map((item, idx) => {
+                        const isEmpty = item.totalTakes === 0;
+                        return (
+                          <tr
+                            key={item.apd}
+                            className={`hover:bg-purple-50/40 transition-colors ${
+                              isEmpty ? 'bg-rose-50/20' : 'bg-white'
+                            }`}
+                          >
+                            <td className="py-3 px-3 text-center font-mono font-bold text-slate-400 text-[11px]">
+                              {String(idx + 1).padStart(2, '0')}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
+                                  isEmpty
+                                    ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                    : 'bg-purple-50 text-purple-700 border-purple-200'
+                                }`}>
+                                  <Shield className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <div className="font-bold text-slate-800 text-xs sm:text-[13px]">
+                                    {item.apd}
+                                  </div>
+                                  {isEmpty && (
+                                    <span className="text-[10px] text-rose-500 font-medium italic">
+                                      Belum pernah diambil
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[11px] border border-slate-200/60 font-mono">
+                                {item.intervalMonths > 0 ? `${item.intervalMonths} Bulan` : 'Fleksibel'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-black ${
+                                isEmpty
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : 'bg-purple-100 text-purple-800 font-mono'
+                              }`}>
+                                {item.totalTakes} kali
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              {item.lastDateDisplay ? (
+                                <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px] border border-slate-200/60">
+                                  {item.lastDateDisplay}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 italic text-[11px]">—</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              {isEmpty ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Siap Diambil
+                                </span>
+                              ) : item.isEligible ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Siap Diambil
+                                </span>
+                              ) : (
+                                <span className="font-mono text-[11px] text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80">
+                                  {item.nextAllowedDateDisplay ? `Boleh: ${item.nextAllowedDateDisplay}` : 'Menunggu Interval'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] font-bold border ${
+                                isEmpty
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : item.isEligible
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  isEmpty ? 'bg-rose-500' : item.isEligible ? 'bg-emerald-500' : 'bg-amber-500'
+                                }`} />
+                                {isEmpty ? 'Belum Diambil' : item.isEligible ? 'Bisa Diambil' : 'Belum Waktunya'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedApdModal(item.apd)}
+                                  className={`py-1 px-2.5 rounded-xl border font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
+                                    canEditApdHistory
+                                      ? 'border-purple-200 hover:border-purple-400 bg-purple-50/70 hover:bg-purple-100/80 text-purple-800'
+                                      : 'border-slate-200 hover:border-purple-300 bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700'
+                                  }`}
+                                  title={canEditApdHistory ? "Kelola Riwayat: Edit Tanggal, Hapus, atau Tambah Data" : "Lihat Rincian & Riwayat Pengambilan"}
+                                >
+                                  {canEditApdHistory ? (
+                                    <>
+                                      <Pencil className="w-3.5 h-3.5 text-purple-600" />
+                                      <span>Riwayat &amp; Edit</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FileText className="w-3.5 h-3.5 text-purple-600" />
+                                      <span>Riwayat</span>
+                                    </>
+                                  )}
+                                </button>
 
-                    {/* Footer: Status / Info */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-center text-center">
-                      {isEmpty ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Belum Diambil
-                        </span>
-                      ) : (
-                        <div className="flex items-center justify-between w-full px-0.5 text-xs">
-                          <span className="text-[11px] text-slate-500 truncate font-medium">
-                            {lastDateDisplay ? `Tgl ${lastDateDisplay}` : `${totalTakes}x Data`}
+                                {item.isInDraft ? (
+                                  <span className="py-1 px-2.5 rounded-xl bg-purple-100 text-purple-700 font-extrabold text-xs flex items-center gap-1 border border-purple-200">
+                                    <Check className="w-3.5 h-3.5" /> Draft
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickAddToDraft(item.apd)}
+                                    className={`py-1 px-2.5 rounded-xl font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-2xs ${
+                                      item.isEligible || isEmpty
+                                        ? 'bg-purple-600 hover:bg-purple-700 text-white active:scale-95'
+                                        : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                                    }`}
+                                    title={item.isEligible || isEmpty ? 'Tambahkan ke draft form pengambilan' : 'Perlu upload BA Kerusakan untuk penggantian'}
+                                  >
+                                    {item.isEligible || isEmpty ? (
+                                      <>
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>+ Ambil</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Lock className="w-3.5 h-3.5 text-amber-700" />
+                                        <span>BA PDF</span>
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={8} className="py-8 text-center text-slate-400 italic">
+                          Tidak ada jenis APD yang sesuai dengan filter pencarian.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* DATA LIST VIEW */}
+            {apdViewMode === 'list' && (
+              <div className="space-y-2.5">
+                {filteredApdItems.length > 0 ? (
+                  filteredApdItems.map((item, idx) => {
+                    const isEmpty = item.totalTakes === 0;
+                    return (
+                      <div
+                        key={item.apd}
+                        className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3.5 shadow-2xs ${
+                          isEmpty
+                            ? 'bg-rose-50/25 border-rose-200/90 hover:border-rose-300'
+                            : 'bg-white border-slate-200 hover:border-purple-200'
+                        }`}
+                      >
+                        {/* Kolom Kiri: Nomor, Nama APD & Info Utama */}
+                        <div className="flex items-start gap-3 min-w-0">
+                          <span className="w-6 font-mono font-bold text-slate-400 text-xs shrink-0 mt-1">
+                            {String(idx + 1).padStart(2, '0')}
                           </span>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                            isEligible 
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' 
-                              : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border ${
+                            isEmpty
+                              ? 'bg-rose-50 text-rose-600 border-rose-200'
+                              : 'bg-purple-50 text-purple-700 border-purple-200'
                           }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${isEligible ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                            {isEligible ? 'Bisa Diambil' : 'Belum Waktunya'}
-                          </span>
+                            <Shield className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <h5 className="font-bold text-slate-800 text-sm sm:text-base leading-snug">
+                              {item.apd}
+                            </h5>
+                            <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
+                              <span className="font-semibold text-slate-700">
+                                Interval: {item.intervalMonths > 0 ? `${item.intervalMonths} Bulan` : 'Fleksibel'}
+                              </span>
+                              <span>•</span>
+                              <span className={`font-bold ${isEmpty ? 'text-rose-600' : 'text-purple-700'}`}>
+                                {item.totalTakes}x Diambil
+                              </span>
+                              {item.lastDateDisplay && (
+                                <>
+                                  <span>•</span>
+                                  <span className="font-mono text-slate-600">
+                                    Terakhir: {item.lastDateDisplay}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
 
-            {/* Versi Mobile Phone: Dibuat Portrait (Grid 2 Kolom Vertikal) */}
-            <div className="grid grid-cols-2 gap-2.5 sm:hidden px-0.5">
-              {APD_TYPES.map(apd => {
-                const historyList = getHistoryIgnoreCase(employeeData.history, apd) || [];
-                const totalTakes = historyList.length;
-                const warningMsg = getIntervalWarning(apd, format(new Date(), 'yyyy-MM-dd'), employeeData.history);
-                const isEligible = !warningMsg;
+                        {/* Kolom Tengah: Status & Jadwal Penggantian */}
+                        <div className="flex items-center gap-2.5 flex-wrap pl-9 md:pl-0">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                            isEmpty
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : item.isEligible
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              isEmpty ? 'bg-rose-500' : item.isEligible ? 'bg-emerald-500' : 'bg-amber-500'
+                            }`} />
+                            {isEmpty ? 'Belum Pernah Diambil' : item.isEligible ? 'Bisa Diambil' : 'Belum Waktunya'}
+                          </span>
 
-                let lastDateDisplay: string | null = null;
-                if (totalTakes > 0) {
-                  const lastHist = historyList[historyList.length - 1];
-                  const lastRaw = typeof lastHist === 'string' ? lastHist : lastHist?.date;
-                  if (lastRaw) {
-                    try {
-                      lastDateDisplay = format(parseISO(lastRaw), 'dd/MM/yyyy');
-                    } catch {
-                      lastDateDisplay = lastRaw;
-                    }
-                  }
-                }
+                          {!isEmpty && !item.isEligible && item.nextAllowedDateDisplay && (
+                            <span className="font-mono text-[11px] text-amber-800 font-semibold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200/80">
+                              Boleh: {item.nextAllowedDateDisplay}
+                            </span>
+                          )}
+                        </div>
 
-                const isEmpty = totalTakes === 0;
+                        {/* Kolom Kanan: Tombol Aksi */}
+                        <div className="flex items-center gap-2 self-end md:self-auto pl-9 md:pl-0 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedApdModal(item.apd)}
+                            className={`py-1.5 px-3 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                              canEditApdHistory
+                                ? 'border-purple-200 hover:border-purple-400 bg-purple-50/70 hover:bg-purple-100/80 text-purple-800'
+                                : 'border-slate-200 hover:border-purple-300 bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700'
+                            }`}
+                            title={canEditApdHistory ? "Kelola Riwayat: Edit Tanggal, Hapus, atau Tambah Data" : "Lihat Detail & Riwayat Pengambilan"}
+                          >
+                            {canEditApdHistory ? (
+                              <>
+                                <Pencil className="w-3.5 h-3.5 text-purple-600" />
+                                <span>Detail &amp; Kelola Riwayat</span>
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="w-3.5 h-3.5 text-purple-600" />
+                                <span>Detail &amp; Riwayat</span>
+                              </>
+                            )}
+                          </button>
 
-                return (
-                  <div
-                    key={apd}
-                    onClick={() => setSelectedApdModal(apd)}
-                    className={`h-[135px] rounded-2xl p-3.5 border transition-all cursor-pointer active:scale-98 flex flex-col justify-between text-center ${
-                      isEmpty
-                        ? 'bg-rose-50/40 border-rose-200 text-rose-950 shadow-2xs'
-                        : 'bg-white border-slate-200 text-slate-800 shadow-2xs'
-                    }`}
-                  >
-                    <div className="h-7 flex items-center justify-center">
-                      <span className={`text-[11px] font-bold uppercase tracking-wider line-clamp-2 leading-tight ${isEmpty ? 'text-rose-800' : 'text-slate-700'}`}>
-                        {apd}
-                      </span>
-                    </div>
-
-                    <div className="my-auto py-1">
-                      <div className="flex items-baseline justify-center gap-1">
-                        <span className={`text-3xl font-black ${isEmpty ? 'text-rose-600' : 'text-slate-900'}`}>
-                          {totalTakes}
-                        </span>
-                        <span className={`text-xs font-semibold ${isEmpty ? 'text-rose-500' : 'text-slate-500'}`}>
-                          kali
-                        </span>
+                          {item.isInDraft ? (
+                            <span className="py-1.5 px-3 rounded-xl bg-purple-100 text-purple-700 font-extrabold text-xs flex items-center gap-1.5 border border-purple-200">
+                              <Check className="w-3.5 h-3.5" /> Sudah di Draft
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleQuickAddToDraft(item.apd)}
+                              className={`py-1.5 px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                                item.isEligible || isEmpty
+                                  ? 'bg-purple-600 hover:bg-purple-700 text-white active:scale-95'
+                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                              }`}
+                            >
+                              {item.isEligible || isEmpty ? (
+                                <>
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Tambah ke Form</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Lock className="w-3.5 h-3.5 text-amber-700" />
+                                  <span>Upload BA Kerusakan</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-center">
-                      {isEmpty ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
-                          Belum Diambil
-                        </span>
-                      ) : (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          isEligible ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isEligible ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                          {isEligible ? 'Bisa' : 'Tunggu'}
-                        </span>
-                      )}
-                    </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-8 text-center text-slate-400 italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    Tidak ada jenis APD yang sesuai dengan filter pencarian.
                   </div>
-                );
-              })}
-            </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Jendela Mengambang (Floating Modal) Detail APD & Keterangan */}
@@ -837,7 +1491,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
             return (
               <div
                 className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
-                onClick={() => { setSelectedApdModal(null); setBaKerusakanFile(null); }}
+                onClick={handleCloseModal}
               >
                 <div
                   className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col max-h-[88vh] overflow-hidden animate-in zoom-in-95 duration-200"
@@ -850,13 +1504,20 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                         <Shield className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-800 leading-snug">{apd}</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">Detail riwayat & kelayakan pengambilan APD</p>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-bold text-slate-800 leading-snug">{apd}</h3>
+                          {canEditApdHistory && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                              Mode Kelola Aktif
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">Detail riwayat &amp; kelayakan pengambilan APD</p>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setSelectedApdModal(null); setBaKerusakanFile(null); }}
+                      onClick={handleCloseModal}
                       className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                       title="Tutup"
                     >
@@ -914,10 +1575,65 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                     {/* Riwayat Pengambilan */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Riwayat Pengambilan ({totalTakes} data tanggal)
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <History className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Riwayat Pengambilan ({totalTakes} data)</span>
                         </h4>
+
+                        {canEditApdHistory && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAddManualForm(!showAddManualForm);
+                              setManualCustomDate(format(new Date(), 'yyyy-MM-dd'));
+                            }}
+                            className="text-xs font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200 transition-all flex items-center gap-1 cursor-pointer"
+                            title="Tambah catatan riwayat pengambilan APD secara manual"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>+ Tambah Tanggal</span>
+                          </button>
+                        )}
                       </div>
+
+                      {/* Form Tambah Manual */}
+                      {canEditApdHistory && showAddManualForm && (
+                        <div className="p-3 rounded-2xl bg-purple-50/90 border border-purple-200 space-y-2.5 mb-3 animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                              <PlusCircle className="w-3.5 h-3.5 text-purple-600" />
+                              Tambah Catatan Pengambilan Manual
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowAddManualForm(false)}
+                              className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-purple-700">
+                            Pilih tanggal pengambilan untuk dicatat ke riwayat APD <strong>{apd}</strong>:
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="date"
+                              value={manualCustomDate}
+                              onChange={e => setManualCustomDate(e.target.value)}
+                              className="flex-1 px-3 py-1.5 text-xs bg-white border border-purple-300 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-purple-400"
+                            />
+                            <button
+                              type="button"
+                              disabled={isAddingManualHistory}
+                              onClick={() => handleAddManualHistory(manualCustomDate)}
+                              className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                            >
+                              {isAddingManualHistory ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              <span>Simpan</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {totalTakes > 0 ? (
                         <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -934,6 +1650,86 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                               }
                             } catch (e) {}
 
+                            // Render baris dalam mode EDIT TANGGAL
+                            if (canEditApdHistory && editingEntryIdx === idx) {
+                              return (
+                                <div key={idx} className="p-2.5 rounded-xl bg-purple-50/80 border border-purple-300 space-y-2 animate-in fade-in">
+                                  <div className="flex items-center justify-between text-xs font-bold text-purple-900">
+                                    <span className="flex items-center gap-1">
+                                      <Pencil className="w-3.5 h-3.5 text-purple-600" />
+                                      Ganti Tanggal Pengambilan Ke-{idx + 1}
+                                    </span>
+                                    <span className="text-[10px] text-purple-600 font-normal">Pilih tanggal baru</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="date"
+                                      value={editDateValue}
+                                      onChange={e => setEditDateValue(e.target.value)}
+                                      className="flex-1 px-3 py-1.5 text-xs bg-white border border-purple-300 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={isSavingEdit}
+                                      onClick={() => handleSaveEditDate(histObj, editDateValue)}
+                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                                      title="Simpan Perubahan Tanggal"
+                                    >
+                                      {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                      <span>Simpan</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isSavingEdit}
+                                      onClick={() => setEditingEntryIdx(null)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                                      title="Batal"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                      <span>Batal</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Render baris dalam mode KONFIRMASI HAPUS
+                            if (canEditApdHistory && confirmDeleteIdx === idx) {
+                              return (
+                                <div key={idx} className="p-3 rounded-xl bg-rose-50 border border-rose-300 space-y-2 animate-in fade-in">
+                                  <div className="flex items-start gap-2 text-rose-900 text-xs">
+                                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="font-bold">Konfirmasi Hapus Riwayat Pengambilan</p>
+                                      <p className="text-[11px] text-rose-700 mt-0.5">
+                                        Yakin ingin menghapus catatan pengambilan ke-{idx + 1} tanggal <strong>{displayDate}</strong>?
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-end gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      disabled={isDeletingHistory}
+                                      onClick={() => setConfirmDeleteIdx(null)}
+                                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
+                                    >
+                                      Batal
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isDeletingHistory}
+                                      onClick={() => handleDeleteHistory(histObj)}
+                                      className="px-3 py-1 text-xs font-bold rounded-lg bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 cursor-pointer disabled:opacity-50 shadow-xs"
+                                    >
+                                      {isDeletingHistory ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                      <span>Ya, Hapus</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Render baris normal
                             return (
                               <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100/60 transition-colors">
                                 <div className="flex items-center gap-2">
@@ -942,47 +1738,79 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                                   </span>
                                   <div className="flex items-center gap-1.5 text-slate-700 text-xs font-medium">
                                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                    <span>{displayDate}</span>
+                                    <span className="font-mono">{displayDate}</span>
                                   </div>
                                 </div>
 
-                                {hUrl ? (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      setPreviewDoc({
-                                        url: hUrl,
-                                        title: apd,
-                                        date: displayDate,
-                                        employeeName: employeeData.nama,
-                                        nik: employeeData.nik
-                                      });
-                                    }}
-                                    className="flex items-center gap-1.5 text-teal-700 bg-teal-50 shadow-xs px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-teal-200 hover:bg-teal-100 hover:border-teal-300 transition-all cursor-pointer"
-                                    title="Buka dokumen bukti pengambilan"
-                                  >
-                                    <FileText className="w-3.5 h-3.5 text-teal-600" />
-                                    <span>Bukti PDF</span>
-                                    <ExternalLink className="w-3 h-3 text-teal-500" />
-                                  </button>
-                                ) : (
-                                  <label className="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white text-purple-700 hover:bg-purple-50 border border-purple-200 text-xs font-semibold transition-colors">
-                                    {uploadingApd?.nik === employeeData.nik && uploadingApd?.apd === apd && uploadingApd?.date === hDate ? (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                      <Upload className="w-3.5 h-3.5" />
-                                    )}
-                                    <span>Upload</span>
-                                    <input
-                                      type="file"
-                                      accept="application/pdf,image/*"
-                                      className="hidden"
-                                      onChange={(e) => handleUploadProof(employeeData.nik, apd, hDate, e)}
-                                      disabled={!!uploadingApd}
-                                    />
-                                  </label>
-                                )}
+                                <div className="flex items-center gap-1.5">
+                                  {hUrl ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        setPreviewDoc({
+                                          url: hUrl,
+                                          title: apd,
+                                          date: displayDate,
+                                          employeeName: employeeData.nama,
+                                          nik: employeeData.nik
+                                        });
+                                      }}
+                                      className="flex items-center gap-1.5 text-teal-700 bg-teal-50 shadow-xs px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-teal-200 hover:bg-teal-100 hover:border-teal-300 transition-all cursor-pointer"
+                                      title="Buka dokumen bukti pengambilan"
+                                    >
+                                      <FileText className="w-3.5 h-3.5 text-teal-600" />
+                                      <span>Bukti PDF</span>
+                                      <ExternalLink className="w-3 h-3 text-teal-500" />
+                                    </button>
+                                  ) : (
+                                    <label className="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white text-purple-700 hover:bg-purple-50 border border-purple-200 text-xs font-semibold transition-colors">
+                                      {uploadingApd?.nik === employeeData.nik && uploadingApd?.apd === apd && uploadingApd?.date === hDate ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Upload className="w-3.5 h-3.5" />
+                                      )}
+                                      <span>Upload</span>
+                                      <input
+                                        type="file"
+                                        accept="application/pdf,image/*"
+                                        className="hidden"
+                                        onChange={(e) => handleUploadProof(employeeData.nik, apd, hDate, e)}
+                                        disabled={!!uploadingApd}
+                                      />
+                                    </label>
+                                  )}
+
+                                  {/* Tombol Aksi Kelola: Ganti Tanggal & Hapus (Hanya untuk Inventory Control, Developer, Manager) */}
+                                  {canEditApdHistory && (
+                                    <div className="flex items-center gap-1 pl-1 border-l border-slate-200">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingEntryIdx(idx);
+                                          try {
+                                            const parsed = parseISO(hDate);
+                                            setEditDateValue(format(parsed, 'yyyy-MM-dd'));
+                                          } catch {
+                                            setEditDateValue(hDate.slice(0, 10));
+                                          }
+                                        }}
+                                        className="p-1 rounded-lg text-slate-500 hover:text-purple-700 hover:bg-purple-100 transition-colors cursor-pointer"
+                                        title="Ganti Tanggal Pengambilan"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmDeleteIdx(idx)}
+                                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                        title="Hapus Catatan Pengambilan Ini"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
@@ -990,6 +1818,16 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
                       ) : (
                         <div className="text-xs text-rose-600 bg-rose-50/70 p-4 rounded-xl border border-rose-200 border-dashed text-center">
                           Belum ada riwayat tanggal pengambilan sebelumnya.
+                        </div>
+                      )}
+
+                      {/* Info Read-Only bila bukan Inventory Control, Developer, atau Manager */}
+                      {!canEditApdHistory && (
+                        <div className="mt-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2 text-slate-500 text-[11px]">
+                          <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>
+                            Pengeditan, perubahan tanggal, dan penghapusan riwayat APD hanya dapat dilakukan oleh <strong>Section Inventory Control</strong>, <strong>Developer</strong>, dan <strong>Manager</strong>.
+                          </span>
                         </div>
                       )}
                     </div>

@@ -661,8 +661,49 @@ employeesRouter.get("/", async (req, res) => {
   }
 });
 
+export const KNOWN_RESIGNED_NIKS = new Set([
+  '04D24000052', // Fikri Lisantri Fahmi
+  '02D23000050', // Kevin Gibran Mamoto
+  '04D25000062', // M. Bagus Ihza Ai Rizki
+  '04D25000045', // Kevin Murheza
+  'M0405240291', // Ade Wijaya
+  'M0210190719', // La Ode Ali Wara
+  '04D26000012', // Nurhafiz Syahputra
+  'M0404220419', // M Tarmizi
+  'M0206250798', // Ardi Waiyolu
+  'M0403240137', // Taufik Mulyadi
+  'M0210230886', // Salim Hi. Hasan
+  'M0201250027', // Fasrul La Udi
+  'M0203220110', // Rifa Nuridi
+  'M0403240143', // M. Fiky Aciman
+  'M0402230177', // Faisal Bakri
+  'M0402260053', // Muhammad Irfan Fadli
+  'M0205250595', // Darwan Alimudin
+]);
+
 export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
   if (!empOrStatus) return false;
+
+  if (typeof empOrStatus === 'object') {
+    const rawNik = String(empOrStatus.nik || '').trim().toUpperCase();
+    if (rawNik && KNOWN_RESIGNED_NIKS.has(rawNik)) return true;
+
+    // Cek jika ada tanggal efektif tidak bekerja
+    const eff = empOrStatus.tanggalEfektifTidakBekerja || empOrStatus.tanggal_efektif_tidak_bekerja;
+    if (eff && eff !== '-' && eff !== '0' && eff !== '#N/A' && String(eff).trim()) {
+      return true;
+    }
+
+    // Cek keterangan / catatan / alasan / statusMess / statusKontrak
+    const rawKet = String(empOrStatus.keterangan || empOrStatus.alasan || empOrStatus.catatan || empOrStatus.statusMess || empOrStatus.statusKontrak || '').toUpperCase();
+    if (rawKet.includes('RESIGN') || rawKet.includes('PHK') || rawKet.includes('SPPHK') || rawKet.includes('KELUAR') || rawKet.includes('BERHENTI')) {
+      return true;
+    }
+
+    const sec = String(empOrStatus.section || empOrStatus.bagian || '').trim().toUpperCase();
+    if (sec.includes('#N/A')) return true;
+  }
+
   const status = typeof empOrStatus === 'string'
     ? empOrStatus
     : (empOrStatus.statusKaryawan || empOrStatus.status_karyawan || empOrStatus.status || empOrStatus['Status Karyawan'] || empOrStatus['Status'] || '');
@@ -673,14 +714,14 @@ export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
     s.includes('MUTASI') ||
     s.includes('SPPHK') ||
     s.includes('KELUAR') ||
+    s.includes('BERHENTI') ||
     s.includes('INACTIVE') ||
     s.includes('NONAKTIF') ||
-    s.includes('NON AKTIF')
+    s.includes('NON AKTIF') ||
+    s.includes('HABIS KONTRAK')
   ) {
     return true;
   }
-  const sec = typeof empOrStatus === 'object' ? String(empOrStatus.section || '').trim().toUpperCase() : '';
-  if (sec.includes('#N/A')) return true;
   return false;
 }
 

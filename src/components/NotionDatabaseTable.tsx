@@ -71,7 +71,7 @@ import { Button } from './ui';
 import { toast } from 'sonner';
 import { uploadPhotoToDrive } from '../sheets-api';
 import { ImageModal } from './image-modal';
-import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, NOTION_COLORS, TasklistProgress, markdownToVisualHtml, migrateLegacySubtaskText } from './notion/tasklist-utils';
+import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, formatTitleToVisualHtml, stripColorTags, NOTION_COLORS, TasklistProgress, markdownToVisualHtml, migrateLegacySubtaskText } from './notion/tasklist-utils';
 import { NotionTasklistView } from './notion/NotionTasklistView';
 import { NotionDropdownCell, STATUS_OPTIONS, PRIORITY_OPTIONS } from './notion/NotionDropdownCell';
 import { NotionDueDateCell, calculateTaskKpiStatus } from './notion/NotionDueDateCell';
@@ -7768,6 +7768,7 @@ export function NotionDatabaseTable({
                                           fieldLabel={isSubItem ? "Judul Sub-kegiatan" : "Judul Kegiatan"}
                                           multiline={false}
                                           isNotionLight={isNotionLight}
+                                          isPinned={isRowPinned(row) && !isSubItem}
                                           onSave={(newVal) => {
                                             const formattedVal = isSubItem ? `↳ ${getDisplayTitle(newVal)}` : newVal;
                                             handleUpdateCellDirect(actualRowIndex, colName, formattedVal);
@@ -7817,17 +7818,27 @@ export function NotionDatabaseTable({
                                             <span className="text-slate-400 select-none text-xs shrink-0">📄</span>
 
                                             <span 
-                                              style={{ fontSize: `${labNoteFontSize}px` }}
-                                              className={`leading-normal block font-semibold transition-all ${
+                                              style={{ 
+                                                fontSize: `${labNoteFontSize}px`,
+                                                color: (isRowPinned(row) && !isSubItem)
+                                                  ? (isNotionLight ? '#2563eb' : '#60a5fa')
+                                                  : undefined
+                                              }}
+                                              className={`leading-normal block transition-all ${
                                                 isSubCompleted 
                                                   ? 'line-through text-slate-400 dark:text-slate-500 font-normal' 
-                                                  : isNotionLight 
-                                                    ? 'text-[#37352f] font-semibold' 
-                                                    : 'text-slate-100'
+                                                  : (isRowPinned(row) && !isSubItem)
+                                                    ? 'text-blue-600 dark:text-blue-400 font-bold'
+                                                    : isNotionLight 
+                                                      ? 'text-[#37352f] font-semibold' 
+                                                      : 'text-slate-100 font-semibold'
                                               } ${fitPageMode ? 'break-words' : ''}`}
-                                            >
-                                              {displayTitle ? displayTitle : <em style={{ color: 'var(--text-muted, #64748b)' }}>Tanpa Judul</em>}
-                                            </span>
+                                              dangerouslySetInnerHTML={{
+                                                __html: (isRowPinned(row) && !isSubItem)
+                                                  ? (formatTitleToVisualHtml(stripColorTags(displayTitle)) || (displayTitle ? displayTitle : `<em style="color: var(--text-muted, #64748b)">Tanpa Judul</em>`))
+                                                  : (formatTitleToVisualHtml(displayTitle) || (displayTitle ? displayTitle : `<em style="color: var(--text-muted, #64748b)">Tanpa Judul</em>`))
+                                              }}
+                                            />
 
                                             {/* Pinned Badge */}
                                             {isRowPinned(row) && !isSubItem && (
@@ -9145,11 +9156,20 @@ export function NotionDatabaseTable({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <h5 
-                          className="font-semibold text-xs group-hover:text-teal-400 leading-snug"
-                          style={{ color: 'var(--text-main, #f1f5f9)' }}
-                        >
-                          {getRowVal(row, 'Jenis kegiatan') || 'Tanpa Judul'}
-                        </h5>
+                          className={`font-semibold text-xs leading-snug ${
+                            isRowPinned(row) ? 'text-blue-600 dark:text-blue-400 font-bold' : 'group-hover:text-teal-400'
+                          }`}
+                          style={{ 
+                            color: isRowPinned(row) 
+                              ? (isNotionLight ? '#2563eb' : '#60a5fa') 
+                              : 'var(--text-main, #f1f5f9)' 
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html: isRowPinned(row)
+                              ? (formatTitleToVisualHtml(stripColorTags(getRowVal(row, 'Jenis kegiatan'))) || 'Tanpa Judul')
+                              : (formatTitleToVisualHtml(getRowVal(row, 'Jenis kegiatan')) || 'Tanpa Judul')
+                          }}
+                        />
                         {renderPriorityBadge(getRowVal(row, 'Priority'))}
                       </div>
 
@@ -9211,9 +9231,21 @@ export function NotionDatabaseTable({
                   {renderStatusBadge(getRowVal(row, 'Status'))}
                 </div>
 
-                <h4 className="font-bold text-sm leading-snug" style={{ color: 'var(--text-main, #f1f5f9)' }}>
-                  {getRowVal(row, 'Jenis kegiatan') || 'Tanpa Judul'}
-                </h4>
+                <h4 
+                  className={`font-bold text-sm leading-snug ${
+                    isRowPinned(row) ? 'text-blue-600 dark:text-blue-400' : ''
+                  }`} 
+                  style={{ 
+                    color: isRowPinned(row) 
+                      ? (isNotionLight ? '#2563eb' : '#60a5fa') 
+                      : 'var(--text-main, #f1f5f9)' 
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: isRowPinned(row)
+                      ? (formatTitleToVisualHtml(stripColorTags(getRowVal(row, 'Jenis kegiatan'))) || 'Tanpa Judul')
+                      : (formatTitleToVisualHtml(getRowVal(row, 'Jenis kegiatan')) || 'Tanpa Judul')
+                  }}
+                />
 
                 {getRowVal(row, 'Keterangan') && (
                   <p className="text-xs line-clamp-3 leading-relaxed" style={{ color: 'var(--text-muted, #94a3b8)' }}>
@@ -10321,9 +10353,21 @@ export function NotionDatabaseTable({
                     </span>
                     <div className="truncate">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-black text-base sm:text-xl truncate" style={{ color: 'var(--text-main, #f1f5f9)' }}>
-                          {getDisplayTitle(baseTopicTitle) || 'Detail Kegiatan'}
-                        </h3>
+                        <h3 
+                          className={`font-black text-base sm:text-xl truncate ${
+                            selectedRow && isRowPinned(selectedRow) ? 'text-blue-600 dark:text-blue-400' : ''
+                          }`} 
+                          style={{ 
+                            color: selectedRow && isRowPinned(selectedRow)
+                              ? (isNotionLight ? '#2563eb' : '#60a5fa')
+                              : 'var(--text-main, #f1f5f9)' 
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html: selectedRow && isRowPinned(selectedRow)
+                              ? (formatTitleToVisualHtml(stripColorTags(getDisplayTitle(baseTopicTitle))) || 'Detail Kegiatan')
+                              : (formatTitleToVisualHtml(getDisplayTitle(baseTopicTitle)) || 'Detail Kegiatan')
+                          }}
+                        />
                         {activeSubPeriod && (
                           <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-teal-500/20 text-teal-300 border border-teal-500/50 font-bold shrink-0">
                             {activeSubPeriod}

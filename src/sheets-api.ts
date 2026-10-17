@@ -507,6 +507,55 @@ export const recordApdTakes = async (nik: string, nama: string, entries: any[], 
   return await res.json();
 };
 
+export const updateApdHistoryDate = async (payload: {
+  id?: number;
+  nik: string;
+  itemName: string;
+  newDate: string;
+  oldDate?: string;
+  updaterNik?: string;
+  updaterName?: string;
+}) => {
+  const res = await fetch('/api/apd/history', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return await res.json();
+};
+
+export const deleteApdHistoryEntry = async (payload: {
+  id?: number;
+  nik: string;
+  itemName: string;
+  date?: string;
+  updaterNik?: string;
+  updaterName?: string;
+}) => {
+  const res = await fetch('/api/apd/history', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return await res.json();
+};
+
+export const addManualApdHistory = async (payload: {
+  nik: string;
+  nama?: string;
+  itemName: string;
+  dateTaken: string;
+  photoUrl?: string;
+  updaterNik?: string;
+}) => {
+  const res = await fetch('/api/apd/history/manual', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return await res.json();
+};
+
 
 
 export const getPendingApdDocuments = async () => {

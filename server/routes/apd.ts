@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, isDbCircuitBroken } from "../../src/db/index.js";
-import { eq, desc, or, inArray, isNull, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, asc, or, inArray, isNull, and, gte, lte, sql } from "drizzle-orm";
 import { 
   apdSettings, apdHistory, apdDocuments, employees 
 } from "../../src/db/schema.js";
@@ -82,6 +82,9 @@ export async function syncApdDataFromSheet(force: boolean = false) {
           for (const h of existingHistory) {
             const key = `${(h.nik || '').trim().toLowerCase()}_${(h.itemName || '').trim().toLowerCase()}_${h.dateTaken ? new Date(h.dateTaken).toISOString().slice(0, 10) : ''}`;
             existingMap.set(key, h);
+            if (h.originalDateKey) {
+              existingMap.set(h.originalDateKey.toLowerCase(), h);
+            }
           }
 
           const toInsert: any[] = [];
@@ -108,6 +111,10 @@ export async function syncApdDataFromSheet(force: boolean = false) {
 
             const existing = existingMap.get(uniqueKey);
             if (existing) {
+              if (existing.isDeleted) {
+                // Jangan bangkitkan kembali data yang sudah dihapus oleh Section Inventory / Dev / Manager
+                continue;
+              }
               if (link && (!existing.photoUrl || existing.photoUrl === 'Link form APD' || !existing.photoUrl.startsWith('http'))) {
                 await db.update(apdHistory)
                   .set({ photoUrl: link })
@@ -115,14 +122,15 @@ export async function syncApdDataFromSheet(force: boolean = false) {
                 existing.photoUrl = link;
               }
             } else {
-              existingMap.set(uniqueKey, { nik, itemName: apdType, dateTaken: parsedDate, photoUrl: link });
+              existingMap.set(uniqueKey, { nik, itemName: apdType, dateTaken: parsedDate, photoUrl: link, isDeleted: false });
               toInsert.push({
                 nik,
                 name,
                 itemName: apdType,
                 dateTaken: parsedDate,
                 photoUrl: link,
-                pt: 'TBP'
+                pt: 'TBP',
+                isDeleted: false
               });
             }
           }
@@ -208,18 +216,26 @@ router.get("/api/apd/history", async (req, res) => {
     // If query by NIK, return formatted history map grouped by APD type
     if (nik && typeof nik === 'string' && nik.trim()) {
       const cleanNik = nik.trim();
-      const historyMap: Record<string, Array<{ date: string; url?: string }>> = {};
+      const historyMap: Record<string, Array<{ id?: number; date: string; url?: string }>> = {};
       if (!isDbCircuitBroken()) {
         try {
           const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
           const records: any = await Promise.race([
-            db.select().from(apdHistory).where(sql`LOWER(${apdHistory.nik}) = LOWER(${cleanNik})`),
+            db.select().from(apdHistory)
+              .where(
+                and(
+                  sql`LOWER(${apdHistory.nik}) = LOWER(${cleanNik})`,
+                  or(isNull(apdHistory.isDeleted), eq(apdHistory.isDeleted, false))
+                )
+              )
+              .orderBy(asc(apdHistory.dateTaken), asc(apdHistory.id)),
             timeoutPromise
           ]);
           for (const r of records) {
             const item = r.itemName || 'Lainnya';
             if (!historyMap[item]) historyMap[item] = [];
             historyMap[item].push({
+              id: r.id,
               date: r.dateTaken ? new Date(r.dateTaken).toISOString() : new Date().toISOString(),
               url: r.photoUrl || ''
             });
@@ -237,11 +253,15 @@ router.get("/api/apd/history", async (req, res) => {
     }
     try {
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
-      let query: any = db.select().from(apdHistory);
+      let query: any = db.select().from(apdHistory)
+        .where(or(isNull(apdHistory.isDeleted), eq(apdHistory.isDeleted, false)));
       if (pt && (pt as string).toUpperCase() === 'GTS') {
-        query = query.where(eq(apdHistory.pt, 'GTS'));
+        query = query.where(and(eq(apdHistory.pt, 'GTS'), or(isNull(apdHistory.isDeleted), eq(apdHistory.isDeleted, false))));
       } else {
-        query = query.where(or(eq(apdHistory.pt, 'TBP'), eq(apdHistory.pt, 'GPS'), eq(apdHistory.pt, 'TBP_GPS'), isNull(apdHistory.pt)));
+        query = query.where(and(
+          or(eq(apdHistory.pt, 'TBP'), eq(apdHistory.pt, 'GPS'), eq(apdHistory.pt, 'TBP_GPS'), isNull(apdHistory.pt)),
+          or(isNull(apdHistory.isDeleted), eq(apdHistory.isDeleted, false))
+        ));
       }
       const data = await Promise.race([query, timeoutPromise]);
       res.json(data || []);
@@ -266,7 +286,8 @@ router.post("/api/apd/history", async (req, res) => {
         itemName: ent.apd || ent.itemName || '',
         dateTaken: ent.tanggal ? new Date(ent.tanggal) : new Date(),
         photoUrl: pdfUrl || ent.pdfUrl || '',
-        pt: pt || 'TBP'
+        pt: pt || 'TBP',
+        isDeleted: false
       }));
 
       await db.insert(apdHistory).values(toInsert);
@@ -274,6 +295,122 @@ router.post("/api/apd/history", async (req, res) => {
     res.json({ status: "ok" });
   } catch (e: any) {
     console.error("Failed to record APD history:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/apd/history - Ganti tanggal atau edit riwayat pengambilan APD
+router.put("/api/apd/history", async (req, res) => {
+  try {
+    const { id, nik, itemName, newDate, oldDate } = req.body;
+    if (!newDate) {
+      return res.status(400).json({ error: "Tanggal baru wajib diisi" });
+    }
+    const parsedNewDate = new Date(newDate);
+    if (isNaN(parsedNewDate.getTime())) {
+      return res.status(400).json({ error: "Format tanggal tidak valid" });
+    }
+
+    if (id) {
+      const existing = await db.select().from(apdHistory).where(eq(apdHistory.id, Number(id)));
+      let originalDateKey = existing[0]?.originalDateKey;
+      if (!originalDateKey && existing[0]?.dateTaken) {
+        const origDateStr = new Date(existing[0].dateTaken).toISOString().slice(0, 10);
+        originalDateKey = `${(existing[0].nik || '').trim().toLowerCase()}_${(existing[0].itemName || '').trim().toLowerCase()}_${origDateStr}`;
+      }
+
+      await db.update(apdHistory)
+        .set({ 
+          dateTaken: parsedNewDate,
+          originalDateKey: originalDateKey || null
+        })
+        .where(eq(apdHistory.id, Number(id)));
+      return res.json({ status: "ok", message: "Tanggal riwayat pengambilan APD berhasil diperbarui" });
+    } else if (nik && itemName && oldDate) {
+      const parsedOld = new Date(oldDate);
+      const startOfDay = new Date(parsedOld.getFullYear(), parsedOld.getMonth(), parsedOld.getDate(), 0, 0, 0);
+      const endOfDay = new Date(parsedOld.getFullYear(), parsedOld.getMonth(), parsedOld.getDate(), 23, 59, 59);
+      const oldDateStr = parsedOld.toISOString().slice(0, 10);
+      const origKey = `${String(nik).trim().toLowerCase()}_${String(itemName).trim().toLowerCase()}_${oldDateStr}`;
+
+      await db.update(apdHistory)
+        .set({ 
+          dateTaken: parsedNewDate,
+          originalDateKey: origKey
+        })
+        .where(
+          and(
+            sql`LOWER(${apdHistory.nik}) = LOWER(${String(nik).trim()})`,
+            sql`LOWER(${apdHistory.itemName}) = LOWER(${String(itemName).trim()})`,
+            gte(apdHistory.dateTaken, startOfDay),
+            lte(apdHistory.dateTaken, endOfDay)
+          )
+        );
+      return res.json({ status: "ok", message: "Tanggal riwayat pengambilan APD berhasil diperbarui" });
+    }
+    return res.status(400).json({ error: "Parameter tidak lengkap untuk update riwayat" });
+  } catch (e: any) {
+    console.error("Failed to update APD history:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/apd/history - Hapus riwayat pengambilan APD
+router.delete("/api/apd/history", async (req, res) => {
+  try {
+    const { id, nik, itemName, date } = req.body;
+    if (id) {
+      await db.update(apdHistory)
+        .set({ isDeleted: true })
+        .where(eq(apdHistory.id, Number(id)));
+      return res.json({ status: "ok", message: "Riwayat pengambilan APD berhasil dihapus" });
+    } else if (nik && itemName && date) {
+      const parsedDate = new Date(date);
+      const startOfDay = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), 0, 0, 0);
+      const endOfDay = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), 23, 59, 59);
+
+      await db.update(apdHistory)
+        .set({ isDeleted: true })
+        .where(
+          and(
+            sql`LOWER(${apdHistory.nik}) = LOWER(${String(nik).trim()})`,
+            sql`LOWER(${apdHistory.itemName}) = LOWER(${String(itemName).trim()})`,
+            gte(apdHistory.dateTaken, startOfDay),
+            lte(apdHistory.dateTaken, endOfDay)
+          )
+        );
+      return res.json({ status: "ok", message: "Riwayat pengambilan APD berhasil dihapus" });
+    }
+    return res.status(400).json({ error: "Parameter tidak lengkap untuk menghapus riwayat" });
+  } catch (e: any) {
+    console.error("Failed to delete APD history:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/apd/history/manual - Tambah riwayat pengambilan APD manual
+router.post("/api/apd/history/manual", async (req, res) => {
+  try {
+    const { nik, nama, itemName, dateTaken, photoUrl } = req.body;
+    if (!nik || !itemName || !dateTaken) {
+      return res.status(400).json({ error: "NIK, jenis APD, dan tanggal wajib diisi" });
+    }
+    const parsedDate = new Date(dateTaken);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({ error: "Format tanggal tidak valid" });
+    }
+    const inserted = await db.insert(apdHistory).values({
+      nik: String(nik).trim(),
+      name: String(nama || '').trim(),
+      itemName: String(itemName).trim(),
+      dateTaken: parsedDate,
+      photoUrl: photoUrl || '',
+      pt: 'TBP',
+      isDeleted: false
+    }).returning();
+    return res.json({ status: "ok", message: "Riwayat pengambilan berhasil ditambahkan", data: inserted[0] });
+  } catch (e: any) {
+    console.error("Failed to add manual APD history:", e);
     res.status(500).json({ error: e.message });
   }
 });

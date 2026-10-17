@@ -4,7 +4,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { trainingCertifications, employees } from "../../src/db/schema.js";
 import { getTrainingAccess } from "./training.js";
 import { getCsvEmployees } from "./employees.js";
-import { isCertType, defaultCertExpired, type CertType } from "../../src/utils/training-certifications.js";
+import { isCertType, defaultCertExpired, CERT_META, type CertType } from "../../src/utils/training-certifications.js";
 
 // ===== Sertifikasi K3 & Kompetensi (modul Training External) =====
 // Lihat: semua (akses penuh Database Training) atau hanya milik sendiri · Ubah: Developer & Section Administrasi
@@ -99,9 +99,13 @@ function getFullFallbackCertifications(): any[] {
       jabatan: emp?.jabatan || emp?.position || 'Staff Laboratorium',
       pt: emp?.pt ? (emp.pt.toUpperCase().includes('GPS') ? 'GPS' : 'TBP') : 'TBP',
       tanggal: '2025-07-24',
+      penerbit: 'BSN / KAN',
+      penyelenggara: 'Internal PrepLab',
+      provider: 'KAN / BSN',
       keterangan: 'Lulus',
       expired: '2028-07-24',
       note: null,
+      sertifikat: 'ISO-17025-KAN-2025',
       updatedBy: 'seed',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -121,8 +125,12 @@ function getFullFallbackCertifications(): any[] {
       pt: emp?.pt || s.pt,
       tanggal: s.tanggal,
       expired: s.expired,
+      penerbit: CERT_META[s.certType]?.issuer || 'Kemenaker / BAPETEN',
+      penyelenggara: 'Kemenaker / BAPETEN',
+      provider: 'PJK3 / Lembaga Diklat',
       keterangan: s.keterangan,
       note: s.note || null,
+      sertifikat: null,
       updatedBy: 'seed',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -144,14 +152,22 @@ export function ensureTrainingCertificationsTable(): Promise<void> {
         nama TEXT NOT NULL,
         jabatan TEXT,
         pt TEXT,
+        penerbit TEXT,
+        penyelenggara TEXT,
+        provider TEXT,
         tanggal TEXT,
         keterangan TEXT,
         expired TEXT,
         note TEXT,
+        sertifikat TEXT,
         updated_by TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )`);
+      await db.execute(sql`ALTER TABLE training_certifications ADD COLUMN IF NOT EXISTS penerbit TEXT;`).catch(() => {});
+      await db.execute(sql`ALTER TABLE training_certifications ADD COLUMN IF NOT EXISTS penyelenggara TEXT;`).catch(() => {});
+      await db.execute(sql`ALTER TABLE training_certifications ADD COLUMN IF NOT EXISTS provider TEXT;`).catch(() => {});
+      await db.execute(sql`ALTER TABLE training_certifications ADD COLUMN IF NOT EXISTS sertifikat TEXT;`).catch(() => {});
       // Seed sekali (penanda di app_settings agar data yang sudah diedit/dihapus tidak dibuat ulang)
       const claimed = await db.execute(sql`INSERT INTO app_settings (setting_key, setting_value, description)
         VALUES ('seed_training_certifications_2026', 'done', 'Seed Sertifikasi K3 & Kompetensi (LIST UPDATE 2026)')
@@ -220,12 +236,16 @@ function pickCert(body: any) {
   if (tanggal && !isDate(tanggal)) throw new Error("Format tanggal training tidak valid (YYYY-MM-DD).");
   let expired = str(body?.expired);
   if (expired && !isDate(expired)) throw new Error("Format tanggal expired tidak valid (YYYY-MM-DD).");
-  if (!expired) expired = defaultCertExpired(certType, tanggal);
+  if (!expired && isCertType(certType)) expired = defaultCertExpired(certType, tanggal);
   return {
     certType, nama, tanggal, expired,
     nik: str(body?.nik)?.toUpperCase() || null,
     jabatan: str(body?.jabatan), pt: str(body?.pt)?.toUpperCase() || null,
+    penerbit: str(body?.penerbit) || (CERT_META[certType]?.issuer || null),
+    penyelenggara: str(body?.penyelenggara) || null,
+    provider: str(body?.provider) || null,
     keterangan: str(body?.keterangan), note: str(body?.note),
+    sertifikat: str(body?.sertifikat) || null,
   };
 }
 
@@ -285,8 +305,14 @@ trainingCertificationsRouter.put("/api/training-certifications/:id", requireMana
     const values = pickCert(req.body);
     const [row] = await db.update(trainingCertifications).set({ ...values, updatedBy: updatedByOf(req), updatedAt: new Date() })
       .where(eq(trainingCertifications.id, id)).returning();
-    if (!row) return res.status(404).json({ status: "error", message: "Data sertifikasi tidak ditemukan." });
-    res.json({ status: "success", data: row });
+    if (cachedFallbackCerts) {
+      const fIdx = cachedFallbackCerts.findIndex(c => c.id === id);
+      if (fIdx >= 0) cachedFallbackCerts[fIdx] = { ...cachedFallbackCerts[fIdx], ...values };
+    }
+    if (!row && !cachedFallbackCerts?.some(c => c.id === id)) {
+      return res.status(404).json({ status: "error", message: "Data sertifikasi tidak ditemukan." });
+    }
+    res.json({ status: "success", data: row || cachedFallbackCerts?.find(c => c.id === id) });
   } catch (error: any) {
     res.status(400).json({ status: "error", message: error.message });
   }
