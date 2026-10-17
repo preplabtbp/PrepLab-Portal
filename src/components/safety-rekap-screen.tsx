@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   ClipboardList, RefreshCw, Download, Search, ArrowLeft, Table2, Users, Pencil, X, Save,
-  RotateCcw, CheckCircle2, CircleDashed, Palmtree, ShieldCheck, ClipboardCheck, CalendarDays
+  RotateCcw, CheckCircle2, CircleDashed, Palmtree, ShieldCheck, ClipboardCheck, CalendarDays, ImageDown
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { toPng } from 'html-to-image';
+import { formatAvatarUrl, handleAvatarError } from '../lib/avatarUtils';
 import { PageHeader } from './PageHeader';
 import { Select } from './ui';
 import { GroupReportScreen, getKtaObligation } from './GroupReportScreen';
@@ -179,6 +181,150 @@ function buildWeekOptions(year: number, currentWeek: number) {
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 }
+
+// Untuk ekspor PNG: foto Google Drive diambil lewat proxy same-origin agar kanvas tidak terblokir CORS
+function photoForCapture(url?: string): string {
+  if (!url) return '';
+  const s = url.trim();
+  if (s.startsWith('data:') || s.startsWith('/api/')) return s;
+  const m = s.match(/\/d\/([a-zA-Z0-9_-]+)/) || s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m && (s.includes('drive.google.com') || s.includes('googleusercontent.com'))) return `/api/employees/photo/${m[1]}`;
+  return formatAvatarUrl(s);
+}
+
+function EmployeeAvatar({ name, photo, className = 'w-8 h-8 text-[11px]' }: { name: string; photo?: string; className?: string }) {
+  const src = formatAvatarUrl(photo);
+  return (
+    <div className={`relative shrink-0 rounded-full overflow-hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 text-slate-700 dark:text-slate-100 font-black flex items-center justify-center ring-2 ring-[var(--card-bg)] ${className}`}>
+      {initials(name)}
+      {src && (
+        <img src={src} alt={name} loading="lazy" onError={handleAvatarError} className="absolute inset-0 w-full h-full object-cover" />
+      )}
+    </div>
+  );
+}
+
+interface RekapSummary {
+  total: number; cuti: number; kta: number; insp: number;
+  lengkap: number; belum: number; ktaPct: number; inspPct: number;
+}
+
+// Ringkasan gaya Excel: ADA (√) / CUTI/IZIN/DINAS / TIDAK ADA KTA/TTA/INSPEKSI
+function SummaryRows({ summary, variant }: { summary: RekapSummary; variant: 'screen' | 'print' }) {
+  const items = [
+    { label: 'ADA (√)', kta: summary.kta, insp: summary.insp, cls: variant === 'print' ? 'bg-white text-slate-900' : 'bg-[var(--card-bg)] text-[var(--text-main)]' },
+    { label: 'CUTI / IZIN / DINAS', kta: summary.cuti, insp: summary.cuti, cls: 'bg-sky-500 text-white' },
+    { label: 'TIDAK ADA KTA/TTA / INSPEKSI', kta: summary.total - summary.kta, insp: summary.total - summary.insp, cls: 'bg-rose-600 text-white' }
+  ];
+  const border = variant === 'print' ? 'border-slate-400' : 'border-[var(--border-main)]';
+  return (
+    <table className={`w-full border-collapse text-sm ${variant === 'print' ? 'text-slate-900' : 'text-[var(--text-main)]'}`}>
+      <thead>
+        <tr className={variant === 'print' ? 'bg-slate-200' : 'bg-slate-100 dark:bg-slate-800'}>
+          <th className={`border ${border} px-3 py-1.5 text-left text-[11px] uppercase tracking-wider`}>Ringkasan</th>
+          <th className={`border ${border} px-3 py-1.5 w-1/4 text-[11px] uppercase tracking-wider`}>KTA / TTA</th>
+          <th className={`border ${border} px-3 py-1.5 w-1/4 text-[11px] uppercase tracking-wider`}>Inspeksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map(it => (
+          <tr key={it.label}>
+            <td className={`border ${border} px-3 py-1.5 font-bold text-center ${it.cls}`}>{it.label}</td>
+            <td className={`border ${border} px-3 py-1.5 text-center font-black tabular-nums`}>{it.kta}</td>
+            <td className={`border ${border} px-3 py-1.5 text-center font-black tabular-nums`}>{it.insp}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// Lembar laporan untuk ekspor PNG (warna tetap terang, tidak terpengaruh tema)
+const RekapReportSheet = React.forwardRef<HTMLDivElement, {
+  rows: RekapRow[]; photoMap: Map<string, string>; summary: RekapSummary;
+  reportMonth: string; rangeLabel: string; week: string;
+}>(({ rows, photoMap, summary, reportMonth, rangeLabel, week }, ref) => {
+  const th = 'border border-slate-400 bg-slate-200 px-2 py-2 text-[11px] font-bold uppercase text-slate-800';
+  const td = 'border border-slate-300 px-2 py-1.5 text-[12px] text-slate-900';
+  const dateTd = (v: DateVal) => v === null
+    ? <td className={`${td} bg-black`} />
+    : <td className={`${td} text-center whitespace-nowrap ${v === '' ? 'bg-rose-50' : ''}`}>{v === '√' ? '√' : formatShortDate(v)}</td>;
+  const check = (done: boolean) => (
+    <td className={`${td} text-center text-base font-bold ${done ? 'text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>{done ? '√' : '✗'}</td>
+  );
+  return (
+    <div ref={ref} style={{ width: 1700 }} className="bg-white p-8 font-sans">
+      <div className="flex items-end justify-between border-b-4 border-slate-900 pb-3 mb-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Prep & Lab · Safety Accountability Program</p>
+          <h1 className="text-3xl font-black text-slate-900">Rekap KTA/TTA & Inspeksi Terencana</h1>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-black text-slate-900">{reportMonth}</p>
+          <p className="text-sm font-semibold text-slate-600">{week} · {rangeLabel}</p>
+        </div>
+      </div>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            <th className={th}>No</th>
+            <th className={`${th} text-left`}>Nama Karyawan</th>
+            <th className={th}>NIK</th>
+            <th className={`${th} text-left`}>Jabatan</th>
+            <th className={th}>(KTA/TTA)</th>
+            <th className={th}>Tanggal KTA</th>
+            <th className={th}>Tanggal TTA 1</th>
+            <th className={th}>Tanggal TTA 2</th>
+            <th className={th}>(Inspeksi)</th>
+            <th className={th}>Keterangan Inspeksi</th>
+            <th className={th}>Tanggal Inspeksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const photo = photoForCapture(photoMap.get(r.nik.trim().toUpperCase()));
+            return (
+              <tr key={r.nik} className={i % 2 ? 'bg-sky-50/70' : 'bg-white'}>
+                <td className={`${td} text-center`}>{i + 1}</td>
+                <td className={td}>
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-9 h-9 shrink-0 rounded-full overflow-hidden bg-slate-200 text-slate-600 text-[11px] font-black flex items-center justify-center">
+                      {initials(r.name)}
+                      {photo && <img src={photo} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                    </div>
+                    <span className="font-semibold">{r.name}</span>
+                  </div>
+                </td>
+                <td className={`${td} text-center font-mono`}>{r.nik}</td>
+                <td className={td}>{r.jabatan}</td>
+                {r.isCuti ? (
+                  <td colSpan={7} className={`${td} text-center font-bold text-white bg-sky-500`}>CUTI / IZIN / DINAS</td>
+                ) : (
+                  <>
+                    {check(r.ktaDone)}
+                    {dateTd(r.tglKta)}
+                    {dateTd(r.tglTta1)}
+                    {dateTd(r.tglTta2)}
+                    {check(r.inspeksiDone)}
+                    <td className={`${td} text-center`}>{r.keteranganInspeksi}</td>
+                    {dateTd(r.tglInspeksi)}
+                  </>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="mt-5 w-[900px]">
+        <SummaryRows summary={summary} variant="print" />
+      </div>
+      <p className="mt-4 text-[11px] text-slate-500">
+        Diekspor dari PrepLab Portal · {new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}
+      </p>
+    </div>
+  );
+});
+RekapReportSheet.displayName = 'RekapReportSheet';
 
 // ─── Dialog edit baris ────────────────────────────────────────────────────────
 
@@ -451,6 +597,25 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [editingRow, setEditingRow] = useState<RekapRow | null>(null);
+  const [photoMap, setPhotoMap] = useState<Map<string, string>>(new Map());
+  const [exportingPng, setExportingPng] = useState(false);
+  const captureRef = useRef<HTMLDivElement>(null);
+
+  // Foto karyawan diambil dari modul Database Karyawan
+  useEffect(() => {
+    fetch('/api/employees?includeInactive=1&all=true')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        const list: any[] = data?.status === 'success' ? (data.data || []) : (Array.isArray(data) ? data : []);
+        const map = new Map<string, string>();
+        list.forEach(emp => {
+          const nik = (emp.nik || '').toString().trim().toUpperCase();
+          if (nik && emp.photo) map.set(nik, emp.photo);
+        });
+        setPhotoMap(map);
+      })
+      .catch(err => console.error('Gagal memuat foto karyawan:', err));
+  }, []);
 
   const canEdit = useMemo(() => {
     const role = (inspectorRole || '').toLowerCase();
@@ -559,7 +724,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     });
   }, [allRows, search, statusFilter]);
 
-  const summary = useMemo(() => {
+  const summary = useMemo<RekapSummary>(() => {
     const active = allRows.filter(r => !r.isCuti);
     const kta = active.filter(r => r.ktaDone).length;
     const insp = active.filter(r => r.inspeksiDone).length;
@@ -574,6 +739,36 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     };
   }, [allRows]);
 
+  const handleDownloadPng = async () => {
+    setExportingPng(true);
+    const toastId = toast.loading('Menyiapkan gambar rekap...');
+    try {
+      // Tunggu lembar laporan ter-render & foto selesai dimuat
+      await new Promise(r => setTimeout(r, 100));
+      const node = captureRef.current;
+      if (!node) throw new Error('Lembar laporan belum siap');
+      await Promise.all(Array.from(node.querySelectorAll('img')).map(img =>
+        img.complete ? Promise.resolve() : new Promise<void>(res => { img.onload = () => res(); img.onerror = () => { img.style.display = 'none'; res(); }; })
+      ));
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        backgroundColor: '#FFFFFF',
+        cacheBust: true,
+        imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+      });
+      const link = document.createElement('a');
+      link.download = `Rekap_KTA_TTA_Inspeksi_${selectedWeek}_${currentYear}.png`;
+      link.href = dataUrl;
+      link.click();
+      toast.success('Gambar rekap berhasil diunduh (PNG)', { id: toastId });
+    } catch (err: any) {
+      console.error('Export PNG rekap error:', err);
+      toast.error('Gagal mengunduh PNG: ' + (err?.message || 'kesalahan rendering'), { id: toastId });
+    } finally {
+      setExportingPng(false);
+    }
+  };
+
   const handleDownloadExcel = () => {
     try {
       const header = ['NO', 'Nama Karyawan', 'NIK', 'Jabatan', '(KTA/TTA)', 'TANGGAL KTA', 'TANGGAL TTA 1', 'TANGGAL TTA 2', '(INSPEKSI)', 'KETERANGAN INSPEKSI', 'TANGGAL INSPEKSI'];
@@ -582,14 +777,19 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         [reportMonth],
         [rangeLabel],
         header,
-        ...rows.map((r, i) => [
+        ...allRows.map((r, i) => [
           i + 1, r.name, r.nik, r.jabatan,
           r.isCuti ? 'CUTI' : r.ktaDone ? '√' : '',
           dateVal(r.tglKta, r.isCuti), dateVal(r.tglTta1, r.isCuti), dateVal(r.tglTta2, r.isCuti),
           r.isCuti ? 'CUTI' : r.inspeksiDone ? '√' : '',
           r.isCuti ? 'CUTI' : r.keteranganInspeksi,
           r.isCuti ? '' : formatShortDate(r.tglInspeksi)
-        ])
+        ]),
+        [],
+        ['', 'RINGKASAN', '', '', 'KTA/TTA', '', '', '', 'INSPEKSI'],
+        ['', 'ADA (√)', '', '', summary.kta, '', '', '', summary.insp],
+        ['', 'CUTI/IZIN/DINAS', '', '', summary.cuti, '', '', '', summary.cuti],
+        ['', 'TIDAK ADA KTA/TTA /INSPEKSI', '', '', summary.total - summary.kta, '', '', '', summary.total - summary.insp]
       ];
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!merges'] = [
@@ -758,7 +958,14 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                     disabled={loading || rows.length === 0}
                     className="h-10 flex-1 sm:flex-none px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60"
                   >
-                    <Download className="w-3.5 h-3.5" /> Export Excel
+                    <Download className="w-3.5 h-3.5" /> Excel
+                  </button>
+                  <button
+                    onClick={handleDownloadPng}
+                    disabled={loading || exportingPng || allRows.length === 0}
+                    className="h-10 flex-1 sm:flex-none px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60"
+                  >
+                    {exportingPng ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />} PNG
                   </button>
                 </div>
               </div>
@@ -828,9 +1035,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                       <td className={`${td} text-center text-[var(--text-muted)] tabular-nums`}>{i + 1}</td>
                       <td className={td}>
                         <div className="flex items-center gap-2.5 min-w-[200px]">
-                          <div className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 text-slate-700 dark:text-slate-100 text-[11px] font-black flex items-center justify-center">
-                            {initials(r.name)}
-                          </div>
+                          <EmployeeAvatar name={r.name} photo={photoMap.get(r.nik.trim().toUpperCase())} className="w-9 h-9 text-[11px]" />
                           <div className="min-w-0">
                             <p className="font-semibold leading-tight flex items-center gap-1.5">
                               {r.name}
@@ -890,6 +1095,25 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
               <span className="flex items-center gap-1.5"><Pencil className="w-3 h-3 text-amber-600" /> Dikoreksi manual</span>
             </div>
           </div>
+
+          <div className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-sm overflow-hidden p-3 sm:p-4">
+            <SummaryRows summary={summary} variant="screen" />
+          </div>
+
+          {/* Lembar tersembunyi untuk ekspor PNG */}
+          {exportingPng && (
+            <div aria-hidden style={{ position: 'fixed', left: -20000, top: 0, pointerEvents: 'none' }}>
+              <RekapReportSheet
+                ref={captureRef}
+                rows={allRows}
+                photoMap={photoMap}
+                summary={summary}
+                reportMonth={reportMonth}
+                rangeLabel={rangeLabel}
+                week={selectedWeek}
+              />
+            </div>
+          )}
         </>
       )}
 
