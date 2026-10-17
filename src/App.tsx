@@ -23,6 +23,7 @@ import { GamificationAlertCenter } from './components/GamificationAlertCenter';
 import { MeetingRoomDevModal } from './components/MeetingRoomDevModal';
 import { FloatingFeedbackButton } from './components/FloatingFeedbackButton';
 import { initFontSize } from './utils/fontSize';
+import { withReadableThemeColors } from './utils/contrast';
 import { formatAvatarUrl } from './lib/avatarUtils';
 import { setupGlobalAttachmentPaste } from './utils/attachmentPasteHelper';
 import { getUserAllowedSections } from './components/notion/logbook-section-utils';
@@ -655,7 +656,8 @@ export default function App() {
     }
     if (!actualColors || typeof actualColors !== 'object') return;
     const root = document.documentElement;
-    Object.entries(actualColors).forEach(([key, value]) => {
+    // Dynamic text contrast: warna teks tema dikoreksi otomatis terhadap kecerahan background tema
+    Object.entries(withReadableThemeColors(actualColors)).forEach(([key, value]) => {
       if (typeof key === 'string' && key.startsWith('--') && value) {
         root.style.setProperty(key, value as string);
       }
