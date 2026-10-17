@@ -36,7 +36,8 @@ function scanPass(root: Element, isCancelled: () => boolean, done: () => void) {
       result = null;
     } else {
       const own = parseColor(cs.backgroundColor);
-      if (own && own.a >= 0.99) result = { ...own, a: 1 };
+      if (!own && cs.backgroundColor && cs.backgroundColor !== 'transparent') result = null; // format tak terbaca → jangan menebak
+      else if (own && own.a >= 0.99) result = { ...own, a: 1 };
       else {
         const below = bgOf(el.parentElement);
         result = below === null ? null : own && own.a > 0 ? composite(own, below) : below;

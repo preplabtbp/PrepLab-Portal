@@ -11,10 +11,20 @@ export const AA_NORMAL = 4.5;
 export const AA_LARGE = 3;
 
 let parseCtx: CanvasRenderingContext2D | null = null;
+const parseCache = new Map<string, RGBA | null>();
 
 export function parseColor(input: string | null | undefined): RGBA | null {
   if (!input) return null;
-  const s = input.trim().toLowerCase();
+  const key = input.trim().toLowerCase();
+  const cached = parseCache.get(key);
+  if (cached !== undefined) return cached;
+  const result = parseColorUncached(key);
+  if (parseCache.size > 2000) parseCache.clear();
+  parseCache.set(key, result);
+  return result;
+}
+
+function parseColorUncached(s: string): RGBA | null {
   if (!s || s === 'none' || s === 'currentcolor' || s === 'inherit') return null;
   if (s === 'transparent') return { r: 0, g: 0, b: 0, a: 0 };
 
@@ -33,16 +43,23 @@ export function parseColor(input: string | null | undefined): RGBA | null {
     const alpha = m[4] === undefined ? 1 : m[4].endsWith('%') ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
     return { r: +m[1], g: +m[2], b: +m[3], a: alpha };
   }
-  // Format lain (oklch, hsl, nama warna): biarkan browser menormalkan lewat canvas
+  // Format lain (oklch/oklab dari Tailwind v4, lab, lch, hsl, color(), nama warna):
+  // gambar 1 piksel di canvas lalu baca nilai sRGB-nya — berlaku untuk semua format warna CSS
   if (typeof document === 'undefined') return null;
   try {
-    parseCtx = parseCtx || document.createElement('canvas').getContext('2d');
+    if (typeof CSS !== 'undefined' && CSS.supports && !CSS.supports('color', s)) return null;
+    if (!parseCtx) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      parseCtx = canvas.getContext('2d', { willReadFrequently: true });
+    }
     if (!parseCtx) return null;
-    parseCtx.fillStyle = '#010203';
+    parseCtx.clearRect(0, 0, 1, 1);
     parseCtx.fillStyle = s;
-    const normalized = String(parseCtx.fillStyle);
-    if (normalized === '#010203' && s !== '#010203') return null;
-    return normalized.startsWith('#') || normalized.startsWith('rgb') ? parseColor(normalized) : null;
+    parseCtx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = parseCtx.getImageData(0, 0, 1, 1).data;
+    return { r, g, b, a: a / 255 };
   } catch {
     return null;
   }
