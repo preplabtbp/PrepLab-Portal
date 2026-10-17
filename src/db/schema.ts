@@ -1109,6 +1109,11 @@ export const inspectionSchedulePlans = pgTable('inspection_schedule_plans', {
   periodEnd: text('period_end').notNull(), // 'YYYY-MM-DD' (Jumat)
   members: json('members').notNull(), // PlanMember[]: { nik, name, jabatan, section, gol, team, shiftGroup, agendaId, roleIndex, isCuti, codes }
   agendaShifts: json('agenda_shifts'), // { [agendaId]: 'Malam' | 'Siang' }
+  // Versi terpublikasi (dilihat karyawan & dipakai /api/inspection-schedule). `members` = draft penyusun.
+  publishedMembers: json('published_members'),
+  publishedAgendaShifts: json('published_agenda_shifts'),
+  publishedAt: timestamp('published_at'),
+  publishedByName: text('published_by_name'),
   source: text('source').default('random'), // 'random' | 'manual'
   updatedByNik: text('updated_by_nik'),
   updatedByName: text('updated_by_name'),
