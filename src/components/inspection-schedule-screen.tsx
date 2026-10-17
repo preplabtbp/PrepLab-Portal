@@ -237,6 +237,104 @@ function formatIsoLong(iso?: string | null) {
   return `${d} ${MONTHS_SHORT[m - 1]} ${y}`;
 }
 
+// Warna cetak (tetap terang) per kategori untuk ekspor PNG
+const LEAVE_PRINT: Record<LeaveCat, { bg: string; fg: string }> = {
+  CUTI: { bg: '#EDE9FE', fg: '#5B21B6' },
+  TRV: { bg: '#E0F2FE', fg: '#075985' },
+  IZIN: { bg: '#FEF9C3', fg: '#854D0E' },
+  SS: { bg: '#FFE4E6', fg: '#9F1239' },
+  SL: { bg: '#FCE7F3', fg: '#9D174D' },
+  DINAS: { bg: '#FFEDD5', fg: '#9A3412' },
+  ONSITE: { bg: '#D1FAE5', fg: '#065F46' },
+  LAINNYA: { bg: '#F1F5F9', fg: '#334155' },
+  KOSONG: { bg: '#FFFFFF', fg: '#94A3B8' }
+};
+
+const LeaveSheet = React.forwardRef<HTMLDivElement, {
+  rows: LeaveRow[]; dates: string[]; filterLabel: string; onsiteCount: number;
+  photoOf: (name: string) => string | undefined;
+}>(({ rows, dates, filterLabel, onsiteCount, photoOf }, ref) => {
+  const th = 'border border-slate-400 bg-slate-200 px-2 py-2 text-[11px] font-bold uppercase text-slate-800';
+  const td = 'border border-slate-300 px-2 py-1.5 text-[12px] text-slate-900';
+  const chip = (code: string, cat: LeaveCat) => (
+    <span className="inline-block min-w-[44px] px-1.5 py-0.5 rounded text-[11px] font-bold" style={{ backgroundColor: LEAVE_PRINT[cat].bg, color: LEAVE_PRINT[cat].fg }}>{code || '-'}</span>
+  );
+  const perCat = LEAVE_FILTERS.map(k => ({ k, n: rows.filter(r => r.days.some(d => d.category === k)).length }));
+  return (
+    <div ref={ref} style={{ width: 1400 }} className="bg-white p-8 font-sans text-slate-900">
+      <div className="flex items-end justify-between border-b-4 border-slate-900 pb-3 mb-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Prep & Lab · Jadwal Inspeksi</p>
+          <h1 className="text-3xl font-black">Kontrol Cuti Karyawan</h1>
+          <p className="text-sm text-slate-600 mt-0.5">Filter: {filterLabel} · Sumber: Database Roster Prep & Lab</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xl font-black">Senin – Rabu</p>
+          <p className="text-sm font-semibold text-slate-600">{formatIsoLong(dates[0])} – {formatIsoLong(dates[2])}</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-4">
+        <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-900 text-white">Tidak Onsite: {rows.length}</span>
+        {perCat.filter(p => p.n > 0).map(p => (
+          <span key={p.k} className="px-3 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: LEAVE_PRINT[p.k].bg, color: LEAVE_PRINT[p.k].fg }}>
+            {LEAVE_STYLE[p.k].label}: {p.n}
+          </span>
+        ))}
+        <span className="px-3 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: LEAVE_PRINT.ONSITE.bg, color: LEAVE_PRINT.ONSITE.fg }}>Onsite penuh Sen–Rab: {onsiteCount}</span>
+      </div>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            <th className={th}>No</th>
+            <th className={`${th} text-left`}>Nama Karyawan</th>
+            <th className={th}>NIK</th>
+            <th className={`${th} text-left`}>Jabatan</th>
+            {dates.map(d => {
+              const [y, m, dd] = d.split('-').map(Number);
+              return <th key={d} className={th}>{DAY_NAMES[new Date(y, m - 1, dd).getDay()]}<br /><span className="font-medium normal-case">{dd} {MONTHS_SHORT[m - 1]}</span></th>;
+            })}
+            <th className={th}>Awal Cuti / TRV</th>
+            <th className={th}>Akhir Cuti / TRV</th>
+            <th className={th}>Kembali Onsite</th>
+            <th className={th}>Hari</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const photo = photoForCapture(photoOf(r.name));
+            return (
+              <tr key={r.nik} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>
+                <td className={`${td} text-center`}>{i + 1}</td>
+                <td className={td}>
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-8 h-8 shrink-0 rounded-full overflow-hidden bg-slate-200 text-slate-600 text-[10px] font-black flex items-center justify-center">
+                      {initials(r.name)}
+                      {photo && <img src={photo} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                    </div>
+                    <span className="font-semibold">{r.name}</span>
+                  </div>
+                </td>
+                <td className={`${td} text-center font-mono`}>{r.nik}</td>
+                <td className={td}>{r.jabatan}</td>
+                {r.days.map(d => <td key={d.date} className={`${td} text-center`}>{chip(d.code, d.category)}</td>)}
+                <td className={`${td} text-center font-semibold whitespace-nowrap`}>{formatIsoLong(r.leaveStart)}</td>
+                <td className={`${td} text-center font-semibold whitespace-nowrap`}>{formatIsoLong(r.leaveEnd)}</td>
+                <td className={`${td} text-center whitespace-nowrap`}>{r.returnDate ? `${formatIsoLong(r.returnDate)} (${r.returnCode})` : 'Belum terjadwal'}</td>
+                <td className={`${td} text-center font-bold`}>{r.totalDays}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="mt-4 text-[11px] text-slate-500">
+        Awal = hari pertama berturut-turut tidak onsite; Akhir = hari terakhir sebelum roster kembali ke D / N / OFF / LS.
+        · Diekspor dari PrepLab Portal {new Date().toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}
+      </p>
+    </div>
+  );
+});
+LeaveSheet.displayName = 'LeaveSheet';
+
 function LeaveControlPanel({ period, photoOf }: { period: { start: Date }; photoOf: (name: string) => string | undefined }) {
   // Senin, Selasa, Rabu di dalam periode Sabtu – Jumat
   const dates = useMemo(() => [2, 3, 4].map(offset => {
@@ -286,6 +384,36 @@ function LeaveControlPanel({ period, photoOf }: { period: { start: Date }; photo
     );
   }, [rows, filter, search]);
 
+  const [exporting, setExporting] = useState(false);
+  const captureRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadPng = async () => {
+    setExporting(true);
+    const toastId = toast.loading('Menyiapkan gambar kontrol cuti...');
+    try {
+      await new Promise(r => setTimeout(r, 100));
+      const node = captureRef.current;
+      if (!node) throw new Error('Lembar belum siap');
+      await Promise.all(Array.from(node.querySelectorAll('img')).map(img =>
+        img.complete ? Promise.resolve() : new Promise<void>(res => { img.onload = () => res(); img.onerror = () => { img.style.display = 'none'; res(); }; })
+      ));
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2, backgroundColor: '#FFFFFF', cacheBust: true,
+        imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+      });
+      const link = document.createElement('a');
+      link.download = `Kontrol_Cuti_${dates[0]}_sd_${dates[2]}${filter === 'ALL' ? '' : `_${LEAVE_STYLE[filter].label.replace(/\s+/g, '_')}`}.png`;
+      link.href = dataUrl;
+      link.click();
+      toast.success('Gambar kontrol cuti berhasil diunduh (PNG)', { id: toastId });
+    } catch (err: any) {
+      console.error('Export PNG kontrol cuti error:', err);
+      toast.error('Gagal mengunduh PNG: ' + (err?.message || 'kesalahan rendering'), { id: toastId });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const codeChip = (code: string, cat: LeaveCat) => (
     <span className={`inline-flex min-w-[46px] justify-center px-2 py-0.5 rounded-md ring-1 ring-inset text-[11px] font-bold ${LEAVE_STYLE[cat].cls}`} title={LEAVE_STYLE[cat].label}>
       {code || '-'}
@@ -327,8 +455,23 @@ function LeaveControlPanel({ period, photoOf }: { period: { start: Date }; photo
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Segarkan
           </button>
+          <button
+            onClick={handleDownloadPng}
+            disabled={loading || exporting || visible.length === 0}
+            className="h-9 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60 whitespace-nowrap"
+            title="Download daftar cuti (sesuai filter & pencarian) sebagai PNG"
+          >
+            {exporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />} PNG
+          </button>
         </div>
       </div>
+
+      {/* Lembar tersembunyi untuk ekspor PNG */}
+      {exporting && (
+        <div aria-hidden style={{ position: 'fixed', left: -20000, top: 0, pointerEvents: 'none' }}>
+          <LeaveSheet ref={captureRef} rows={visible} dates={dates} filterLabel={filter === 'ALL' ? 'Semua Tidak Onsite' : LEAVE_STYLE[filter].label} onsiteCount={onsiteCount} photoOf={photoOf} />
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[var(--border-main)] bg-[var(--input-bg)]/50">
         <button
