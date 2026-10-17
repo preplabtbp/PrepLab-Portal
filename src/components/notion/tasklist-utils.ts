@@ -696,6 +696,22 @@ export function formatColorTagsToHtml(text?: string | null): string {
 }
 
 /**
+ * Formats an inline title or single-line text with color tags and inline markdown (bold, italic, strike, underline, code)
+ * Returns safe inline HTML without block-level wrappers.
+ */
+export function formatTitleToVisualHtml(title?: string | null): string {
+  if (!title || typeof title !== 'string') return '';
+  let out = formatColorTagsToHtml(title);
+  out = out.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/__([\s\S]+?)__/g, '<strong>$1</strong>');
+  out = out.replace(/(^|[^\*])\*([^\*\n]+)\*([^\*]|$)/g, '$1<em>$2</em>$3');
+  out = out.replace(/~~(.+?)~~/g, '<s>$1</s>');
+  out = out.replace(/<u>(.*?)<\/u>/g, '<u>$1</u>');
+  out = out.replace(/`([^`]+)`/g, '<code class="px-1 py-0.5 bg-slate-200/80 rounded font-mono text-[11px]">$1</code>');
+  return out;
+}
+
+/**
  * Strips all Notion color and highlight tags from text
  */
 export function stripColorTags(text?: string | null): string {
