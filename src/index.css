@@ -74,6 +74,9 @@
   --header-text: #000000;
   --footer-selected: #2A9D8F;
   --username-color: #000000;
+  /* Dynamic text contrast: teks di atas warna primary/accent (dihitung ulang saat tema diterapkan) */
+  --on-primary: #0F172A;
+  --on-accent: #0F172A;
 }
 
 /* ==========================================================

@@ -4,7 +4,7 @@ import {
   CalendarRange, RefreshCw, ImageDown, Search, ArrowLeft, Moon, Sun, Clock, CheckCircle2,
   CircleDashed, Palmtree, UserX, StickyNote, FlaskConical, Wrench, Layers, Boxes, Users, AlertCircle,
   ChevronLeft, ChevronRight, RotateCcw, Shuffle, Pencil, Maximize2, Minimize2, Plus, X, Trash2, AlertTriangle,
-  Table2, FileSpreadsheet, CalendarDays, CopyPlus
+  Table2, FileSpreadsheet, CalendarDays, CopyPlus, Save, UserCheck
 } from 'lucide-react';
 import { Select } from './ui';
 import { toPng } from 'html-to-image';
@@ -13,7 +13,7 @@ import { PageHeader } from './PageHeader';
 import { INSPECTION_29_AGENDAS, matchTicketToAgenda, InspectionAgendaItem } from '../utils/inspection-pic-matcher';
 import { getISOWeek, getISOWeekYear } from '../utils/iso-week';
 import {
-  PlanMember, ShiftGroup, ruleError, shiftMismatch, agendaShortName
+  PlanMember, ShiftGroup, ruleError, shiftMismatch, agendaShortName, agendaCapacity
 } from '../utils/inspection-schedule-rules';
 import { getRekapWeek, getRekapWeekRange, EmployeeAvatar, photoForCapture, initials } from './safety-rekap-screen';
 
@@ -92,11 +92,13 @@ interface MemberWarning { level: 'error' | 'warn'; text: string }
 
 interface InspectionPlan {
   id: number; year: number; week: number;
-  members: PlanMember[];
+  members: PlanMember[]; // draft penyusun
   agendaShifts: Record<string, ShiftGroup> | null;
   source: string | null;
   updatedByName: string | null;
   updatedAt: string | null;
+  publishedAt: string | null;
+  publishedByName: string | null;
 }
 
 type PlanHistory = Record<string, Record<string, number>>;
@@ -690,7 +692,12 @@ function PlanEditModal({ target, members, agendaShifts, history, photoOf, onClos
       .sort((a, b) => Number(!!a.agendaId) - Number(!!b.agendaId) || a.name.localeCompare(b.name));
   }, [members, query]);
 
-  const error = person && agendaId ? ruleError(person, agendaId) : null;
+  // Agenda sudah penuh (tanpa menghitung karyawan yang sedang diedit), mis. Tabung Gas maks. 1 orang
+  const isFull = (id: number) =>
+    members.filter(m => !m.isCuti && m.agendaId === id && planKey(m) !== personKey).length >= agendaCapacity(id);
+  const error = person && agendaId
+    ? ruleError(person, agendaId) || (isFull(agendaId) ? `"${agendaShortName(agendaId)}" hanya untuk ${agendaCapacity(agendaId)} orang petugas` : null)
+    : null;
   const warnings = person && agendaId
     ? memberWarnings(history, agendaId, person, person, agendaShifts[agendaId] || null).filter(w => w.level === 'warn')
     : [];
@@ -775,7 +782,8 @@ function PlanEditModal({ target, members, agendaShifts, history, photoOf, onClos
                   <optgroup key={g} label={`Shift ${g}${g === 'Siang' ? ' + Nonshift' : ''}`}>
                     {INSPECTION_29_AGENDAS.filter(a => (agendaShifts[a.id] || 'Siang') === g).map(a => {
                       const blocked = person ? ruleError(person, a.id) : null;
-                      return <option key={a.id} value={a.id} disabled={!!blocked}>#{a.id} {a.name}{blocked ? ' (dilarang)' : ''}</option>;
+                      const full = !blocked && isFull(a.id);
+                      return <option key={a.id} value={a.id} disabled={!!blocked || full}>#{a.id} {a.name}{blocked ? ' (dilarang)' : full ? ' (penuh)' : ''}</option>;
                     })}
                   </optgroup>
                 ))}
@@ -989,6 +997,92 @@ function ScheduleRekapPanel({ year, currentWeek, photoOf }: { year: number; curr
   );
 }
 
+// ─── Tampilan karyawan perseorangan (hanya jadwal milik sendiri) ────────────
+
+function PersonalSchedulePanel({ state, week, name, photoOf }: {
+  state: { loading: boolean; available: boolean; isPublished: boolean; data: any | null; error?: string };
+  week: number; name: string; photoOf: (name: string) => string | undefined;
+}) {
+  const box = 'bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-sm';
+  if (state.loading) {
+    return <div className={`${box} py-16 text-center text-sm text-[var(--text-muted)]`}><RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Memuat jadwal Anda...</div>;
+  }
+  const empty = (title: string, desc: string, icon: React.ReactNode) => (
+    <div className={`${box} py-14 px-4 text-center`}>
+      <div className="w-12 h-12 mx-auto rounded-2xl bg-[var(--input-bg)] text-[var(--text-muted)] flex items-center justify-center">{icon}</div>
+      <p className="mt-3 text-sm font-bold text-[var(--text-main)]">{title}</p>
+      <p className="text-xs text-[var(--text-muted)] mt-1 max-w-md mx-auto">{desc}</p>
+    </div>
+  );
+  if (state.error) {
+    return empty('Gagal memuat jadwal inspeksi', `${state.error}. Tekan Segarkan untuk mencoba lagi.`, <AlertCircle className="w-6 h-6 text-rose-500" />);
+  }
+  if (!state.available) {
+    return empty(`Jadwal Week ${week} belum dipublikasikan`, 'Jadwal inspeksi minggu ini belum dipublikasikan oleh Administration. Silakan cek kembali nanti — Anda akan menerima notifikasi saat jadwal terbit.', <CalendarRange className="w-6 h-6" />);
+  }
+  const s = state.data;
+  if (!s) {
+    return empty('Anda tidak dijadwalkan inspeksi minggu ini', `Tidak ditemukan jadwal inspeksi atas nama ${name || 'Anda'} pada Week ${week}.`, <UserCheck className="w-6 h-6" />);
+  }
+  if (s.isCuti) {
+    return empty('Anda tercatat cuti pada periode ini', 'Karyawan yang cuti tidak dijadwalkan inspeksi dan dikecualikan dari target KTA/TTA & Inspeksi minggu ini.', <Palmtree className="w-6 h-6" />);
+  }
+  const agenda = findAgenda(s.inspeksi || '');
+  const cat = CATEGORY[agenda ? AGENDA_CATEGORY[agenda.id] || 'OTHER' : 'OTHER'];
+  const shift = shiftGroup(s.shift || '');
+  const partners: any[] = s.partners || [];
+  return (
+    <div className={`${box} overflow-hidden border-t-4 ${cat.accent}`}>
+      <div className={`px-5 py-4 ${cat.head}`}>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">Jadwal Inspeksi Saya · Week {week}</p>
+        <h3 className="text-lg font-black leading-snug mt-1">{s.inspeksi}</h3>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${shift === 'Malam' ? 'bg-indigo-600 text-white' : shift === 'Siang' ? 'bg-amber-400 text-amber-950' : 'bg-slate-500 text-white'}`}>
+            {shift === 'Malam' ? <Moon className="w-3 h-3" /> : shift === 'Siang' ? <Sun className="w-3 h-3" /> : <Clock className="w-3 h-3" />} Shift {shift}
+          </span>
+          <span className="px-2.5 py-0.5 rounded-full bg-white/70 dark:bg-black/20 text-[10px] font-bold uppercase">{s.roleIndex === 1 ? 'Inspektor Utama' : 'Pendamping'}</span>
+          {s.isCompleted ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold uppercase"><CheckCircle2 className="w-3 h-3" /> Selesai {formatShort(s.completedAt)}</span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/70 dark:bg-black/20 text-[10px] font-bold uppercase"><CircleDashed className="w-3 h-3" /> Belum dikirim</span>
+          )}
+          {!state.isPublished && <span className="px-2.5 py-0.5 rounded-full bg-white/70 dark:bg-black/20 text-[10px] font-bold uppercase">Sumber: Google Sheet</span>}
+        </div>
+      </div>
+      <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-2">Tim Inspeksi</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2.5">
+              <EmployeeAvatar name={s.name} photo={photoOf(s.name)} className="w-9 h-9 text-[10px]" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-bold text-[var(--text-main)] truncate">{s.name} <span className="text-[10px] font-semibold text-[var(--primary)]">(Anda)</span></p>
+                <p className="text-[11px] text-[var(--text-muted)] truncate">{s.roleIndex === 1 ? 'Inspektor Utama' : 'Pendamping'}{s.jabatan ? ` · ${s.jabatan}` : ''}</p>
+              </div>
+            </div>
+            {partners.map(p => (
+              <div key={p.name} className="flex items-center gap-2.5">
+                <EmployeeAvatar name={p.name} photo={photoOf(p.name)} className="w-9 h-9 text-[10px]" />
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-[var(--text-main)] truncate">{p.name}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] truncate">{p.roleIndex === 1 ? 'Inspektor Utama' : 'Pendamping'}{p.jabatan ? ` · ${p.jabatan}` : ''}</p>
+                </div>
+              </div>
+            ))}
+            {partners.length === 0 && <p className="text-xs italic text-[var(--text-muted)]">Tidak ada pendamping — inspeksi dilakukan sendiri.</p>}
+          </div>
+        </div>
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-2">Catatan</p>
+          <ol className="space-y-1.5 text-[13px] text-[var(--text-muted)] list-decimal pl-4">
+            {NOTES.map(n => <li key={n}>{n}</li>)}
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Layar utama ────────────────────────────────────────────────────────────
 
 export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }: InspectionScheduleScreenProps) {
@@ -1020,6 +1114,12 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
   const [busy, setBusy] = useState('');
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [cutiConflicts, setCutiConflicts] = useState<string[]>([]);
+  const [publishState, setPublishState] = useState({ isPublished: false, hasUnpublishedChanges: false });
+  // Tampilan karyawan perseorangan (bukan Administration / Developer / Manager)
+  const [personal, setPersonal] = useState<{ loading: boolean; available: boolean; isPublished: boolean; data: any | null; error?: string }>({ loading: true, available: false, isPublished: false, data: null });
+  // Pesan bila jadwal portal gagal dimuat (database bermasalah) → mode cadangan Google Sheet
+  const [degraded, setDegraded] = useState('');
+  const canEditRef = useRef(false);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -1080,19 +1180,65 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
 
   const loadWeek = useCallback(async (week: number, refresh = false) => {
     let found: InspectionPlan | null = null;
+    let editor = false;
+    let published = false;
+    let failure = '';
     try {
-      const res = await fetch(`/api/inspection-plan?year=${currentYear}&week=${week}&nik=${encodeURIComponent(inspectorNik || '')}`);
+      const res = await fetch(`/api/inspection-plan?year=${currentYear}&week=${week}`);
       const json = await res.json().catch(() => null);
       if (json?.success) {
         found = json.plan || null;
+        editor = !!json.canEdit;
+        published = !!json.isPublished;
         setHistory(json.history || {});
         setCutiConflicts(json.cutiConflicts || []);
-        setCanEdit(!!json.canEdit);
+        setPublishState({ isPublished: published, hasUnpublishedChanges: !!json.hasUnpublishedChanges });
+      } else {
+        failure = json?.message || `Server membalas ${res.status}`;
       }
-    } catch (err) {
-      console.error('Gagal memuat jadwal portal:', err);
+    } catch (err: any) {
+      failure = err?.message || 'Koneksi ke server terputus';
     }
+    // Gagal memuat jadwal portal (mis. database penuh/offline): tetap tampilkan jadwal Google Sheet week aktif
+    // (hanya-baca) dengan banner peringatan; hak akses terakhir dipertahankan, tidak diturunkan diam-diam
+    if (failure) {
+      console.error('Gagal memuat jadwal portal:', failure);
+      editor = canEditRef.current;
+      setPublishState({ isPublished: false, hasUnpublishedChanges: false });
+      setCutiConflicts([]);
+    }
+    setDegraded(failure);
+    canEditRef.current = editor;
+    setCanEdit(editor);
     setPlan(found);
+
+    // Karyawan biasa: hanya jadwal dirinya (versi terpublikasi, atau Google Sheet untuk week aktif)
+    if (!editor) {
+      setSchedule([]);
+      setPersonal({ loading: true, available: published || week === currentWeek, isPublished: published, data: null });
+      if (!published && week !== currentWeek) {
+        setPersonal({ loading: false, available: false, isPublished: false, data: null });
+        return;
+      }
+      try {
+        const periodEnd = getRekapWeekRange(currentYear, week).end;
+        const res = await fetch(`/api/inspection-schedule?sheet=CurrentWeek&week=W${getISOWeek(periodEnd)}&year=${getISOWeekYear(periodEnd)}&nik=${encodeURIComponent(inspectorNik || '')}&name=${encodeURIComponent(inspectorName || '')}${refresh ? '&refresh=true' : ''}`);
+        const json = await res.json().catch(() => null);
+        if (!json || (json.success === false && json.error)) {
+          // Server gagal (bukan "tidak dijadwalkan") → tampilkan error yang jelas
+          const raw = String(json?.error || `Server membalas ${res.status}`);
+          const msg = /connection slots|too many clients/i.test(raw) ? 'Database sedang penuh (batas koneksi server tercapai)'
+            : /Failed query/i.test(raw) ? 'Database sedang bermasalah' : raw;
+          setPersonal({ loading: false, available: true, isPublished: published, data: null, error: msg });
+        } else {
+          setPersonal({ loading: false, available: true, isPublished: published, data: json.found ? json.schedule : null });
+        }
+      } catch {
+        setPersonal({ loading: false, available: true, isPublished: published, data: null });
+      }
+      return;
+    }
+
     if (found || week === currentWeek) {
       await fetchSchedule(week, refresh);
     } else {
@@ -1101,7 +1247,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       setSheetName('');
       setLoadError(`Jadwal agenda Week ${week} belum tersedia — Google Sheet jadwal hanya menyimpan jadwal week aktif (Week ${currentWeek}).`);
     }
-  }, [currentYear, currentWeek, inspectorNik, fetchSchedule]);
+  }, [currentYear, currentWeek, inspectorNik, inspectorName, fetchSchedule]);
 
   useEffect(() => { loadWeek(selectedWeek); }, [selectedWeek, loadWeek]);
 
@@ -1127,17 +1273,30 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     const label = scope === 'ALL' ? 'semua shift' : scope === 'Malam' ? 'Shift Malam' : 'Shift Siang + Nonshift';
     if (plan && !window.confirm(`Acak ulang petugas ${label} untuk Week ${selectedWeek}? Penempatan ${label} saat ini akan diganti.`)) return;
     planRequest('Mengacak jadwal', '/api/inspection-plan/randomize', {
-      method: 'POST', body: JSON.stringify({ year: currentYear, week: selectedWeek, scope, editorNik: inspectorNik })
+      method: 'POST', body: JSON.stringify({ year: currentYear, week: selectedWeek, scope })
     }, `Jadwal ${label} berhasil diacak dari Database Roster`);
   };
 
   const handleCopyFromSheet = () => planRequest('Menyalin jadwal Google Sheet', '/api/inspection-plan/from-sheet', {
-    method: 'POST', body: JSON.stringify({ year: currentYear, week: selectedWeek, editorNik: inspectorNik })
+    method: 'POST', body: JSON.stringify({ year: currentYear, week: selectedWeek })
   }, 'Jadwal Google Sheet disalin ke portal — sekarang bisa diedit');
 
+  // Publikasikan draft (seperti "Simpan & Publikasikan" di P5M Schedule Builder)
+  const handlePublish = () => {
+    const errors = warningList.filter(w => w.level === 'error').length;
+    const first = !publishState.isPublished;
+    const msg = first
+      ? `Publikasikan jadwal inspeksi Week ${selectedWeek}? Jadwal akan terlihat oleh karyawan dan notifikasi dikirim ke setiap petugas.`
+      : `Publikasikan perubahan jadwal Week ${selectedWeek}? Notifikasi pembaruan hanya dikirim ke karyawan yang penempatannya berubah.`;
+    if (!window.confirm(errors ? `${msg}\n\nPerhatian: masih ada ${errors} pelanggaran aturan (merah) di jadwal.` : msg)) return;
+    planRequest(first ? 'Mempublikasikan jadwal' : 'Mempublikasikan perubahan', '/api/inspection-plan/publish', {
+      method: 'POST', body: JSON.stringify({ year: currentYear, week: selectedWeek })
+    }, first ? 'Jadwal inspeksi dipublikasikan & notifikasi terkirim ke petugas' : 'Perubahan jadwal dipublikasikan & dikirim ke karyawan terkait');
+  };
+
   const handleDeletePlan = () => {
-    if (!window.confirm(`Hapus jadwal portal Week ${selectedWeek}? Jadwal kembali memakai Google Sheet.`)) return;
-    planRequest('Menghapus jadwal portal', `/api/inspection-plan?year=${currentYear}&week=${selectedWeek}&editorNik=${encodeURIComponent(inspectorNik || '')}`, { method: 'DELETE' }, 'Jadwal portal dihapus');
+    if (!window.confirm(`Hapus jadwal portal Week ${selectedWeek} (draft & versi terpublikasi)? Karyawan kembali melihat jadwal Google Sheet.`)) return;
+    planRequest('Menghapus jadwal portal', `/api/inspection-plan?year=${currentYear}&week=${selectedWeek}`, { method: 'DELETE' }, 'Jadwal portal dihapus');
   };
 
   const applyEdit = async (key: string, agendaId: number | null, role: 'utama' | 'pendamping') => {
@@ -1151,7 +1310,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     // Server menomori ulang peran per agenda berdasarkan urutan roleIndex
     target.roleIndex = role === 'utama' ? 0 : 999;
     return planRequest('Menyimpan jadwal', '/api/inspection-plan', {
-      method: 'PUT', body: JSON.stringify({ year: currentYear, week: selectedWeek, members, editorNik: inspectorNik })
+      method: 'PUT', body: JSON.stringify({ year: currentYear, week: selectedWeek, members })
     }, `Jadwal ${target.name} diperbarui`);
   };
 
@@ -1161,7 +1320,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     const conflict = new Set(cutiConflicts);
     const members = plan.members.map(m => conflict.has(planKey(m)) ? { ...m, isCuti: true, agendaId: null, roleIndex: 1, shiftGroup: null } : m);
     planRequest('Mengeluarkan karyawan cuti', '/api/inspection-plan', {
-      method: 'PUT', body: JSON.stringify({ year: currentYear, week: selectedWeek, members, editorNik: inspectorNik })
+      method: 'PUT', body: JSON.stringify({ year: currentYear, week: selectedWeek, members })
     }, `${conflict.size} karyawan cuti dikeluarkan dari jadwal`);
   };
 
@@ -1196,6 +1355,14 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         if (pm.isCuti) cutiList.push(member);
         else if (pm.agendaId) byAgenda.set(pm.agendaId, [...(byAgenda.get(pm.agendaId) || []), member]);
         else unassignedList.push(member);
+      });
+      // Jadwal lama yang melebihi kapasitas agenda (mis. Tabung Gas > 1 orang) → tandai petugas berlebih
+      byAgenda.forEach((list, id) => {
+        const cap = agendaCapacity(id);
+        if (list.length <= cap) return;
+        [...list].sort((a, b) => a.roleIndex - b.roleIndex).slice(cap).forEach(m => {
+          m.warnings = [{ level: 'error', text: `Agenda ini hanya untuk ${cap} orang petugas` }, ...(m.warnings || [])];
+        });
       });
     } else schedule.forEach((s: any) => {
       const member: Member = {
@@ -1388,7 +1555,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
             );
           })}
         </div>
-        {canEdit && c.agenda && (
+        {canEdit && c.agenda && c.members.length < agendaCapacity(c.agenda.id) && (
           <button
             onClick={() => requestEdit({ kind: 'agenda', agendaId: c.agenda!.id })}
             className="mx-4 mb-3 h-8 rounded-xl border border-dashed border-[var(--border-main)] text-[11px] font-bold text-[var(--text-muted)] hover:text-[var(--primary)] hover:border-[var(--primary)] flex items-center justify-center gap-1.5 cursor-pointer"
@@ -1447,6 +1614,24 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       {tab === 'rekap' ? (
         <ScheduleRekapPanel year={currentYear} currentWeek={currentWeek} photoOf={photoOf} />
       ) : (<>
+      {degraded && (
+        <div className="flex items-start gap-3 rounded-2xl border border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10 p-3">
+          <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-rose-800 dark:text-rose-200">Jadwal portal tidak dapat dimuat</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">
+              {degraded}. Sementara ditampilkan jadwal Google Sheet (week aktif, hanya-baca); acak, edit & publikasi tidak tersedia sampai koneksi pulih.
+            </p>
+          </div>
+          <button
+            onClick={() => loadWeek(selectedWeek, true)}
+            className="h-8 px-3 shrink-0 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+          </button>
+        </div>
+      )}
+
       {/* Banner minggu */}
       <div className="rounded-2xl overflow-hidden border border-yellow-300 dark:border-yellow-500/40 shadow-sm">
         <div className="bg-gradient-to-r from-yellow-300 via-yellow-200 to-amber-200 dark:from-yellow-500/25 dark:via-yellow-500/15 dark:to-amber-500/15 px-4 py-3 text-center">
@@ -1495,15 +1680,17 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
             </button>
           )}
         </div>
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Cari agenda atau nama petugas..."
-            className="w-full h-10 pl-9 pr-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-sm text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
-          />
-        </div>
+        {canEdit ? (
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Cari agenda atau nama petugas..."
+              className="w-full h-10 pl-9 pr-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-sm text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
+            />
+          </div>
+        ) : <div className="flex-1" />}
         <div className="flex gap-2">
           <button
             onClick={() => loadWeek(selectedWeek, true)}
@@ -1512,15 +1699,21 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Segarkan
           </button>
-          <button
-            onClick={handleDownloadPng}
-            disabled={loading || exportingPng || schedule.length === 0}
-            className="h-10 flex-1 xl:flex-none px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60"
-          >
-            {exportingPng ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />} Download PNG
-          </button>
+          {canEdit && (
+            <button
+              onClick={handleDownloadPng}
+              disabled={loading || exportingPng || schedule.length === 0}
+              className="h-10 flex-1 xl:flex-none px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-60"
+            >
+              {exportingPng ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />} Download PNG
+            </button>
+          )}
         </div>
       </div>
+
+      {!canEdit ? (
+        <PersonalSchedulePanel state={personal} week={selectedWeek} name={inspectorName} photoOf={photoOf} />
+      ) : (<>
 
       {/* Penyusun jadwal: acak per shift dari Database Roster & sumber jadwal */}
       <div className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl p-3 shadow-sm flex flex-col xl:flex-row xl:items-center gap-3">
@@ -1529,43 +1722,61 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
             <Shuffle className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-black text-[var(--text-main)]">
+            <p className="text-sm font-black text-[var(--text-main)] flex flex-wrap items-center gap-2">
               {plan ? 'Jadwal Portal' : 'Jadwal Google Sheet'}
-              <span className="ml-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)]">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)]">
                 {plan ? (plan.source === 'random' ? 'Hasil acak' : 'Edit manual') : 'CurrentWeek'}
               </span>
+              {plan && (
+                !publishState.isPublished ? (
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">Draft · belum terlihat karyawan</span>
+                ) : publishState.hasUnpublishedChanges ? (
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">Ada perubahan belum dipublikasikan</span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"><CheckCircle2 className="w-3 h-3" /> Dipublikasikan</span>
+                )
+              )}
             </p>
             <p className="text-[11px] text-[var(--text-muted)] truncate">
               {plan
-                ? `Diperbarui ${plan.updatedByName || '-'}${plan.updatedAt ? ` · ${new Date(plan.updatedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}` : ''} · petugas Gol II–V dari Database Roster (Senin – Rabu)`
+                ? `Diperbarui ${plan.updatedByName || '-'}${plan.updatedAt ? ` · ${new Date(plan.updatedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}${plan.publishedAt ? ` · Dipublikasikan ${plan.publishedByName || '-'} ${new Date(plan.publishedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}`
                 : 'Acak untuk menyusun jadwal dari Database Roster Prep & Lab (Gol II–V, roster Senin – Rabu)'}
             </p>
           </div>
         </div>
-        {canEdit ? (
+        {canEdit && (
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => handleRandomize('ALL')} disabled={!!busy} className="h-9 px-3 rounded-xl bg-[var(--primary)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang seluruh petugas (Malam & Siang + Nonshift)">
+            <button onClick={() => handleRandomize('ALL')} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl bg-[var(--primary)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang seluruh petugas (Malam & Siang + Nonshift)">
               <Shuffle className="w-3.5 h-3.5" /> Acak Semua
             </button>
-            <button onClick={() => handleRandomize('Malam')} disabled={!!busy} className="h-9 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Malam saja">
+            <button onClick={() => handleRandomize('Malam')} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Malam saja">
               <Moon className="w-3.5 h-3.5" /> Acak Shift Malam
             </button>
-            <button onClick={() => handleRandomize('Siang')} disabled={!!busy} className="h-9 px-3 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Siang digabung Nonshift">
+            <button onClick={() => handleRandomize('Siang')} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Siang digabung Nonshift">
               <Sun className="w-3.5 h-3.5" /> Acak Siang + Nonshift
             </button>
             {!plan && isActiveWeek && schedule.length > 0 && (
-              <button onClick={handleCopyFromSheet} disabled={!!busy} className="h-9 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-[var(--text-main)] text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Salin jadwal Google Sheet ke portal agar bisa diedit per karyawan">
+              <button onClick={handleCopyFromSheet} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-[var(--text-main)] text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Salin jadwal Google Sheet ke portal agar bisa diedit per karyawan">
                 <CopyPlus className="w-3.5 h-3.5" /> Salin dari Sheet
               </button>
             )}
             {plan && (
-              <button onClick={handleDeletePlan} disabled={!!busy} className="h-9 px-3 rounded-xl border border-rose-300 dark:border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Hapus jadwal portal, kembali ke Google Sheet">
+              <button onClick={handleDeletePlan} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl border border-rose-300 dark:border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Hapus jadwal portal, kembali ke Google Sheet">
                 <Trash2 className="w-3.5 h-3.5" /> Hapus
               </button>
             )}
+            {plan && (
+              <button
+                onClick={handlePublish}
+                disabled={!!busy || !!degraded || (publishState.isPublished && !publishState.hasUnpublishedChanges)}
+                className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                title="Publikasikan jadwal ke karyawan & kirim notifikasi"
+              >
+                {busy.startsWith('Mempublikasikan') ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                {!publishState.isPublished ? 'Simpan & Publikasikan' : publishState.hasUnpublishedChanges ? 'Publikasikan Perubahan' : 'Sudah Dipublikasikan'}
+              </button>
+            )}
           </div>
-        ) : (
-          <p className="text-[11px] italic text-[var(--text-muted)]">Acak & edit jadwal hanya untuk Admin / Supervisor ke atas.</p>
         )}
       </div>
 
@@ -1577,7 +1788,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
               <AlertTriangle className="w-4 h-4" /> {warningList.length} peringatan jadwal
             </p>
             {canEdit && plan && cutiConflicts.length > 0 && (
-              <button onClick={handleRemoveCuti} disabled={!!busy} className="h-8 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
+              <button onClick={handleRemoveCuti} disabled={!!busy || !!degraded} className="h-8 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
                 <UserX className="w-3.5 h-3.5" /> Keluarkan {cutiConflicts.length} karyawan cuti
               </button>
             )}
@@ -1639,7 +1850,11 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
             <span className="opacity-60">{cards.filter(c => c.category === k).length}</span>
           </button>
         ))}
-        {sheetName && <span className="ml-auto text-[11px] text-[var(--text-muted)]">Sumber: Google Sheet "{sheetName}"</span>}
+        {(plan || sheetName) && (
+          <span className="ml-auto text-[11px] text-[var(--text-muted)]">
+            Sumber: {plan ? `Jadwal Portal (${publishState.isPublished ? (publishState.hasUnpublishedChanges ? 'draft, ada perubahan' : 'terpublikasi') : 'draft'})` : `Google Sheet "${sheetName}"`}
+          </span>
+        )}
       </div>
 
       {/* Kartu agenda */}
@@ -1752,8 +1967,9 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       )}
 
       </>)}
+      </>)}
 
-      {editTarget && plan && (
+      {editTarget && plan && canEdit && (
         <PlanEditModal
           target={editTarget}
           members={plan.members}

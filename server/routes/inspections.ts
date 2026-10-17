@@ -2133,7 +2133,8 @@ async function findPortalPlan(isoWeekTag: string, isoYear?: number) {
         ? and(eq(inspectionSchedulePlans.isoWeek, isoWeekTag), eq(inspectionSchedulePlans.isoYear, isoYear))
         : eq(inspectionSchedulePlans.isoWeek, isoWeekTag))
       .orderBy(desc(inspectionSchedulePlans.periodEnd)).limit(1);
-    return rows[0] || null;
+    // Hanya jadwal yang sudah dipublikasikan; draft penyusun tidak menggantikan Google Sheet
+    return rows[0]?.publishedMembers ? rows[0] : null;
   } catch {
     return null; // tabel belum dibuat
   }
@@ -2141,7 +2142,7 @@ async function findPortalPlan(isoWeekTag: string, isoYear?: number) {
 
 // Ubah jadwal portal ke bentuk baris yang sama dengan hasil parse Google Sheet
 function portalPlanToSchedules(plan: any): { schedules: any[]; agendaShifts: { no: number; agenda: string; shift: string }[] } {
-  const members: any[] = Array.isArray(plan.members) ? plan.members : [];
+  const members: any[] = Array.isArray(plan.publishedMembers) ? plan.publishedMembers : [];
   const shiftLabel = (m: any) => {
     const group = m.shiftGroup === 'Malam' ? 'Malam' : m.shiftGroup === 'Siang' ? 'Siang' : 'Nonshift';
     return m.team === 'A' || m.team === 'B' ? `Shift ${m.team} (${group})` : group;
@@ -2165,7 +2166,7 @@ function portalPlanToSchedules(plan: any): { schedules: any[]; agendaShifts: { n
         roleLabel: o.roleIndex === 1 ? 'Inspektor 1 (Utama)' : `Inspektor ${o.roleIndex} (Pendamping)`
       }));
   }
-  const shifts = plan.agendaShifts || {};
+  const shifts = plan.publishedAgendaShifts || {};
   const agendaShifts = Object.keys(shifts).map(id => ({ no: Number(id), agenda: agendaName(Number(id)), shift: shifts[id] }));
   return { schedules, agendaShifts };
 }
@@ -2585,7 +2586,7 @@ router.get("/api/inspection-schedule", async (req, res) => {
     const portalPlan = targetSheet.toLowerCase() === 'currentweek' ? await findPortalPlan(targetWeekTag, isoYear) : null;
     const portal = portalPlan ? portalPlanToSchedules(portalPlan) : null;
 
-    const cacheKey = `${targetSheet.toLowerCase()}_${targetWeekTag.toLowerCase()}${portalPlan ? `_plan${portalPlan.id}_${new Date(portalPlan.updatedAt || 0).getTime()}` : ''}`;
+    const cacheKey = `${targetSheet.toLowerCase()}_${targetWeekTag.toLowerCase()}${portalPlan ? `_plan${portalPlan.id}_${new Date(portalPlan.publishedAt || 0).getTime()}` : ''}`;
     const now = Date.now();
     let allSchedules: any[];
     const cachedEnriched = enrichedScheduleCacheMap.get(cacheKey);
