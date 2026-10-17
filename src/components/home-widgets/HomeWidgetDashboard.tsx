@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, Settings2, RotateCcw, ChevronLeft, ChevronRight, 
-  Maximize2, Minimize2, X, SlidersHorizontal, Check, Sparkles 
+  Maximize2, Minimize2, X, SlidersHorizontal, Check, Sparkles, GripVertical, Move 
 } from 'lucide-react';
 import { 
   WidgetId, WidgetSize, WidgetItemConfig, 
@@ -112,6 +112,55 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
     const disabledWidgets = configs.filter((c) => !c.enabled);
     const reordered = newEnabled.map((item, idx) => ({ ...item, order: idx }));
     saveConfigs([...reordered, ...disabledWidgets]);
+  };
+
+  // Drag and drop state
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent, index: number) => {
+    if (dragOverIndex === index) {
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const newEnabled = [...enabledWidgets];
+    const [movedItem] = newEnabled.splice(draggedIndex, 1);
+    newEnabled.splice(targetIndex, 0, movedItem);
+
+    const disabledWidgets = configs.filter((c) => !c.enabled);
+    const reordered = newEnabled.map((item, idx) => ({ ...item, order: idx }));
+    saveConfigs([...reordered, ...disabledWidgets]);
+
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const handleResetLayout = () => {
@@ -242,6 +291,27 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
         </div>
       </div>
 
+      {/* Edit Mode Tip & Guidance Banner */}
+      {isEditMode && enabledWidgets.length > 0 && (
+        <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 flex flex-wrap items-center justify-between gap-2 shadow-xs animate-in fade-in slide-in-from-top-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-xl bg-amber-200 dark:bg-amber-900 flex items-center justify-center text-amber-900 dark:text-amber-200 shrink-0">
+              <GripVertical className="w-4 h-4" />
+            </div>
+            <span className="truncate">
+              <strong>Mode Drag &amp; Drop Aktif:</strong> Klik dan tahan kartu widget lalu geser (drag &amp; drop) ke posisi yang diinginkan, atau gunakan tombol panah &lt; &gt;.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditMode(false)}
+            className="px-3 py-1 text-xs font-black bg-amber-400 hover:bg-amber-500 text-amber-950 rounded-xl transition-colors shrink-0 shadow-2xs cursor-pointer"
+          >
+            Selesai Atur
+          </button>
+        </div>
+      )}
+
       {/* Grid Container */}
       {enabledWidgets.length === 0 ? (
         <div 
@@ -273,11 +343,29 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
           {enabledWidgets.map((item, index) => {
             const catalogItem = WIDGET_CATALOG.find((w) => w.id === item.id);
             const canResize = (catalogItem?.availableSizes?.length || 0) > 1;
+            const isBeingDragged = draggedIndex === index;
+            const isDragOverTarget = dragOverIndex === index && draggedIndex !== index;
 
             return (
               <div
                 key={item.id}
-                className={`${getColSpanClass(item.size)} rounded-3xl p-4 sm:p-5 border transition-all duration-200 relative overflow-hidden group shadow-2xs hover:shadow-xs flex flex-col justify-between`}
+                draggable={isEditMode}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={(e) => handleDragLeave(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                className={`${getColSpanClass(item.size)} rounded-3xl p-4 sm:p-5 border transition-all duration-200 relative overflow-hidden group shadow-2xs hover:shadow-xs flex flex-col justify-between ${
+                  isEditMode ? 'cursor-grab active:cursor-grabbing select-none' : ''
+                } ${
+                  isBeingDragged 
+                    ? 'opacity-30 scale-[0.98] ring-2 ring-amber-400 border-dashed border-amber-500' 
+                    : ''
+                } ${
+                  isDragOverTarget 
+                    ? 'ring-4 ring-teal-500 ring-offset-2 scale-[1.03] bg-teal-50/70 dark:bg-teal-950/50 border-teal-500 shadow-xl' 
+                    : ''
+                }`}
                 style={{
                   backgroundColor: 'var(--card-bg, #FFFFFF)',
                   borderColor: isEditMode 
@@ -288,6 +376,15 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
                 {/* Edit Mode Overlay Handles */}
                 {isEditMode && (
                   <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-white/95 dark:bg-slate-900/95 p-1 rounded-xl shadow-md border border-[var(--border-main)] animate-in fade-in">
+                    {/* Drag Handle Indicator */}
+                    <div 
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/60 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 cursor-grab active:cursor-grabbing select-none transition-colors border border-amber-300 dark:border-amber-700 shadow-2xs"
+                      title="Klik & tahan untuk drag widget ke posisi lain"
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
+                      <span>Drag</span>
+                    </div>
+
                     {/* Move Left */}
                     <button
                       type="button"

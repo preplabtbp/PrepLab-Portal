@@ -337,3 +337,481 @@ export const GbaK3SignPost: React.FC<{
     </svg>
   );
 };
+
+// 9. GAZEBO GHOST NPC (Hantu Pojok Kiri Bawah - Bot Suwit Gunting-Batu-Kertas GBA)
+export const GbaLoungeGhostNpc: React.FC<{
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  className?: string;
+  isHovered?: boolean;
+  onClick?: () => void;
+}> = ({ x = 0, y = 0, width = 14, height = 18, className = '', isHovered = false, onClick }) => {
+  return (
+    <svg
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      viewBox="0 0 24 30"
+      onClick={onClick}
+      className={`select-none overflow-visible transition-all duration-200 cursor-pointer ${className} ${
+        isHovered 
+          ? 'filter drop-shadow(0 0 4px #A855F7)' 
+          : 'filter drop-shadow(0 0 2px rgba(168,85,247,0.45))'
+      }`}
+      style={{ 
+        shapeRendering: 'crispEdges', 
+        imageRendering: 'pixelated',
+        transformOrigin: 'bottom center'
+      }}
+    >
+      <title>👻 Si Mba Hantu Pojok (Klik untuk duel Gunting-Batu-Kertas!)</title>
+
+      {/* Ground Spooky Shadow */}
+      <ellipse cx="12" cy="27" rx="6" ry="1.8" fill="#581C87" opacity="0.45" />
+
+      {/* Floating Ghost Outer Silhouette (Deep Lavender/Purple) */}
+      <path
+        d="M 12 4 C 7 4 4 8 4 14 C 4 20 4 24 6 24 C 7.5 24 8.5 22 10 22 C 11.5 22 12.5 24 14 24 C 15.5 24 16.5 22 18 22 C 19.5 22 20.5 24 22 24 C 24 24 24 20 24 14 C 24 8 21 4 12 4 Z"
+        fill="#A855F7"
+        opacity="0.85"
+      />
+
+      {/* Inner Glowing Body (Pale Lavender/White) */}
+      <path
+        d="M 12 6 C 8 6 6 9 6 14 C 6 19 6.5 22 8 22 C 9 22 10 20.5 11 20.5 C 12 20.5 12.8 22 14 22 C 15.2 22 16 20.5 17 20.5 C 18 20.5 18.5 22 20 22 C 21.5 22 22 19 22 14 C 22 9 19 6 12 6 Z"
+        fill="#F3E8FF"
+      />
+
+      {/* Spooky Glowing Eyes */}
+      <rect x="8" y="10" width="2.5" height="3.5" rx="0.5" fill="#3B0764" />
+      <rect x="13.5" y="10" width="2.5" height="3.5" rx="0.5" fill="#3B0764" />
+      {/* Yellow/Red Radiant Pupils */}
+      <rect x="8.5" y="10.5" width="1.2" height="1.2" fill="#FACC15" />
+      <rect x="14" y="10.5" width="1.2" height="1.2" fill="#FACC15" />
+
+      {/* Playful Ghostly Smile */}
+      <path d="M 10 16 Q 12 18.5 14 16" stroke="#581C87" strokeWidth="0.9" fill="none" />
+
+      {/* Rosy Cheek Blush */}
+      <rect x="6.5" y="13.5" width="1.5" height="1" fill="#F472B6" opacity="0.6" />
+      <rect x="16" y="13.5" width="1.5" height="1" fill="#F472B6" opacity="0.6" />
+
+      {/* Magical Floating Sparkle Particles */}
+      <circle cx="3" cy="8" r="0.8" fill="#C084FC" opacity="0.8">
+        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.6s" repeatCount="indefinite" />
+      </circle>
+      <circle cx="21" cy="6" r="0.7" fill="#67E8F9" opacity="0.8">
+        <animate attributeName="opacity" values="0.8;0.2;0.8" dur="1.4s" repeatCount="indefinite" />
+      </circle>
+    </svg>
+  );
+};
+
+// 7. UNDERGROUND 4-SEATER DOMINO (GAPLE) TABLE WITH 4 WOODEN CHAIRS
+export const GbaUndergroundDominoTable: React.FC<{
+  x?: number;
+  y?: number;
+  className?: string;
+  isHovered?: boolean;
+  activeSeat?: 'top' | 'bottom' | 'left' | 'right' | null;
+  onClick?: () => void;
+  onSeatClick?: (seat: 'top' | 'bottom' | 'left' | 'right') => void;
+}> = ({ x = 0, y = 0, className = '', isHovered = false, activeSeat = null, onClick, onSeatClick }) => {
+  return (
+    <svg
+      x={x}
+      y={y}
+      width={56}
+      height={42}
+      viewBox="0 0 56 42"
+      className={`select-none overflow-visible transition-all duration-200 cursor-pointer ${className} ${
+        isHovered ? 'filter drop-shadow(0 0 5px #10B981)' : 'filter drop-shadow(0 3px 3px rgba(0,0,0,0.4))'
+      }`}
+      style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
+      onClick={onClick}
+    >
+      <title>🀄 Meja Gaple 4 Kursi (Klik untuk duduk & bermain Gaple)</title>
+
+      {/* Ground Ambient Shadow */}
+      <ellipse cx="28" cy="24" rx="26" ry="16" fill="#000000" opacity="0.45" />
+
+      {/* ── SEAT TOP (UTARA) ── */}
+      <g 
+        className="cursor-pointer group/top"
+        onClick={(e) => {
+          if (onSeatClick) {
+            e.stopPropagation();
+            onSeatClick('top');
+          }
+        }}
+      >
+        <title>Kursi Atas (Utara)</title>
+        <rect x="21" y="2" width="14" height="6" rx="1" fill="#78350F" stroke="#451A03" strokeWidth="0.6" />
+        <rect x="22" y="3" width="12" height="2" fill="#B45309" />
+        {activeSeat === 'top' && (
+          <rect x="21" y="2" width="14" height="6" fill="#10B981" opacity="0.4" />
+        )}
+      </g>
+
+      {/* ── SEAT BOTTOM (SELATAN) ── */}
+      <g 
+        className="cursor-pointer group/bot"
+        onClick={(e) => {
+          if (onSeatClick) {
+            e.stopPropagation();
+            onSeatClick('bottom');
+          }
+        }}
+      >
+        <title>Kursi Bawah (Selatan)</title>
+        <rect x="21" y="34" width="14" height="6" rx="1" fill="#78350F" stroke="#451A03" strokeWidth="0.6" />
+        <rect x="22" y="35" width="12" height="2" fill="#B45309" />
+        {activeSeat === 'bottom' && (
+          <rect x="21" y="34" width="14" height="6" fill="#10B981" opacity="0.4" />
+        )}
+      </g>
+
+      {/* ── SEAT LEFT (BARAT) ── */}
+      <g 
+        className="cursor-pointer group/left"
+        onClick={(e) => {
+          if (onSeatClick) {
+            e.stopPropagation();
+            onSeatClick('left');
+          }
+        }}
+      >
+        <title>Kursi Kiri (Barat)</title>
+        <rect x="2" y="15" width="6" height="14" rx="1" fill="#78350F" stroke="#451A03" strokeWidth="0.6" />
+        <rect x="3" y="16" width="2" height="12" fill="#B45309" />
+        {activeSeat === 'left' && (
+          <rect x="2" y="15" width="6" height="14" fill="#10B981" opacity="0.4" />
+        )}
+      </g>
+
+      {/* ── SEAT RIGHT (TIMUR) ── */}
+      <g 
+        className="cursor-pointer group/right"
+        onClick={(e) => {
+          if (onSeatClick) {
+            e.stopPropagation();
+            onSeatClick('right');
+          }
+        }}
+      >
+        <title>Kursi Kanan (Timur)</title>
+        <rect x="48" y="15" width="6" height="14" rx="1" fill="#78350F" stroke="#451A03" strokeWidth="0.6" />
+        <rect x="49" y="16" width="2" height="12" fill="#B45309" />
+        {activeSeat === 'right' && (
+          <rect x="48" y="15" width="6" height="14" fill="#10B981" opacity="0.4" />
+        )}
+      </g>
+
+      {/* ── TABLE LEGS & SOLID BASE ── */}
+      <rect x="12" y="27" width="3" height="7" fill="#2E1065" />
+      <rect x="41" y="27" width="3" height="7" fill="#2E1065" />
+      <rect x="14" y="29" width="28" height="2" fill="#1E0E45" />
+
+      {/* ── SOLID MAHOGANY TABLE RIM ── */}
+      <rect x="9" y="9" width="38" height="24" rx="2" fill="#451A03" stroke="#1E0E45" strokeWidth="0.8" />
+      <rect x="10" y="10" width="36" height="22" rx="1" fill="#78350F" />
+      <rect x="11" y="11" width="34" height="20" rx="1" fill="#92400E" />
+
+      {/* ── GREEN FELT (KAPUK HIJAU MEJA GAPLE) ── */}
+      <rect x="12" y="12" width="32" height="18" rx="1" fill="#065F46" stroke="#047857" strokeWidth="0.5" />
+      <rect x="13" y="13" width="30" height="16" fill="#047857" />
+      <rect x="14" y="14" width="28" height="14" fill="#059669" opacity="0.65" />
+
+      {/* Golden Thread Inlay Border */}
+      <rect x="14" y="14" width="28" height="14" fill="none" stroke="#FBBF24" strokeWidth="0.4" strokeDasharray="1 1" opacity="0.7" />
+
+      {/* Mini Domino Tiles Placed on Table Center */}
+      {/* Tile 1: 6-6 balak vertical */}
+      <g transform="translate(23, 17)">
+        <rect x="0" y="0" width="4" height="8" rx="0.4" fill="#FFFDF7" stroke="#334155" strokeWidth="0.3" />
+        <line x1="0" y1="4" x2="4" y2="4" stroke="#DC2626" strokeWidth="0.3" />
+        <circle cx="1.2" cy="1.5" r="0.35" fill="#DC2626" />
+        <circle cx="2.8" cy="1.5" r="0.35" fill="#DC2626" />
+        <circle cx="1.2" cy="2.5" r="0.35" fill="#DC2626" />
+        <circle cx="2.8" cy="2.5" r="0.35" fill="#DC2626" />
+        <circle cx="1.2" cy="5.5" r="0.35" fill="#DC2626" />
+        <circle cx="2.8" cy="5.5" r="0.35" fill="#DC2626" />
+        <circle cx="1.2" cy="6.5" r="0.35" fill="#DC2626" />
+        <circle cx="2.8" cy="6.5" r="0.35" fill="#DC2626" />
+      </g>
+      {/* Tile 2: 6-3 horizontal connected */}
+      <g transform="translate(28, 19)">
+        <rect x="0" y="0" width="8" height="4" rx="0.4" fill="#FFFDF7" stroke="#334155" strokeWidth="0.3" />
+        <line x1="4" y1="0" x2="4" y2="4" stroke="#DC2626" strokeWidth="0.3" />
+        <circle cx="1.5" cy="1.2" r="0.35" fill="#DC2626" />
+        <circle cx="1.5" cy="2.8" r="0.35" fill="#DC2626" />
+        <circle cx="2.5" cy="2" r="0.35" fill="#DC2626" />
+        <circle cx="5.5" cy="1.2" r="0.35" fill="#DC2626" />
+        <circle cx="6.5" cy="2" r="0.35" fill="#DC2626" />
+        <circle cx="7.5" cy="2.8" r="0.35" fill="#DC2626" />
+      </g>
+    </svg>
+  );
+};
+
+// 8. UNDERGROUND 2-SEATER CHESS TABLE WITH 2 WOODEN CHAIRS
+export const GbaUndergroundChessTable: React.FC<{
+  x?: number;
+  y?: number;
+  className?: string;
+  isHovered?: boolean;
+  activeSeat?: 'left' | 'right' | null;
+  onClick?: () => void;
+  onSeatClick?: (seat: 'left' | 'right') => void;
+}> = ({ x = 0, y = 0, className = '', isHovered = false, activeSeat = null, onClick, onSeatClick }) => {
+  return (
+    <svg
+      x={x}
+      y={y}
+      width={44}
+      height={36}
+      viewBox="0 0 44 36"
+      className={`select-none overflow-visible transition-all duration-200 cursor-pointer ${className} ${
+        isHovered ? 'filter drop-shadow(0 0 5px #F59E0B)' : 'filter drop-shadow(0 3px 3px rgba(0,0,0,0.4))'
+      }`}
+      style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
+      onClick={onClick}
+    >
+      <title>♟️ Meja Catur 2 Kursi (Klik untuk duduk & bermain Catur)</title>
+
+      {/* Ground Shadow */}
+      <ellipse cx="22" cy="22" rx="19" ry="12" fill="#000000" opacity="0.45" />
+
+      {/* ── SEAT LEFT (PEMAIN PUTIH) ── */}
+      <g 
+        className="cursor-pointer group/cleft"
+        onClick={(e) => {
+          if (onSeatClick) {
+            e.stopPropagation();
+            onSeatClick('left');
+          }
+        }}
+      >
+        <title>Kursi Kiri (Pemain Putih)</title>
+        <rect x="2" y="11" width="6" height="14" rx="1" fill="#78350F" stroke="#451A03" strokeWidth="0.6" />
+        <rect x="3" y="12" width="2" height="12" fill="#B45309" />
+        {activeSeat === 'left' && (
+          <rect x="2" y="11" width="6" height="14" fill="#F59E0B" opacity="0.4" />
+        )}
+      </g>
+
+      {/* ── SEAT RIGHT (PEMAIN HITAM) ── */}
+      <g 
+        className="cursor-pointer group/cright"
+        onClick={(e) => {
+          if (onSeatClick) {
+            e.stopPropagation();
+            onSeatClick('right');
+          }
+        }}
+      >
+        <title>Kursi Kanan (Pemain Hitam)</title>
+        <rect x="36" y="11" width="6" height="14" rx="1" fill="#78350F" stroke="#451A03" strokeWidth="0.6" />
+        <rect x="37" y="12" width="2" height="12" fill="#B45309" />
+        {activeSeat === 'right' && (
+          <rect x="36" y="11" width="6" height="14" fill="#F59E0B" opacity="0.4" />
+        )}
+      </g>
+
+      {/* ── SOLID TABLE BASE ── */}
+      <rect x="19" y="24" width="6" height="8" fill="#2E1065" />
+      <rect x="17" y="30" width="10" height="2" rx="1" fill="#1E0E45" />
+
+      {/* ── MAHOGANY TABLE TOP (SQUARE) ── */}
+      <rect x="11" y="7" width="22" height="22" rx="2" fill="#451A03" stroke="#1E0E45" strokeWidth="0.7" />
+      <rect x="12" y="8" width="20" height="20" fill="#78350F" />
+      <rect x="13" y="9" width="18" height="18" fill="#92400E" />
+
+      {/* ── 8x8 CHESSBOARD PATTERN ── */}
+      <rect x="14" y="10" width="16" height="16" fill="#F3E8D2" stroke="#451A03" strokeWidth="0.5" />
+      {/* 8x8 alternating squares */}
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((row) =>
+        [0, 1, 2, 3, 4, 5, 6, 7].map((col) => {
+          const isDark = (row + col) % 2 === 1;
+          return isDark ? (
+            <rect
+              key={`cb-${row}-${col}`}
+              x={14 + col * 2}
+              y={10 + row * 2}
+              width={2}
+              height={2}
+              fill="#78350F"
+            />
+          ) : null;
+        })
+      )}
+
+      {/* Mini Pixel Chess Pieces */}
+      {/* White King / Queen on table */}
+      <rect x="17" y="20.5" width="1.2" height="2.2" fill="#FFFFFF" />
+      <rect x="21" y="20.5" width="1.2" height="2.2" fill="#FFFFFF" />
+      {/* Black King / Queen on table */}
+      <rect x="17" y="11.5" width="1.2" height="2.2" fill="#1E1B2E" />
+      <rect x="21" y="11.5" width="1.2" height="2.2" fill="#1E1B2E" />
+    </svg>
+  );
+};
+
+// 9. UNDERGROUND MINING LADDER (Tangga Naik ke Gazebo Atas)
+export const GbaUndergroundLadder: React.FC<{
+  x?: number;
+  y?: number;
+  className?: string;
+  isHovered?: boolean;
+  onClick?: () => void;
+}> = ({ x = 0, y = 0, className = '', isHovered = false, onClick }) => {
+  return (
+    <svg
+      x={x}
+      y={y}
+      width={18}
+      height={34}
+      viewBox="0 0 18 34"
+      className={`select-none overflow-visible transition-all duration-200 cursor-pointer ${className} ${
+        isHovered ? 'filter drop-shadow(0 0 5px #F59E0B)' : ''
+      }`}
+      style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
+      onClick={onClick}
+    >
+      <title>🪜 Tangga Tambang (Klik untuk naik kembali ke Gazebo)</title>
+      {/* Ceiling Hole Trim */}
+      <rect x="1" y="0" width="16" height="3" fill="#090518" stroke="#6B21A8" strokeWidth="0.6" />
+      <rect x="3" y="0" width="12" height="2" fill="#3B0764" />
+
+      {/* Vertical Wooden Rails */}
+      <rect x="3" y="2" width="2.5" height="30" fill="#78350F" stroke="#451A03" strokeWidth="0.5" />
+      <rect x="12.5" y="2" width="2.5" height="30" fill="#78350F" stroke="#451A03" strokeWidth="0.5" />
+      <rect x="3.5" y="2" width="1" height="30" fill="#B45309" />
+      <rect x="13" y="2" width="1" height="30" fill="#B45309" />
+
+      {/* Iron Rungs */}
+      {[6, 11, 16, 21, 26].map((ry) => (
+        <g key={`rung-${ry}`}>
+          <rect x="4.5" y={ry} width="9" height="2" fill="#64748B" stroke="#1E293B" strokeWidth="0.4" />
+          <rect x="5.5" y={ry + 0.3} width="7" height="0.8" fill="#CBD5E1" />
+        </g>
+      ))}
+
+      {/* Up Arrow Pulsing Badge */}
+      <g transform="translate(6, 14)">
+        <polygon points="3,0 6,4 4,4 4,7 2,7 2,4 0,4" fill="#FBBF24" opacity="0.9">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="1.2s" repeatCount="indefinite" />
+          <animate attributeName="transform" type="translate" values="0,0; 0,-2; 0,0" dur="1.2s" repeatCount="indefinite" />
+        </polygon>
+      </g>
+    </svg>
+  );
+};
+
+// 10. UNDERGROUND MINER LANTERN (Lentera Besi Berkedip Hangat)
+export const GbaUndergroundLantern: React.FC<{
+  x?: number;
+  y?: number;
+}> = ({ x = 0, y = 0 }) => {
+  return (
+    <svg
+      x={x}
+      y={y}
+      width={12}
+      height={18}
+      viewBox="0 0 12 18"
+      className="select-none overflow-visible"
+      style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
+    >
+      {/* Hanging Chain */}
+      <line x1="6" y1="0" x2="6" y2="4" stroke="#475569" strokeWidth="0.8" strokeDasharray="1 1" />
+
+      {/* Ambient Warm Flame Glow */}
+      <circle cx="6" cy="10" r="7" fill="#F59E0B" opacity="0.25">
+        <animate attributeName="r" values="6;8;6" dur="2s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.18;0.32;0.18" dur="2s" repeatCount="indefinite" />
+      </circle>
+
+      {/* Iron Cap */}
+      <rect x="3" y="4" width="6" height="2" fill="#1E293B" />
+      <rect x="4" y="3" width="4" height="1" fill="#334155" />
+
+      {/* Glass Body & Flame */}
+      <rect x="3.5" y="6" width="5" height="6" fill="#FEF08A" opacity="0.85" />
+      <rect x="4.5" y="7.5" width="3" height="3" fill="#F97316">
+        <animate attributeName="opacity" values="0.7;1;0.7" dur="0.8s" repeatCount="indefinite" />
+      </rect>
+
+      {/* Iron Cage Guard */}
+      <rect x="3" y="6" width="6" height="6" fill="none" stroke="#1E293B" strokeWidth="0.6" />
+      <line x1="6" y1="6" x2="6" y2="12" stroke="#1E293B" strokeWidth="0.5" />
+
+      {/* Iron Base */}
+      <rect x="3" y="12" width="6" height="2" fill="#1E293B" />
+    </svg>
+  );
+};
+
+// 11. GAZEBO TERRACE ENTRANCE DOORWAY (Pintu Masuk Terhubung dari Gedung Lab ke Gazebo)
+export const GbaGazeboTerraceEntranceDoor: React.FC<{
+  x?: number;
+  y?: number;
+  className?: string;
+  isHovered?: boolean;
+  onClick?: () => void;
+}> = ({ x = 0, y = 0, className = '', isHovered = false, onClick }) => {
+  return (
+    <svg
+      x={x}
+      y={y}
+      width={24}
+      height={38}
+      viewBox="0 0 24 38"
+      className={`select-none overflow-visible cursor-pointer group ${className} ${
+        isHovered ? 'filter drop-shadow(0 0 5px #F59E0B)' : ''
+      }`}
+      style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
+      onClick={onClick}
+    >
+      <title>🚪 Pintu Masuk Gazebo dari Gedung Laboratorium (Klik untuk kembali ke Lab)</title>
+      {/* Concrete Facility Wall Extension */}
+      <rect x="0" y="0" width="24" height="34" fill="#334155" stroke="#1E293B" strokeWidth="0.6" />
+      <rect x="1" y="1" width="22" height="3" fill="#475569" />
+
+      {/* Signboard Header Plaque */}
+      <rect x="2" y="4" width="20" height="5" rx="0.5" fill="#0F172A" stroke="#38BDF8" strokeWidth="0.5" />
+      <text x="12" y="7.8" textAnchor="middle" fontSize="2.8" fontWeight="900" fill="#BAE6FD" fontFamily="monospace">
+        LAB PREP ⬅️
+      </text>
+
+      {/* Recessed Doorway Arch */}
+      <rect x="3" y="10" width="18" height="24" fill="#0A0E1A" />
+      <rect x="4" y="11" width="16" height="23" fill="#0284C7" opacity="0.3" />
+
+      {/* Glass Sliding Panels with Specular Reflection Line */}
+      <line x1="6" y1="13" x2="16" y2="30" stroke="#FFFFFF" strokeWidth="0.8" opacity="0.4" />
+      <rect x="11" y="18" width="1" height="7" fill="#E2E8F0" />
+
+      {/* Welcome Entrance Floor Threshold / Mat */}
+      <rect x="2" y="34" width="20" height="3" fill="#0F172A" />
+      <rect x="3" y="34.5" width="18" height="2" fill="#15803D" />
+      <text x="12" y="36.2" textAnchor="middle" fontSize="2.2" fontWeight="bold" fill="#BBF7D0" fontFamily="monospace">
+        TERAS K3
+      </text>
+
+      {/* Soft welcoming indicator arrow pointing into gazebo */}
+      <g transform="translate(18, 22)">
+        <polygon points="0,0 4,2.5 0,5" fill="#FBBF24" opacity="0.9">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="1.5s" repeatCount="indefinite" />
+          <animate attributeName="transform" type="translate" values="0,0; 2,0; 0,0" dur="1.5s" repeatCount="indefinite" />
+        </polygon>
+      </g>
+    </svg>
+  );
+};
+
+
+

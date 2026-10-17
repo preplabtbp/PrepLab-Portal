@@ -4,6 +4,7 @@ import { uploadPhotoToDrive } from '../../sheets-api';
 import { Card, Button, Input } from '../ui';
 import { Camera, PlusCircle, Trash2, Truck } from 'lucide-react';
 import { InspectorSignatures, SignatureData } from '../InspectorSignatures';
+import { formatProofImageUrl } from '../SimplifiedInspectionModal';
 
 const ITEMS = [
   { id: 'Rotary', label: 'Lampu Rotary' },
@@ -27,6 +28,7 @@ export function FormSarana({ inspectorName, inspectorNik, onSubmit, autoFillAllY
       unit: '', 
       ket: '', 
       foto: '', 
+      previewUrl: '',
       checks: ITEMS.reduce((acc, curr) => ({ ...acc, [curr.id]: '✔' }), {}) 
     }
   ]);
@@ -52,6 +54,7 @@ export function FormSarana({ inspectorName, inspectorNik, onSubmit, autoFillAllY
         unit: '', 
         ket: '', 
         foto: '', 
+        previewUrl: '',
         checks: ITEMS.reduce((acc, curr) => ({ ...acc, [curr.id]: '✔' }), {}) 
       }
     ]);
@@ -88,7 +91,7 @@ export function FormSarana({ inspectorName, inspectorNik, onSubmit, autoFillAllY
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const maxD = 600;
+        const maxD = 800;
         if (width > height) {
           if (width > maxD) {
             height *= maxD / width;
@@ -104,16 +107,26 @@ export function FormSarana({ inspectorName, inspectorNik, onSubmit, autoFillAllY
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+
+        // 1. Simpan preview lokal langsung agar tampilan instan dan tidak pernah broken
+        setUnits(prevUnits => prevUnits.map(u => u.id === unitId ? { 
+          ...u, 
+          foto: compressedBase64,
+          previewUrl: compressedBase64 
+        } : u));
         
         try {
            const base64Data = compressedBase64.split(',')[1];
            const cleanFileName = (file.name || 'foto_sarana.jpg').replace(/\.jpeg$/i, '.jpg');
            const url = await uploadPhotoToDrive(base64Data, 'image/jpeg', cleanFileName, 'Form Inspeksi');
-           setUnits(prevUnits => prevUnits.map(u => u.id === unitId ? { ...u, foto: url } : u));
+           setUnits(prevUnits => prevUnits.map(u => u.id === unitId ? { 
+             ...u, 
+             foto: url || compressedBase64,
+             previewUrl: compressedBase64 
+           } : u));
         } catch(err) {
-           console.error("Gagal upload", err);
-           toast.error("Gagal upload foto");
+           console.error("Upload Google Drive gagal, tetap menggunakan base64 lokal:", err);
         } finally {
            setUploadingUnitId(null);
         }
@@ -170,7 +183,13 @@ export function FormSarana({ inspectorName, inspectorNik, onSubmit, autoFillAllY
       return;
     }
 
-    onSubmit({ payload, fotoProses: payload[0].foto, signatures: signatureData });
+    const allUnitPhotos = payload.map(u => u.foto).filter(Boolean);
+    onSubmit({ 
+      payload, 
+      fotoProses: payload[0]?.foto || '', 
+      fotoTemuanArray: allUnitPhotos,
+      signatures: signatureData 
+    });
   };
 
   return (
@@ -238,25 +257,47 @@ export function FormSarana({ inspectorName, inspectorNik, onSubmit, autoFillAllY
             />
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <label className="text-xs font-semibold text-slate-700 block mb-2 flex items-center gap-1">
-              <Camera className="w-4 h-4" /> Upload Foto Unit <span className="text-rose-500">*</span>
+          <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <Camera className="w-4 h-4 text-primary" /> Upload Foto Unit <span className="text-rose-500">*</span>
             </label>
             <Input 
               type="file" 
               accept="image/*"
               onChange={(e) => handleImageUpload(u.id, e)}
-              className="bg-white text-sm"
+              className="bg-white dark:bg-slate-800 text-sm"
             />
             {uploadingUnitId === u.id && (
-              <p className="text-xs text-blue-500 mt-1 animate-pulse">Mengunggah foto...</p>
+              <p className="text-xs text-blue-500 mt-1 animate-pulse font-semibold">Mengunggah &amp; mengompresi foto...</p>
             )}
-            {u.foto && (
-              <div className="mt-3 text-center">
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full">
-                  ✓ Foto Terunggah
-                </span>
-                <img src={u.foto} alt="Preview Unit" className="mt-3 max-h-24 mx-auto rounded-lg shadow-sm" />
+            {(u.previewUrl || u.foto) && (
+              <div className="mt-3 text-center space-y-2">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+                    ✓ Foto Terunggah
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setUnits(prev => prev.map(item => item.id === u.id ? { ...item, foto: '', previewUrl: '' } : item))}
+                    className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 underline"
+                  >
+                    Hapus Foto
+                  </button>
+                </div>
+                <div className="relative max-w-xs mx-auto rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-950/5 dark:bg-slate-950/30 shadow-xs">
+                  <img 
+                    src={u.previewUrl || formatProofImageUrl(u.foto)} 
+                    alt={`Preview Unit ${u.unit || (idx + 1)}`} 
+                    onError={(e) => {
+                      const raw = u.foto;
+                      const driveMatch = raw?.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || raw?.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                      if (driveMatch) {
+                        e.currentTarget.src = `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+                      }
+                    }}
+                    className="w-full max-h-48 object-contain rounded-xl mx-auto" 
+                  />
+                </div>
               </div>
             )}
           </div>

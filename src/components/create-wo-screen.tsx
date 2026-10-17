@@ -696,6 +696,7 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
             <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm relative">
                 <SignatureCanvas 
                   ref={sigPad}
+                  penColor="#000000"
                   canvasProps={{className: "w-full h-40"}}
                   backgroundColor="rgba(255,255,255,1)"
                 />

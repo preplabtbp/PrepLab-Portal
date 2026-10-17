@@ -20,6 +20,9 @@ import {
   GbaNickelSampleDrums,
   GbaK3SignPost
 } from './lounge/LoungeFurnitureSvg';
+import { LoungeGhostRpsModal } from './lounge/LoungeGhostRpsModal';
+import { SecretDominoLoungeModal } from './lounge/SecretDominoLoungeModal';
+import { SecretChessLoungeModal } from './lounge/SecretChessLoungeModal';
 
 interface TempatNongkrongModalProps {
   isOpen: boolean;
@@ -366,6 +369,41 @@ const LOUNGE_SEATS: LoungeSpot[] = [
   }
 ];
 
+/**
+ * Authentic GBA Route/Town Location Title Card
+ * Slides down smoothly upon entering Gazebo or Underground Bunker
+ */
+const GbaLocationTitleCard: React.FC<{
+  title: string;
+  subtitle: string;
+  icon?: string;
+}> = ({ title, subtitle, icon = '📍' }) => {
+  return (
+    <div className="absolute top-3 left-3 z-40 pointer-events-none animate-in fade-in slide-in-from-top-2 duration-300">
+      <div className="relative bg-[#0F172A]/90 backdrop-blur-xs border-2 border-[#F59E0B] rounded-lg px-3 py-1.5 shadow-2xl flex items-center gap-2.5 overflow-hidden">
+        {/* Decorative hazard stripes on left edge */}
+        <div className="w-1.5 self-stretch bg-linear-to-b from-amber-400 via-amber-500 to-amber-600 rounded-xs" />
+        
+        <div className="w-7 h-7 rounded-md bg-[#1E293B] border border-[#F59E0B]/50 flex items-center justify-center text-sm shadow-inner">
+          {icon}
+        </div>
+        
+        <div className="flex flex-col">
+          <span className="text-[11px] font-black tracking-wider text-[#FEF08A] font-mono uppercase drop-shadow-xs">
+            {title}
+          </span>
+          <span className="text-[9px] font-bold text-[#CBD5E1] tracking-wide font-sans">
+            {subtitle}
+          </span>
+        </div>
+
+        {/* Diagonal glass glare highlight */}
+        <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/10 to-transparent pointer-events-none -skew-x-12" />
+      </div>
+    </div>
+  );
+};
+
 export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
   isOpen,
   onClose,
@@ -379,6 +417,19 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [selectedAvatarForInteract, setSelectedAvatarForInteract] = useState<InRoomAvatar | null>(null);
   const [hoveredFurniture, setHoveredFurniture] = useState<string | null>(null);
+  const [showGhostRpsModal, setShowGhostRpsModal] = useState<boolean>(false);
+  const [showSecretDominoModal, setShowSecretDominoModal] = useState<boolean>(false);
+  const [showSecretChessModal, setShowSecretChessModal] = useState<boolean>(false);
+  const [currentLoungeArea, setCurrentLoungeArea] = useState<'gazebo' | 'underground'>('gazebo');
+  const [isSecretHoleUnlocked, setIsSecretHoleUnlocked] = useState<boolean>(() => {
+    try {
+      const scoreStr = localStorage.getItem('preplab_lounge_ghost_rps_score');
+      const score = scoreStr ? JSON.parse(scoreStr) : null;
+      if (score && score.wins >= 5) return true;
+      return localStorage.getItem('preplab_secret_domino_unlocked') === 'true';
+    } catch {}
+    return false;
+  });
 
   // Load user's saved avatar customization (skin tone, face expression, clothes)
   const myCustomCfg = useMemo(() => {
@@ -448,18 +499,67 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     };
   }, [userNik, userName, userRole]);
 
-  // My Avatar In-Room State: Start seated at Gazebo bench (authentic GBA tile coordinates)
-  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 3.44, y: 4.75 });
+  // My Avatar In-Room State: Arrive via doorway threshold (Col 1.2, Row 4.2)
+  const [myPos, setMyPos] = useState<{ x: number; y: number }>({ x: 1.2, y: 4.2 });
   const [myFacing, setMyFacing] = useState<'down' | 'up' | 'left' | 'right'>('right');
-  const [myActionState, setMyActionState] = useState<'idle' | 'walk' | 'coffee' | 'inspect' | 'jump' | 'smoke' | 'sit' | 'smoke_sit' | 'coffee_sit'>('sit');
+  const [myActionState, setMyActionState] = useState<'idle' | 'walk' | 'coffee' | 'inspect' | 'jump' | 'smoke' | 'sit' | 'smoke_sit' | 'coffee_sit'>('walk');
   const [myWalkFrame, setMyWalkFrame] = useState(0);
   const [mySpeech, setMySpeech] = useState<{ text: string; expiry: number } | null>({
-    text: '🚬 Santai sejenak merokok di Gazebo K3 PrepLab Obi!',
-    expiry: Date.now() + 6500
+    text: '🚶 Tiba di Gazebo Lounge K3 PrepLab...',
+    expiry: Date.now() + 5000
   });
 
-  // Active seat tracking
-  const [activeSeatId, setActiveSeatId] = useState<string | null>('bench_1');
+  // Active seat tracking (null upon entry until player selects a chair or clicks to sit)
+  const [activeSeatId, setActiveSeatId] = useState<string | null>(null);
+  const [locationBanner, setLocationBanner] = useState<{ title: string; subtitle: string; icon: string } | null>(null);
+
+  // Seamless area switcher with authentic entrance positioning and location banner
+  const switchLoungeArea = useCallback((newArea: 'gazebo' | 'underground') => {
+    setCurrentLoungeArea(newArea);
+    if (newArea === 'underground') {
+      setMyPos({ x: 1.4, y: 2.8 });
+      setMyFacing('down');
+      setMyActionState('walk');
+      setActiveSeatId(null);
+      setMySpeech({ text: '🪜 Turun ke Bunker Bawah Tanah Klub Rahasia...', expiry: Date.now() + 5000 });
+      setLocationBanner({
+        title: 'BUNKER BAWAH TANAH',
+        subtitle: 'Klub Rahasia Gaple & Catur Harita',
+        icon: '🕳️'
+      });
+    } else {
+      setMyPos({ x: 2.35, y: 6.2 });
+      setMyFacing('up');
+      setMyActionState('walk');
+      setActiveSeatId(null);
+      setMySpeech({ text: '🪜 Kembali ke Gazebo Lounge Atas...', expiry: Date.now() + 5000 });
+      setLocationBanner({
+        title: 'GAZEBO TAMBANG & LOUNGE K3',
+        subtitle: 'Area Istirahat & Sosialisasi K3',
+        icon: '🏢'
+      });
+    }
+  }, []);
+
+  // Display location banner on modal open
+  useEffect(() => {
+    if (isOpen) {
+      setLocationBanner({
+        title: currentLoungeArea === 'underground' ? 'BUNKER BAWAH TANAH' : 'GAZEBO TAMBANG & LOUNGE K3',
+        subtitle: currentLoungeArea === 'underground' ? 'Klub Rahasia Gaple & Catur Harita' : 'Area Istirahat & Sosialisasi K3',
+        icon: currentLoungeArea === 'underground' ? '🕳️' : '🏢'
+      });
+    }
+  }, [isOpen, currentLoungeArea]);
+
+  // Auto-dismiss location banner after 3.2s
+  useEffect(() => {
+    if (!locationBanner) return;
+    const t = setTimeout(() => {
+      setLocationBanner(null);
+    }, 3200);
+    return () => clearTimeout(t);
+  }, [locationBanner]);
 
   // Other In-Room Avatars
   const [otherAvatars, setOtherAvatars] = useState<Map<string, InRoomAvatar>>(new Map());
@@ -513,6 +613,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       osc.stop(ctx.currentTime + 0.25);
     } catch {}
   };
+
 
   // Real-time bidirectional movement & action callbacks for GbaOverworldMap
   const handlePlayerMove = useCallback((pos: { x: number; y: number; facing: string; actionState: string }) => {
@@ -1003,6 +1104,29 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     setSelectedAvatarForInteract(null);
   };
 
+  // Suwit vs Ghost callback (Shows win/lose overhead bubble reaction & unlocks secret domino hole at 5 wins)
+  const handleFinishGhostGame = useCallback((result: 'win' | 'lose' | 'draw', playerChoice: string, ghostChoice: string) => {
+    let speechMsg = '';
+    if (result === 'win') {
+      speechMsg = '😄 Horeee! Menang suwit lawan Hantu Pojok!';
+      handleSendMessage(speechMsg, 'jump');
+      try {
+        const scoreStr = localStorage.getItem('preplab_lounge_ghost_rps_score');
+        const score = scoreStr ? JSON.parse(scoreStr) : null;
+        if (score && score.wins >= 5) {
+          setIsSecretHoleUnlocked(true);
+          localStorage.setItem('preplab_secret_domino_unlocked', 'true');
+        }
+      } catch {}
+    } else if (result === 'lose') {
+      speechMsg = '😭 Huwaaa... kalah suwit lawan Hantu Pojok!';
+      handleSendMessage(speechMsg, 'idle');
+    } else {
+      speechMsg = '😅 Seri! Pikiran kita seirama...';
+      handleSendMessage(speechMsg, 'idle');
+    }
+  }, [handleSendMessage]);
+
   // Combine and sort avatars for 2.5D visual depth (higher Y = in front)
   const allRenderAvatars = useMemo(() => {
     const list: InRoomAvatar[] = [
@@ -1087,8 +1211,34 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm sm:text-base font-black text-emerald-300 font-display tracking-tight flex items-center gap-1.5">
-                <span>PREPLAB SITE LOUNGE &amp; GAZEBO</span>
+                <span>
+                  {currentLoungeArea === 'underground' 
+                    ? '🕳️ BUNKER BAWAH TANAH (KLUB GAPLE & CATUR)' 
+                    : 'PREPLAB SITE LOUNGE & GAZEBO'}
+                </span>
               </h3>
+
+              {currentLoungeArea === 'underground' ? (
+                <button
+                  type="button"
+                  onClick={() => switchLoungeArea('gazebo')}
+                  className="px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer active:scale-95"
+                  title="Naik kembali ke Gazebo Atas"
+                >
+                  <span>🪜 Naik ke Gazebo</span>
+                </button>
+              ) : (
+                isSecretHoleUnlocked && (
+                  <button
+                    type="button"
+                    onClick={() => switchLoungeArea('underground')}
+                    className="px-2.5 py-1 rounded-xl bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-600 font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
+                    title="Masuk ke Bunker Bawah Tanah"
+                  >
+                    <span>🕳️ Bunker Bawah Tanah</span>
+                  </button>
+                )
+              )}
 
               {/* Online Personil Counter with Tooltip */}
               <div className="relative group/tt">
@@ -1097,7 +1247,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
                   <span>👥 {allRenderAvatars.length}</span>
                 </span>
                 <div className="absolute left-0 top-7 z-30 hidden group-hover/tt:block px-2.5 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
-                  {allRenderAvatars.length} Personil di Tempat Nongkrong &amp; Gazebo K3
+                  {allRenderAvatars.length} Personil di {currentLoungeArea === 'underground' ? 'Bunker Bawah Tanah' : 'Tempat Nongkrong & Gazebo K3'}
                 </div>
               </div>
             </div>
@@ -1153,8 +1303,17 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
 
         {/* ── MAIN 1:1 POKÉMON GBA OVERWORLD MULTIPLAYER STAGE ── */}
         <div className="w-full flex-1 relative overflow-hidden bg-[#181820] flex flex-col">
+          {/* Authentic Retro GBA Location Plaque Banner */}
+          {locationBanner && (
+            <GbaLocationTitleCard 
+              title={locationBanner.title} 
+              subtitle={locationBanner.subtitle} 
+              icon={locationBanner.icon} 
+            />
+          )}
+
           <GbaOverworldMap
-            roomType="lounge_nickel"
+            roomType={currentLoungeArea === 'underground' ? 'underground_lounge' : 'lounge_nickel'}
             playerNik={userNik}
             playerName={effectiveUsername}
             playerRankName={effectivePangkat}
@@ -1192,153 +1351,18 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             })}
             soundEnabled={soundEnabled}
             isCompactDiorama={false}
+            onExitLoungeBackToWork={onClose}
+            onPlayGhostRps={() => setShowGhostRpsModal(true)}
+            isSecretHoleUnlocked={isSecretHoleUnlocked}
+            onEnterSecretDomino={() => switchLoungeArea('underground')}
+            onAscendToGazebo={() => switchLoungeArea('gazebo')}
+            onOpenDominoGame={() => setShowSecretDominoModal(true)}
+            onOpenChessGame={() => setShowSecretChessModal(true)}
           />
         </div>
 
-        {/* ── BOTTOM COMMAND DECK (High-Contrast, Crisp & Ultra-Visible Chat Bar) ── */}
-        <div className="p-3 sm:p-3.5 border-t-2 border-emerald-500/50 bg-[#1E293B] flex flex-col gap-2.5 z-20 shadow-2xl">
-          {/* Quick Action Icons Bar with Hover Tooltips */}
-          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-0.5">
-            <div className="flex items-center gap-1.5">
-              {/* Sit / Stand Toggle */}
-              <div className="relative group/tt">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isCurrentSitting) {
-                      setMyActionState('idle');
-                      setActiveSeatId(null);
-                    } else {
-                      // Find first available bench slot (2 persons per bench)
-                      const availableSpot = LOUNGE_SEATS.find(s => s.action.includes('sit') && !isLoungeSpotTaken(s));
-                      if (availableSpot) {
-                        handleSitAtSpot(availableSpot);
-                      } else {
-                        playChime('msg');
-                        setMySpeech({ text: '⚠️ Semua bangku gazebo sedang penuh (2 orang per bangku)!', expiry: Date.now() + 4500 });
-                      }
-                    }
-                  }}
-                  className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 border ${
-                    isCurrentSitting 
-                      ? 'bg-amber-400 text-slate-950 border-amber-300' 
-                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                  }`}
-                  aria-label="Duduk atau Berdiri"
-                >
-                  <span>{isCurrentSitting ? '🚶' : '🪑'}</span>
-                </button>
-                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
-                  {isCurrentSitting ? '🚶 Berdiri Santai' : '🪑 Duduk di Bangku Gazebo'}
-                </div>
-              </div>
-
-              {/* Smoke Action */}
-              <div className="relative group/tt">
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage('🚬 Santai sejenak hisap rokok di Gazebo K3...', 'smoke')}
-                  className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 border ${
-                    myActionState === 'smoke' || myActionState === 'smoke_sit'
-                      ? 'bg-amber-400 text-slate-950 border-amber-300' 
-                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                  }`}
-                  aria-label="Merokok Santai"
-                >
-                  <span>🚬</span>
-                </button>
-                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
-                  🚬 Merokok Santai di Gazebo K3
-                </div>
-              </div>
-
-              {/* Coffee Action */}
-              <div className="relative group/tt">
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage('☕ Seruput kopi hitam hangat sambil rehat sejenak!', 'coffee')}
-                  className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 border ${
-                    myActionState === 'coffee' || myActionState === 'coffee_sit'
-                      ? 'bg-emerald-400 text-slate-950 border-emerald-300' 
-                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                  }`}
-                  aria-label="Seruput Kopi"
-                >
-                  <span>☕</span>
-                </button>
-                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
-                  ☕ Seruput Kopi Hitam Hangat
-                </div>
-              </div>
-
-              {/* Snack Action */}
-              <div className="relative group/tt">
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage('🥪 Menaruh pisang goreng & snack hangat di meja!', 'coffee')}
-                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
-                  aria-label="Bagi Pisang Goreng"
-                >
-                  <span>🥪</span>
-                </button>
-                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
-                  🥪 Bagi Pisang Goreng &amp; Cemilan
-                </div>
-              </div>
-
-              {/* Wave Greeting */}
-              <div className="relative group/tt">
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage('👋 Halo rekan shift Preparasi & Lab Nikel TBP!', 'jump')}
-                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
-                  aria-label="Sapa Rekan"
-                >
-                  <span>👋</span>
-                </button>
-                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
-                  👋 Sapa Semua Rekan Shift
-                </div>
-              </div>
-
-              {/* Safety K3 Cheers */}
-              <div className="relative group/tt">
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage('👍 Zero Accident harga mati di site TBP!', 'jump')}
-                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
-                  aria-label="Semangat K3"
-                >
-                  <span>👍</span>
-                </button>
-                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
-                  👍 Semangat K3 Zero Accident!
-                </div>
-              </div>
-
-              {/* Sample Ore Discuss */}
-              <div className="relative group/tt">
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage('🪨 Sample saprolite & limonite shift ini representatif & homogen!', 'inspect')}
-                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
-                  aria-label="Bahas Sampel"
-                >
-                  <span>🪨</span>
-                </button>
-                <div className="absolute left-0 bottom-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
-                  🪨 Bahas Sampel Saprolite &amp; Limonite
-                </div>
-              </div>
-            </div>
-
-            {/* Current Active Location Pill */}
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 text-[11px] font-mono border border-slate-600 shadow-xs">
-              <span className="text-emerald-400">●</span>
-              <span>{isCurrentSitting ? (activeSpot ? activeSpot.name : 'Duduk Santai') : 'Patroli Siaga K3'}</span>
-            </div>
-          </div>
-
+        {/* ── BOTTOM COMMAND DECK (Clean Easter Egg Mode: Chat Bar Only) ── */}
+        <div className="p-3 sm:p-3.5 border-t-2 border-emerald-500/50 bg-[#1E293B] flex flex-col z-20 shadow-2xl">
           {/* ULTRA-VISIBLE, CRISP & HIGH-CONTRAST CHAT INPUT BAR */}
           <div className="flex items-center gap-2 p-1 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-inner">
             <div className="flex-1 relative flex items-center">
@@ -1373,6 +1397,43 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Duel Suwit vs Hantu Pojok Gazebo Mini-Game Modal */}
+      <LoungeGhostRpsModal
+        isOpen={showGhostRpsModal}
+        onClose={() => {
+          setShowGhostRpsModal(false);
+          // Sync secret hole status if user hit 5 wins
+          try {
+            if (localStorage.getItem('preplab_secret_domino_unlocked') === 'true') {
+              setIsSecretHoleUnlocked(true);
+            }
+          } catch {}
+        }}
+        playerName={effectiveUsername}
+        onFinishGame={handleFinishGhostGame}
+        soundEnabled={soundEnabled}
+      />
+
+      {/* Ruang Rahasia Meja Gaple 4 Orang Modal */}
+      <SecretDominoLoungeModal
+        isOpen={showSecretDominoModal}
+        onClose={() => setShowSecretDominoModal(false)}
+        playerName={effectiveUsername}
+        playerNik={userNik}
+        playerAvatar={avatarUrl || undefined}
+        soundEnabled={soundEnabled}
+      />
+
+      {/* Ruang Rahasia Meja Catur 2 Orang Modal */}
+      <SecretChessLoungeModal
+        isOpen={showSecretChessModal}
+        onClose={() => setShowSecretChessModal(false)}
+        playerName={effectiveUsername}
+        playerNik={userNik}
+        playerAvatar={avatarUrl || undefined}
+        soundEnabled={soundEnabled}
+      />
     </div>
   );
 };

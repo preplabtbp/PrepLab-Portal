@@ -1710,14 +1710,14 @@ ${aiMeetingNotes
 
               {/* List of Recent / All Posts */}
               <div className="space-y-0.5">
-                {(showAllPostsView ? filteredPosts : recentPostsList).map((post) => {
+                {(showAllPostsView ? filteredPosts : recentPostsList).map((post, postIdx) => {
                   const isSelected = selectedPost?.id === post.id && !isEditing;
                   const title = getPostTitle(post);
                   const icon = getNotionIcon(post);
 
                   return (
                     <div
-                      key={post.id}
+                      key={post.id ? `recent-${post.id}` : `recent-idx-${postIdx}`}
                       onClick={() => {
                         addRecentPost(post.id);
                         navigateToPost(post);
@@ -3252,9 +3252,9 @@ ${aiMeetingNotes
                   Tidak ada dokumen yang cocok dengan "{searchQuery}"
                 </div>
               ) : (
-                filteredPosts.slice(0, 15).map((p) => (
+                filteredPosts.slice(0, 15).map((p, pIdx) => (
                   <div
-                    key={p.id}
+                    key={p.id ? `search-${p.id}` : `search-idx-${pIdx}`}
                     onClick={() => {
                       addRecentPost(p.id);
                       navigateToPost(p);
@@ -3366,9 +3366,9 @@ ${aiMeetingNotes
                     <p className="text-[11px] opacity-75">Komentar atau postingan yang menyebut seksi Anda akan muncul di sini.</p>
                   </div>
                 ) : (
-                  notificationsList.map((n) => (
+                  notificationsList.map((n, nIdx) => (
                     <div
-                      key={n.id}
+                      key={n.id ? `notif-${n.id}` : `notif-idx-${nIdx}`}
                       onClick={() => {
                         if (!n.isRead) {
                           fetch(`/api/notifications/${n.id}/read`, { method: 'PUT' }).catch(console.error);
@@ -3419,9 +3419,9 @@ ${aiMeetingNotes
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">
                     Artikel &amp; Topik Labnote Terbaru
                   </div>
-                  {posts.slice(0, 15).map((p) => (
+                  {posts.slice(0, 15).map((p, pIdx) => (
                     <div
-                      key={p.id}
+                      key={p.id ? `latest-${p.id}` : `latest-idx-${pIdx}`}
                       onClick={() => {
                         setShowNotifModal(false);
                         navigateToPost(p);

@@ -831,7 +831,7 @@ export function extractMarkdownTableFromContent(content: string): {
         const isLogbookMatch = rowStr.match(/<!--is-logbook:([^>]+)-->/);
 
         const isPin = rowStr.includes('<!--pin') || rowStr.includes('<!pin') || rowStr.includes('<!--pinned');
-        const cleanTitle = (rowObj['Jenis kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '')
+        const cleanTitle = (rowObj['Activity Name'] || rowObj['Activity'] || rowObj['Jenis kegiatan'] || rowObj['Jenis Kegiatan'] || rowObj['Name'] || rowObj['Judul'] || '')
           .replace(/^↳\s*/, '')
           .replace(/<!--[\s\S]*?-->/g, '')
           .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
@@ -1565,7 +1565,14 @@ export function NotionDatabaseTable({
   const [isUploadingCommentFile, setIsUploadingCommentFile] = useState(false);
   const commentFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
-  const [previewImage, setPreviewImage] = useState<{ url: string; title: string; driveViewUrl?: string; driveDownloadUrl?: string } | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ 
+    url: string; 
+    title: string; 
+    driveViewUrl?: string; 
+    driveDownloadUrl?: string;
+    images?: Array<{ url: string; title?: string; driveViewUrl?: string; driveDownloadUrl?: string }>;
+    currentIndex?: number;
+  } | null>(null);
   const [showAllReplies, setShowAllReplies] = useState(false);
 
   // Pending file upload with caption for Gallery
@@ -2954,14 +2961,46 @@ export function NotionDatabaseTable({
     return { rootComments: roots, repliesMap: replies };
   }, [activeTopicComments]);
 
-  // Handler seragam untuk preview attachment (gambar via ImageModal, dokumen via tab baru)
+  // Filter khusus lampiran gambar dari komentar topik untuk mode galeri lightbox
+  const imageGalleryList = useMemo(() => {
+    return galleryItems
+      .filter((item) => item.attachment.isImage)
+      .map((item) => {
+        const att = item.attachment;
+        return {
+          url: att.directUrl || att.url,
+          title: att.caption ? `${att.name} — "${att.caption}"` : att.name,
+          driveViewUrl: att.driveViewUrl,
+          driveDownloadUrl: att.driveDownloadUrl
+        };
+      });
+  }, [galleryItems]);
+
+  // Handler seragam untuk preview attachment (gambar via ImageModal dengan gallery list, dokumen via tab baru)
   const handlePreviewAttachment = (att: CommentAttachmentItem) => {
     if (att.isImage) {
-      setPreviewImage({
-        url: att.directUrl || att.url,
+      const targetUrl = att.directUrl || att.url;
+      const targetDriveId = att.id || extractDriveId(targetUrl);
+
+      const foundIdx = imageGalleryList.findIndex((img) => {
+        if (img.url === targetUrl) return true;
+        if (targetDriveId && (img.url.includes(targetDriveId) || (img.driveViewUrl && img.driveViewUrl.includes(targetDriveId)))) return true;
+        if (att.driveViewUrl && img.driveViewUrl === att.driveViewUrl) return true;
+        return false;
+      });
+
+      const currentIndex = foundIdx >= 0 ? foundIdx : 0;
+      const fallbackItem = {
+        url: targetUrl,
         title: att.caption ? `${att.name} — "${att.caption}"` : att.name,
         driveViewUrl: att.driveViewUrl,
         driveDownloadUrl: att.driveDownloadUrl
+      };
+
+      setPreviewImage({
+        ...(foundIdx >= 0 ? imageGalleryList[foundIdx] : fallbackItem),
+        images: imageGalleryList.length > 0 ? imageGalleryList : [fallbackItem],
+        currentIndex: currentIndex
       });
     } else if (att.driveViewUrl) {
       window.open(att.driveViewUrl, '_blank');
@@ -4908,9 +4947,8 @@ export function NotionDatabaseTable({
     }
   };
 
-  // Upload file inside discussion comment box with caption
-  const handleCommentFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawFiles = e.target.files ? Array.from(e.target.files) : [];
+  // Helper memproses & mengunggah file lampiran komentar diskusi (bisa dari input file maupun Paste/Ctrl+V)
+  const processAndUploadCommentFiles = async (rawFiles: File[]) => {
     if (rawFiles.length === 0) return;
 
     setIsUploadingCommentFile(true);
@@ -4997,7 +5035,42 @@ export function NotionDatabaseTable({
       toast.error('Gagal mengunggah file', { id: 'upload-comment-file' });
     } finally {
       setIsUploadingCommentFile(false);
-      if (e.target) e.target.value = '';
+    }
+  };
+
+  // Upload file inside discussion comment box with caption
+  const handleCommentFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFiles = e.target.files ? Array.from(e.target.files) : [];
+    if (rawFiles.length === 0) return;
+    await processAndUploadCommentFiles(rawFiles);
+    if (e.target) e.target.value = '';
+  };
+
+  // Handler copy-paste langsung gambar di kolom komentar (Ctrl+V tanpa perlu choose file)
+  const handleCommentPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const clipboardItems = e.clipboardData?.items;
+    if (!clipboardItems) return;
+
+    const imageFiles: File[] = [];
+    for (let i = 0; i < clipboardItems.length; i++) {
+      const item = clipboardItems[i];
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile();
+        if (blob) {
+          const now = new Date();
+          const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+          const ext = blob.type.split('/')[1] || 'png';
+          const filename = blob.name && blob.name !== 'image.png' 
+            ? blob.name 
+            : `pasted_image_${timestamp}_${i + 1}.${ext}`;
+          imageFiles.push(new File([blob], filename, { type: blob.type }));
+        }
+      }
+    }
+
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      await processAndUploadCommentFiles(imageFiles);
     }
   };
 
@@ -7321,11 +7394,11 @@ export function NotionDatabaseTable({
                 </tr>
               ) : (() => {
                 let runningParentNumber = 0;
-                return groupedRowsData.map(({ groupName, groupRows }) => {
+                return groupedRowsData.map(({ groupName, groupRows }, gIdx) => {
                   const isCollapsed = collapsedGroups[groupName];
 
                   return (
-                    <React.Fragment key={groupName}>
+                    <React.Fragment key={groupName ? `grp-${groupName}` : `grp-idx-${gIdx}`}>
                       {/* Notion Group Header Row */}
                       <tr
                         onClick={() => toggleGroup(groupName)}
@@ -11425,12 +11498,13 @@ export function NotionDatabaseTable({
                           rows={2}
                           value={commentText}
                           onChange={(e) => setCommentText(e.target.value)}
+                          onPaste={handleCommentPaste}
                           placeholder={
                             replyingTo 
-                              ? `Tulis tanggapan untuk ${replyingTo.authorName}...` 
+                              ? `Tulis tanggapan untuk ${replyingTo.authorName}... (Bisa paste gambar / Ctrl+V)` 
                               : selectedFile
                               ? `Tulis catatan tambahan untuk lampiran (opsional)...`
-                              : `Add a comment for "${selectedTopicTitle}"...`
+                              : `Tulis komentar... (Bisa langsung paste gambar / Ctrl+V)`
                           }
                           className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none leading-relaxed text-xs resize-none"
                           style={{
@@ -11660,7 +11734,7 @@ export function NotionDatabaseTable({
         )}
       </AnimatePresence>
 
-      {/* Image Preview Modal */}
+      {/* Image Preview Modal with Gallery Navigation */}
       {previewImage && (
         <ImageModal
           isOpen={!!previewImage}
@@ -11669,6 +11743,8 @@ export function NotionDatabaseTable({
           title={previewImage.title}
           driveViewUrl={previewImage.driveViewUrl}
           driveDownloadUrl={previewImage.driveDownloadUrl}
+          images={previewImage.images}
+          currentIndex={previewImage.currentIndex}
         />
       )}
 

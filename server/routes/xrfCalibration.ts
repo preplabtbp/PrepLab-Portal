@@ -967,7 +967,12 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
       endDate ? lte(xrfVerifications.verificationDate, endDate) : sql`1=1`,
     ];
     if (standardsParam.length > 0) {
-      whereConditions.push(sql`${xrfVerificationItems.standardCode} IN (${sql.join(standardsParam.map(s => sql`${s}`), sql`, `)})`);
+      const expandedStandards = Array.from(new Set([
+        ...standardsParam,
+        ...standardsParam.map(s => s.replace('_', ' ')),
+        ...standardsParam.map(s => s.replace(' ', '_')),
+      ]));
+      whereConditions.push(sql`${xrfVerificationItems.standardCode} IN (${sql.join(expandedStandards.map(s => sql`${s}`), sql`, `)})`);
     }
 
     const rawData = await db.select({
@@ -1027,9 +1032,12 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
 
       for (const std of standardsParam) {
         currentGrid[std] = {};
-        const ref = refMap[std]?.[elKey] || {
-          nominalValue: 2.0,
-          stdevFixed: 0.08,
+        const isBlank = std.toUpperCase().includes('BLANK');
+        const defaultNominal = isBlank ? 0.000 : 2.0;
+        const defaultSigma = isBlank ? 0.010 : 0.08;
+        const ref = refMap[std]?.[elKey] || refMap[std.replace('_', ' ')]?.[elKey] || refMap[std.replace(' ', '_')]?.[elKey] || {
+          nominalValue: defaultNominal,
+          stdevFixed: defaultSigma,
           warningSigma: 2.0,
           actionSigma: 3.0,
         };
@@ -1043,7 +1051,7 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
 
         for (const inst of instrumentsParam) {
           const pointsForGrid = rawData
-            .filter(d => d.standardCode === std && d.instrumentCode === inst)
+            .filter(d => (d.standardCode === std || d.standardCode === std.replace('_', ' ') || d.standardCode === std.replace(' ', '_')) && d.instrumentCode === inst)
             .map((d, idx) => {
               const val = getter(d);
               return {

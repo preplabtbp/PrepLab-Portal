@@ -1126,64 +1126,115 @@ export default function App() {
   }
   if (!inspectorNik && !inspectorName && !isEmbedMode) {
     return (
-      <div className="min-h-screen w-full bg-[#080c14] text-slate-100 flex flex-col items-center justify-center p-4 relative overflow-hidden selection:bg-teal-500 selection:text-white font-sans">
-        
+      <div className="min-h-screen w-full bg-[#080c14] text-slate-100 flex flex-col items-stretch relative overflow-hidden selection:bg-teal-500 selection:text-white font-sans">
+
         {/* Ambient Glow Orbs */}
         <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-teal-500/15 rounded-full blur-[120px] pointer-events-none animate-pulse duration-1000" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[550px] h-[550px] bg-emerald-500/15 rounded-full blur-[140px] pointer-events-none animate-pulse duration-700" />
         <div className="absolute top-[40%] right-[25%] w-[350px] h-[350px] bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none" />
 
         {/* Subtle Tech Grid Pattern */}
-        <div 
-          className="absolute inset-0 opacity-[0.12] pointer-events-none" 
+        <div
+          className="absolute inset-0 opacity-[0.07] pointer-events-none"
           style={{
             backgroundImage: `radial-gradient(#2dd4bf 1px, transparent 1px)`,
             backgroundSize: '32px 32px'
           }}
         />
 
-        {/* Top Security Status Bar */}
-        <div className="relative z-10 mb-6 flex items-center gap-3 px-4 py-1.5 rounded-full bg-slate-900/90 border border-teal-500/30 backdrop-blur-md text-[11px] font-mono shadow-lg">
-          <span className="flex h-2 w-2 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
-          </span>
-          <span className="text-teal-300 font-semibold">PREPLAB ENTERPRISE GATEWAY</span>
-          <span className="text-teal-500/50">|</span>
-          <span className="text-teal-100/90 font-medium">HARITA NICKEL • TBP & GPS</span>
-        </div>
+        {/* ── HEADER BANNER ── */}
+        <div className="relative z-10 w-full bg-[#0a1628]/95 backdrop-blur-md border-b border-teal-500/25 shadow-[0_4px_32px_-8px_rgba(20,184,166,0.25)]">
+          {/* Accent line top */}
+          <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-teal-400 to-transparent" />
 
-        {/* Main Glassmorphic Login Card */}
-        <div className="relative z-10 w-full max-w-md bg-[#0d1527]/90 backdrop-blur-2xl rounded-3xl border border-teal-500/30 shadow-[0_0_60px_-15px_rgba(20,184,166,0.35)] p-8 sm:p-10 space-y-6 overflow-hidden">
-          
-          {/* Card Top Light Accent Streak */}
-          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-80" />
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-12 bg-teal-500/20 blur-xl pointer-events-none" />
-
-          {/* Logo & Brand Emblem */}
-          <div className="flex flex-col items-center text-center space-y-3">
-            <div className="relative group">
-              <div className="w-20 h-20 rounded-3xl bg-slate-950/90 border border-teal-400/40 p-2 flex items-center justify-center shadow-2xl shadow-teal-500/25 group-hover:scale-105 transition-all duration-300 backdrop-blur-md">
-                <img 
-                  src="/preplab-logo.png" 
-                  alt="Prep & Lab Logo" 
-                  className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(249,115,22,0.3)]" 
-                />
+          <div className="max-w-6xl mx-auto px-4 sm:px-8">
+            {/* 4 Logo Row */}
+            <div className="flex items-center justify-center gap-6 sm:gap-10 py-4 sm:py-5">
+              {/* Logo 1: PrepLab */}
+              <div className="flex flex-col items-center gap-1.5 group">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950/80 border border-orange-400/30 p-1.5 flex items-center justify-center shadow-lg group-hover:border-orange-400/60 group-hover:shadow-orange-500/20 transition-all duration-200">
+                  <img src="/preplab-logo.png" alt="PrepLab" className="w-full h-full object-contain filter drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]" />
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-bold text-orange-300/90 uppercase tracking-widest font-mono">PrepLab</span>
               </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500/25 border border-emerald-400/60 flex items-center justify-center text-emerald-400 backdrop-blur-md shadow-sm">
-                <ShieldCheck className="w-3.5 h-3.5" />
+
+              <div className="h-10 w-px bg-teal-500/20" />
+
+              {/* Logo 2: TBP */}
+              <div className="flex flex-col items-center gap-1.5 group">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950/80 border border-teal-400/30 p-1.5 flex items-center justify-center shadow-lg group-hover:border-teal-400/60 group-hover:shadow-teal-500/20 transition-all duration-200">
+                  <img src="/tbp-header-logo.png" alt="TBP" className="w-full h-full object-contain filter brightness-110" />
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-bold text-teal-300/90 uppercase tracking-widest font-mono">TBP</span>
+              </div>
+
+              <div className="h-10 w-px bg-teal-500/20" />
+
+              {/* Logo 3: GPS */}
+              <div className="flex flex-col items-center gap-1.5 group">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950/80 border border-blue-400/30 p-1.5 flex items-center justify-center shadow-lg group-hover:border-blue-400/60 group-hover:shadow-blue-500/20 transition-all duration-200">
+                  <img src="/gps-logo.svg" alt="GPS" className="w-full h-full object-contain" />
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-bold text-blue-300/90 uppercase tracking-widest font-mono">GPS</span>
+              </div>
+
+              <div className="h-10 w-px bg-teal-500/20" />
+
+              {/* Logo 4: GTS */}
+              <div className="flex flex-col items-center gap-1.5 group">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950/80 border border-emerald-400/30 p-1.5 flex items-center justify-center shadow-lg group-hover:border-emerald-400/60 group-hover:shadow-emerald-500/20 transition-all duration-200">
+                  <img src="/gts-logo.svg" alt="GTS" className="w-full h-full object-contain" />
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-bold text-emerald-300/90 uppercase tracking-widest font-mono">GTS</span>
               </div>
             </div>
 
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-white via-teal-100 to-teal-400 bg-clip-text text-transparent">
-                PREP &amp; LAB PORTAL
+            {/* Title Row */}
+            <div className="text-center pb-4 sm:pb-5 border-t border-teal-500/15 pt-3">
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-white via-teal-100 to-teal-400 bg-clip-text text-transparent">
+                Preparation &amp; Laboratory
               </h1>
-              <p className="text-xs text-teal-200/80 mt-1 font-medium tracking-wide">
-                PRECISION IN EVERY ELEMENT • HARITA NICKEL
+              <p className="text-[10px] sm:text-xs text-teal-300/70 mt-0.5 font-medium tracking-[0.15em] uppercase">
+                Harita Nickel • Quality Assurance &amp; Laboratorium Division
               </p>
             </div>
           </div>
+
+          {/* Accent line bottom */}
+          <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-teal-500/50 to-transparent" />
+        </div>
+
+        {/* ── CONTENT AREA ── */}
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 sm:p-8">
+
+          {/* Status pill */}
+          <div className="mb-5 flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-slate-900/80 border border-teal-500/30 backdrop-blur-md text-[11px] font-mono shadow-lg">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+            </span>
+            <span className="text-teal-300 font-semibold">PREPLAB ENTERPRISE GATEWAY</span>
+            <span className="text-teal-500/50">|</span>
+            <span className="text-teal-100/80">Sistem Aktif</span>
+          </div>
+
+          {/* Main Glassmorphic Login Card */}
+          <div className="relative w-full max-w-md bg-[#0d1527]/90 backdrop-blur-2xl rounded-3xl border border-teal-500/30 shadow-[0_0_60px_-15px_rgba(20,184,166,0.35)] p-8 sm:p-10 space-y-6 overflow-hidden">
+
+            {/* Card Top Light Accent Streak */}
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-80" />
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-12 bg-teal-500/20 blur-xl pointer-events-none" />
+
+            {/* Card Header — compact, no big logo */}
+            <div className="flex flex-col items-center text-center space-y-1.5">
+              <div className="flex items-center gap-2 text-teal-300/80">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-semibold tracking-wide uppercase font-mono">Portal Login</span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Masukkan NIK atau Username yang terdaftar
+              </p>
+            </div>
 
           {/* Form Content per Step */}
           <form onSubmit={handleNikLogin} className="space-y-4 pt-2 text-left">
@@ -1485,12 +1536,14 @@ export default function App() {
         </div>
 
         {/* Global Footer Motto */}
-        <div className="relative z-10 mt-6 text-center text-xs">
-          <p className="font-semibold text-teal-200/90">Divisi Quality Assurance & Laboratorium • Harita Nickel</p>
+        <div className="mt-6 text-center text-xs">
+          <p className="font-semibold text-teal-200/90">Divisi Quality Assurance &amp; Laboratorium • Harita Nickel</p>
           <p className="text-[11px] text-teal-400/70 mt-0.5">Safety • Precision • Integrity • Continuous Improvement</p>
         </div>
 
       </div>
+
+    </div>
     );
   }
 
@@ -1607,18 +1660,18 @@ export default function App() {
           <div className="flex flex-col items-center w-full flex-1 gap-1 pt-1 overflow-y-auto no-scrollbar">
             {[
               {
-                id: 'modules',
-                label: 'Menu',
-                icon: LayoutGrid,
-                onClick: () => setShowModulesDrawer(true),
-                title: 'Buka Semua Menu & Modul Portal',
-              },
-              {
                 id: 'home',
                 label: 'Home',
                 icon: Home,
                 onClick: () => handleNav('home'),
                 title: 'Beranda / Home',
+              },
+              {
+                id: 'modules',
+                label: 'Menu',
+                icon: LayoutGrid,
+                onClick: () => setShowModulesDrawer(true),
+                title: 'Buka Semua Menu & Modul Portal',
               },
               {
                 id: 'bulletin',

@@ -6,6 +6,7 @@ import {
   LayoutGrid, Columns, RotateCcw, Building2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { WDXRF_SUPERMINI_STANDARDS_ORDER, OFFICIAL_INPUT_STANDARDS_ORDER } from './XrfControlChartsTab';
 
 export interface IsolatedOffspecPoint {
   id: string; // unique key: `${instCode}-${stdCode}-${element}-${index}`
@@ -327,7 +328,15 @@ export const XrfOffspecIsolationModal: React.FC<XrfOffspecIsolationModalProps> =
       else entry.warningCount++;
     });
 
-    return Array.from(map.values());
+    const combinedOrder = Array.from(new Set([...WDXRF_SUPERMINI_STANDARDS_ORDER, ...OFFICIAL_INPUT_STANDARDS_ORDER]));
+    return Array.from(map.values()).sort((a, b) => {
+      const idxA = combinedOrder.findIndex(c => c === a.stdCode || c === a.stdCode.replace(' ', '_') || c.replace('_', ' ') === a.stdCode);
+      const idxB = combinedOrder.findIndex(c => c === b.stdCode || c === b.stdCode.replace(' ', '_') || c.replace('_', ' ') === b.stdCode);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.stdCode.localeCompare(b.stdCode);
+    });
   }, [filteredPoints]);
 
   // -----------------------------------------------------------------
