@@ -133,27 +133,56 @@ function jabatanRank(jabatan: string): number {
   return 4;
 }
 
-// Tentukan kolom KTA / TTA 1 / TTA 2 berdasarkan kewajiban & laporan aktual
-function buildKtaCells(emp: any): Pick<RekapValues, 'ktaDone' | 'tglKta' | 'tglTta1' | 'tglTta2'> {
+interface Period { start: Date; end: Date }
+
+// Parse tanggal; 'YYYY-MM-DD' dibaca sebagai tanggal lokal (bukan UTC)
+function parseLocalDate(v: any): Date | null {
+  if (!v) return null;
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const d = m ? new Date(+m[1], +m[2] - 1, +m[3], 12) : new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function inPeriod(v: any, period: Period): boolean {
+  const d = parseLocalDate(v);
+  return !!d && d >= period.start && d <= period.end;
+}
+
+// Ambil tanggal pertama yang masuk periode week; null bila semua di luar periode
+function pickInPeriod(period: Period, ...candidates: any[]): any {
+  return candidates.find(c => inPeriod(c, period)) ?? null;
+}
+
+// Tentukan kolom KTA / TTA 1 / TTA 2 berdasarkan kewajiban & laporan yang tanggalnya masuk periode week
+function buildKtaCells(emp: any, period: Period): Pick<RekapValues, 'ktaDone' | 'tglKta' | 'tglTta1' | 'tglTta2'> {
   const obligation = emp.obligation || getKtaObligation(emp.nik, emp.jabatan, emp.section);
   const cd = emp.checkDetails || {};
-  const isDone = emp.status === 'SUDAH';
+  const isManual = emp.isManualOverride && emp.status === 'SUDAH';
 
   type Sub = { type: 'KTA' | 'TTA'; ts: any };
+  const typeOf = (label: any): 'KTA' | 'TTA' => (String(label || 'KTA').toUpperCase().includes('TTA') ? 'TTA' : 'KTA');
   let subs: Sub[] = [];
   if (Array.isArray(emp.reports) && emp.reports.length > 0) {
-    subs = emp.reports.map((r: any) => ({
-      type: String(r.reportType || 'KTA').toUpperCase().includes('TTA') ? 'TTA' : 'KTA',
-      ts: r.timestamp || r.date || null
-    }));
+    subs = emp.reports.map((r: any) => ({ type: typeOf(r.reportType), ts: pickInPeriod(period, r.date, r.timestamp) }));
   } else {
-    if (cd.check1Done && cd.check1Label) subs.push({ type: String(cd.check1Label).toUpperCase().includes('TTA') ? 'TTA' : 'KTA', ts: cd.check1Timestamp || emp.completedAt });
-    if (cd.check2Done && cd.check2Label) subs.push({ type: String(cd.check2Label).toUpperCase().includes('TTA') ? 'TTA' : 'KTA', ts: cd.check2Timestamp || emp.completedAt });
+    if (cd.check1Done && cd.check1Label) subs.push({ type: typeOf(cd.check1Label), ts: pickInPeriod(period, cd.check1Timestamp, emp.completedAt) });
+    if (cd.check2Done && cd.check2Label) subs.push({ type: typeOf(cd.check2Label), ts: pickInPeriod(period, cd.check2Timestamp, emp.completedAt) });
   }
-  subs.sort((a, b) => (a.ts ? new Date(a.ts).getTime() : 0) - (b.ts ? new Date(b.ts).getTime() : 0));
+  // Laporan dengan tanggal di luar periode week otomatis diabaikan
+  subs = subs.filter(s => s.ts !== null);
+  subs.sort((a, b) => (parseLocalDate(a.ts)?.getTime() || 0) - (parseLocalDate(b.ts)?.getTime() || 0));
 
   const ktaSub = subs.find(s => s.type === 'KTA');
   const ttaSubs = subs.filter(s => s.type === 'TTA');
+
+  // Hitung ulang status dari laporan dalam periode (aturan sama dengan server /api/rekap-kta)
+  let isDone = isManual;
+  if (!isDone) {
+    if (obligation.type === '1_KTA_OR_TTA') isDone = subs.length >= 1;
+    else if (obligation.type === '1_KTA_AND_1_TTA') isDone = (!!ktaSub && ttaSubs.length >= 1) || subs.length >= 2;
+    else isDone = subs.length >= 2;
+  }
 
   let needKta = false, needTta1 = false, needTta2 = false;
   if (obligation.type === '1_KTA_AND_1_TTA') {
@@ -173,8 +202,8 @@ function buildKtaCells(emp: any): Pick<RekapValues, 'ktaDone' | 'tglKta' | 'tglT
   }
 
   const cell = (sub: Sub | undefined, required: boolean): DateVal => {
-    if (sub) return toIsoDate(sub.ts) || '√';
-    if (required) return emp.isManualOverride && isDone ? '√' : '';
+    if (sub) return toIsoDate(parseLocalDate(sub.ts)) || '√';
+    if (required) return isManual ? '√' : '';
     return null;
   };
 
@@ -186,11 +215,16 @@ function buildKtaCells(emp: any): Pick<RekapValues, 'ktaDone' | 'tglKta' | 'tglT
   };
 }
 
-// Data edit tersimpan → nilai efektif. Tanggal: null = otomatis, '-' = tidak wajib, '' = kosong
-function applyEdit(auto: RekapValues, edit: any): RekapValues {
+// Data edit tersimpan → nilai efektif. Tanggal: null = otomatis, '-' = tidak wajib, '' = kosong.
+// Tanggal manual di luar periode week juga otomatis dikosongkan.
+function applyEdit(auto: RekapValues, edit: any, period: Period): RekapValues {
   if (!edit) return auto;
-  const date = (stored: any, fallback: DateVal): DateVal =>
-    stored === null || stored === undefined ? fallback : stored === '-' ? null : stored;
+  const date = (stored: any, fallback: DateVal): DateVal => {
+    if (stored === null || stored === undefined) return fallback;
+    if (stored === '-') return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(stored) && !inPeriod(stored, period)) return '';
+    return stored;
+  };
   const bool = (stored: any, fallback: boolean) => (typeof stored === 'boolean' ? stored : fallback);
   // absenceStatus: null = otomatis (data lama is_cuti tetap dihormati), '' = hadir, selain itu status
   let absence: Absence | null = auto.absence;
@@ -387,7 +421,7 @@ function dateToForm(v: DateVal): { mode: DateMode; date: string } {
   return { mode: 'date', date: v === '√' ? '' : v };
 }
 
-function DateField({ label, value, onChange }: { label: string; value: { mode: DateMode; date: string }; onChange: (v: { mode: DateMode; date: string }) => void }) {
+function DateField({ label, value, onChange, min, max }: { label: string; value: { mode: DateMode; date: string }; onChange: (v: { mode: DateMode; date: string }) => void; min?: string; max?: string }) {
   return (
     <div className="space-y-1.5">
       <label className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-muted)]">{label}</label>
@@ -406,6 +440,8 @@ function DateField({ label, value, onChange }: { label: string; value: { mode: D
       {value.mode === 'date' && (
         <input
           type="date"
+          min={min}
+          max={max}
           value={value.date}
           onChange={e => onChange({ mode: 'date', date: e.target.value })}
           className="w-full h-9 px-2.5 rounded-lg border border-[var(--border-main)] bg-[var(--input-bg)] text-sm text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
@@ -447,9 +483,12 @@ interface EditDialogProps {
   editorName: string;
   onClose: () => void;
   onSaved: () => void;
+  period: Period;
 }
 
-function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSaved }: EditDialogProps) {
+function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSaved, period }: EditDialogProps) {
+  const minDate = toIsoDate(period.start);
+  const maxDate = toIsoDate(period.end);
   const [absence, setAbsence] = useState<Absence | null>(row.absence);
   const isCuti = absence !== null;
   const [ktaDone, setKtaDone] = useState(row.ktaDone);
@@ -481,6 +520,10 @@ function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSave
   const handleSave = async () => {
     if ([tglKta, tglTta1, tglTta2, tglInspeksi].some(f => f.mode === 'date' && !f.date)) {
       toast.error('Isi tanggal atau pilih "Belum" / "Tdk Wajib"');
+      return;
+    }
+    if ([tglKta, tglTta1, tglTta2, tglInspeksi].some(f => f.mode === 'date' && f.date && !inPeriod(f.date, period))) {
+      toast.error(`Tanggal harus berada dalam periode ${week} (${formatShortDate(minDate)} s/d ${formatShortDate(maxDate)})`);
       return;
     }
     setSaving(true);
@@ -588,9 +631,9 @@ function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSave
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <StatusToggle label="Status KTA/TTA" value={ktaDone} onChange={setKtaDone} />
-                <DateField label="Tanggal KTA" value={tglKta} onChange={setTglKta} />
-                <DateField label="Tanggal TTA 1" value={tglTta1} onChange={setTglTta1} />
-                <DateField label="Tanggal TTA 2" value={tglTta2} onChange={setTglTta2} />
+                <DateField label="Tanggal KTA" value={tglKta} onChange={setTglKta} min={minDate} max={maxDate} />
+                <DateField label="Tanggal TTA 1" value={tglTta1} onChange={setTglTta1} min={minDate} max={maxDate} />
+                <DateField label="Tanggal TTA 2" value={tglTta2} onChange={setTglTta2} min={minDate} max={maxDate} />
               </div>
             </section>
 
@@ -600,7 +643,7 @@ function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSave
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <StatusToggle label="Status Inspeksi" value={inspeksiDone} onChange={setInspeksiDone} />
-                <DateField label="Tanggal Inspeksi" value={tglInspeksi} onChange={setTglInspeksi} />
+                <DateField label="Tanggal Inspeksi" value={tglInspeksi} onChange={setTglInspeksi} min={minDate} max={maxDate} />
                 <div className="sm:col-span-2 space-y-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-muted)]">Keterangan Inspeksi</label>
                   <input
@@ -779,12 +822,15 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     inspeksiData.rekapList.filter(isValidEmployee).forEach(emp => {
       const { auto } = ensure(emp, false);
       const cd = emp.checkDetails || {};
-      auto.inspeksiDone = emp.status === 'SUDAH';
-      auto.keteranganInspeksi = emp.pdfTitle || cd.pdfTitle || '';
-      auto.tglInspeksi = toIsoDate(cd.pdfTimestamp || cd.ssTimestamp || emp.completedAt);
+      // Hanya tanggal inspeksi yang masuk periode week yang dihitung
+      const tgl = pickInPeriod(weekRange, cd.pdfTimestamp, cd.ssTimestamp, emp.completedAt);
+      const isManual = emp.isManualOverride && emp.status === 'SUDAH';
+      auto.inspeksiDone = emp.status === 'SUDAH' && (isManual || tgl !== null);
+      auto.keteranganInspeksi = tgl !== null || isManual ? (emp.pdfTitle || cd.pdfTitle || '') : '';
+      auto.tglInspeksi = tgl !== null ? toIsoDate(parseLocalDate(tgl)) : (isManual ? '√' : '');
     });
     ktaData.rekapList.filter(isValidEmployee).forEach(emp => {
-      Object.assign(ensure(emp, false).auto, buildKtaCells(emp));
+      Object.assign(ensure(emp, false).auto, buildKtaCells(emp, weekRange));
     });
     [...inspeksiData.cutiList, ...ktaData.cutiList].filter(isValidEmployee).forEach(emp => ensure(emp, true));
 
@@ -792,10 +838,10 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     return Array.from(map.entries())
       .map(([key, e]) => {
         const edit = editMap.get(key);
-        return { ...e, ...applyEdit(e.auto, edit), edit };
+        return { ...e, ...applyEdit(e.auto, edit, weekRange), edit };
       })
       .sort((a, b) => jabatanRank(a.jabatan) - jabatanRank(b.jabatan) || a.name.localeCompare(b.name));
-  }, [inspeksiData, ktaData, edits]);
+  }, [inspeksiData, ktaData, edits, weekRange]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1220,6 +1266,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
           year={currentYear}
           editorNik={inspectorNik}
           editorName={inspectorName}
+          period={weekRange}
           onClose={() => setEditingRow(null)}
           onSaved={() => { setEditingRow(null); fetchEdits(selectedWeek); }}
         />
