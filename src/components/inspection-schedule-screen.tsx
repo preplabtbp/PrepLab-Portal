@@ -1111,6 +1111,9 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
   const [publishState, setPublishState] = useState({ isPublished: false, hasUnpublishedChanges: false });
   // Tampilan karyawan perseorangan (bukan Administration / Developer / Manager)
   const [personal, setPersonal] = useState<{ loading: boolean; available: boolean; isPublished: boolean; data: any | null; error?: string }>({ loading: true, available: false, isPublished: false, data: null });
+  // Pesan bila jadwal portal gagal dimuat (database bermasalah) → mode cadangan Google Sheet
+  const [degraded, setDegraded] = useState('');
+  const canEditRef = useRef(false);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -1190,16 +1193,16 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     } catch (err: any) {
       failure = err?.message || 'Koneksi ke server terputus';
     }
-    // Gagal memuat (mis. database penuh/offline): tampilkan error, jangan turunkan hak akses diam-diam
+    // Gagal memuat jadwal portal (mis. database penuh/offline): tetap tampilkan jadwal Google Sheet week aktif
+    // (hanya-baca) dengan banner peringatan; hak akses terakhir dipertahankan, tidak diturunkan diam-diam
     if (failure) {
       console.error('Gagal memuat jadwal portal:', failure);
-      setPlan(null);
-      setSchedule([]);
-      setLoading(false);
-      setLoadError(`Gagal memuat jadwal inspeksi: ${failure}. Tekan Segarkan untuk mencoba lagi.`);
-      setPersonal({ loading: false, available: false, isPublished: false, data: null, error: failure });
-      return;
+      editor = canEditRef.current;
+      setPublishState({ isPublished: false, hasUnpublishedChanges: false });
+      setCutiConflicts([]);
     }
+    setDegraded(failure);
+    canEditRef.current = editor;
     setCanEdit(editor);
     setPlan(found);
 
@@ -1215,7 +1218,15 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         const periodEnd = getRekapWeekRange(currentYear, week).end;
         const res = await fetch(`/api/inspection-schedule?sheet=CurrentWeek&week=W${getISOWeek(periodEnd)}&year=${getISOWeekYear(periodEnd)}&nik=${encodeURIComponent(inspectorNik || '')}&name=${encodeURIComponent(inspectorName || '')}${refresh ? '&refresh=true' : ''}`);
         const json = await res.json().catch(() => null);
-        setPersonal({ loading: false, available: true, isPublished: published, data: json?.found ? json.schedule : null });
+        if (!json || (json.success === false && json.error)) {
+          // Server gagal (bukan "tidak dijadwalkan") → tampilkan error yang jelas
+          const raw = String(json?.error || `Server membalas ${res.status}`);
+          const msg = /connection slots|too many clients/i.test(raw) ? 'Database sedang penuh (batas koneksi server tercapai)'
+            : /Failed query/i.test(raw) ? 'Database sedang bermasalah' : raw;
+          setPersonal({ loading: false, available: true, isPublished: published, data: null, error: msg });
+        } else {
+          setPersonal({ loading: false, available: true, isPublished: published, data: json.found ? json.schedule : null });
+        }
       } catch {
         setPersonal({ loading: false, available: true, isPublished: published, data: null });
       }
@@ -1589,6 +1600,24 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       {tab === 'rekap' ? (
         <ScheduleRekapPanel year={currentYear} currentWeek={currentWeek} photoOf={photoOf} />
       ) : (<>
+      {degraded && (
+        <div className="flex items-start gap-3 rounded-2xl border border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10 p-3">
+          <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-rose-800 dark:text-rose-200">Jadwal portal tidak dapat dimuat</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300">
+              {degraded}. Sementara ditampilkan jadwal Google Sheet (week aktif, hanya-baca); acak, edit & publikasi tidak tersedia sampai koneksi pulih.
+            </p>
+          </div>
+          <button
+            onClick={() => loadWeek(selectedWeek, true)}
+            className="h-8 px-3 shrink-0 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Coba lagi
+          </button>
+        </div>
+      )}
+
       {/* Banner minggu */}
       <div className="rounded-2xl overflow-hidden border border-yellow-300 dark:border-yellow-500/40 shadow-sm">
         <div className="bg-gradient-to-r from-yellow-300 via-yellow-200 to-amber-200 dark:from-yellow-500/25 dark:via-yellow-500/15 dark:to-amber-500/15 px-4 py-3 text-center">
@@ -1703,29 +1732,29 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         </div>
         {canEdit && (
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => handleRandomize('ALL')} disabled={!!busy} className="h-9 px-3 rounded-xl bg-[var(--primary)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang seluruh petugas (Malam & Siang + Nonshift)">
+            <button onClick={() => handleRandomize('ALL')} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl bg-[var(--primary)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang seluruh petugas (Malam & Siang + Nonshift)">
               <Shuffle className="w-3.5 h-3.5" /> Acak Semua
             </button>
-            <button onClick={() => handleRandomize('Malam')} disabled={!!busy} className="h-9 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Malam saja">
+            <button onClick={() => handleRandomize('Malam')} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Malam saja">
               <Moon className="w-3.5 h-3.5" /> Acak Shift Malam
             </button>
-            <button onClick={() => handleRandomize('Siang')} disabled={!!busy} className="h-9 px-3 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Siang digabung Nonshift">
+            <button onClick={() => handleRandomize('Siang')} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Siang digabung Nonshift">
               <Sun className="w-3.5 h-3.5" /> Acak Siang + Nonshift
             </button>
             {!plan && isActiveWeek && schedule.length > 0 && (
-              <button onClick={handleCopyFromSheet} disabled={!!busy} className="h-9 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-[var(--text-main)] text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Salin jadwal Google Sheet ke portal agar bisa diedit per karyawan">
+              <button onClick={handleCopyFromSheet} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-[var(--text-main)] text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Salin jadwal Google Sheet ke portal agar bisa diedit per karyawan">
                 <CopyPlus className="w-3.5 h-3.5" /> Salin dari Sheet
               </button>
             )}
             {plan && (
-              <button onClick={handleDeletePlan} disabled={!!busy} className="h-9 px-3 rounded-xl border border-rose-300 dark:border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Hapus jadwal portal, kembali ke Google Sheet">
+              <button onClick={handleDeletePlan} disabled={!!busy || !!degraded} className="h-9 px-3 rounded-xl border border-rose-300 dark:border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Hapus jadwal portal, kembali ke Google Sheet">
                 <Trash2 className="w-3.5 h-3.5" /> Hapus
               </button>
             )}
             {plan && (
               <button
                 onClick={handlePublish}
-                disabled={!!busy || (publishState.isPublished && !publishState.hasUnpublishedChanges)}
+                disabled={!!busy || !!degraded || (publishState.isPublished && !publishState.hasUnpublishedChanges)}
                 className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
                 title="Publikasikan jadwal ke karyawan & kirim notifikasi"
               >
@@ -1745,7 +1774,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
               <AlertTriangle className="w-4 h-4" /> {warningList.length} peringatan jadwal
             </p>
             {canEdit && plan && cutiConflicts.length > 0 && (
-              <button onClick={handleRemoveCuti} disabled={!!busy} className="h-8 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
+              <button onClick={handleRemoveCuti} disabled={!!busy || !!degraded} className="h-8 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
                 <UserX className="w-3.5 h-3.5" /> Keluarkan {cutiConflicts.length} karyawan cuti
               </button>
             )}

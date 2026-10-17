@@ -19,6 +19,17 @@ const WORKING_CODES = new Set(['D', 'N', 'LS']);
 const ONSITE_CODES = new Set(['D', 'N', 'OFF', 'LS']);
 const DAY_MS = 86400000;
 
+// Pesan error yang bisa dipahami pengguna (bukan teks SQL mentah dari drizzle "Failed query: ...")
+function friendlyDbError(error: any, fallback: string): string {
+  const code = error?.cause?.code || error?.code;
+  const msg = String(error?.cause?.message || error?.message || '');
+  if (code === '53300' || /connection slots|too many clients/i.test(msg)) {
+    return 'Database sedang penuh (batas koneksi server tercapai). Coba lagi beberapa saat';
+  }
+  if (/ECONNREFUSED|ETIMEDOUT|ENOTFOUND|timeout|terminated/i.test(msg)) return 'Database tidak dapat dihubungi. Coba lagi beberapa saat';
+  return !msg || msg.startsWith('Failed query') ? fallback : msg;
+}
+
 let planTableEnsured = false;
 async function ensurePlanTable() {
   if (planTableEnsured) return;
@@ -293,7 +304,7 @@ inspectionPlannerRouter.get("/api/inspection-plan", async (req, res) => {
     res.json({ success: true, period, plan, history, canEdit, cutiConflicts, isPublished, hasUnpublishedChanges });
   } catch (error: any) {
     console.error('Error inspection-plan:', error);
-    res.status(500).json({ success: false, message: error.message || 'Gagal memuat jadwal' });
+    res.status(503).json({ success: false, message: friendlyDbError(error, 'Gagal memuat jadwal') });
   }
 });
 
@@ -332,7 +343,7 @@ inspectionPlannerRouter.post("/api/inspection-plan/randomize", async (req, res) 
     res.json({ success: true, period, plan, history });
   } catch (error: any) {
     console.error('Error randomize inspection-plan:', error);
-    res.status(500).json({ success: false, message: error.message || 'Gagal mengacak jadwal' });
+    res.status(503).json({ success: false, message: friendlyDbError(error, 'Gagal mengacak jadwal') });
   }
 });
 
@@ -373,7 +384,7 @@ inspectionPlannerRouter.post("/api/inspection-plan/from-sheet", async (req, res)
     res.json({ success: true, period, plan });
   } catch (error: any) {
     console.error('Error from-sheet inspection-plan:', error);
-    res.status(500).json({ success: false, message: error.message || 'Gagal menyalin jadwal Google Sheet' });
+    res.status(503).json({ success: false, message: friendlyDbError(error, 'Gagal menyalin jadwal Google Sheet') });
   }
 });
 
@@ -399,7 +410,7 @@ inspectionPlannerRouter.put("/api/inspection-plan", async (req, res) => {
     res.json({ success: true, period, plan });
   } catch (error: any) {
     console.error('Error save inspection-plan:', error);
-    res.status(500).json({ success: false, message: error.message || 'Gagal menyimpan jadwal' });
+    res.status(503).json({ success: false, message: friendlyDbError(error, 'Gagal menyimpan jadwal') });
   }
 });
 
@@ -475,7 +486,7 @@ inspectionPlannerRouter.post("/api/inspection-plan/publish", async (req, res) =>
     });
   } catch (error: any) {
     console.error('Error publish inspection-plan:', error);
-    res.status(500).json({ success: false, message: error.message || 'Gagal mempublikasikan jadwal' });
+    res.status(503).json({ success: false, message: friendlyDbError(error, 'Gagal mempublikasikan jadwal') });
   }
 });
 
@@ -492,7 +503,7 @@ inspectionPlannerRouter.delete("/api/inspection-plan", async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error delete inspection-plan:', error);
-    res.status(500).json({ success: false, message: error.message || 'Gagal menghapus jadwal' });
+    res.status(503).json({ success: false, message: friendlyDbError(error, 'Gagal menghapus jadwal') });
   }
 });
 
@@ -533,6 +544,6 @@ inspectionPlannerRouter.get("/api/inspection-plan/rekap", async (req, res) => {
     res.json({ success: true, year, weeks, rows: list });
   } catch (error: any) {
     console.error('Error rekap inspection-plan:', error);
-    res.status(500).json({ success: false, message: error.message || 'Gagal memuat rekap jadwal' });
+    res.status(503).json({ success: false, message: friendlyDbError(error, 'Gagal memuat rekap jadwal') });
   }
 });
