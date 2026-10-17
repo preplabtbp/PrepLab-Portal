@@ -19,6 +19,8 @@ interface GroupReportProps {
   onClose?: () => void;
   isFloating?: boolean;
   isDeveloper?: boolean;
+  // 'feed' = modul SAP (laporan & feed), 'rekap' = detail rekap di menu Safety
+  mode?: 'feed' | 'rekap';
 }
 
 function getCurrentISOWeekTag(d: Date = new Date()): string {
@@ -166,9 +168,9 @@ export function formatReportDateTime(timestamp?: string | number | Date | null):
   }
 }
 
-export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false }: GroupReportProps) {
-  // Main view state: 'feed' or 'rekap'
-  const [activeTab, setActiveTab] = useState<'feed' | 'rekap'>('feed');
+export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false, mode = 'feed' }: GroupReportProps) {
+  // Main view: 'feed' (modul SAP) atau 'rekap' (dipindahkan ke menu Safety)
+  const activeTab = mode;
   // Category filter for feed: 'ALL' | 'INSPEKSI' | 'KTA_TTA'
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'INSPEKSI' | 'KTA_TTA'>('ALL');
   // Sub-tab for Rekap: 'INSPEKSI' | 'KTA_TTA'
@@ -1476,10 +1478,10 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
             </div>
             <div className="min-w-0">
               <h1 className="text-sm sm:text-base font-black tracking-tight text-[var(--text-main)] font-display truncate">
-                SAP Management (Hazard & Safety)
+                {activeTab === 'rekap' ? 'Detail Rekap Status Laporan' : 'SAP Management (Hazard & Safety)'}
               </h1>
               <p className="text-[11px] text-[var(--text-muted)] font-medium truncate">
-                Inspeksi K3 & Laporan KTA/TTA Prep & Lab ({selectedWeek})
+                {activeTab === 'rekap' ? 'Status per personil, cuti & pengingat' : 'Inspeksi K3 & Laporan KTA/TTA Prep & Lab'} ({selectedWeek})
               </p>
             </div>
           </div>
@@ -1527,32 +1529,6 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
           </div>
         </div>
 
-        {/* NAVIGATION TABS (FEED VS REKAP) */}
-        <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-[var(--border-main)]">
-          <button
-            onClick={() => setActiveTab('feed')}
-            className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'feed'
-                ? 'bg-[var(--primary)] text-white shadow-md'
-                : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>Laporan & Feed ({messages.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('rekap')}
-            className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'rekap'
-                ? 'bg-[var(--primary)] text-white shadow-md'
-                : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Rekap Status Laporan</span>
-          </button>
-        </div>
       </div>
 
       {/* ── TAB CONTENT 1: FEED & LAPORAN SAFETY (DENGAN FILTER KATEGORI) ── */}

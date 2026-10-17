@@ -1070,3 +1070,51 @@ export const xrfVerificationItems = pgTable('xrf_verification_items', {
   index('idx_xrf_ver_items_std_code').on(t.standardCode),
 ]);
 
+
+// Edit manual baris Rekap KTA/TTA & Inspeksi (menu Safety), per minggu ISO & NIK.
+// Kolom bernilai NULL = ikut data otomatis; terisi = override manual.
+export const safetyRekapEdits = pgTable('safety_rekap_edits', {
+  id: serial('id').primaryKey(),
+  week: text('week').notNull(), // contoh: 'W42'
+  year: integer('year').notNull(),
+  nik: text('nik').notNull(),
+  name: text('name'),
+  isCuti: boolean('is_cuti'), // lama; digantikan absenceStatus
+  absenceStatus: text('absence_status'), // NULL = otomatis, '' = hadir/wajib, 'CUTI' | 'IZIN' | 'DINAS' | 'RESIGN' | 'NEW_HIRE'
+  ktaDone: boolean('kta_done'),
+  tglKta: text('tgl_kta'), // '' = kosongkan, '-' = tidak wajib (sel hitam)
+  tglTta1: text('tgl_tta1'),
+  tglTta2: text('tgl_tta2'),
+  inspeksiDone: boolean('inspeksi_done'),
+  keteranganInspeksi: text('keterangan_inspeksi'),
+  tglInspeksi: text('tgl_inspeksi'),
+  catatan: text('catatan'),
+  updatedByNik: text('updated_by_nik'),
+  updatedByName: text('updated_by_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_safety_rekap_edits_week_nik').on(t.year, t.week, t.nik),
+]);
+
+// Jadwal Inspeksi mingguan yang dibuat di portal (acak per shift / edit manual), per week rekap (Sabtu – Jumat).
+// Bila ada, menggantikan jadwal Google Sheet "CurrentWeek" untuk minggu ISO `isoWeek` (Senin – Jumat periode).
+export const inspectionSchedulePlans = pgTable('inspection_schedule_plans', {
+  id: serial('id').primaryKey(),
+  year: integer('year').notNull(), // tahun week rekap
+  week: integer('week').notNull(), // nomor week rekap
+  isoYear: integer('iso_year').notNull(),
+  isoWeek: text('iso_week').notNull(), // contoh: 'W43'
+  periodStart: text('period_start').notNull(), // 'YYYY-MM-DD' (Sabtu)
+  periodEnd: text('period_end').notNull(), // 'YYYY-MM-DD' (Jumat)
+  members: json('members').notNull(), // PlanMember[]: { nik, name, jabatan, section, gol, team, shiftGroup, agendaId, roleIndex, isCuti, codes }
+  agendaShifts: json('agenda_shifts'), // { [agendaId]: 'Malam' | 'Siang' }
+  source: text('source').default('random'), // 'random' | 'manual'
+  updatedByNik: text('updated_by_nik'),
+  updatedByName: text('updated_by_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_inspection_schedule_plans_week').on(t.year, t.week),
+  index('idx_inspection_schedule_plans_iso').on(t.isoYear, t.isoWeek),
+]);
