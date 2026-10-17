@@ -994,7 +994,7 @@ function ScheduleRekapPanel({ year, currentWeek, photoOf }: { year: number; curr
 // ─── Tampilan karyawan perseorangan (hanya jadwal milik sendiri) ────────────
 
 function PersonalSchedulePanel({ state, week, name, photoOf }: {
-  state: { loading: boolean; available: boolean; isPublished: boolean; data: any | null };
+  state: { loading: boolean; available: boolean; isPublished: boolean; data: any | null; error?: string };
   week: number; name: string; photoOf: (name: string) => string | undefined;
 }) {
   const box = 'bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-sm';
@@ -1008,6 +1008,9 @@ function PersonalSchedulePanel({ state, week, name, photoOf }: {
       <p className="text-xs text-[var(--text-muted)] mt-1 max-w-md mx-auto">{desc}</p>
     </div>
   );
+  if (state.error) {
+    return empty('Gagal memuat jadwal inspeksi', `${state.error}. Tekan Segarkan untuk mencoba lagi.`, <AlertCircle className="w-6 h-6 text-rose-500" />);
+  }
   if (!state.available) {
     return empty(`Jadwal Week ${week} belum dipublikasikan`, 'Jadwal inspeksi minggu ini belum dipublikasikan oleh Administration. Silakan cek kembali nanti — Anda akan menerima notifikasi saat jadwal terbit.', <CalendarRange className="w-6 h-6" />);
   }
@@ -1107,7 +1110,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
   const [cutiConflicts, setCutiConflicts] = useState<string[]>([]);
   const [publishState, setPublishState] = useState({ isPublished: false, hasUnpublishedChanges: false });
   // Tampilan karyawan perseorangan (bukan Administration / Developer / Manager)
-  const [personal, setPersonal] = useState<{ loading: boolean; available: boolean; isPublished: boolean; data: any | null }>({ loading: true, available: false, isPublished: false, data: null });
+  const [personal, setPersonal] = useState<{ loading: boolean; available: boolean; isPublished: boolean; data: any | null; error?: string }>({ loading: true, available: false, isPublished: false, data: null });
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -1170,6 +1173,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     let found: InspectionPlan | null = null;
     let editor = false;
     let published = false;
+    let failure = '';
     try {
       const res = await fetch(`/api/inspection-plan?year=${currentYear}&week=${week}`);
       const json = await res.json().catch(() => null);
@@ -1180,9 +1184,21 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         setHistory(json.history || {});
         setCutiConflicts(json.cutiConflicts || []);
         setPublishState({ isPublished: published, hasUnpublishedChanges: !!json.hasUnpublishedChanges });
+      } else {
+        failure = json?.message || `Server membalas ${res.status}`;
       }
-    } catch (err) {
-      console.error('Gagal memuat jadwal portal:', err);
+    } catch (err: any) {
+      failure = err?.message || 'Koneksi ke server terputus';
+    }
+    // Gagal memuat (mis. database penuh/offline): tampilkan error, jangan turunkan hak akses diam-diam
+    if (failure) {
+      console.error('Gagal memuat jadwal portal:', failure);
+      setPlan(null);
+      setSchedule([]);
+      setLoading(false);
+      setLoadError(`Gagal memuat jadwal inspeksi: ${failure}. Tekan Segarkan untuk mencoba lagi.`);
+      setPersonal({ loading: false, available: false, isPublished: false, data: null, error: failure });
+      return;
     }
     setCanEdit(editor);
     setPlan(found);
@@ -1791,7 +1807,11 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
             <span className="opacity-60">{cards.filter(c => c.category === k).length}</span>
           </button>
         ))}
-        {sheetName && <span className="ml-auto text-[11px] text-[var(--text-muted)]">Sumber: Google Sheet "{sheetName}"</span>}
+        {(plan || sheetName) && (
+          <span className="ml-auto text-[11px] text-[var(--text-muted)]">
+            Sumber: {plan ? `Jadwal Portal (${publishState.isPublished ? (publishState.hasUnpublishedChanges ? 'draft, ada perubahan' : 'terpublikasi') : 'draft'})` : `Google Sheet "${sheetName}"`}
+          </span>
+        )}
       </div>
 
       {/* Kartu agenda */}

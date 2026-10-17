@@ -90,9 +90,11 @@ export async function buildRosterMembers(period: ReturnType<typeof rekapPeriod>,
     const working = codes.filter(c => WORKING_CODES.has(c));
     const nights = working.filter(c => c === 'N').length;
     const team = /^a$/i.test(e.team) ? 'A' : /^b$/i.test(e.team) ? 'B' : 'Nonshift';
-    // Sama dengan Kontrol Cuti: ada kode cuti/TRV/izin/sakit/dinas di salah satu hari Senin – Rabu → tidak dijadwalkan
-    const onLeave = codes.some(c => c && c !== '-' && !ONSITE_CODES.has(c));
-    const isCuti = onLeave || working.length === 0;
+    // Sama dengan Kontrol Cuti: ada kode cuti/TRV/izin/sakit/dinas di salah satu hari Senin – Rabu → tidak dijadwalkan.
+    // CS (Cuti Site) tetap di site → dihitung onsite, bukan cuti.
+    const isCutiSite = (c: string) => /^CS\d*$/.test(c);
+    const onLeave = codes.some(c => c && c !== '-' && !ONSITE_CODES.has(c) && !isCutiSite(c));
+    const isCuti = onLeave || (working.length === 0 && !codes.some(isCutiSite));
     list.push({
       nik: e.nik, name: e.name, jabatan: e.jabatan, section: e.section, gol: e.gol, team,
       shiftGroup: isCuti ? null : nights > working.length - nights ? 'Malam' : team === 'Nonshift' ? 'Nonshift' : 'Siang',
