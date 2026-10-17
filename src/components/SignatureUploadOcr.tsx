@@ -5,6 +5,7 @@ import {
   Sliders, 
   RotateCcw, 
   Shield, 
+  ShieldCheck,
   Palette, 
   RefreshCw,
   Maximize2,
@@ -46,8 +47,8 @@ export function SignatureUploadOcr({
   const [contrast, setContrast] = useState<number>(1.3);
   const [invert, setInvert] = useState<boolean>(false);
   
-  // Watermark Settings
-  const [watermarkEnabled, setWatermarkEnabled] = useState<boolean>(true);
+  // Watermark Settings (Default false to prevent double watermark with portal system)
+  const [watermarkEnabled, setWatermarkEnabled] = useState<boolean>(false);
   const [watermarkText, setWatermarkText] = useState<string>('HANYA UNTUK PREPLAB PORTAL');
   const [watermarkSubText, setWatermarkSubText] = useState<string>(
     inspectorNik && inspectorName ? `${inspectorName} • ${inspectorNik}` : ''
@@ -338,21 +339,49 @@ export function SignatureUploadOcr({
           </div>
 
           {/* Watermark Protection Box */}
-          <div className="p-3.5 rounded-2xl bg-[var(--card-bg)] border border-teal-500/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5 cursor-pointer">
-                <Shield className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                Watermark Pengaman Digital
-              </label>
-              <input
-                type="checkbox"
-                checked={watermarkEnabled}
-                onChange={(e) => setWatermarkEnabled(e.target.checked)}
-                className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
-              />
+          <div className="p-3.5 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-main)] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="font-bold text-[var(--text-main)] flex items-center gap-1.5 text-xs">
+                <Shield className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                Pilihan Watermark:
+              </span>
+              <div className="grid grid-cols-2 gap-1.5 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setWatermarkEnabled(false)}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition-all cursor-pointer ${
+                    !watermarkEnabled
+                      ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                      : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                  }`}
+                >
+                  Polos (Rapi & Standar)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWatermarkEnabled(true)}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition-all cursor-pointer ${
+                    watermarkEnabled
+                      ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                      : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                  }`}
+                >
+                  Cap Watermark di Gambar
+                </button>
+              </div>
             </div>
 
-            {watermarkEnabled && (
+            {!watermarkEnabled ? (
+              <div className="p-2.5 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/60 dark:border-teal-800/50 text-[11px] text-teal-900 dark:text-teal-200 flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-teal-950 dark:text-teal-100">Mode Polos Aktif (Rekomendasi)</p>
+                  <p className="leading-relaxed opacity-90">
+                    File tanda tangan bersih tanpa teks dicap di dalam gambar. Watermark resmi (<em>PREPLAB SECURE VERIFIED • AES-256</em>) sudah otomatis disediakan oleh sistem portal saat pratinjau dan tanda tangan formulir, sehingga <strong>tidak terjadi watermark ganda/tumpuk</strong>.
+                  </p>
+                </div>
+              </div>
+            ) : (
               <div className="space-y-3 pt-1 text-xs">
                 {/* Preset Chips */}
                 <div className="space-y-1">

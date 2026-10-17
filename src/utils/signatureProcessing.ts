@@ -44,7 +44,7 @@ export const DEFAULT_SIGNATURE_OPTIONS: ProcessSignatureOptions = {
   aspectRatio: 'standard',
   scale: 1.0,
   watermark: {
-    enabled: true,
+    enabled: false, // Default false to avoid double watermark with portal system watermark
     text: 'HANYA UNTUK PREPLAB PORTAL',
     subText: '',
     opacity: 0.16,
