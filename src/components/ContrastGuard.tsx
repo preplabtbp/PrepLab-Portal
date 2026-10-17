@@ -4,10 +4,11 @@ import { RGBA, parseColor, composite, contrastRatio, ensureContrast, toCss, AA_N
 // ── Dynamic Text Contrast (seluruh portal) ───────────────────────────────────
 // Memindai teks yang tampil, menghitung warna background efektif di belakangnya (menelusuri parent &
 // menumpuk background transparan), lalu menyesuaikan warna teks yang sulit dibaca:
-// teks terang untuk background gelap dan sebaliknya. Warna desain yang masih terbaca tidak diubah.
+// teks terang untuk background gelap dan sebaliknya. Warna yang sudah memenuhi WCAG AA tidak diubah;
+// yang kurang digeser seminimal mungkin (hue dipertahankan) sampai memenuhi AA.
 // Elemen dapat dikecualikan dengan atribut data-contrast="off".
 
-const FIX_BELOW = 3; // di bawah rasio ini teks dianggap tidak terbaca → dikoreksi
+// Standar WCAG AA: teks normal minimal 4.5:1, teks besar/tebal minimal 3:1. Di bawahnya → dikoreksi.
 const ORIG_ATTR = 'data-dc-orig'; // warna inline asli sebelum dikoreksi
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'CANVAS', 'VIDEO', 'IMG', 'IFRAME', 'TEMPLATE']);
 const FORM_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
@@ -60,8 +61,10 @@ function scanPass(root: Element, isCancelled: () => boolean, done: () => void) {
   let i = 0;
   const step = (deadline?: IdleDeadline) => {
     if (isCancelled()) return;
-    const until = performance.now() + 12;
-    while (i < targets.length && (deadline ? deadline.timeRemaining() > 2 : performance.now() < until)) {
+    // Selalu proses minimal satu batch (~8 ms) walau browser sibuk, agar pemindaian pasti selesai
+    const budget = deadline && !deadline.didTimeout ? Math.max(deadline.timeRemaining(), 8) : 8;
+    const until = performance.now() + budget;
+    while (i < targets.length && performance.now() < until) {
       const el = targets[i++] as HTMLElement;
       if (!el.isConnected || !hasOwnText(el) || el.closest('[data-contrast="off"]')) continue;
       if (el.getClientRects().length === 0) continue; // tersembunyi
@@ -91,11 +94,12 @@ function checkElement(el: HTMLElement, bgOf: (el: Element | null) => Bg) {
   const size = parseFloat(cs.fontSize) || 14;
   const bold = (parseInt(cs.fontWeight, 10) || 400) >= 700;
   const large = size >= 24 || (bold && size >= 18.66);
-  if (contrastRatio(effectiveFg, bg) >= FIX_BELOW) {
+  const min = large ? AA_LARGE : AA_NORMAL;
+  if (contrastRatio(effectiveFg, bg) >= min) {
     if (corrected) el.removeAttribute(ORIG_ATTR);
     return;
   }
-  const fixed = ensureContrast(effectiveFg, bg, large ? AA_LARGE : AA_NORMAL);
+  const fixed = ensureContrast(effectiveFg, bg, min);
   if (!corrected) el.setAttribute(ORIG_ATTR, el.style.getPropertyValue('color'));
   el.style.setProperty('color', toCss(fixed), 'important');
   if (FORM_TAGS.has(el.tagName)) el.style.setProperty('-webkit-text-fill-color', toCss(fixed), 'important');
