@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Coffee, Send, Users, X, Sparkles, Smile, RefreshCw, 
-  ShieldCheck, Flame, Volume2, VolumeX, MapPin, Footprints,
+  ShieldCheck, ShieldAlert, Flame, Volume2, VolumeX, MapPin, Footprints,
   Cigarette, Sun, Compass, Armchair, ChevronRight
 } from 'lucide-react';
 import { getGlobalSocket, joinLounge, leaveLounge } from '../../lib/socketClient';
@@ -427,6 +427,25 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
   const [hoveredFurniture, setHoveredFurniture] = useState<string | null>(null);
   const [showPvPRpsModal, setShowPvPRpsModal] = useState<boolean>(false);
   const [pvpOpponent, setPvpOpponent] = useState<InRoomAvatar | null>(null);
+
+  // Real-time online PvP RPS state
+  const [activeRpsMatch, setActiveRpsMatch] = useState<{
+    matchId: string;
+    player1: { nik: string; name: string; avatar?: string; pangkat?: string; score: number };
+    player2: { nik: string; name: string; avatar?: string; pangkat?: string; score: number };
+    round: number;
+    p1Score: number;
+    p2Score: number;
+  } | null>(null);
+  const [incomingRpsInvite, setIncomingRpsInvite] = useState<{
+    matchId: string;
+    fromNik: string;
+    fromName: string;
+    fromAvatar?: string;
+    fromPangkat?: string;
+  } | null>(null);
+  const [showRpsTargetSelector, setShowRpsTargetSelector] = useState<boolean>(false);
+  const [rpsNotice, setRpsNotice] = useState<string | null>(null);
   const [showSecretDominoModal, setShowSecretDominoModal] = useState<boolean>(false);
   const [showSecretChessModal, setShowSecretChessModal] = useState<boolean>(false);
   const [dominoTargetSeat, setDominoTargetSeat] = useState<'top' | 'bottom' | 'left' | 'right' | undefined>(undefined);
@@ -1046,6 +1065,52 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       }
     };
 
+    const handleRpsInviteReceived = (data: {
+      matchId: string;
+      fromNik: string;
+      fromName: string;
+      fromAvatar?: string;
+      fromPangkat?: string;
+    }) => {
+      setIncomingRpsInvite(data);
+    };
+
+    const handleRpsChallengeSent = () => {
+      setRpsNotice('Tantangan Suwit terkirim! Menunggu respon rekan...');
+      setTimeout(() => setRpsNotice(null), 5000);
+    };
+
+    const handleRpsChallengeDeclined = (data: { fromName: string }) => {
+      setRpsNotice(`${data.fromName} menolak tantangan Suwit.`);
+      setTimeout(() => setRpsNotice(null), 5000);
+    };
+
+    const handleRpsChallengeFailed = (data: { message: string }) => {
+      setRpsNotice(data.message || 'Gagal mengirim tantangan Suwit.');
+      setTimeout(() => setRpsNotice(null), 5000);
+    };
+
+    const handleRpsGameStart = (data: {
+      matchId: string;
+      player1: any;
+      player2: any;
+      round: number;
+      p1Score: number;
+      p2Score: number;
+    }) => {
+      setIncomingRpsInvite(null);
+      setShowRpsTargetSelector(false);
+      setRpsNotice(null);
+      setActiveRpsMatch(data);
+      setShowPvPRpsModal(true);
+    };
+
+    socket.on('rps:invite_received', handleRpsInviteReceived);
+    socket.on('rps:challenge_sent', handleRpsChallengeSent);
+    socket.on('rps:challenge_declined', handleRpsChallengeDeclined);
+    socket.on('rps:challenge_failed', handleRpsChallengeFailed);
+    socket.on('rps:game_start', handleRpsGameStart);
+
     socket.on('lounge:sync_state', handleLoungeSync);
     socket.on('lounge:user_joined', handleUserJoined);
     socket.on('lounge:user_left', handleUserLeft);
@@ -1055,6 +1120,12 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     socket.on('new_message', handleNewMessage);
 
     return () => {
+      socket.off('rps:invite_received', handleRpsInviteReceived);
+      socket.off('rps:challenge_sent', handleRpsChallengeSent);
+      socket.off('rps:challenge_declined', handleRpsChallengeDeclined);
+      socket.off('rps:challenge_failed', handleRpsChallengeFailed);
+      socket.off('rps:game_start', handleRpsGameStart);
+
       socket.off('lounge:sync_state', handleLoungeSync);
       socket.off('lounge:user_joined', handleUserJoined);
       socket.off('lounge:user_left', handleUserLeft);
@@ -1176,26 +1247,43 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     setSelectedAvatarForInteract(null);
   };
 
-  // Suwit vs Ghost callback (Shows win/lose overhead bubble reaction & unlocks secret domino hole at 5 wins)
-  const handleFinishGhostGame = useCallback((result: 'win' | 'lose' | 'draw', playerChoice: string, ghostChoice: string) => {
-    let speechMsg = '';
-    if (result === 'win') {
-      speechMsg = '😄 Horeee! Menang suwit lawan Hantu Pojok!';
-      handleSendMessage(speechMsg, 'jump');
-      try {
-        const scoreStr = localStorage.getItem('preplab_lounge_ghost_rps_score');
-        const score = scoreStr ? JSON.parse(scoreStr) : null;
-        if (score && score.wins >= 5) {
-          setIsSecretHoleUnlocked(true);
-          localStorage.setItem('preplab_secret_domino_unlocked', 'true');
-        }
-      } catch {}
-    } else if (result === 'lose') {
-      speechMsg = '😭 Huwaaa... kalah suwit lawan Hantu Pojok!';
-      handleSendMessage(speechMsg, 'idle');
+  // Online PvP Suwit Challenge Dispatcher
+  const handleChallengeOnlineUser = useCallback((targetNik: string, targetName: string) => {
+    const socket = getGlobalSocket();
+    if (!socket.connected) {
+      setRpsNotice('⚠️ Koneksi terputus. Tidak dapat mengirim tantangan.');
+      setTimeout(() => setRpsNotice(null), 4000);
+      return;
+    }
+    socket.emit('rps:challenge', {
+      toNik: targetNik,
+      fromNik: userNik,
+      fromName: effectiveUsername,
+      fromAvatar: avatarUrl || undefined,
+      fromPangkat: effectivePangkat
+    });
+    setRpsNotice(`Tantangan Suwit terkirim ke ${targetName}... Menunggu respon rekan.`);
+    setTimeout(() => setRpsNotice(null), 5000);
+  }, [userNik, effectiveUsername, avatarUrl, effectivePangkat]);
+
+  const handleOpenSuwitDuel = useCallback(() => {
+    const onlinePeers = Array.from(otherAvatars.values()).filter(a => a.nik !== userNik);
+    if (onlinePeers.length === 0) {
+      setRpsNotice('⚠️ Permainan Suwit hanya bisa dimainkan secara multiplayer antara user yang sedang online di Tempat Nongkrong! Saat ini belum ada rekan lain yang aktif di Gazebo.');
+      setTimeout(() => setRpsNotice(null), 6000);
+      return;
+    }
+    if (onlinePeers.length === 1) {
+      handleChallengeOnlineUser(onlinePeers[0].nik, onlinePeers[0].username);
     } else {
-      speechMsg = '😅 Seri! Pikiran kita seirama...';
-      handleSendMessage(speechMsg, 'idle');
+      setShowRpsTargetSelector(true);
+    }
+  }, [otherAvatars, userNik, handleChallengeOnlineUser]);
+
+  // PvP Suwit Online callback
+  const handleFinishPvPGame = useCallback((result: 'win' | 'lose' | 'draw') => {
+    if (result === 'win') {
+      handleSendMessage('😄 Horeee! Menang duel Suwit online!', 'jump');
     }
   }, [handleSendMessage]);
 
@@ -1330,21 +1418,14 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             <div className="relative group/tt">
               <button
                 type="button"
-                onClick={() => {
-                  const candidate = allRenderAvatars.find(a => a.nik !== userNik) || null;
-                  setPvpOpponent(candidate);
-                  setShowPvPRpsModal(true);
-                  if (candidate) {
-                    handleSendMessage(`✌️ Mengajak ${candidate.username} tanding Suwit PvP!`, 'jump');
-                  }
-                }}
+                onClick={handleOpenSuwitDuel}
                 className="h-8 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs border border-amber-400 transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1 active:scale-95"
                 aria-label="Tantang Suwit PvP"
               >
                 <span>✌️ Suwit PvP</span>
               </button>
               <div className="absolute right-0 top-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
-                ✌️ Tanding Suwit PvP (5x Win Buka Pintu Rahasia Lantai)
+                ✌️ Tanding Suwit PvP (Khusus Antar User Online)
               </div>
             </div>
 
@@ -1425,8 +1506,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
               <div className="w-full grid grid-cols-2 gap-1.5 text-xs font-bold">
                 <button
                   onClick={() => {
-                    setPvpOpponent(selectedAvatarForInteract);
-                    setShowPvPRpsModal(true);
+                    handleChallengeOnlineUser(selectedAvatarForInteract.nik, selectedAvatarForInteract.username);
                     setSelectedAvatarForInteract(null);
                     handleSendMessage(`✌️ Mengajak ${selectedAvatarForInteract.username} tanding Suwit PvP!`, 'jump');
                   }}
@@ -1526,10 +1606,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             soundEnabled={soundEnabled}
             isCompactDiorama={false}
             onExitLoungeBackToWork={onClose}
-            onPlayGhostRps={() => {
-              setPvpOpponent(null);
-              setShowPvPRpsModal(true);
-            }}
+            onPlayGhostRps={handleOpenSuwitDuel}
             isSecretHoleUnlocked={isSecretHoleUnlocked}
             isSecretCutsceneActive={isSecretCutscenePlaying}
             onEnterSecretDomino={() => switchLoungeArea('underground')}
@@ -1586,23 +1663,172 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
         </div>
       </div>
 
-      {/* Duel Suwit PvP vs Rekan Gazebo Mini-Game Modal */}
-      <LoungePvPRpsModal
-        isOpen={showPvPRpsModal}
-        onClose={() => setShowPvPRpsModal(false)}
-        playerName={effectiveUsername}
-        opponentName={pvpOpponent?.username || 'Rekan Shift K3'}
-        opponentAvatar={pvpOpponent?.avatarUrl}
-        opponentPangkat={pvpOpponent?.pangkat}
-        onFinishGame={(result) => {
-          if (result === 'win') {
-            handleSendMessage('😄 Horeee! Menang duel Suwit!', 'jump');
+      {/* Duel Suwit PvP Multiplayer Online Modal */}
+      {showPvPRpsModal && activeRpsMatch && (
+        <LoungePvPRpsModal
+          isOpen={showPvPRpsModal}
+          onClose={() => {
+            setShowPvPRpsModal(false);
+            setActiveRpsMatch(null);
+          }}
+          matchId={activeRpsMatch.matchId}
+          playerNik={userNik}
+          playerName={effectiveUsername}
+          playerAvatar={avatarUrl || undefined}
+          playerPangkat={effectivePangkat}
+          opponentNik={
+            activeRpsMatch.player1.nik === userNik
+              ? activeRpsMatch.player2.nik
+              : activeRpsMatch.player1.nik
           }
-        }}
-        onUnlockCutscene={triggerSecretUnlockCutscene}
-        soundEnabled={soundEnabled}
-        isSecretHoleUnlocked={isSecretHoleUnlocked}
-      />
+          opponentName={
+            activeRpsMatch.player1.nik === userNik
+              ? activeRpsMatch.player2.name
+              : activeRpsMatch.player1.name
+          }
+          opponentAvatar={
+            activeRpsMatch.player1.nik === userNik
+              ? activeRpsMatch.player2.avatar
+              : activeRpsMatch.player1.avatar
+          }
+          opponentPangkat={
+            activeRpsMatch.player1.nik === userNik
+              ? activeRpsMatch.player2.pangkat
+              : activeRpsMatch.player1.pangkat
+          }
+          isHost={activeRpsMatch.player1.nik === userNik}
+          initialRound={activeRpsMatch.round}
+          initialP1Score={activeRpsMatch.p1Score}
+          initialP2Score={activeRpsMatch.p2Score}
+          onFinishGame={(result) => handleFinishPvPGame(result)}
+          onUnlockCutscene={triggerSecretUnlockCutscene}
+          soundEnabled={soundEnabled}
+          isSecretHoleUnlocked={isSecretHoleUnlocked}
+        />
+      )}
+
+      {/* Incoming RPS Challenge Banner */}
+      {incomingRpsInvite && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 p-4 rounded-3xl bg-slate-950 border-2 border-amber-400 text-white shadow-[0_0_40px_rgba(245,158,11,0.4)] flex items-center gap-3.5 animate-in slide-in-from-top-4 max-w-md w-full mx-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-2xl shrink-0">
+            ✌️
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-wider">
+              Tantangan Suwit Gazebo K3!
+            </div>
+            <div className="text-xs sm:text-sm font-black text-white truncate">
+              {incomingRpsInvite.fromName} menantangmu duel!
+            </div>
+            <div className="text-[10px] text-slate-400 font-mono">
+              {incomingRpsInvite.fromPangkat || 'Personnel'}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const s = getGlobalSocket();
+                if (s.connected) {
+                  s.emit('rps:accept', { matchId: incomingRpsInvite.matchId });
+                }
+                setIncomingRpsInvite(null);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs cursor-pointer shadow-md active:scale-95 transition-all"
+            >
+              Terima ✌️
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const s = getGlobalSocket();
+                if (s.connected) {
+                  s.emit('rps:decline', { matchId: incomingRpsInvite.matchId });
+                }
+                setIncomingRpsInvite(null);
+              }}
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer active:scale-95 transition-all"
+            >
+              Tolak
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Real-time Notice / Toast for RPS */}
+      {rpsNotice && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-slate-950/95 border-2 border-amber-400 text-amber-200 text-xs font-bold shadow-[0_0_30px_rgba(245,158,11,0.3)] animate-in fade-in flex items-center gap-2.5 max-w-md">
+          <span>📢</span>
+          <span className="flex-1">{rpsNotice}</span>
+          <button
+            type="button"
+            onClick={() => setRpsNotice(null)}
+            className="p-1 text-slate-400 hover:text-white cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Online Peer Target Selector Modal for Suwit PvP */}
+      {showRpsTargetSelector && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setShowRpsTargetSelector(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-slate-950 border-2 border-amber-500/60 p-5 text-slate-100 shadow-[0_0_40px_rgba(245,158,11,0.3)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✌️</span>
+                <h4 className="text-sm font-black text-white">Pilih Lawan Tanding Suwit</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRpsTargetSelector(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400 mb-3 font-mono">
+              Pilih rekan yang sedang aktif online di Gazebo untuk ditantang:
+            </p>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {Array.from(otherAvatars.values())
+                .filter((av) => av.nik !== userNik)
+                .map((peer) => (
+                  <div
+                    key={peer.nik}
+                    className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-purple-950/80 border border-purple-500/50 flex items-center justify-center text-lg shrink-0 overflow-hidden">
+                        {renderAvatarNode(peer.avatarUrl, '👷', 'w-9 h-9')}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-white block truncate">{peer.username}</span>
+                        <span className="text-[10px] text-amber-400 font-mono block">{peer.pangkat}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleChallengeOnlineUser(peer.nik, peer.username);
+                        setShowRpsTargetSelector(false);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer shadow-md active:scale-95 transition-all shrink-0 ml-2"
+                    >
+                      Tantang ✌️
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Ruang Rahasia Meja Gaple 4 Orang Modal */}
       <SecretDominoLoungeModal

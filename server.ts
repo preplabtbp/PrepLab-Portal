@@ -704,6 +704,28 @@ const app = express();
     chessLoungeState.gameAnnouncement = 'Meja catur kosong. Papan dan waktu otomatis direset!';
   };
 
+  // --- REAL-TIME MULTIPLAYER SUWIT (RPS) 1V1 PVP STATE ---
+  interface RpsPlayer {
+    nik: string;
+    name: string;
+    avatar?: string;
+    pangkat?: string;
+    socketId: string;
+    choice: 'rock' | 'paper' | 'scissors' | null;
+    score: number;
+  }
+
+  interface RpsMatch {
+    id: string;
+    player1: RpsPlayer;
+    player2: RpsPlayer;
+    status: 'INVITING' | 'PLAYING' | 'REVEALED';
+    round: number;
+  }
+
+  const rpsMatches = new Map<string, RpsMatch>();
+
+
   const cleanupStaleLoungeAvatars = () => {
     const activeSocketIds = new Set(onlineSockets.keys());
     for (const [nik, avatar] of loungeAvatars.entries()) {
@@ -1420,6 +1442,183 @@ const app = express();
       socket.emit('chess:sync', chessLoungeState);
     });
 
+    // ==========================================
+    // MULTIPLAYER SUWIT (RPS) 1V1 PVP SOCKET EVENTS
+    // ==========================================
+    socket.on('rps:challenge', (data: {
+      toNik: string;
+      fromNik: string;
+      fromName: string;
+      fromAvatar?: string;
+      fromPangkat?: string;
+    }) => {
+      // Find target socket
+      let targetSocketId: string | null = null;
+      let targetUser: any = null;
+      for (const [sId, sUser] of onlineSockets.entries()) {
+        if (sUser.nik === data.toNik) {
+          targetSocketId = sId;
+          targetUser = sUser;
+          break;
+        }
+      }
+
+      if (!targetSocketId) {
+        socket.emit('rps:challenge_failed', { message: 'Rekan tidak sedang online.' });
+        return;
+      }
+
+      const matchId = `rps-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const match: RpsMatch = {
+        id: matchId,
+        player1: {
+          nik: data.fromNik,
+          name: data.fromName,
+          avatar: data.fromAvatar,
+          pangkat: data.fromPangkat,
+          socketId: socket.id,
+          choice: null,
+          score: 0
+        },
+        player2: {
+          nik: data.toNik,
+          name: targetUser.name || targetUser.username || data.toNik,
+          avatar: targetUser.avatar,
+          pangkat: targetUser.pangkat,
+          socketId: targetSocketId,
+          choice: null,
+          score: 0
+        },
+        status: 'INVITING',
+        round: 1
+      };
+
+      rpsMatches.set(matchId, match);
+
+      // Notify target player of the challenge
+      io.to(targetSocketId).emit('rps:invite_received', {
+        matchId,
+        fromNik: data.fromNik,
+        fromName: data.fromName,
+        fromAvatar: data.fromAvatar,
+        fromPangkat: data.fromPangkat
+      });
+
+      socket.emit('rps:challenge_sent', { matchId, toNik: data.toNik });
+    });
+
+    socket.on('rps:accept', (data: { matchId: string }) => {
+      const match = rpsMatches.get(data.matchId);
+      if (!match) {
+        socket.emit('rps:error', { message: 'Tantangan sudah kadaluarsa.' });
+        return;
+      }
+
+      match.status = 'PLAYING';
+      const p1Socket = io.sockets.sockets.get(match.player1.socketId);
+      const p2Socket = io.sockets.sockets.get(match.player2.socketId);
+
+      if (p1Socket) p1Socket.join(`rps:${match.id}`);
+      if (p2Socket) p2Socket.join(`rps:${match.id}`);
+
+      io.to(`rps:${match.id}`).emit('rps:game_start', {
+        matchId: match.id,
+        player1: match.player1,
+        player2: match.player2,
+        round: match.round,
+        p1Score: match.player1.score,
+        p2Score: match.player2.score
+      });
+    });
+
+    socket.on('rps:decline', (data: { matchId: string }) => {
+      const match = rpsMatches.get(data.matchId);
+      if (match) {
+        io.to(match.player1.socketId).emit('rps:challenge_declined', {
+          matchId: match.id,
+          fromName: match.player2.name
+        });
+        rpsMatches.delete(match.id);
+      }
+    });
+
+    socket.on('rps:make_choice', (data: { matchId: string; nik: string; choice: 'rock' | 'paper' | 'scissors' }) => {
+      const match = rpsMatches.get(data.matchId);
+      if (!match || match.status !== 'PLAYING') return;
+
+      const isP1 = match.player1.nik === data.nik || match.player1.socketId === socket.id;
+      const isP2 = match.player2.nik === data.nik || match.player2.socketId === socket.id;
+
+      if (isP1) {
+        match.player1.choice = data.choice;
+        io.to(match.player2.socketId).emit('rps:opponent_chose', { matchId: match.id });
+      } else if (isP2) {
+        match.player2.choice = data.choice;
+        io.to(match.player1.socketId).emit('rps:opponent_chose', { matchId: match.id });
+      }
+
+      // Check if both players have chosen
+      if (match.player1.choice && match.player2.choice) {
+        const c1 = match.player1.choice;
+        const c2 = match.player2.choice;
+        let winner: 'player1' | 'player2' | 'draw' = 'draw';
+
+        if (c1 === c2) {
+          winner = 'draw';
+        } else if (
+          (c1 === 'rock' && c2 === 'scissors') ||
+          (c1 === 'paper' && c2 === 'rock') ||
+          (c1 === 'scissors' && c2 === 'paper')
+        ) {
+          winner = 'player1';
+          match.player1.score++;
+        } else {
+          winner = 'player2';
+          match.player2.score++;
+        }
+
+        match.status = 'REVEALED';
+
+        io.to(`rps:${match.id}`).emit('rps:round_result', {
+          matchId: match.id,
+          player1Choice: c1,
+          player2Choice: c2,
+          winner,
+          p1Score: match.player1.score,
+          p2Score: match.player2.score,
+          round: match.round
+        });
+      }
+    });
+
+    socket.on('rps:next_round', (data: { matchId: string }) => {
+      const match = rpsMatches.get(data.matchId);
+      if (!match) return;
+
+      match.round++;
+      match.player1.choice = null;
+      match.player2.choice = null;
+      match.status = 'PLAYING';
+
+      io.to(`rps:${match.id}`).emit('rps:round_started', {
+        matchId: match.id,
+        round: match.round,
+        p1Score: match.player1.score,
+        p2Score: match.player2.score
+      });
+    });
+
+    socket.on('rps:leave', (data: { matchId: string }) => {
+      const match = rpsMatches.get(data?.matchId);
+      if (match) {
+        io.to(`rps:${match.id}`).emit('rps:match_ended', {
+          reason: 'Pertandingan telah diakhiri.'
+        });
+        rpsMatches.delete(match.id);
+      }
+    });
+
+
     socket.on('chat:clear', async (data) => {
       try {
         const room = data?.room || 'global';
@@ -1674,6 +1873,15 @@ const app = express();
         }
         io.to('lounge').emit('chess:sync', chessLoungeState);
       }
+
+      // Clean up RPS matches if player disconnects
+      for (const [mId, match] of rpsMatches.entries()) {
+        if (match.player1.socketId === socket.id || match.player2.socketId === socket.id || (user?.nik && (match.player1.nik === user.nik || match.player2.nik === user.nik))) {
+          io.to(`rps:${mId}`).emit('rps:match_ended', { reason: 'Lawan terputus dari jaringan.' });
+          rpsMatches.delete(mId);
+        }
+      }
+
     });
   });
 
@@ -1986,54 +2194,8 @@ async function getNotificationTargets(dept) {
   });
 }
 
-async function syncBulletinToAgenda(post: any) {
-  try {
-    let contentData: any = {};
-    try {
-      contentData = JSON.parse(post.content);
-    } catch (e) {
-      console.error("Failed to parse content for agenda sync", e);
-      return;
-    }
+// Note: Canonical syncBulletinToAgenda is exported from ./server/utils.ts and used across bulletin routes.
 
-    const agendaId = `bulletin_${post.id}`;
-
-    if (contentData.agendaDate) {
-      const startD = new Date(contentData.agendaDate);
-      if (isNaN(startD.getTime())) {
-        console.error("Invalid agendaDate", contentData.agendaDate);
-        return;
-      }
-
-      // Check if agenda item already exists
-      const existing = await db.select().from(agendaEvents).where(eq(agendaEvents.id, agendaId)).limit(1);
-
-      const agendaData = {
-        id: agendaId,
-        title: (contentData as any).jenisKegiatan || "Bulletin Event",
-        startDate: startD,
-        endDate: (contentData as any).endDate ? new Date((contentData as any).endDate) : null,
-        kategori: "SPV UP", // Maps to 'Section' in frontend
-        pic: (contentData as any).pic || post.authorName || "",
-        deskripsi: (contentData as any).keterangan || "",
-        creatorNik: post.authorNik,
-        department: post.department,
-        bulletinPostId: post.id,
-      };
-
-      if (existing.length > 0) {
-        await db.update(agendaEvents).set(agendaData).where(eq(agendaEvents.id, agendaId));
-      } else {
-        await db.insert(agendaEvents).values(agendaData);
-      }
-    } else {
-      // If no agendaDate is provided (or if it was deleted), make sure we delete the corresponding agenda event if it existed!
-      await db.delete(agendaEvents).where(eq(agendaEvents.id, agendaId));
-    }
-  } catch (error) {
-    console.error("Failed in syncBulletinToAgenda:", error);
-  }
-}
 
 
   

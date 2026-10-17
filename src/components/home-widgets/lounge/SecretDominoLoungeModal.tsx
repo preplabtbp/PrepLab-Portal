@@ -737,7 +737,8 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
 
     const { canLeft, canRight } = getPlayableSides(tile, openEnds);
 
-    if (canLeft && canRight && openEnds?.left !== openEnds?.right) {
+    // If card can connect to BOTH ends, ALWAYS let player choose (even if both ends share the same number!)
+    if (canLeft && canRight) {
       setPendingChoiceTile(tile);
       playSfx('click');
     } else if (canLeft) {
@@ -1057,6 +1058,68 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
                         {/* Red Pips (Half 1 & Half 2) */}
                         {renderSvgPips(t.pip1Val, t.pip1Cx, t.pip1Cy, halfW, halfH)}
                         {renderSvgPips(t.pip2Val, t.pip2Cx, t.pip2Cy, halfW, halfH)}
+
+                        {/* Interactive Clickable Target Rings when choosing which end to attach */}
+                        {pendingChoiceTile && t.isLeftEnd && (
+                          <g
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleConfirmChoice('left');
+                            }}
+                            className="cursor-pointer group animate-pulse"
+                          >
+                            <circle
+                              cx={t.x}
+                              cy={t.y}
+                              r={Math.max(t.w, t.h) * 0.7}
+                              fill="rgba(245, 158, 11, 0.25)"
+                              stroke="#F59E0B"
+                              strokeWidth="2.5"
+                              strokeDasharray="4 2"
+                            />
+                            <text
+                              x={t.x}
+                              y={t.y - t.h / 2 - 4}
+                              textAnchor="middle"
+                              fontSize="7.5"
+                              fontWeight="bold"
+                              fill="#FDE68A"
+                              className="pointer-events-none drop-shadow-md select-none"
+                            >
+                              Sambung Sini ({openEnds?.left})
+                            </text>
+                          </g>
+                        )}
+                        {pendingChoiceTile && t.isRightEnd && (
+                          <g
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleConfirmChoice('right');
+                            }}
+                            className="cursor-pointer group animate-pulse"
+                          >
+                            <circle
+                              cx={t.x}
+                              cy={t.y}
+                              r={Math.max(t.w, t.h) * 0.7}
+                              fill="rgba(16, 185, 129, 0.25)"
+                              stroke="#10B981"
+                              strokeWidth="2.5"
+                              strokeDasharray="4 2"
+                            />
+                            <text
+                              x={t.x}
+                              y={t.y + t.h / 2 + 10}
+                              textAnchor="middle"
+                              fontSize="7.5"
+                              fontWeight="bold"
+                              fill="#A7F3D0"
+                              className="pointer-events-none drop-shadow-md select-none"
+                            >
+                              Sambung Sini ({openEnds?.right})
+                            </text>
+                          </g>
+                        )}
                       </g>
                     );
                   })}
@@ -1154,29 +1217,36 @@ export const SecretDominoLoungeModal: React.FC<SecretDominoLoungeModalProps> = (
 
                 {/* Ambiguous Choice Modal (Left or Right) */}
                 {pendingChoiceTile && openEnds && (
-                  <div className="mb-2 p-2.5 rounded-2xl bg-slate-900/95 border-2 border-emerald-400 shadow-2xl flex items-center gap-3 animate-in zoom-in-95">
-                    <span className="text-xs font-bold text-white">Sambung ke ujung mana?</span>
-                    <button
-                      type="button"
-                      onClick={() => handleConfirmChoice('left')}
-                      className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" /> Ujung Kiri ({openEnds.left})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleConfirmChoice('right')}
-                      className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer"
-                    >
-                      Ujung Kanan ({openEnds.right}) <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPendingChoiceTile(null)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-white"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                  <div className="mb-2 p-2.5 rounded-2xl bg-slate-900/95 border-2 border-emerald-400 shadow-2xl flex flex-wrap items-center justify-between gap-3 animate-in zoom-in-95">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>Sambung Kartu <strong>[{pendingChoiceTile.left}|{pendingChoiceTile.right}]</strong> ke mana?</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmChoice('left')}
+                        className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" /> Ujung Kiri ({openEnds.left})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmChoice('right')}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95"
+                      >
+                        Ujung Kanan ({openEnds.right}) <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingChoiceTile(null)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                        title="Batal"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 )}
 

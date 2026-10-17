@@ -219,6 +219,8 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
   // Can the current user control pieces for this color?
   // (Prevents freeze if playing solo / AI or if opponent seat is empty!)
   const canControlSide = useCallback((side: PieceColor): boolean => {
+    // In AI mode, Black is strictly AI-controlled, player cannot move Black pieces!
+    if (vsAiMode && side === 'b') return false;
     const seat = side === 'w' ? whiteSeat : blackSeat;
     // 1. If this seat belongs to me, YES
     if (isSeatMe(seat)) return true;
@@ -230,14 +232,18 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
     return false;
   }, [whiteSeat, blackSeat, isSeatMe, vsAiMode]);
 
-  // Auto flip board if seated as Black
+  // Auto flip board if seated as Black (unless vs AI mode is active)
   useEffect(() => {
+    if (vsAiMode) {
+      setIsFlipped(false);
+      return;
+    }
     if (mySide === 'b') {
       setIsFlipped(true);
     } else if (mySide === 'w') {
       setIsFlipped(false);
     }
-  }, [mySide]);
+  }, [mySide, vsAiMode]);
 
   // Auto-sit if initialSeat is provided from overworld interaction
   const hasAutoSatChessRef = useRef(false);
@@ -684,7 +690,7 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
 
     // Check if auto-sitting is needed to reserve the side on the server
     if (!whiteSeat && movingPiece.color === 'w') handleSit('w');
-    if (!blackSeat && movingPiece.color === 'b') handleSit('b');
+    if (!blackSeat && movingPiece.color === 'b' && !vsAiMode) handleSit('b');
 
     const targetPiece = board[toR][toC];
     const isPawn = movingPiece.type === 'p';
@@ -984,15 +990,18 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
     <div className="w-full max-w-[480px] flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-md z-10 shrink-0">
       <div className="flex items-center gap-2.5">
         <div className="w-8 h-8 rounded-xl bg-slate-950 border border-slate-600 flex items-center justify-center text-xl shadow-inner overflow-hidden">
-          {renderAvatarNode(blackSeat?.avatar, '♟️', 'w-8 h-8')}
+          {vsAiMode && !blackSeat ? '🤖' : renderAvatarNode(blackSeat?.avatar, '♟️', 'w-8 h-8')}
         </div>
         <div>
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-black text-white">
-              {blackSeat ? blackSeat.name : 'Bidak Hitam (Kursi Kosong)'}
+              {blackSeat ? blackSeat.name : vsAiMode ? 'Bunker AI Bot (Solo)' : 'Bidak Hitam (Kursi Kosong)'}
             </span>
             {isSeatMe(blackSeat) && (
               <span className="text-[9px] px-1 bg-amber-500/20 text-amber-300 font-mono rounded">ANDA</span>
+            )}
+            {vsAiMode && !blackSeat && (
+              <span className="text-[9px] px-1 bg-purple-500/20 text-purple-300 font-mono rounded border border-purple-500/40">AI AKTIF</span>
             )}
           </div>
           <div className="text-[10px] text-slate-400 flex items-center gap-1">
@@ -1022,16 +1031,25 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
           )
         ) : (
           <div className="flex items-center gap-1.5">
+            {!vsAiMode && (
+              <button
+                onClick={() => handleSit('b')}
+                className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-amber-950/80 border border-slate-600 hover:border-amber-500/60 text-slate-300 hover:text-amber-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+              >
+                <UserPlus className="w-3 h-3" /> Ambil Hitam
+              </button>
+            )}
             <button
-              onClick={() => handleSit('b')}
-              className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-amber-950/80 border border-slate-600 hover:border-amber-500/60 text-slate-300 hover:text-amber-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
-            >
-              <UserPlus className="w-3 h-3" /> Ambil Hitam
-            </button>
-            <button
-              onClick={() => setVsAiMode(!vsAiMode)}
+              onClick={() => {
+                const nextAi = !vsAiMode;
+                setVsAiMode(nextAi);
+                if (nextAi) {
+                  if (!whiteSeat || !isSeatMe(whiteSeat)) handleSit('w');
+                  setIsFlipped(false);
+                }
+              }}
               className={`px-2 py-1 rounded-xl border text-[10px] font-mono cursor-pointer transition-all ${
-                vsAiMode ? 'bg-purple-950 border-purple-400 text-purple-300' : 'bg-slate-800 border-slate-700 text-slate-400'
+                vsAiMode ? 'bg-purple-950 border-purple-400 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.3)]' : 'bg-slate-800 border-slate-700 text-slate-400'
               }`}
               title="Aktifkan AI Bunker jika bermain solo"
             >
