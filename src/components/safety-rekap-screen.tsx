@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { toast } from 'sonner';
 import {
   ClipboardList, RefreshCw, Download, Search, ArrowLeft, Table2, Users, Pencil, X, Save,
-  RotateCcw, CheckCircle2, CircleDashed, Palmtree, ShieldCheck, ClipboardCheck, CalendarDays, ImageDown
+  RotateCcw, CheckCircle2, CircleDashed, Palmtree, ShieldCheck, ClipboardCheck, CalendarDays, ImageDown, Clock
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toPng } from 'html-to-image';
@@ -87,9 +87,11 @@ interface RekapRow extends RekapValues {
   jabatan: string;
   auto: RekapValues;
   edit?: any;
+  ktaLate: boolean;      // salah satu tanggal KTA/TTA jatuh di Kamis/Jumat
+  inspeksiLate: boolean; // tanggal inspeksi jatuh di Kamis/Jumat
 }
 
-type StatusFilter = 'ALL' | 'BELUM' | 'LENGKAP' | 'CUTI';
+type StatusFilter = 'ALL' | 'BELUM' | 'LENGKAP' | 'TERLAMBAT' | 'CUTI';
 
 function toIsoDate(ts: any): string {
   if (!ts) return '';
@@ -152,6 +154,14 @@ function inPeriod(v: any, period: Period): boolean {
 // Ambil tanggal pertama yang masuk periode week; null bila semua di luar periode
 function pickInPeriod(period: Period, ...candidates: any[]): any {
   return candidates.find(c => inPeriod(c, period)) ?? null;
+}
+
+// Penyelesaian pada hari Kamis / Jumat dalam periode week dianggap terlambat
+const LATE_WEEKDAYS = [4, 5];
+function isLateDate(v: DateVal): boolean {
+  if (!v || v === '√') return false;
+  const d = parseLocalDate(v);
+  return !!d && LATE_WEEKDAYS.includes(d.getDay());
 }
 
 // Tentukan kolom KTA / TTA 1 / TTA 2 berdasarkan kewajiban & laporan yang tanggalnya masuk periode week
@@ -287,12 +297,14 @@ function EmployeeAvatar({ name, photo, className = 'w-8 h-8 text-[11px]' }: { na
 interface RekapSummary {
   total: number; cuti: number; kta: number; insp: number; absence: Record<Absence, number>;
   lengkap: number; belum: number; ktaPct: number; inspPct: number;
+  ktaLate: number; inspLate: number;
 }
 
 // Ringkasan gaya Excel: ADA (√) / status ketidakhadiran (warna pastel) / TIDAK ADA KTA/TTA/INSPEKSI
 function SummaryRows({ summary, variant }: { summary: RekapSummary; variant: 'screen' | 'print' }) {
   const items: { label: string; kta: number; insp: number; cls: string; style?: React.CSSProperties }[] = [
     { label: 'ADA (√)', kta: summary.kta, insp: summary.insp, cls: variant === 'print' ? 'bg-white text-slate-900' : 'bg-[var(--card-bg)] text-[var(--text-main)]' },
+    { label: 'TERLAMBAT (KAMIS / JUMAT)', kta: summary.ktaLate, insp: summary.inspLate, cls: '', style: { backgroundColor: '#FCA5A5', color: '#7F1D1D' } },
     ...ABSENCE_KEYS.map(k => ({
       label: ABSENCE_OPTIONS[k].excel, kta: summary.absence[k], insp: summary.absence[k], cls: '',
       style: { backgroundColor: ABSENCE_OPTIONS[k].print, color: ABSENCE_OPTIONS[k].printText }
@@ -331,8 +343,14 @@ const RekapReportSheet = React.forwardRef<HTMLDivElement, {
   const td = 'border border-slate-300 px-2 py-1.5 text-[12px] text-slate-900';
   const dateTd = (v: DateVal) => v === null
     ? <td className={`${td} bg-black`} />
-    : <td className={`${td} text-center whitespace-nowrap ${v === '' ? 'bg-rose-50' : ''}`}>{v === '√' ? '√' : formatShortDate(v)}</td>;
-  const check = (done: boolean) => (
+    : isLateDate(v)
+      ? <td className={`${td} text-center whitespace-nowrap font-bold`} style={{ backgroundColor: '#EF4444', color: '#FFFFFF' }}>{formatShortDate(v)}</td>
+      : <td className={`${td} text-center whitespace-nowrap ${v === '' ? 'bg-rose-50' : ''}`}>{v === '√' ? '√' : formatShortDate(v)}</td>;
+  const check = (done: boolean, late: boolean) => done && late ? (
+    <td className={`${td} text-center font-bold`} style={{ backgroundColor: '#EF4444', color: '#FFFFFF' }}>
+      <span className="text-base">√</span> <span className="text-[10px] uppercase">Terlambat</span>
+    </td>
+  ) : (
     <td className={`${td} text-center text-base font-bold ${done ? 'text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>{done ? '√' : '✗'}</td>
   );
   return (
@@ -386,11 +404,11 @@ const RekapReportSheet = React.forwardRef<HTMLDivElement, {
                   </td>
                 ) : (
                   <>
-                    {check(r.ktaDone)}
+                    {check(r.ktaDone, r.ktaLate)}
                     {dateTd(r.tglKta)}
                     {dateTd(r.tglTta1)}
                     {dateTd(r.tglTta2)}
-                    {check(r.inspeksiDone)}
+                    {check(r.inspeksiDone, r.inspeksiLate)}
                     <td className={`${td} text-center`}>{r.keteranganInspeksi}</td>
                     {dateTd(r.tglInspeksi)}
                   </>
@@ -838,7 +856,12 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     return Array.from(map.entries())
       .map(([key, e]) => {
         const edit = editMap.get(key);
-        return { ...e, ...applyEdit(e.auto, edit, weekRange), edit };
+        const v = applyEdit(e.auto, edit, weekRange);
+        return {
+          ...e, ...v, edit,
+          ktaLate: v.ktaDone && [v.tglKta, v.tglTta1, v.tglTta2].some(isLateDate),
+          inspeksiLate: v.inspeksiDone && isLateDate(v.tglInspeksi)
+        };
       })
       .sort((a, b) => jabatanRank(a.jabatan) - jabatanRank(b.jabatan) || a.name.localeCompare(b.name));
   }, [inspeksiData, ktaData, edits, weekRange]);
@@ -848,6 +871,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     return allRows.filter(r => {
       if (q && !r.name.toLowerCase().includes(q) && !(r.nik || '').toLowerCase().includes(q) && !r.jabatan.toLowerCase().includes(q)) return false;
       if (statusFilter === 'CUTI') return r.isCuti;
+      if (statusFilter === 'TERLAMBAT') return !r.isCuti && (r.ktaLate || r.inspeksiLate);
       if (statusFilter === 'LENGKAP') return !r.isCuti && r.ktaDone && r.inspeksiDone;
       if (statusFilter === 'BELUM') return !r.isCuti && (!r.ktaDone || !r.inspeksiDone);
       return true;
@@ -868,7 +892,9 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       lengkap: active.filter(r => r.ktaDone && r.inspeksiDone).length,
       belum: active.filter(r => !r.ktaDone || !r.inspeksiDone).length,
       ktaPct: active.length ? Math.round((kta / active.length) * 100) : 0,
-      inspPct: active.length ? Math.round((insp / active.length) * 100) : 0
+      inspPct: active.length ? Math.round((insp / active.length) * 100) : 0,
+      ktaLate: active.filter(r => r.ktaLate).length,
+      inspLate: active.filter(r => r.inspeksiLate).length
     };
   }, [allRows]);
 
@@ -906,22 +932,25 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     try {
       const header = ['NO', 'Nama Karyawan', 'NIK', 'Jabatan', '(KTA/TTA)', 'TANGGAL KTA', 'TANGGAL TTA 1', 'TANGGAL TTA 2', '(INSPEKSI)', 'KETERANGAN INSPEKSI', 'TANGGAL INSPEKSI'];
       const absLabel = (r: RekapRow) => (r.absence ? ABSENCE_OPTIONS[r.absence].excel : '');
-      const dateVal = (v: DateVal, r: RekapRow) => (r.absence ? absLabel(r) : v === null ? '-' : formatShortDate(v));
+      const dateVal = (v: DateVal, r: RekapRow) =>
+        (r.absence ? absLabel(r) : v === null ? '-' : `${formatShortDate(v)}${isLateDate(v) ? ' (TERLAMBAT)' : ''}`);
+      const doneVal = (done: boolean, late: boolean) => (done ? (late ? '√ TERLAMBAT' : '√') : '');
       const aoa: any[][] = [
         [reportMonth],
         [rangeLabel],
         header,
         ...allRows.map((r, i) => [
           i + 1, r.name, r.nik, r.jabatan,
-          r.absence ? absLabel(r) : r.ktaDone ? '√' : '',
+          r.absence ? absLabel(r) : doneVal(r.ktaDone, r.ktaLate),
           dateVal(r.tglKta, r), dateVal(r.tglTta1, r), dateVal(r.tglTta2, r),
-          r.absence ? absLabel(r) : r.inspeksiDone ? '√' : '',
+          r.absence ? absLabel(r) : doneVal(r.inspeksiDone, r.inspeksiLate),
           r.absence ? absLabel(r) : r.keteranganInspeksi,
-          r.isCuti ? '' : formatShortDate(r.tglInspeksi)
+          r.isCuti ? '' : dateVal(r.tglInspeksi, r)
         ]),
         [],
         ['', 'RINGKASAN', '', '', 'KTA/TTA', '', '', '', 'INSPEKSI'],
         ['', 'ADA (√)', '', '', summary.kta, '', '', '', summary.insp],
+        ['', 'TERLAMBAT (KAMIS/JUMAT)', '', '', summary.ktaLate, '', '', '', summary.inspLate],
         ...ABSENCE_KEYS.map(k => ['', ABSENCE_OPTIONS[k].excel, '', '', summary.absence[k], '', '', '', summary.absence[k]]),
         ['', 'TIDAK ADA KTA/TTA /INSPEKSI', '', '', summary.total - summary.kta, '', '', '', summary.total - summary.insp]
       ];
@@ -947,7 +976,11 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0 6px, transparent 6px 12px)'
   };
 
-  const statusBadge = (done: boolean) => done ? (
+  const statusBadge = (done: boolean, late = false) => done && late ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white ring-1 ring-inset ring-red-700 text-[11px] font-bold" title="Diselesaikan hari Kamis/Jumat">
+      <Clock className="w-3.5 h-3.5" /> Terlambat
+    </span>
+  ) : done ? (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-500/25 text-[11px] font-bold">
       <CheckCircle2 className="w-3.5 h-3.5" /> Lengkap
     </span>
@@ -964,6 +997,13 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     if (v === '') {
       return <td key={key} className={`${td} text-center border-l border-l-[var(--border-main)]`}><span className="text-rose-400 dark:text-rose-500 font-bold">—</span></td>;
     }
+    if (isLateDate(v)) {
+      return (
+        <td key={key} className={`${td} text-center whitespace-nowrap tabular-nums font-bold border-l border-l-[var(--border-main)] bg-red-500 text-white dark:bg-red-600`} title="Terlambat — diselesaikan hari Kamis/Jumat">
+          {formatShortDate(v)}
+        </td>
+      );
+    }
     return (
       <td key={key} className={`${td} text-center whitespace-nowrap tabular-nums font-medium border-l border-l-[var(--border-main)]`}>
         {v === '√' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 inline" /> : formatShortDate(v)}
@@ -975,6 +1015,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     { id: 'ALL', label: 'Semua', count: allRows.length },
     { id: 'BELUM', label: 'Belum Lengkap', count: summary.belum },
     { id: 'LENGKAP', label: 'Lengkap', count: summary.lengkap },
+    { id: 'TERLAMBAT', label: 'Terlambat (Kamis/Jumat)', count: allRows.filter(r => !r.isCuti && (r.ktaLate || r.inspeksiLate)).length },
     { id: 'CUTI', label: 'Tidak Hadir / Non-Target', count: summary.cuti }
   ];
 
@@ -1201,11 +1242,11 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                         </td>
                       ) : (
                         <>
-                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>{statusBadge(r.ktaDone)}</td>
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>{statusBadge(r.ktaDone, r.ktaLate)}</td>
                           {dateCell(r.tglKta, 'kta')}
                           {dateCell(r.tglTta1, 'tta1')}
                           {dateCell(r.tglTta2, 'tta2')}
-                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>{statusBadge(r.inspeksiDone)}</td>
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>{statusBadge(r.inspeksiDone, r.inspeksiLate)}</td>
                           <td className={`${td} border-l border-l-[var(--border-main)] min-w-[260px]`}>
                             {r.keteranganInspeksi || <span className="text-[var(--text-muted)] italic">Belum ada laporan</span>}
                           </td>
@@ -1234,6 +1275,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
               <span>Menampilkan <b className="text-[var(--text-main)]">{rows.length}</b> dari {allRows.length} personil</span>
               <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 bg-slate-900 inline-block rounded-sm" style={naStyle} /> Tidak wajib</span>
               <span className="flex items-center gap-1.5"><span className="text-rose-500 font-bold">—</span> Belum dipenuhi</span>
+              <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 bg-red-500 inline-block rounded-sm" /> Terlambat (selesai Kamis/Jumat)</span>
               <span className="flex items-center gap-1.5"><Pencil className="w-3 h-3 text-amber-600" /> Dikoreksi manual</span>
             </div>
           </div>
