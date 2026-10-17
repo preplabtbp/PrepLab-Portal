@@ -268,8 +268,9 @@ const LEAVE_PRINT: Record<LeaveCat, { bg: string; fg: string }> = {
 
 const LeaveSheet = React.forwardRef<HTMLDivElement, {
   rows: LeaveRow[]; dates: string[]; filterLabel: string; onsiteCount: number;
+  week: number; periodLabel: string;
   photoOf: (name: string) => string | undefined;
-}>(({ rows, dates, filterLabel, onsiteCount, photoOf }, ref) => {
+}>(({ rows, dates, filterLabel, onsiteCount, week, periodLabel, photoOf }, ref) => {
   const th = 'border border-slate-400 bg-slate-200 px-2 py-2 text-[11px] font-bold uppercase text-slate-800';
   const td = 'border border-slate-300 px-2 py-1.5 text-[12px] text-slate-900';
   const chip = (code: string, cat: LeaveCat) => (
@@ -280,13 +281,15 @@ const LeaveSheet = React.forwardRef<HTMLDivElement, {
     <div ref={ref} style={{ width: 1400 }} className="bg-white p-8 font-sans text-slate-900">
       <div className="flex items-end justify-between border-b-4 border-slate-900 pb-3 mb-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Prep & Lab · Jadwal Inspeksi</p>
-          <h1 className="text-3xl font-black">Kontrol Cuti Karyawan</h1>
-          <p className="text-sm text-slate-600 mt-0.5">Gol II – V · Filter: {filterLabel} · Sumber: Database Roster Prep & Lab</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Departemen Preparation & Laboratory · Kontrol Kehadiran Karyawan</p>
+          <h1 className="text-[26px] leading-tight font-black">Daftar Karyawan Dept. Prep & Lab yang Cuti, Izin, Dinas Luar, Resign &amp; New Hire</h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Karyawan Gol II – V · Filter: {filterLabel} · Acuan roster Senin – Rabu ({formatIsoLong(dates[0])} – {formatIsoLong(dates[2])}) · Sumber: Database Roster Prep & Lab
+          </p>
         </div>
-        <div className="text-right">
-          <p className="text-xl font-black">Senin – Rabu</p>
-          <p className="text-sm font-semibold text-slate-600">{formatIsoLong(dates[0])} – {formatIsoLong(dates[2])}</p>
+        <div className="text-right shrink-0 pl-6">
+          <p className="text-xl font-black">Week {week}</p>
+          <p className="text-sm font-semibold text-slate-600 whitespace-nowrap">Periode {periodLabel}</p>
         </div>
       </div>
       <div className="flex flex-wrap gap-2 mb-4">
@@ -351,7 +354,9 @@ const LeaveSheet = React.forwardRef<HTMLDivElement, {
 });
 LeaveSheet.displayName = 'LeaveSheet';
 
-function LeaveControlPanel({ period, photoOf }: { period: { start: Date }; photoOf: (name: string) => string | undefined }) {
+function LeaveControlPanel({ period, week, periodLabel, photoOf }: {
+  period: { start: Date }; week: number; periodLabel: string; photoOf: (name: string) => string | undefined;
+}) {
   // Senin, Selasa, Rabu di dalam periode Sabtu – Jumat
   const dates = useMemo(() => [2, 3, 4].map(offset => {
     const d = new Date(period.start);
@@ -485,7 +490,7 @@ function LeaveControlPanel({ period, photoOf }: { period: { start: Date }; photo
       {/* Lembar tersembunyi untuk ekspor PNG */}
       {exporting && (
         <div aria-hidden style={{ position: 'fixed', left: -20000, top: 0, pointerEvents: 'none' }}>
-          <LeaveSheet ref={captureRef} rows={visible} dates={dates} filterLabel={filter === 'ALL' ? 'Semua Tidak Onsite' : LEAVE_STYLE[filter].label} onsiteCount={onsiteCount} photoOf={photoOf} />
+          <LeaveSheet ref={captureRef} rows={visible} dates={dates} filterLabel={filter === 'ALL' ? 'Semua Tidak Onsite' : LEAVE_STYLE[filter].label} onsiteCount={onsiteCount} week={week} periodLabel={periodLabel} photoOf={photoOf} />
         </div>
       )}
 
@@ -1005,7 +1010,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       )}
 
       {/* Kontrol cuti dari Database Roster (Senin – Rabu) */}
-      <LeaveControlPanel period={period} photoOf={photoOf} />
+      <LeaveControlPanel period={period} week={selectedWeek} periodLabel={rangeLabel} photoOf={photoOf} />
 
       {/* Catatan & daftar cuti */}
       {!loadError && schedule.length > 0 && (
