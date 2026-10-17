@@ -40,6 +40,7 @@ function getEmployeeShiftBadge(rawShift: string | undefined | null) {
 }
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import { 
   ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, 
   FileText, BarChart3, ChevronRight, ChevronDown, ChevronUp, ExternalLink, CheckCircle2, AlertTriangle, Fingerprint, 
@@ -398,6 +399,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebounce(searchTerm, 300);
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -2005,8 +2007,8 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   }, [employees]);
 
   const filteredSearch = useMemo(() => {
-    if (!searchTerm) return [];
-    const term = searchTerm.toLowerCase().trim();
+    if (!debouncedSearch) return [];
+    const term = debouncedSearch.toLowerCase().trim();
     return scopedEmployees.filter(e => {
       const name = (e.name || e.nama || '').toLowerCase();
       const nik = (e.nik || '').toLowerCase();
@@ -2014,7 +2016,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
       const sec = (e.section || e.department || '').toLowerCase();
       return name.includes(term) || nik.includes(term) || jabatan.includes(term) || sec.includes(term);
     }).sort(compareEmployeesByJabatan).slice(0, 30);
-  }, [scopedEmployees, searchTerm]);
+  }, [scopedEmployees, debouncedSearch]);
 
   if (loading) {
     return (
