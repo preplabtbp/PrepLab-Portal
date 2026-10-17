@@ -4,7 +4,7 @@ import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { employees, inspectionSchedulePlans, notifications } from "../../src/db/schema.js";
 import { INSPECTION_29_AGENDAS, matchTicketToAgenda } from "../../src/utils/inspection-pic-matcher.js";
 import {
-  PlanMember, ShiftGroup, DEFAULT_AGENDA_SHIFT, APD_TEAM_AGENDAS, poolOf, ruleError, agendaName
+  PlanMember, ShiftGroup, DEFAULT_AGENDA_SHIFT, APD_TEAM_AGENDAS, poolOf, ruleError, agendaName, isSeniorGol
 } from "../../src/utils/inspection-schedule-rules.js";
 import { loadLeaveRoster } from "./roster.js";
 import { fetchInspectionScheduleFromSheet, invalidateScheduleCache } from "./inspections.js";
@@ -173,8 +173,24 @@ export function randomizeGroups(
     const eligible = new Map(agendas.map(id => [id, people.filter(m => !ruleError(m, id))]));
     const count = new Map(agendas.map(id => [id, 0]));
 
+    // 0) Gol III – V selalu di urutan pertama: masing-masing menjadi inspektor utama agenda tersendiri.
+    //    Pilih agenda dengan kandidat terbanyak agar agenda yang kandidatnya terbatas tetap bisa terisi.
+    const seniors = people.filter(m => isSeniorGol(m.gol)).sort((a, b) => golRank(a.gol) - golRank(b.gol) || Math.random() - 0.5);
+    for (const m of seniors) {
+      const options = agendas.filter(id => count.get(id) === 0 && !ruleError(m, id));
+      if (!options.length) continue;
+      const best = options.reduce((b, id) => {
+        const score = penalty(m, id) * 10 - eligible.get(id)!.length;
+        return score < b.score ? { id, score } : b;
+      }, { id: options[0], score: Infinity }).id;
+      m.agendaId = best;
+      m.roleIndex = 1;
+      count.set(best, 1);
+    }
+
     // 1) Satu inspektor utama per agenda; agenda dengan kandidat paling sedikit diisi dulu
-    const order = [...agendas].sort((x, y) => eligible.get(x)!.length - eligible.get(y)!.length || Math.random() - 0.5);
+    const order = [...agendas].filter(id => count.get(id) === 0)
+      .sort((x, y) => eligible.get(x)!.length - eligible.get(y)!.length || Math.random() - 0.5);
     for (const id of order) {
       const candidates = eligible.get(id)!.filter(m => m.agendaId === null);
       if (!candidates.length) continue;
@@ -201,7 +217,19 @@ export function randomizeGroups(
       m.agendaId = best;
       m.roleIndex = next;
     }
+
+    // 3) Urutan di tiap agenda: Gol V → IV → III dahulu, baru Gol II (urutan acak dipertahankan)
+    for (const id of agendas) {
+      people.filter(m => m.agendaId === id)
+        .sort((a, b) => Number(!isSeniorGol(a.gol)) - Number(!isSeniorGol(b.gol)) || (isSeniorGol(a.gol) ? golRank(a.gol) - golRank(b.gol) : 0) || a.roleIndex - b.roleIndex)
+        .forEach((m, i) => { m.roleIndex = i + 1; });
+    }
   }
+}
+
+const GOL_ORDER: Record<string, number> = { V: 0, IV: 1, III: 2, II: 3 };
+function golRank(gol: string): number {
+  return GOL_ORDER[(gol || '').trim().toUpperCase()] ?? 9;
 }
 
 function normalizeRoles(members: PlanMember[]) {
