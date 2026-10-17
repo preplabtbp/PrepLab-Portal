@@ -77,6 +77,7 @@ const PemantauanScreen = lazyWithRetry(() => import('./components/pemantauan-scr
 const ProfileScreen = lazyWithRetry(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
 const RosterAdminScreen = lazyWithRetry(() => import('./components/roster-admin-screen').then(m => ({ default: m.RosterAdminScreen })));
 const TrainingDatabaseScreen = lazyWithRetry(() => import('./components/training-database-screen').then(m => ({ default: m.TrainingDatabaseScreen })));
+const SafetyRekapScreen = lazyWithRetry(() => import('./components/safety-rekap-screen').then(m => ({ default: m.SafetyRekapScreen })));
 const MealOrdersScreen = lazyWithRetry(() => import('./components/meal-orders-screen').then(m => ({ default: m.MealOrdersScreen })));
 const MonitoringDashboard = lazyWithRetry(() => import('./components/monitoring-dashboard').then(m => ({ default: m.MonitoringDashboard })));
 const WeeklyInspectionScreen = lazyWithRetry(() => import('./components/weekly-inspection-screen').then(m => ({ default: m.WeeklyInspectionScreen })));
@@ -2013,6 +2014,7 @@ export default function App() {
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
   <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
+  <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleNav('home')} />} />
   <Route path="/training-external" element={<TrainingDatabaseScreen key="external" scope="external" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/meal-orders" element={<MealOrdersScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />

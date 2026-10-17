@@ -151,6 +151,18 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     target: 'clinic'
   },
   {
+    id: 'safety-rekap',
+    title: 'Rekap KTA/TTA & Inspeksi',
+    desc: 'Rekap mingguan laporan KTA/TTA & inspeksi terencana per personil',
+    category: 'Pelaporan & Temuan',
+    icon: <ShieldCheck className="w-5 h-5" />,
+    iconBg: 'bg-amber-500/15 border-amber-500/25',
+    iconColor: 'text-amber-600 dark:text-amber-400',
+    tags: ['rekap', 'kta', 'tta', 'inspeksi', 'kepatuhan', 'sap', 'safety', 'mingguan'],
+    actionType: 'nav',
+    target: 'safety-rekap'
+  },
+  {
     id: 'roster-admin',
     title: 'Roster & Cuti Kerja',
     desc: 'Jadwal shift kerja harian & status roster personil',
