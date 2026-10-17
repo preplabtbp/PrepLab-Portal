@@ -254,12 +254,60 @@ function applyEdit(auto: RekapValues, edit: any, period: Period): RekapValues {
   };
 }
 
+// Periode rekap Safety: Sabtu – Jumat berikutnya.
+// Week N = Sabtu di minggu ISO N s/d Jumat di minggu ISO N+1 (contoh 2026: W42 = 17 – 23 Okt).
+function getRekapWeekRange(year: number, week: number): Period {
+  const iso = getISOWeekRange(year, week);
+  const start = new Date(iso.start);
+  start.setDate(start.getDate() + 5);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+// Week rekap untuk suatu tanggal (Sabtu ikut week ISO yang sama, Senin–Jumat ikut week ISO sebelumnya)
+function getRekapWeek(date: Date): { week: number; year: number } {
+  const d = new Date(date);
+  d.setDate(d.getDate() - 5);
+  return { week: getISOWeek(d), year: getISOWeekYear(d) };
+}
+
+// Gabungkan data rekap 2 minggu ISO yang beririsan dengan periode Sabtu – Jumat
+function mergeRekapLists(lists: any[][]): any[] {
+  const map = new Map<string, any>();
+  lists.flat().forEach(emp => {
+    const key = (emp.nik || emp.name || '').toString().trim().toUpperCase();
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { ...emp, _sources: [emp] });
+      return;
+    }
+    const reports = [...(prev.reports || []), ...(emp.reports || [])];
+    const seen = new Set<string>();
+    const manual = (e: any) => e.isManualOverride && e.status === 'SUDAH';
+    map.set(key, {
+      ...prev,
+      ...(manual(emp) && !manual(prev) ? { isManualOverride: true, status: 'SUDAH', checkDetails: emp.checkDetails } : {}),
+      reports: reports.filter(r => {
+        const id = String(r.id ?? `${r.reportType}-${r.timestamp}`);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      }),
+      _sources: [...prev._sources, emp]
+    });
+  });
+  return Array.from(map.values());
+}
+
 function buildWeekOptions(year: number, currentWeek: number) {
   const options: { value: string; label: string }[] = [];
   const start = Math.max(1, currentWeek - 8);
   const end = Math.min(53, currentWeek + 1);
   for (let w = end; w >= start; w--) {
-    const { start: s, end: e } = getISOWeekRange(year, w);
+    const { start: s, end: e } = getRekapWeekRange(year, w);
     options.push({
       value: `W${w}`,
       label: `Week ${w} (${s.getDate()} ${MONTHS_SHORT[s.getMonth()]} - ${e.getDate()} ${MONTHS_SHORT[e.getMonth()]})${w === currentWeek ? ' [Aktif]' : ''}`
@@ -726,8 +774,8 @@ function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSave
 
 export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, inspectorSection, onBack }: SafetyRekapScreenProps) {
   const today = useMemo(() => new Date(), []);
-  const currentYear = useMemo(() => getISOWeekYear(today), [today]);
-  const currentWeek = useMemo(() => getISOWeek(today), [today]);
+  const currentYear = useMemo(() => getRekapWeek(today).year, [today]);
+  const currentWeek = useMemo(() => getRekapWeek(today).week, [today]);
   const weekOptions = useMemo(() => buildWeekOptions(currentYear, currentWeek), [currentYear, currentWeek]);
 
   const [view, setView] = useState<'tabel' | 'detail'>('tabel');
@@ -767,8 +815,8 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
   }, [inspectorNik, inspectorRole, inspectorSection]);
 
   const weekNum = parseInt(selectedWeek.replace(/\D/g, ''), 10) || currentWeek;
-  const weekRange = useMemo(() => getISOWeekRange(currentYear, weekNum), [currentYear, weekNum]);
-  // Bulan laporan mengikuti hari Kamis (penentu minggu ISO)
+  const weekRange = useMemo(() => getRekapWeekRange(currentYear, weekNum), [currentYear, weekNum]);
+  // Bulan laporan mengikuti hari Selasa (hari ke-4 dari periode Sabtu – Jumat)
   const reportMonth = useMemo(() => {
     const thu = new Date(weekRange.start);
     thu.setDate(thu.getDate() + 3);
@@ -792,24 +840,31 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
   const fetchData = useCallback(async (week: string, refresh = false) => {
     setLoading(true);
     try {
-      const q = `week=${week}${refresh ? '&refresh=true' : ''}`;
-      const [inspRes, ktaRes] = await Promise.all([
-        fetch(`/api/rekap-inspeksi?${q}`),
-        fetch(`/api/rekap-kta?${q}`),
+      // Server mengelompokkan data per minggu ISO (Senin – Minggu). Periode Sabtu – Jumat
+      // beririsan dengan 2 minggu ISO: N (Sabtu–Minggu) dan N+1 (Senin–Jumat).
+      const num = parseInt(week.replace(/\D/g, ''), 10);
+      const isoWeeks = [`W${num}`, `W${getISOWeek(getRekapWeekRange(currentYear, num).end)}`];
+      const suffix = refresh ? '&refresh=true' : '';
+      const [responses] = await Promise.all([
+        Promise.all(isoWeeks.flatMap(w => [
+          fetch(`/api/rekap-inspeksi?week=${w}${suffix}`),
+          fetch(`/api/rekap-kta?week=${w}${suffix}`)
+        ])),
         fetchEdits(week)
       ]);
-      const inspJson = inspRes.ok ? await inspRes.json() : {};
-      const ktaJson = ktaRes.ok ? await ktaRes.json() : {};
-      setInspeksiData({ rekapList: inspJson.rekapList || [], cutiList: inspJson.cutiList || [] });
-      setKtaData({ rekapList: ktaJson.rekapList || [], cutiList: ktaJson.cutiList || [] });
-      if (!inspRes.ok || !ktaRes.ok) toast.error('Sebagian data rekap gagal dimuat');
+      const jsons = await Promise.all(responses.map(r => (r.ok ? r.json() : {})));
+      const [inspA, ktaA, inspB, ktaB] = jsons as any[];
+      // Status cuti/roster mengikuti minggu ISO N+1 (Senin – Jumat = mayoritas periode)
+      setInspeksiData({ rekapList: mergeRekapLists([inspA.rekapList || [], inspB.rekapList || []]), cutiList: inspB.cutiList || [] });
+      setKtaData({ rekapList: mergeRekapLists([ktaA.rekapList || [], ktaB.rekapList || []]), cutiList: ktaB.cutiList || [] });
+      if (responses.some(r => !r.ok)) toast.error('Sebagian data rekap gagal dimuat');
     } catch (err) {
       console.error('Error fetching rekap safety:', err);
       toast.error('Gagal memuat rekap KTA/TTA & Inspeksi');
     } finally {
       setLoading(false);
     }
-  }, [fetchEdits]);
+  }, [fetchEdits, currentYear]);
 
   useEffect(() => {
     if (view === 'tabel') fetchData(selectedWeek);
@@ -837,15 +892,21 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       return entry;
     };
 
-    inspeksiData.rekapList.filter(isValidEmployee).forEach(emp => {
-      const { auto } = ensure(emp, false);
-      const cd = emp.checkDetails || {};
-      // Hanya tanggal inspeksi yang masuk periode week yang dihitung
-      const tgl = pickInPeriod(weekRange, cd.pdfTimestamp, cd.ssTimestamp, emp.completedAt);
-      const isManual = emp.isManualOverride && emp.status === 'SUDAH';
-      auto.inspeksiDone = emp.status === 'SUDAH' && (isManual || tgl !== null);
-      auto.keteranganInspeksi = tgl !== null || isManual ? (emp.pdfTitle || cd.pdfTitle || '') : '';
-      auto.tglInspeksi = tgl !== null ? toIsoDate(parseLocalDate(tgl)) : (isManual ? '√' : '');
+    inspeksiData.rekapList.filter(isValidEmployee).forEach(merged => {
+      const { auto } = ensure(merged, false);
+      // Cek data dari tiap minggu ISO; hanya tanggal inspeksi yang masuk periode Sabtu – Jumat yang dihitung
+      for (const emp of (merged._sources || [merged])) {
+        const cd = emp.checkDetails || {};
+        const tgl = pickInPeriod(weekRange, cd.pdfTimestamp, cd.ssTimestamp, emp.completedAt);
+        const isManual = emp.isManualOverride && emp.status === 'SUDAH';
+        const done = emp.status === 'SUDAH' && (isManual || tgl !== null);
+        if (done || (!auto.inspeksiDone && tgl !== null)) {
+          auto.inspeksiDone = done;
+          auto.keteranganInspeksi = emp.pdfTitle || cd.pdfTitle || '';
+          auto.tglInspeksi = tgl !== null ? toIsoDate(parseLocalDate(tgl)) : '√';
+        }
+        if (done) break;
+      }
     });
     ktaData.rekapList.filter(isValidEmployee).forEach(emp => {
       Object.assign(ensure(emp, false).auto, buildKtaCells(emp, weekRange));
