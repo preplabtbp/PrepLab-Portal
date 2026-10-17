@@ -135,7 +135,7 @@ function jabatanRank(jabatan: string): number {
   return 4;
 }
 
-interface Period { start: Date; end: Date }
+export interface Period { start: Date; end: Date }
 
 // Parse tanggal; 'YYYY-MM-DD' dibaca sebagai tanggal lokal (bukan UTC)
 function parseLocalDate(v: any): Date | null {
@@ -256,7 +256,7 @@ function applyEdit(auto: RekapValues, edit: any, period: Period): RekapValues {
 
 // Periode rekap Safety: Sabtu – Jumat berikutnya.
 // Week N = Sabtu di minggu ISO N s/d Jumat di minggu ISO N+1 (contoh 2026: W42 = 17 – 23 Okt).
-function getRekapWeekRange(year: number, week: number): Period {
+export function getRekapWeekRange(year: number, week: number): Period {
   const iso = getISOWeekRange(year, week);
   const start = new Date(iso.start);
   start.setDate(start.getDate() + 5);
@@ -268,7 +268,7 @@ function getRekapWeekRange(year: number, week: number): Period {
 }
 
 // Week rekap untuk suatu tanggal (Sabtu ikut week ISO yang sama, Senin–Jumat ikut week ISO sebelumnya)
-function getRekapWeek(date: Date): { week: number; year: number } {
+export function getRekapWeek(date: Date): { week: number; year: number } {
   const d = new Date(date);
   d.setDate(d.getDate() - 5);
   return { week: getISOWeek(d), year: getISOWeekYear(d) };
@@ -316,12 +316,12 @@ function buildWeekOptions(year: number, currentWeek: number) {
   return options;
 }
 
-function initials(name: string) {
+export function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 }
 
 // Untuk ekspor PNG: foto Google Drive diambil lewat proxy same-origin agar kanvas tidak terblokir CORS
-function photoForCapture(url?: string): string {
+export function photoForCapture(url?: string): string {
   if (!url) return '';
   const s = url.trim();
   if (s.startsWith('data:') || s.startsWith('/api/')) return s;
@@ -330,7 +330,7 @@ function photoForCapture(url?: string): string {
   return formatAvatarUrl(s);
 }
 
-function EmployeeAvatar({ name, photo, className = 'w-8 h-8 text-[11px]' }: { name: string; photo?: string; className?: string }) {
+export function EmployeeAvatar({ name, photo, className = 'w-8 h-8 text-[11px]' }: { name: string; photo?: string; className?: string }) {
   const src = formatAvatarUrl(photo);
   return (
     <div className={`relative shrink-0 rounded-full overflow-hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 text-slate-700 dark:text-slate-100 font-black flex items-center justify-center ring-2 ring-[var(--card-bg)] ${className}`}>

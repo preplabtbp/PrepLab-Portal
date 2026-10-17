@@ -1956,6 +1956,8 @@ export function invalidateScheduleCache() {
   rekapInspeksiCache.clear();
 }
 
+const agendaShiftsBySheet = new Map<string, { no: number; agenda: string; shift: string }[]>();
+
 export async function fetchInspectionScheduleFromSheet(forceRefresh = false, sheetName = 'CurrentWeek') {
   const targetSheet = (sheetName || 'CurrentWeek').trim();
   const cacheKey = targetSheet.toLowerCase();
@@ -2015,6 +2017,17 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
 
   const scheduleList: any[] = [];
   let currentShiftGroup = 'Nonshift';
+
+  // Kolom J–L: daftar resmi agenda inspeksi beserta shift per agenda ("Jadwal Inspeksi (Baru)")
+  const agendaShifts: { no: number; agenda: string; shift: string }[] = [];
+  for (const r of rows) {
+    const agendaNo = parseInt((r[9] || '').trim(), 10);
+    const agendaName = (r[10] || '').trim();
+    if (!isNaN(agendaNo) && agendaName) {
+      agendaShifts.push({ no: agendaNo, agenda: agendaName, shift: (r[11] || '').trim() });
+    }
+  }
+  agendaShiftsBySheet.set(cacheKey, agendaShifts);
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
@@ -2575,7 +2588,8 @@ router.get("/api/inspection-schedule", async (req, res) => {
       sheet: targetSheet,
       week: targetWeekTag,
       total: allSchedules.length,
-      data: allSchedules
+      data: allSchedules,
+      agendaShifts: agendaShiftsBySheet.get(targetSheet.toLowerCase()) || []
     });
   } catch (error: any) {
     console.error("Error fetching inspection schedule:", error);

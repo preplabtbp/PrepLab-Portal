@@ -163,6 +163,18 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     target: 'safety-rekap'
   },
   {
+    id: 'inspection-schedule',
+    title: 'Jadwal Inspeksi',
+    desc: 'Jadwal inspeksi terencana mingguan Preparasi & Laboratorium (Sabtu – Jumat)',
+    category: 'Pelaporan & Temuan',
+    icon: <Calendar className="w-5 h-5" />,
+    iconBg: 'bg-amber-500/15 border-amber-500/25',
+    iconColor: 'text-amber-600 dark:text-amber-400',
+    tags: ['jadwal', 'inspeksi', 'schedule', 'mingguan', 'week', 'petugas', 'agenda', 'safety'],
+    actionType: 'nav',
+    target: 'inspection-schedule'
+  },
+  {
     id: 'roster-admin',
     title: 'Roster & Cuti Kerja',
     desc: 'Jadwal shift kerja harian & status roster personil',
