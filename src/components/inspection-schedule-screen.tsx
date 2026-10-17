@@ -279,7 +279,6 @@ const LEAVE_STYLE: Record<LeaveCat, { label: string; cls: string }> = {
   KOSONG: { label: '-', cls: 'bg-transparent text-[var(--text-muted)] ring-[var(--border-main)]' }
 };
 const LEAVE_FILTERS: LeaveCat[] = ['CUTI', 'TRV', 'IZIN', 'SS', 'SL', 'DINAS'];
-const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
 interface LeaveRow {
   nik: string; name: string; jabatan: string; section: string;
@@ -318,9 +317,6 @@ const LeaveSheet = React.forwardRef<HTMLDivElement, {
 }>(({ rows, dates, filterLabel, onsiteCount, week, periodLabel, photoOf }, ref) => {
   const th = 'border border-slate-400 bg-slate-200 px-2 py-2 text-[11px] font-bold uppercase text-slate-800';
   const td = 'border border-slate-300 px-2 py-1.5 text-[12px] text-slate-900';
-  const chip = (code: string, cat: LeaveCat) => (
-    <span className="inline-block min-w-[44px] px-1.5 py-0.5 rounded text-[11px] font-bold" style={{ backgroundColor: LEAVE_PRINT[cat].bg, color: LEAVE_PRINT[cat].fg }}>{code || '-'}</span>
-  );
   const perCat = LEAVE_FILTERS.map(k => ({ k, n: rows.filter(r => r.days.some(d => d.category === k)).length }));
   return (
     <div ref={ref} style={{ width: 1400 }} className="bg-white p-8 font-sans text-slate-900">
@@ -353,10 +349,6 @@ const LeaveSheet = React.forwardRef<HTMLDivElement, {
             <th className={`${th} text-left`}>Nama Karyawan</th>
             <th className={th}>NIK</th>
             <th className={`${th} text-left`}>Jabatan</th>
-            {dates.map(d => {
-              const [y, m, dd] = d.split('-').map(Number);
-              return <th key={d} className={th}>{DAY_NAMES[new Date(y, m - 1, dd).getDay()]}<br /><span className="font-medium normal-case">{dd} {MONTHS_SHORT[m - 1]}</span></th>;
-            })}
             <th className={th}>Awal Cuti / TRV</th>
             <th className={th}>Akhir Cuti / TRV</th>
             <th className={th}>Kembali Onsite</th>
@@ -380,7 +372,6 @@ const LeaveSheet = React.forwardRef<HTMLDivElement, {
                 </td>
                 <td className={`${td} text-center font-mono`}>{r.nik}</td>
                 <td className={td}>{r.jabatan}</td>
-                {r.days.map(d => <td key={d.date} className={`${td} text-center`}>{chip(d.code, d.category)}</td>)}
                 <td className={`${td} text-center font-semibold whitespace-nowrap`}>{formatIsoLong(r.leaveStart)}</td>
                 <td className={`${td} text-center font-semibold whitespace-nowrap`}>{formatIsoLong(r.leaveEnd)}</td>
                 <td className={`${td} text-center whitespace-nowrap`}>{r.returnDate ? `${formatIsoLong(r.returnDate)} (${r.returnCode})` : 'Belum terjadwal'}</td>
@@ -567,14 +558,6 @@ function LeaveControlPanel({ period, week, periodLabel, photoOf }: {
               <th className={`${th} w-10 text-center`}>No</th>
               <th className={`${th} text-left`}>Nama / NIK</th>
               <th className={`${th} text-left`}>Jabatan</th>
-              {dates.map(d => {
-                const [y, m, dd] = d.split('-').map(Number);
-                return (
-                  <th key={d} className={`${th} text-center border-l border-l-[var(--border-main)]`}>
-                    {DAY_NAMES[new Date(y, m - 1, dd).getDay()]}<span className="block font-medium normal-case tracking-normal text-[10px] opacity-70">{dd} {MONTHS_SHORT[m - 1]}</span>
-                  </th>
-                );
-              })}
               <th className={`${th} text-center border-l border-l-[var(--border-main)]`}>Awal Cuti / TRV</th>
               <th className={`${th} text-center`}>Akhir Cuti / TRV</th>
               <th className={`${th} text-center`}>Kembali Onsite</th>
@@ -583,11 +566,11 @@ function LeaveControlPanel({ period, week, periodLabel, photoOf }: {
           </thead>
           <tbody>
             {loading && rows.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-12 text-center text-sm text-[var(--text-muted)]"><RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Membaca roster dari Google Sheet...</td></tr>
+              <tr><td colSpan={7} className="px-3 py-12 text-center text-sm text-[var(--text-muted)]"><RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Membaca roster dari Google Sheet...</td></tr>
             ) : error ? (
-              <tr><td colSpan={10} className="px-3 py-12 text-center text-sm text-rose-600 dark:text-rose-400"><AlertCircle className="w-4 h-4 inline mr-1.5" />{error}</td></tr>
+              <tr><td colSpan={7} className="px-3 py-12 text-center text-sm text-rose-600 dark:text-rose-400"><AlertCircle className="w-4 h-4 inline mr-1.5" />{error}</td></tr>
             ) : visible.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-12 text-center text-sm text-[var(--text-muted)]">Tidak ada karyawan yang cocok.</td></tr>
+              <tr><td colSpan={7} className="px-3 py-12 text-center text-sm text-[var(--text-muted)]">Tidak ada karyawan yang cocok.</td></tr>
             ) : visible.map((r, i) => (
               <tr key={r.nik} className="hover:bg-[var(--input-bg)]/70 transition-colors">
                 <td className={`${td} text-center text-[var(--text-muted)] tabular-nums`}>{i + 1}</td>
@@ -601,9 +584,6 @@ function LeaveControlPanel({ period, week, periodLabel, photoOf }: {
                   </div>
                 </td>
                 <td className={`${td} text-[var(--text-muted)] min-w-[170px]`}>{r.jabatan}</td>
-                {r.days.map(d => (
-                  <td key={d.date} className={`${td} text-center border-l border-l-[var(--border-main)]`}>{codeChip(d.code, d.category)}</td>
-                ))}
                 <td className={`${td} text-center whitespace-nowrap font-semibold border-l border-l-[var(--border-main)]`}>{formatIsoLong(r.leaveStart)}</td>
                 <td className={`${td} text-center whitespace-nowrap font-semibold`}>{formatIsoLong(r.leaveEnd)}</td>
                 <td className={`${td} text-center whitespace-nowrap`}>
