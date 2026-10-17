@@ -1018,6 +1018,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
   const [canEdit, setCanEdit] = useState(false);
   const [busy, setBusy] = useState('');
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [cutiConflicts, setCutiConflicts] = useState<string[]>([]);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -1084,6 +1085,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       if (json?.success) {
         found = json.plan || null;
         setHistory(json.history || {});
+        setCutiConflicts(json.cutiConflicts || []);
         setCanEdit(!!json.canEdit);
       }
     } catch (err) {
@@ -1152,6 +1154,16 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     }, `Jadwal ${target.name} diperbarui`);
   };
 
+  // Keluarkan petugas yang menurut roster cuti pada periode ini → masuk daftar cuti
+  const handleRemoveCuti = () => {
+    if (!plan || !cutiConflicts.length) return;
+    const conflict = new Set(cutiConflicts);
+    const members = plan.members.map(m => conflict.has(planKey(m)) ? { ...m, isCuti: true, agendaId: null, roleIndex: 1, shiftGroup: null } : m);
+    planRequest('Mengeluarkan karyawan cuti', '/api/inspection-plan', {
+      method: 'PUT', body: JSON.stringify({ year: currentYear, week: selectedWeek, members, editorNik: inspectorNik })
+    }, `${conflict.size} karyawan cuti dikeluarkan dari jadwal`);
+  };
+
   const requestEdit = (t: EditTarget) => {
     if (plan) { setEditTarget(t); return; }
     if (window.confirm('Jadwal minggu ini masih dari Google Sheet. Salin ke portal agar bisa diedit per karyawan?')) handleCopyFromSheet();
@@ -1175,7 +1187,10 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         const member: Member = {
           no: i + 1, name: pm.name, jabatan: pm.jabatan, shift: shiftLabelOf(pm), roleIndex: pm.roleIndex,
           isCompleted: !!s?.isCompleted, completedAt: s?.completedAt, key: planKey(pm), plan: pm,
-          warnings: memberWarnings(history, pm.agendaId, pm, pm, pm.agendaId ? planShifts?.[pm.agendaId] : null)
+          warnings: [
+            ...(pm.agendaId && !pm.isCuti && cutiConflicts.includes(planKey(pm)) ? [{ level: 'error' as const, text: 'Cuti pada periode ini (Database Roster) — tidak boleh dijadwalkan' }] : []),
+            ...memberWarnings(history, pm.agendaId, pm, pm, pm.agendaId ? planShifts?.[pm.agendaId] : null)
+          ]
         };
         if (pm.isCuti) cutiList.push(member);
         else if (pm.agendaId) byAgenda.set(pm.agendaId, [...(byAgenda.get(pm.agendaId) || []), member]);
@@ -1224,7 +1239,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       cards: list, cuti: cutiList.sort((a, b) => a.name.localeCompare(b.name)), nonActive: nonActiveList,
       unassigned: unassignedList.sort((a, b) => a.name.localeCompare(b.name))
     };
-  }, [schedule, agendaShifts, plan, history]);
+  }, [schedule, agendaShifts, plan, history, cutiConflicts]);
 
   // Daftar peringatan (inspeksi berulang, aturan Gol/Section, shift) untuk banner ringkasan
   const warningList = useMemo(() => cards.flatMap(c => c.members.flatMap(m =>
@@ -1556,9 +1571,16 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       {/* Peringatan jadwal */}
       {warningList.length > 0 && (
         <div className="rounded-2xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 p-3">
-          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 mb-2">
-            <AlertTriangle className="w-4 h-4" /> {warningList.length} peringatan jadwal
-          </p>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 mr-auto">
+              <AlertTriangle className="w-4 h-4" /> {warningList.length} peringatan jadwal
+            </p>
+            {canEdit && plan && cutiConflicts.length > 0 && (
+              <button onClick={handleRemoveCuti} disabled={!!busy} className="h-8 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
+                <UserX className="w-3.5 h-3.5" /> Keluarkan {cutiConflicts.length} karyawan cuti
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-x-4 gap-y-1">
             {warningList.map((w, i) => (
               <p key={i} className={`text-[12px] ${w.level === 'error' ? 'text-rose-700 dark:text-rose-300' : 'text-amber-800 dark:text-amber-200'}`}>

@@ -14,6 +14,7 @@ export const inspectionPlannerRouter = Router();
 
 const PLAN_GOL = new Set(['II', 'III', 'IV', 'V']);
 const WORKING_CODES = new Set(['D', 'N', 'LS']);
+const ONSITE_CODES = new Set(['D', 'N', 'OFF', 'LS']);
 const DAY_MS = 86400000;
 
 let planTableEnsured = false;
@@ -83,7 +84,9 @@ export async function buildRosterMembers(period: ReturnType<typeof rekapPeriod>,
     const working = codes.filter(c => WORKING_CODES.has(c));
     const nights = working.filter(c => c === 'N').length;
     const team = /^a$/i.test(e.team) ? 'A' : /^b$/i.test(e.team) ? 'B' : 'Nonshift';
-    const isCuti = working.length === 0;
+    // Sama dengan Kontrol Cuti: ada kode cuti/TRV/izin/sakit/dinas di salah satu hari Senin – Rabu → tidak dijadwalkan
+    const onLeave = codes.some(c => c && c !== '-' && !ONSITE_CODES.has(c));
+    const isCuti = onLeave || working.length === 0;
     list.push({
       nik: e.nik, name: e.name, jabatan: e.jabatan, section: e.section, gol: e.gol, team,
       shiftGroup: isCuti ? null : nights > working.length - nights ? 'Malam' : team === 'Nonshift' ? 'Nonshift' : 'Siang',
@@ -249,7 +252,17 @@ inspectionPlannerRouter.get("/api/inspection-plan", async (req, res) => {
       loadHistory(period.year, period.week),
       canEditPlan(req.query.nik as string)
     ]);
-    res.json({ success: true, period, plan, history, canEdit });
+    // Petugas terjadwal yang menurut roster terbaru cuti pada periode ini
+    let cutiConflicts: string[] = [];
+    if (plan) {
+      try {
+        const cutiNow = new Set((await buildRosterMembers(period)).filter(m => m.isCuti).map(memberKey));
+        cutiConflicts = ((plan.members as PlanMember[]) || []).filter(m => !m.isCuti && m.agendaId && cutiNow.has(memberKey(m))).map(memberKey);
+      } catch (err) {
+        console.warn('[inspection-plan] Gagal cek cuti roster:', err);
+      }
+    }
+    res.json({ success: true, period, plan, history, canEdit, cutiConflicts });
   } catch (error: any) {
     console.error('Error inspection-plan:', error);
     res.status(500).json({ success: false, message: error.message || 'Gagal memuat jadwal' });
@@ -316,9 +329,9 @@ inspectionPlannerRouter.post("/api/inspection-plan/from-sheet", async (req, res)
       if (!agenda) continue;
       const m = byName.get((s.name || '').trim().toLowerCase());
       if (m) {
+        if (m.isCuti) continue; // cuti pada periode ini menurut roster → tidak ikut dijadwalkan
         m.agendaId = agenda.id;
         m.roleIndex = s.roleIndex || 1;
-        if (m.isCuti) { m.isCuti = false; m.shiftGroup = m.team === 'Nonshift' ? 'Nonshift' : 'Siang'; }
       } else {
         const shift = (s.shift || '').toLowerCase();
         members.push({
