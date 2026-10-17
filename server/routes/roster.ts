@@ -681,3 +681,135 @@ setTimeout(() => {
   });
 }, 1000);
 
+
+// ── KONTROL CUTI (Jadwal Inspeksi) ────────────────────────────────────────────
+// Dibaca langsung dari Google Sheet "Database Roster Prep & Lab" (tab Rooster_Staff & Rooster_Crew)
+const LEAVE_ROSTER_SHEET_ID = "1iijlFReGxHyMiFAbd0J5-yfs1udWvZo4ydrJJKJBCNo";
+const LEAVE_ROSTER_TABS = [
+  { type: 'Staff', sheet: 'Rooster_Staff', colSection: 5, dateStartCol: 15 },
+  { type: 'Crew', sheet: 'Rooster_Crew', colSection: 4, dateStartCol: 14 }
+];
+const LEAVE_RESIGNED_NIKS = new Set([
+  '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
+  'M0206250825', 'M0203220107', 'M0402240107', 'M0402230177', 'M0205250595', 'M0201250027', 'M0206250798', 'M0403240137', 'M0404220419'
+]);
+const ONSITE_CODES = new Set(['D', 'N', 'OFF', 'LS']);
+const LEAVE_CACHE_TTL = 10 * 60 * 1000;
+let leaveRosterCache: { data: any[]; timestamp: number } | null = null;
+
+// Kategori kode roster untuk tampilan Kontrol Cuti
+function leaveCategory(code: string): string {
+  const c = code.toUpperCase();
+  if (!c || c === '-') return 'KOSONG';
+  if (ONSITE_CODES.has(c)) return 'ONSITE';
+  if (c === 'TRV') return 'TRV';
+  if (c === 'SS') return 'SS';
+  if (c === 'SL') return 'SL';
+  if (c === 'I' || c === 'IK') return 'IZIN';
+  if (c === 'DL') return 'DINAS';
+  if (/^(C|CT|CE|CS|CI)\d*$/.test(c)) return 'CUTI';
+  return 'LAINNYA';
+}
+
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, mei: 4, jun: 5, jul: 6, aug: 7, agu: 7, ags: 7, sep: 8, oct: 9, okt: 9, nov: 10, dec: 11, des: 11
+};
+// Header tanggal sheet: "17 Oct 26" → "2026-10-17"
+function rosterHeaderToIso(h: string): string | null {
+  const m = (h || '').trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\w*\s+(\d{2,4})$/);
+  if (!m) return null;
+  const month = MONTH_INDEX[m[2].toLowerCase()];
+  if (month === undefined) return null;
+  const year = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(parseInt(m[1], 10)).padStart(2, '0')}`;
+}
+
+async function loadLeaveRoster(force = false): Promise<any[]> {
+  if (!force && leaveRosterCache && Date.now() - leaveRosterCache.timestamp < LEAVE_CACHE_TTL) {
+    return leaveRosterCache.data;
+  }
+  const Papa = (await import('papaparse')).default;
+  const result: any[] = [];
+  for (const tab of LEAVE_ROSTER_TABS) {
+    const url = `https://docs.google.com/spreadsheets/d/${LEAVE_ROSTER_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${tab.sheet}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Gagal membaca sheet ${tab.sheet}: ${res.status}`);
+    const rows = Papa.parse(await res.text(), { skipEmptyLines: true }).data as string[][];
+    if (rows.length < 2) continue;
+    const dateCols = rows[0].map((h, i) => (i >= tab.dateStartCol ? rosterHeaderToIso(h) : null));
+    for (const r of rows.slice(1)) {
+      const nik = (r[2] || '').trim();
+      const name = (r[1] || '').trim();
+      if (!nik || !name || nik.includes('#') || LEAVE_RESIGNED_NIKS.has(nik.toUpperCase())) continue;
+      const days: Record<string, string> = {};
+      dateCols.forEach((iso, i) => { if (iso) days[iso] = (r[i] || '').trim().toUpperCase(); });
+      result.push({ nik, name, jabatan: (r[3] || '').trim(), section: (r[tab.colSection] || '').trim(), type: tab.type, days });
+    }
+  }
+  leaveRosterCache = { data: result, timestamp: Date.now() };
+  return result;
+}
+
+function shiftIsoDate(iso: string, delta: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+// GET /api/roster/leave-control?dates=2026-10-19,2026-10-20,2026-10-21
+// Karyawan yang tidak onsite (Cuti/Izin/SS/SL/TRV/dll.) pada tanggal-tanggal tsb, beserta awal & akhir cuti.
+// Awal = hari pertama blok non-onsite; Akhir = hari terakhir sebelum kode berganti ke D/N/OFF/LS.
+router.get("/api/roster/leave-control", async (req, res) => {
+  try {
+    const dates = String(req.query.dates || '').split(',').map(s => s.trim()).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s));
+    if (dates.length === 0) return res.status(400).json({ success: false, message: 'Parameter dates wajib (YYYY-MM-DD, dipisah koma)' });
+    const all = await loadLeaveRoster(req.query.refresh === 'true');
+
+    let onsiteCount = 0;
+    const list: any[] = [];
+    for (const emp of all) {
+      const codes = dates.map(d => emp.days[d] || '');
+      if (codes.every(c => !c || c === '-')) continue; // tidak ada data roster (belum bergabung / non-aktif)
+      const firstOff = dates.find(d => {
+        const cat = leaveCategory(emp.days[d] || '');
+        return cat !== 'ONSITE' && cat !== 'KOSONG';
+      });
+      if (!firstOff) { onsiteCount++; continue; }
+
+      const isOff = (d: string) => {
+        const cat = leaveCategory(emp.days[d] || '');
+        return cat !== 'ONSITE' && cat !== 'KOSONG';
+      };
+      let start = firstOff;
+      for (let i = 0; i < 120 && isOff(shiftIsoDate(start, -1)); i++) start = shiftIsoDate(start, -1);
+      let end = firstOff;
+      for (let i = 0; i < 120 && isOff(shiftIsoDate(end, 1)); i++) end = shiftIsoDate(end, 1);
+      const nextDay = shiftIsoDate(end, 1);
+      const returnCode = emp.days[nextDay] || '';
+
+      // Kategori utama: kode non-onsite yang paling sering di blok (selain TRV), fallback TRV
+      const blockCats: Record<string, number> = {};
+      for (let d = start; d <= end; d = shiftIsoDate(d, 1)) {
+        const cat = leaveCategory(emp.days[d] || '');
+        blockCats[cat] = (blockCats[cat] || 0) + 1;
+      }
+      const main = Object.entries(blockCats).filter(([k]) => k !== 'TRV').sort((a, b) => b[1] - a[1])[0]?.[0] || 'TRV';
+
+      list.push({
+        nik: emp.nik, name: emp.name, jabatan: emp.jabatan, section: emp.section, type: emp.type,
+        category: main,
+        days: dates.map(d => ({ date: d, code: emp.days[d] || '', category: leaveCategory(emp.days[d] || '') })),
+        leaveStart: start,
+        leaveEnd: end,
+        returnDate: ONSITE_CODES.has(returnCode) ? nextDay : null,
+        returnCode: returnCode || null,
+        totalDays: Math.round((new Date(`${end}T12:00:00Z`).getTime() - new Date(`${start}T12:00:00Z`).getTime()) / 86400000) + 1
+      });
+    }
+    list.sort((a, b) => a.leaveStart.localeCompare(b.leaveStart) || a.name.localeCompare(b.name));
+    res.json({ success: true, dates, onsiteCount, total: list.length, data: list });
+  } catch (error: any) {
+    console.error('Error leave-control roster:', error);
+    res.status(500).json({ success: false, message: error.message || 'Gagal membaca roster' });
+  }
+});

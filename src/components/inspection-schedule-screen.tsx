@@ -202,6 +202,221 @@ const ScheduleSheet = React.forwardRef<HTMLDivElement, {
 });
 ScheduleSheet.displayName = 'ScheduleSheet';
 
+// ─── Kontrol Cuti (roster Senin – Rabu) ─────────────────────────────────────
+
+type LeaveCat = 'CUTI' | 'TRV' | 'IZIN' | 'SS' | 'SL' | 'DINAS' | 'ONSITE' | 'LAINNYA' | 'KOSONG';
+
+const LEAVE_STYLE: Record<LeaveCat, { label: string; cls: string }> = {
+  CUTI: { label: 'Cuti', cls: 'bg-violet-100 text-violet-800 ring-violet-300 dark:bg-violet-500/20 dark:text-violet-200 dark:ring-violet-500/40' },
+  TRV: { label: 'TRV', cls: 'bg-sky-100 text-sky-800 ring-sky-300 dark:bg-sky-500/20 dark:text-sky-200 dark:ring-sky-500/40' },
+  IZIN: { label: 'Izin', cls: 'bg-yellow-100 text-yellow-800 ring-yellow-300 dark:bg-yellow-500/20 dark:text-yellow-200 dark:ring-yellow-500/40' },
+  SS: { label: 'SS', cls: 'bg-rose-100 text-rose-800 ring-rose-300 dark:bg-rose-500/20 dark:text-rose-200 dark:ring-rose-500/40' },
+  SL: { label: 'SL', cls: 'bg-pink-100 text-pink-800 ring-pink-300 dark:bg-pink-500/20 dark:text-pink-200 dark:ring-pink-500/40' },
+  DINAS: { label: 'Dinas Luar', cls: 'bg-orange-100 text-orange-800 ring-orange-300 dark:bg-orange-500/20 dark:text-orange-200 dark:ring-orange-500/40' },
+  ONSITE: { label: 'Onsite', cls: 'bg-emerald-100 text-emerald-800 ring-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-500/40' },
+  LAINNYA: { label: 'Lainnya', cls: 'bg-slate-100 text-slate-700 ring-slate-300 dark:bg-slate-500/20 dark:text-slate-200 dark:ring-slate-500/40' },
+  KOSONG: { label: '-', cls: 'bg-transparent text-[var(--text-muted)] ring-[var(--border-main)]' }
+};
+const LEAVE_FILTERS: LeaveCat[] = ['CUTI', 'TRV', 'IZIN', 'SS', 'SL', 'DINAS'];
+const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+interface LeaveRow {
+  nik: string; name: string; jabatan: string; section: string;
+  category: LeaveCat;
+  days: { date: string; code: string; category: LeaveCat }[];
+  leaveStart: string; leaveEnd: string; returnDate: string | null; returnCode: string | null; totalDays: number;
+}
+
+function isoLocal(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatIsoLong(iso?: string | null) {
+  if (!iso) return '-';
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${d} ${MONTHS_SHORT[m - 1]} ${y}`;
+}
+
+function LeaveControlPanel({ period, photoOf }: { period: { start: Date }; photoOf: (name: string) => string | undefined }) {
+  // Senin, Selasa, Rabu di dalam periode Sabtu – Jumat
+  const dates = useMemo(() => [2, 3, 4].map(offset => {
+    const d = new Date(period.start);
+    d.setDate(d.getDate() + offset);
+    return isoLocal(d);
+  }), [period.start]);
+
+  const [rows, setRows] = useState<LeaveRow[]>([]);
+  const [onsiteCount, setOnsiteCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState<LeaveCat | 'ALL'>('ALL');
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async (refresh = false) => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/roster/leave-control?dates=${dates.join(',')}${refresh ? '&refresh=true' : ''}`);
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) throw new Error(json?.message || 'Gagal membaca roster');
+      setRows(json.data || []);
+      setOnsiteCount(json.onsiteCount || 0);
+    } catch (err: any) {
+      setRows([]);
+      setError(err.message || 'Gagal membaca roster');
+    } finally {
+      setLoading(false);
+    }
+  }, [dates]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const counts = useMemo(() => {
+    // Per orang: dihitung pada kategori X bila salah satu hari Senin–Rabu berkode X
+    const c: Partial<Record<LeaveCat, number>> = {};
+    rows.forEach(r => new Set(r.days.map(d => d.category)).forEach(cat => { c[cat] = (c[cat] || 0) + 1; }));
+    return c;
+  }, [rows]);
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter(r =>
+      (filter === 'ALL' || r.days.some(d => d.category === filter)) &&
+      (!q || r.name.toLowerCase().includes(q) || r.nik.toLowerCase().includes(q) || r.jabatan.toLowerCase().includes(q))
+    );
+  }, [rows, filter, search]);
+
+  const codeChip = (code: string, cat: LeaveCat) => (
+    <span className={`inline-flex min-w-[46px] justify-center px-2 py-0.5 rounded-md ring-1 ring-inset text-[11px] font-bold ${LEAVE_STYLE[cat].cls}`} title={LEAVE_STYLE[cat].label}>
+      {code || '-'}
+    </span>
+  );
+
+  const th = 'px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-b border-[var(--border-main)] whitespace-nowrap';
+  const td = 'px-3 py-2 border-b border-[var(--border-main)] text-[13px] align-middle';
+
+  return (
+    <section className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-4 border-b border-[var(--border-main)]">
+        <div className="flex items-center gap-3 lg:mr-auto">
+          <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+            <Palmtree className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-black text-[var(--text-main)] leading-tight">Kontrol Cuti Karyawan</h3>
+            <p className="text-xs text-[var(--text-muted)]">
+              Roster Senin – Rabu ({formatIsoLong(dates[0])} – {formatIsoLong(dates[2])}) · sumber: Database Roster Prep & Lab
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="relative flex-1 lg:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Cari nama / NIK / jabatan..."
+              className="w-full h-9 pl-9 pr-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-sm text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
+            />
+          </div>
+          <button
+            onClick={() => load(true)}
+            disabled={loading}
+            className="h-9 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] hover:bg-[var(--bg-main)] text-[var(--text-main)] text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+            title="Ambil ulang dari Google Sheet roster"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Segarkan
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[var(--border-main)] bg-[var(--input-bg)]/50">
+        <button
+          onClick={() => setFilter('ALL')}
+          className={`h-7 px-3 rounded-full text-xs font-semibold cursor-pointer ${filter === 'ALL' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-[var(--card-bg)] text-[var(--text-muted)] border border-[var(--border-main)]'}`}
+        >
+          Tidak Onsite <span className="opacity-70">{rows.length}</span>
+        </button>
+        {LEAVE_FILTERS.map(k => (
+          <button
+            key={k}
+            onClick={() => setFilter(k)}
+            className={`h-7 px-3 rounded-full text-xs font-semibold ring-1 ring-inset cursor-pointer transition-opacity ${LEAVE_STYLE[k].cls} ${filter === k ? 'ring-2 shadow-sm' : 'opacity-80 hover:opacity-100'}`}
+          >
+            {LEAVE_STYLE[k].label} <span className="opacity-70">{counts[k] || 0}</span>
+          </button>
+        ))}
+        <span className={`ml-auto inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-xs font-semibold ring-1 ring-inset ${LEAVE_STYLE.ONSITE.cls}`}>
+          <CheckCircle2 className="w-3.5 h-3.5" /> Onsite penuh Sen–Rab: {onsiteCount}
+        </span>
+      </div>
+
+      <div className="overflow-auto max-h-[60vh]">
+        <table className="w-full min-w-[980px] border-separate border-spacing-0 text-[var(--text-main)]">
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className={`${th} w-10 text-center`}>No</th>
+              <th className={`${th} text-left`}>Nama / NIK</th>
+              <th className={`${th} text-left`}>Jabatan</th>
+              {dates.map(d => {
+                const [y, m, dd] = d.split('-').map(Number);
+                return (
+                  <th key={d} className={`${th} text-center border-l border-l-[var(--border-main)]`}>
+                    {DAY_NAMES[new Date(y, m - 1, dd).getDay()]}<span className="block font-medium normal-case tracking-normal text-[10px] opacity-70">{dd} {MONTHS_SHORT[m - 1]}</span>
+                  </th>
+                );
+              })}
+              <th className={`${th} text-center border-l border-l-[var(--border-main)]`}>Awal Cuti / TRV</th>
+              <th className={`${th} text-center`}>Akhir Cuti / TRV</th>
+              <th className={`${th} text-center`}>Kembali Onsite</th>
+              <th className={`${th} text-center`}>Hari</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && rows.length === 0 ? (
+              <tr><td colSpan={10} className="px-3 py-12 text-center text-sm text-[var(--text-muted)]"><RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Membaca roster dari Google Sheet...</td></tr>
+            ) : error ? (
+              <tr><td colSpan={10} className="px-3 py-12 text-center text-sm text-rose-600 dark:text-rose-400"><AlertCircle className="w-4 h-4 inline mr-1.5" />{error}</td></tr>
+            ) : visible.length === 0 ? (
+              <tr><td colSpan={10} className="px-3 py-12 text-center text-sm text-[var(--text-muted)]">Tidak ada karyawan yang cocok.</td></tr>
+            ) : visible.map((r, i) => (
+              <tr key={r.nik} className="hover:bg-[var(--input-bg)]/70 transition-colors">
+                <td className={`${td} text-center text-[var(--text-muted)] tabular-nums`}>{i + 1}</td>
+                <td className={td}>
+                  <div className="flex items-center gap-2.5 min-w-[200px]">
+                    <EmployeeAvatar name={r.name} photo={photoOf(r.name)} className="w-8 h-8 text-[10px]" />
+                    <div className="min-w-0">
+                      <p className="font-semibold leading-tight truncate">{r.name}</p>
+                      <p className="text-[11px] font-mono text-[var(--text-muted)]">{r.nik}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className={`${td} text-[var(--text-muted)] min-w-[170px]`}>{r.jabatan}</td>
+                {r.days.map(d => (
+                  <td key={d.date} className={`${td} text-center border-l border-l-[var(--border-main)]`}>{codeChip(d.code, d.category)}</td>
+                ))}
+                <td className={`${td} text-center whitespace-nowrap font-semibold border-l border-l-[var(--border-main)]`}>{formatIsoLong(r.leaveStart)}</td>
+                <td className={`${td} text-center whitespace-nowrap font-semibold`}>{formatIsoLong(r.leaveEnd)}</td>
+                <td className={`${td} text-center whitespace-nowrap`}>
+                  {r.returnDate ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      {formatIsoLong(r.returnDate)} {r.returnCode && codeChip(r.returnCode, 'ONSITE')}
+                    </span>
+                  ) : <span className="text-[var(--text-muted)] italic">Belum terjadwal</span>}
+                </td>
+                <td className={`${td} text-center tabular-nums font-bold`}>{r.totalDays}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-4 py-2.5 border-t border-[var(--border-main)] text-[11px] text-[var(--text-muted)]">
+        Awal = hari pertama berturut-turut tidak onsite (TRV/C/CT/CE/I/dll.); Akhir = hari terakhir sebelum roster kembali ke D / N / OFF / LS.
+      </p>
+    </section>
+  );
+}
+
 // ─── Layar utama ────────────────────────────────────────────────────────────
 
 export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }: InspectionScheduleScreenProps) {
@@ -574,6 +789,9 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
           )}
         </div>
       )}
+
+      {/* Kontrol cuti dari Database Roster (Senin – Rabu) */}
+      <LeaveControlPanel period={period} photoOf={photoOf} />
 
       {/* Catatan & daftar cuti */}
       {!loadError && schedule.length > 0 && (
