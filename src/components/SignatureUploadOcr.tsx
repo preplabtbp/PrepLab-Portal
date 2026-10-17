@@ -56,6 +56,7 @@ export function SignatureUploadOcr({
   const [watermarkStyle, setWatermarkStyle] = useState<'diagonal' | 'corner' | 'pattern'>('diagonal');
   const [watermarkSize, setWatermarkSize] = useState<'sm' | 'md' | 'lg'>('md');
   const [watermarkLayer, setWatermarkLayer] = useState<'behind' | 'front'>('behind');
+  const [watermarkColor, setWatermarkColor] = useState<string>('#000000');
 
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,7 +101,7 @@ export function SignatureUploadOcr({
             style: watermarkStyle,
             size: watermarkSize,
             layer: watermarkLayer,
-            color: '#0f766e'
+            color: watermarkColor
           }
         });
 
@@ -138,7 +139,8 @@ export function SignatureUploadOcr({
     watermarkOpacity,
     watermarkStyle,
     watermarkSize,
-    watermarkLayer
+    watermarkLayer,
+    watermarkColor
   ]);
 
   // Clean up object URL
@@ -464,6 +466,30 @@ export function SignatureUploadOcr({
                           }`}
                         >
                           {sz === 'sm' ? 'Kecil' : sz === 'md' ? 'Sedang' : 'Besar'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <span className="text-[11px] font-semibold text-[var(--text-muted)]">Warna Watermark:</span>
+                    <div className="grid grid-cols-3 gap-1 w-full sm:w-auto">
+                      {[
+                        { id: '#000000', label: 'Hitam' },
+                        { id: '#475569', label: 'Abu-abu' },
+                        { id: '#0f766e', label: 'Teal' },
+                      ].map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setWatermarkColor(c.id)}
+                          className={`py-1 px-2.5 rounded-lg text-[11px] font-semibold text-center transition-all cursor-pointer ${
+                            watermarkColor === c.id
+                              ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                              : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                          }`}
+                        >
+                          {c.label}
                         </button>
                       ))}
                     </div>

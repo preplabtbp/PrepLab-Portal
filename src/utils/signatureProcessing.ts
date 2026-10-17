@@ -46,8 +46,8 @@ export const DEFAULT_SIGNATURE_OPTIONS: ProcessSignatureOptions = {
     enabled: true,
     text: 'HANYA UNTUK PREPLAB PORTAL',
     subText: '',
-    opacity: 0.18,
-    color: '#0f766e', // teal
+    opacity: 0.16,
+    color: '#000000', // black
     style: 'diagonal',
     size: 'md',
     layer: 'behind'
@@ -361,8 +361,8 @@ function applyWatermarkToCanvas(
 
   ctx.save();
 
-  const color = watermark.color || '#0f766e';
-  const opacity = Math.min(0.6, Math.max(0.04, watermark.opacity || 0.18));
+  const color = watermark.color || '#000000';
+  const opacity = Math.min(0.6, Math.max(0.04, watermark.opacity || 0.16));
   ctx.globalAlpha = opacity;
   ctx.fillStyle = color;
 
