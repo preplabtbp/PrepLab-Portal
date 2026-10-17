@@ -21,7 +21,7 @@ import { getCsvEmployees } from "./employees.js";
 
 export const router = Router();
 
-async function isAuthorizedRosterEditor(editorNik?: string): Promise<boolean> {
+export async function isAuthorizedRosterEditor(editorNik?: string): Promise<boolean> {
   if (!editorNik) return false;
   const nik = String(editorNik).trim();
   if (!nik) return false;
@@ -686,8 +686,8 @@ setTimeout(() => {
 // Dibaca langsung dari Google Sheet "Database Roster Prep & Lab" (tab Rooster_Staff & Rooster_Crew)
 const LEAVE_ROSTER_SHEET_ID = "1iijlFReGxHyMiFAbd0J5-yfs1udWvZo4ydrJJKJBCNo";
 const LEAVE_ROSTER_TABS = [
-  { type: 'Staff', sheet: 'Rooster_Staff', colSection: 5, colGol: 6, dateStartCol: 15 },
-  { type: 'Crew', sheet: 'Rooster_Crew', colSection: 4, colGol: 5, dateStartCol: 14 }
+  { type: 'Staff', sheet: 'Rooster_Staff', colSection: 5, colGol: 6, colShift: 7, dateStartCol: 15 },
+  { type: 'Crew', sheet: 'Rooster_Crew', colSection: 4, colGol: 5, colShift: 6, dateStartCol: 14 }
 ];
 const LEAVE_RESIGNED_NIKS = new Set([
   '04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356',
@@ -726,7 +726,7 @@ function rosterHeaderToIso(h: string): string | null {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(parseInt(m[1], 10)).padStart(2, '0')}`;
 }
 
-async function loadLeaveRoster(force = false): Promise<any[]> {
+export async function loadLeaveRoster(force = false): Promise<any[]> {
   if (!force && leaveRosterCache && Date.now() - leaveRosterCache.timestamp < LEAVE_CACHE_TTL) {
     return leaveRosterCache.data;
   }
@@ -745,7 +745,7 @@ async function loadLeaveRoster(force = false): Promise<any[]> {
       if (!nik || !name || nik.includes('#') || LEAVE_RESIGNED_NIKS.has(nik.toUpperCase())) continue;
       const days: Record<string, string> = {};
       dateCols.forEach((iso, i) => { if (iso) days[iso] = (r[i] || '').trim().toUpperCase(); });
-      result.push({ nik, name, jabatan: (r[3] || '').trim(), section: (r[tab.colSection] || '').trim(), gol: (r[tab.colGol] || '').trim().toUpperCase(), type: tab.type, days });
+      result.push({ nik, name, jabatan: (r[3] || '').trim(), section: (r[tab.colSection] || '').trim(), gol: (r[tab.colGol] || '').trim().toUpperCase(), team: (r[tab.colShift] || '').trim(), type: tab.type, days });
     }
   }
   leaveRosterCache = { data: result, timestamp: Date.now() };

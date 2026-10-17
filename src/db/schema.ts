@@ -1096,3 +1096,25 @@ export const safetyRekapEdits = pgTable('safety_rekap_edits', {
 }, (t) => [
   uniqueIndex('idx_safety_rekap_edits_week_nik').on(t.year, t.week, t.nik),
 ]);
+
+// Jadwal Inspeksi mingguan yang dibuat di portal (acak per shift / edit manual), per week rekap (Sabtu – Jumat).
+// Bila ada, menggantikan jadwal Google Sheet "CurrentWeek" untuk minggu ISO `isoWeek` (Senin – Jumat periode).
+export const inspectionSchedulePlans = pgTable('inspection_schedule_plans', {
+  id: serial('id').primaryKey(),
+  year: integer('year').notNull(), // tahun week rekap
+  week: integer('week').notNull(), // nomor week rekap
+  isoYear: integer('iso_year').notNull(),
+  isoWeek: text('iso_week').notNull(), // contoh: 'W43'
+  periodStart: text('period_start').notNull(), // 'YYYY-MM-DD' (Sabtu)
+  periodEnd: text('period_end').notNull(), // 'YYYY-MM-DD' (Jumat)
+  members: json('members').notNull(), // PlanMember[]: { nik, name, jabatan, section, gol, team, shiftGroup, agendaId, roleIndex, isCuti, codes }
+  agendaShifts: json('agenda_shifts'), // { [agendaId]: 'Malam' | 'Siang' }
+  source: text('source').default('random'), // 'random' | 'manual'
+  updatedByNik: text('updated_by_nik'),
+  updatedByName: text('updated_by_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_inspection_schedule_plans_week').on(t.year, t.week),
+  index('idx_inspection_schedule_plans_iso').on(t.isoYear, t.isoWeek),
+]);

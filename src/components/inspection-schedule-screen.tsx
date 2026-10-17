@@ -3,13 +3,17 @@ import { toast } from 'sonner';
 import {
   CalendarRange, RefreshCw, ImageDown, Search, ArrowLeft, Moon, Sun, Clock, CheckCircle2,
   CircleDashed, Palmtree, UserX, StickyNote, FlaskConical, Wrench, Layers, Boxes, Users, AlertCircle,
-  ChevronLeft, ChevronRight, RotateCcw
+  ChevronLeft, ChevronRight, RotateCcw, Shuffle, Pencil, Maximize2, Minimize2, Plus, X, Trash2, AlertTriangle,
+  Table2, FileSpreadsheet, CalendarDays, CopyPlus
 } from 'lucide-react';
 import { Select } from './ui';
 import { toPng } from 'html-to-image';
 import { PageHeader } from './PageHeader';
 import { INSPECTION_29_AGENDAS, matchTicketToAgenda, InspectionAgendaItem } from '../utils/inspection-pic-matcher';
-import { getISOWeek } from '../utils/iso-week';
+import { getISOWeek, getISOWeekYear } from '../utils/iso-week';
+import {
+  PlanMember, ShiftGroup, ruleError, shiftMismatch, agendaShortName
+} from '../utils/inspection-schedule-rules';
 import { getRekapWeek, getRekapWeekRange, EmployeeAvatar, photoForCapture, initials } from './safety-rekap-screen';
 
 interface InspectionScheduleScreenProps {
@@ -78,6 +82,47 @@ interface Member {
   roleIndex: number;
   isCompleted: boolean;
   completedAt?: string | null;
+  key?: string; // kunci PlanMember (jadwal portal)
+  plan?: PlanMember;
+  warnings?: MemberWarning[];
+}
+
+interface MemberWarning { level: 'error' | 'warn'; text: string }
+
+interface InspectionPlan {
+  id: number; year: number; week: number;
+  members: PlanMember[];
+  agendaShifts: Record<string, ShiftGroup> | null;
+  source: string | null;
+  updatedByName: string | null;
+  updatedAt: string | null;
+}
+
+type PlanHistory = Record<string, Record<string, number>>;
+
+const planKey = (m: { nik?: string; name?: string }) => (m.nik || m.name || '').trim().toUpperCase();
+
+function shiftLabelOf(m: PlanMember) {
+  const group = m.shiftGroup === 'Malam' ? 'Malam' : m.shiftGroup === 'Siang' ? 'Siang' : 'Nonshift';
+  return m.team === 'A' || m.team === 'B' ? `Shift ${m.team} (${group})` : group;
+}
+
+// Peringatan: inspeksi sama 1 / 2 minggu sebelumnya, aturan Gol & Section, shift tidak sesuai
+function memberWarnings(
+  history: PlanHistory, agendaId: number | null | undefined, ident: { nik?: string; name: string },
+  plan?: PlanMember, agendaShift?: ShiftGroup | null
+): MemberWarning[] {
+  if (!agendaId) return [];
+  const list: MemberWarning[] = [];
+  const ago = history[planKey(ident)]?.[agendaId] ?? history[ident.name.trim().toUpperCase()]?.[agendaId];
+  if (ago) list.push({ level: 'warn', text: `Sudah melakukan inspeksi yang sama ${ago} minggu lalu` });
+  if (plan) {
+    const err = ruleError(plan, agendaId);
+    if (err) list.push({ level: 'error', text: err });
+    const mismatch = agendaShift ? shiftMismatch(plan, agendaShift) : null;
+    if (mismatch) list.push({ level: 'warn', text: mismatch });
+  }
+  return list;
 }
 
 interface AgendaCard {
@@ -581,6 +626,330 @@ function LeaveControlPanel({ period, week, periodLabel, photoOf }: {
   );
 }
 
+// ─── Edit manual petugas (per karyawan / per agenda) ────────────────────────
+
+type EditTarget = { kind: 'member'; key: string } | { kind: 'agenda'; agendaId: number };
+
+function PlanEditModal({ target, members, agendaShifts, history, photoOf, onClose, onApply }: {
+  target: EditTarget; members: PlanMember[]; agendaShifts: Record<string, ShiftGroup>; history: PlanHistory;
+  photoOf: (name: string) => string | undefined;
+  onClose: () => void;
+  onApply: (key: string, agendaId: number | null, role: 'utama' | 'pendamping') => Promise<boolean>;
+}) {
+  const fixedMember = target.kind === 'member' ? members.find(m => planKey(m) === target.key) || null : null;
+  const [personKey, setPersonKey] = useState(fixedMember ? planKey(fixedMember) : '');
+  const [agendaId, setAgendaId] = useState<number | null>(target.kind === 'agenda' ? target.agendaId : fixedMember?.agendaId ?? null);
+  const [role, setRole] = useState<'utama' | 'pendamping'>(fixedMember?.roleIndex === 1 ? 'utama' : 'pendamping');
+  const [query, setQuery] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const person = members.find(m => planKey(m) === personKey) || null;
+  const candidates = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return members
+      .filter(m => !m.isCuti && (!q || m.name.toLowerCase().includes(q) || m.jabatan.toLowerCase().includes(q)))
+      .sort((a, b) => Number(!!a.agendaId) - Number(!!b.agendaId) || a.name.localeCompare(b.name));
+  }, [members, query]);
+
+  const error = person && agendaId ? ruleError(person, agendaId) : null;
+  const warnings = person && agendaId
+    ? memberWarnings(history, agendaId, person, person, agendaShifts[agendaId] || null).filter(w => w.level === 'warn')
+    : [];
+
+  const submit = async () => {
+    if (!person) return;
+    setSaving(true);
+    try {
+      if (await onApply(planKey(person), agendaId, role)) onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[90vh] flex flex-col bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--border-main)]">
+          <Pencil className="w-4 h-4 text-[var(--primary)]" />
+          <h3 className="flex-1 text-sm font-black text-[var(--text-main)]">
+            {target.kind === 'member' ? 'Edit Jadwal Karyawan' : `Tambah Petugas · ${agendaShortName(target.agendaId)}`}
+          </h3>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-[var(--input-bg)] flex items-center justify-center cursor-pointer text-[var(--text-muted)]"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {target.kind === 'agenda' && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Pilih karyawan</p>
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Cari nama / jabatan..."
+                className="w-full h-9 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-sm text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
+              />
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-[var(--border-main)] divide-y divide-[var(--border-main)]">
+                {candidates.map(m => {
+                  const k = planKey(m);
+                  const blocked = ruleError(m, target.agendaId);
+                  return (
+                    <button
+                      key={k}
+                      disabled={!!blocked}
+                      onClick={() => { setPersonKey(k); setRole('pendamping'); }}
+                      title={blocked || undefined}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-left cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${personKey === k ? 'bg-[var(--primary)]/10' : 'hover:bg-[var(--input-bg)]'}`}
+                    >
+                      <EmployeeAvatar name={m.name} photo={photoOf(m.name)} className="w-7 h-7 text-[9px]" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-semibold text-[var(--text-main)] truncate">{m.name}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] truncate">
+                          Gol {m.gol || '-'} · {m.section || '-'} · {shiftLabelOf(m)} · {m.agendaId ? agendaShortName(m.agendaId) : 'Belum dijadwalkan'}
+                        </p>
+                      </div>
+                      {blocked && <span className="text-[10px] font-bold text-rose-500 shrink-0">Dilarang</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {person && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--input-bg)]">
+              <EmployeeAvatar name={person.name} photo={photoOf(person.name)} className="w-10 h-10 text-[11px]" />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-[var(--text-main)] truncate">{person.name}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">{person.jabatan}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Gol {person.gol || '-'} · {person.section || '-'} · {shiftLabelOf(person)}{person.codes?.length ? ` · Roster Sen–Rab: ${person.codes.join(' / ')}` : ''}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {target.kind === 'member' && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Agenda inspeksi</p>
+              <Select value={agendaId ? String(agendaId) : ''} onChange={e => setAgendaId(e.target.value ? parseInt(e.target.value, 10) : null)}>
+                <option value="">— Tidak dijadwalkan —</option>
+                {(['Siang', 'Malam'] as ShiftGroup[]).map(g => (
+                  <optgroup key={g} label={`Shift ${g}${g === 'Siang' ? ' + Nonshift' : ''}`}>
+                    {INSPECTION_29_AGENDAS.filter(a => (agendaShifts[a.id] || 'Siang') === g).map(a => {
+                      const blocked = person ? ruleError(person, a.id) : null;
+                      return <option key={a.id} value={a.id} disabled={!!blocked}>#{a.id} {a.name}{blocked ? ' (dilarang)' : ''}</option>;
+                    })}
+                  </optgroup>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          {agendaId && person && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Peran</p>
+              <div className="flex gap-2">
+                {(['utama', 'pendamping'] as const).map(r => (
+                  <button
+                    key={r}
+                    onClick={() => setRole(r)}
+                    className={`flex-1 h-9 rounded-xl text-xs font-bold border cursor-pointer ${role === r ? 'bg-[var(--primary)] text-white border-transparent' : 'border-[var(--border-main)] text-[var(--text-main)] bg-[var(--input-bg)]'}`}
+                  >
+                    {r === 'utama' ? 'Inspektor Utama' : 'Pendamping'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="flex items-start gap-2 text-xs font-semibold text-rose-600 dark:text-rose-400"><AlertCircle className="w-4 h-4 shrink-0" /> {error}</p>
+          )}
+          {warnings.map(w => (
+            <p key={w.text} className="flex items-start gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400"><AlertTriangle className="w-4 h-4 shrink-0" /> {w.text}</p>
+          ))}
+        </div>
+
+        <div className="flex gap-2 px-5 py-4 border-t border-[var(--border-main)]">
+          <button onClick={onClose} className="flex-1 h-10 rounded-xl border border-[var(--border-main)] text-[var(--text-main)] text-sm font-bold cursor-pointer">Batal</button>
+          <button
+            onClick={submit}
+            disabled={!person || !!error || saving}
+            className="flex-1 h-10 rounded-xl bg-[var(--primary)] text-white text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            {saving && <RefreshCw className="w-4 h-4 animate-spin" />} Simpan
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Rekap jadwal per karyawan (tampilan seperti roster per week) ───────────
+
+interface RekapRow {
+  nik: string; name: string; jabatan: string; section: string; gol: string; team: string;
+  cells: Record<string, { agendaId: number | null; roleIndex: number; isCuti: boolean; shiftGroup: string | null }>;
+}
+
+function ScheduleRekapPanel({ year, currentWeek, photoOf }: { year: number; currentWeek: number; photoOf: (name: string) => string | undefined }) {
+  const [from, setFrom] = useState(Math.max(1, currentWeek - 7));
+  const [to, setTo] = useState(Math.min(53, currentWeek + 1));
+  const [weeks, setWeeks] = useState<{ week: number; start: string; end: string; hasPlan: boolean }[]>([]);
+  const [rows, setRows] = useState<RekapRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/inspection-plan/rekap?year=${year}&from=${from}&to=${to}`);
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) throw new Error(json?.message || 'Gagal memuat rekap');
+      setWeeks(json.weeks || []);
+      setRows(json.rows || []);
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal memuat rekap jadwal');
+    } finally {
+      setLoading(false);
+    }
+  }, [year, from, to]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? rows.filter(r => r.name.toLowerCase().includes(q) || r.jabatan.toLowerCase().includes(q) || r.section.toLowerCase().includes(q)) : rows;
+  }, [rows, search]);
+
+  const weekLabel = (w: { start: string; end: string }) => {
+    const [, sm, sd] = w.start.split('-').map(Number);
+    const [, em, ed] = w.end.split('-').map(Number);
+    return sm === em ? `${sd}–${ed} ${MONTHS_SHORT[em - 1]}` : `${sd} ${MONTHS_SHORT[sm - 1]}–${ed} ${MONTHS_SHORT[em - 1]}`;
+  };
+
+  const exportExcel = async () => {
+    const XLSX = await import('xlsx');
+    const data = visible.map((r, i) => {
+      const row: Record<string, string | number> = { No: i + 1, Nama: r.name, NIK: r.nik, Jabatan: r.jabatan, Section: r.section, Gol: r.gol };
+      weeks.forEach(w => {
+        const c = r.cells[w.week];
+        row[`Week ${w.week} (${weekLabel(w)})`] = !c ? '' : c.isCuti ? 'Cuti' : c.agendaId ? `${agendaShortName(c.agendaId)}${c.roleIndex > 1 ? ' (Pendamping)' : ''}` : '-';
+      });
+      return row;
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Rekap Jadwal Inspeksi');
+    XLSX.writeFile(wb, `Rekap_Jadwal_Inspeksi_W${from}-W${to}_${year}.xlsx`);
+  };
+
+  const weekOpts = Array.from({ length: 53 }, (_, i) => i + 1);
+  const th = 'px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border-b border-[var(--border-main)] whitespace-nowrap';
+
+  return (
+    <section className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-4 border-b border-[var(--border-main)]">
+        <div className="flex items-center gap-3 lg:mr-auto">
+          <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center"><Table2 className="w-5 h-5" /></div>
+          <div>
+            <h3 className="text-base font-black text-[var(--text-main)] leading-tight">Rekap Jadwal Inspeksi per Karyawan</h3>
+            <p className="text-xs text-[var(--text-muted)]">Agenda tiap karyawan per week (periode Sabtu – Jumat) · sumber: jadwal portal</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text-muted)]">
+            <CalendarDays className="w-4 h-4" /> Week
+            <select value={from} onChange={e => { const v = parseInt(e.target.value, 10); setFrom(v); if (v > to) setTo(v); }} className="h-9 px-2 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-[var(--text-main)] text-sm">
+              {weekOpts.map(w => <option key={w} value={w}>{w}</option>)}
+            </select>
+            s/d
+            <select value={to} onChange={e => { const v = parseInt(e.target.value, 10); setTo(v); if (v < from) setFrom(v); }} className="h-9 px-2 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-[var(--text-main)] text-sm">
+              {weekOpts.map(w => <option key={w} value={w}>{w}</option>)}
+            </select>
+          </div>
+          <div className="relative w-full sm:w-56">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari karyawan..." className="w-full h-9 pl-9 pr-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-sm text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[var(--primary)]/30" />
+          </div>
+          <button onClick={load} disabled={loading} className="h-9 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-[var(--text-main)] text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Segarkan
+          </button>
+          <button onClick={exportExcel} disabled={!visible.length} className="h-9 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
+            <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-auto max-h-[75vh]">
+        <table className="min-w-full border-separate border-spacing-0 text-[var(--text-main)]">
+          <thead className="sticky top-0 z-20">
+            <tr>
+              <th className={`${th} w-10 text-center`}>No</th>
+              <th className={`${th} text-left sticky left-0 z-30 min-w-[230px]`}>Karyawan</th>
+              {weeks.map(w => (
+                <th key={w.week} className={`${th} text-center border-l border-l-[var(--border-main)] min-w-[150px] ${w.week === currentWeek ? 'bg-yellow-100 dark:bg-yellow-500/20' : ''}`}>
+                  Week {w.week}
+                  <span className="block font-medium normal-case tracking-normal text-[10px] opacity-70">{weekLabel(w)}{!w.hasPlan ? ' · belum ada' : ''}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && rows.length === 0 ? (
+              <tr><td colSpan={weeks.length + 2} className="px-3 py-12 text-center text-sm text-[var(--text-muted)]"><RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Memuat rekap...</td></tr>
+            ) : visible.length === 0 ? (
+              <tr><td colSpan={weeks.length + 2} className="px-3 py-12 text-center text-sm text-[var(--text-muted)]">Belum ada jadwal portal pada rentang week ini. Gunakan tombol Acak / Edit di tab Jadwal Mingguan.</td></tr>
+            ) : visible.map((r, i) => (
+              <tr key={r.nik || r.name} className="hover:bg-[var(--input-bg)]/70">
+                <td className="px-2 py-1.5 border-b border-[var(--border-main)] text-center text-[11px] text-[var(--text-muted)] tabular-nums">{i + 1}</td>
+                <td className="px-2 py-1.5 border-b border-[var(--border-main)] sticky left-0 z-10 bg-[var(--card-bg)]">
+                  <div className="flex items-center gap-2">
+                    <EmployeeAvatar name={r.name} photo={photoOf(r.name)} className="w-7 h-7 text-[9px]" />
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold leading-tight truncate max-w-[180px]">{r.name}</p>
+                      <p className="text-[10px] text-[var(--text-muted)] truncate max-w-[180px]">Gol {r.gol || '-'} · {r.jabatan}</p>
+                    </div>
+                  </div>
+                </td>
+                {weeks.map((w, wi) => {
+                  const c = r.cells[w.week];
+                  const prev = [weeks[wi - 1], weeks[wi - 2]].filter(Boolean).some(pw => c?.agendaId && r.cells[pw.week]?.agendaId === c.agendaId);
+                  const cat = c?.agendaId ? CATEGORY[AGENDA_CATEGORY[c.agendaId] || 'OTHER'] : null;
+                  return (
+                    <td key={w.week} className="px-1.5 py-1.5 border-b border-l border-[var(--border-main)] text-center align-middle">
+                      {!c ? (
+                        <span className="text-[11px] text-[var(--text-muted)]">{w.hasPlan ? '-' : ''}</span>
+                      ) : c.isCuti ? (
+                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold ring-1 ring-inset ${LEAVE_STYLE.CUTI.cls}`}>Cuti</span>
+                      ) : c.agendaId && cat ? (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold leading-tight ${cat.head} ${prev ? 'ring-2 ring-amber-400' : ''}`}
+                          title={`${agendaShortName(c.agendaId)} · ${c.roleIndex === 1 ? 'Utama' : 'Pendamping'} · Shift ${c.shiftGroup || '-'}${prev ? ' · berulang dari week sebelumnya' : ''}`}
+                        >
+                          {c.shiftGroup === 'Malam' ? <Moon className="w-3 h-3 shrink-0" /> : <Sun className="w-3 h-3 shrink-0" />}
+                          <span className="text-left">{agendaShortName(c.agendaId)}{c.roleIndex > 1 ? <span className="opacity-60"> · P</span> : null}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-[var(--text-muted)]">-</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-4 py-2.5 border-t border-[var(--border-main)] text-[11px] text-[var(--text-muted)] flex flex-wrap gap-x-4 gap-y-1">
+        <span className="inline-flex items-center gap-1"><Sun className="w-3 h-3" /> Shift Siang / Nonshift</span>
+        <span className="inline-flex items-center gap-1"><Moon className="w-3 h-3" /> Shift Malam</span>
+        <span>· P = Pendamping</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded ring-2 ring-amber-400" /> Inspeksi sama dengan 1–2 week sebelumnya</span>
+      </p>
+    </section>
+  );
+}
+
 // ─── Layar utama ────────────────────────────────────────────────────────────
 
 export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }: InspectionScheduleScreenProps) {
@@ -604,6 +973,20 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
   const [photoByName, setPhotoByName] = useState<Map<string, string>>(new Map());
   const [exportingPng, setExportingPng] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
+  const [tab, setTab] = useState<'jadwal' | 'rekap'>('jadwal');
+  const [fullscreen, setFullscreen] = useState(false);
+  const [plan, setPlan] = useState<InspectionPlan | null>(null);
+  const [history, setHistory] = useState<PlanHistory>({});
+  const [canEdit, setCanEdit] = useState(false);
+  const [busy, setBusy] = useState('');
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fullscreen]);
 
   const period = useMemo(() => getRekapWeekRange(currentYear, selectedWeek), [currentYear, selectedWeek]);
   // Label periode sama dengan modul Rekap KTA/TTA, mis. "17 - 23 Oktober 2026"
@@ -636,14 +1019,16 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     setLoading(true);
     setLoadError('');
     try {
-      // Status selesai dihitung server per minggu ISO; gunakan minggu ISO Senin–Jumat dari periode Sabtu–Jumat
-      const isoTag = `W${getISOWeek(getRekapWeekRange(currentYear, week).end)}`;
-      const res = await fetch(`/api/inspection-schedule?sheet=CurrentWeek&week=${isoTag}${refresh ? '&refresh=true' : ''}`);
+      // Status selesai dihitung server per minggu ISO; gunakan minggu ISO Senin–Jumat dari periode Sabtu–Jumat.
+      // Bila ada jadwal portal untuk minggu tsb, server mengembalikannya sebagai pengganti sheet "CurrentWeek".
+      const periodEnd = getRekapWeekRange(currentYear, week).end;
+      const isoTag = `W${getISOWeek(periodEnd)}`;
+      const res = await fetch(`/api/inspection-schedule?sheet=CurrentWeek&week=${isoTag}&year=${getISOWeekYear(periodEnd)}${refresh ? '&refresh=true' : ''}`);
       const json = res.ok ? await res.json() : null;
       const data: any[] = json?.data || [];
       setSchedule(data);
       setAgendaShifts(json?.agendaShifts || []);
-      setSheetName(data.length ? 'CurrentWeek' : '');
+      setSheetName(data.length ? (json?.source === 'portal' ? 'Portal' : 'CurrentWeek') : '');
       if (!data.length) setLoadError(json?.error ? 'Gagal membaca jadwal dari Google Sheet.' : 'Jadwal minggu ini belum tersedia di Google Sheet.');
     } catch (err: any) {
       console.error('Gagal memuat jadwal inspeksi:', err);
@@ -654,25 +1039,112 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     }
   }, [currentYear]);
 
-  useEffect(() => {
-    if (isActiveWeek) {
-      fetchSchedule(selectedWeek);
+  const loadWeek = useCallback(async (week: number, refresh = false) => {
+    let found: InspectionPlan | null = null;
+    try {
+      const res = await fetch(`/api/inspection-plan?year=${currentYear}&week=${week}&nik=${encodeURIComponent(inspectorNik || '')}`);
+      const json = await res.json().catch(() => null);
+      if (json?.success) {
+        found = json.plan || null;
+        setHistory(json.history || {});
+        setCanEdit(!!json.canEdit);
+      }
+    } catch (err) {
+      console.error('Gagal memuat jadwal portal:', err);
+    }
+    setPlan(found);
+    if (found || week === currentWeek) {
+      await fetchSchedule(week, refresh);
     } else {
       setSchedule([]);
       setAgendaShifts([]);
       setSheetName('');
-      setLoadError(`Jadwal agenda Week ${selectedWeek} tidak tersedia — Google Sheet jadwal hanya menyimpan jadwal week aktif (Week ${currentWeek}).`);
+      setLoadError(`Jadwal agenda Week ${week} belum tersedia — Google Sheet jadwal hanya menyimpan jadwal week aktif (Week ${currentWeek}).`);
     }
-  }, [selectedWeek, isActiveWeek, currentWeek, fetchSchedule]);
+  }, [currentYear, currentWeek, inspectorNik, fetchSchedule]);
+
+  useEffect(() => { loadWeek(selectedWeek); }, [selectedWeek, loadWeek]);
+
+  const planRequest = async (label: string, url: string, init: RequestInit, successMsg: string) => {
+    setBusy(label);
+    const toastId = toast.loading(`${label}...`);
+    try {
+      const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...init });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) throw new Error(json?.message || `${label} gagal`);
+      toast.success(successMsg, { id: toastId });
+      await loadWeek(selectedWeek);
+      return true;
+    } catch (err: any) {
+      toast.error(err.message || `${label} gagal`, { id: toastId });
+      return false;
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleRandomize = (scope: 'ALL' | ShiftGroup) => {
+    const label = scope === 'ALL' ? 'semua shift' : scope === 'Malam' ? 'Shift Malam' : 'Shift Siang + Nonshift';
+    if (plan && !window.confirm(`Acak ulang petugas ${label} untuk Week ${selectedWeek}? Penempatan ${label} saat ini akan diganti.`)) return;
+    planRequest('Mengacak jadwal', '/api/inspection-plan/randomize', {
+      method: 'POST', body: JSON.stringify({ year: currentYear, week: selectedWeek, scope, editorNik: inspectorNik })
+    }, `Jadwal ${label} berhasil diacak dari Database Roster`);
+  };
+
+  const handleCopyFromSheet = () => planRequest('Menyalin jadwal Google Sheet', '/api/inspection-plan/from-sheet', {
+    method: 'POST', body: JSON.stringify({ year: currentYear, week: selectedWeek, editorNik: inspectorNik })
+  }, 'Jadwal Google Sheet disalin ke portal — sekarang bisa diedit');
+
+  const handleDeletePlan = () => {
+    if (!window.confirm(`Hapus jadwal portal Week ${selectedWeek}? Jadwal kembali memakai Google Sheet.`)) return;
+    planRequest('Menghapus jadwal portal', `/api/inspection-plan?year=${currentYear}&week=${selectedWeek}&editorNik=${encodeURIComponent(inspectorNik || '')}`, { method: 'DELETE' }, 'Jadwal portal dihapus');
+  };
+
+  const applyEdit = async (key: string, agendaId: number | null, role: 'utama' | 'pendamping') => {
+    if (!plan) return false;
+    const members = plan.members.map(m => ({ ...m }));
+    const target = members.find(m => planKey(m) === key);
+    if (!target) return false;
+    const err = agendaId ? ruleError(target, agendaId) : null;
+    if (err) { toast.error(err); return false; }
+    target.agendaId = agendaId;
+    // Server menomori ulang peran per agenda berdasarkan urutan roleIndex
+    target.roleIndex = role === 'utama' ? 0 : 999;
+    return planRequest('Menyimpan jadwal', '/api/inspection-plan', {
+      method: 'PUT', body: JSON.stringify({ year: currentYear, week: selectedWeek, members, editorNik: inspectorNik })
+    }, `Jadwal ${target.name} diperbarui`);
+  };
+
+  const requestEdit = (t: EditTarget) => {
+    if (plan) { setEditTarget(t); return; }
+    if (window.confirm('Jadwal minggu ini masih dari Google Sheet. Salin ke portal agar bisa diedit per karyawan?')) handleCopyFromSheet();
+  };
 
   // Susun 29 kartu agenda + agenda tambahan yang tidak dikenali
-  const { cards, cuti, nonActive } = useMemo(() => {
+  const { cards, cuti, nonActive, unassigned } = useMemo(() => {
     const byAgenda = new Map<number, Member[]>();
     const extra = new Map<string, Member[]>();
     const cutiList: Member[] = [];
     const nonActiveList: { name: string; note: string }[] = [];
+    const unassignedList: Member[] = [];
+    const planShifts = plan?.agendaShifts || null;
 
-    schedule.forEach((s: any) => {
+    if (plan) {
+      // Jadwal portal: data lengkap dari roster; status selesai dari /api/inspection-schedule
+      const done = new Map(schedule.map((s: any) => [`${(s.name || '').trim().toLowerCase()}|${(s.inspeksi || '').trim().toLowerCase()}`, s]));
+      plan.members.forEach((pm, i) => {
+        const inspeksi = pm.agendaId ? INSPECTION_29_AGENDAS.find(a => a.id === pm.agendaId)?.name || '' : '';
+        const s: any = done.get(`${pm.name.trim().toLowerCase()}|${inspeksi.toLowerCase()}`);
+        const member: Member = {
+          no: i + 1, name: pm.name, jabatan: pm.jabatan, shift: shiftLabelOf(pm), roleIndex: pm.roleIndex,
+          isCompleted: !!s?.isCompleted, completedAt: s?.completedAt, key: planKey(pm), plan: pm,
+          warnings: memberWarnings(history, pm.agendaId, pm, pm, pm.agendaId ? planShifts?.[pm.agendaId] : null)
+        };
+        if (pm.isCuti) cutiList.push(member);
+        else if (pm.agendaId) byAgenda.set(pm.agendaId, [...(byAgenda.get(pm.agendaId) || []), member]);
+        else unassignedList.push(member);
+      });
+    } else schedule.forEach((s: any) => {
       const member: Member = {
         no: s.no, name: s.name, jabatan: s.jabatan || '', shift: s.shift || '',
         roleIndex: s.roleIndex || 1, isCompleted: !!s.isCompleted, completedAt: s.completedAt
@@ -686,6 +1158,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       if (!text) return;
       const agenda = findAgenda(text);
       if (agenda) {
+        member.warnings = memberWarnings(history, agenda.id, { name: s.name });
         byAgenda.set(agenda.id, [...(byAgenda.get(agenda.id) || []), member]);
       } else {
         extra.set(text, [...(extra.get(text) || []), member]);
@@ -700,7 +1173,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     });
     const toCard = (key: string, title: string, agenda: InspectionAgendaItem | null, category: Category, members: Member[]): AgendaCard => {
       const sorted = [...members].sort((a, b) => a.roleIndex - b.roleIndex);
-      const fromSheet = sheetShift.get(agenda ? agenda.id : title.trim().toLowerCase());
+      const fromSheet = (agenda && planShifts?.[agenda.id]) || sheetShift.get(agenda ? agenda.id : title.trim().toLowerCase());
       const shift = fromSheet ? shiftGroup(fromSheet) : sorted.length ? shiftGroup(sorted[0].shift) : null;
       return { key, title, agenda, category, members: sorted, shift };
     };
@@ -710,8 +1183,16 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
       ...Array.from(extra.entries()).map(([title, members]) => toCard(`x-${title}`, title, null, 'OTHER', members))
     ];
     list.sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category) || (a.agenda?.id ?? 99) - (b.agenda?.id ?? 99));
-    return { cards: list, cuti: cutiList.sort((a, b) => a.name.localeCompare(b.name)), nonActive: nonActiveList };
-  }, [schedule, agendaShifts]);
+    return {
+      cards: list, cuti: cutiList.sort((a, b) => a.name.localeCompare(b.name)), nonActive: nonActiveList,
+      unassigned: unassignedList.sort((a, b) => a.name.localeCompare(b.name))
+    };
+  }, [schedule, agendaShifts, plan, history]);
+
+  // Daftar peringatan (inspeksi berulang, aturan Gol/Section, shift) untuk banner ringkasan
+  const warningList = useMemo(() => cards.flatMap(c => c.members.flatMap(m =>
+    (m.warnings || []).map(w => ({ ...w, name: m.name, agenda: c.agenda ? agendaShortName(c.agenda.id) : c.title }))
+  )), [cards]);
 
   const stats = useMemo(() => {
     const assigned = cards.filter(c => c.members.length > 0);
@@ -811,23 +1292,57 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
             <p className="flex items-center gap-1.5 text-xs italic text-[var(--text-muted)]">
               <AlertCircle className="w-3.5 h-3.5" /> Belum ada petugas dijadwalkan
             </p>
-          ) : c.members.map(m => (
-            <div key={m.name} className="flex items-center gap-2.5">
-              <EmployeeAvatar name={m.name} photo={photoOf(m.name)} className="w-8 h-8 text-[10px]" />
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-semibold text-[var(--text-main)] truncate">{m.name}</p>
-                <p className="text-[10px] text-[var(--text-muted)] truncate">
-                  {m.roleIndex === 1 ? 'Inspektor Utama' : 'Pendamping'}{m.jabatan ? ` · ${m.jabatan}` : ''}
-                </p>
+          ) : c.members.map(m => {
+            const hasError = m.warnings?.some(w => w.level === 'error');
+            return (
+              <div key={m.name} className="group/m">
+                <div className="flex items-center gap-2.5">
+                  <EmployeeAvatar name={m.name} photo={photoOf(m.name)} className="w-8 h-8 text-[10px]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-[var(--text-main)] truncate">{m.name}</p>
+                    <p className="text-[10px] text-[var(--text-muted)] truncate">
+                      {m.roleIndex === 1 ? 'Inspektor Utama' : 'Pendamping'}{m.plan ? ` · Gol ${m.plan.gol || '-'} · ${m.shift}` : m.jabatan ? ` · ${m.jabatan}` : ''}
+                    </p>
+                  </div>
+                  {!!m.warnings?.length && (
+                    <span className={`shrink-0 ${hasError ? 'text-rose-500' : 'text-amber-500'}`} title={m.warnings.map(w => w.text).join('\n')}>
+                      <AlertTriangle className="w-4 h-4" />
+                    </span>
+                  )}
+                  {m.isCompleted && (
+                    <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400" title="Laporan inspeksi sudah terkirim">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> {formatShort(m.completedAt)}
+                    </span>
+                  )}
+                  {canEdit && (
+                    <button
+                      onClick={() => requestEdit({ kind: 'member', key: m.key || m.name.trim().toUpperCase() })}
+                      className="shrink-0 w-7 h-7 rounded-lg text-[var(--text-muted)] hover:text-[var(--primary)] hover:bg-[var(--input-bg)] flex items-center justify-center cursor-pointer opacity-60 group-hover/m:opacity-100"
+                      title="Edit jadwal karyawan ini"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {!!m.warnings?.length && (
+                  <div className="ml-10 mt-1 space-y-0.5">
+                    {m.warnings.map(w => (
+                      <p key={w.text} className={`text-[10px] font-semibold leading-tight ${w.level === 'error' ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>{w.text}</p>
+                    ))}
+                  </div>
+                )}
               </div>
-              {m.isCompleted && (
-                <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400" title="Laporan inspeksi sudah terkirim">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> {formatShort(m.completedAt)}
-                </span>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
+        {canEdit && c.agenda && (
+          <button
+            onClick={() => requestEdit({ kind: 'agenda', agendaId: c.agenda!.id })}
+            className="mx-4 mb-3 h-8 rounded-xl border border-dashed border-[var(--border-main)] text-[11px] font-bold text-[var(--text-muted)] hover:text-[var(--primary)] hover:border-[var(--primary)] flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" /> Tambah petugas
+          </button>
+        )}
       </div>
     );
   };
@@ -837,19 +1352,48 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
     .filter(g => g.cards.length > 0);
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full px-2 sm:px-4 lg:px-6">
+    <div className={fullscreen
+      ? 'fixed inset-0 z-[60] overflow-y-auto bg-[var(--bg-main)] space-y-4 p-3 sm:p-4 pb-10'
+      : 'space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full px-2 sm:px-4 lg:px-6'}
+    >
       <PageHeader
         title="Jadwal Inspeksi"
         description="Jadwal inspeksi terencana mingguan Preparasi & Laboratorium (periode Sabtu – Jumat)"
         icon={<CalendarRange />}
       >
-        {onBack && (
+        <button
+          onClick={() => setFullscreen(f => !f)}
+          className="h-9 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+          title={fullscreen ? 'Keluar layar penuh (Esc)' : 'Tampilan layar penuh'}
+        >
+          {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />} {fullscreen ? 'Keluar' : 'Layar Penuh'}
+        </button>
+        {onBack && !fullscreen && (
           <button onClick={onBack} className="h-9 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors">
             <ArrowLeft className="w-4 h-4" /> Kembali
           </button>
         )}
       </PageHeader>
 
+      {/* Tab: jadwal mingguan / rekap per karyawan */}
+      <div className="inline-flex p-1 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-sm">
+        {([
+          { k: 'jadwal', label: 'Jadwal Mingguan', icon: <CalendarRange className="w-4 h-4" /> },
+          { k: 'rekap', label: 'Rekap per Karyawan', icon: <Table2 className="w-4 h-4" /> }
+        ] as const).map(t => (
+          <button
+            key={t.k}
+            onClick={() => setTab(t.k)}
+            className={`h-9 px-4 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors ${tab === t.k ? 'bg-[var(--primary)] text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'rekap' ? (
+        <ScheduleRekapPanel year={currentYear} currentWeek={currentWeek} photoOf={photoOf} />
+      ) : (<>
       {/* Banner minggu */}
       <div className="rounded-2xl overflow-hidden border border-yellow-300 dark:border-yellow-500/40 shadow-sm">
         <div className="bg-gradient-to-r from-yellow-300 via-yellow-200 to-amber-200 dark:from-yellow-500/25 dark:via-yellow-500/15 dark:to-amber-500/15 px-4 py-3 text-center">
@@ -909,8 +1453,8 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => fetchSchedule(selectedWeek, true)}
-            disabled={loading || !isActiveWeek}
+            onClick={() => loadWeek(selectedWeek, true)}
+            disabled={loading}
             className="h-10 flex-1 xl:flex-none px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] hover:bg-[var(--bg-main)] text-[var(--text-main)] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Segarkan
@@ -924,6 +1468,69 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
           </button>
         </div>
       </div>
+
+      {/* Penyusun jadwal: acak per shift dari Database Roster & sumber jadwal */}
+      <div className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl p-3 shadow-sm flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="flex items-center gap-3 xl:mr-auto min-w-0">
+          <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${plan ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
+            <Shuffle className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-black text-[var(--text-main)]">
+              {plan ? 'Jadwal Portal' : 'Jadwal Google Sheet'}
+              <span className="ml-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)]">
+                {plan ? (plan.source === 'random' ? 'Hasil acak' : 'Edit manual') : 'CurrentWeek'}
+              </span>
+            </p>
+            <p className="text-[11px] text-[var(--text-muted)] truncate">
+              {plan
+                ? `Diperbarui ${plan.updatedByName || '-'}${plan.updatedAt ? ` · ${new Date(plan.updatedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}` : ''} · petugas Gol II–V dari Database Roster (Senin – Rabu)`
+                : 'Acak untuk menyusun jadwal dari Database Roster Prep & Lab (Gol II–V, roster Senin – Rabu)'}
+            </p>
+          </div>
+        </div>
+        {canEdit ? (
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => handleRandomize('ALL')} disabled={!!busy} className="h-9 px-3 rounded-xl bg-[var(--primary)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang seluruh petugas (Malam & Siang + Nonshift)">
+              <Shuffle className="w-3.5 h-3.5" /> Acak Semua
+            </button>
+            <button onClick={() => handleRandomize('Malam')} disabled={!!busy} className="h-9 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Malam saja">
+              <Moon className="w-3.5 h-3.5" /> Acak Shift Malam
+            </button>
+            <button onClick={() => handleRandomize('Siang')} disabled={!!busy} className="h-9 px-3 rounded-xl bg-amber-400 hover:bg-amber-500 text-amber-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Acak ulang petugas Shift Siang digabung Nonshift">
+              <Sun className="w-3.5 h-3.5" /> Acak Siang + Nonshift
+            </button>
+            {!plan && isActiveWeek && schedule.length > 0 && (
+              <button onClick={handleCopyFromSheet} disabled={!!busy} className="h-9 px-3 rounded-xl border border-[var(--border-main)] bg-[var(--input-bg)] text-[var(--text-main)] text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Salin jadwal Google Sheet ke portal agar bisa diedit per karyawan">
+                <CopyPlus className="w-3.5 h-3.5" /> Salin dari Sheet
+              </button>
+            )}
+            {plan && (
+              <button onClick={handleDeletePlan} disabled={!!busy} className="h-9 px-3 rounded-xl border border-rose-300 dark:border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60" title="Hapus jadwal portal, kembali ke Google Sheet">
+                <Trash2 className="w-3.5 h-3.5" /> Hapus
+              </button>
+            )}
+          </div>
+        ) : (
+          <p className="text-[11px] italic text-[var(--text-muted)]">Acak & edit jadwal hanya untuk Admin / Supervisor ke atas.</p>
+        )}
+      </div>
+
+      {/* Peringatan jadwal */}
+      {warningList.length > 0 && (
+        <div className="rounded-2xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 p-3">
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-800 dark:text-amber-300 mb-2">
+            <AlertTriangle className="w-4 h-4" /> {warningList.length} peringatan jadwal
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-x-4 gap-y-1">
+            {warningList.map((w, i) => (
+              <p key={i} className={`text-[12px] ${w.level === 'error' ? 'text-rose-700 dark:text-rose-300' : 'text-amber-800 dark:text-amber-200'}`}>
+                <span className="font-bold">{w.name}</span> · {w.agenda}: {w.text}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -998,7 +1605,7 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
                 <span className="text-xs text-[var(--text-muted)]">{g.cards.length} agenda</span>
                 <div className="flex-1 h-px bg-[var(--border-main)]" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 min-[1900px]:grid-cols-6 gap-3">
                 {g.cards.map(renderCard)}
               </div>
             </section>
@@ -1006,6 +1613,29 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
           {groupedVisible.length === 0 && (
             <p className="py-10 text-center text-sm text-[var(--text-muted)]">Tidak ada agenda yang cocok dengan pencarian.</p>
           )}
+        </div>
+      )}
+
+      {/* Karyawan onsite yang belum mendapat agenda (jadwal portal) */}
+      {plan && unassigned.length > 0 && (
+        <div className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl p-4 shadow-sm">
+          <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[var(--text-main)] mb-3">
+            <Users className="w-4 h-4 text-sky-500" /> Onsite, belum dijadwalkan
+            <span className="px-1.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 text-[10px]">{unassigned.length}</span>
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {unassigned.map(m => (
+              <button
+                key={m.key}
+                onClick={() => canEdit && m.key && setEditTarget({ kind: 'member', key: m.key })}
+                className={`inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-[var(--input-bg)] text-xs font-semibold text-[var(--text-main)] ${canEdit ? 'cursor-pointer hover:ring-2 hover:ring-[var(--primary)]/40' : 'cursor-default'}`}
+                title={canEdit ? 'Klik untuk menjadwalkan' : undefined}
+              >
+                <EmployeeAvatar name={m.name} photo={photoOf(m.name)} className="w-6 h-6 text-[9px]" />
+                {m.name} <span className="opacity-60">· {m.shift}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1059,6 +1689,20 @@ export function InspectionScheduleScreen({ inspectorNik, inspectorName, onBack }
             </div>
           </div>
         </div>
+      )}
+
+      </>)}
+
+      {editTarget && plan && (
+        <PlanEditModal
+          target={editTarget}
+          members={plan.members}
+          agendaShifts={plan.agendaShifts || {}}
+          history={history}
+          photoOf={photoOf}
+          onClose={() => setEditTarget(null)}
+          onApply={applyEdit}
+        />
       )}
 
       {/* Lembar tersembunyi untuk ekspor PNG */}
