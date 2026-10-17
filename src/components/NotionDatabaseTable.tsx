@@ -225,6 +225,7 @@ export const parseCommentAttachments = (fileUrl?: string | null, fileName?: stri
             const name = item.name || extractedName || contentExtractedName || 'Attachment';
             const driveId = extractDriveId(item);
             const isImg = 
+              Boolean(item.isImage) ||
               item.category === 'image' || 
               (item.mimeType && item.mimeType.startsWith('image/')) ||
               /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(name) ||
@@ -1563,6 +1564,7 @@ export function NotionDatabaseTable({
   const [editingCommentContent, setEditingCommentContent] = useState<string>('');
   const [commentFileCaption, setCommentFileCaption] = useState('');
   const [isUploadingCommentFile, setIsUploadingCommentFile] = useState(false);
+  const activeCommentUploadsCountRef = useRef(0);
   const commentFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ 
@@ -4853,7 +4855,11 @@ export function NotionDatabaseTable({
     e.preventDefault();
     if (submittingComment || isSubmittingCommentRef.current) return;
     const hasFiles = selectedFiles.length > 0 || selectedFile !== null;
-    const finalContent = commentText.trim() || (commentFileCaption.trim() ? `📎 ${selectedFile?.name || 'Lampiran'}\n\n${commentFileCaption.trim()}` : (hasFiles ? `📎 Lampiran` : ''));
+    const finalContent = commentText.trim() || (
+      commentFileCaption.trim() 
+        ? `📎 ${selectedFiles.length > 1 ? `${selectedFiles.length} Lampiran Foto` : (selectedFiles[0]?.name || selectedFile?.name || 'Lampiran')}\n\n${commentFileCaption.trim()}`
+        : (hasFiles ? (selectedFiles.length > 1 ? `📎 ${selectedFiles.length} Lampiran Foto` : `📎 ${selectedFiles[0]?.name || selectedFile?.name || 'Lampiran'}`) : '')
+    );
     if (!finalContent && !hasFiles) return;
     const targetPostId = getEffectivePostId(selectedRow);
     if (!targetPostId) {
@@ -4874,14 +4880,14 @@ export function NotionDatabaseTable({
             name: f.name,
             caption: idx === 0 ? commentFileCaption.trim() : (f.caption || ''),
             directUrl: f.url,
-            isImage: f.isImage
+            isImage: f.isImage !== false
           }))
         : selectedFile ? [{
             url: selectedFile.url,
             name: selectedFile.name,
             caption: commentFileCaption.trim(),
             directUrl: selectedFile.url,
-            isImage: selectedFile.isImage
+            isImage: selectedFile.isImage !== false
           }] : null;
 
       const fileUrlPayload = allFilesPayload ? JSON.stringify(allFilesPayload) : null;
@@ -4951,6 +4957,7 @@ export function NotionDatabaseTable({
   const processAndUploadCommentFiles = async (rawFiles: File[]) => {
     if (rawFiles.length === 0) return;
 
+    activeCommentUploadsCountRef.current += 1;
     setIsUploadingCommentFile(true);
     toast.loading(`Mengompres dan mengunggah ${rawFiles.length} lampiran...`, { id: 'upload-comment-file' });
 
@@ -4969,34 +4976,39 @@ export function NotionDatabaseTable({
         const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
 
         if (isImg) {
-          const img = new Image();
-          await new Promise((resolve) => {
-            img.onload = resolve;
-            img.src = base64Raw;
-          });
+          try {
+            const img = new Image();
+            await new Promise((resolve) => {
+              img.onload = () => resolve(true);
+              img.onerror = () => resolve(false);
+              img.src = base64Raw;
+            });
 
-          const canvas = document.createElement('canvas');
-          const maxW = 1600;
-          const maxH = 1200;
-          let w = img.width;
-          let h = img.height;
+            const canvas = document.createElement('canvas');
+            const maxW = 1600;
+            const maxH = 1200;
+            let w = img.width || 1200;
+            let h = img.height || 900;
 
-          if (w > maxW || h > maxH) {
-            if (w > h) {
-              h = Math.round((h * maxW) / w);
-              w = maxW;
-            } else {
-              w = Math.round((w * maxH) / h);
-              h = maxH;
+            if (w > maxW || h > maxH) {
+              if (w > h) {
+                h = Math.round((h * maxW) / w);
+                w = maxW;
+              } else {
+                w = Math.round((w * maxH) / h);
+                h = maxH;
+              }
             }
-          }
 
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, w, h);
-            finalBase64 = canvas.toDataURL('image/jpeg', 0.85);
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, w, h);
+              finalBase64 = canvas.toDataURL('image/jpeg', 0.85);
+            }
+          } catch (cErr) {
+            console.warn('Canvas compression fallback', cErr);
           }
         }
 
@@ -5016,7 +5028,9 @@ export function NotionDatabaseTable({
           if (upJson.url) {
             uploadedUrl = upJson.url;
           }
-        } catch (uErr) {}
+        } catch (uErr) {
+          console.warn('Upload fallback to compressed base64 url', uErr);
+        }
 
         uploadedItems.push({
           name: file.name,
@@ -5026,15 +5040,20 @@ export function NotionDatabaseTable({
         });
       }
 
-      setSelectedFiles(prev => [...prev, ...uploadedItems]);
-      if (uploadedItems.length > 0) {
-        setSelectedFile(uploadedItems[0]);
-      }
-      toast.success(`${uploadedItems.length} lampiran berhasil diunggah!`, { id: 'upload-comment-file' });
+      // Selalu gabungkan (append) lampiran yang baru di-paste dengan lampiran yang sudah ada sebelumnya
+      setSelectedFiles(prev => {
+        const next = [...prev, ...uploadedItems];
+        setSelectedFile(next[0] || null);
+        return next;
+      });
+      toast.success(`${uploadedItems.length} lampiran siap dikirim! (Bisa paste screenshot lagi)`, { id: 'upload-comment-file' });
     } catch (err) {
       toast.error('Gagal mengunggah file', { id: 'upload-comment-file' });
     } finally {
-      setIsUploadingCommentFile(false);
+      activeCommentUploadsCountRef.current = Math.max(0, activeCommentUploadsCountRef.current - 1);
+      if (activeCommentUploadsCountRef.current === 0) {
+        setIsUploadingCommentFile(false);
+      }
     }
   };
 
@@ -5047,23 +5066,35 @@ export function NotionDatabaseTable({
   };
 
   // Handler copy-paste langsung gambar di kolom komentar (Ctrl+V tanpa perlu choose file)
-  const handleCommentPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const clipboardItems = e.clipboardData?.items;
-    if (!clipboardItems) return;
+  const handleCommentPaste = async (e: React.ClipboardEvent<any>) => {
+    const rawFiles = e.clipboardData?.files ? Array.from(e.clipboardData.files) : [];
+    const rawItems = e.clipboardData?.items ? Array.from(e.clipboardData.items) : [];
 
     const imageFiles: File[] = [];
-    for (let i = 0; i < clipboardItems.length; i++) {
-      const item = clipboardItems[i];
-      if (item.type.startsWith('image/')) {
-        const blob = item.getAsFile();
-        if (blob) {
-          const now = new Date();
-          const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-          const ext = blob.type.split('/')[1] || 'png';
-          const filename = blob.name && blob.name !== 'image.png' 
-            ? blob.name 
-            : `pasted_image_${timestamp}_${i + 1}.${ext}`;
-          imageFiles.push(new File([blob], filename, { type: blob.type }));
+
+    // 1. Cek jika clipboard langsung berisi file image (misal multi-copy di Explorer)
+    for (const f of rawFiles) {
+      if (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name)) {
+        imageFiles.push(f);
+      }
+    }
+
+    // 2. Jika tidak ada file langsung, cek clipboard items (buffer screenshot Snipping Tool / PrtScn)
+    if (imageFiles.length === 0 && rawItems.length > 0) {
+      for (let i = 0; i < rawItems.length; i++) {
+        const item = rawItems[i];
+        if (item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          if (blob) {
+            const now = new Date();
+            const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+            const randSuffix = Math.random().toString(36).substring(2, 6);
+            const ext = blob.type.split('/')[1] || 'png';
+            const filename = blob.name && blob.name !== 'image.png' && blob.name !== 'blob'
+              ? blob.name 
+              : `pasted_image_${timestamp}_${i + 1}_${randSuffix}.${ext}`;
+            imageFiles.push(new File([blob], filename, { type: blob.type }));
+          }
         }
       }
     }
@@ -5071,6 +5102,12 @@ export function NotionDatabaseTable({
     if (imageFiles.length > 0) {
       e.preventDefault();
       await processAndUploadCommentFiles(imageFiles);
+
+      // Auto-focus textarea agar user bisa langsung mengetik pesan atau menekan Enter
+      setTimeout(() => {
+        const el = document.getElementById('notion-comment-textarea');
+        if (el) el.focus();
+      }, 50);
     }
   };
 
@@ -10268,6 +10305,7 @@ export function NotionDatabaseTable({
                   color: 'var(--text-main, #cbd5e1)'
                 }}
                 onClick={(e) => e.stopPropagation()}
+                onPaste={handleCommentPaste}
               >
                 {/* Drawer Sticky Header */}
                 <div 
@@ -11401,6 +11439,7 @@ export function NotionDatabaseTable({
                       {/* Notion Bottom Comment Box */}
                       <form 
                         onSubmit={handlePostComment} 
+                        onPaste={handleCommentPaste}
                         className="p-3.5 sm:p-4 border rounded-2xl space-y-2.5 shadow-md mt-4"
                         style={{
                           backgroundColor: 'var(--card-bg, #171717)',
@@ -11467,9 +11506,10 @@ export function NotionDatabaseTable({
                                     onClick={() => {
                                       const updated = selectedFiles.filter((_, idx) => idx !== fIdx);
                                       setSelectedFiles(updated);
-                                      if (updated.length === 0) setSelectedFile(null);
+                                      setSelectedFile(updated[0] || null);
                                     }}
                                     className="p-0.5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded cursor-pointer"
+                                    title="Hapus file ini"
                                   >
                                     <X className="w-3 h-3" />
                                   </button>
@@ -11499,11 +11539,17 @@ export function NotionDatabaseTable({
                           value={commentText}
                           onChange={(e) => setCommentText(e.target.value)}
                           onPaste={handleCommentPaste}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handlePostComment(e);
+                            }
+                          }}
                           placeholder={
                             replyingTo 
                               ? `Tulis tanggapan untuk ${replyingTo.authorName}... (Bisa paste gambar / Ctrl+V)` 
-                              : selectedFile
-                              ? `Tulis catatan tambahan untuk lampiran (opsional)...`
+                              : selectedFiles.length > 0 || selectedFile
+                              ? `Tulis catatan tambahan untuk lampiran (opsional, tekan Enter untuk kirim)...`
                               : `Tulis komentar... (Bisa langsung paste gambar / Ctrl+V)`
                           }
                           className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none leading-relaxed text-xs resize-none"
@@ -11561,7 +11607,7 @@ export function NotionDatabaseTable({
 
                           <Button
                             type="submit"
-                            disabled={submittingComment || isUploadingCommentFile || (!commentText.trim() && !selectedFile)}
+                            disabled={submittingComment || isUploadingCommentFile || (!commentText.trim() && selectedFiles.length === 0 && !selectedFile)}
                             className="!w-auto text-xs px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {submittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : replyingTo ? <Reply className="w-3.5 h-3.5 mr-1.5 rotate-180" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}

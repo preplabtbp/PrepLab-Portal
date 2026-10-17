@@ -77,6 +77,11 @@ export function getRoleStartingXp(position?: string | null, department?: string 
     return 22601;
   }
 
+  // 3. Preparation Admin / System Developer -> Major / Principal Specialist (18,500 EXP)
+  if (p.includes('ADMIN') || p.includes('DEVELOPER') || s.includes('ADMINISTRATION')) {
+    return 18500;
+  }
+
   return 0;
 }
 
@@ -302,8 +307,8 @@ export async function computeUserGamification(nik: string, userName?: string) {
     return cachedUser.data;
   }
 
-  // Instant response for core developers without heavy multi-table DB computations
-  if (['M0403240177', '02D24000043', '02D25000055', 'PREPLABADMIN'].includes(cleanNik)) {
+  // Instant response for core system administrator without heavy multi-table DB computations
+  if (['M0403240177', '02D24000043', 'PREPLABADMIN'].includes(cleanNik)) {
     const devName = cleanNik === 'M0403240177' ? 'Aldy Aldersun Puluh' : (userName || 'Developer');
     const devFallbackResult = {
       nik: cleanNik,
@@ -334,6 +339,39 @@ export async function computeUserGamification(nik: string, userName?: string) {
     };
     userGamificationCache.set(cleanNik, { data: devFallbackResult, timestamp: Date.now() });
     return devFallbackResult;
+  }
+
+  // Specialized response for Preparation Admin & Developer (Anugrah)
+  if (cleanNik === '02D25000055') {
+    const adminFallbackResult = {
+      nik: cleanNik,
+      name: userName || 'Anugrah',
+      section: 'Administration',
+      department: 'Preparation & Laboratory',
+      position: 'Preparation Admin',
+      pt: 'TBP',
+      equippedFrame: 'frame_gold_wings',
+      equippedTitle: 'Principal Staff Specialist',
+      avatar: null,
+      stats: { ktaCount: 15, inspectionCount: 50, woCreateCount: 10, woResolveCount: 10, loginStreak: 7 },
+      seasonStats: {},
+      totalXp: 18500,
+      seasonXp: 18500,
+      badgesEarned: 8,
+      rankInfo: { 
+        currentRank: { id: 43, name: 'Principal Staff Specialist (Major)', tier: 'Colonel', tierGroup: 'High Commander (Major 3)', icon: '/assets/ranks/rank_43_major3_2.svg' },
+        nextRank: null,
+        progress: 85
+      },
+      branchResults: [],
+      unlockedTitles: ['Principal Staff Specialist', 'Staff Officer', 'Frontline Trainee'],
+      defaultTitle: 'Principal Staff Specialist',
+      isDevUser: true,
+      publicRank: { id: 43, name: 'Principal Staff Specialist (Major)', tier: 'Colonel', tierGroup: 'High Commander (Major 3)', icon: '/assets/ranks/rank_43_major3_2.svg' },
+      seasonInfo: { startDate: new Date().toISOString(), isZeroBaseline: true }
+    };
+    userGamificationCache.set(cleanNik, { data: adminFallbackResult, timestamp: Date.now() });
+    return adminFallbackResult;
   }
 
   const seasonStart = await getSeasonStartDate();

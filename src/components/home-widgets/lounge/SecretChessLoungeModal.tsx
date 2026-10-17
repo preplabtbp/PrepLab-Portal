@@ -28,6 +28,7 @@ interface SecretChessLoungeModalProps {
   playerNik?: string;
   playerAvatar?: string;
   soundEnabled?: boolean;
+  initialSeat?: 'left' | 'right';
 }
 
 // Initial 8x8 Chess Board Setup (Rank 8 at index 0, Rank 1 at index 7)
@@ -164,7 +165,8 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
   playerName,
   playerNik,
   playerAvatar,
-  soundEnabled = true
+  soundEnabled = true,
+  initialSeat
 }) => {
   const [board, setBoard] = useState<BoardState>(INITIAL_BOARD);
   const [currentTurn, setCurrentTurn] = useState<PieceColor>('w');
@@ -237,6 +239,23 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
     }
   }, [mySide]);
 
+  // Auto-sit if initialSeat is provided from overworld interaction
+  const hasAutoSatChessRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen) {
+      hasAutoSatChessRef.current = false;
+      return;
+    }
+    if (initialSeat && !hasAutoSatChessRef.current && !mySide) {
+      const targetSide: PieceColor = initialSeat === 'left' ? 'w' : 'b';
+      const targetSeat = targetSide === 'w' ? whiteSeat : blackSeat;
+      if (!targetSeat) {
+        hasAutoSatChessRef.current = true;
+        handleSit(targetSide);
+      }
+    }
+  }, [isOpen, initialSeat, mySide, whiteSeat, blackSeat]);
+
   // ── SOCKET.IO MULTIPLAYER SYNC ──
   useEffect(() => {
     if (!isOpen) return;
@@ -277,17 +296,20 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
     };
   }, [isOpen, playSfx, winner]);
 
-  // Handle Seat Taking
+  // Handle Seat Taking (auto-unseat from previous seat if switching)
   const handleSit = useCallback((side: 'w' | 'b') => {
     playSfx('click');
     const socket = getGlobalSocket();
+    if (mySide && mySide !== side) {
+      socket.emit('chess:stand', { side: mySide });
+    }
     socket.emit('chess:sit', {
       side,
       nik: effectiveNik,
       name: playerName,
       avatar: playerAvatar
     });
-  }, [effectiveNik, playerName, playerAvatar, playSfx]);
+  }, [effectiveNik, playerName, playerAvatar, playSfx, mySide]);
 
   // Handle Standing Up
   const handleStand = useCallback((side: 'w' | 'b') => {
@@ -295,6 +317,14 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
     const socket = getGlobalSocket();
     socket.emit('chess:stand', { side });
   }, [playSfx]);
+
+  // Unseat on modal close or unmount
+  const handleCloseModal = useCallback(() => {
+    if (mySide) {
+      handleStand(mySide);
+    }
+    onClose();
+  }, [mySide, handleStand, onClose]);
 
   // Handle Reset Game
   const resetGame = useCallback(() => {
@@ -950,10 +980,125 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
   const rowIndices = isFlipped ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
   const colIndices = isFlipped ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
 
+  const renderBlackPlayerBar = () => (
+    <div className="w-full max-w-[480px] flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-md z-10 shrink-0">
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-xl bg-slate-950 border border-slate-600 flex items-center justify-center text-xl shadow-inner overflow-hidden">
+          {renderAvatarNode(blackSeat?.avatar, '♟️', 'w-8 h-8')}
+        </div>
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-black text-white">
+              {blackSeat ? blackSeat.name : 'Bidak Hitam (Kursi Kosong)'}
+            </span>
+            {isSeatMe(blackSeat) && (
+              <span className="text-[9px] px-1 bg-amber-500/20 text-amber-300 font-mono rounded">ANDA</span>
+            )}
+          </div>
+          <div className="text-[10px] text-slate-400 flex items-center gap-1">
+            <span>Eliminasi:</span>
+            <span className="text-slate-200 font-serif">
+              {capturedByWhite.map((p) => PIECE_SYMBOLS[p.type].symbol).join(' ')}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2.5">
+        <div className={`px-2.5 py-1 rounded-xl font-mono font-black text-xs flex items-center gap-1 border ${
+          currentTurn === 'b' && !winner
+            ? 'bg-amber-500/20 border-amber-400 text-amber-300 animate-pulse'
+            : 'bg-slate-950 border-slate-800 text-slate-400'
+        }`}>
+          <Clock className="w-3 h-3" />
+          <span>{formatTime(blackTime)}</span>
+        </div>
+
+        {blackSeat ? (
+          isSeatMe(blackSeat) && (
+            <button onClick={() => handleStand('b')} className="text-slate-400 hover:text-red-400 text-xs p-1 cursor-pointer" title="Berdiri">
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => handleSit('b')}
+              className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-amber-950/80 border border-slate-600 hover:border-amber-500/60 text-slate-300 hover:text-amber-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+            >
+              <UserPlus className="w-3 h-3" /> Ambil Hitam
+            </button>
+            <button
+              onClick={() => setVsAiMode(!vsAiMode)}
+              className={`px-2 py-1 rounded-xl border text-[10px] font-mono cursor-pointer transition-all ${
+                vsAiMode ? 'bg-purple-950 border-purple-400 text-purple-300' : 'bg-slate-800 border-slate-700 text-slate-400'
+              }`}
+              title="Aktifkan AI Bunker jika bermain solo"
+            >
+              AI {vsAiMode ? 'ON' : 'OFF'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderWhitePlayerBar = () => (
+    <div className="w-full max-w-[480px] flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-md z-10 shrink-0">
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center text-xl shadow-inner text-slate-900 overflow-hidden">
+          {renderAvatarNode(whiteSeat?.avatar, '♟️', 'w-8 h-8')}
+        </div>
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-black text-white">
+              {whiteSeat ? whiteSeat.name : 'Bidak Putih (Kursi Kosong)'}
+            </span>
+            {isSeatMe(whiteSeat) && (
+              <span className="text-[9px] px-1 bg-amber-500/20 text-amber-300 font-mono rounded">ANDA</span>
+            )}
+          </div>
+          <div className="text-[10px] text-slate-400 flex items-center gap-1">
+            <span>Eliminasi:</span>
+            <span className="text-slate-200 font-serif">
+              {capturedByBlack.map((p) => PIECE_SYMBOLS[p.type].symbol).join(' ')}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2.5">
+        <div className={`px-2.5 py-1 rounded-xl font-mono font-black text-xs flex items-center gap-1 border ${
+          currentTurn === 'w' && !winner
+            ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 animate-pulse'
+            : 'bg-slate-950 border-slate-800 text-slate-400'
+        }`}>
+          <Clock className="w-3 h-3" />
+          <span>{formatTime(whiteTime)}</span>
+        </div>
+
+        {whiteSeat ? (
+          isSeatMe(whiteSeat) && (
+            <button onClick={() => handleStand('w')} className="text-slate-400 hover:text-red-400 text-xs p-1 cursor-pointer" title="Berdiri">
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )
+        ) : (
+          <button
+            onClick={() => handleSit('w')}
+            className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-emerald-950/80 border border-slate-600 hover:border-emerald-500/60 text-slate-300 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
+          >
+            <UserPlus className="w-3 h-3" /> Ambil Putih
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div 
       className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300 select-none"
-      onClick={onClose}
+      onClick={handleCloseModal}
     >
       <div 
         className="w-full max-w-4xl h-[95vh] max-h-[890px] rounded-3xl bg-[#0F172A] border-2 border-amber-500/50 text-slate-100 shadow-[0_0_60px_rgba(245,158,11,0.25)] flex flex-col overflow-hidden relative"
@@ -981,6 +1126,28 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {mySide && (
+              <button
+                type="button"
+                onClick={() => handleStand(mySide)}
+                className="px-2.5 py-1.5 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-700/80 text-red-300 hover:text-white font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Berdiri dan tinggalkan kursi"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Tinggalkan Kursi</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={resetGame}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+              title="Reset papan catur ke awal"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsFlipped(!isFlipped)}
@@ -999,7 +1166,7 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleCloseModal}
               className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
               title="Kembali ke Ruang Underground"
             >
@@ -1051,68 +1218,8 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
         {/* ── CHESS ARENA (2 PLAYERS & 8x8 BOARD) ── */}
         <div className="flex-1 p-3 flex flex-col justify-between items-center overflow-hidden bg-[#0A0E1A] relative">
           
-          {/* BLACK PLAYER BAR (TOP) */}
-          <div className="w-full max-w-[480px] flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-md z-10 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-slate-950 border border-slate-600 flex items-center justify-center text-xl shadow-inner overflow-hidden">
-                {renderAvatarNode(blackSeat?.avatar, '♟️', 'w-8 h-8')}
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-black text-white">
-                    {blackSeat ? blackSeat.name : 'Bidak Hitam (Kursi Kosong)'}
-                  </span>
-                  {isSeatMe(blackSeat) && (
-                    <span className="text-[9px] px-1 bg-amber-500/20 text-amber-300 font-mono rounded">ANDA</span>
-                  )}
-                </div>
-                <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <span>Eliminasi:</span>
-                  <span className="text-slate-200 font-serif">
-                    {capturedByWhite.map((p, i) => PIECE_SYMBOLS[p.type].symbol).join(' ')}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              {/* Black Clock Display */}
-              <div className={`px-2.5 py-1 rounded-xl font-mono font-black text-xs flex items-center gap-1 border ${
-                currentTurn === 'b' && !winner
-                  ? 'bg-amber-500/20 border-amber-400 text-amber-300 animate-pulse'
-                  : 'bg-slate-950 border-slate-800 text-slate-400'
-              }`}>
-                <Clock className="w-3 h-3" />
-                <span>{formatTime(blackTime)}</span>
-              </div>
-
-              {blackSeat ? (
-                isSeatMe(blackSeat) && (
-                  <button onClick={() => handleStand('b')} className="text-slate-400 hover:text-red-400 text-xs p-1 cursor-pointer" title="Berdiri">
-                    <LogOut className="w-3.5 h-3.5" />
-                  </button>
-                )
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handleSit('b')}
-                    className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-amber-950/80 border border-slate-600 hover:border-amber-500/60 text-slate-300 hover:text-amber-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
-                  >
-                    <UserPlus className="w-3 h-3" /> Ambil Hitam
-                  </button>
-                  <button
-                    onClick={() => setVsAiMode(!vsAiMode)}
-                    className={`px-2 py-1 rounded-xl border text-[10px] font-mono cursor-pointer transition-all ${
-                      vsAiMode ? 'bg-purple-950 border-purple-400 text-purple-300' : 'bg-slate-800 border-slate-700 text-slate-400'
-                    }`}
-                    title="Aktifkan AI Bunker jika bermain solo"
-                  >
-                    AI {vsAiMode ? 'ON' : 'OFF'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* TOP PLAYER BAR (Opponent Perspective) */}
+          {isFlipped ? renderWhitePlayerBar() : renderBlackPlayerBar()}
 
           {/* 8x8 CHESS BOARD CONTAINER */}
           <div className="my-auto relative p-2.5 rounded-3xl bg-[#2D1B10] border-4 border-[#5E3A1E] shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
@@ -1214,57 +1321,8 @@ export const SecretChessLoungeModal: React.FC<SecretChessLoungeModalProps> = ({
             )}
           </div>
 
-          {/* WHITE PLAYER BAR (BOTTOM) */}
-          <div className="w-full max-w-[480px] flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-900/90 border border-slate-700 shadow-md z-10 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center text-xl shadow-inner text-slate-900 overflow-hidden">
-                {renderAvatarNode(whiteSeat?.avatar, '♟️', 'w-8 h-8')}
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-black text-white">
-                    {whiteSeat ? whiteSeat.name : 'Bidak Putih (Kursi Kosong)'}
-                  </span>
-                  {isSeatMe(whiteSeat) && (
-                    <span className="text-[9px] px-1 bg-amber-500/20 text-amber-300 font-mono rounded">ANDA</span>
-                  )}
-                </div>
-                <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <span>Eliminasi:</span>
-                  <span className="text-slate-200 font-serif">
-                    {capturedByBlack.map((p, i) => PIECE_SYMBOLS[p.type].symbol).join(' ')}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              {/* White Clock Display */}
-              <div className={`px-2.5 py-1 rounded-xl font-mono font-black text-xs flex items-center gap-1 border ${
-                currentTurn === 'w' && !winner
-                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 animate-pulse'
-                  : 'bg-slate-950 border-slate-800 text-slate-400'
-              }`}>
-                <Clock className="w-3 h-3" />
-                <span>{formatTime(whiteTime)}</span>
-              </div>
-
-              {whiteSeat ? (
-                isSeatMe(whiteSeat) && (
-                  <button onClick={() => handleStand('w')} className="text-slate-400 hover:text-red-400 text-xs p-1 cursor-pointer" title="Berdiri">
-                    <LogOut className="w-3.5 h-3.5" />
-                  </button>
-                )
-              ) : (
-                <button
-                  onClick={() => handleSit('w')}
-                  className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-emerald-950/80 border border-slate-600 hover:border-emerald-500/60 text-slate-300 hover:text-emerald-300 text-xs flex items-center gap-1 cursor-pointer transition-all"
-                >
-                  <UserPlus className="w-3 h-3" /> Ambil Putih
-                </button>
-              )}
-            </div>
-          </div>
+          {/* BOTTOM PLAYER BAR (Player Perspective) */}
+          {isFlipped ? renderBlackPlayerBar() : renderWhitePlayerBar()}
         </div>
       </div>
     </div>

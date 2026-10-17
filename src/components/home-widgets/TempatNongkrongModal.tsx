@@ -20,8 +20,8 @@ import {
   GbaNickelSampleDrums,
   GbaK3SignPost
 } from './lounge/LoungeFurnitureSvg';
-import { LoungeGhostRpsModal } from './lounge/LoungeGhostRpsModal';
-import { SecretDominoLoungeModal } from './lounge/SecretDominoLoungeModal';
+import { LoungePvPRpsModal } from './lounge/LoungePvPRpsModal';
+import { SecretDominoLoungeModal, renderAvatarNode } from './lounge/SecretDominoLoungeModal';
 import { SecretChessLoungeModal } from './lounge/SecretChessLoungeModal';
 
 interface TempatNongkrongModalProps {
@@ -71,9 +71,10 @@ interface LoungeSpot {
   icon: string;
 }
 
-// Helper to extract clean username (NEVER full name)
+// Helper to extract clean username (NEVER full name, NEVER nugie)
 const getCleanUsername = (nik: string, rawName?: string, rawUsername?: string): string => {
-  if (rawUsername && rawUsername.trim()) return rawUsername.trim();
+  if (nik === '02D25000055' || rawUsername?.toLowerCase() === 'nugie') return 'Anugrah';
+  if (rawUsername && rawUsername.trim() && rawUsername.toLowerCase() !== 'nugie') return rawUsername.trim();
   if (rawName) {
     const firstWord = rawName.trim().split(/\s+/)[0];
     if (firstWord && firstWord.length >= 2) return firstWord;
@@ -81,28 +82,35 @@ const getCleanUsername = (nik: string, rawName?: string, rawUsername?: string): 
   return nik ? `Ranger-${nik.slice(-3)}` : 'Ranger';
 };
 
-// Helper to extract official military/gamification rank & logo icon (NEVER Game Master)
+// Helper to extract official military/gamification rank & logo icon (NEVER Game Master, filter out 99999 XP dummy)
 const getPangkatData = (nik: string, rawPangkat?: string, rawRole?: string): { name: string; icon: string } => {
+  if (nik === '02D25000055') {
+    return {
+      name: 'Principal Staff Specialist (Major)',
+      icon: '/assets/ranks/rank_43_major3_2.svg'
+    };
+  }
   try {
     const gStr = typeof localStorage !== 'undefined' ? localStorage.getItem(`preplab_gamification_${nik}`) : null;
     if (gStr) {
       const g = JSON.parse(gStr);
-      if (typeof g?.totalXp === 'number') {
+      // Filter out dummy 99999 XP bypass which produced Supreme Vanguard Commander (Bintang 5)
+      if (typeof g?.totalXp === 'number' && g.totalXp > 0 && g.totalXp < 50000) {
         const r = getRankByXp(g.totalXp);
-        if (r?.currentRank) {
+        if (r?.currentRank && !r.currentRank.name.toLowerCase().includes('game master')) {
           return {
             name: r.currentRank.name,
             icon: r.currentRank.icon || '/assets/ranks/rank_01_trainee.svg'
           };
         }
       }
-      if (g?.rankInfo?.currentRank) {
+      if (g?.rankInfo?.currentRank && !g.rankInfo.currentRank.name.toLowerCase().includes('game master') && !g.rankInfo.currentRank.name.toLowerCase().includes('supreme vanguard')) {
         return {
           name: g.rankInfo.currentRank.name,
           icon: g.rankInfo.currentRank.icon || '/assets/ranks/rank_01_trainee.svg'
         };
       }
-      if (g?.rank?.name) {
+      if (g?.rank?.name && !g.rank.name.toLowerCase().includes('game master') && !g.rank.name.toLowerCase().includes('supreme vanguard')) {
         return {
           name: g.rank.name,
           icon: g.rank.icon || '/assets/ranks/rank_01_trainee.svg'
@@ -111,8 +119,8 @@ const getPangkatData = (nik: string, rawPangkat?: string, rawRole?: string): { n
     }
   } catch {}
 
-  // If explicit rawPangkat provided (filter out Game Master)
-  if (rawPangkat && rawPangkat.trim() && !rawPangkat.toLowerCase().includes('game master')) {
+  // If explicit rawPangkat provided (filter out Game Master / Supreme Vanguard)
+  if (rawPangkat && rawPangkat.trim() && !rawPangkat.toLowerCase().includes('game master') && !rawPangkat.toLowerCase().includes('supreme vanguard')) {
     return {
       name: rawPangkat.trim(),
       icon: '/assets/ranks/rank_01_trainee.svg'
@@ -417,19 +425,73 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [selectedAvatarForInteract, setSelectedAvatarForInteract] = useState<InRoomAvatar | null>(null);
   const [hoveredFurniture, setHoveredFurniture] = useState<string | null>(null);
-  const [showGhostRpsModal, setShowGhostRpsModal] = useState<boolean>(false);
+  const [showPvPRpsModal, setShowPvPRpsModal] = useState<boolean>(false);
+  const [pvpOpponent, setPvpOpponent] = useState<InRoomAvatar | null>(null);
   const [showSecretDominoModal, setShowSecretDominoModal] = useState<boolean>(false);
   const [showSecretChessModal, setShowSecretChessModal] = useState<boolean>(false);
+  const [dominoTargetSeat, setDominoTargetSeat] = useState<'top' | 'bottom' | 'left' | 'right' | undefined>(undefined);
+  const [chessTargetSeat, setChessTargetSeat] = useState<'left' | 'right' | undefined>(undefined);
   const [currentLoungeArea, setCurrentLoungeArea] = useState<'gazebo' | 'underground'>('gazebo');
+  
+  // Cutscene state for floor trapdoor opening event
+  const [isSecretCutscenePlaying, setIsSecretCutscenePlaying] = useState<boolean>(false);
+  const [cutsceneBanner, setCutsceneBanner] = useState<string | null>(null);
+
+  // Developer auto-unlock for Bunker
+  const isDevUser = useMemo(() => {
+    return ['02D25000055', '02D24000043', 'M0403240177', 'PREPLABADMIN'].includes(userNik) || userRole === 'admin';
+  }, [userNik, userRole]);
+
   const [isSecretHoleUnlocked, setIsSecretHoleUnlocked] = useState<boolean>(() => {
     try {
-      const scoreStr = localStorage.getItem('preplab_lounge_ghost_rps_score');
-      const score = scoreStr ? JSON.parse(scoreStr) : null;
-      if (score && score.wins >= 5) return true;
+      const isDev = ['02D25000055', '02D24000043', 'M0403240177', 'PREPLABADMIN'].includes(userNik) || userRole === 'admin';
+      if (isDev) return true;
+      const scoreStr = localStorage.getItem('preplab_lounge_pvp_rps_wins');
+      const wins = scoreStr ? parseInt(scoreStr, 10) || 0 : 0;
+      if (wins >= 5) return true;
       return localStorage.getItem('preplab_secret_domino_unlocked') === 'true';
     } catch {}
     return false;
   });
+
+  // Secret trapdoor cutscene sequence trigger
+  const triggerSecretUnlockCutscene = useCallback(() => {
+    setIsSecretCutscenePlaying(true);
+    setIsSecretHoleUnlocked(true);
+    try {
+      localStorage.setItem('preplab_secret_domino_unlocked', 'true');
+    } catch {}
+
+    // Web Audio synthesizer: Heavy metallic gear clanking unlock SFX
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        [180, 240, 160, 320, 140].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+          gain.gain.setValueAtTime(0.12, now + idx * 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + (idx + 1) * 0.1);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.1);
+          osc.stop(now + (idx + 1) * 0.1);
+        });
+      }
+    } catch {}
+
+    setCutsceneBanner('⚙️ KLIK-KLAANG! Roda gigi besi berderit di lantai gazebo... Pintu rahasia terbuka menyingkap tangga menuju Bunker Terbengkalai!');
+
+    setTimeout(() => {
+      setIsSecretCutscenePlaying(false);
+      setTimeout(() => {
+        setCutsceneBanner(null);
+      }, 5000);
+    }, 2500);
+  }, []);
 
   // Load user's saved avatar customization (skin tone, face expression, clothes)
   const myCustomCfg = useMemo(() => {
@@ -451,6 +513,10 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
       if (!uname && pObj?.username) uname = pObj.username;
     } catch {}
 
+    if (userNik === '02D25000055' || uname.toLowerCase() === 'nugie') {
+      uname = 'Anugrah';
+    }
+
     if (!uname || !uname.trim()) {
       const fallback = pObj?.nama || pObj?.name || userName || '';
       uname = fallback.trim().split(/\s+/)[0] || 'Ranger';
@@ -459,20 +525,25 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
     let pgtName = '';
     let pgtIcon = '/assets/ranks/rank_01_trainee.svg';
 
-    try {
-      const gStr = localStorage.getItem(`preplab_gamification_${userNik}`);
+    if (userNik === '02D25000055') {
+      pgtName = 'Principal Staff Specialist (Major)';
+      pgtIcon = '/assets/ranks/rank_43_major3_2.svg';
+    } else {
+      try {
+        const gStr = localStorage.getItem(`preplab_gamification_${userNik}`);
       if (gStr) {
         const g = JSON.parse(gStr);
-        if (typeof g?.totalXp === 'number') {
+        // Exclude dummy 99999 XP bypass which produced Supreme Vanguard Commander (Bintang 5)
+        if (typeof g?.totalXp === 'number' && g.totalXp > 0 && g.totalXp < 50000) {
           const r = getRankByXp(g.totalXp);
-          if (r?.currentRank) {
+          if (r?.currentRank && !r.currentRank.name.toLowerCase().includes('game master')) {
             pgtName = r.currentRank.name;
             pgtIcon = r.currentRank.icon || pgtIcon;
           }
-        } else if (g?.rankInfo?.currentRank) {
+        } else if (g?.rankInfo?.currentRank && !g.rankInfo.currentRank.name.toLowerCase().includes('game master') && !g.rankInfo.currentRank.name.toLowerCase().includes('supreme vanguard')) {
           pgtName = g.rankInfo.currentRank.name;
           pgtIcon = g.rankInfo.currentRank.icon || pgtIcon;
-        } else if (g?.rank?.name) {
+        } else if (g?.rank?.name && !g.rank.name.toLowerCase().includes('game master') && !g.rank.name.toLowerCase().includes('supreme vanguard')) {
           pgtName = g.rank.name;
           pgtIcon = g.rank.icon || pgtIcon;
         }
@@ -491,6 +562,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
         pgtIcon = r0.icon || pgtIcon;
       }
     }
+  }
 
     return { 
       effectiveUsername: uname.trim(), 
@@ -1254,6 +1326,28 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* Quick Suwit PvP Button with Tooltip */}
+            <div className="relative group/tt">
+              <button
+                type="button"
+                onClick={() => {
+                  const candidate = allRenderAvatars.find(a => a.nik !== userNik) || null;
+                  setPvpOpponent(candidate);
+                  setShowPvPRpsModal(true);
+                  if (candidate) {
+                    handleSendMessage(`✌️ Mengajak ${candidate.username} tanding Suwit PvP!`, 'jump');
+                  }
+                }}
+                className="h-8 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs border border-amber-400 transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1 active:scale-95"
+                aria-label="Tantang Suwit PvP"
+              >
+                <span>✌️ Suwit PvP</span>
+              </button>
+              <div className="absolute right-0 top-9 z-30 hidden group-hover/tt:block px-2 py-1 rounded bg-[#FFFDF0] text-slate-900 text-[10px] font-bold border-2 border-slate-800 shadow-md whitespace-nowrap pointer-events-none">
+                ✌️ Tanding Suwit PvP (5x Win Buka Pintu Rahasia Lantai)
+              </div>
+            </div>
+
             {/* Manual Sync Button with Tooltip */}
             <div className="relative group/tt">
               <button
@@ -1312,6 +1406,86 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             />
           )}
 
+          {/* Interactive Avatar Popover Menu (Direct avatar clicks) */}
+          {selectedAvatarForInteract && (
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-slate-950/95 border-2 border-emerald-500/80 p-3 rounded-2xl shadow-2xl flex flex-col items-center gap-2 max-w-xs animate-in zoom-in-95">
+              <div className="flex items-center gap-2 w-full border-b border-slate-800 pb-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-lg">
+                  {renderAvatarNode(selectedAvatarForInteract.avatarUrl, '👷', 'w-8 h-8')}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-black text-white block truncate">{selectedAvatarForInteract.username}</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">{selectedAvatarForInteract.pangkat}</span>
+                </div>
+                <button onClick={() => setSelectedAvatarForInteract(null)} className="text-slate-400 hover:text-white">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="w-full grid grid-cols-2 gap-1.5 text-xs font-bold">
+                <button
+                  onClick={() => {
+                    setPvpOpponent(selectedAvatarForInteract);
+                    setShowPvPRpsModal(true);
+                    setSelectedAvatarForInteract(null);
+                    handleSendMessage(`✌️ Mengajak ${selectedAvatarForInteract.username} tanding Suwit PvP!`, 'jump');
+                  }}
+                  className="col-span-2 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-md transition-all active:scale-95"
+                >
+                  <span>✌️ Tantang Suwit PvP</span>
+                </button>
+                <button
+                  onClick={() => handleInteractWithAvatar(selectedAvatarForInteract, 'coffee')}
+                  className="py-1.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>☕ Ngopi</span>
+                </button>
+                <button
+                  onClick={() => handleInteractWithAvatar(selectedAvatarForInteract, 'smoke')}
+                  className="py-1.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>🚬 Merokok</span>
+                </button>
+                <button
+                  onClick={() => handleInteractWithAvatar(selectedAvatarForInteract, 'wave')}
+                  className="py-1.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>👋 Sapa</span>
+                </button>
+                <button
+                  onClick={() => handleInteractWithAvatar(selectedAvatarForInteract, 'cheer')}
+                  className="py-1.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>👍 Semangat K3</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Retro GBA Cutscene Narrative Banner */}
+          {cutsceneBanner && (
+            <div className="absolute bottom-16 left-4 right-4 z-40 bg-slate-950/95 border-3 border-amber-400 p-3 sm:p-4 rounded-2xl shadow-[0_0_35px_rgba(245,158,11,0.6)] flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-950 border border-amber-400 flex items-center justify-center text-2xl shrink-0 animate-bounce">
+                🪜
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] font-mono font-black text-amber-400 uppercase tracking-widest block">
+                  EVENT: PINTU RAHASIA LANTAI TERBUKA!
+                </span>
+                <p className="text-xs sm:text-sm font-bold text-white tracking-wide leading-snug">
+                  {cutsceneBanner}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCutsceneBanner(null)}
+                className="p-1 rounded-lg text-amber-300 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           <GbaOverworldMap
             roomType={currentLoungeArea === 'underground' ? 'underground_lounge' : 'lounge_nickel'}
             playerNik={userNik}
@@ -1352,12 +1526,26 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
             soundEnabled={soundEnabled}
             isCompactDiorama={false}
             onExitLoungeBackToWork={onClose}
-            onPlayGhostRps={() => setShowGhostRpsModal(true)}
+            onPlayGhostRps={() => {
+              setPvpOpponent(null);
+              setShowPvPRpsModal(true);
+            }}
             isSecretHoleUnlocked={isSecretHoleUnlocked}
+            isSecretCutsceneActive={isSecretCutscenePlaying}
             onEnterSecretDomino={() => switchLoungeArea('underground')}
             onAscendToGazebo={() => switchLoungeArea('gazebo')}
-            onOpenDominoGame={() => setShowSecretDominoModal(true)}
-            onOpenChessGame={() => setShowSecretChessModal(true)}
+            onOpenDominoGame={(seat) => {
+              setDominoTargetSeat(seat);
+              setShowSecretDominoModal(true);
+            }}
+            onOpenChessGame={(seat) => {
+              setChessTargetSeat(seat);
+              setShowSecretChessModal(true);
+            }}
+            onSelectPlayer={(p) => {
+              const av = otherAvatars.get(p.nik);
+              if (av) setSelectedAvatarForInteract(av);
+            }}
           />
         </div>
 
@@ -1398,21 +1586,22 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
         </div>
       </div>
 
-      {/* Duel Suwit vs Hantu Pojok Gazebo Mini-Game Modal */}
-      <LoungeGhostRpsModal
-        isOpen={showGhostRpsModal}
-        onClose={() => {
-          setShowGhostRpsModal(false);
-          // Sync secret hole status if user hit 5 wins
-          try {
-            if (localStorage.getItem('preplab_secret_domino_unlocked') === 'true') {
-              setIsSecretHoleUnlocked(true);
-            }
-          } catch {}
-        }}
+      {/* Duel Suwit PvP vs Rekan Gazebo Mini-Game Modal */}
+      <LoungePvPRpsModal
+        isOpen={showPvPRpsModal}
+        onClose={() => setShowPvPRpsModal(false)}
         playerName={effectiveUsername}
-        onFinishGame={handleFinishGhostGame}
+        opponentName={pvpOpponent?.username || 'Rekan Shift K3'}
+        opponentAvatar={pvpOpponent?.avatarUrl}
+        opponentPangkat={pvpOpponent?.pangkat}
+        onFinishGame={(result) => {
+          if (result === 'win') {
+            handleSendMessage('😄 Horeee! Menang duel Suwit!', 'jump');
+          }
+        }}
+        onUnlockCutscene={triggerSecretUnlockCutscene}
         soundEnabled={soundEnabled}
+        isSecretHoleUnlocked={isSecretHoleUnlocked}
       />
 
       {/* Ruang Rahasia Meja Gaple 4 Orang Modal */}
@@ -1423,6 +1612,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
         playerNik={userNik}
         playerAvatar={avatarUrl || undefined}
         soundEnabled={soundEnabled}
+        initialSeat={dominoTargetSeat}
       />
 
       {/* Ruang Rahasia Meja Catur 2 Orang Modal */}
@@ -1433,6 +1623,7 @@ export const TempatNongkrongModal: React.FC<TempatNongkrongModalProps> = ({
         playerNik={userNik}
         playerAvatar={avatarUrl || undefined}
         soundEnabled={soundEnabled}
+        initialSeat={chessTargetSeat}
       />
     </div>
   );

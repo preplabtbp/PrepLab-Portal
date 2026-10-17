@@ -674,6 +674,32 @@ const app = express();
     gameAnnouncement: 'Menunggu pemain mengambil posisi Putih & Hitam...'
   };
 
+  const resetDominoGame = () => {
+    dominoLoungeState.seats = [null, null, null, null];
+    dominoLoungeState.boardChain = [];
+    dominoLoungeState.currentTurnIndex = 0;
+    dominoLoungeState.isPlaying = false;
+    dominoLoungeState.roundWinner = null;
+    dominoLoungeState.consecutivePasses = 0;
+    dominoLoungeState.gameAnnouncement = 'Meja Gaple kosong. Permainan direset dan siap untuk putaran baru!';
+    dominoLoungeState.hands.clear();
+  };
+
+  const resetChessGame = () => {
+    chessLoungeState.board = JSON.parse(JSON.stringify(INITIAL_SERVER_CHESS_BOARD));
+    chessLoungeState.currentTurn = 'w';
+    chessLoungeState.isCheck = null;
+    chessLoungeState.winner = null;
+    chessLoungeState.lastMove = null;
+    chessLoungeState.whiteTime = 600;
+    chessLoungeState.blackTime = 600;
+    chessLoungeState.halfMoveClock = 0;
+    chessLoungeState.positionHistory = [];
+    chessLoungeState.capturedByWhite = [];
+    chessLoungeState.capturedByBlack = [];
+    chessLoungeState.gameAnnouncement = 'Meja catur kosong. Papan dan waktu otomatis direset!';
+  };
+
   const cleanupStaleLoungeAvatars = () => {
     const activeSocketIds = new Set(onlineSockets.keys());
     for (const [nik, avatar] of loungeAvatars.entries()) {
@@ -971,8 +997,14 @@ const app = express();
 
     socket.on('domino:stand', (data: { seatIdx: number }) => {
       if (typeof data.seatIdx === 'number' && data.seatIdx >= 0 && data.seatIdx < 4) {
-        // If active game is in progress, replace with bot so table does not freeze
-        if (dominoLoungeState.isPlaying && !dominoLoungeState.roundWinner) {
+        // Check if other real human players remain at the table
+        const hasOtherHuman = dominoLoungeState.seats.some((s, idx) => idx !== data.seatIdx && s && !s.isBot);
+
+        if (!hasOtherHuman) {
+          // If no other human players remain at the table, reset immediately
+          resetDominoGame();
+        } else if (dominoLoungeState.isPlaying && !dominoLoungeState.roundWinner) {
+          // If active game is in progress and other humans are still playing, replace with bot so table does not freeze
           const botNames = [
             { nik: 'bot_budi', name: 'Budi (Bot)', avatar: '🤖' },
             { nik: 'bot_siti', name: 'Siti (Bot)', avatar: '👾' },
@@ -1068,8 +1100,14 @@ const app = express();
         const curRight = dominoLoungeState.boardChain[dominoLoungeState.boardChain.length - 1].val2;
 
         if (side === 'left') {
+          // Strictly validate that tile has curLeft
+          if (tile.left !== curLeft && tile.right !== curLeft) {
+            console.warn(`[Domino] Invalid move for left end (${curLeft}): tile is [${tile.left}|${tile.right}]`);
+            return;
+          }
           let val1 = tile.left;
           let val2 = tile.right;
+          // For prepending on the left: val2 connects to curLeft, val1 becomes new openLeft
           if (tile.right === curLeft) {
             val1 = tile.left;
             val2 = tile.right;
@@ -1086,8 +1124,14 @@ const app = express();
           };
           dominoLoungeState.boardChain.unshift(newTile);
         } else {
+          // Strictly validate that tile has curRight
+          if (tile.left !== curRight && tile.right !== curRight) {
+            console.warn(`[Domino] Invalid move for right end (${curRight}): tile is [${tile.left}|${tile.right}]`);
+            return;
+          }
           let val1 = tile.left;
           let val2 = tile.right;
+          // For appending on the right: val1 connects to curRight, val2 becomes new openRight
           if (tile.left === curRight) {
             val1 = tile.left;
             val2 = tile.right;
@@ -1287,8 +1331,16 @@ const app = express();
       const playerName = socket.data.name || data.name || playerNik;
 
       if (data.side === 'w') {
+        // Clear black seat if player was sitting there
+        if (chessLoungeState.blackSeat && (chessLoungeState.blackSeat.nik === playerNik || chessLoungeState.blackSeat.socketId === socket.id)) {
+          chessLoungeState.blackSeat = null;
+        }
         chessLoungeState.whiteSeat = { nik: playerNik, name: playerName, avatar: data.avatar, socketId: socket.id };
       } else {
+        // Clear white seat if player was sitting there
+        if (chessLoungeState.whiteSeat && (chessLoungeState.whiteSeat.nik === playerNik || chessLoungeState.whiteSeat.socketId === socket.id)) {
+          chessLoungeState.whiteSeat = null;
+        }
         chessLoungeState.blackSeat = { nik: playerNik, name: playerName, avatar: data.avatar, socketId: socket.id };
       }
 
@@ -1301,6 +1353,9 @@ const app = express();
       socket.join('lounge');
       if (data.side === 'w') chessLoungeState.whiteSeat = null;
       if (data.side === 'b') chessLoungeState.blackSeat = null;
+      if (!chessLoungeState.whiteSeat && !chessLoungeState.blackSeat) {
+        resetChessGame();
+      }
       io.to('lounge').emit('chess:sync', chessLoungeState);
       socket.emit('chess:sync', chessLoungeState);
     });
@@ -1593,6 +1648,9 @@ const app = express();
         }
       }
       if (dominoSeatChanged) {
+        if (dominoLoungeState.seats.every(s => !s || s.isBot)) {
+          resetDominoGame();
+        }
         io.to('lounge').emit('domino:sync', getPublicDominoState());
       }
 
@@ -1607,6 +1665,9 @@ const app = express();
         chessSeatChanged = true;
       }
       if (chessSeatChanged) {
+        if (!chessLoungeState.whiteSeat && !chessLoungeState.blackSeat) {
+          resetChessGame();
+        }
         io.to('lounge').emit('chess:sync', chessLoungeState);
       }
     });

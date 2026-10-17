@@ -172,7 +172,7 @@ export const DEV_USERS: Record<string, any> = {
   '02D25000055': {
     id: 102,
     nik: '02D25000055',
-    username: 'nugie',
+    username: 'Anugrah',
     name: 'Muhamad Anugrah Ramadhan',
     jabatan: 'Preparation Admin',
     jobGrade: 'S2.4',
