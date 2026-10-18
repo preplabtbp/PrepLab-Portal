@@ -6008,15 +6008,12 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
 
   return (
     <div className={`p-2.5 rounded-xl transition-all text-xs flex flex-col gap-1.5 ${cardStyle} ${selectNameOpen || selectMateriOpen ? 'z-40 relative' : ''}`}>
-      {/* Notion Tag Header for Senam */}
+      {/* Judul Senam di Atas Kotak */}
       {isSenamSlot && (
-        <div className="flex items-center justify-between gap-1 pb-1 border-b border-[#fadec9] dark:border-[#d9730d]/30">
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9.5px] font-semibold bg-[#fadec9]/40 text-[#8f4226] border border-[#fadec9] dark:bg-[#fadec9]/20 dark:text-[#ffa775] dark:border-[#d9730d]/40 tracking-tight">
-            <span>🤸</span>
-            <span>Instruktur Senam</span>
-          </span>
-          <span className="text-[8.5px] font-mono text-[#787774] dark:text-slate-400 bg-[#f1f1ef] dark:bg-slate-800 px-1.5 py-0.2 rounded border border-[#e3e2de] dark:border-slate-700">
-            Duet 2 Kru
+        <div className="flex items-center gap-1.5 pb-1 border-b border-[#fadec9] dark:border-[#d9730d]/30">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#d9730d] shrink-0"></span>
+          <span className="font-bold text-[11px] text-[#8f4226] dark:text-[#ffa775] uppercase tracking-wider">
+            Senam
           </span>
         </div>
       )}
@@ -6186,47 +6183,20 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
           <div className="flex items-center justify-between gap-1 w-full">
             {slot.nama && slot.nama.includes(' / ') ? (
               <div className="flex flex-col gap-1 py-0.5 w-full" title={slot.nama}>
-                {/* Instruktur 1 - Prep/Maintenance (Yellow badge per user rule: outline yellow for prep) */}
-                <div className="flex items-center justify-between gap-1.5 px-2 py-1 bg-[#fbf3db]/40 dark:bg-[#252520] rounded-lg border border-[#f2e5bc] dark:border-[#cb912f]/40">
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <span className="w-4 h-4 rounded-full bg-[#fbf3db] text-[#8f6b00] border border-[#f2e5bc] text-[9px] font-bold flex items-center justify-center shrink-0">
-                      P
-                    </span>
-                    <span className="font-semibold text-[11.5px] text-[#37352f] dark:text-[#ebebeb] break-words whitespace-normal leading-tight">
-                      {slot.nama.split(' / ')[0]}
-                    </span>
-                  </div>
-                  <span className="text-[8.5px] font-medium px-1.5 py-0.2 rounded bg-[#fbf3db] text-[#8f6b00] border border-[#f2e5bc] shrink-0">
-                    Prep/Maint
-                  </span>
+                <div className="font-semibold text-[11.5px] text-[#37352f] dark:text-[#ebebeb] break-words whitespace-normal leading-tight">
+                  {slot.nama.split(' / ')[0]}
                 </div>
-
-                {/* Instruktur 2 - Laboratory (Red badge per user rule: outline red for lab) */}
-                <div className="flex items-center justify-between gap-1.5 px-2 py-1 bg-[#fbe4e4]/40 dark:bg-[#251f1f] rounded-lg border border-[#f9d1d3] dark:border-[#d44c47]/40">
-                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <span className="w-4 h-4 rounded-full bg-[#fbe4e4] text-[#a83030] border border-[#f9d1d3] text-[9px] font-bold flex items-center justify-center shrink-0">
-                      L
-                    </span>
-                    <span className="font-semibold text-[11.5px] text-[#37352f] dark:text-[#ebebeb] break-words whitespace-normal leading-tight">
-                      {slot.nama.split(' / ')[1]}
-                    </span>
-                  </div>
-                  <span className="text-[8.5px] font-medium px-1.5 py-0.2 rounded bg-[#fbe4e4] text-[#a83030] border border-[#f9d1d3] shrink-0">
-                    Lab
-                  </span>
+                <div className="font-semibold text-[11.5px] text-[#37352f] dark:text-[#ebebeb] break-words whitespace-normal leading-tight">
+                  {slot.nama.split(' / ')[1]}
                 </div>
               </div>
             ) : isSenamSlot ? (
-              <div className="flex items-center justify-between gap-1.5 px-2 py-1 bg-[#fadec9]/30 dark:bg-slate-850 rounded-lg border border-[#fadec9] dark:border-[#d9730d]/40 w-full">
-                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <span className="w-4 h-4 rounded-full bg-[#fadec9] text-[#8f4226] border border-[#f5d5c8] text-[9px] font-bold flex items-center justify-center shrink-0">
-                    S
-                  </span>
-                  <span className="font-semibold text-[11.5px] text-[#37352f] dark:text-[#ebebeb] break-words whitespace-normal leading-tight">
-                    {slot.nama || '— Tidak Ada SDM —'}
-                  </span>
-                </div>
-              </div>
+              <span
+                className={`font-semibold text-[11.5px] leading-tight break-words whitespace-normal ${isEmptySDM ? 'text-[#a83030] italic' : 'text-[#37352f] dark:text-[#ebebeb]'}`}
+                title={slot.nama}
+              >
+                {slot.nama || '— Tidak Ada SDM —'}
+              </span>
             ) : (
               <span
                 className={`font-semibold text-[11.5px] leading-tight break-words whitespace-normal ${isEmptySDM ? 'text-[#a83030] italic' : 'text-[#37352f] dark:text-[#ebebeb]'}`}
@@ -6477,17 +6447,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             )}
           </div>
         ) : isSenamSlot ? (
-          <div className="mt-1 px-2.5 py-1.5 rounded-lg text-[10.5px] leading-snug font-medium break-words border bg-white dark:bg-slate-900 border-[#fadec9] dark:border-[#d9730d]/40 text-[#8f4226] dark:text-[#ffa775] flex items-center justify-between gap-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#d9730d] shrink-0"></span>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-[#8f4226] dark:text-[#ffa775]">
-                Senam Kebugaran
-              </span>
-            </div>
-            <span className="text-[8.5px] font-medium text-[#787774] dark:text-slate-400 bg-[#f1f1ef] dark:bg-slate-800 px-1.5 py-0.2 rounded border border-[#e3e2de] dark:border-slate-700 shrink-0">
-              Semua Team
-            </span>
-          </div>
+          null
         ) : (
           <div className={`mt-1 px-2.5 py-1.5 rounded-lg text-[10.5px] leading-snug font-medium break-words border-l-2 flex items-start justify-between gap-1.5 ${
             zone === 'prep'
