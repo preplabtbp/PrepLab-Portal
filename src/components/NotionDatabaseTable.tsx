@@ -5749,6 +5749,7 @@ export function NotionDatabaseTable({
   // Default font size, font family, and color match Created Time column (#475569, font-sans, font-normal, 13px / 12px)
   // When collapsed (!isExpanded), clamped strictly with ellipsis (...) right at cell boundary
   // When expanded, preserves bullet points and lines separated by enter as distinct points
+  // Khusus tabel pada dokumen/artikel Labnote (!isLogbookTable), kolom description langsung auto-expanded
   const renderFormattedNotes = (text: string, isExpanded: boolean = true) => {
     if (!text || text === '-' || text === '•') return <span className="font-sans text-xs text-slate-400">-</span>;
     // Normalize <br/>, <br>, <br /> to newlines
@@ -5763,10 +5764,13 @@ export function NotionDatabaseTable({
       return <span className="font-sans text-xs text-slate-400">-</span>;
     }
 
+    // Auto-expanded: tabel Labnote (!isLogbookTable) langsung auto-expanded utuh, tabel logbook mengikuti status isExpanded
+    const shouldExpand = !isLogbookTable || isExpanded;
+
     return (
       <div 
         className={`leading-relaxed font-sans font-normal block w-full transition-all ${
-          !isExpanded ? 'max-h-[36px] overflow-hidden line-clamp-1' : 'space-y-1'
+          !shouldExpand ? 'max-h-[36px] overflow-hidden line-clamp-1' : 'space-y-1'
         } ${fitPageMode ? 'text-xs' : 'text-[13px]'} ${isNotionLight ? 'text-[#475569]' : 'text-slate-300'}`}
         style={{ 
           fontSize: fitPageMode ? '12px' : '13px',
@@ -8087,7 +8091,7 @@ export function NotionDatabaseTable({
                                         />
                                       ) : (
                                         <div 
-                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer font-sans w-full min-w-0 overflow-hidden"
+                                          className="relative group/cell flex items-start justify-between gap-1 cursor-pointer font-sans w-full min-w-0"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             const cleanInitial = val
@@ -8098,7 +8102,7 @@ export function NotionDatabaseTable({
                                             setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: cleanInitial, multiline: true });
                                           }}
                                         >
-                                          <div className={`flex-1 min-w-0 overflow-hidden font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
+                                          <div className={`flex-1 min-w-0 font-sans ${fitPageMode ? 'text-xs break-words' : 'text-[13px]'} leading-normal`}>
                                             {renderFormattedNotes(val, isExpanded)}
                                           </div>
                                           <button
