@@ -279,6 +279,20 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   // D. Parameter / Element Analisis (Global & Synchronized across all charts)
   const [selectedElement, setSelectedElement] = useState<string>('Ni');
 
+  // E. Filter Periode Waktu / Tahun (Default: Tahun Berjalan)
+  const currentYearStr = new Date().getFullYear().toString();
+  const [selectedYear, setSelectedYear] = useState<string>(currentYearStr);
+
+  const dateRange = useMemo(() => {
+    if (selectedYear === 'ALL') {
+      return { startDate: '', endDate: '' };
+    }
+    return {
+      startDate: `${selectedYear}-01-01`,
+      endDate: `${selectedYear}-12-31`,
+    };
+  }, [selectedYear]);
+
   // Modal State: Tambah Alat Baru Langsung dari UI
   const [showAddInstrumentModal, setShowAddInstrumentModal] = useState<boolean>(false);
   const [newInstName, setNewInstName] = useState<string>('');
@@ -631,7 +645,12 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     if (selectedInstruments.length === 0) return;
     try {
       const instParam = selectedInstruments.join(',');
-      const res = await fetch(`/api/xrf/available-standards?instrumentCode=${instParam}`);
+      const params = new URLSearchParams();
+      params.set('instrumentCode', instParam);
+      if (dateRange.startDate) params.set('startDate', dateRange.startDate);
+      if (dateRange.endDate) params.set('endDate', dateRange.endDate);
+
+      const res = await fetch(`/api/xrf/available-standards?${params.toString()}`);
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         const parsed = json.data.map((d: any) => ({
@@ -651,7 +670,12 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     if (selectedInstruments.length === 0) return;
     try {
       const instParam = selectedInstruments.join(',');
-      const res = await fetch(`/api/xrf/latest-batch-standards?instrumentCode=${instParam}`);
+      const params = new URLSearchParams();
+      params.set('instrumentCode', instParam);
+      if (dateRange.startDate) params.set('startDate', dateRange.startDate);
+      if (dateRange.endDate) params.set('endDate', dateRange.endDate);
+
+      const res = await fetch(`/api/xrf/latest-batch-standards?${params.toString()}`);
       const json = await res.json();
       if (json.success && json.hasData && Array.isArray(json.standards) && json.standards.length > 0) {
         setLatestBatchStandards(json.standards);
@@ -666,19 +690,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   useEffect(() => {
     loadAvailableStandards();
     loadLatestBatchStandards();
-  }, [selectedInstruments]);
+  }, [selectedInstruments, dateRange]);
 
-  // Auto-sync selected standards when primary matrix, method, or latest batch standards change
+  // Auto-sync selected standards: selalu prioritaskan standar dari dataset batch terakhir yang diinput untuk tiap alatnya
   useEffect(() => {
-    if (selectedMethod === 'WDXRF') {
+    if (latestBatchStandards.length > 0) {
+      setSelectedStandards(latestBatchStandards);
+    } else if (selectedMethod === 'WDXRF') {
       const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
-      if (latestBatchStandards.length > 0) {
-        setSelectedStandards(latestBatchStandards);
-      } else if (hasZetium) {
-        setSelectedStandards(WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER);
-      } else {
-        setSelectedStandards(WDXRF_SUPERMINI_STANDARDS_ORDER);
-      }
+      setSelectedStandards(hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER);
     } else if (selectedMatrix === 'SAPROLITE') {
       const sapCodes = [
         'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 
@@ -705,6 +725,9 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         : (selectedStandards.length > 0 ? selectedStandards.join(',') : 'ALL');
       params.set('standards', standardsToQuery);
 
+      if (dateRange.startDate) params.set('startDate', dateRange.startDate);
+      if (dateRange.endDate) params.set('endDate', dateRange.endDate);
+
       const res = await fetch(`/api/xrf/qc-chart-data?${params.toString()}`);
       const json = await res.json();
       if (json.success) {
@@ -724,7 +747,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
 
   useEffect(() => {
     fetchChartData();
-  }, [selectedInstruments, selectedStandards]);
+  }, [selectedInstruments, selectedStandards, dateRange]);
 
   // Handle Synchronized Element Selection from ANY chart card dropdown
   const handleSelectElement = (el: string) => {
@@ -818,22 +841,20 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   };
 
   // Visible standards list:
-  // - If WDXRF: follow official baseline from latest verification batch (Zetium TBP or Supermini GTS)
-  // - If EDXRF: strictly constrained to selected Primary Matrix (Saprolite vs Limonite)
-  // - Historical standards: if toggled, display older standards that have data but are retired from current batch
+  // - Selalu prioritaskan urutan standar dari batch pengukuran terakhir yang diinput untuk alat terkait (EDXRF maupun WDXRF)
+  // - Fallback ke urutan default matriks jika belum ada batch pengukuran
   const visibleStandards = useMemo(() => {
     let candidateCodes: string[] = [];
     let matrixType = 'SAPROLITE';
 
-    if (selectedMethod === 'WDXRF') {
+    if (latestBatchStandards.length > 0) {
+      candidateCodes = [...latestBatchStandards];
       const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
-      if (latestBatchStandards.length > 0) {
-        candidateCodes = [...latestBatchStandards];
-      } else if (hasZetium) {
-        candidateCodes = [...WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER];
-      } else {
-        candidateCodes = [...WDXRF_SUPERMINI_STANDARDS_ORDER];
-      }
+      const hasSupermini = selectedInstruments.some(c => c === 'SUPERMINI');
+      matrixType = hasZetium ? 'ZETIUM' : hasSupermini ? 'SUPERMINI' : (selectedMatrix || 'SAPROLITE');
+    } else if (selectedMethod === 'WDXRF') {
+      const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
+      candidateCodes = hasZetium ? [...WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER] : [...WDXRF_SUPERMINI_STANDARDS_ORDER];
       matrixType = hasZetium ? 'ZETIUM' : 'SUPERMINI';
     } else {
       const isSaprolite = selectedMatrix === 'SAPROLITE';
@@ -865,22 +886,16 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       };
     });
 
-    if (selectedMethod === 'WDXRF') {
-      // Untuk WDXRF: tampilkan urutan skema standar secara utuh dan kontinu
-      return list;
-    }
-
-    const withData = list.filter(s => s.count > 0);
-    return withData.length > 0 ? withData : list;
+    return list;
   }, [standards, standardCountMap, selectedMatrix, selectedMethod, selectedInstruments, latestBatchStandards, availableStandardsData, showHistoricalStandards]);
 
   const historicalStandardsCount = useMemo(() => {
     let candidateCodes: string[] = [];
-    if (selectedMethod === 'WDXRF') {
+    if (latestBatchStandards.length > 0) {
+      candidateCodes = latestBatchStandards;
+    } else if (selectedMethod === 'WDXRF') {
       const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
-      candidateCodes = latestBatchStandards.length > 0 
-        ? latestBatchStandards 
-        : (hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER);
+      candidateCodes = hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER;
     } else {
       candidateCodes = selectedMatrix === 'SAPROLITE'
         ? ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']
@@ -892,8 +907,22 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     ).length;
   }, [availableStandardsData, latestBatchStandards, selectedMethod, selectedMatrix, selectedInstruments]);
 
-  // Standards rendered on the chart canvas (rendered directly)
-  const renderedStandards = visibleStandards;
+  // Standards rendered on the chart canvas:
+  // Disesuaikan dengan data set terakhir untuk tiap alatnya & hilangkan chart yang kosong
+  const renderedStandards = useMemo(() => {
+    if (showHistoricalStandards) return visibleStandards;
+
+    const listWithData = visibleStandards.filter(std => {
+      const stdCode = std.code;
+      const stdData = currentGridData[stdCode] || currentGridData[stdCode.replace('_', ' ')] || currentGridData[std.name] || {};
+      const hasPoints = selectedInstruments.some(instCode => (stdData[instCode]?.points?.length || 0) > 0);
+      const hasCount = (std.count || 0) > 0;
+      return hasPoints || hasCount;
+    });
+
+    if (loading && listWithData.length === 0) return visibleStandards;
+    return listWithData.length > 0 ? listWithData : visibleStandards;
+  }, [visibleStandards, currentGridData, selectedInstruments, showHistoricalStandards, loading]);
 
   // Calculate Grid Columns Class for responsive layout
   const getGridColsClass = () => {
@@ -917,10 +946,39 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
           
           <div className="flex flex-wrap items-center gap-3">
             {/* 1. UNIVERSE ENTITY BADGE (STRICTLY DRIVEN BY PORTAL UNIVERSE) */}
-            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-black shadow-xs">
-              <Building2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span>{selectedSite === 'GTS' ? 'UNIVERSE: PT. GANE TAMBANG SENTOSA (GTS)' : 'UNIVERSE: PT. TRIMEGAH BANGUN PERSADA (TBP / GPS)'}</span>
-            </div>
+            {isDevOrManager ? (
+              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSite('TBP')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    selectedSite === 'TBP'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  PT. TBP / GPS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSite('GTS')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    selectedSite === 'GTS'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  PT. GTS
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-black shadow-xs">
+                <Building2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>{selectedSite === 'GTS' ? 'UNIVERSE: PT. GANE TAMBANG SENTOSA (GTS)' : 'UNIVERSE: PT. TRIMEGAH BANGUN PERSADA (TBP / GPS)'}</span>
+              </div>
+            )}
 
             {/* 2. METHOD SELECTOR (EDXRF vs WDXRF) */}
             <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
@@ -1007,6 +1065,22 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
 
           {/* Action & Layout Controls */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Filter Periode Tahun / All-Time */}
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tahun:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-0.5 text-xs font-black text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+              >
+                <option value={currentYearStr}>{currentYearStr} (Tahun Berjalan)</option>
+                <option value={String(Number(currentYearStr) - 1)}>{Number(currentYearStr) - 1}</option>
+                <option value={String(Number(currentYearStr) - 2)}>{Number(currentYearStr) - 2}</option>
+                <option value="ALL">Semua Waktu (All-Time)</option>
+              </select>
+            </div>
+
             <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-0.5 bg-slate-100 dark:bg-slate-800 text-xs">
               <button
                 onClick={() => setViewMode('side-by-side')}

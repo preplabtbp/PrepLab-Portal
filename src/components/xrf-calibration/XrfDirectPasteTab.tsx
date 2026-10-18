@@ -93,24 +93,44 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
   isDevOrManager = false,
   onSuccessSave,
 }) => {
-  // Determine default instrument based on assignedSite
-  const defaultInst = useMemo(() => {
-    if (assignedSite === 'TBP') {
-      const found = instruments.find(i => i.code === 'EPSILON_G' || i.site === 'TBP');
-      return found ? found.code : 'EPSILON_G';
+  // Active site for instrument filtering (Default: assignedSite)
+  const [activeSite, setActiveSite] = useState<'GTS' | 'TBP'>(() => assignedSite);
+
+  useEffect(() => {
+    if (assignedSite) {
+      setActiveSite(assignedSite);
     }
-    const found = instruments.find(i => i.code === 'SUPERMINI' || i.code === 'EPSILON_D' || i.site === 'GTS');
-    return found ? found.code : 'EPSILON_D';
-  }, [assignedSite, instruments]);
+  }, [assignedSite]);
+
+  // Strictly filter instruments to the active site (prevent GTS instruments on TBP or vice-versa)
+  const siteInstruments = useMemo(() => {
+    return instruments.filter(inst => {
+      const isKnownGts = ['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(inst.code);
+      const isKnownTbp = ['EPSILON_C', 'EPSILON_E', 'EPSILON_F', 'EPSILON_G', 'EPSILON_H', 'S2_PUMA', 'ZETIUM_A', 'ZETIUM_B'].includes(inst.code);
+      const site = isKnownGts ? 'GTS' : (isKnownTbp ? 'TBP' : (inst.site || 'TBP'));
+      return site === activeSite;
+    });
+  }, [instruments, activeSite]);
+
+  // Determine default instrument based on activeSite
+  const defaultInst = useMemo(() => {
+    if (activeSite === 'TBP') {
+      const found = siteInstruments.find(i => i.code === 'EPSILON_G' || i.code === 'EPSILON_H' || i.code === 'EPSILON_C');
+      return found ? found.code : (siteInstruments[0]?.code || 'EPSILON_G');
+    }
+    const found = siteInstruments.find(i => i.code === 'SUPERMINI' || i.code === 'EPSILON_D' || i.code === 'EPSILON_A');
+    return found ? found.code : (siteInstruments[0]?.code || 'EPSILON_D');
+  }, [activeSite, siteInstruments]);
 
   // Configuration State
   const [selectedInstrument, setSelectedInstrument] = useState<string>(defaultInst);
 
   useEffect(() => {
-    if (defaultInst) {
+    const isCurrentValid = siteInstruments.some(i => i.code === selectedInstrument);
+    if (!isCurrentValid && siteInstruments.length > 0) {
       setSelectedInstrument(defaultInst);
     }
-  }, [defaultInst]);
+  }, [siteInstruments, defaultInst, selectedInstrument]);
 
   const [autoDetectInstrument, setAutoDetectInstrument] = useState<boolean>(true);
   const [matrixMode, setMatrixMode] = useState<'AUTO' | 'SUPERMINI' | 'SAPROLITE' | 'LIMONITE'>('AUTO');
@@ -762,9 +782,37 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* 1. Target Instrument */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-              Instrumen Target
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Instrumen Target ({activeSite})
+              </label>
+              {isDevOrManager && (
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSite('TBP')}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                      activeSite === 'TBP'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    TBP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSite('GTS')}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                      activeSite === 'GTS'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    GTS
+                  </button>
+                </div>
+              )}
+            </div>
             <select
               value={selectedInstrument}
               onChange={e => {
@@ -776,13 +824,11 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
               }}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 outline-none"
             >
-              {instruments
-                .filter(inst => isDevOrManager || !inst.site || inst.site === assignedSite)
-                .map(inst => (
-                  <option key={inst.code} value={inst.code}>
-                    {inst.name} ({inst.code})
-                  </option>
-                ))}
+              {siteInstruments.map(inst => (
+                <option key={inst.code} value={inst.code}>
+                  {inst.name} ({inst.code})
+                </option>
+              ))}
             </select>
             <label className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 cursor-pointer">
               <input

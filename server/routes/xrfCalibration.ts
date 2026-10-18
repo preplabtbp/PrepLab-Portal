@@ -1051,7 +1051,7 @@ xrfRouter.post("/verifications/bulk-reassign", async (req, res) => {
 xrfRouter.get("/available-standards", async (req, res) => {
   try {
     await ensureXrfTables();
-    const { instrumentCode } = req.query;
+    const { instrumentCode, startDate, endDate } = req.query;
 
     let conditions: any[] = [];
     if (instrumentCode && instrumentCode !== 'ALL') {
@@ -1059,6 +1059,13 @@ xrfRouter.get("/available-standards", async (req, res) => {
       if (instList.length > 0) {
         conditions.push(sql`${xrfVerifications.instrumentCode} IN (${sql.join(instList.map(c => sql`${c}`), sql`, `)})`);
       }
+    }
+
+    if (startDate) {
+      conditions.push(gte(xrfVerifications.verificationDate, String(startDate)));
+    }
+    if (endDate) {
+      conditions.push(lte(xrfVerifications.verificationDate, String(endDate)));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -1084,7 +1091,7 @@ xrfRouter.get("/available-standards", async (req, res) => {
 xrfRouter.get("/latest-batch-standards", async (req, res) => {
   try {
     await ensureXrfTables();
-    const { instrumentCode } = req.query;
+    const { instrumentCode, startDate, endDate } = req.query;
     if (!instrumentCode) {
       return res.status(400).json({ success: false, error: "instrumentCode diperlukan." });
     }
@@ -1094,28 +1101,48 @@ xrfRouter.get("/latest-batch-standards", async (req, res) => {
       return res.status(400).json({ success: false, error: "Daftar instrumentCode kosong." });
     }
 
-    // Ambil instrumen target (pertama)
-    const targetInst = instList[0];
-    const latestBatch = await db.select()
-      .from(xrfVerifications)
-      .where(eq(xrfVerifications.instrumentCode, targetInst))
-      .orderBy(desc(xrfVerifications.verificationDate), desc(xrfVerifications.id))
-      .limit(1);
+    // Ambil batch terbaru untuk masing-masing instrumen di instList
+    const latestBatches: any[] = [];
+    for (const inst of instList) {
+      const conditions = [eq(xrfVerifications.instrumentCode, inst)];
+      if (startDate) conditions.push(gte(xrfVerifications.verificationDate, String(startDate)));
+      if (endDate) conditions.push(lte(xrfVerifications.verificationDate, String(endDate)));
 
-    if (latestBatch.length === 0) {
+      let batches = await db.select()
+        .from(xrfVerifications)
+        .where(and(...conditions))
+        .orderBy(desc(xrfVerifications.verificationDate), desc(xrfVerifications.id))
+        .limit(1);
+
+      // Fallback ke batch terbaru keseluruhan jika di rentang tanggal belum ada
+      if (batches.length === 0 && (startDate || endDate)) {
+        batches = await db.select()
+          .from(xrfVerifications)
+          .where(eq(xrfVerifications.instrumentCode, inst))
+          .orderBy(desc(xrfVerifications.verificationDate), desc(xrfVerifications.id))
+          .limit(1);
+      }
+
+      if (batches.length > 0) {
+        latestBatches.push(batches[0]);
+      }
+    }
+
+    if (latestBatches.length === 0) {
       return res.json({
         success: true,
         hasData: false,
-        instrumentCode: targetInst,
+        instrumentCode: instList[0],
         standards: [],
         items: [],
       });
     }
 
-    const batch = latestBatch[0];
+    // Ambil item dari semua batch terbaru tersebut
+    const batchIds = latestBatches.map(b => b.id);
     const items = await db.select()
       .from(xrfVerificationItems)
-      .where(eq(xrfVerificationItems.verificationId, batch.id))
+      .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(batchIds.map(id => sql`${id}`), sql`, `)})`)
       .orderBy(asc(xrfVerificationItems.sequenceNo), asc(xrfVerificationItems.id));
 
     // Standar unik sesuai urutan kemunculan di batch
@@ -1126,17 +1153,19 @@ xrfRouter.get("/latest-batch-standards", async (req, res) => {
       }
     }
 
+    const primaryBatch = latestBatches[0];
+
     return res.json({
       success: true,
       hasData: true,
-      instrumentCode: targetInst,
+      instrumentCode: instList.join(','),
       batch: {
-        id: batch.id,
-        batchCode: batch.batchCode,
-        verificationDate: batch.verificationDate,
-        verificationTime: batch.verificationTime,
-        instrumentCode: batch.instrumentCode,
-        instrumentName: batch.instrumentName,
+        id: primaryBatch.id,
+        batchCode: primaryBatch.batchCode,
+        verificationDate: primaryBatch.verificationDate,
+        verificationTime: primaryBatch.verificationTime,
+        instrumentCode: primaryBatch.instrumentCode,
+        instrumentName: primaryBatch.instrumentName,
       },
       standards: standardsOrder,
       items: items.map(it => ({

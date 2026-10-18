@@ -109,19 +109,34 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
   // 1. Matrix Application State: LIMONITE, SAPROLITE, SUPERMINI, ZETIUM, or DYNAMIC
   const [selectedMatrix, setSelectedMatrix] = useState<'LIMONITE' | 'SAPROLITE' | 'SUPERMINI' | 'ZETIUM' | 'DYNAMIC'>('LIMONITE');
 
-  // Filter instruments based on user role and assigned site
+  // Active site for instrument filtering (Default: assignedSite)
+  const [activeSite, setActiveSite] = useState<'GTS' | 'TBP'>(() => assignedSite);
+
+  useEffect(() => {
+    if (assignedSite) setActiveSite(assignedSite);
+  }, [assignedSite]);
+
+  // Filter instruments strictly based on active site (prevent GTS instruments on TBP or vice-versa)
   const filteredInstruments = useMemo(() => {
-    if (isDevOrManager) return instruments;
     return instruments.filter(inst => {
-      const site = inst.site || (['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(inst.code) ? 'GTS' : 'TBP');
-      return site === assignedSite;
+      const isKnownGts = ['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(inst.code);
+      const isKnownTbp = ['EPSILON_C', 'EPSILON_E', 'EPSILON_F', 'EPSILON_G', 'EPSILON_H', 'S2_PUMA', 'ZETIUM_A', 'ZETIUM_B'].includes(inst.code);
+      const site = isKnownGts ? 'GTS' : (isKnownTbp ? 'TBP' : (inst.site || 'TBP'));
+      return site === activeSite;
     });
-  }, [instruments, isDevOrManager, assignedSite]);
+  }, [instruments, activeSite]);
 
   // Batch Header State
   const [selectedInstrument, setSelectedInstrument] = useState(
     filteredInstruments[0]?.code || (assignedSite === 'GTS' ? 'EPSILON_A' : 'EPSILON_C')
   );
+
+  useEffect(() => {
+    const isCurrentValid = filteredInstruments.some(i => i.code === selectedInstrument);
+    if (!isCurrentValid && filteredInstruments.length > 0) {
+      setSelectedInstrument(filteredInstruments[0].code);
+    }
+  }, [filteredInstruments, selectedInstrument]);
   const [verificationDate, setVerificationDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [verificationTime, setVerificationTime] = useState('00:30');
   const [shift, setShift] = useState('1');
