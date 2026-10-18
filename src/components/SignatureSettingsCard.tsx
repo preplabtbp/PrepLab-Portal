@@ -16,11 +16,14 @@ import {
   HelpCircle,
   X,
   FileCheck2,
-  Shield
+  Shield,
+  Upload,
+  Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, Button, Input } from './ui';
 import { getSafeSignatureDataUrl } from '../utils/signatureUtils';
+import { SignatureUploadOcr } from './SignatureUploadOcr';
 
 interface SignatureSettingsCardProps {
   inspectorNik: string | null;
@@ -41,6 +44,8 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // Form States - Setup / Edit TTD
+  const [setupMode, setSetupMode] = useState<'draw' | 'upload'>('draw');
+  const [uploadedSignatureData, setUploadedSignatureData] = useState<string | null>(null);
   const sigCanvasRef = useRef<SignatureCanvas | null>(null);
   const [setupPin, setSetupPin] = useState('');
   const [setupPinConfirm, setSetupPinConfirm] = useState('');
@@ -61,6 +66,8 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
   const [savingChangePin, setSavingChangePin] = useState(false);
 
   // Form States - Forgot PIN Recovery
+  const [recoveryMode, setRecoveryMode] = useState<'draw' | 'upload'>('draw');
+  const [recoveryUploadData, setRecoveryUploadData] = useState<string | null>(null);
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [recoveryNewPin, setRecoveryNewPin] = useState('');
   const [recoveryNewPinConfirm, setRecoveryNewPinConfirm] = useState('');
@@ -109,10 +116,18 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
 
   // Handle Save / Setup Signature
   const handleSaveSignature = async () => {
-    if (!sigCanvasRef.current) return;
-    const sigData = getSafeSignatureDataUrl(sigCanvasRef.current);
-    if (!sigData) {
-      return toast.error('Silakan gambar tanda tangan Anda di canvas terlebih dahulu');
+    let sigData: string | null = null;
+    if (setupMode === 'draw') {
+      if (!sigCanvasRef.current) return;
+      sigData = getSafeSignatureDataUrl(sigCanvasRef.current);
+      if (!sigData) {
+        return toast.error('Silakan goreskan tanda tangan Anda di canvas terlebih dahulu');
+      }
+    } else {
+      if (!uploadedSignatureData) {
+        return toast.error('Silakan pilih dan sesuaikan foto tanda tangan Anda terlebih dahulu');
+      }
+      sigData = uploadedSignatureData;
     }
 
     if (!setupPin || !/^\d{6}$/.test(setupPin)) {
@@ -195,10 +210,16 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
     }
 
     let newSigData: string | undefined = undefined;
-    if (recoveryRedraw && recoveryCanvasRef.current) {
-      newSigData = getSafeSignatureDataUrl(recoveryCanvasRef.current);
+    if (recoveryRedraw) {
+      if (recoveryMode === 'draw') {
+        if (recoveryCanvasRef.current) {
+          newSigData = getSafeSignatureDataUrl(recoveryCanvasRef.current);
+        }
+      } else {
+        newSigData = recoveryUploadData || undefined;
+      }
       if (!newSigData) {
-        return toast.error('Silakan gambar tanda tangan baru Anda pada canvas');
+        return toast.error('Silakan buat atau upload tanda tangan baru Anda');
       }
     }
 
@@ -397,7 +418,7 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
       {/* ========================================================================= */}
       {setupModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+          <div className="w-full max-w-xl bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-[var(--border-main)] flex items-center justify-between shrink-0 bg-[var(--input-bg)]/50">
               <div className="flex items-center gap-2.5">
@@ -424,34 +445,72 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
 
             {/* Body */}
             <div className="p-5 overflow-y-auto space-y-4 flex-1">
-              {/* Canvas Area */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
-                    Goreskan Tanda Tangan Anda di Bawah
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => sigCanvasRef.current?.clear()}
-                    className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--input-bg)] hover:bg-slate-200 dark:hover:bg-slate-700 text-[var(--text-muted)] hover:text-[var(--text-main)] font-semibold transition-colors flex items-center gap-1 shadow-2xs border border-[var(--border-main)]"
-                  >
-                    <RotateCcw className="w-3 h-3" /> Bersihkan
-                  </button>
-                </div>
+              {/* Tab Switcher: Gores di Layar vs Upload Foto */}
+              <div className="grid grid-cols-2 p-1 bg-[var(--input-bg)] rounded-xl border border-[var(--border-main)] gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSetupMode('draw')}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    setupMode === 'draw'
+                      ? 'bg-[var(--card-bg)] text-teal-600 dark:text-teal-400 shadow-2xs border border-[var(--border-main)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                  }`}
+                >
+                  <PenTool className="w-3.5 h-3.5" /> Gores di Layar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSetupMode('upload')}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    setupMode === 'upload'
+                      ? 'bg-[var(--card-bg)] text-teal-600 dark:text-teal-400 shadow-2xs border border-[var(--border-main)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5" /> Upload Foto TTD
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 font-extrabold uppercase">
+                    OCR
+                  </span>
+                </button>
+              </div>
 
-                <div className="border-2 border-dashed border-[var(--border-main)] rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-inner relative">
-                  <SignatureCanvas
-                    ref={sigCanvasRef}
-                    penColor="#000000"
-                    canvasProps={{
-                      className: 'w-full h-44 cursor-crosshair'
-                    }}
-                  />
-                  <div className="absolute bottom-2 left-3 pointer-events-none text-[10px] text-slate-400 select-none">
-                    Tanda tangan resmi • Prep &amp; Lab Portal
+              {setupMode === 'draw' ? (
+                /* Canvas Area */
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
+                      Goreskan Tanda Tangan Anda di Bawah
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => sigCanvasRef.current?.clear()}
+                      className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--input-bg)] hover:bg-slate-200 dark:hover:bg-slate-700 text-[var(--text-muted)] hover:text-[var(--text-main)] font-semibold transition-colors flex items-center gap-1 shadow-2xs border border-[var(--border-main)]"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Bersihkan
+                    </button>
+                  </div>
+
+                  <div className="border-2 border-dashed border-[var(--border-main)] rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-inner relative">
+                    <SignatureCanvas
+                      ref={sigCanvasRef}
+                      penColor="#000000"
+                      canvasProps={{
+                        className: 'w-full h-44 cursor-crosshair'
+                      }}
+                    />
+                    <div className="absolute bottom-2 left-3 pointer-events-none text-[10px] text-slate-400 select-none">
+                      Tanda tangan resmi • Prep &amp; Lab Portal
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* Upload & OCR Area */
+                <SignatureUploadOcr
+                  inspectorName={inspectorName}
+                  inspectorNik={inspectorNik}
+                  onProcessedSignatureChange={(url) => setUploadedSignatureData(url)}
+                />
+              )}
 
               {/* Input PIN Lama (Jika ganti) */}
               {hasPin && (
@@ -754,25 +813,60 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
                 </label>
 
                 {recoveryRedraw && (
-                  <div className="space-y-1.5 animate-in fade-in duration-200">
-                    <div className="flex justify-end">
+                  <div className="space-y-2.5 animate-in fade-in duration-200">
+                    <div className="grid grid-cols-2 p-1 bg-[var(--input-bg)] rounded-xl border border-[var(--border-main)] gap-1">
                       <button
                         type="button"
-                        onClick={() => recoveryCanvasRef.current?.clear()}
-                        className="text-[10px] text-slate-500 hover:text-slate-700 font-semibold"
+                        onClick={() => setRecoveryMode('draw')}
+                        className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          recoveryMode === 'draw'
+                            ? 'bg-[var(--card-bg)] text-teal-600 dark:text-teal-400 shadow-2xs border border-[var(--border-main)]'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                        }`}
                       >
-                        Bersihkan
+                        <PenTool className="w-3 h-3" /> Gores di Layar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRecoveryMode('upload')}
+                        className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          recoveryMode === 'upload'
+                            ? 'bg-[var(--card-bg)] text-teal-600 dark:text-teal-400 shadow-2xs border border-[var(--border-main)]'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                        }`}
+                      >
+                        <Upload className="w-3 h-3" /> Upload Foto (OCR)
                       </button>
                     </div>
-                    <div className="border border-[var(--border-main)] rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-                      <SignatureCanvas
-                        ref={recoveryCanvasRef}
-                        penColor="#000000"
-                        canvasProps={{
-                          className: 'w-full h-32 cursor-crosshair'
-                        }}
+
+                    {recoveryMode === 'draw' ? (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => recoveryCanvasRef.current?.clear()}
+                            className="text-[10px] text-slate-500 hover:text-slate-700 font-semibold"
+                          >
+                            Bersihkan
+                          </button>
+                        </div>
+                        <div className="border border-[var(--border-main)] rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                          <SignatureCanvas
+                            ref={recoveryCanvasRef}
+                            penColor="#000000"
+                            canvasProps={{
+                              className: 'w-full h-32 cursor-crosshair'
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <SignatureUploadOcr
+                        inspectorName={inspectorName}
+                        inspectorNik={inspectorNik}
+                        onProcessedSignatureChange={(url) => setRecoveryUploadData(url)}
                       />
-                    </div>
+                    )}
                   </div>
                 )}
               </div>

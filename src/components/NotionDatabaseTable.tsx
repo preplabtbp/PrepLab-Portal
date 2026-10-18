@@ -118,6 +118,7 @@ export interface CommentAttachmentItem {
   id?: string;
   name: string;
   url: string;
+  previewUrl?: string;
   directUrl?: string;
   driveViewUrl?: string;
   driveDownloadUrl?: string;
@@ -383,7 +384,7 @@ export const NotionAttachmentGrid = ({
   onPreview
 }: {
   attachments: CommentAttachmentItem[];
-  onPreview: (att: CommentAttachmentItem) => void;
+  onPreview: (att: CommentAttachmentItem, contextImages?: CommentAttachmentItem[]) => void;
 }) => {
   if (!attachments || attachments.length === 0) return null;
 
@@ -403,14 +404,14 @@ export const NotionAttachmentGrid = ({
             <NotionAttachmentThumbnail
               key={att.id || idx}
               attachment={att}
-              onPreview={onPreview}
+              onPreview={(target) => onPreview(target, images)}
             />
           ))}
           {overflowImage && (
             <NotionAttachmentThumbnail
               key={overflowImage.id || 'overflow'}
               attachment={overflowImage}
-              onPreview={onPreview}
+              onPreview={(target) => onPreview(target, images)}
               overlayBadge={`+${overflowCount}`}
             />
           )}
@@ -1388,22 +1389,81 @@ export function NotionDatabaseTable({
     return [];
   });
 
+  // Helpers untuk mendapatkan judul dan keterangan baris sebelum deklarasi getRowVal
+  const getRawRowTitle = useCallback((r: TableRowData): string => {
+    if (!r) return '';
+    return (
+      r['Activity Name'] || 
+      r['Jenis kegiatan'] || 
+      r['Jenis Kegiatan'] || 
+      r['Name'] || 
+      r['= Name'] || 
+      r['Judul'] || 
+      r['Title'] || 
+      r['Nama kegiatan'] || 
+      r['Task'] || 
+      ''
+    ).trim();
+  }, []);
+
+  const getRawRowDesc = useCallback((r: TableRowData): string => {
+    if (!r) return '';
+    return (
+      r['Description'] || 
+      r['Keterangan'] || 
+      r['Deskripsi'] || 
+      r['Catatan'] || 
+      r['Rincian'] || 
+      ''
+    ).trim();
+  }, []);
+
   // Helper untuk mengecek apakah baris di-pin
   const isRowPinned = useCallback((row: TableRowData): boolean => {
     if (!row) return false;
-    if (String(row.isPinned) === 'true' || (row as any).isPinned === true || String((row as any)._pinned) === 'true' || (row as any)._pinned === true) return true;
-    const ket = typeof row['Keterangan'] === 'string' ? row['Keterangan'] : String(row['Keterangan'] || '');
-    if (ket.includes('<!--pin') || ket.includes('<!pin') || ket.includes('<!--pinned')) return true;
-    const jk = typeof row['Jenis kegiatan'] === 'string' ? row['Jenis kegiatan'] : String(row['Jenis kegiatan'] || '');
-    if (jk.includes('<!--pin') || jk.includes('<!pin') || jk.includes('<!--pinned')) return true;
+
+    // 1. Explicit unpinned takes absolute priority!
+    if (
+      row.isPinned === 'false' || 
+      (row as any).isPinned === false || 
+      (row as any)._pinned === 'false' || 
+      (row as any)._pinned === false
+    ) {
+      return false;
+    }
+
+    // 2. Explicit pinned status
+    if (
+      row.isPinned === 'true' || 
+      (row as any).isPinned === true || 
+      (row as any)._pinned === 'true' || 
+      (row as any)._pinned === true
+    ) {
+      return true;
+    }
+
+    // 3. Persistent key in pinnedRowKeys
     const rowId = row.id ? String(row.id) : '';
     if (rowId && pinnedRowKeys.includes(rowId)) return true;
-    const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+
+    const rawTitle = getRawRowTitle(row);
+    const cleanTitle = getDisplayTitle(rawTitle);
+    const strippedTitle = stripColorTags(cleanTitle);
     if (cleanTitle && pinnedRowKeys.includes(cleanTitle)) return true;
+    if (strippedTitle && pinnedRowKeys.includes(strippedTitle)) return true;
+
     const taskCode = row.taskCode || row['Task ID'] || row['ID Task'];
     if (taskCode && pinnedRowKeys.includes(String(taskCode))) return true;
+
+    // 4. HTML comment tags in cells (Keterangan, Description, Jenis kegiatan, Activity Name)
+    const ket = getRawRowDesc(row);
+    if (ket.includes('<!--pin') || ket.includes('<!pin') || ket.includes('<!--pinned')) return true;
+
+    const jk = getRawRowTitle(row);
+    if (jk.includes('<!--pin') || jk.includes('<!pin') || jk.includes('<!--pinned')) return true;
+
     return false;
-  }, [pinnedRowKeys]);
+  }, [pinnedRowKeys, getRawRowTitle, getRawRowDesc]);
 
   // Sinkronisasi baris dengan penanda <!--pin--> ke pinnedRowKeys saat rows prop dimuat
   useEffect(() => {
@@ -1413,10 +1473,27 @@ export function NotionDatabaseTable({
       let changed = false;
       rows.forEach(r => {
         if (!isSubItemRow(r)) {
-          const ket = r['Keterangan'] || '';
-          const jk = r['Jenis kegiatan'] || '';
-          const isPinTag = ket.includes('<!--pin') || ket.includes('<!pin') || ket.includes('<!--pinned') || jk.includes('<!--pin') || jk.includes('<!pin') || r.isPinned === 'true';
-          const cleanTitle = jk.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+          // If explicitly unpinned, do not restore!
+          if (
+            r.isPinned === 'false' || 
+            (r as any).isPinned === false || 
+            (r as any)._pinned === 'false' || 
+            (r as any)._pinned === false
+          ) {
+            return;
+          }
+          const ket = getRawRowDesc(r);
+          const jk = getRawRowTitle(r);
+          const isPinTag = 
+            r.isPinned === 'true' || 
+            (r as any).isPinned === true || 
+            ket.includes('<!--pin') || 
+            ket.includes('<!pin') || 
+            ket.includes('<!--pinned') || 
+            jk.includes('<!--pin') || 
+            jk.includes('<!pin');
+
+          const cleanTitle = stripColorTags(getDisplayTitle(jk));
           const key = r.id ? String(r.id) : cleanTitle;
           if (isPinTag && key && !nextKeys.includes(key)) {
             nextKeys.push(key);
@@ -1432,7 +1509,7 @@ export function NotionDatabaseTable({
       }
       return prevKeys;
     });
-  }, [rows, tablePinStorageKey]);
+  }, [rows, tablePinStorageKey, getRawRowTitle, getRawRowDesc]);
 
   // Handler toggle pin / unpin baris task
   const handleTogglePinRow = async (targetRowOrIndex: TableRowData | number) => {
@@ -1476,20 +1553,26 @@ export function NotionDatabaseTable({
 
     const newPinnedState = !currentlyPinned;
     const rowId = targetRow.id ? String(targetRow.id) : '';
-    const jkRaw = targetRow['Jenis kegiatan'] || targetRow['Name'] || targetRow['Judul'] || '';
-    const cleanTitle = jkRaw.replace(/^↳\s*/, '').replace(/<!--[^>]+-->/g, '').trim();
+    const rawTitle = getRawRowTitle(targetRow);
+    const cleanTitle = getDisplayTitle(rawTitle);
+    const strippedTitle = stripColorTags(cleanTitle);
     const taskCode = targetRow.taskCode || targetRow['Task ID'] || targetRow['ID Task'] || '';
 
     // Bersihkan semua kemungkinan key untuk task ini agar tidak ada duplikasi atau residual
     const keysToRemove = new Set<string>();
     if (rowId) keysToRemove.add(rowId);
+    if (rawTitle) keysToRemove.add(rawTitle);
     if (cleanTitle) keysToRemove.add(cleanTitle);
+    if (strippedTitle) keysToRemove.add(strippedTitle);
     if (taskCode) keysToRemove.add(String(taskCode));
 
-    let nextPinnedKeys = pinnedRowKeys.filter(k => !keysToRemove.has(k));
+    let nextPinnedKeys = pinnedRowKeys.filter(k => {
+      const kClean = stripColorTags(getDisplayTitle(k));
+      return !keysToRemove.has(k) && !keysToRemove.has(kClean);
+    });
 
     if (newPinnedState) {
-      const keyToAdd = rowId || cleanTitle || (taskCode ? String(taskCode) : '');
+      const keyToAdd = rowId || strippedTitle || cleanTitle || (taskCode ? String(taskCode) : '');
       if (keyToAdd && !nextPinnedKeys.includes(keyToAdd)) {
         nextPinnedKeys.push(keyToAdd);
       }
@@ -1506,20 +1589,28 @@ export function NotionDatabaseTable({
     updatedRow.isPinned = newPinnedState ? 'true' : 'false';
     (updatedRow as any)._pinned = newPinnedState ? 'true' : 'false';
 
-    // Simpan atau hapus penanda <!--pin--> di kolom Keterangan dan Jenis kegiatan
-    let ket = updatedRow['Keterangan'] || '';
-    let jk = updatedRow['Jenis kegiatan'] || '';
-
     if (newPinnedState) {
-      if (!ket.includes('<!--pin-->')) {
-        ket = `${ket} <!--pin-->`.trim();
+      // Find the description or remarks column to append <!--pin-->
+      const descKey = Object.keys(updatedRow).find(k => {
+        const kl = k.toLowerCase().trim();
+        return kl === 'keterangan' || kl === 'description' || kl === 'deskripsi' || kl === 'catatan';
+      }) || 'Keterangan';
+      let curDesc = updatedRow[descKey] || '';
+      if (!curDesc.includes('<!--pin-->')) {
+        updatedRow[descKey] = `${curDesc} <!--pin-->`.trim();
       }
     } else {
-      ket = ket.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
-      jk = jk.replace(/<!--pin-->/g, '').replace(/<!--pinned-->/g, '').trim();
+      // Clean ALL pin comments from ALL properties of this row
+      for (const k of Object.keys(updatedRow)) {
+        if (typeof updatedRow[k] === 'string') {
+          updatedRow[k] = updatedRow[k]
+            .replace(/<!--\s*pin.*?-->/gi, '')
+            .replace(/<!-?\s*pinned.*?-->/gi, '')
+            .replace(/<!pin.*?>/gi, '')
+            .trim();
+        }
+      }
     }
-    updatedRow['Keterangan'] = ket;
-    updatedRow['Jenis kegiatan'] = jk;
 
     nextRows[rowIndex] = updatedRow;
     setLocalRows(nextRows);
@@ -2983,13 +3074,34 @@ export function NotionDatabaseTable({
   }, [galleryItems]);
 
   // Handler seragam untuk preview attachment (gambar via ImageModal dengan gallery list, dokumen via tab baru)
-  const handlePreviewAttachment = (att: CommentAttachmentItem) => {
+  const handlePreviewAttachment = (
+    att: CommentAttachmentItem,
+    contextImages?: Array<{ name?: string; url?: string; previewUrl?: string; isImage?: boolean; directUrl?: string; driveViewUrl?: string; driveDownloadUrl?: string; caption?: string }>
+  ) => {
     if (att.isImage) {
-      const targetUrl = att.directUrl || att.url;
+      const targetUrl = att.previewUrl || att.directUrl || att.url;
       const targetDriveId = att.id || extractDriveId(targetUrl);
 
-      const foundIdx = imageGalleryList.findIndex((img) => {
+      // Gunakan contextImages jika disediakan (misal dari foto-foto yang sedang ter-paste di selectedFiles atau grup attachment)
+      const activeGallery = (contextImages && contextImages.length > 0)
+        ? contextImages
+            .filter((f) => f.isImage !== false)
+            .map((f) => {
+              const u = f.previewUrl || f.directUrl || f.url || '';
+              const dId = extractDriveId(u);
+              return {
+                url: u,
+                title: f.caption ? `${f.name || 'Foto'} — "${f.caption}"` : (f.name || 'Foto'),
+                driveViewUrl: f.driveViewUrl || (dId ? `https://drive.google.com/file/d/${dId}/view?usp=sharing` : undefined),
+                driveDownloadUrl: f.driveDownloadUrl || (dId ? `https://drive.google.com/uc?id=${dId}&export=download` : undefined)
+              };
+            })
+        : imageGalleryList;
+
+      const foundIdx = activeGallery.findIndex((img) => {
         if (img.url === targetUrl) return true;
+        if (att.url && img.url === att.url) return true;
+        if (att.previewUrl && img.url === att.previewUrl) return true;
         if (targetDriveId && (img.url.includes(targetDriveId) || (img.driveViewUrl && img.driveViewUrl.includes(targetDriveId)))) return true;
         if (att.driveViewUrl && img.driveViewUrl === att.driveViewUrl) return true;
         return false;
@@ -3004,8 +3116,8 @@ export function NotionDatabaseTable({
       };
 
       setPreviewImage({
-        ...(foundIdx >= 0 ? imageGalleryList[foundIdx] : fallbackItem),
-        images: imageGalleryList.length > 0 ? imageGalleryList : [fallbackItem],
+        ...(foundIdx >= 0 ? activeGallery[foundIdx] : fallbackItem),
+        images: activeGallery.length > 0 ? activeGallery : [fallbackItem],
         currentIndex: currentIndex
       });
     } else if (att.driveViewUrl) {
@@ -4878,11 +4990,12 @@ export function NotionDatabaseTable({
     try {
       isSubmittingCommentRef.current = true;
       setSubmittingComment(true);
-      const allFilesPayload = selectedFiles.length > 0
-        ? selectedFiles.map((f, idx) => ({
+      const filesToSave = selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : []);
+      const allFilesPayload = filesToSave.length > 0
+        ? filesToSave.map((f) => ({
             url: f.url,
             name: f.name,
-            caption: idx === 0 ? commentFileCaption.trim() : (f.caption || ''),
+            caption: (f as any).caption || '',
             directUrl: f.url,
             isImage: f.isImage !== false
           }))
@@ -5105,6 +5218,7 @@ export function NotionDatabaseTable({
 
     if (imageFiles.length > 0) {
       e.preventDefault();
+      e.stopPropagation();
       await processAndUploadCommentFiles(imageFiles);
 
       // Auto-focus textarea agar user bisa langsung mengetik pesan atau menekan Enter
@@ -5114,6 +5228,25 @@ export function NotionDatabaseTable({
       }, 50);
     }
   };
+
+  // Listen to global portal:image_pasted when task detail modal is open
+  useEffect(() => {
+    if (!selectedRow) return;
+
+    const handlePortalImagePasted = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ file: File; base64: string }>;
+      if (customEvent.detail?.file) {
+        customEvent.preventDefault();
+        customEvent.stopPropagation();
+        await processAndUploadCommentFiles([customEvent.detail.file]);
+      }
+    };
+
+    window.addEventListener('portal:image_pasted', handlePortalImagePasted);
+    return () => {
+      window.removeEventListener('portal:image_pasted', handlePortalImagePasted);
+    };
+  }, [selectedRow]);
 
   // Edit comment
   const handleSaveEditComment = async (commentId: number) => {
@@ -11129,7 +11262,7 @@ export function NotionDatabaseTable({
                                     className="p-0.5 hover:bg-rose-500/10 text-[#787774] hover:text-rose-500 rounded cursor-pointer"
                                     title="Hapus file ini"
                                   >
-                                    <X className="w-3 h-3" />
+                                    <X className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               ))}

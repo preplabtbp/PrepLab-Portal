@@ -269,6 +269,7 @@ export function BulletinTopicDetail({
 
     if (imageFiles.length > 0) {
       e.preventDefault();
+      e.stopPropagation();
       await processAndUploadBulletinFiles(imageFiles);
 
       // Auto-focus textarea agar user bisa langsung mengetik pesan atau menekan Enter
@@ -288,10 +289,10 @@ export function BulletinTopicDetail({
     );
     if (!finalContent && !hasFiles) return;
     try {
-      const fileUrlPayload = hasFiles ? JSON.stringify(selectedFiles.map((f, idx) => ({
+      const fileUrlPayload = hasFiles ? JSON.stringify(selectedFiles.map((f) => ({
         url: f.url,
         name: f.name,
-        caption: idx === 0 ? fileCaption.trim() : '',
+        caption: '',
         directUrl: f.url,
         isImage: f.isImage !== false
       }))) : null;
