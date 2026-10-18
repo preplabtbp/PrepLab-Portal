@@ -295,27 +295,30 @@ export const NotionAttachmentThumbnail = ({
 
   const driveId = attachment.id || extractDriveId(attachment.directUrl || attachment.url);
 
+  // Notion-style Document / File Attachment Block (Image 2 style)
   if (!attachment.isImage || imgFailed) {
     return (
       <div className="flex flex-col items-start gap-1">
         <div
           onClick={() => onPreview(attachment)}
-          className="flex items-center gap-1.5 p-1.5 px-2.5 rounded-lg border hover:border-teal-500/60 transition-all cursor-pointer group shadow-xs max-w-xs text-xs"
-          style={{
-            backgroundColor: 'var(--input-bg, #1a1a1a)',
-            borderColor: 'var(--border-main, #334155)'
-          }}
+          className="flex items-center gap-2.5 p-2 px-3 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] bg-white dark:bg-[#202020] hover:bg-[#F7F7F5] dark:hover:bg-[#252525] transition-colors cursor-pointer group shadow-xs max-w-sm text-xs"
           title={`Buka / Unduh: ${attachment.name}`}
         >
-          <div className="w-5 h-5 rounded bg-teal-950/80 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0">
-            <FileText className="w-3 h-3" />
+          <div className="w-7 h-7 rounded bg-[#F1F1EF] dark:bg-[#2F2F2F] flex items-center justify-center text-[#5A5A55] dark:text-[#9B9A97] shrink-0">
+            <FileSpreadsheet className="w-3.5 h-3.5" />
           </div>
-          <span className="text-[11px] font-semibold text-teal-300 truncate max-w-[150px] group-hover:underline">
-            {attachment.name}
-          </span>
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-semibold text-[#37352F] dark:text-[#E6E6E5] truncate block group-hover:underline">
+              {attachment.name}
+            </span>
+            <span className="text-[10px] text-[#787774] dark:text-[#9B9A97] block">
+              {attachment.size ? `${Math.round(attachment.size / 1024)} KB` : 'Document'}
+            </span>
+          </div>
+          <MoreHorizontal className="w-3.5 h-3.5 text-[#787774] dark:text-[#9B9A97] shrink-0 opacity-70 group-hover:opacity-100" />
         </div>
         {attachment.caption && (
-          <span className="text-[10px] text-teal-300/80 italic font-normal line-clamp-2 max-w-[200px] pl-1">
+          <span className="text-[11px] text-[#787774] dark:text-[#9B9A97] italic line-clamp-2 max-w-[240px] pl-1">
             "{attachment.caption}"
           </span>
         )}
@@ -325,52 +328,49 @@ export const NotionAttachmentThumbnail = ({
 
   const primarySrc = attachment.directUrl || attachment.url;
 
+  // Notion-style Image Thumbnail
   return (
     <div className="flex flex-col items-start gap-1">
       <div
         onClick={() => onPreview(attachment)}
-        className="relative rounded-lg overflow-hidden border hover:border-teal-500/80 w-16 h-16 sm:w-20 sm:h-20 block group cursor-pointer shadow-xs transition-all hover:scale-[1.03] shrink-0"
-        style={{
-          backgroundColor: 'var(--input-bg, #161616)',
-          borderColor: 'var(--border-main, #334155)'
-        }}
+        className="relative rounded-lg overflow-hidden border border-[#EDEDEC] dark:border-[#2F2F2F] hover:border-[#B4B4B0] dark:hover:border-[#5A5A55] w-20 h-20 sm:w-24 sm:h-24 block group cursor-pointer shadow-xs transition-all hover:scale-[1.02] shrink-0 bg-[#F1F1EF] dark:bg-[#202020]"
         title={`Klik untuk memperbesar: ${attachment.name}${attachment.caption ? ` - ${attachment.caption}` : ''}`}
       >
         <img
           src={primarySrc}
-        alt={attachment.name}
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-        onError={(e) => {
-          const target = e.target as HTMLImageElement;
-          if (driveId) {
-            if (fallbackStage === 0) {
-              setFallbackStage(1);
-              target.src = `https://lh3.googleusercontent.com/d/${driveId}`;
-            } else if (fallbackStage === 1) {
-              setFallbackStage(2);
-              target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w600`;
+          alt={attachment.name}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            if (driveId) {
+              if (fallbackStage === 0) {
+                setFallbackStage(1);
+                target.src = `https://lh3.googleusercontent.com/d/${driveId}`;
+              } else if (fallbackStage === 1) {
+                setFallbackStage(2);
+                target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w600`;
+              } else {
+                setImgFailed(true);
+              }
             } else {
               setImgFailed(true);
             }
-          } else {
-            setImgFailed(true);
-          }
-        }}
-      />
-      {overlayBadge ? (
-        <div className="absolute inset-0 bg-black/65 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-xs sm:text-sm tracking-wide">
-          {overlayBadge}
-        </div>
-      ) : (
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow" />
-        </div>
-      )}
+          }}
+        />
+        {overlayBadge ? (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-xs sm:text-sm tracking-wide">
+            {overlayBadge}
+          </div>
+        ) : (
+          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow" />
+          </div>
+        )}
       </div>
       {attachment.caption && (
-        <span className="text-[10px] text-teal-300/90 italic font-medium line-clamp-2 max-w-[160px] leading-tight" title={attachment.caption}>
+        <span className="text-[11px] text-[#787774] dark:text-[#9B9A97] italic line-clamp-2 max-w-[180px] leading-tight" title={attachment.caption}>
           "{attachment.caption}"
         </span>
       )}
@@ -396,9 +396,9 @@ export const NotionAttachmentGrid = ({
   const overflowCount = images.length - maxVisibleImages;
 
   return (
-    <div className="space-y-1.5 pt-1">
+    <div className="space-y-2 pt-1.5">
       {images.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           {visibleImages.map((att, idx) => (
             <NotionAttachmentThumbnail
               key={att.id || idx}
@@ -418,7 +418,7 @@ export const NotionAttachmentGrid = ({
       )}
 
       {docs.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-0.5">
           {docs.map((att, idx) => (
             <NotionAttachmentThumbnail
               key={att.id || `doc-${idx}`}
@@ -1576,6 +1576,8 @@ export function NotionDatabaseTable({
     currentIndex?: number;
   } | null>(null);
   const [showAllReplies, setShowAllReplies] = useState(false);
+  const [showModalKeterangan, setShowModalKeterangan] = useState(false);
+  const [showModalMedia, setShowModalMedia] = useState(false);
 
   // Pending file upload with caption for Gallery
   const [pendingUploadFile, setPendingUploadFile] = useState<{
@@ -1596,6 +1598,8 @@ export function NotionDatabaseTable({
   useEffect(() => {
     setShowAllReplies(false);
     setReplyingTo(null);
+    setShowModalKeterangan(false);
+    setShowModalMedia(false);
   }, [selectedRow]);
 
   const handleStartReply = (c: any) => {
@@ -10319,74 +10323,35 @@ export function NotionDatabaseTable({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25, ease: "easeInOut" }}
-              className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/50 backdrop-blur-xs"
               onClick={() => handleCloseDetailModal()}
             />
 
-            {/* Right-to-Left Slide-over Panel (Wide 2-Column Layout) */}
+            {/* Right-to-Left Slide-over Panel (Clean Notion Page Document Layout) */}
             <div className="fixed inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10 pointer-events-none">
               <motion.div 
                 initial={{ x: "100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
-                transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
-                className="w-screen max-w-5xl lg:max-w-6xl xl:max-w-7xl border-l shadow-[-20px_0_50px_rgba(0,0,0,0.5)] flex flex-col h-full overflow-hidden pointer-events-auto"
-                style={{
-                  backgroundColor: 'var(--card-bg, #1a1a1a)',
-                  borderColor: 'var(--border-main, #334155)',
-                  color: 'var(--text-main, #cbd5e1)'
-                }}
+                transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+                className="w-screen max-w-3xl lg:max-w-4xl xl:max-w-5xl border-l border-[#EDEDEC] dark:border-[#2F2F2F] bg-white dark:bg-[#191919] text-[#37352F] dark:text-[#E6E6E5] shadow-2xl flex flex-col h-full overflow-hidden pointer-events-auto"
                 onClick={(e) => e.stopPropagation()}
                 onPaste={handleCommentPaste}
               >
-                {/* Drawer Sticky Header */}
+                {/* Minimalist Notion Sticky Topbar */}
                 <div 
-                  className="p-4 sm:p-5 border-b flex items-center justify-between shrink-0"
-                  style={{
-                    backgroundColor: 'var(--input-bg, #222222)',
-                    borderColor: 'var(--border-main, #334155)'
-                  }}
+                  className="px-4 sm:px-6 py-2.5 border-b border-[#EDEDEC] dark:border-[#2F2F2F] bg-white/95 dark:bg-[#191919]/95 backdrop-blur-sm flex items-center justify-between shrink-0 z-10"
                 >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <span className="text-xs sm:text-sm font-mono px-3 py-1 rounded-xl bg-teal-950/90 text-teal-300 border border-teal-600/50 font-bold shrink-0 shadow-sm">
+                  <div className="flex items-center gap-2 overflow-hidden text-xs text-[#787774] dark:text-[#9B9A97]">
+                    <span className="font-mono px-2 py-0.5 rounded bg-[#F1F1EF] dark:bg-[#2F2F2F] text-[#5A5A55] dark:text-[#9B9A97] font-semibold shrink-0">
                       #{getRowVal(selectedRow, 'number') || '1'}
                     </span>
-                    <div className="truncate">
-                      <div className="flex items-center gap-2">
-                        <h3 
-                          className={`font-black text-base sm:text-xl truncate ${
-                            selectedRow && isRowPinned(selectedRow) ? 'text-blue-600 dark:text-blue-400' : ''
-                          }`} 
-                          style={{ 
-                            color: selectedRow && isRowPinned(selectedRow)
-                              ? (isNotionLight ? '#2563eb' : '#60a5fa')
-                              : 'var(--text-main, #f1f5f9)' 
-                          }}
-                          dangerouslySetInnerHTML={{
-                            __html: selectedRow && isRowPinned(selectedRow)
-                              ? (formatTitleToVisualHtml(stripColorTags(getDisplayTitle(baseTopicTitle))) || 'Detail Kegiatan')
-                              : (formatTitleToVisualHtml(getDisplayTitle(baseTopicTitle)) || 'Detail Kegiatan')
-                          }}
-                        />
-                        {activeSubPeriod && (
-                          <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-teal-500/20 text-teal-300 border border-teal-500/50 font-bold shrink-0">
-                            {activeSubPeriod}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                          Aktivitas: {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
-                        </span>
-                        <span style={{ color: 'var(--text-muted, #64748b)' }}>•</span>
-                        <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                          Periode: {getRowVal(selectedRow, 'period') || 'Periodik'}
-                        </span>
-                      </div>
-                    </div>
+                    <span className="truncate">
+                      {section || 'Kegiatan'}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {/* Move Topic to Section Periodical Page Button */}
                     {sectionPeriodicalPages.length > 0 && (
                       <div className="relative">
@@ -10394,12 +10359,12 @@ export function NotionDatabaseTable({
                           type="button"
                           onClick={() => setShowMovePopover(!showMovePopover)}
                           disabled={isMovingTopic}
-                          className="p-2 px-3 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm disabled:opacity-50"
-                          title="Pindahkan kegiatan ini ke halaman periodik seksi lain (Weekly, Daily, Monthly, dll)"
+                          className="px-2.5 py-1 rounded-md text-xs font-medium text-[#37352F] dark:text-[#E6E6E5] hover:bg-[#F1F1EF] dark:hover:bg-[#252525] border border-[#EDEDEC] dark:border-[#2F2F2F] flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                          title="Pindahkan kegiatan ini ke halaman periodik seksi lain"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Pindah Halaman</span>
-                          <ChevronDown className="w-3 h-3 opacity-70" />
+                          <ExternalLink className="w-3.5 h-3.5 text-[#787774]" />
+                          <span className="hidden sm:inline">Pindah Halaman</span>
+                          <ChevronDown className="w-3 h-3 opacity-60" />
                         </button>
 
                         {showMovePopover && (
@@ -10409,17 +10374,13 @@ export function NotionDatabaseTable({
                               onClick={() => setShowMovePopover(false)} 
                             />
                             <div 
-                              className="absolute right-0 top-full mt-1.5 z-40 w-64 border rounded-2xl shadow-2xl overflow-hidden p-1.5 animate-in fade-in zoom-in-95 duration-100"
-                              style={{
-                                backgroundColor: 'var(--card-bg, #202020)',
-                                borderColor: 'var(--border-main, #334155)'
-                              }}
+                              className="absolute right-0 top-full mt-1.5 z-40 w-64 border border-[#EDEDEC] dark:border-[#2F2F2F] rounded-xl shadow-xl overflow-hidden p-1.5 bg-white dark:bg-[#202020] animate-in fade-in zoom-in-95 duration-100"
                             >
-                              <div className="px-2.5 py-1.5 border-b mb-1" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-400 block">
+                              <div className="px-2.5 py-1.5 border-b border-[#EDEDEC] dark:border-[#2F2F2F] mb-1">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#787774] dark:text-[#9B9A97] block">
                                   Pindah ke Halaman Periodik:
                                 </span>
-                                <span className="text-[11px] text-slate-400 block truncate">
+                                <span className="text-[11px] text-[#37352F] dark:text-[#E6E6E5] font-medium block truncate">
                                   {section || 'Seksi Ini'}
                                 </span>
                               </div>
@@ -10429,14 +10390,13 @@ export function NotionDatabaseTable({
                                     key={dest.post.id}
                                     type="button"
                                     onClick={() => openMoveModal(dest.post, selectedRow)}
-                                    className="w-full px-2.5 py-2 rounded-xl text-left text-xs font-medium hover:bg-teal-500/15 hover:text-teal-300 transition-colors flex items-center justify-between group cursor-pointer"
-                                    style={{ color: 'var(--text-main, #cbd5e1)' }}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-medium hover:bg-[#F1F1EF] dark:hover:bg-[#2F2F2F] transition-colors flex items-center justify-between group cursor-pointer text-[#37352F] dark:text-[#E6E6E5]"
                                   >
                                     <div className="flex items-center gap-2 truncate">
                                       <span className="text-sm shrink-0">{dest.icon}</span>
                                       <span className="truncate">{dest.post.title}</span>
                                     </div>
-                                    <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-teal-300 shrink-0" />
+                                    <ChevronRight className="w-3.5 h-3.5 text-[#787774] group-hover:text-[#37352F] dark:group-hover:text-white shrink-0" />
                                   </button>
                                 ))}
                               </div>
@@ -10448,79 +10408,66 @@ export function NotionDatabaseTable({
 
                     <button
                       onClick={() => handleOpenEditModal(selectedRow, localRows.indexOf(selectedRow))}
-                      className="p-2 px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+                      className="px-2.5 py-1 rounded-md text-xs font-medium text-[#37352F] dark:text-[#E6E6E5] hover:bg-[#F1F1EF] dark:hover:bg-[#252525] border border-[#EDEDEC] dark:border-[#2F2F2F] flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Edit Data Kegiatan"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>Edit</span>
+                      <Edit2 className="w-3.5 h-3.5 text-[#787774]" />
+                      <span className="hidden sm:inline">Edit</span>
                     </button>
+
                     <button
                       onClick={() => handleDeleteRow(localRows.indexOf(selectedRow))}
-                      className="p-2 px-3.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/40 text-xs font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+                      className="px-2.5 py-1 rounded-md text-xs font-medium text-[#EB5757] hover:bg-[#FFE2DD] dark:hover:bg-[#4A201C] border border-[#EDEDEC] dark:border-[#2F2F2F] flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Hapus Kegiatan"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Hapus</span>
+                      <span className="hidden sm:inline">Hapus</span>
                     </button>
+
                     <button
                       onClick={() => handleCloseDetailModal()}
-                      className="p-2 rounded-xl border hover:opacity-80 transition-opacity ml-1 cursor-pointer"
-                      style={{
-                        backgroundColor: 'var(--card-bg, #1e293b)',
-                        borderColor: 'var(--border-main, #334155)',
-                        color: 'var(--text-muted, #94a3b8)'
-                      }}
-                      title="Tutup Panel (ESC)"
+                      className="p-1 rounded-md text-[#787774] hover:text-[#37352F] dark:hover:text-white hover:bg-[#F1F1EF] dark:hover:bg-[#252525] transition-colors ml-1 cursor-pointer"
+                      title="Tutup (ESC)"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
 
-                {/* Drawer Body: Wide 2-Column Responsive Layout */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    
-                    {/* ================================================================= */}
-                    {/* LEFT COLUMN: DETAIL TOPIK & RINCIAN KEGIATAN                      */}
-                    {/* ================================================================= */}
-                    <div className="lg:col-span-5 xl:col-span-5 space-y-5">
-                      
-                      {/* Key Highlights Grid */}
-                      <div 
-                        className="grid grid-cols-2 gap-2.5 p-4 rounded-2xl border shadow-inner text-xs"
-                        style={{
-                          backgroundColor: 'var(--input-bg, #141414)',
-                          borderColor: 'var(--border-main, #334155)'
+                {/* Drawer Body: Notion Page Document */}
+                <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
+                  <div className="max-w-3xl mx-auto space-y-6">
+
+                    {/* Judul Kegiatan (Large Prominent Header) */}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        {activeSubPeriod && (
+                          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-[#EDF3EC] text-[#2B593F] dark:bg-[#1C3829] dark:text-[#4EA672]">
+                            {activeSubPeriod}
+                          </span>
+                        )}
+                      </div>
+                      <h2 
+                        className={`text-2xl sm:text-3xl font-bold tracking-tight leading-snug ${
+                          selectedRow && isRowPinned(selectedRow) ? 'text-blue-600 dark:text-blue-400' : 'text-[#37352F] dark:text-white'
+                        }`} 
+                        dangerouslySetInnerHTML={{
+                          __html: selectedRow && isRowPinned(selectedRow)
+                            ? (formatTitleToVisualHtml(stripColorTags(getDisplayTitle(baseTopicTitle))) || 'Detail Kegiatan')
+                            : (formatTitleToVisualHtml(getDisplayTitle(baseTopicTitle)) || 'Detail Kegiatan')
                         }}
-                      >
-                        <div>
-                          <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Status</span>
-                          {(() => {
-                            const actualIdx = localRows.indexOf(selectedRow) !== -1 
-                              ? localRows.indexOf(selectedRow)
-                              : localRows.findIndex(r => getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan'));
-                            
-                            if (actualIdx !== -1) {
-                              return (
-                                <NotionDropdownCell
-                                  type="status"
-                                  value={getRowVal(selectedRow, 'Status')}
-                                  onChange={(newVal) => handleUpdateCellDirect(actualIdx, 'Status', newVal)}
-                                />
-                              );
-                            }
-                            return renderStatusBadge(getRowVal(selectedRow, 'Status'));
-                          })()}
+                      />
+                    </div>
+
+                    {/* Notion Property Table (Image 2 style) */}
+                    <div className="space-y-1 py-1 text-xs border-y border-[#EDEDEC] dark:border-[#2F2F2F]">
+                      {/* Row: Aktivitas */}
+                      <div className="flex items-center py-1 hover:bg-[#F7F7F5] dark:hover:bg-[#242424] rounded-md px-2 -mx-2 transition-colors">
+                        <div className="w-36 sm:w-44 flex items-center gap-2 text-[#787774] dark:text-[#9B9A97] shrink-0">
+                          <Activity className="w-3.5 h-3.5" />
+                          <span>Aktivitas</span>
                         </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Priority</span>
-                          {renderPriorityBadge(getRowVal(selectedRow, 'Priority'))}
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>PIC</span>
-                          {renderPicBadge(getRowVal(selectedRow, 'PIC'), 'sm', true)}
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold block mb-1.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Activity Type</span>
+                        <div className="flex-1 min-w-0">
                           {(() => {
                             const actualIdx = localRows.indexOf(selectedRow) !== -1 
                               ? localRows.indexOf(selectedRow)
@@ -10552,14 +10499,7 @@ export function NotionDatabaseTable({
                               );
                             }
                             return (
-                              <span 
-                                className="font-mono font-semibold px-2 py-0.5 rounded border inline-block truncate max-w-full text-[11px]"
-                                style={{
-                                  backgroundColor: 'var(--card-bg, #1e1e1e)',
-                                  borderColor: 'var(--border-main, #334155)',
-                                  color: 'var(--text-main, #cbd5e1)'
-                                }}
-                              >
+                              <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#F1F1EF] text-[#5A5A55] dark:bg-[#2F2F2F] dark:text-[#9B9A97]">
                                 {getRowVal(selectedRow, 'Activity (routine/non routine)') || 'Routine'}
                               </span>
                             );
@@ -10567,447 +10507,452 @@ export function NotionDatabaseTable({
                         </div>
                       </div>
 
-                      {/* Sub-Period Navigator Card (when cadence is periodic) */}
-                      {isPeriodic && (
-                        <div 
-                          className="p-4 rounded-2xl border shadow-sm space-y-3"
-                          style={{
-                            backgroundColor: 'var(--card-bg, #181818)',
-                            borderColor: 'var(--border-main, #334155)'
-                          }}
-                        >
-                          <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main, #2d2d2d)' }}>
-                            <div className="flex items-center gap-2">
-                              <CalendarDays className="w-4 h-4 text-teal-400" />
-                              <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider">
-                                Sub-Judul Periode ({currentCadence})
-                              </h4>
-                            </div>
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-950/80 text-teal-300 border border-teal-700/50">
-                              Traceability Mandiri
-                            </span>
-                          </div>
-
-                          <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                            Setiap sub-judul memiliki ruang diskusi, PIC, dan galeri media tersendiri:
-                          </p>
-
-                          {/* Sub-period pills */}
-                          <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
-                            <button
-                              type="button"
-                              onClick={() => setActiveSubPeriod('')}
-                              className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                                activeSubPeriod === ''
-                                  ? 'bg-teal-500 text-slate-950 border-teal-400 shadow-md shadow-teal-950/50'
-                                  : 'bg-slate-900/80 text-slate-300 border-slate-700 hover:border-teal-500/60'
-                              }`}
-                            >
-                              <span>📋 Topik Umum</span>
-                              {(() => {
-                                const cleanBase = getDisplayTitle(baseTopicTitle).toLowerCase().trim();
-                                const rawBase = baseTopicTitle.toLowerCase().trim();
-                                const rowId = (selectedRow?.id || '').toLowerCase().trim();
-                                const count = (rowId ? topicCommentCounts[rowId] : 0) || 
-                                              topicCommentCounts[cleanBase] || 
-                                              topicCommentCounts[rawBase] || 0;
-                                return count > 0 ? (
-                                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                                    activeSubPeriod === '' ? 'bg-slate-950 text-teal-300' : 'bg-slate-800 text-slate-400'
-                                  }`}>
-                                    {count}
-                                  </span>
-                                ) : null;
-                              })()}
-                            </button>
-
-                            {availableSubPeriods.map((subP) => {
-                              const isSelected = activeSubPeriod === subP;
-                              const cleanBase = getDisplayTitle(baseTopicTitle).toLowerCase().trim();
-                              const rawBase = baseTopicTitle.toLowerCase().trim();
-                              const subCleanKey = `${cleanBase} - ${subP}`.toLowerCase().trim();
-                              const subKey = `${rawBase} - ${subP}`.toLowerCase().trim();
-                              const subCount = topicCommentCounts[subCleanKey] || topicCommentCounts[subKey] || 0;
-
+                      {/* Row: Status */}
+                      <div className="flex items-center py-1 hover:bg-[#F7F7F5] dark:hover:bg-[#242424] rounded-md px-2 -mx-2 transition-colors">
+                        <div className="w-36 sm:w-44 flex items-center gap-2 text-[#787774] dark:text-[#9B9A97] shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Status</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {(() => {
+                            const actualIdx = localRows.indexOf(selectedRow) !== -1 
+                              ? localRows.indexOf(selectedRow)
+                              : localRows.findIndex(r => getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan'));
+                            
+                            if (actualIdx !== -1) {
                               return (
-                                <button
-                                  key={subP}
-                                  type="button"
-                                  onClick={() => setActiveSubPeriod(subP)}
-                                  className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                                    isSelected
-                                      ? 'bg-teal-500 text-slate-950 border-teal-400 shadow-md shadow-teal-950/50 scale-[1.03]'
-                                      : 'bg-slate-900/80 text-slate-300 border-slate-700 hover:border-teal-500/60'
-                                  }`}
-                                >
-                                  <span>{subP}</span>
-                                  {subCount > 0 && (
-                                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                                      isSelected ? 'bg-slate-950 text-teal-300' : 'bg-teal-950 text-teal-400 border border-teal-700/60'
-                                    }`}>
-                                      {subCount}
-                                    </span>
-                                  )}
-                                </button>
+                                <NotionDropdownCell
+                                  type="status"
+                                  value={getRowVal(selectedRow, 'Status')}
+                                  onChange={(newVal) => handleUpdateCellDirect(actualIdx, 'Status', newVal)}
+                                />
                               );
-                            })}
-                          </div>
+                            }
+                            return renderStatusBadge(getRowVal(selectedRow, 'Status'));
+                          })()}
+                        </div>
+                      </div>
 
-                          {/* Active Sub-Period PIC Banner */}
-                          {activeSubPeriod && (
-                            <div className="p-2.5 rounded-xl border bg-teal-950/20 border-teal-500/30 flex items-center justify-between text-xs mt-2">
-                              <div className="flex items-center gap-2">
-                                <User className="w-3.5 h-3.5 text-teal-400" />
-                                <span className="text-[11px] text-teal-200">
-                                  PIC Sub-Judul ({activeSubPeriod}): <strong>{getRowVal(selectedRow, 'PIC') || 'Belum Ditentukan'}</strong>
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-teal-400/80 font-mono">
-                                {activeTopicComments.length} update
-                              </span>
-                            </div>
+                      {/* Row: PIC */}
+                      <div className="flex items-center py-1 hover:bg-[#F7F7F5] dark:hover:bg-[#242424] rounded-md px-2 -mx-2 transition-colors">
+                        <div className="w-36 sm:w-44 flex items-center gap-2 text-[#787774] dark:text-[#9B9A97] shrink-0">
+                          <User className="w-3.5 h-3.5" />
+                          <span>PIC</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {getRowVal(selectedRow, 'PIC') ? (
+                            renderPicBadge(getRowVal(selectedRow, 'PIC'), 'sm', true)
+                          ) : (
+                            <span className="text-[#9B9A97] dark:text-[#5A5A55]">Empty</span>
                           )}
+                        </div>
+                      </div>
 
-                          {/* Custom sub-period quick adder */}
-                          <div className="pt-1 flex items-center gap-2">
-                            <input
-                              type="text"
-                              id="custom-subperiod-input"
-                              placeholder={`Tambah sub-judul kustom (cth: ${currentCadence === 'Weekly' ? 'W53 2026' : currentCadence === 'Quarterly' ? 'Q1 Revisi' : 'Kustom'})...`}
-                              className="flex-1 px-2.5 py-1.5 rounded-xl border text-[11px] outline-none focus:border-teal-500"
-                              style={{
-                                backgroundColor: 'var(--input-bg, #141414)',
-                                borderColor: 'var(--border-main, #334155)',
-                                color: 'var(--text-main, #f1f5f9)'
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  const val = (e.currentTarget.value || '').trim();
-                                  if (val) {
-                                    setCustomPeriodsMap(prev => ({
-                                      ...prev,
-                                      [baseTopicTitle]: [...(prev[baseTopicTitle] || []), val]
-                                    }));
-                                    setActiveSubPeriod(val);
-                                    e.currentTarget.value = '';
-                                    toast.success(`Sub-judul "${val}" berhasil ditambahkan!`);
-                                  }
-                                }
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const inputEl = document.getElementById('custom-subperiod-input') as HTMLInputElement;
-                                if (inputEl && inputEl.value.trim()) {
-                                  const val = inputEl.value.trim();
-                                  setCustomPeriodsMap(prev => ({
-                                    ...prev,
-                                    [baseTopicTitle]: [...(prev[baseTopicTitle] || []), val]
-                                  }));
-                                  setActiveSubPeriod(val);
-                                  inputEl.value = '';
-                                  toast.success(`Sub-judul "${val}" berhasil ditambahkan!`);
-                                }
-                              }}
-                              className="px-2.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-bold cursor-pointer shrink-0"
-                            >
-                              + Tambah
-                            </button>
+                      {/* Row: Priority */}
+                      <div className="flex items-center py-1 hover:bg-[#F7F7F5] dark:hover:bg-[#242424] rounded-md px-2 -mx-2 transition-colors">
+                        <div className="w-36 sm:w-44 flex items-center gap-2 text-[#787774] dark:text-[#9B9A97] shrink-0">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          <span>Priority</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {getRowVal(selectedRow, 'Priority') ? (
+                            renderPriorityBadge(getRowVal(selectedRow, 'Priority'))
+                          ) : (
+                            <span className="text-[#9B9A97] dark:text-[#5A5A55]">Empty</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Row: Period */}
+                      <div className="flex items-center py-1 hover:bg-[#F7F7F5] dark:hover:bg-[#242424] rounded-md px-2 -mx-2 transition-colors">
+                        <div className="w-36 sm:w-44 flex items-center gap-2 text-[#787774] dark:text-[#9B9A97] shrink-0">
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>Period</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {getRowVal(selectedRow, 'period') ? (
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#EDF3EC] text-[#2B593F] dark:bg-[#1C3829] dark:text-[#4EA672]">
+                              {getRowVal(selectedRow, 'period')}
+                            </span>
+                          ) : (
+                            <span className="text-[#9B9A97] dark:text-[#5A5A55]">Empty</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Row: Created time */}
+                      <div className="flex items-center py-1 hover:bg-[#F7F7F5] dark:hover:bg-[#242424] rounded-md px-2 -mx-2 transition-colors">
+                        <div className="w-36 sm:w-44 flex items-center gap-2 text-[#787774] dark:text-[#9B9A97] shrink-0">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Created time</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {getRowVal(selectedRow, 'Created Time') || getRowVal(selectedRow, 'Tanggal Dibuat') ? (
+                            <span className="text-[#37352F] dark:text-[#E6E6E5] font-mono text-[11px]">
+                              {getRowVal(selectedRow, 'Created Time') || getRowVal(selectedRow, 'Tanggal Dibuat')}
+                            </span>
+                          ) : (
+                            <span className="text-[#9B9A97] dark:text-[#5A5A55]">Empty</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Row: Sub-Periode (periodic cadence) */}
+                      {isPeriodic && (
+                        <div className="flex items-start py-1.5 hover:bg-[#F7F7F5] dark:hover:bg-[#242424] rounded-md px-2 -mx-2 transition-colors">
+                          <div className="w-36 sm:w-44 flex items-center gap-2 text-[#787774] dark:text-[#9B9A97] shrink-0 pt-0.5">
+                            <CalendarDays className="w-3.5 h-3.5" />
+                            <span>Sub-Periode</span>
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto">
+                              <button
+                                type="button"
+                                onClick={() => setActiveSubPeriod('')}
+                                className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors cursor-pointer ${
+                                  activeSubPeriod === ''
+                                    ? 'bg-[#37352F] text-white dark:bg-white dark:text-[#191919] border-transparent'
+                                    : 'bg-[#F1F1EF] text-[#5A5A55] dark:bg-[#2F2F2F] dark:text-[#9B9A97] border-transparent hover:bg-[#EAEAEA] dark:hover:bg-[#383838]'
+                                }`}
+                              >
+                                📋 Topik Umum
+                              </button>
+                              {availableSubPeriods.map((subP) => {
+                                const isSelected = activeSubPeriod === subP;
+                                return (
+                                  <button
+                                    key={subP}
+                                    type="button"
+                                    onClick={() => setActiveSubPeriod(subP)}
+                                    className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-[#37352F] text-white dark:bg-white dark:text-[#191919] border-transparent'
+                                        : 'bg-[#F1F1EF] text-[#5A5A55] dark:bg-[#2F2F2F] dark:text-[#9B9A97] border-transparent hover:bg-[#EAEAEA] dark:hover:bg-[#383838]'
+                                    }`}
+                                  >
+                                    {subP}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       )}
+                    </div>
 
-                      {/* Rincian & Keterangan Subtask Manager (Sinergi Penuh dengan Log Book & 1-Source-of-Truth) */}
-                      {(() => {
-                        const actualIdx = localRows.indexOf(selectedRow) !== -1 
-                          ? localRows.indexOf(selectedRow)
-                          : localRows.findIndex(r => 
-                              (selectedRow.id && r.id === selectedRow.id) || 
-                              getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan')
-                            );
+                    {/* Collapsible Sections: Keterangan & Media Gallery */}
+                    {(() => {
+                      const actualIdx = localRows.indexOf(selectedRow) !== -1 
+                        ? localRows.indexOf(selectedRow)
+                        : localRows.findIndex(r => 
+                            (selectedRow.id && r.id === selectedRow.id) || 
+                            getRowVal(r, 'Jenis kegiatan') === getRowVal(selectedRow, 'Jenis kegiatan')
+                          );
 
-                        const liveRow = actualIdx !== -1 ? localRows[actualIdx] : selectedRow;
-                        let canonicalKetVal = (getRowVal(liveRow, 'Keterangan') || getRowVal(liveRow, 'Description') || '').replace(/<br\s*\/?>/gi, '\n');
+                      const liveRow = actualIdx !== -1 ? localRows[actualIdx] : selectedRow;
+                      let canonicalKetVal = (getRowVal(liveRow, 'Keterangan') || getRowVal(liveRow, 'Description') || '').replace(/<br\s*\/?>/gi, '\n');
 
-                        // Collect child rows from table to ensure 100% synchronization
-                        if (actualIdx !== -1) {
-                          const childRows: TableRowData[] = [];
-                          for (let i = actualIdx + 1; i < localRows.length; i++) {
-                            if (isSubItemRow(localRows[i])) {
-                              childRows.push(localRows[i]);
-                            } else {
-                              break;
-                            }
-                          }
-                          if (childRows.length > 0) {
-                            const nonChecklistLines = canonicalKetVal.split('\n').filter(line => !line.trim().match(/^[-*]\s*\[([ xX])\]/));
-                            const childChecklistLines = childRows.map(cRow => {
-                              const isComp = isSubItemCompleted(cRow);
-                              const cleanTitle = getDisplayTitle(getRowVal(cRow, 'Jenis kegiatan') || getRowVal(cRow, 'Jenis Kegiatan') || '');
-                              return `- [${isComp ? 'x' : ' '}] ${cleanTitle}`;
-                            });
-                            canonicalKetVal = [...nonChecklistLines, ...childChecklistLines].join('\n').trim();
+                      if (actualIdx !== -1) {
+                        const childRows: TableRowData[] = [];
+                        for (let i = actualIdx + 1; i < localRows.length; i++) {
+                          if (isSubItemRow(localRows[i])) {
+                            childRows.push(localRows[i]);
+                          } else {
+                            break;
                           }
                         }
+                        if (childRows.length > 0) {
+                          const nonChecklistLines = canonicalKetVal.split('\n').filter(line => !line.trim().match(/^[-*]\s*\[([ xX])\]/));
+                          const childChecklistLines = childRows.map(cRow => {
+                            const isComp = isSubItemCompleted(cRow);
+                            const cleanTitle = getDisplayTitle(getRowVal(cRow, 'Jenis kegiatan') || getRowVal(cRow, 'Jenis Kegiatan') || '');
+                            return `- [${isComp ? 'x' : ' '}] ${cleanTitle}`;
+                          });
+                          canonicalKetVal = [...nonChecklistLines, ...childChecklistLines].join('\n').trim();
+                        }
+                      }
 
-                        return (
-                          <SharedSubtaskManager
-                            value={canonicalKetVal}
-                            onChange={(newVal) => {
-                              if (actualIdx !== -1) {
-                                handleSyncModalSubtasks(actualIdx, newVal);
-                              } else {
-                                handleSyncModalSubtasks(selectedRow, newVal);
-                              }
-                            }}
-                            label="Rincian & Checklist Subtask Kegiatan"
-                            currentUser={{ nik: currentAuthorNik || '', name: currentAuthorName || getRowVal(selectedRow, 'PIC') || 'PIC' }}
-                            selectedDate={new Date().toISOString().split('T')[0]}
-                            allowModeSwitch={true}
-                            defaultMode="checklist"
-                            showProgressBar={true}
-                            placeholder="Tambah butir subtask langsung di sini lalu tekan Enter..."
-                          />
-                        );
-                      })()}
+                      const checklistLines = canonicalKetVal.split('\n').filter((l: string) => l.trim().match(/^[-*]\s*\[([ xX])\]/));
+                      const totalSubtasks = checklistLines.length;
+                      const completedSubtasks = checklistLines.filter((l: string) => l.trim().match(/^[-*]\s*\[[xX]\]/)).length;
+                      const hasTextNotes = canonicalKetVal.split('\n').some((l: string) => l.trim().length > 0 && !l.trim().match(/^[-*]\s*\[([ xX])\]/));
 
-                      {/* Secondary Metadata Info Cards */}
-                      <div className="grid grid-cols-2 gap-2.5 text-[11px]">
-                        <div className="p-3 rounded-xl border" style={{ backgroundColor: 'var(--input-bg, #171717)', borderColor: 'var(--border-main, #334155)' }}>
-                          <span className="text-[9px] uppercase font-bold block mb-0.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Period</span>
-                          <span className="font-medium truncate block" style={{ color: 'var(--text-main, #cbd5e1)' }}>{getRowVal(selectedRow, 'period') || '-'}</span>
-                        </div>
-                        <div className="p-3 rounded-xl border" style={{ backgroundColor: 'var(--input-bg, #171717)', borderColor: 'var(--border-main, #334155)' }}>
-                          <span className="text-[9px] uppercase font-bold block mb-0.5" style={{ color: 'var(--text-muted, #94a3b8)' }}>Dibuat</span>
-                          <span className="font-mono text-[10px] truncate block" style={{ color: 'var(--text-main, #cbd5e1)' }}>{getRowVal(selectedRow, 'Created Time') || '-'}</span>
-                        </div>
-                      </div>
+                      return (
+                        <div className="space-y-2">
+                          {/* Toggle 1: Keterangan & Checklist Subtask */}
+                          <div className="rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] overflow-hidden bg-white dark:bg-[#1E1E1E] transition-all">
+                            <button
+                              type="button"
+                              onClick={() => setShowModalKeterangan(!showModalKeterangan)}
+                              className="w-full flex items-center justify-between p-2.5 px-3 hover:bg-[#F7F7F5] dark:hover:bg-[#252525] text-left transition-colors cursor-pointer group"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <ChevronRight 
+                                  className={`w-4 h-4 text-[#787774] dark:text-[#9B9A97] transition-transform duration-150 shrink-0 ${
+                                    showModalKeterangan ? 'rotate-90' : ''
+                                  }`} 
+                                />
+                                <FileText className="w-4 h-4 text-[#787774] dark:text-[#9B9A97] shrink-0" />
+                                <span className="text-xs sm:text-sm font-medium text-[#37352F] dark:text-[#E6E6E5]">
+                                  Keterangan & Checklist Subtask
+                                </span>
+                                {totalSubtasks > 0 ? (
+                                  <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#EDF3EC] text-[#2B593F] dark:bg-[#1C3829] dark:text-[#4EA672] font-semibold shrink-0">
+                                    {completedSubtasks}/{totalSubtasks} Selesai ({Math.round((completedSubtasks / totalSubtasks) * 100)}%)
+                                  </span>
+                                ) : hasTextNotes ? (
+                                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F1F1EF] text-[#5A5A55] dark:bg-[#2F2F2F] dark:text-[#9B9A97] shrink-0">
+                                    Catatan Tersedia
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] text-[#9B9A97] dark:text-[#5A5A55] italic shrink-0">
+                                    Belum ada rincian
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs text-[#787774] dark:text-[#9B9A97] shrink-0 group-hover:text-[#37352F] dark:group-hover:text-white">
+                                {showModalKeterangan ? 'Tutup' : 'Buka & Edit'}
+                              </span>
+                            </button>
 
-                      {/* 3. GALERI & LAMPIRAN MEDIA TOPIK */}
-                      <div 
-                        className="p-4 sm:p-5 rounded-2xl border shadow-sm space-y-3"
-                        style={{
-                          backgroundColor: 'var(--card-bg, #171717)',
-                          borderColor: 'var(--border-main, #334155)'
-                        }}
-                      >
-                        <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                          <div className="flex items-center gap-2">
-                            <ImageIcon className="w-4 h-4 text-teal-400" />
-                            <h4 className="text-xs font-bold text-teal-400 uppercase tracking-wider">
-                              Galeri & Lampiran Media ({galleryItems.length})
-                            </h4>
-                          </div>
-                          
-                          <input
-                            type="file"
-                            ref={galleryFileInputRef}
-                            onChange={handleGalleryFileSelect}
-                            accept="image/*,.pdf,.doc,.docx"
-                            className="hidden"
-                          />
-                          <button
-                            type="button"
-                            disabled={isUploadingGallery}
-                            onClick={() => galleryFileInputRef.current?.click()}
-                            className="px-2.5 py-1 rounded-lg bg-teal-950/80 hover:bg-teal-900 text-teal-300 border border-teal-600/50 text-[10px] font-bold flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
-                          >
-                            {isUploadingGallery ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                            <span>+ Upload Lampiran / Foto</span>
-                          </button>
-                        </div>
-
-                        {/* Gallery Items Grid */}
-                        {galleryItems.length > 0 ? (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
-                            {galleryItems.map((item, idx) => {
-                              const driveId = item.attachment.id || extractDriveId(item.attachment.directUrl || item.attachment.url);
-                              const targetUrl = item.attachment.directUrl || item.attachment.url || item.attachment.name;
-                              const canDelete = 
-                                !item.comment.authorNik || 
-                                item.comment.authorNik === currentAuthorNik || 
-                                item.comment.authorName === currentAuthorName;
-
-                              return (
-                                <div 
-                                  key={item.comment.id ? `gal-${item.comment.id}-${idx}` : idx}
-                                  onClick={() => handlePreviewAttachment(item.attachment)}
-                                  className="group relative rounded-xl overflow-hidden aspect-video border hover:border-teal-500/60 cursor-pointer shadow-sm transition-all hover:scale-[1.02]"
-                                  style={{
-                                    backgroundColor: 'var(--input-bg, #121212)',
-                                    borderColor: 'var(--border-main, #334155)'
-                                  }}
-                                  title={`Klik untuk melihat: ${item.attachment.name}${item.attachment.caption ? ` (${item.attachment.caption})` : ''}`}
+                            <AnimatePresence>
+                              {showModalKeterangan && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="overflow-hidden border-t border-[#EDEDEC] dark:border-[#2F2F2F] p-3 sm:p-4 bg-[#FAFAFA] dark:bg-[#181818]"
                                 >
-                                  {item.attachment.isImage ? (
-                                    <img 
-                                      src={item.attachment.directUrl || item.attachment.url} 
-                                      alt={item.attachment.name}
-                                      loading="lazy"
-                                      referrerPolicy="no-referrer"
-                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                      onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        if (driveId) {
-                                          if (!target.src.includes('googleusercontent.com')) {
-                                            target.src = `https://lh3.googleusercontent.com/d/${driveId}`;
-                                          } else if (!target.src.includes('thumbnail')) {
-                                            target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
-                                          }
-                                        }
-                                      }}
+                                  <SharedSubtaskManager
+                                    value={canonicalKetVal}
+                                    onChange={(newVal) => {
+                                      if (actualIdx !== -1) {
+                                        handleSyncModalSubtasks(actualIdx, newVal);
+                                      } else {
+                                        handleSyncModalSubtasks(selectedRow, newVal);
+                                      }
+                                    }}
+                                    label="Rincian & Checklist Subtask Kegiatan"
+                                    currentUser={{ nik: currentAuthorNik || '', name: currentAuthorName || getRowVal(selectedRow, 'PIC') || 'PIC' }}
+                                    selectedDate={new Date().toISOString().split('T')[0]}
+                                    allowModeSwitch={true}
+                                    defaultMode="checklist"
+                                    showProgressBar={true}
+                                    placeholder="Tambah butir subtask langsung di sini lalu tekan Enter..."
+                                  />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+
+                          {/* Toggle 2: Galeri & Lampiran Media */}
+                          <div className="rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] overflow-hidden bg-white dark:bg-[#1E1E1E] transition-all">
+                            <button
+                              type="button"
+                              onClick={() => setShowModalMedia(!showModalMedia)}
+                              className="w-full flex items-center justify-between p-2.5 px-3 hover:bg-[#F7F7F5] dark:hover:bg-[#252525] text-left transition-colors cursor-pointer group"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <ChevronRight 
+                                  className={`w-4 h-4 text-[#787774] dark:text-[#9B9A97] transition-transform duration-150 shrink-0 ${
+                                    showModalMedia ? 'rotate-90' : ''
+                                  }`} 
+                                />
+                                <ImageIcon className="w-4 h-4 text-[#787774] dark:text-[#9B9A97] shrink-0" />
+                                <span className="text-xs sm:text-sm font-medium text-[#37352F] dark:text-[#E6E6E5]">
+                                  Galeri & Lampiran Media
+                                </span>
+                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#F1F1EF] text-[#5A5A55] dark:bg-[#2F2F2F] dark:text-[#9B9A97] shrink-0">
+                                  {galleryItems.length} File / Foto
+                                </span>
+                              </div>
+                              <span className="text-xs text-[#787774] dark:text-[#9B9A97] shrink-0 group-hover:text-[#37352F] dark:group-hover:text-white">
+                                {showModalMedia ? 'Tutup' : 'Buka Galeri'}
+                              </span>
+                            </button>
+
+                            <AnimatePresence>
+                              {showModalMedia && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="overflow-hidden border-t border-[#EDEDEC] dark:border-[#2F2F2F] p-3 sm:p-4 bg-[#FAFAFA] dark:bg-[#181818] space-y-3"
+                                >
+                                  <div className="flex items-center justify-between pb-2 border-b border-[#EDEDEC] dark:border-[#2F2F2F]">
+                                    <span className="text-xs font-semibold text-[#37352F] dark:text-[#E6E6E5]">
+                                      Dokumentasi Foto & File ({galleryItems.length})
+                                    </span>
+                                    <input
+                                      type="file"
+                                      ref={galleryFileInputRef}
+                                      onChange={handleGalleryFileSelect}
+                                      accept="image/*,.pdf,.doc,.docx"
+                                      className="hidden"
                                     />
-                                  ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-teal-950/30">
-                                      <FileText className="w-6 h-6 text-teal-400 mb-1" />
-                                      <span className="text-[10px] text-teal-300 font-semibold truncate w-full px-1">{item.attachment.name}</span>
-                                    </div>
-                                  )}
-
-                                  {/* Caption Badge */}
-                                  {item.attachment.caption && (
-                                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[9px] text-teal-300 font-medium z-10 shadow-xs border border-teal-500/30">
-                                      💬 Caption
-                                    </div>
-                                  )}
-
-                                  {/* Delete Attachment Button on Thumbnail */}
-                                  {canDelete && (
                                     <button
                                       type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteAttachment(item.comment.id, targetUrl, item.attachment.name);
-                                      }}
-                                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-lg bg-black/75 hover:bg-rose-600 text-slate-300 hover:text-white flex items-center justify-center transition-all opacity-80 group-hover:opacity-100 z-20 cursor-pointer shadow-md border border-white/20 hover:border-rose-400 active:scale-90"
-                                      title="Hapus lampiran ini dari galeri (teks komentar tetap tersimpan)"
+                                      disabled={isUploadingGallery}
+                                      onClick={() => galleryFileInputRef.current?.click()}
+                                      className="px-2.5 py-1 rounded-md bg-[#2383E2] hover:bg-[#1D70C2] text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                                     >
-                                      <Trash2 className="w-3 h-3 stroke-[2.5]" />
+                                      {isUploadingGallery ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                                      <span>+ Upload Foto / Lampiran</span>
                                     </button>
-                                  )}
-
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2.5 pointer-events-none">
-                                    {item.attachment.caption ? (
-                                      <>
-                                        <span className="text-[11px] font-bold text-white line-clamp-2 leading-tight">
-                                          "{item.attachment.caption}"
-                                        </span>
-                                        <span className="text-[9px] text-slate-300 truncate mt-0.5">{item.attachment.name}</span>
-                                      </>
-                                    ) : (
-                                      <span className="text-[10px] font-bold text-white truncate">{item.attachment.name}</span>
-                                    )}
-                                    <span className="text-[9px] text-teal-300 font-mono mt-0.5">{item.authorName}</span>
                                   </div>
-                                </div>
-                              );
-                            })}
+
+                                  {galleryItems.length > 0 ? (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+                                      {galleryItems.map((item, idx) => {
+                                        const driveId = item.attachment.id || extractDriveId(item.attachment.directUrl || item.attachment.url);
+                                        const targetUrl = item.attachment.directUrl || item.attachment.url || item.attachment.name;
+                                        const canDelete = 
+                                          !item.comment.authorNik || 
+                                          item.comment.authorNik === currentAuthorNik || 
+                                          item.comment.authorName === currentAuthorName;
+
+                                        return (
+                                          <div 
+                                            key={item.comment.id ? `gal-${item.comment.id}-${idx}` : idx}
+                                            onClick={() => handlePreviewAttachment(item.attachment)}
+                                            className="group relative rounded-lg overflow-hidden aspect-video border border-[#EDEDEC] dark:border-[#2F2F2F] bg-white dark:bg-[#121212] hover:border-[#B4B4B0] dark:hover:border-[#5A5A55] cursor-pointer shadow-xs transition-all hover:scale-[1.02]"
+                                            title={`Klik untuk melihat: ${item.attachment.name}`}
+                                          >
+                                            {item.attachment.isImage ? (
+                                              <img 
+                                                src={item.attachment.directUrl || item.attachment.url} 
+                                                alt={item.attachment.name}
+                                                loading="lazy"
+                                                referrerPolicy="no-referrer"
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                onError={(e) => {
+                                                  const target = e.target as HTMLImageElement;
+                                                  if (driveId) {
+                                                    if (!target.src.includes('googleusercontent.com')) {
+                                                      target.src = `https://lh3.googleusercontent.com/d/${driveId}`;
+                                                    } else if (!target.src.includes('thumbnail')) {
+                                                      target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
+                                                    }
+                                                  }
+                                                }}
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-[#F1F1EF] dark:bg-[#252525]">
+                                                <FileText className="w-6 h-6 text-[#787774] dark:text-[#9B9A97] mb-1" />
+                                                <span className="text-[10px] text-[#37352F] dark:text-[#E6E6E5] font-medium truncate w-full px-1">{item.attachment.name}</span>
+                                              </div>
+                                            )}
+
+                                            {item.attachment.caption && (
+                                              <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[9px] text-white font-medium z-10 shadow-xs">
+                                                💬 Caption
+                                              </div>
+                                            )}
+
+                                            {canDelete && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteAttachment(item.comment.id, targetUrl, item.attachment.name);
+                                                }}
+                                                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-black/75 hover:bg-rose-600 text-slate-300 hover:text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 z-20 cursor-pointer shadow-md"
+                                                title="Hapus lampiran ini"
+                                              >
+                                                <Trash2 className="w-3 h-3 stroke-[2.5]" />
+                                              </button>
+                                            )}
+
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2 pointer-events-none">
+                                              <span className="text-[10px] font-bold text-white truncate">{item.attachment.name}</span>
+                                              <span className="text-[9px] text-slate-300 font-mono mt-0.5">{item.authorName}</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <div 
+                                      onClick={() => galleryFileInputRef.current?.click()}
+                                      className="py-6 px-4 rounded-lg border border-dashed border-[#EDEDEC] dark:border-[#2F2F2F] text-center cursor-pointer hover:bg-[#F1F1EF] dark:hover:bg-[#202020] transition-colors"
+                                    >
+                                      <ImageIcon className="w-6 h-6 mx-auto mb-1.5 text-[#787774] dark:text-[#9B9A97]" />
+                                      <p className="text-xs font-medium text-[#37352F] dark:text-[#E6E6E5]">Belum ada foto atau lampiran untuk kegiatan ini</p>
+                                      <p className="text-[10px] text-[#787774] dark:text-[#9B9A97] mt-0.5">Klik di sini untuk mengunggah foto dokumentasi / lampiran</p>
+                                    </div>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
-                        ) : (
-                          <div 
-                            onClick={() => galleryFileInputRef.current?.click()}
-                            className="py-6 px-4 rounded-xl border border-dashed text-center cursor-pointer transition-colors group"
-                            style={{
-                              backgroundColor: 'var(--input-bg, #141414)',
-                              borderColor: 'var(--border-main, #334155)'
-                            }}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Main Canvas: Notion Comments Section */}
+                    <div className="pt-2 space-y-4">
+                      {/* Comments Section Header */}
+                      <div className="flex items-center justify-between pb-2 border-b border-[#EDEDEC] dark:border-[#2F2F2F]">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4 text-[#787774] dark:text-[#9B9A97]" />
+                          <h3 className="text-sm font-semibold text-[#37352F] dark:text-[#E6E6E5]">
+                            Comments ({sortedTopicComments.length})
+                          </h3>
+                        </div>
+                        {sortedTopicComments.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllReplies(!showAllReplies)}
+                            className="text-xs font-medium text-[#787774] dark:text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
                           >
-                            <ImageIcon className="w-6 h-6 mx-auto mb-1.5 text-teal-400 transition-colors" />
-                            <p className="text-xs font-medium transition-colors" style={{ color: 'var(--text-main, #cbd5e1)' }}>
-                              Belum ada foto atau lampiran untuk kegiatan ini
-                            </p>
-                            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted, #64748b)' }}>
-                              Klik di sini untuk mengunggah foto dokumentasi / hasil inspeksi
-                            </p>
-                          </div>
+                            {showAllReplies ? (
+                              <>
+                                <ChevronUp className="w-3.5 h-3.5" />
+                                <span>Sembunyikan {sortedTopicComments.length - 2} balasan</span>
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-3.5 h-3.5" />
+                                <span>Tampilkan semua ({sortedTopicComments.length} komentar)</span>
+                              </>
+                            )}
+                          </button>
                         )}
                       </div>
 
-                    </div>
-
-                    {/* ================================================================= */}
-                    {/* RIGHT COLUMN: NOTION-STYLE DISCUSSION & REPLIES                   */}
-                    {/* ================================================================= */}
-                    <div className="lg:col-span-7 xl:col-span-7 space-y-4">
-                      
-                      {/* Header Comments */}
-                      <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                        <div className="flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4 text-teal-500" />
-                          <h4 
-                            className="text-xs font-bold uppercase tracking-wider"
-                            style={{ color: 'var(--text-main, #0f172a)' }}
-                          >
-                            Comments ({sortedTopicComments.length})
-                          </h4>
-                        </div>
-                        <span 
-                          className="text-[10px] font-mono px-2 py-0.5 rounded-full border"
-                          style={{
-                            backgroundColor: 'var(--input-bg, #141414)',
-                            borderColor: 'var(--border-main, #334155)',
-                            color: 'var(--text-muted, #94a3b8)'
-                          }}
-                        >
-                          ⚡ Threaded Replies
-                        </span>
-                      </div>
-
-                      {/* Comments Timeline Stream */}
-                      <div className="space-y-2 pt-1">
-                        {commentsLoading ? (
-                          <div className="text-center py-8" style={{ color: 'var(--text-muted, #94a3b8)' }}>
-                            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-teal-400" />
-                            <p className="text-xs">Memuat riwayat diskusi...</p>
-                          </div>
-                        ) : sortedTopicComments.length === 0 ? (
-                          <div 
-                            className="text-center py-8 px-4 rounded-2xl border border-dashed"
-                            style={{
-                              backgroundColor: 'var(--card-bg, #151515)',
-                              borderColor: 'var(--border-main, #334155)',
-                              color: 'var(--text-muted, #94a3b8)'
-                            }}
-                          >
-                            <MessageSquare className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-teal-400" />
-                            <p className="text-xs italic">Belum ada komentar atau update diskusi pada kegiatan ini.</p>
-                          </div>
-                        ) : sortedTopicComments.length <= 2 ? (
-                          sortedTopicComments.map((c, idx) => {
+                      {/* Comments List Stream */}
+                      <div className="space-y-1">
+                        {(() => {
+                          const renderCommentItem = (c: any, idx: number) => {
                             const atts = parseCommentAttachments(c.fileUrl, c.fileName, c.content);
+                            const isEditing = editingCommentId === c.id;
+                            const isAuthor = c.authorNik === currentAuthorNik;
+
                             return (
                               <div 
                                 key={c.id ? `comment-${c.id}-${idx}` : `comment-${idx}`} 
-                                className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-500/5 transition-colors group"
+                                className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-[#F7F7F5] dark:hover:bg-[#252525] transition-colors group"
                                 style={{
-                                  borderBottom: '1px solid var(--border-main, rgba(51, 65, 85, 0.25))'
+                                  borderBottom: '1px solid rgba(55, 53, 47, 0.06)'
                                 }}
                               >
                                 <div 
-                                  className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 shadow-xs"
-                                  style={{
-                                    backgroundColor: 'var(--input-bg, #f1f5f9)',
-                                    border: '1px solid var(--border-main, #cbd5e1)',
-                                    color: 'var(--text-main, #0f172a)'
-                                  }}
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 mt-0.5 bg-[#E3E2E0] dark:bg-[#3F3F3F] text-[#37352F] dark:text-[#E6E6E5]"
                                 >
                                   {(c.authorName || 'U').charAt(0).toUpperCase()}
                                 </div>
 
                                 <div className="flex-1 min-w-0 space-y-1">
                                   <div className="flex items-center gap-2 flex-wrap text-xs">
-                                    <span 
-                                      className="font-bold text-xs"
-                                      style={{ color: 'var(--text-main, #0f172a)' }}
-                                    >
+                                    <span className="font-semibold text-xs text-[#37352F] dark:text-[#E6E6E5]">
                                       {c.authorName || 'Personil'}
                                     </span>
-                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 leading-tight">
+                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-normal bg-[#F1F1EF] dark:bg-[#2F2F2F] text-[#787774] dark:text-[#9B9A97] leading-tight">
                                       Guest
                                     </span>
-                                    <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
+                                    <span className="text-[11px] text-[#787774] dark:text-[#9B9A97] font-mono">
                                       {formatNotionCommentTime(c.createdAt)}
                                     </span>
 
@@ -11015,13 +10960,13 @@ export function NotionDatabaseTable({
                                       <button
                                         type="button"
                                         onClick={() => handleStartReply(c)}
-                                        className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-500/10 transition-opacity flex items-center gap-1 cursor-pointer font-medium"
+                                        className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded text-[#787774] dark:text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white hover:bg-[#F1F1EF] dark:hover:bg-[#2F2F2F] transition-all flex items-center gap-1 cursor-pointer font-medium"
                                         title={`Balas tanggapan ${c.authorName}`}
                                       >
                                         <Reply className="w-2.5 h-2.5 rotate-180" />
                                         <span>Balas</span>
                                       </button>
-                                      {c.authorNik === currentAuthorNik && (
+                                      {isAuthor && (
                                         <>
                                           <button
                                             type="button"
@@ -11029,7 +10974,7 @@ export function NotionDatabaseTable({
                                               setEditingCommentId(c.id);
                                               setEditingCommentContent(c.content);
                                             }}
-                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-[#787774] hover:text-[#2383E2] transition-opacity cursor-pointer rounded hover:bg-[#F1F1EF] dark:hover:bg-[#2F2F2F]"
                                             title="Edit komentar ini"
                                           >
                                             <Edit2 className="w-3 h-3" />
@@ -11037,7 +10982,7 @@ export function NotionDatabaseTable({
                                           <button
                                             type="button"
                                             onClick={() => handleDeleteComment(c.id)}
-                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                                            className="opacity-0 group-hover:opacity-100 p-1 text-[#787774] hover:text-rose-500 transition-opacity cursor-pointer rounded hover:bg-[#FFE2DD] dark:hover:bg-[#4A201C]"
                                             title="Hapus komentar ini"
                                           >
                                             <Trash2 className="w-3 h-3" />
@@ -11047,40 +10992,35 @@ export function NotionDatabaseTable({
                                     </div>
                                   </div>
 
-                                  {editingCommentId === c.id ? (
-                                      <div className="space-y-2 mt-1">
-                                        <textarea
-                                          value={editingCommentContent}
-                                          onChange={(e) => setEditingCommentContent(e.target.value)}
-                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
-                                          style={{
-                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
-                                            borderColor: 'var(--border-main, #334155)',
-                                            color: 'var(--text-main, #f1f5f9)'
-                                          }}
-                                        />
-                                        <div className="flex items-center gap-2 justify-end">
-                                          <button
-                                            type="button"
-                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
-                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
-                                          >
-                                            Batal
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSaveEditComment(c.id)}
-                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
-                                          >
-                                            Simpan
-                                          </button>
-                                        </div>
+                                  {isEditing ? (
+                                    <div className="space-y-2 mt-1">
+                                      <textarea
+                                        value={editingCommentContent}
+                                        onChange={(e) => setEditingCommentContent(e.target.value)}
+                                        className="w-full text-xs p-2 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] focus:border-[#B4B4B0] dark:focus:border-[#5A5A55] outline-none leading-relaxed min-h-[60px] bg-white dark:bg-[#1E1E1E] text-[#37352F] dark:text-[#E6E6E5]"
+                                      />
+                                      <div className="flex items-center gap-2 justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
+                                          className="px-2.5 py-1 text-xs rounded border border-[#EDEDEC] dark:border-[#2F2F2F] text-[#787774] dark:text-[#9B9A97] hover:bg-[#F1F1EF] dark:hover:bg-[#2F2F2F] cursor-pointer"
+                                        >
+                                          Batal
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSaveEditComment(c.id)}
+                                          className="px-3 py-1 text-xs rounded bg-[#2383E2] hover:bg-[#1D70C2] text-white font-medium cursor-pointer shadow-xs"
+                                        >
+                                          Simpan
+                                        </button>
                                       </div>
-                                    ) : (
-                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                        {c.content}
-                                      </p>
-                                    )}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap text-[#37352F] dark:text-[#E6E6E5]">
+                                      {c.content}
+                                    </p>
+                                  )}
 
                                   {atts.length > 0 && (
                                     <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
@@ -11088,428 +11028,68 @@ export function NotionDatabaseTable({
                                 </div>
                               </div>
                             );
-                          })
-                        ) : (
-                          <div className="space-y-2">
-                            {/* First / Earliest Comment */}
-                            {(() => {
-                              const c = sortedTopicComments[0];
-                              const atts = parseCommentAttachments(c.fileUrl, c.fileName, c.content);
-                              return (
-                                <div 
-                                  key={c.id ? `first-${c.id}` : 'first-item'} 
-                                  className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-500/5 transition-colors group"
-                                  style={{
-                                    borderBottom: '1px solid var(--border-main, rgba(51, 65, 85, 0.25))'
-                                  }}
+                          };
+
+                          if (commentsLoading) {
+                            return (
+                              <div className="text-center py-8 text-[#787774] dark:text-[#9B9A97]">
+                                <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[#2383E2]" />
+                                <p className="text-xs">Memuat riwayat diskusi...</p>
+                              </div>
+                            );
+                          }
+
+                          if (sortedTopicComments.length === 0) {
+                            return (
+                              <div className="text-center py-8 px-4 rounded-lg border border-dashed border-[#EDEDEC] dark:border-[#2F2F2F] text-[#787774] dark:text-[#9B9A97]">
+                                <MessageSquare className="w-5 h-5 mx-auto mb-1.5 opacity-40 text-[#787774]" />
+                                <p className="text-xs italic">Belum ada komentar atau diskusi pada kegiatan ini.</p>
+                              </div>
+                            );
+                          }
+
+                          if (sortedTopicComments.length <= 2 || showAllReplies) {
+                            return sortedTopicComments.map((c, idx) => renderCommentItem(c, idx));
+                          }
+
+                          return (
+                            <div className="space-y-1">
+                              {renderCommentItem(sortedTopicComments[0], 0)}
+                              <div className="pl-8 py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAllReplies(true)}
+                                  className="text-xs font-medium text-[#787774] dark:text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white flex items-center gap-1.5 py-1 px-2.5 rounded-md hover:bg-[#F1F1EF] dark:hover:bg-[#252525] transition-colors cursor-pointer border border-[#EDEDEC] dark:border-[#2F2F2F]"
                                 >
-                                  <div 
-                                    className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 shadow-xs"
-                                    style={{
-                                      backgroundColor: 'var(--input-bg, #f1f5f9)',
-                                      border: '1px solid var(--border-main, #cbd5e1)',
-                                      color: 'var(--text-main, #0f172a)'
-                                    }}
-                                  >
-                                    {(c.authorName || 'U').charAt(0).toUpperCase()}
-                                  </div>
-
-                                  <div className="flex-1 min-w-0 space-y-1">
-                                    <div className="flex items-center gap-2 flex-wrap text-xs">
-                                      <span 
-                                        className="font-bold text-xs"
-                                        style={{ color: 'var(--text-main, #0f172a)' }}
-                                      >
-                                        {c.authorName || 'Personil'}
-                                      </span>
-                                      <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 leading-tight">
-                                        Guest
-                                      </span>
-                                      <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
-                                        {formatNotionCommentTime(c.createdAt)}
-                                      </span>
-
-                                      <div className="ml-auto flex items-center gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleStartReply(c)}
-                                          className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-500/10 transition-opacity flex items-center gap-1 cursor-pointer font-medium"
-                                          title={`Balas tanggapan ${c.authorName}`}
-                                        >
-                                          <Reply className="w-2.5 h-2.5 rotate-180" />
-                                          <span>Balas</span>
-                                        </button>
-                                        {c.authorNik === currentAuthorNik && (
-                                        <>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setEditingCommentId(c.id);
-                                              setEditingCommentContent(c.content);
-                                            }}
-                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
-                                            title="Edit komentar ini"
-                                          >
-                                            <Edit2 className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleDeleteComment(c.id)}
-                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                                            title="Hapus komentar ini"
-                                          >
-                                            <Trash2 className="w-3 h-3" />
-                                          </button>
-                                        </>
-                                      )}
-                                      </div>
-                                    </div>
-
-                                    {editingCommentId === c.id ? (
-                                      <div className="space-y-2 mt-1">
-                                        <textarea
-                                          value={editingCommentContent}
-                                          onChange={(e) => setEditingCommentContent(e.target.value)}
-                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
-                                          style={{
-                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
-                                            borderColor: 'var(--border-main, #334155)',
-                                            color: 'var(--text-main, #f1f5f9)'
-                                          }}
-                                        />
-                                        <div className="flex items-center gap-2 justify-end">
-                                          <button
-                                            type="button"
-                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
-                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
-                                          >
-                                            Batal
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSaveEditComment(c.id)}
-                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
-                                          >
-                                            Simpan
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                        {c.content}
-                                      </p>
-                                    )}
-
-                                    {atts.length > 0 && (
-                                      <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-
-                            {/* Collapsible toggle bar */}
-                            <div className="pl-9 py-1">
-                              <button
-                                type="button"
-                                onClick={() => setShowAllReplies(!showAllReplies)}
-                                className="text-xs font-semibold flex items-center gap-1.5 py-1 px-2.5 -ml-2.5 rounded-lg transition-all cursor-pointer group border border-dashed hover:border-teal-500/50"
-                                style={{
-                                  color: 'var(--text-muted, #64748b)',
-                                  borderColor: 'var(--border-main, rgba(51, 65, 85, 0.4))'
-                                }}
-                              >
-                                {showAllReplies ? (
-                                  <>
-                                    <ChevronUp className="w-3.5 h-3.5 text-teal-500" />
-                                    <span>Sembunyikan {sortedTopicComments.length - 2} balasan</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <ChevronDown className="w-3.5 h-3.5 text-teal-500 group-hover:translate-y-0.5 transition-transform" />
-                                    <span style={{ color: 'var(--text-main, #0f172a)' }}>Show {sortedTopicComments.length - 2} replies</span>
-                                  </>
-                                )}
-                              </button>
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                  <span>Tampilkan {sortedTopicComments.length - 2} balasan lainnya</span>
+                                </button>
+                              </div>
+                              {renderCommentItem(sortedTopicComments[sortedTopicComments.length - 1], sortedTopicComments.length - 1)}
                             </div>
-
-                            {/* Intermediate comments */}
-                            <AnimatePresence>
-                              {showAllReplies && (
-                                <motion.div
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  className="space-y-2 overflow-hidden"
-                                >
-                                  {sortedTopicComments.slice(1, sortedTopicComments.length - 1).map((c, midx) => {
-                                    const atts = parseCommentAttachments(c.fileUrl, c.fileName, c.content);
-                                    return (
-                                      <div 
-                                        key={c.id ? `mid-${c.id}-${midx}` : `mid-${midx}`} 
-                                        className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-500/5 transition-colors group"
-                                        style={{
-                                          borderBottom: '1px solid var(--border-main, rgba(51, 65, 85, 0.25))'
-                                        }}
-                                      >
-                                        <div 
-                                          className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 shadow-xs"
-                                          style={{
-                                            backgroundColor: 'var(--input-bg, #f1f5f9)',
-                                            border: '1px solid var(--border-main, #cbd5e1)',
-                                            color: 'var(--text-main, #0f172a)'
-                                          }}
-                                        >
-                                          {(c.authorName || 'U').charAt(0).toUpperCase()}
-                                        </div>
-
-                                        <div className="flex-1 min-w-0 space-y-1">
-                                          <div className="flex items-center gap-2 flex-wrap text-xs">
-                                            <span 
-                                              className="font-bold text-xs"
-                                              style={{ color: 'var(--text-main, #0f172a)' }}
-                                            >
-                                              {c.authorName || 'Personil'}
-                                            </span>
-                                            <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 leading-tight">
-                                              Guest
-                                            </span>
-                                            <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
-                                              {formatNotionCommentTime(c.createdAt)}
-                                            </span>
-
-                                            <div className="ml-auto flex items-center gap-1">
-                                              <button
-                                                type="button"
-                                                onClick={() => handleStartReply(c)}
-                                                className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-500/10 transition-opacity flex items-center gap-1 cursor-pointer font-medium"
-                                                title={`Balas tanggapan ${c.authorName}`}
-                                              >
-                                                <Reply className="w-2.5 h-2.5 rotate-180" />
-                                                <span>Balas</span>
-                                              </button>
-                                              {c.authorNik === currentAuthorNik && (
-                                        <>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setEditingCommentId(c.id);
-                                              setEditingCommentContent(c.content);
-                                            }}
-                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
-                                            title="Edit komentar ini"
-                                          >
-                                            <Edit2 className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleDeleteComment(c.id)}
-                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                                            title="Hapus komentar ini"
-                                          >
-                                            <Trash2 className="w-3 h-3" />
-                                          </button>
-                                        </>
-                                      )}
-                                            </div>
-                                          </div>
-
-                                          {editingCommentId === c.id ? (
-                                      <div className="space-y-2 mt-1">
-                                        <textarea
-                                          value={editingCommentContent}
-                                          onChange={(e) => setEditingCommentContent(e.target.value)}
-                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
-                                          style={{
-                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
-                                            borderColor: 'var(--border-main, #334155)',
-                                            color: 'var(--text-main, #f1f5f9)'
-                                          }}
-                                        />
-                                        <div className="flex items-center gap-2 justify-end">
-                                          <button
-                                            type="button"
-                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
-                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
-                                          >
-                                            Batal
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSaveEditComment(c.id)}
-                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
-                                          >
-                                            Simpan
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                        {c.content}
-                                      </p>
-                                    )}
-
-                                          {atts.length > 0 && (
-                                            <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-
-                            {/* Latest / Newest Comment */}
-                            {(() => {
-                              const c = sortedTopicComments[sortedTopicComments.length - 1];
-                              const atts = parseCommentAttachments(c.fileUrl, c.fileName, c.content);
-                              return (
-                                <div 
-                                  key={c.id ? `last-${c.id}` : 'last-item'} 
-                                  className="flex items-start gap-2.5 p-2.5 rounded-xl hover:bg-slate-500/5 transition-colors group"
-                                  style={{
-                                    borderBottom: '1px solid var(--border-main, rgba(51, 65, 85, 0.25))'
-                                  }}
-                                >
-                                  <div 
-                                    className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 shadow-xs"
-                                    style={{
-                                      backgroundColor: 'var(--input-bg, #f1f5f9)',
-                                      border: '1px solid var(--border-main, #cbd5e1)',
-                                      color: 'var(--text-main, #0f172a)'
-                                    }}
-                                  >
-                                    {(c.authorName || 'U').charAt(0).toUpperCase()}
-                                  </div>
-
-                                  <div className="flex-1 min-w-0 space-y-1">
-                                    <div className="flex items-center gap-2 flex-wrap text-xs">
-                                      <span 
-                                        className="font-bold text-xs"
-                                        style={{ color: 'var(--text-main, #0f172a)' }}
-                                      >
-                                        {c.authorName || 'Personil'}
-                                      </span>
-                                      <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 leading-tight">
-                                        Guest
-                                      </span>
-                                      <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted, #64748b)' }}>
-                                        {formatNotionCommentTime(c.createdAt)}
-                                      </span>
-
-                                      <div className="ml-auto flex items-center gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleStartReply(c)}
-                                          className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-500/10 transition-opacity flex items-center gap-1 cursor-pointer font-medium"
-                                          title={`Balas tanggapan ${c.authorName}`}
-                                        >
-                                          <Reply className="w-2.5 h-2.5 rotate-180" />
-                                          <span>Balas</span>
-                                        </button>
-                                        {c.authorNik === currentAuthorNik && (
-                                        <>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setEditingCommentId(c.id);
-                                              setEditingCommentContent(c.content);
-                                            }}
-                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-sky-500 transition-opacity cursor-pointer"
-                                            title="Edit komentar ini"
-                                          >
-                                            <Edit2 className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleDeleteComment(c.id)}
-                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                                            title="Hapus komentar ini"
-                                          >
-                                            <Trash2 className="w-3 h-3" />
-                                          </button>
-                                        </>
-                                      )}
-                                      </div>
-                                    </div>
-
-                                    {editingCommentId === c.id ? (
-                                      <div className="space-y-2 mt-1">
-                                        <textarea
-                                          value={editingCommentContent}
-                                          onChange={(e) => setEditingCommentContent(e.target.value)}
-                                          className="w-full text-xs p-2 rounded-lg border focus:ring-1 focus:ring-sky-500 outline-none leading-relaxed min-h-[60px]"
-                                          style={{
-                                            backgroundColor: 'var(--input-bg, #1a1a1a)',
-                                            borderColor: 'var(--border-main, #334155)',
-                                            color: 'var(--text-main, #f1f5f9)'
-                                          }}
-                                        />
-                                        <div className="flex items-center gap-2 justify-end">
-                                          <button
-                                            type="button"
-                                            onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}
-                                            className="px-2 py-1 text-xs rounded border border-slate-600 text-slate-300 hover:bg-slate-700 cursor-pointer"
-                                          >
-                                            Batal
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSaveEditComment(c.id)}
-                                            className="px-2.5 py-1 text-xs rounded bg-sky-600 hover:bg-sky-500 text-white font-medium cursor-pointer"
-                                          >
-                                            Simpan
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main, #1e293b)' }}>
-                                        {c.content}
-                                      </p>
-                                    )}
-
-                                    {atts.length > 0 && (
-                                      <NotionAttachmentGrid attachments={atts} onPreview={handlePreviewAttachment} />
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
 
-                      {/* Notion Bottom Comment Box */}
+                      {/* Notion Bottom Comment Input Box */}
                       <form 
                         onSubmit={handlePostComment} 
                         onPaste={handleCommentPaste}
-                        className="p-3.5 sm:p-4 border rounded-2xl space-y-2.5 shadow-md mt-4"
-                        style={{
-                          backgroundColor: 'var(--card-bg, #171717)',
-                          borderColor: 'var(--border-main, #334155)'
-                        }}
+                        className="p-3 sm:p-3.5 border border-[#EDEDEC] dark:border-[#2F2F2F] rounded-xl space-y-2.5 shadow-xs bg-white dark:bg-[#202020] mt-4"
                       >
                         {/* Replying banner */}
                         {replyingTo && (
-                          <div 
-                            className="flex items-center justify-between p-2 px-3 rounded-xl border text-xs animate-in fade-in duration-150 shadow-xs"
-                            style={{
-                              backgroundColor: 'rgba(20, 184, 166, 0.12)',
-                              borderColor: 'rgba(20, 184, 166, 0.35)',
-                              color: 'var(--text-main, #f1f5f9)'
-                            }}
-                          >
+                          <div className="flex items-center justify-between p-2 px-3 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#F7F7F5] dark:bg-[#252525] text-xs">
                             <div className="flex items-center gap-2 min-w-0">
-                              <Reply className="w-3.5 h-3.5 text-teal-400 shrink-0 rotate-180" />
-                              <span className="truncate">
-                                Membalas <strong className="text-teal-300 font-semibold">{replyingTo.authorName}</strong>: <span className="opacity-85 italic font-normal">"{replyingTo.content.substring(0, 60)}{replyingTo.content.length > 60 ? '...' : ''}"</span>
+                              <Reply className="w-3.5 h-3.5 text-[#787774] shrink-0 rotate-180" />
+                              <span className="truncate text-[#37352F] dark:text-[#E6E6E5]">
+                                Membalas <strong className="font-semibold">{replyingTo.authorName}</strong>: <span className="text-[#787774] dark:text-[#9B9A97] italic font-normal">"{replyingTo.content.substring(0, 60)}{replyingTo.content.length > 60 ? '...' : ''}"</span>
                               </span>
                             </div>
                             <button
                               type="button"
                               onClick={() => setReplyingTo(null)}
-                              className="p-1 hover:bg-teal-500/20 rounded-md text-teal-300 hover:text-white transition-colors cursor-pointer shrink-0 ml-2"
+                              className="p-1 hover:bg-[#EFEFED] dark:hover:bg-[#333333] rounded text-[#787774] hover:text-[#37352F] dark:hover:text-white transition-colors cursor-pointer shrink-0 ml-2"
                               title="Batal Membalas"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -11519,32 +11099,26 @@ export function NotionDatabaseTable({
 
                         {/* Selected Attachment Preview with Caption */}
                         {(selectedFiles.length > 0 || selectedFile) && (
-                          <div 
-                            className="p-2.5 rounded-xl border space-y-2 animate-in fade-in shadow-xs"
-                            style={{
-                              backgroundColor: 'var(--input-bg, #1a1a1a)',
-                              borderColor: 'rgba(20, 184, 166, 0.45)'
-                            }}
-                          >
-                            <div className="flex items-center justify-between text-xs font-semibold text-teal-400">
+                          <div className="p-2.5 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#FAFAFA] dark:bg-[#181818] space-y-2 text-xs">
+                            <div className="flex items-center justify-between font-medium text-[#787774] dark:text-[#9B9A97]">
                               <span>Lampiran ({selectedFiles.length || 1} file siap dikirim):</span>
                               <button
                                 type="button"
                                 onClick={() => { setSelectedFiles([]); setSelectedFile(null); setCommentFileCaption(''); }}
-                                className="text-[11px] text-rose-400 hover:underline cursor-pointer"
+                                className="text-rose-500 hover:underline cursor-pointer"
                               >
                                 Hapus Semua
                               </button>
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {(selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : [])).map((f, fIdx) => (
-                                <div key={fIdx} className="relative flex items-center gap-2 p-1.5 pr-2.5 rounded-lg bg-teal-950/40 border border-teal-500/30">
+                                <div key={fIdx} className="relative flex items-center gap-2 p-1.5 pr-2.5 rounded-md bg-white dark:bg-[#222222] border border-[#EDEDEC] dark:border-[#2F2F2F]">
                                   {f.isImage && (f.previewUrl || f.url) ? (
-                                    <img src={f.previewUrl || f.url} alt={f.name} className="w-8 h-8 object-cover rounded border border-teal-500/40 shrink-0" />
+                                    <img src={f.previewUrl || f.url} alt={f.name} className="w-8 h-8 object-cover rounded border border-[#EDEDEC] dark:border-[#2F2F2F] shrink-0" />
                                   ) : (
-                                    <Paperclip className="w-4 h-4 text-teal-400 shrink-0" />
+                                    <Paperclip className="w-4 h-4 text-[#787774] shrink-0" />
                                   )}
-                                  <span className="text-[11px] font-medium text-teal-200 truncate max-w-[120px]" title={f.name}>{f.name}</span>
+                                  <span className="text-[11px] font-medium text-[#37352F] dark:text-[#E6E6E5] truncate max-w-[120px]" title={f.name}>{f.name}</span>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -11552,7 +11126,7 @@ export function NotionDatabaseTable({
                                       setSelectedFiles(updated);
                                       setSelectedFile(updated[0] || null);
                                     }}
-                                    className="p-0.5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded cursor-pointer"
+                                    className="p-0.5 hover:bg-rose-500/10 text-[#787774] hover:text-rose-500 rounded cursor-pointer"
                                     title="Hapus file ini"
                                   >
                                     <X className="w-3 h-3" />
@@ -11560,18 +11134,13 @@ export function NotionDatabaseTable({
                                 </div>
                               ))}
                             </div>
-                            <div className="flex items-center gap-1.5 pt-1">
+                            <div className="pt-1">
                               <input
                                 type="text"
                                 value={commentFileCaption}
                                 onChange={(e) => setCommentFileCaption(e.target.value)}
                                 placeholder="Tambahkan caption gambar/lampiran (opsional)..."
-                                className="w-full text-xs px-2.5 py-1.5 rounded-lg border focus:border-teal-500 outline-none leading-relaxed"
-                                style={{
-                                  backgroundColor: 'var(--card-bg, #141414)',
-                                  borderColor: 'var(--border-main, #334155)',
-                                  color: 'var(--text-main, #f1f5f9)'
-                                }}
+                                className="w-full text-xs px-2.5 py-1.5 rounded-md border border-[#EDEDEC] dark:border-[#2F2F2F] focus:border-[#B4B4B0] dark:focus:border-[#5A5A55] outline-none leading-relaxed bg-white dark:bg-[#1E1E1E] text-[#37352F] dark:text-[#E6E6E5]"
                               />
                             </div>
                           </div>
@@ -11596,15 +11165,10 @@ export function NotionDatabaseTable({
                               ? `Tulis catatan tambahan untuk lampiran (opsional, tekan Enter untuk kirim)...`
                               : `Tulis komentar... (Bisa langsung paste gambar / Ctrl+V)`
                           }
-                          className="w-full p-2.5 rounded-xl border focus:border-teal-500 outline-none leading-relaxed text-xs resize-none"
-                          style={{
-                            backgroundColor: 'var(--input-bg, #202020)',
-                            borderColor: 'var(--border-main, #334155)',
-                            color: 'var(--text-main, #f1f5f9)'
-                          }}
+                          className="w-full p-2 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] focus:border-[#B4B4B0] dark:focus:border-[#5A5A55] outline-none leading-relaxed text-xs sm:text-sm resize-none bg-[#FAFAFA] dark:bg-[#191919] text-[#37352F] dark:text-[#E6E6E5] placeholder-[#9B9A97]"
                         />
 
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
                           <div className="flex items-center gap-2">
                             <input
                               type="file"
@@ -11618,28 +11182,18 @@ export function NotionDatabaseTable({
                               type="button"
                               disabled={isUploadingCommentFile}
                               onClick={() => commentFileInputRef.current?.click()}
-                              className="p-1 px-2.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 hover:border-teal-500/60 transition-colors cursor-pointer"
-                              style={{
-                                backgroundColor: 'var(--input-bg, #202020)',
-                                borderColor: 'var(--border-main, #334155)',
-                                color: 'var(--text-muted, #94a3b8)'
-                              }}
+                              className="p-1 px-2.5 rounded-md border border-[#EDEDEC] dark:border-[#2F2F2F] text-xs font-medium flex items-center gap-1.5 hover:bg-[#F7F7F5] dark:hover:bg-[#252525] text-[#787774] dark:text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white transition-colors cursor-pointer"
                               title="Lampirkan foto atau dokumen ke diskusi"
                             >
-                              {isUploadingCommentFile ? <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-400" /> : <Paperclip className="w-3.5 h-3.5 text-teal-400" />}
+                              {isUploadingCommentFile ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#2383E2]" /> : <Paperclip className="w-3.5 h-3.5" />}
                               <span>{isUploadingCommentFile ? 'Mengunggah...' : 'Lampirkan Foto'}</span>
                             </button>
 
-                            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted, #94a3b8)' }}>Status:</span>
+                            <span className="text-[11px] font-medium text-[#787774] dark:text-[#9B9A97]">Status:</span>
                             <select
                               value={statusUpdateChoice}
                               onChange={(e) => setStatusUpdateChoice(e.target.value)}
-                              className="p-1 px-2 rounded-lg border text-xs outline-none cursor-pointer"
-                              style={{
-                                backgroundColor: 'var(--input-bg, #202020)',
-                                borderColor: 'var(--border-main, #334155)',
-                                color: 'var(--text-main, #f1f5f9)'
-                              }}
+                              className="p-1 px-2 rounded-md border border-[#EDEDEC] dark:border-[#2F2F2F] text-xs outline-none cursor-pointer bg-white dark:bg-[#191919] text-[#37352F] dark:text-[#E6E6E5]"
                             >
                               <option value="">Status Tetap ({getRowVal(selectedRow, 'Status') || 'Open'})</option>
                               <option value="On Progress">⏩ Ubah ke On Progress</option>
@@ -11649,18 +11203,18 @@ export function NotionDatabaseTable({
                             </select>
                           </div>
 
-                          <Button
+                          <button
                             type="submit"
                             disabled={submittingComment || isUploadingCommentFile || (!commentText.trim() && selectedFiles.length === 0 && !selectedFile)}
-                            className="!w-auto text-xs px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="text-xs px-4 py-1.5 bg-[#2383E2] hover:bg-[#1D70C2] text-white font-semibold rounded-lg shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                           >
-                            {submittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : replyingTo ? <Reply className="w-3.5 h-3.5 mr-1.5 rotate-180" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
+                            {submittingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : replyingTo ? <Reply className="w-3.5 h-3.5 rotate-180" /> : <Send className="w-3.5 h-3.5" />}
                             <span>{replyingTo ? 'Kirim Balasan' : 'Comment'}</span>
-                          </Button>
+                          </button>
                         </div>
                       </form>
-
                     </div>
+
                   </div>
                 </div>
               </motion.div>
@@ -11693,23 +11247,18 @@ export function NotionDatabaseTable({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2 }}
-              className="relative w-full max-w-lg rounded-2xl border shadow-2xl p-5 z-10 space-y-4"
-              style={{
-                backgroundColor: 'var(--card-bg, #1a1a1a)',
-                borderColor: 'var(--border-main, #334155)',
-                color: 'var(--text-main, #f1f5f9)'
-              }}
+              className="relative w-full max-w-lg rounded-xl border border-[#EDEDEC] dark:border-[#2F2F2F] shadow-2xl p-5 z-10 space-y-4 bg-white dark:bg-[#1E1E1E] text-[#37352F] dark:text-[#E6E6E5]"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400">
+              <div className="flex items-center justify-between pb-3 border-b border-[#EDEDEC] dark:border-[#2F2F2F]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#F1F1EF] dark:bg-[#2F2F2F] flex items-center justify-center text-[#5A5A55] dark:text-[#9B9A97]">
                     <ImageIcon className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-teal-300">Upload Lampiran dengan Caption</h3>
-                    <p className="text-[11px] text-slate-400">Tambahkan penjelasan atau caption untuk foto ini</p>
+                    <h3 className="text-sm font-semibold text-[#37352F] dark:text-white">Upload Lampiran dengan Caption</h3>
+                    <p className="text-xs text-[#787774] dark:text-[#9B9A97]">Tambahkan penjelasan atau caption untuk foto/file ini</p>
                   </div>
                 </div>
                 <button
@@ -11721,7 +11270,7 @@ export function NotionDatabaseTable({
                     }
                     setPendingUploadFile(null);
                   }}
-                  className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 rounded-md hover:bg-[#F1F1EF] dark:hover:bg-[#252525] text-[#787774] hover:text-[#37352F] dark:hover:text-white transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -11730,7 +11279,7 @@ export function NotionDatabaseTable({
               {/* Preview Thumbnail */}
               <div className="space-y-3">
                 {pendingUploadFile.isImage && pendingUploadFile.previewUrl ? (
-                  <div className="relative rounded-xl overflow-hidden border max-h-56 flex items-center justify-center bg-black/40" style={{ borderColor: 'var(--border-main, #334155)' }}>
+                  <div className="relative rounded-lg overflow-hidden border border-[#EDEDEC] dark:border-[#2F2F2F] max-h-56 flex items-center justify-center bg-[#FAFAFA] dark:bg-black/40">
                     <img 
                       src={pendingUploadFile.previewUrl} 
                       alt={pendingUploadFile.file.name} 
@@ -11738,25 +11287,25 @@ export function NotionDatabaseTable({
                     />
                   </div>
                 ) : (
-                  <div className="p-4 rounded-xl border flex items-center gap-3 bg-slate-900/60" style={{ borderColor: 'var(--border-main, #334155)' }}>
-                    <div className="w-10 h-10 rounded-xl bg-teal-950 border border-teal-700/50 flex items-center justify-center text-teal-400 shrink-0">
+                  <div className="p-4 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] flex items-center gap-3 bg-[#FAFAFA] dark:bg-[#141414]">
+                    <div className="w-10 h-10 rounded-lg bg-[#F1F1EF] dark:bg-[#2F2F2F] flex items-center justify-center text-[#5A5A55] dark:text-[#9B9A97] shrink-0">
                       <FileText className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <span className="font-semibold text-xs text-teal-300 block truncate">{pendingUploadFile.file.name}</span>
-                      <span className="text-[10px] text-slate-400">{(pendingUploadFile.file.size / 1024).toFixed(0)} KB</span>
+                      <span className="font-semibold text-xs text-[#37352F] dark:text-[#E6E6E5] block truncate">{pendingUploadFile.file.name}</span>
+                      <span className="text-[10px] text-[#787774] dark:text-[#9B9A97]">{(pendingUploadFile.file.size / 1024).toFixed(0)} KB</span>
                     </div>
                   </div>
                 )}
 
-                <div className="text-[11px] text-slate-400 truncate flex items-center justify-between">
+                <div className="text-[11px] text-[#787774] dark:text-[#9B9A97] truncate flex items-center justify-between">
                   <span className="truncate max-w-[300px]"><strong>File:</strong> {pendingUploadFile.file.name}</span>
                   <span>{(pendingUploadFile.file.size / 1024).toFixed(0)} KB</span>
                 </div>
 
                 {/* Caption Input */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-teal-300">
+                  <label className="block text-xs font-medium text-[#37352F] dark:text-[#E6E6E5]">
                     Caption / Keterangan Gambar (Opsional):
                   </label>
                   <textarea
@@ -11765,12 +11314,7 @@ export function NotionDatabaseTable({
                     value={pendingUploadFile.caption}
                     onChange={(e) => setPendingUploadFile({ ...pendingUploadFile, caption: e.target.value })}
                     placeholder="Contoh: Kondisi bearing motor setelah dibersihkan dan siap dipasang kembali..."
-                    className="w-full p-2.5 rounded-xl border text-xs outline-none focus:border-teal-500 leading-relaxed resize-none"
-                    style={{
-                      backgroundColor: 'var(--input-bg, #141414)',
-                      borderColor: 'var(--border-main, #334155)',
-                      color: 'var(--text-main, #f1f5f9)'
-                    }}
+                    className="w-full p-2.5 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] text-xs outline-none focus:border-[#B4B4B0] dark:focus:border-[#5A5A55] leading-relaxed resize-none bg-[#FAFAFA] dark:bg-[#141414] text-[#37352F] dark:text-[#E6E6E5]"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                         e.preventDefault();
@@ -11778,14 +11322,14 @@ export function NotionDatabaseTable({
                       }
                     }}
                   />
-                  <span className="text-[10px] text-slate-500 italic block">
+                  <span className="text-[10px] text-[#787774] dark:text-[#9B9A97] italic block">
                     Tekan Ctrl+Enter atau klik tombol di bawah untuk mengunggah.
                   </span>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t" style={{ borderColor: 'var(--border-main, #334155)' }}>
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#EDEDEC] dark:border-[#2F2F2F]">
                 <button
                   type="button"
                   disabled={isUploadingGallery}
@@ -11795,16 +11339,15 @@ export function NotionDatabaseTable({
                     }
                     setPendingUploadFile(null);
                   }}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-                  style={{ borderColor: 'var(--border-main, #334155)' }}
+                  className="px-4 py-2 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] text-xs font-medium text-[#787774] dark:text-[#9B9A97] hover:bg-[#F1F1EF] dark:hover:bg-[#252525] transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
-                <Button
+                <button
                   type="button"
                   disabled={isUploadingGallery}
                   onClick={handleExecuteGalleryUpload}
-                  className="!w-auto text-xs px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                  className="text-xs px-5 py-2 bg-[#2383E2] hover:bg-[#1D70C2] text-white font-semibold rounded-lg shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-50"
                 >
                   {isUploadingGallery ? (
                     <>
@@ -11817,7 +11360,7 @@ export function NotionDatabaseTable({
                       <span>Upload & Simpan Caption</span>
                     </>
                   )}
-                </Button>
+                </button>
               </div>
             </motion.div>
           </div>

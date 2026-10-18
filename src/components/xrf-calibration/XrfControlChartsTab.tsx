@@ -4,11 +4,12 @@ import {
   HelpCircle, Sparkles, Filter, Check, Eye, EyeOff, 
   LayoutGrid, Columns, Layers, CheckSquare, Square, Info, ShieldCheck,
   CheckCircle2, Database, ChevronDown, Activity, Building2, Cpu, ShieldAlert,
-  Plus, X
+  Plus, X, Archive
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { XrfQcChartCard, QC_ELEMENTS_LIST, XrfPointData, XrfChartLimitData, XrfPointAnnotation } from './XrfQcChartCard';
 import { XrfOffspecIsolationModal, IsolatedOffspecPoint } from './XrfOffspecIsolationModal';
+import { formatStandardDisplayName, isWdxrfInstrument } from '../../utils/xrfStandardDetector';
 
 interface XrfControlChartsTabProps {
   instruments: Array<{ code: string; name: string }>;
@@ -27,8 +28,29 @@ export const OFFICIAL_INPUT_STANDARDS_ORDER = [
   'OREAS193', 'SAP19', 'OREAS194', 'OREAS195',
 ];
 
-// Urutan standar resmi skema WDXRF Supermini 200 (17 Standar kontinu tanpa dipisah saprolite/limonite)
+// Urutan standar resmi skema WDXRF Supermini 200 (17 Standar GTS)
 export const WDXRF_SUPERMINI_STANDARDS_ORDER = [
+  'BLANK_A',
+  'BLANK_B',
+  'OREAS184',
+  'LIM01',
+  'LIM02',
+  'LIM03',
+  'OREAS187',
+  'LIM04',
+  'OREAS189',
+  'LIM05',
+  'OREAS190',
+  'OREAS191',
+  'OREAS192',
+  'OREAS193',
+  'SAP19',
+  'OREAS194',
+  'OREAS195',
+];
+
+// Urutan standar default skema WDXRF Zetium PANalytical (17 Standar TBP)
+export const WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER = [
   'BLANK_A',
   'BLANK_B',
   'OREAS184',
@@ -591,7 +613,11 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     }
   }, [selectedSite, selectedMethod, currentCategoryInstruments]);
 
-  // Map standard code to measurement count
+
+  const [latestBatchStandards, setLatestBatchStandards] = useState<string[]>([]);
+  const [showHistoricalStandards, setShowHistoricalStandards] = useState(false);
+
+  // Map of standardCode -> count for quick lookup
   const standardCountMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const item of availableStandardsData) {
@@ -620,14 +646,39 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     }
   };
 
+  // Load baseline standards from the latest verification batch for selected instruments
+  const loadLatestBatchStandards = async () => {
+    if (selectedInstruments.length === 0) return;
+    try {
+      const instParam = selectedInstruments.join(',');
+      const res = await fetch(`/api/xrf/latest-batch-standards?instrumentCode=${instParam}`);
+      const json = await res.json();
+      if (json.success && json.hasData && Array.isArray(json.standards) && json.standards.length > 0) {
+        setLatestBatchStandards(json.standards);
+      } else {
+        setLatestBatchStandards([]);
+      }
+    } catch (err) {
+      console.warn("Gagal memuat standar batch terakhir:", err);
+    }
+  };
+
   useEffect(() => {
     loadAvailableStandards();
+    loadLatestBatchStandards();
   }, [selectedInstruments]);
 
-  // Auto-sync selected standards when primary matrix or method changes
+  // Auto-sync selected standards when primary matrix, method, or latest batch standards change
   useEffect(() => {
     if (selectedMethod === 'WDXRF') {
-      setSelectedStandards(WDXRF_SUPERMINI_STANDARDS_ORDER);
+      const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
+      if (latestBatchStandards.length > 0) {
+        setSelectedStandards(latestBatchStandards);
+      } else if (hasZetium) {
+        setSelectedStandards(WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER);
+      } else {
+        setSelectedStandards(WDXRF_SUPERMINI_STANDARDS_ORDER);
+      }
     } else if (selectedMatrix === 'SAPROLITE') {
       const sapCodes = [
         'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 
@@ -638,7 +689,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       const limCodes = ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
       setSelectedStandards(limCodes);
     }
-  }, [selectedMethod, selectedMatrix]);
+  }, [selectedMethod, selectedMatrix, latestBatchStandards, selectedInstruments]);
 
   // Fetch chart data from backend for all selected instruments
   const fetchChartData = async () => {
@@ -767,15 +818,23 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   };
 
   // Visible standards list:
-  // - If WDXRF: follow official WDXRF 17 standards schema (unified, NOT separated by saprolite/limonite)
+  // - If WDXRF: follow official baseline from latest verification batch (Zetium TBP or Supermini GTS)
   // - If EDXRF: strictly constrained to selected Primary Matrix (Saprolite vs Limonite)
+  // - Historical standards: if toggled, display older standards that have data but are retired from current batch
   const visibleStandards = useMemo(() => {
     let candidateCodes: string[] = [];
     let matrixType = 'SAPROLITE';
 
     if (selectedMethod === 'WDXRF') {
-      candidateCodes = WDXRF_SUPERMINI_STANDARDS_ORDER;
-      matrixType = 'SUPERMINI';
+      const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
+      if (latestBatchStandards.length > 0) {
+        candidateCodes = [...latestBatchStandards];
+      } else if (hasZetium) {
+        candidateCodes = [...WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER];
+      } else {
+        candidateCodes = [...WDXRF_SUPERMINI_STANDARDS_ORDER];
+      }
+      matrixType = hasZetium ? 'ZETIUM' : 'SUPERMINI';
     } else {
       const isSaprolite = selectedMatrix === 'SAPROLITE';
       candidateCodes = isSaprolite
@@ -784,25 +843,54 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       matrixType = isSaprolite ? 'SAPROLITE' : 'LIMONITE';
     }
 
+    // Identifikasi standar historis yang memiliki data pengukuran tapi tidak ada di set batch terakhir
+    const historicalCodes = availableStandardsData
+      .filter(s => s.count > 0 && !candidateCodes.includes(s.standardCode) && !candidateCodes.includes(s.standardCode.replace(' ', '_')))
+      .map(s => s.standardCode);
+
+    if (showHistoricalStandards && historicalCodes.length > 0) {
+      candidateCodes = [...candidateCodes, ...historicalCodes];
+    }
+
     const list = candidateCodes.map(code => {
       const existing = standards.find(s => s.code === code || s.code === code.replace('_', ' ') || s.name === code);
+      const isHist = historicalCodes.includes(code);
+      const baseDisp = existing?.name || STANDARD_DISPLAY_NAMES[code] || formatStandardDisplayName(code);
       return {
         code,
-        name: existing?.name || STANDARD_DISPLAY_NAMES[code] || code,
+        name: isHist ? `${baseDisp} (Arsip/Historis)` : baseDisp,
         matrix: matrixType,
         count: standardCountMap[code] || standardCountMap[code.replace('_', ' ')] || 0,
+        isHistorical: isHist,
       };
     });
 
     if (selectedMethod === 'WDXRF') {
-      // Untuk WDXRF: tampilkan urutan skema 17 standar secara utuh dan kontinu,
-      // tidak dipisahkan saprolite/limonite dan tidak dieliminasi
+      // Untuk WDXRF: tampilkan urutan skema standar secara utuh dan kontinu
       return list;
     }
 
     const withData = list.filter(s => s.count > 0);
     return withData.length > 0 ? withData : list;
-  }, [standards, standardCountMap, selectedMatrix, selectedMethod]);
+  }, [standards, standardCountMap, selectedMatrix, selectedMethod, selectedInstruments, latestBatchStandards, availableStandardsData, showHistoricalStandards]);
+
+  const historicalStandardsCount = useMemo(() => {
+    let candidateCodes: string[] = [];
+    if (selectedMethod === 'WDXRF') {
+      const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
+      candidateCodes = latestBatchStandards.length > 0 
+        ? latestBatchStandards 
+        : (hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER);
+    } else {
+      candidateCodes = selectedMatrix === 'SAPROLITE'
+        ? ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']
+        : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
+    }
+
+    return availableStandardsData.filter(s => 
+      s.count > 0 && !candidateCodes.includes(s.standardCode) && !candidateCodes.includes(s.standardCode.replace(' ', '_'))
+    ).length;
+  }, [availableStandardsData, latestBatchStandards, selectedMethod, selectedMatrix, selectedInstruments]);
 
   // Standards rendered on the chart canvas (rendered directly)
   const renderedStandards = visibleStandards;
@@ -893,8 +981,27 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             ) : (
               <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 text-xs font-black shadow-xs">
                 <Layers className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span>SKEMA STANDAR WDXRF (17 STANDAR KONTINU)</span>
+                <span>
+                  {selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B')
+                    ? `WDXRF ZETIUM TBP (${latestBatchStandards.length > 0 ? latestBatchStandards.length : 17} STANDAR BASELINE)`
+                    : `WDXRF SUPERMINI GTS (${latestBatchStandards.length > 0 ? latestBatchStandards.length : 17} STANDAR BASELINE)`}
+                </span>
               </div>
+            )}
+
+            {historicalStandardsCount > 0 && (
+              <button
+                onClick={() => setShowHistoricalStandards(!showHistoricalStandards)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                  showHistoricalStandards
+                    ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-900'
+                }`}
+                title="Tampilkan data standar lama yang pernah diukur namun tidak masuk dalam batch verifikasi terakhir"
+              >
+                <Archive className="w-3.5 h-3.5 text-amber-500" />
+                <span>{showHistoricalStandards ? 'Tutup' : 'Buka'} Standar Arsip ({historicalStandardsCount})</span>
+              </button>
             )}
           </div>
 

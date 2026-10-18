@@ -9,6 +9,7 @@ import {
   xrfVerifications,
   xrfVerificationItems
 } from "../../src/db/schema.js";
+import { extractSmartStandardCode } from "../../src/utils/xrfStandardDetector.js";
 
 export const xrfRouter = Router();
 
@@ -1079,6 +1080,89 @@ xrfRouter.get("/available-standards", async (req, res) => {
   }
 });
 
+// 7d. GET Latest Verification Batch Standards (Baseline Aktif untuk Control Chart & Form Input Dinamis)
+xrfRouter.get("/latest-batch-standards", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const { instrumentCode } = req.query;
+    if (!instrumentCode) {
+      return res.status(400).json({ success: false, error: "instrumentCode diperlukan." });
+    }
+
+    const instList = String(instrumentCode).split(',').map(s => s.trim()).filter(Boolean);
+    if (instList.length === 0) {
+      return res.status(400).json({ success: false, error: "Daftar instrumentCode kosong." });
+    }
+
+    // Ambil instrumen target (pertama)
+    const targetInst = instList[0];
+    const latestBatch = await db.select()
+      .from(xrfVerifications)
+      .where(eq(xrfVerifications.instrumentCode, targetInst))
+      .orderBy(desc(xrfVerifications.verificationDate), desc(xrfVerifications.id))
+      .limit(1);
+
+    if (latestBatch.length === 0) {
+      return res.json({
+        success: true,
+        hasData: false,
+        instrumentCode: targetInst,
+        standards: [],
+        items: [],
+      });
+    }
+
+    const batch = latestBatch[0];
+    const items = await db.select()
+      .from(xrfVerificationItems)
+      .where(eq(xrfVerificationItems.verificationId, batch.id))
+      .orderBy(asc(xrfVerificationItems.sequenceNo), asc(xrfVerificationItems.id));
+
+    // Standar unik sesuai urutan kemunculan di batch
+    const standardsOrder: string[] = [];
+    for (const it of items) {
+      if (it.standardCode && !standardsOrder.includes(it.standardCode)) {
+        standardsOrder.push(it.standardCode);
+      }
+    }
+
+    return res.json({
+      success: true,
+      hasData: true,
+      instrumentCode: targetInst,
+      batch: {
+        id: batch.id,
+        batchCode: batch.batchCode,
+        verificationDate: batch.verificationDate,
+        verificationTime: batch.verificationTime,
+        instrumentCode: batch.instrumentCode,
+        instrumentName: batch.instrumentName,
+      },
+      standards: standardsOrder,
+      items: items.map(it => ({
+        id: it.id,
+        standardCode: it.standardCode,
+        sampleLabel: it.sampleLabel,
+        sequenceNo: it.sequenceNo,
+        analyzedAt: it.analyzedAt,
+        ni: it.ni,
+        co: it.co,
+        fe: it.fe,
+        cao: it.cao,
+        sio2: it.sio2,
+        al2o3: it.al2o3,
+        mgo: it.mgo,
+        p: it.p,
+        s: it.s,
+        cr2o3: it.cr2o3,
+        mno: it.mno,
+      })),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Cache for high-performance chart querying
 let qcChartCache: {
   cacheKey: string;
@@ -1447,7 +1531,17 @@ xrfRouter.post("/import-recap-csv", async (req, res) => {
       return res.status(400).json({ success: false, error: "Isi CSV wajib diisi." });
     }
 
-    const parsed = Papa.parse<string[]>(csvContent, { skipEmptyLines: false });
+    // 1. Bersihkan baris kosong berlebih di ujung bawah (menghindari 1 juta trailing rows Excel)
+    const rawLines = csvContent.split(/\r?\n/);
+    let lastNonEmpty = rawLines.length - 1;
+    while (lastNonEmpty >= 0) {
+      const line = rawLines[lastNonEmpty].trim().replace(/,/g, '').replace(/\t/g, '');
+      if (line.length > 0) break;
+      lastNonEmpty--;
+    }
+    const cleanCsv = lastNonEmpty >= 0 ? rawLines.slice(0, lastNonEmpty + 1).join('\n') : '';
+
+    const parsed = Papa.parse<string[]>(cleanCsv, { skipEmptyLines: false });
     const rows = parsed.data;
 
     let defaultInst = targetInstrumentCode || 'EPSILON_A';
@@ -1498,43 +1592,25 @@ xrfRouter.post("/import-recap-csv", async (req, res) => {
         currentInstrument = targetInstrumentCode;
       } else {
         const xrfText = String(cols[1] || '').toUpperCase();
-        if (xrfText.includes('SUPERMINI') || xrfText.includes('RIGAKU') || xrfText.includes('WDXRF')) {
+        const matchEpsilon = xrfText.match(/EPSILON[\s_]*4?[\s_]*([A-H])/i);
+        if (matchEpsilon) {
+          currentInstrument = `EPSILON_${matchEpsilon[1].toUpperCase()}`;
+        } else if (xrfText.includes('SUPERMINI') || xrfText.includes('RIGAKU') || xrfText.includes('WDXRF')) {
           currentInstrument = 'SUPERMINI';
-        } else if (xrfText.includes('EPSILON A') || xrfText.includes('EPSILON_A')) {
-          currentInstrument = 'EPSILON_A';
-        } else if (xrfText.includes('EPSILON B') || xrfText.includes('EPSILON_B')) {
-          currentInstrument = 'EPSILON_B';
-        } else if (xrfText.includes('EPSILON D') || xrfText.includes('EPSILON_D')) {
-          currentInstrument = 'EPSILON_D';
+        } else if (xrfText.includes('PUMA') || xrfText.includes('S2')) {
+          currentInstrument = 'S2_PUMA';
+        } else if (xrfText.includes('ZETIUM A') || xrfText.includes('ZETIUM_A')) {
+          currentInstrument = 'ZETIUM_A';
+        } else if (xrfText.includes('ZETIUM B') || xrfText.includes('ZETIUM_B')) {
+          currentInstrument = 'ZETIUM_B';
         }
       }
 
       const dateStr = String(cols[2] || '').trim();
       const rawLabel = String(cols[3] || '').trim().toUpperCase();
 
-      let stdCode = 'UNKNOWN';
-      if (rawLabel.includes('BLANK A') || rawLabel === 'BLANK A') stdCode = 'BLANK_A';
-      else if (rawLabel.includes('BLANK B') || rawLabel.includes('BLANK_B')) stdCode = 'BLANK_B';
-      else if (rawLabel.includes('LIM01') || rawLabel.includes('LIM 01')) stdCode = 'LIM01';
-      else if (rawLabel.includes('LIM02') || rawLabel.includes('LIM 02')) stdCode = 'LIM02';
-      else if (rawLabel.includes('LIM03') || rawLabel.includes('LIM 03')) stdCode = 'LIM03';
-      else if (rawLabel.includes('LIM04') || rawLabel.includes('LIM 04')) stdCode = 'LIM04';
-      else if (rawLabel.includes('LIM05') || rawLabel.includes('LIM 05')) stdCode = 'LIM05';
-      else if (rawLabel.includes('OREAS184') || rawLabel.includes('OREAS 184')) stdCode = 'OREAS184';
-      else if (rawLabel.includes('OREAS187') || rawLabel.includes('OREAS 187')) stdCode = 'OREAS187';
-      else if (rawLabel.includes('OREAS189') || rawLabel.includes('OREAS 189')) stdCode = 'OREAS189';
-      else if (rawLabel.includes('OREAS190') || rawLabel.includes('OREAS 190')) stdCode = 'OREAS190';
-      else if (rawLabel.includes('OREAS191') || rawLabel.includes('OREAS 191')) stdCode = 'OREAS191';
-      else if (rawLabel.includes('OREAS192') || rawLabel.includes('OREAS 192')) stdCode = 'OREAS192';
-      else if (rawLabel.includes('OREAS193') || rawLabel.includes('OREAS 193')) stdCode = 'OREAS193';
-      else if (rawLabel.includes('SAP19') || rawLabel.includes('SAP 19')) stdCode = 'SAP19';
-      else if (rawLabel.includes('OREAS194') || rawLabel.includes('OREAS 194')) stdCode = 'OREAS194';
-      else if (rawLabel.includes('OREAS195') || rawLabel.includes('OREAS 195')) stdCode = 'OREAS195';
-      else if (rawLabel.includes('SAP16') || rawLabel.includes('SAP 16')) stdCode = 'SAP16';
-      else if (rawLabel.includes('OREAS182') || rawLabel.includes('OREAS 182')) stdCode = 'OREAS182';
-      else if (rawLabel.includes('LIM13') || rawLabel.includes('LIM 13')) stdCode = 'LIM13';
-      else if (rawLabel.includes('LIM')) stdCode = 'LIM01';
-      else if (rawLabel.includes('OREAS')) stdCode = 'OREAS184';
+      const { standardCode: detectedStdCode } = extractSmartStandardCode(rawLabel);
+      let stdCode = detectedStdCode !== 'UNKNOWN' ? detectedStdCode : (rawLabel.includes('LIM') ? 'LIM01' : (rawLabel.includes('OREAS') ? 'OREAS184' : 'UNKNOWN'));
 
       const [dPart, tPart] = dateStr.split(' ');
       if (!dPart) continue;
@@ -1586,13 +1662,24 @@ xrfRouter.post("/import-recap-csv", async (req, res) => {
             weekNo: getIsoWeek(dObj),
             items: [...currentBatchItems],
           });
+          currentBatchItems = [];
         }
-        currentBatchItems = [itemObj];
         currentDate = isoDate;
         currentTime = time;
-      } else {
-        currentBatchItems.push(itemObj);
       }
+
+      // Skip calibration blanks (seperti VER-BLANK WAX & LICOWAX) KECUALI Supermini BLANK A / VER-BLANK B
+      if (/BLANK\s*(WAX|LICO)/i.test(rawLabel)) {
+        continue;
+      }
+      if (/BLANK/i.test(rawLabel) && !/BLANK\s*[AB]/i.test(rawLabel) && currentInstrument !== 'SUPERMINI') {
+        continue;
+      }
+
+      currentBatchItems.push({
+        ...itemObj,
+        seqNo: currentBatchItems.length + 1,
+      });
     }
 
     if (currentBatchItems.length > 0 && currentDate) {

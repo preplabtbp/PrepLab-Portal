@@ -271,6 +271,8 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
           <XrfDirectPasteTab
             instruments={instruments}
             standards={standards}
+            assignedSite={assignedSite}
+            isDevOrManager={isDevOrManager}
             onSuccessSave={() => setActiveTab('control-charts')}
           />
         )}
