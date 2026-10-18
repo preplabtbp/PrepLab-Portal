@@ -235,6 +235,18 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     target: 'agenda'
   },
   {
+    id: 'parampaa',
+    title: 'Kuis Parampaa (Arcade)',
+    desc: 'Game asah otak legendaris karya Masova (Flash Offline)',
+    category: 'Fasilitas & Penunjang',
+    icon: <Sparkles className="w-5 h-5" />,
+    iconBg: 'bg-emerald-500/15 border-emerald-500/25',
+    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    tags: ['parampaa', 'game', 'kuis', 'offline', 'arcade', 'asah otak', 'hiburan'],
+    actionType: 'nav',
+    target: 'parampaa'
+  },
+  {
     id: 'quiz',
     title: 'Quiz Safety & Prosedur',
     desc: 'Uji pemahaman standar operasional & keselamatan kerja',

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -29,8 +30,39 @@ export function AgendaDashboard({
     inspectorNik === 'M0403240177' || 
     inspectorNik === 'preplabadmin'
   );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTabParam = searchParams.get('tab') || searchParams.get('filter');
+
+  // Default langsung diarahkan ke filter 'Private' (Pribadi)
+  const [categoryFilter, setCategoryFilter] = useState<string>(() => {
+    if (initialTabParam) {
+      const f = initialTabParam.toLowerCase();
+      if (f === 'all' || f === 'semua') return 'All';
+      if (f === 'private' || f === 'pribadi' || f === 'personal') return 'Private';
+    }
+    return 'Private';
+  });
+
+  // Sinkronisasi jika parameter tab di URL berubah
+  useEffect(() => {
+    const tab = searchParams.get('tab') || searchParams.get('filter');
+    if (tab) {
+      const f = tab.toLowerCase();
+      if (f === 'all' || f === 'semua') setCategoryFilter('All');
+      else if (f === 'private' || f === 'pribadi' || f === 'personal') setCategoryFilter('Private');
+    }
+  }, [searchParams]);
+
+  const handleSelectFilter = (cat: string) => {
+    setCategoryFilter(cat);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', cat);
+      return next;
+    }, { replace: true });
+  };
+
   const [events, setEvents] = useState<any[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -99,7 +131,7 @@ export function AgendaDashboard({
     try {
       const year = new Date().getFullYear();
       const [agendaRes, notesRes, holidaysRes] = await Promise.all([
-        fetch('/api/agenda').then(r => r.json()),
+        fetch(`/api/agenda?nik=${encodeURIComponent(inspectorNik || '')}`).then(r => r.json()),
         fetch('/api/notes').then(r => r.json()),
         fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/ID`).then(r => r.ok ? r.json() : []).catch(() => [])
       ]);
@@ -239,43 +271,60 @@ export function AgendaDashboard({
   };
 
   
-  const filteredEvents = useMemo(() => {
-    const isBirthdayEvent = (e: any) => {
-      if (e.id && String(e.id).startsWith('bday-')) return true;
-      if (e.extendedProps?.isBirthday) return true;
-      const k = (e.extendedProps?.kategori || '').toLowerCase();
-      return k === 'birthday' || k === 'ulang tahun';
-    };
+  const isUserPersonalEvent = (e: any) => {
+    const p = e.extendedProps || e;
+    const cleanNik = (inspectorNik || '').trim().toUpperCase();
+    const cleanName = (inspectorName || '').trim().toLowerCase();
+    
+    const creatorNik = String(p.creatorNik || p.creator_nik || '').trim().toUpperCase();
+    const pic = String(p.pic || '').trim();
+    const picUpper = pic.toUpperCase();
+    const picLower = pic.toLowerCase();
 
-    if (categoryFilter === 'All') {
-      return events.filter(e => !isBirthdayEvent(e));
-    }
-    if (categoryFilter === 'Meeting') {
+    // Cocokkan NIK pembuat (creator)
+    if (cleanNik && creatorNik && creatorNik === cleanNik) return true;
+    // Cocokkan PIC NIK atau Nama
+    if (cleanNik && (picUpper === cleanNik || picUpper.includes(cleanNik))) return true;
+    if (cleanName && (picLower === cleanName || picLower.includes(cleanName) || cleanName.includes(picLower))) return true;
+
+    return false;
+  };
+
+  const isPrivateCategory = (e: any) => {
+    const p = e.extendedProps || e;
+    const kat = String(p.kategori || '').trim().toLowerCase();
+    return kat === 'private' || kat === 'personal' || kat === 'pribadi';
+  };
+  
+  const filteredEvents = useMemo(() => {
+    if (categoryFilter === 'Private') {
+      // Hanya agenda pribadi milik pengguna yang sedang login!
+      // Libur nasional, ulang tahun orang lain, maupun agenda orang lain TIDAK dimunculkan di sini.
       return events.filter(e => {
-        if (isBirthdayEvent(e)) return false;
-        if (e.extendedProps?.isHoliday) return true;
-        const k = (e.extendedProps?.kategori || '').toLowerCase();
-        return k === 'meeting' || k === 'rapat' || (e.title || '').toLowerCase().includes('meeting') || (e.title || '').toLowerCase().includes('rapat');
+        if (e.extendedProps?.isHoliday) return false;
+        if (e.extendedProps?.isBirthday) return false;
+        if (String(e.id || '').startsWith('bday-')) return false;
+
+        return isPrivateCategory(e) && isUserPersonalEvent(e);
       });
     }
-    if (categoryFilter === 'Quality Assurance') {
-      return events.filter(e => {
-        if (isBirthdayEvent(e)) return false; // Strictly exclude birthdays from Quality Assurance!
-        if (e.extendedProps?.isHoliday) return true;
-        const k = (e.extendedProps?.kategori || '').toLowerCase();
-        return k === 'quality assurance' || k === 'qa';
-      });
-    }
-    if (categoryFilter === 'Birthday') {
-      if (!isDev) return [];
-      return events.filter(e => isBirthdayEvent(e));
-    }
+
+    // categoryFilter === 'All' (Semua)
+    // Menampilkan agenda umum (meeting, QA, general, libur nasional)
+    // SERTA agenda pribadi MILIK USER SENDIRI.
+    // Agenda pribadi milik orang lain disaring agar privasi masing-masing terjaga.
     return events.filter(e => {
-      if (isBirthdayEvent(e)) return false;
-      if (e.extendedProps?.isHoliday) return true; // always show holidays
-      return e.extendedProps?.kategori === categoryFilter;
+      if (String(e.id || '').startsWith('bday-') || e.extendedProps?.isBirthday) return false;
+      if (e.extendedProps?.isHoliday) return true;
+
+      // Jika kategori adalah Pribadi/Personal, hanya tampilkan milik user yang sedang aktif
+      if (isPrivateCategory(e)) {
+        return isUserPersonalEvent(e);
+      }
+
+      return true;
     });
-  }, [events, categoryFilter, isDev]);
+  }, [events, categoryFilter, inspectorNik, inspectorName]);
 
   const handleEventClick = (info: any) => {
     setCurrentAgenda(info.event);
@@ -299,30 +348,19 @@ export function AgendaDashboard({
         <div className="flex flex-wrap gap-2 w-full md:w-auto justify-start md:justify-end">
           <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto hide-scrollbar" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)', borderWidth: 1 }}>
             {[
-              'All', 
-              'Meeting', 
-              'Quality Assurance', 
-              'Private', 
-              'SPV UP', 
-              'General',
-              ...(isDev ? ['Birthday'] : [])
-            ].map(cat => (
+              { id: 'Private', label: 'Pribadi' },
+              { id: 'All', label: 'Semua' }
+            ].map(tab => (
               <button 
-                key={cat}
-                onClick={() => setCategoryFilter(cat)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex-shrink-0 ${categoryFilter === cat ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
+                key={tab.id}
+                onClick={() => handleSelectFilter(tab.id)}
+                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all flex-shrink-0 cursor-pointer ${categoryFilter === tab.id ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
                 style={{ 
-                  backgroundColor: categoryFilter === cat ? 'var(--card-bg)' : 'transparent',
-                  color: categoryFilter === cat ? (cat === 'Birthday' ? '#EC4899' : 'var(--primary)') : 'var(--text-main)'
+                  backgroundColor: categoryFilter === tab.id ? 'var(--card-bg)' : 'transparent',
+                  color: categoryFilter === tab.id ? 'var(--primary)' : 'var(--text-main)'
                 }}
               >
-                {cat === 'All' ? 'Semua' : 
-                 cat === 'Meeting' ? 'Meeting' : 
-                 cat === 'Quality Assurance' ? 'Quality Assurance' : 
-                 cat === 'SPV UP' ? 'Section' : 
-                 cat === 'Private' ? 'Pribadi' : 
-                 cat === 'General' ? 'General' : 
-                 cat === 'Birthday' ? '🎂 Ulang Tahun (Dev)' : cat}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -582,8 +620,9 @@ export function AgendaDashboard({
                 <Input id="ag-end" type="datetime-local" label="Waktu Selesai" defaultValue={currentAgenda?.extendedProps?.endDate ? new Date(currentAgenda.extendedProps.endDate).toISOString().slice(0,16) : ''} style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)' }}/>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Select id="ag-kategori" label="Kategori" defaultValue={currentAgenda?.extendedProps?.kategori || 'Personal'} options={[
-                  {value: 'Personal', label: 'Personal'}, {value: 'Meeting', label: 'Meeting'}, {value: 'Laboratory', label: 'Laboratory'}, {value: 'General', label: 'General'}, {value: 'SPV UP', label: 'SPV UP'}
+                <Select id="ag-kategori" label="Kategori" defaultValue={currentAgenda?.extendedProps?.kategori || (categoryFilter === 'All' ? 'General' : 'Personal')} options={[
+                  {value: 'Personal', label: 'Pribadi (Agenda Saya)'}, 
+                  {value: 'General', label: 'Semua / Umum (Publik)'}
                 ]} style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)' }}/>
                 <Input id="ag-pic" label="Nama PIC" defaultValue={currentAgenda?.extendedProps?.pic || inspectorName} style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)' }}/>
               </div>
@@ -640,7 +679,9 @@ export function AgendaDashboard({
                </div>
                <div className="p-3 rounded-lg text-sm space-y-2 border" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)' }}>
                   <div className="flex justify-between border-b pb-1" style={{ borderColor: 'var(--border-main)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Kategori:</span> <span className="font-medium" style={{ color: 'var(--text-main)' }}>{currentAgenda.extendedProps?.kategori || '-'}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Kategori:</span> <span className="font-medium" style={{ color: 'var(--text-main)' }}>
+                      {(currentAgenda.extendedProps?.kategori === 'Personal' || currentAgenda.extendedProps?.kategori === 'Private' || currentAgenda.extendedProps?.kategori === 'Pribadi') ? 'Pribadi' : (currentAgenda.extendedProps?.kategori === 'General' ? 'Umum / Semua' : (currentAgenda.extendedProps?.kategori || '-'))}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span style={{ color: 'var(--text-muted)' }}>PIC:</span> <span className="font-medium" style={{ color: 'var(--text-main)' }}>{currentAgenda.extendedProps?.pic || '-'}</span>

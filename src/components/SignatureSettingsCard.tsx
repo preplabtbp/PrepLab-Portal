@@ -58,6 +58,7 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
   const [showUnlockPin, setShowUnlockPin] = useState(false);
   const [unlockedSignatureData, setUnlockedSignatureData] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
+  const [showPreviewWatermark, setShowPreviewWatermark] = useState(true);
 
   // Form States - Change PIN
   const [changeOldPin, setChangeOldPin] = useState('');
@@ -636,17 +637,35 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
                 <div className="space-y-4 text-center">
                   <div className="p-4 rounded-2xl border-2 border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900 shadow-inner relative overflow-hidden flex flex-col items-center justify-center min-h-[140px]">
                     {/* Security Watermark in background */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-5 select-none text-[10px] font-black tracking-widest text-slate-900 dark:text-white uppercase leading-relaxed">
-                      <span>PREPLAB SECURE VERIFIED</span>
-                      <span>NIK: {inspectorNik} • AES-256</span>
-                      <span>OFFICIAL DIGITAL SIGNATURE</span>
-                    </div>
+                    {showPreviewWatermark && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-5 select-none text-[10px] font-black tracking-widest text-slate-900 dark:text-white uppercase leading-relaxed">
+                        <span>PREPLAB SECURE VERIFIED</span>
+                        <span>NIK: {inspectorNik} • AES-256</span>
+                        <span>OFFICIAL DIGITAL SIGNATURE</span>
+                      </div>
+                    )}
 
                     <img
                       src={unlockedSignatureData}
                       alt="Tanda Tangan Terverifikasi"
                       className="max-h-28 max-w-full object-contain relative z-10"
                     />
+                  </div>
+
+                  {/* Watermark toggle pill */}
+                  <div className="flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowPreviewWatermark(!showPreviewWatermark)}
+                      className={`text-[11px] px-3 py-1 rounded-full font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        showPreviewWatermark
+                          ? 'bg-teal-50 dark:bg-teal-950/60 border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300'
+                          : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-500'
+                      }`}
+                    >
+                      <span>Watermark Latar Portal:</span>
+                      <span className="font-bold">{showPreviewWatermark ? 'Aktif' : 'Nonaktif (Hindari Tumpuk)'}</span>
+                    </button>
                   </div>
 
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">

@@ -5,6 +5,7 @@ import {
   Sliders, 
   RotateCcw, 
   Shield, 
+  ShieldCheck,
   Palette, 
   RefreshCw,
   Maximize2,
@@ -46,16 +47,18 @@ export function SignatureUploadOcr({
   const [contrast, setContrast] = useState<number>(1.3);
   const [invert, setInvert] = useState<boolean>(false);
   
-  // Watermark Settings
-  const [watermarkEnabled, setWatermarkEnabled] = useState<boolean>(true);
+  // Watermark Settings (Default false to prevent double watermark with portal system)
+  const [watermarkEnabled, setWatermarkEnabled] = useState<boolean>(false);
   const [watermarkText, setWatermarkText] = useState<string>('HANYA UNTUK PREPLAB PORTAL');
   const [watermarkSubText, setWatermarkSubText] = useState<string>(
     inspectorNik && inspectorName ? `${inspectorName} • ${inspectorNik}` : ''
   );
   const [watermarkOpacity, setWatermarkOpacity] = useState<number>(0.18);
   const [watermarkStyle, setWatermarkStyle] = useState<'diagonal' | 'corner' | 'pattern'>('diagonal');
-  const [watermarkSize, setWatermarkSize] = useState<'sm' | 'md' | 'lg'>('md');
+  const [watermarkSize, setWatermarkSize] = useState<'sm' | 'md' | 'lg' | 'xl'>('md');
+  const [watermarkScale, setWatermarkScale] = useState<number>(1.0);
   const [watermarkLayer, setWatermarkLayer] = useState<'behind' | 'front'>('behind');
+  const [watermarkColor, setWatermarkColor] = useState<string>('#000000');
 
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,8 +102,9 @@ export function SignatureUploadOcr({
             opacity: watermarkOpacity,
             style: watermarkStyle,
             size: watermarkSize,
+            scale: watermarkScale,
             layer: watermarkLayer,
-            color: '#0f766e'
+            color: watermarkColor
           }
         });
 
@@ -138,7 +142,9 @@ export function SignatureUploadOcr({
     watermarkOpacity,
     watermarkStyle,
     watermarkSize,
-    watermarkLayer
+    watermarkScale,
+    watermarkLayer,
+    watermarkColor
   ]);
 
   // Clean up object URL
@@ -333,21 +339,49 @@ export function SignatureUploadOcr({
           </div>
 
           {/* Watermark Protection Box */}
-          <div className="p-3.5 rounded-2xl bg-[var(--card-bg)] border border-teal-500/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5 cursor-pointer">
-                <Shield className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                Watermark Pengaman Digital
-              </label>
-              <input
-                type="checkbox"
-                checked={watermarkEnabled}
-                onChange={(e) => setWatermarkEnabled(e.target.checked)}
-                className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
-              />
+          <div className="p-3.5 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-main)] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="font-bold text-[var(--text-main)] flex items-center gap-1.5 text-xs">
+                <Shield className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                Pilihan Watermark:
+              </span>
+              <div className="grid grid-cols-2 gap-1.5 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setWatermarkEnabled(false)}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition-all cursor-pointer ${
+                    !watermarkEnabled
+                      ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                      : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                  }`}
+                >
+                  Polos (Rapi & Standar)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWatermarkEnabled(true)}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-semibold text-center transition-all cursor-pointer ${
+                    watermarkEnabled
+                      ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                      : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                  }`}
+                >
+                  Cap Watermark di Gambar
+                </button>
+              </div>
             </div>
 
-            {watermarkEnabled && (
+            {!watermarkEnabled ? (
+              <div className="p-2.5 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/60 dark:border-teal-800/50 text-[11px] text-teal-900 dark:text-teal-200 flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold text-teal-950 dark:text-teal-100">Mode Polos Aktif (Rekomendasi)</p>
+                  <p className="leading-relaxed opacity-90">
+                    File tanda tangan bersih tanpa teks dicap di dalam gambar. Watermark resmi (<em>PREPLAB SECURE VERIFIED • AES-256</em>) sudah otomatis disediakan oleh sistem portal saat pratinjau dan tanda tangan formulir, sehingga <strong>tidak terjadi watermark ganda/tumpuk</strong>.
+                  </p>
+                </div>
+              </div>
+            ) : (
               <div className="space-y-3 pt-1 text-xs">
                 {/* Preset Chips */}
                 <div className="space-y-1">
@@ -451,19 +485,51 @@ export function SignatureUploadOcr({
 
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                     <span className="text-[11px] font-semibold text-[var(--text-muted)]">Ukuran Watermark:</span>
-                    <div className="grid grid-cols-3 gap-1 w-full sm:w-auto">
-                      {(['sm', 'md', 'lg'] as const).map((sz) => (
+                    <div className="grid grid-cols-4 gap-1 w-full sm:w-auto">
+                      {[
+                        { id: 'sm' as const, label: 'Kecil', scale: 0.6 },
+                        { id: 'md' as const, label: 'Sedang', scale: 1.0 },
+                        { id: 'lg' as const, label: 'Besar', scale: 1.6 },
+                        { id: 'xl' as const, label: 'Ekstra', scale: 2.2 },
+                      ].map((item) => (
                         <button
-                          key={sz}
+                          key={item.id}
                           type="button"
-                          onClick={() => setWatermarkSize(sz)}
-                          className={`py-1 px-2.5 rounded-lg text-[11px] font-semibold text-center transition-all cursor-pointer ${
-                            watermarkSize === sz
+                          onClick={() => {
+                            setWatermarkSize(item.id);
+                            setWatermarkScale(item.scale);
+                          }}
+                          className={`py-1 px-2 rounded-lg text-[11px] font-semibold text-center transition-all cursor-pointer ${
+                            watermarkSize === item.id
                               ? 'bg-teal-600 text-white font-bold shadow-2xs'
                               : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
                           }`}
                         >
-                          {sz === 'sm' ? 'Kecil' : sz === 'md' ? 'Sedang' : 'Besar'}
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <span className="text-[11px] font-semibold text-[var(--text-muted)]">Warna Watermark:</span>
+                    <div className="grid grid-cols-3 gap-1 w-full sm:w-auto">
+                      {[
+                        { id: '#000000', label: 'Hitam' },
+                        { id: '#475569', label: 'Abu-abu' },
+                        { id: '#0f766e', label: 'Teal' },
+                      ].map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setWatermarkColor(c.id)}
+                          className={`py-1 px-2.5 rounded-lg text-[11px] font-semibold text-center transition-all cursor-pointer ${
+                            watermarkColor === c.id
+                              ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                              : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                          }`}
+                        >
+                          {c.label}
                         </button>
                       ))}
                     </div>
@@ -533,7 +599,7 @@ export function SignatureUploadOcr({
                 />
               </div>
 
-              {/* Kepekatan Watermark */}
+              {/* Transparansi Watermark */}
               <div className="space-y-1.5 pt-2 border-t border-[var(--border-main)]">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-[var(--text-main)]">
@@ -550,6 +616,34 @@ export function SignatureUploadOcr({
                   step="0.02"
                   value={watermarkOpacity}
                   onChange={(e) => setWatermarkOpacity(Number(e.target.value))}
+                  className="w-full accent-teal-600 cursor-pointer"
+                />
+              </div>
+
+              {/* Ukuran / Skala Watermark Presisi */}
+              <div className="space-y-1.5 pt-2 border-t border-[var(--border-main)]">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-[var(--text-main)]">
+                    Ukuran Watermark (Presisi):
+                  </span>
+                  <span className="font-mono text-teal-600 font-bold">
+                    {Math.round(watermarkScale * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.4"
+                  max="2.5"
+                  step="0.1"
+                  value={watermarkScale}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setWatermarkScale(val);
+                    if (val <= 0.75) setWatermarkSize('sm');
+                    else if (val <= 1.25) setWatermarkSize('md');
+                    else if (val <= 1.85) setWatermarkSize('lg');
+                    else setWatermarkSize('xl');
+                  }}
                   className="w-full accent-teal-600 cursor-pointer"
                 />
               </div>
@@ -576,6 +670,8 @@ export function SignatureUploadOcr({
                     setInvert(false);
                     setWatermarkOpacity(0.18);
                     setWatermarkSize('md');
+                    setWatermarkScale(1.0);
+                    setWatermarkColor('#000000');
                     setWatermarkLayer('behind');
                   }}
                   className="text-[10px] text-teal-600 hover:underline font-semibold"

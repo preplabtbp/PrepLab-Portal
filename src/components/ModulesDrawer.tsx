@@ -5,7 +5,8 @@ import {
   CheckSquare, Eye, AlertTriangle, ClipboardCheck, Package, Box, FileText, 
   Settings, BookOpen, Info, Briefcase, Users, Calendar, Clock, Utensils, 
   LayoutDashboard, User, Search, X, ArrowRight, LayoutGrid, UploadCloud, ExternalLink,
-  Trophy, ChevronDown, ChevronsUpDown, ClipboardList, BriefcaseMedical, GraduationCap, Award, Sliders, TrendingUp
+  Trophy, ChevronDown, ChevronsUpDown, ClipboardList, BriefcaseMedical, GraduationCap, Award, Sliders, TrendingUp,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from './ui';
 import { FoodReportModal } from './food-report-modal';
@@ -163,6 +164,7 @@ export function ModulesDrawer({
       bgIcon: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20',
       items: [
         { id: 'quiz', title: "Quiz Safety & SOP", desc: "Uji pemahaman prosedur", icon: <BookOpen className="w-5 h-5" />, color: 'blue', action: () => handleItemClick(() => onNav('quiz')) },
+        { id: 'parampaa', title: "Kuis Parampaa", desc: "Game asah otak offline", icon: <Sparkles className="w-5 h-5" />, color: 'blue', action: () => handleItemClick(() => onNav('parampaa')) },
         { id: 'manual', title: "Buku Panduan", desc: "User Manual Sistem", icon: <Info className="w-5 h-5" />, color: 'blue', action: () => handleItemClick(() => onNav('manual')) },
         ...(isQA ? [{ id: 'quiz-admin', title: "Manajemen Quiz", desc: "Tambah, Edit & Hapus Soal", icon: <Settings className="w-5 h-5" />, color: 'blue', action: () => handleItemClick(() => onNav('quiz-admin')) }] : []),
       ]
@@ -177,7 +179,7 @@ export function ModulesDrawer({
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('induksi')) },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('employee-database')) },
         ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('p5m')) }] : []),
-        { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('agenda')) },
+        { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('agenda?tab=Private')) },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('roster-admin')) },
         { id: 'meal-orders', title: "Orderan Makanan", desc: "Order harian Kantin & Lapangan", icon: <Utensils className="w-5 h-5" />, color: 'indigo', action: () => handleItemClick(() => onNav('meal-orders')) },
         // { id: 'food-report', title: "Lapor Makan", desc: "Status konsumsi", icon: <Utensils className="w-5 h-5" />, color: 'indigo', action: () => setShowFoodReportModal(true) }, // Di-hide sementara (belum operasional)

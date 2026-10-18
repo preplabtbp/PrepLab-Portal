@@ -89,6 +89,7 @@ const ApdSettingsScreen = lazyWithRetry(() => import('./components/apd-settings-
 const ApdMonitoringScreen = lazyWithRetry(() => import('./components/apd-monitoring-screen').then(m => ({ default: m.ApdMonitoringScreen })));
 const InduksiScreen = lazyWithRetry(() => import('./components/induksi-screen').then(m => ({ default: m.InduksiScreen })));
 const HomeScreen = lazyWithRetry(() => import('./components/home-screen').then(m => ({ default: m.HomeScreen })));
+const ParampaaArcadeScreen = lazyWithRetry(() => import('./components/ParampaaArcadeScreen').then(m => ({ default: m.ParampaaArcadeScreen })));
 const QuizScreen = lazyWithRetry(() => import('./components/quiz-screen').then(m => ({ default: m.QuizScreen })));
 const QuizAdminScreen = lazyWithRetry(() => import('./components/quiz-admin-screen').then(m => ({ default: m.QuizAdminScreen })));
 const InspectionScreen = lazyWithRetry(() => import('./components/inspection-screen').then(m => ({ default: m.InspectionScreen })));
@@ -1939,6 +1940,8 @@ export default function App() {
   <Route path="/monitoring" element={<MonitoringDashboard inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} />} />
   <Route path="/guest/monitoring" element={<GuestMonitoringScreen />} />
   <Route path="/quiz-admin" element={<QuizAdminScreen userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
+    <Route path="/parampaa" element={<ParampaaArcadeScreen onBack={() => handleNav('home')} />} />
+  <Route path="/arcade" element={<ParampaaArcadeScreen onBack={() => handleNav('home')} />} />
   <Route path="/quiz" element={<QuizScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
   <Route path="/apd" element={<Navigate to="/apd-input" replace />} />
   <Route path="/apd/*" element={<Navigate to="/apd-input" replace />} />
