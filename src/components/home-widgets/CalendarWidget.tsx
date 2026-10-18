@@ -5,6 +5,7 @@ import {
   RotateCcw, Edit3, Check, Trash2, BookmarkCheck, Sparkles, ArrowRight 
 } from 'lucide-react';
 import { WidgetSize } from './types';
+import { getGlobalSocket } from '../../lib/socketClient';
 
 interface CalendarWidgetProps {
   size: WidgetSize;
@@ -26,6 +27,48 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
   });
   const [memoInput, setMemoInput] = useState<string>('');
   const [isEditingNote, setIsEditingNote] = useState<boolean>(false);
+
+  // Sync calendar notes across devices & listen to socket events
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRemoteCalendarNotes = async () => {
+      try {
+        const res = await fetch('/api/widgets/calendar-notes');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+        if (data.success && data.calendarNotes && Object.keys(data.calendarNotes).length > 0) {
+          setNotes(data.calendarNotes);
+          try {
+            localStorage.setItem('preplab_calendar_notes', JSON.stringify(data.calendarNotes));
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('Could not fetch calendar notes:', err);
+      }
+    };
+    fetchRemoteCalendarNotes();
+
+    const socket = getGlobalSocket();
+    const handleRemoteCalendarUpdate = (remote: Record<string, string>) => {
+      if (!isMounted) return;
+      if (remote && typeof remote === 'object') {
+        setNotes((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(remote)) return prev;
+          try {
+            localStorage.setItem('preplab_calendar_notes', JSON.stringify(remote));
+          } catch {}
+          return remote;
+        });
+      }
+    };
+
+    socket.on('widgets:calendar_notes_updated', handleRemoteCalendarUpdate);
+    return () => {
+      isMounted = false;
+      socket.off('widgets:calendar_notes_updated', handleRemoteCalendarUpdate);
+    };
+  }, []);
 
   const monthNames = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -77,6 +120,18 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
     setSelectedDate(new Date(year, month, day));
   };
 
+  const saveCalendarNotes = (updated: Record<string, string>) => {
+    setNotes(updated);
+    try {
+      localStorage.setItem('preplab_calendar_notes', JSON.stringify(updated));
+    } catch {}
+    fetch('/api/widgets/calendar-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ calendarNotes: updated })
+    }).catch((err) => console.warn('Failed to sync calendar notes:', err));
+  };
+
   const handleSaveNote = () => {
     const updated = { ...notes };
     if (memoInput.trim()) {
@@ -84,21 +139,15 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
     } else {
       delete updated[selectedKey];
     }
-    setNotes(updated);
-    try {
-      localStorage.setItem('preplab_calendar_notes', JSON.stringify(updated));
-    } catch {}
+    saveCalendarNotes(updated);
     setIsEditingNote(false);
   };
 
   const handleDeleteNote = () => {
     const updated = { ...notes };
     delete updated[selectedKey];
-    setNotes(updated);
+    saveCalendarNotes(updated);
     setMemoInput('');
-    try {
-      localStorage.setItem('preplab_calendar_notes', JSON.stringify(updated));
-    } catch {}
     setIsEditingNote(false);
   };
 

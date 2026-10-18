@@ -80,7 +80,34 @@ interface XrfQcChartCardProps {
   onDeleteAnnotation?: (pointIndex: number) => void;
 }
 
-export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
+// Singleton in-memory cache for employee list (prevents N+1 requests from 50+ cards)
+let sharedEmployeesCache: Array<{ nik: string; nama: string; jabatan?: string }> | null = null;
+let sharedEmployeesPromise: Promise<Array<{ nik: string; nama: string; jabatan?: string }>> | null = null;
+
+async function getSharedEmployees(): Promise<Array<{ nik: string; nama: string; jabatan?: string }>> {
+  if (sharedEmployeesCache) return sharedEmployeesCache;
+  if (!sharedEmployeesPromise) {
+    sharedEmployeesPromise = fetch('/api/employees')
+      .then(res => res.json())
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data?.employees || []);
+        const mapped = list.map((e: any) => ({
+          nik: String(e.nik || ''),
+          nama: String(e.nama || e.name || 'Personil'),
+          jabatan: String(e.jabatan || e.position || '')
+        }));
+        sharedEmployeesCache = mapped;
+        return mapped;
+      })
+      .catch(() => {
+        sharedEmployeesPromise = null;
+        return [];
+      });
+  }
+  return sharedEmployeesPromise;
+}
+
+export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
   standardCode,
   instrumentName,
   instrumentCode,
@@ -118,20 +145,12 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Fetch employees list for NIK lookup
+  // Fetch employees list ONLY when annotation form is actually open (lazy loaded & cached)
   useEffect(() => {
-    fetch('/api/employees')
-      .then(res => res.json())
-      .then(data => {
-        const list = Array.isArray(data) ? data : (data?.employees || []);
-        setEmployeesList(list.map((e: any) => ({
-          nik: String(e.nik || ''),
-          nama: String(e.nama || e.name || 'Personil'),
-          jabatan: String(e.jabatan || e.position || '')
-        })));
-      })
-      .catch(() => {});
-  }, []);
+    if (editingAnnotation || showPicDropdown) {
+      getSharedEmployees().then(setEmployeesList);
+    }
+  }, [editingAnnotation, showPicDropdown]);
 
   // Filter employees for auto-complete dropdown
   const filteredEmployees = useMemo(() => {
@@ -1237,4 +1256,6 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
       )}
     </div>
   );
-};
+});
+
+XrfQcChartCard.displayName = 'XrfQcChartCard';

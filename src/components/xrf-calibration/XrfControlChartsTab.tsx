@@ -711,9 +711,19 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     }
   }, [selectedMethod, selectedMatrix, latestBatchStandards, selectedInstruments]);
 
+  const chartAbortControllerRef = useRef<AbortController | null>(null);
+
   // Fetch chart data from backend for all selected instruments
   const fetchChartData = async () => {
     if (selectedInstruments.length === 0) return;
+
+    // Abort previous in-flight chart data request
+    if (chartAbortControllerRef.current) {
+      chartAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    chartAbortControllerRef.current = controller;
+
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -728,7 +738,9 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       if (dateRange.startDate) params.set('startDate', dateRange.startDate);
       if (dateRange.endDate) params.set('endDate', dateRange.endDate);
 
-      const res = await fetch(`/api/xrf/qc-chart-data?${params.toString()}`);
+      const res = await fetch(`/api/xrf/qc-chart-data?${params.toString()}`, {
+        signal: controller.signal
+      });
       const json = await res.json();
       if (json.success) {
         if (json.allElementsData) {
@@ -739,14 +751,20 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         }
       }
     } catch (err: any) {
+      if (err.name === 'AbortError') return;
       toast.error('Gagal mengambil data grafik: ' + err.message);
     } finally {
-      setLoading(false);
+      if (chartAbortControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchChartData();
+    const timer = setTimeout(() => {
+      fetchChartData();
+    }, 70);
+    return () => clearTimeout(timer);
   }, [selectedInstruments, selectedStandards, dateRange]);
 
   // Handle Synchronized Element Selection from ANY chart card dropdown
@@ -920,7 +938,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       return hasPoints || hasCount;
     });
 
-    if (loading && listWithData.length === 0) return visibleStandards;
+    if (loading && listWithData.length === 0) return [];
     return listWithData.length > 0 ? listWithData : visibleStandards;
   }, [visibleStandards, currentGridData, selectedInstruments, showHistoricalStandards, loading]);
 
@@ -1285,7 +1303,21 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       {/* 3. DYNAMIC CHARTS PER SELECTED CRM STANDARD                   */}
       {/* ------------------------------------------------------------- */}
       <div className="space-y-8">
-        {renderedStandards.length === 0 ? (
+        {loading && renderedStandards.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center space-y-4 shadow-xs">
+            <div className="w-12 h-12 mx-auto rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 flex items-center justify-center text-teal-600 dark:text-teal-400 animate-spin">
+              <RefreshCw className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Menyiapkan Grafik Kontrol Mutu ({selectedSite} • {selectedMethod})...
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Memuat titik data pengukuran dan batas kendali statistik.
+              </p>
+            </div>
+          </div>
+        ) : renderedStandards.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-12 text-center space-y-4">
             <div className="w-12 h-12 mx-auto rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 flex items-center justify-center text-teal-600 dark:text-teal-400">
               <Database className="w-6 h-6" />

@@ -551,6 +551,8 @@ export async function cleanupDuplicateEmployees() {
   }
 }
 
+let lastCleanupTime = 0;
+
 employeesRouter.get("/", async (req, res) => {
   try {
     const { pt, all } = req.query;
@@ -562,8 +564,11 @@ employeesRouter.get("/", async (req, res) => {
       return res.json(cachedAllEmployees.data);
     }
     
-    // Non-blocking cleanup in background
-    cleanupDuplicateEmployees().catch(() => {});
+    // Non-blocking cleanup in background (throttled to at most once per hour to prevent DB connection spikes)
+    if (Date.now() - lastCleanupTime > 3600000) {
+      lastCleanupTime = Date.now();
+      cleanupDuplicateEmployees().catch(() => {});
+    }
 
     let data: any[] = [];
     if (isDbCircuitBroken()) {

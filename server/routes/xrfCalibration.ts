@@ -1313,6 +1313,30 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
       'MnO': (d) => d.mno,
     };
 
+    // Pre-group rawData in O(N) by standard and instrument for instant O(1) lookup
+    const groupedData = new Map<string, typeof rawData>();
+    for (const d of rawData) {
+      const stdCode = (d.standardCode || '').trim();
+      const normStd = stdCode.replace(' ', '_');
+      const key1 = `${normStd}::${d.instrumentCode}`;
+      let list1 = groupedData.get(key1);
+      if (!list1) {
+        list1 = [];
+        groupedData.set(key1, list1);
+      }
+      list1.push(d);
+
+      const key2 = `${stdCode}::${d.instrumentCode}`;
+      if (key2 !== key1) {
+        let list2 = groupedData.get(key2);
+        if (!list2) {
+          list2 = [];
+          groupedData.set(key2, list2);
+        }
+        list2.push(d);
+      }
+    }
+
     // Precalculate allElementsData for all 11 elements in-memory (< 2ms)
     const computedAllElements: Record<string, Record<string, Record<string, any>>> = {};
 
@@ -1340,20 +1364,21 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
         const lowerAction = ref.lowerAction !== null && ref.lowerAction !== undefined ? Number(ref.lowerAction) : Number((nominal - 3 * sigma).toFixed(3));
 
         for (const inst of instrumentsParam) {
-          const pointsForGrid = rawData
-            .filter(d => (d.standardCode === std || d.standardCode === std.replace('_', ' ') || d.standardCode === std.replace(' ', '_')) && d.instrumentCode === inst)
-            .map((d, idx) => {
-              const val = getter(d);
-              return {
-                index: idx + 1,
-                id: d.id,
-                date: d.verificationDate,
-                week: d.weekNo,
-                analyzedAt: d.analyzedAt,
-                value: val !== null && val !== undefined ? Number(val) : 0,
-                status: d.itemStatus,
-              };
-            });
+          const normStd = std.trim().replace(' ', '_');
+          const matchingRows = groupedData.get(`${normStd}::${inst}`) || groupedData.get(`${std}::${inst}`) || [];
+
+          const pointsForGrid = matchingRows.map((d, idx) => {
+            const val = getter(d);
+            return {
+              index: idx + 1,
+              id: d.id,
+              date: d.verificationDate,
+              week: d.weekNo,
+              analyzedAt: d.analyzedAt,
+              value: val !== null && val !== undefined ? Number(val) : 0,
+              status: d.itemStatus,
+            };
+          });
 
           // Kalkulasi Statistik Aktual
           const values = pointsForGrid.map(p => p.value).filter(v => !isNaN(v) && v > 0);
