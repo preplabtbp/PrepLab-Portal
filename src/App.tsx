@@ -521,18 +521,13 @@ export default function App() {
   const [showModulesDrawer, setShowModulesDrawer] = useState(false);
   const [showBulletinMenu, setShowBulletinMenu] = useState(false);
   const [showHazardReportModal, setShowHazardReportModal] = useState(false);
-  const [showSapDrawer, setShowSapDrawer] = useState(false);
   const [showChatDrawer, setShowChatDrawer] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Listen for global open sap drawer and chat drawer requests
   useEffect(() => {
     const handleOpenSap = () => {
-      if (isAdminOrDeveloper) {
-        setShowSapDrawer(true);
-      } else {
-        toast.error('Akses SAP Management hanya untuk Tim Administrasi dan Developer.');
-      }
+      handleNav('safety-rekap');
     };
     const handleOpenChat = () => setShowChatDrawer(true);
     window.addEventListener('open-sap-drawer', handleOpenSap);
@@ -541,20 +536,16 @@ export default function App() {
       window.removeEventListener('open-sap-drawer', handleOpenSap);
       window.removeEventListener('open-chat-drawer', handleOpenChat);
     };
-  }, [isAdminOrDeveloper]);
+  }, []);
 
   // Listen for global open hazard report modal requests
   useEffect(() => {
     const handleOpenHazard = () => {
-      if (isAdminOrDeveloper) {
-        setShowSapDrawer(true);
-      } else {
-        toast.error('Akses SAP Management hanya untuk Tim Administrasi dan Developer.');
-      }
+      handleNav('safety-rekap');
     };
     window.addEventListener('open-hazard-report-modal', handleOpenHazard);
     return () => window.removeEventListener('open-hazard-report-modal', handleOpenHazard);
-  }, [isAdminOrDeveloper]);
+  }, []);
 
   // Listen for global open modules drawer requests and Alt+M shortcut (blocked for Crew)
   useEffect(() => {
@@ -1693,13 +1684,6 @@ export default function App() {
                 onClick: () => setShowChatDrawer(true),
                 title: 'Buka Portal Chat (Global & Section)',
               },
-              ...(isAdminOrDeveloper ? [{
-                id: 'sap',
-                label: 'SAP',
-                icon: ShieldAlert,
-                onClick: () => setShowSapDrawer(true),
-                title: 'SAP Management (Safety & Rekap Laporan)',
-              }] : []),
               {
                 id: 'leaderboard',
                 label: 'Rank',
@@ -2240,48 +2224,6 @@ export default function App() {
           userPt={userProfile?.pt}
         />
       )}
-
-      {/* SAP Management Drawer (Slides in from RIGHT, wider than profile view) */}
-      <AnimatePresence>
-        {showSapDrawer && (
-          <div className="fixed inset-0 z-[70] overflow-hidden">
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              onClick={() => setShowSapDrawer(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[75]"
-            />
-
-            {/* Drawer Panel - Slides in from the RIGHT */}
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="fixed inset-y-0 right-0 z-[80] w-full sm:w-[650px] md:w-[780px] lg:w-[940px] xl:w-[1080px] h-[100dvh] shadow-2xl border-l flex flex-col overflow-hidden transition-colors"
-              style={{
-                backgroundColor: 'var(--bg-main, #F8FAFC)',
-                borderColor: 'var(--border-main, #E2E8F0)',
-                color: 'var(--text-main, #1E293B)'
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              <GroupReportScreen
-                inspectorName={inspectorName || 'Inspector'}
-                inspectorNik={inspectorNik!}
-                inspectorRole={userProfile?.jabatan}
-                inspectorSection={userProfile?.section}
-                onClose={() => setShowSapDrawer(false)}
-                isFloating={true}
-                isDeveloper={isDeveloper}
-              />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Chat Drawer (Slides in from RIGHT, wider than profile view) */}
       <AnimatePresence>

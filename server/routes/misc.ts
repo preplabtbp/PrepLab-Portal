@@ -848,7 +848,10 @@ export async function getRekapPersonnelClassification(
   const sheetCutiNames = new Set<string>();
 
   try {
-    const sheetSchedules = await fetchInspectionScheduleFromSheet(forceRefresh, targetSheet);
+    let sheetSchedules = await fetchInspectionScheduleFromSheet(forceRefresh, targetSheet).catch(() => null);
+    if ((!sheetSchedules || sheetSchedules.length === 0) && targetSheet !== 'CurrentWeek') {
+      sheetSchedules = await fetchInspectionScheduleFromSheet(forceRefresh, 'CurrentWeek').catch(() => null);
+    }
     if (Array.isArray(sheetSchedules)) {
       sheetSchedules.forEach((item: any) => {
         if (!item?.name) return;

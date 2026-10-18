@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import {
-  ClipboardList, RefreshCw, Download, Search, ArrowLeft, Table2, Users, Pencil, X, Save,
+  ClipboardList, RefreshCw, Download, Search, ArrowLeft, Table2, Users, BarChart3, Pencil, X, Save,
   RotateCcw, CheckCircle2, CircleDashed, Palmtree, ShieldCheck, ClipboardCheck, CalendarDays, ImageDown, Clock
 } from 'lucide-react';
+import { SafetyModuleSwitch } from './SafetyModuleSwitch';
 import * as XLSX from 'xlsx';
 import { toPng } from 'html-to-image';
 import { formatAvatarUrl, handleAvatarError } from '../lib/avatarUtils';
 import { PageHeader } from './PageHeader';
 import { Select } from './ui';
 import { GroupReportScreen, getKtaObligation } from './GroupReportScreen';
+import { SafetyRekapDiagram } from './SafetyRekapDiagram';
 import { getISOWeek, getISOWeekYear, getISOWeekRange } from '../utils/iso-week';
 
 interface SafetyRekapScreenProps {
@@ -778,10 +780,12 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
   const currentWeek = useMemo(() => getRekapWeek(today).week, [today]);
   const weekOptions = useMemo(() => buildWeekOptions(currentYear, currentWeek), [currentYear, currentWeek]);
 
-  const [view, setView] = useState<'tabel' | 'detail'>('tabel');
+  const [view, setView] = useState<'tabel' | 'diagram' | 'detail'>('tabel');
   const [selectedWeek, setSelectedWeek] = useState(`W${currentWeek}`);
   const [inspeksiData, setInspeksiData] = useState<{ rekapList: any[]; cutiList: any[] }>({ rekapList: [], cutiList: [] });
   const [ktaData, setKtaData] = useState<{ rekapList: any[]; cutiList: any[] }>({ rekapList: [], cutiList: [] });
+  // Karyawan dari panel "Kontrol Cuti Karyawan" (modul Jadwal Inspeksi, roster Senin – Rabu periode)
+  const [leaveList, setLeaveList] = useState<any[] | null>(null);
   const [edits, setEdits] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -807,12 +811,17 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       .catch(err => console.error('Gagal memuat foto karyawan:', err));
   }, []);
 
-  const canEdit = useMemo(() => {
-    const role = (inspectorRole || '').toLowerCase();
-    const section = (inspectorSection || '').toLowerCase();
-    return EDITOR_NIKS.includes(inspectorNik) || inspectorNik.startsWith('02D24') ||
-      ['manager', 'superintendent', 'admin', 'safety'].some(k => role.includes(k)) || section.includes('admin');
-  }, [inspectorNik, inspectorRole, inspectorSection]);
+  // Hak edit dari server (Section Administration, Developer & Manager); selain itu hanya data dirinya sendiri
+  const [canEdit, setCanEdit] = useState(false);
+  useEffect(() => {
+    fetch('/api/safety-access')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => setCanEdit(!!data?.canEdit))
+      .catch(() => setCanEdit(false));
+  }, [inspectorNik]);
+  useEffect(() => {
+    if (!canEdit && view !== 'tabel') setView('tabel');
+  }, [canEdit, view]);
 
   const weekNum = parseInt(selectedWeek.replace(/\D/g, ''), 10) || currentWeek;
   const weekRange = useMemo(() => getRekapWeekRange(currentYear, weekNum), [currentYear, weekNum]);
@@ -845,13 +854,25 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       const num = parseInt(week.replace(/\D/g, ''), 10);
       const isoWeeks = [`W${num}`, `W${getISOWeek(getRekapWeekRange(currentYear, num).end)}`];
       const suffix = refresh ? '&refresh=true' : '';
-      const [responses] = await Promise.all([
+      // Senin, Selasa, Rabu periode Sabtu – Jumat (sama dengan Kontrol Cuti di modul Jadwal Inspeksi)
+      const periodStart = getRekapWeekRange(currentYear, num).start;
+      const leaveDates = [2, 3, 4].map(offset => {
+        const d = new Date(periodStart);
+        d.setDate(d.getDate() + offset);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      });
+      const [responses, , leaveJson] = await Promise.all([
         Promise.all(isoWeeks.flatMap(w => [
           fetch(`/api/rekap-inspeksi?week=${w}${suffix}`),
           fetch(`/api/rekap-kta?week=${w}${suffix}`)
         ])),
-        fetchEdits(week)
+        fetchEdits(week),
+        fetch(`/api/roster/leave-control?dates=${leaveDates.join(',')}${suffix}`)
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null)
       ]);
+      setLeaveList(leaveJson?.success ? (leaveJson.data || []) : null);
+      if (!leaveJson?.success) toast.error('Data Kontrol Cuti (roster) gagal dimuat — status cuti memakai data lama');
       const jsons = await Promise.all(responses.map(r => (r.ok ? r.json() : {})));
       const [inspA, ktaA, inspB, ktaB] = jsons as any[];
       // Status cuti/roster mengikuti minggu ISO N+1 (Senin – Jumat = mayoritas periode)
@@ -872,28 +893,29 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
 
   const allRows = useMemo<RekapRow[]>(() => {
     const map = new Map<string, { nik: string; name: string; jabatan: string; auto: RekapValues }>();
-    const ensure = (emp: any, isCuti: boolean) => {
+    // force = status dari Kontrol Cuti Karyawan: selalu diikuti (tidak dibatalkan oleh laporan yang terkirim)
+    const ensure = (emp: any, absence: Absence | null, force = false) => {
       const key = (emp.nik || '').toString().trim().toUpperCase();
       let entry = map.get(key);
       if (!entry) {
         entry = {
           nik: emp.nik, name: emp.name || '-', jabatan: emp.jabatan || '-',
           auto: {
-            absence: isCuti ? 'CUTI' : null, isCuti, ktaDone: false, tglKta: '', tglTta1: '', tglTta2: null,
+            absence, isCuti: absence !== null, ktaDone: false, tglKta: '', tglTta1: '', tglTta2: null,
             inspeksiDone: false, keteranganInspeksi: '', tglInspeksi: ''
           }
         };
         map.set(key, entry);
       }
-      if (isCuti) {
+      if (absence && (force || (!entry.auto.inspeksiDone && !entry.auto.ktaDone))) {
         entry.auto.isCuti = true;
-        entry.auto.absence = 'CUTI';
+        entry.auto.absence = absence;
       }
       return entry;
     };
 
     inspeksiData.rekapList.filter(isValidEmployee).forEach(merged => {
-      const { auto } = ensure(merged, false);
+      const { auto } = ensure(merged, null);
       // Cek data dari tiap minggu ISO; hanya tanggal inspeksi yang masuk periode Sabtu – Jumat yang dihitung
       for (const emp of (merged._sources || [merged])) {
         const cd = emp.checkDetails || {};
@@ -909,12 +931,21 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       }
     });
     ktaData.rekapList.filter(isValidEmployee).forEach(emp => {
-      Object.assign(ensure(emp, false).auto, buildKtaCells(emp, weekRange));
+      Object.assign(ensure(emp, null).auto, buildKtaCells(emp, weekRange));
     });
-    [...inspeksiData.cutiList, ...ktaData.cutiList].filter(isValidEmployee).forEach(emp => ensure(emp, true));
+    if (leaveList) {
+      // Sumber status cuti: Kontrol Cuti Karyawan (Jadwal Inspeksi) — Izin → IZIN, Dinas Luar → DINAS, lainnya → CUTI
+      leaveList.filter(isValidEmployee).forEach(emp => {
+        ensure(emp, emp.category === 'IZIN' ? 'IZIN' : emp.category === 'DINAS' ? 'DINAS' : 'CUTI', true);
+      });
+    } else {
+      [...inspeksiData.cutiList, ...ktaData.cutiList].filter(isValidEmployee).forEach(emp => ensure(emp, 'CUTI'));
+    }
 
     const editMap = new Map(edits.map(e => [String(e.nik).trim().toUpperCase(), e]));
+    const ownKey = (inspectorNik || '').trim().toUpperCase();
     return Array.from(map.entries())
+      .filter(([key]) => canEdit || key === ownKey)
       .map(([key, e]) => {
         const edit = editMap.get(key);
         const v = applyEdit(e.auto, edit, weekRange);
@@ -925,7 +956,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         };
       })
       .sort((a, b) => jabatanRank(a.jabatan) - jabatanRank(b.jabatan) || a.name.localeCompare(b.name));
-  }, [inspeksiData, ktaData, edits, weekRange]);
+  }, [inspeksiData, ktaData, leaveList, edits, weekRange, canEdit, inspectorNik]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1023,6 +1054,23 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       ws['!cols'] = [{ wch: 5 }, { wch: 30 }, { wch: 14 }, { wch: 34 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 11 }, { wch: 55 }, { wch: 16 }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, `Rekap_${selectedWeek}`);
+      const diagramAoa: any[][] = [
+        ['REKAPITULASI DIAGRAM CAPAIAN K3 (KTA/TTA & INSPEKSI)'],
+        [`Periode: ${selectedWeek} (${rangeLabel}) - Tahun ${currentYear}`],
+        [],
+        ['INDIKATOR KINERJA K3', 'TARGET PERSONIL', 'AKTUAL TERCAPAI', 'PERSENTASE (%)', 'STATUS CAPAIAN'],
+        ['Hazard Report (KTA/TTA)', summary.total, summary.kta, `${summary.ktaPct}%`, summary.ktaPct >= 100 ? 'TERCAPAI 100%' : 'BELUM TERCAPAI'],
+        ['Inspeksi Terencana', summary.total, summary.insp, `${summary.inspPct}%`, summary.inspPct >= 100 ? 'TERCAPAI 100%' : 'BELUM TERCAPAI'],
+        ['Lengkap Keduanya (KTA & Insp)', summary.total, summary.lengkap, `${summary.total ? Math.round((summary.lengkap / summary.total) * 100) : 0}%`, '-'],
+        [],
+        ['RINCIAN KEPATUHAN WAKTU & KEHADIRAN', 'JUMLAH PERSONIL', 'PERSENTASE (%)'],
+        ['Tepat Waktu (Sabtu - Rabu)', summary.total - summary.ktaLate, `${summary.total ? Math.round(((summary.total - summary.ktaLate) / summary.total) * 100) : 0}%`],
+        ['Terlambat (Kamis - Jumat)', summary.ktaLate + summary.inspLate, '-'],
+        ['Personil Cuti / Non-Target', summary.cuti, `${allRows.length ? Math.round((summary.cuti / allRows.length) * 100) : 0}%`]
+      ];
+      const wsDiagram = XLSX.utils.aoa_to_sheet(diagramAoa);
+      wsDiagram['!cols'] = [{ wch: 35 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }];
+      XLSX.utils.book_append_sheet(wb, wsDiagram, 'Diagram');
       XLSX.writeFile(wb, `Rekap_KTA_TTA_Inspeksi_${selectedWeek}_${currentYear}.xlsx`);
       toast.success('File Excel berhasil diunduh');
     } catch (err) {
@@ -1086,7 +1134,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 w-full px-2 sm:px-4 lg:px-6">
       <PageHeader
-        title="Rekap KTA/TTA & Inspeksi"
+        title={<span className="flex flex-wrap items-center gap-x-3 gap-y-2"><SafetyModuleSwitch active="rekap" /> Rekap KTA/TTA & Inspeksi</span>}
         description="Kepatuhan mingguan laporan observasi KTA/TTA dan inspeksi terencana Prep & Lab"
         icon={<ClipboardList />}
       >
@@ -1097,11 +1145,12 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         )}
       </PageHeader>
 
-      <div className="inline-grid grid-cols-2 gap-1 bg-[var(--input-bg)] p-1 rounded-xl border border-[var(--border-main)]">
+      <div className="inline-grid grid-cols-3 gap-1 bg-[var(--input-bg)] p-1 rounded-xl border border-[var(--border-main)]">
         {([
           { id: 'tabel', label: 'Tabel Rekap', icon: <Table2 className="w-3.5 h-3.5" /> },
+          { id: 'diagram', label: 'Diagram', icon: <BarChart3 className="w-3.5 h-3.5" /> },
           { id: 'detail', label: 'Detail & Aksi Personil', icon: <Users className="w-3.5 h-3.5" /> }
-        ] as const).map(t => (
+        ] as const).filter(t => canEdit || t.id === 'tabel').map(t => (
           <button
             key={t.id}
             onClick={() => setView(t.id)}
@@ -1114,7 +1163,13 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         ))}
       </div>
 
-      {view === 'detail' ? (
+      {view === 'diagram' ? (
+        <SafetyRekapDiagram
+          year={currentYear}
+          activeWeek={selectedWeek}
+          activeWeekSummary={summary}
+        />
+      ) : view === 'detail' ? (
         <GroupReportScreen
           mode="rekap"
           inspectorName={inspectorName}
@@ -1231,7 +1286,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                 </button>
               ))}
               {!canEdit && (
-                <span className="ml-auto text-[11px] text-[var(--text-muted)]">Mode lihat saja</span>
+                <span className="ml-auto text-[11px] text-[var(--text-muted)]">Mode personal · hanya data Anda (edit: Administration, Developer & Manager)</span>
               )}
             </div>
 

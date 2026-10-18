@@ -2276,9 +2276,12 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
           s.shift = grp ? `${grp} (Long Shift)` : 'Long Shift';
           s.shiftType = 'longshift';
         } else if (rosterCode === 'C' || rosterCode.startsWith('CT') || rosterCode.startsWith('CR') || rosterCode === 'TRV') {
-          s.isCuti = true;
-          s.shift = 'Cuti';
-          s.shiftType = 'cuti';
+          // Jangan timpa personil yang memiliki agenda inspeksi terjadwal aktif menjadi cuti hanya karena status roster harian (mis. travel/TRV akhir pekan)
+          if (!s.inspeksi || s.inspeksi.toLowerCase().trim() === 'cuti') {
+            s.isCuti = true;
+            s.shift = 'Cuti';
+            s.shiftType = 'cuti';
+          }
         }
       }
 

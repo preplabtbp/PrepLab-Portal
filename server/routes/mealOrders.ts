@@ -144,10 +144,13 @@ async function bulkUpsertMealOrders(date: string, rows: ParsedMealOrderRow[], up
       .onConflictDoUpdate({
         target: [mealOrders.orderDate, mealOrders.nik],
         // Pilihan Catatan & Tempat Tinggal tidak boleh hilang tertimpa kosong
+        // Kolom PT dikunci: tidak boleh ditimpa oleh import harian biasa kecuali saat import profil karyawan
         set: Object.fromEntries([...setFields, 'updatedBy', 'updatedAt'].map(f => [f, f.startsWith('pilihan')
           ? sql.raw(`COALESCE(excluded.${toSnake(f)}, meal_orders.${toSnake(f)})`)
           : f === 'tempatTinggal'
           ? sql.raw(`COALESCE(NULLIF(TRIM(excluded.tempat_tinggal), ''), meal_orders.tempat_tinggal)`)
+          : f === 'pt' && !updatedBy.startsWith('import-profile')
+          ? sql.raw(`COALESCE(meal_orders.pt, excluded.pt)`)
           : sql.raw(`excluded.${toSnake(f)}`)])),
       })
       .returning({ id: mealOrders.id });
@@ -931,10 +934,10 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
     // JANGAN PERNAH mengambil alamatDomisili (alamat KTP/rumah).
     const lockedTt = (p?.tempatTinggal && p.tempatTinggal.length <= 25 ? p.tempatTinggal : null) || masterTtByNik.get(nik) || master?.tempatTinggal || fallback.tempatTinggal || null;
     return {
-      statusMess: p?.statusMess || master?.statusMess || fallback.statusMess || null,
-      pt: p?.pt || master?.pt || fallback.pt || null,
-      shift: p?.shift || master?.shift || fallback.shift || null,
-      section: p?.section || master?.section || fallback.section || null,
+      statusMess: p?.statusMess || master?.statusMess || dbByNik.get(nik)?.statusMess || fallback.statusMess || null,
+      pt: p?.pt || master?.pt || dbByNik.get(nik)?.pt || fallback.pt || null,
+      shift: p?.shift || master?.shift || dbByNik.get(nik)?.shift || fallback.shift || null,
+      section: p?.section || master?.section || dbByNik.get(nik)?.section || fallback.section || null,
       tempatTinggal: lockedTt,
     };
   };
@@ -1062,10 +1065,16 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     const master = masterProfiles.get(nik);
     const sortNo = master?.sortNo ?? getSortNo(nik, current?.sortNo);
     // Kolom Profil (Status Mess, PT, Shift, Section, Residence): PT & Residence TIDAK BOLEH diganti saat sinkronisasi roster
-    const lockedStatusMess = current?.statusMess || lastOrdersByNik.get(nik)?.statusMess || empDbByNik.get(nik)?.statusMess || master?.statusMess || rosterEmp.statusMess || null;
-    const lockedPt = current?.pt || lastOrdersByNik.get(nik)?.pt || empDbByNik.get(nik)?.pt || master?.pt || rosterEmp.pt || null;
-    const lockedShift = current?.shift || lastOrdersByNik.get(nik)?.shift || empDbByNik.get(nik)?.shift || master?.shift || rosterEmp.shift || null;
-    const lockedSection = current?.section || lastOrdersByNik.get(nik)?.section || empDbByNik.get(nik)?.section || master?.section || rosterEmp.section || null;
+    // Kolom Profil (Status Mess, PT, Shift, Section, Residence):
+    // Prioritas penguncian PT:
+    // 1. PT pada tanggal yang sedang diedit (current)
+    // 2. Master PT resmi Orderan Makanan (masterProfiles acuan 2026-10-14)
+    // 3. Riwayat PT orderan terdekat (lastOrdersByNik)
+    // 4. Database Karyawan (empDbByNik)
+    const lockedStatusMess = current?.statusMess || master?.statusMess || empDbByNik.get(nik)?.statusMess || lastOrdersByNik.get(nik)?.statusMess || rosterEmp.statusMess || null;
+    const lockedPt = current?.pt || master?.pt || (lastOrdersByNik.get(nik)?.pt && lastOrdersByNik.get(nik)?.pt !== '-' ? lastOrdersByNik.get(nik)!.pt : null) || empDbByNik.get(nik)?.pt || rosterEmp.pt || null;
+    const lockedShift = current?.shift || master?.shift || lastOrdersByNik.get(nik)?.shift || empDbByNik.get(nik)?.shift || rosterEmp.shift || null;
+    const lockedSection = current?.section || master?.section || lastOrdersByNik.get(nik)?.section || empDbByNik.get(nik)?.section || rosterEmp.section || null;
     const lockedTt = (current?.tempatTinggal && current.tempatTinggal.length <= 25 ? current.tempatTinggal : null)
       || (lastOrdersByNik.get(nik)?.tempatTinggal && lastOrdersByNik.get(nik)!.tempatTinggal!.length <= 25 ? lastOrdersByNik.get(nik)!.tempatTinggal : null)
       || masterTtByNik.get(nik)
@@ -1437,22 +1446,24 @@ async function getMealOrderRowsWithLatestProfiles(date: string) {
       const k = String(lo.nik || '').toUpperCase().trim();
       if (!lastByNik.has(k)) lastByNik.set(k, lo);
     }
+    const masterProfiles = await loadMasterEmployeeProfileMap();
     const dbEmps = await db.select({ nik: employees.nik, pt: employees.pt, statusMess: employees.statusMess, shift: employees.shift, section: employees.section }).from(employees);
     const empByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
 
     return seedRows.map(r => {
       const k = String(r.nik || '').toUpperCase().trim();
       const last = lastByNik.get(k);
+      const master = masterProfiles.get(k);
       const emp = empByNik.get(k);
-      const pt = last?.pt || emp?.pt || r.pt || null;
-      const tempatTinggal = (last?.tempatTinggal && last.tempatTinggal.length <= 25 ? last.tempatTinggal : null) || r.tempatTinggal || null;
+      const pt = last?.pt || master?.pt || emp?.pt || r.pt || null;
+      const tempatTinggal = (last?.tempatTinggal && last.tempatTinggal.length <= 25 ? last.tempatTinggal : null) || master?.tempatTinggal || r.tempatTinggal || null;
       return {
         ...r,
         pt,
         tempatTinggal,
-        statusMess: last?.statusMess || emp?.statusMess || r.statusMess || null,
-        shift: last?.shift || emp?.shift || r.shift || null,
-        section: last?.section || emp?.section || r.section || null,
+        statusMess: last?.statusMess || master?.statusMess || emp?.statusMess || r.statusMess || null,
+        shift: last?.shift || master?.shift || emp?.shift || r.shift || null,
+        section: last?.section || master?.section || emp?.section || r.section || null,
       };
     });
   } catch (err: any) {
@@ -1662,6 +1673,109 @@ mealOrdersRouter.post("/api/meal-orders/import", requireMealManager, async (req,
   } catch (error: any) {
     console.error("[MealOrders IMPORT] Error:", error);
     res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// 3b. POST /api/meal-orders/import-profiles — Import & Perbarui Profil Karyawan dari format Excel
+// Format Excel: NO, NAMA KARYAWAN NR, NIK, Status Mess, PT, Shift, Section, Tempat Tinggal
+// Memperbarui master database karyawan & seluruh baris meal_orders untuk karyawan-karyawan ini
+mealOrdersRouter.post("/api/meal-orders/import-profiles", requireMealManager, async (req, res) => {
+  try {
+    await ensureMealOrdersTable();
+    const rows = req.body?.rows;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ status: "error", message: "Data profil karyawan kosong atau tidak valid." });
+    }
+
+    const by = updatedByOf(req);
+    const now = new Date();
+    let empUpdated = 0;
+    let empInserted = 0;
+    let ordersUpdated = 0;
+    let tbpCount = 0;
+    let gpsCount = 0;
+
+    for (const raw of rows) {
+      const nik = String(raw.nik || raw.NIK || '').trim().toUpperCase();
+      if (!nik || nik === 'NIK') continue;
+
+      const nama = String(raw.nama || raw.name || raw['NAMA KARYAWAN NR'] || raw['NAMA KARYAWAN'] || raw['Nama'] || '').trim();
+      const rawPt = String(raw.pt || raw.PT || raw.perusahaan || raw.company || '').trim().toUpperCase();
+      const pt = rawPt.includes('GPS') ? 'GPS' : rawPt.includes('TBP') ? 'TBP' : (rawPt || null);
+      if (pt === 'TBP') tbpCount++;
+      else if (pt === 'GPS') gpsCount++;
+
+      const statusMess = String(raw.statusMess || raw['Status Mess'] || raw['STATUS MESS'] || raw['status_mess'] || '').trim() || null;
+      const shift = String(raw.shift || raw.Shift || raw.SHIFT || '').trim() || null;
+      const section = String(raw.section || raw.Section || raw.SECTION || raw.bagian || raw.Bagian || '').trim() || null;
+      const tempatTinggal = String(raw.tempatTinggal || raw['Tempat Tinggal'] || raw['TEMPAT TINGGAL'] || raw.residence || raw.Residence || raw.domisili || '').trim() || null;
+      const sortNo = Number(raw.no || raw.NO || raw.sortNo) || null;
+
+      // 1. Update / Insert di tabel employees
+      const existingEmp = await db.select().from(employees).where(sql`UPPER(TRIM(${employees.nik})) = ${nik}`).limit(1);
+      if (existingEmp.length > 0) {
+        const empPatch: Record<string, any> = {};
+        if (nama) empPatch.name = nama;
+        if (pt) empPatch.pt = pt;
+        if (statusMess) empPatch.statusMess = statusMess;
+        if (shift) empPatch.shift = shift;
+        if (section) empPatch.section = section;
+        if (tempatTinggal) empPatch.alamatDomisili = tempatTinggal;
+
+        if (Object.keys(empPatch).length > 0) {
+          await db.update(employees).set(empPatch).where(eq(employees.id, existingEmp[0].id));
+          empUpdated++;
+        }
+      } else if (nama) {
+        await db.insert(employees).values({
+          nik,
+          name: nama,
+          pt: pt || 'TBP',
+          statusMess: statusMess || 'CR',
+          shift: shift || 'Nonshift',
+          section: section || 'Laboratorium Krishna',
+          alamatDomisili: tempatTinggal || 'Nirwana',
+          department: 'Preparation & Laboratory',
+          statusKaryawan: 'Aktif',
+        });
+        empInserted++;
+      }
+
+      // 2. Update seluruh baris di tabel meal_orders untuk NIK tersebut
+      // Inilah satu-satunya cara resmi kolom PT & profil operasional ter-update di modul orderan makanan!
+      const orderPatch: Record<string, any> = { updatedBy: `import-profile:${by}`, updatedAt: now };
+      if (nama) orderPatch.nama = nama;
+      if (pt) orderPatch.pt = pt;
+      if (statusMess) orderPatch.statusMess = statusMess;
+      if (shift) orderPatch.shift = shift;
+      if (section) orderPatch.section = section;
+      if (tempatTinggal) orderPatch.tempatTinggal = tempatTinggal;
+      if (sortNo != null) orderPatch.sortNo = sortNo;
+
+      const updatedOrders = await db.update(mealOrders)
+        .set(orderPatch)
+        .where(sql`UPPER(TRIM(${mealOrders.nik})) = ${nik}`)
+        .returning({ id: mealOrders.id });
+      ordersUpdated += updatedOrders.length;
+    }
+
+    scheduleSheetSync();
+
+    res.json({
+      status: "success",
+      message: `Berhasil memperbarui ${rows.length} profil karyawan (TBP: ${tbpCount}, GPS: ${gpsCount}). ${ordersUpdated} baris data Orderan Makanan telah disinkronkan.`,
+      stats: {
+        total: rows.length,
+        empUpdated,
+        empInserted,
+        ordersUpdated,
+        tbpCount,
+        gpsCount,
+      }
+    });
+  } catch (error: any) {
+    console.error("[MealOrders IMPORT-PROFILES] Error:", error);
+    res.status(500).json({ status: "error", message: error.message || "Gagal mengimpor profil karyawan." });
   }
 });
 
