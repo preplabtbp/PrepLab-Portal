@@ -175,18 +175,16 @@ export function buildJsaIkConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'JSA', { label: 'General Preparation' }),
-        slot('Laboratory', 'SPV', 'IK', { label: 'General Laboratory' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
+        slot('Preparation', 'SPV', 'Safety', { label: 'General Preparation', materiTetap: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'Safety', { label: 'General Laboratory', materiTetap: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam' })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'IK', { label: 'General Preparation' }),
-        slot('Laboratory', 'SPV', 'JSA', { label: 'General Laboratory' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
+        slot('Preparation', 'SPV', 'Safety', { label: 'General Preparation', materiTetap: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'Safety', { label: 'General Laboratory', materiTetap: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam' })
       ]
     }
   };
@@ -267,7 +265,6 @@ export function buildJsaIkConfig() {
     },
     malam: {
       gabungan: [
-        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
         slot('Preparation', 'Foreman/Officer', 'IK'),
         slot('Laboratory', 'Foreman/Officer', 'JSA')
       ]
@@ -330,18 +327,16 @@ export function buildAllIkConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'IK', { label: 'General Preparation' }),
-        slot('Laboratory', 'SPV', 'IK', { label: 'General Laboratory' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
+        slot('Preparation', 'SPV', 'IK', { label: 'General Preparation', materiTetap: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'IK', { label: 'General Laboratory', materiTetap: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam' })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'IK', { label: 'General Preparation' }),
-        slot('Laboratory', 'SPV', 'IK', { label: 'General Laboratory' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
+        slot('Preparation', 'SPV', 'IK', { label: 'General Preparation', materiTetap: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'IK', { label: 'General Laboratory', materiTetap: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam' })
       ]
     }
   };
@@ -423,7 +418,6 @@ export function buildAllIkConfig() {
     },
     malam: {
       gabungan: [
-        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
         slot('Preparation', 'Foreman/Officer', 'IK'),
         slot('Laboratory', 'Foreman/Officer', 'IK')
       ]
@@ -486,18 +480,16 @@ export function buildAllSopConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'SOP', { label: 'General Preparation' }),
-        slot('Laboratory', 'SPV', 'SOP', { label: 'General Laboratory' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
+        slot('Preparation', 'SPV', 'SOP', { label: 'General Preparation', materiTetap: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'SOP', { label: 'General Laboratory', materiTetap: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam' })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'SOP', { label: 'General Preparation' }),
-        slot('Laboratory', 'SPV', 'SOP', { label: 'General Laboratory' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
+        slot('Preparation', 'SPV', 'SOP', { label: 'General Preparation', materiTetap: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'SOP', { label: 'General Laboratory', materiTetap: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam' })
       ]
     }
   };
@@ -579,7 +571,6 @@ export function buildAllSopConfig() {
     },
     malam: {
       gabungan: [
-        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
         slot('Preparation', 'Foreman/Officer', 'SOP'),
         slot('Laboratory', 'Foreman/Officer', 'SOP')
       ]
@@ -641,18 +632,16 @@ export function buildDefaultConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Safety', { label: 'General Preparation' }),
-        slot('Laboratory', 'SPV', 'Safety', { label: 'General Laboratory' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
+        slot('Preparation', 'SPV', 'Safety', { label: 'General Preparation', materiTetap: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'Safety', { label: 'General Laboratory', materiTetap: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam' })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Safety', { label: 'General Preparation' }),
-        slot('Laboratory', 'SPV', 'Safety', { label: 'General Laboratory' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
-        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
+        slot('Preparation', 'SPV', 'Safety', { label: 'General Preparation', materiTetap: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'Safety', { label: 'General Laboratory', materiTetap: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam' })
       ]
     }
   };
@@ -734,7 +723,6 @@ export function buildDefaultConfig() {
     },
     malam: {
       gabungan: [
-        slot('All', 'Foreman/Officer', 'Safety', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
         slot('Preparation', 'Foreman/Officer', 'Safety'),
         slot('Laboratory', 'Foreman/Officer', 'Safety')
       ]
@@ -3773,38 +3761,38 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                 </div>
 
                 {/* Proportional Legend Badge Card */}
-                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-[var(--input-bg)]/90 border border-[var(--border-main)] px-3.5 py-1.5 rounded-2xl shadow-2xs shrink-0 self-stretch md:self-auto">
+                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 bg-white/90 dark:bg-[#191919]/90 border border-[#e3e2de] dark:border-slate-800 px-3.5 py-1.5 rounded-xl shadow-2xs shrink-0 self-stretch md:self-auto">
                   {/* Shift Categories */}
                   <div className="flex items-center gap-1.5 text-[11px] font-mono">
-                    <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold tracking-wider mr-0.5">Shift:</span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/25 text-[10px]">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shadow-2xs"></span> Day
+                    <span className="text-[#787774] dark:text-[#9b9b9b] text-[10px] uppercase font-bold tracking-wider mr-0.5">Shift:</span>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#f1f1ef] text-[#37352f] dark:bg-[#252525] dark:text-[#ebebeb] font-semibold border border-[#e3e2de] dark:border-slate-700 text-[10px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#787774] inline-block"></span> Day (Gray)
                     </span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-500/25 text-[10px]">
-                      <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block shadow-2xs"></span> Night
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#f4eeee] text-[#6e4b3e] dark:bg-[#2a2423] dark:text-[#c4927b] font-semibold border border-[#e8deda] dark:border-[#3d3331] text-[10px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#9f6b53] inline-block"></span> Night (Brown)
                     </span>
                   </div>
 
-                  <div className="hidden sm:block w-px h-4 bg-[var(--border-main)]"></div>
+                  <div className="hidden sm:block w-px h-4 bg-[#e3e2de] dark:bg-slate-800"></div>
 
                   {/* Section Categories */}
                   <div className="flex items-center gap-1.5 text-[11px] font-mono">
-                    <span className="text-[var(--text-muted)] text-[10px] uppercase font-bold tracking-wider mr-0.5">Section:</span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-orange-500/15 text-orange-700 dark:text-orange-300 font-bold border border-orange-500/25 text-[10px]">
-                      <span className="w-2 h-2 rounded bg-orange-500 inline-block shadow-2xs"></span> Preparasi
+                    <span className="text-[#787774] dark:text-[#9b9b9b] text-[10px] uppercase font-bold tracking-wider mr-0.5">Outline:</span>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#fadec9]/40 text-[#8f4226] dark:text-[#ffa775] font-semibold border border-[#fadec9] dark:border-[#d9730d]/50 text-[10px]">
+                      <span className="w-1.5 h-1.5 rounded bg-[#d9730d] inline-block"></span> Gabungan (Orange)
                     </span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/25 text-[10px]">
-                      <span className="w-2 h-2 rounded bg-emerald-500 inline-block shadow-2xs"></span> Laboratorium
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#fbf3db]/40 text-[#8f6b00] dark:text-[#f4d178] font-semibold border border-[#f2e5bc] dark:border-[#cb912f]/50 text-[10px]">
+                      <span className="w-1.5 h-1.5 rounded bg-[#cb912f] inline-block"></span> Preparasi (Yellow)
                     </span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/25 text-[10px]">
-                      <span className="w-2 h-2 rounded bg-amber-500 inline-block shadow-2xs"></span> Gabungan
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#fbe4e4]/40 text-[#a83030] dark:text-[#ff8a86] font-semibold border border-[#f9d1d3] dark:border-[#d44c47]/50 text-[10px]">
+                      <span className="w-1.5 h-1.5 rounded bg-[#d44c47] inline-block"></span> Laboratorium (Red)
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Grid Columns (1 column if single day filter selected, 7 columns if ALL selected) */}
-              <div className={`grid divide-x divide-[var(--border-main)] border-b border-[var(--border-main)] text-xs ${
+              <div className={`grid divide-x divide-[#e3e2de] dark:divide-slate-800 border-b border-[#e3e2de] dark:border-slate-800 text-xs bg-white dark:bg-[#191919] ${
                 selectedDayFilter === 'ALL' ? 'grid-cols-7' : 'grid-cols-1 w-full'
               }`}>
                 {(selectedDayFilter === 'ALL' ? DAYS : [selectedDayFilter]).map(day => {
@@ -3815,27 +3803,29 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     <div id={`p5m-col-${day}`} key={day} className={`flex flex-col ${selectedDayFilter === 'ALL' ? 'min-w-[160px]' : 'w-full'}`}>
                       
                       {/* Column Header */}
-                      <div className="bg-[var(--input-bg)] p-2.5 text-center border-b border-[var(--border-main)]" style={{ borderTop: `4px solid ${DAY_COLORS[day]}` }}>
-                        <div className="font-black text-[var(--text-main)] text-sm">{day}</div>
-                        <div className="text-[11px] font-mono text-[var(--text-muted)] font-semibold">{dateInfo?.display || '-'}</div>
-                        <span className={`inline-block text-[9px] uppercase font-mono font-black px-2 py-0.5 rounded-full mt-1 ${
-                          isG ? 'bg-amber-400 text-slate-950 border border-amber-500 shadow-xs' : 'bg-emerald-600 text-white shadow-xs'
+                      <div className="bg-[#fbfbfa] dark:bg-[#1f1f1f] p-2.5 text-center border-b border-[#e3e2de] dark:border-slate-800">
+                        <div className="font-bold text-[#37352f] dark:text-[#ebebeb] text-sm">{day}</div>
+                        <div className="text-[11px] font-mono text-[#787774] dark:text-[#9b9b9b] font-medium">{dateInfo?.display || '-'}</div>
+                        <span className={`inline-block text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded-md mt-1 border ${
+                          isG 
+                            ? 'bg-[#fadec9]/50 text-[#8f4226] border-[#fadec9] dark:bg-[#fadec9]/20 dark:text-[#ffa775] dark:border-[#d9730d]/40' 
+                            : 'bg-[#f1f1ef] text-[#787774] border-[#e3e2de] dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                         }`}>
                           {isG ? 'GABUNGAN' : 'SPLIT'}
                         </span>
                       </div>
 
-                      {/* ☀️ Day Shift Section */}
-                      <div className="bg-[var(--card-bg)] p-1.5 border-b-2 border-[var(--border-main)] flex-1 space-y-1.5 min-h-[160px]">
-                        <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 px-1 pt-0.5 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-amber-400 inline-block shadow-sm"></span>
+                      {/* ☀️ Day Shift Section (Notion Gray Background) */}
+                      <div className="bg-[#f1f1ef] dark:bg-[#202020] p-1.5 border-b border-[#e3e2de] dark:border-slate-800 flex-1 space-y-1.5 min-h-[160px]">
+                        <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-[#787774] dark:text-[#9b9b9b] px-1 pt-0.5 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#787774] inline-block"></span>
                           <span>☀️ Day Shift</span>
                         </div>
 
                         {isG ? (
-                          <div className="bg-amber-50/40 rounded-xl p-1.5 border-2 border-amber-300 space-y-1.5 shadow-sm">
-                            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-amber-900 px-1 mb-1">
-                              <span className="w-2 h-2 rounded bg-amber-500 inline-block shadow-sm"></span>
+                          <div className="bg-white/95 dark:bg-[#191919]/95 rounded-xl p-1.5 border border-[#fadec9] dark:border-[#d9730d]/50 space-y-1.5 shadow-xs">
+                            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-[#8f4226] dark:text-[#ffa775] px-1 mb-1">
+                              <span className="w-1.5 h-1.5 rounded bg-[#d9730d] inline-block"></span>
                               Gabungan (All Team)
                             </div>
                             {(scheduleData[day]?.pagi?.gabungan || []).map((slot: any, sIdx: number) => (
@@ -3861,20 +3851,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                               <button
                                 type="button"
                                 onClick={() => handleAddSlot(day, 'pagi', 'gabungan')}
-                                className="w-full py-1 px-2 rounded-lg border border-dashed border-amber-400 hover:border-amber-600 bg-white/70 hover:bg-amber-100 text-amber-900 text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
+                                className="w-full py-1 px-2 rounded-lg border border-dashed border-[#fadec9] hover:border-[#d9730d] bg-white/70 hover:bg-[#fadec9]/20 text-[#8f4226] dark:text-[#ffa775] text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
                                 title="Tambah slot pemateri baru di sesi Pagi Gabungan"
                               >
-                                <Plus className="w-3.5 h-3.5 text-amber-600" />
+                                <Plus className="w-3.5 h-3.5 text-[#d9730d]" />
                                 <span>Tambah Pemateri</span>
                               </button>
                             )}
                           </div>
                         ) : (
                           <div className="space-y-1.5">
-                            {/* Prep */}
-                            <div className="bg-orange-50/40 rounded-xl p-1.5 border-2 border-orange-300 space-y-1.5 shadow-sm">
-                              <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-orange-900 px-1 mb-1">
-                                <span className="w-2 h-2 rounded bg-orange-500 inline-block shadow-sm"></span>
+                            {/* Prep (Yellow Outline) */}
+                            <div className="bg-white/95 dark:bg-[#191919]/95 rounded-xl p-1.5 border border-[#f2e5bc] dark:border-[#cb912f]/50 space-y-1.5 shadow-xs">
+                              <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-[#8f6b00] dark:text-[#f4d178] px-1 mb-1">
+                                <span className="w-1.5 h-1.5 rounded bg-[#cb912f] inline-block"></span>
                                 Preparasi
                               </div>
                               {(scheduleData[day]?.pagi?.preparasi || []).map((slot: any, sIdx: number) => (
@@ -3900,19 +3890,19 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 <button
                                   type="button"
                                   onClick={() => handleAddSlot(day, 'pagi', 'preparasi')}
-                                  className="w-full py-1 px-2 rounded-lg border border-dashed border-orange-400 hover:border-orange-600 bg-white/70 hover:bg-orange-100 text-orange-900 text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
+                                  className="w-full py-1 px-2 rounded-lg border border-dashed border-[#f2e5bc] hover:border-[#cb912f] bg-white/70 hover:bg-[#fbf3db]/20 text-[#8f6b00] dark:text-[#f4d178] text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
                                   title="Tambah slot pemateri baru di Preparasi Pagi"
                                 >
-                                  <Plus className="w-3.5 h-3.5 text-orange-600" />
+                                  <Plus className="w-3.5 h-3.5 text-[#cb912f]" />
                                   <span>Tambah Pemateri Prep</span>
                                 </button>
                               )}
                             </div>
 
-                            {/* Lab */}
-                            <div className="bg-emerald-50/40 rounded-xl p-1.5 border-2 border-emerald-300 space-y-1.5 shadow-sm">
-                              <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-emerald-900 px-1 mb-1">
-                                <span className="w-2 h-2 rounded bg-emerald-600 inline-block shadow-sm"></span>
+                            {/* Lab (Red Outline) */}
+                            <div className="bg-white/95 dark:bg-[#191919]/95 rounded-xl p-1.5 border border-[#f9d1d3] dark:border-[#d44c47]/50 space-y-1.5 shadow-xs">
+                              <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-[#a83030] dark:text-[#ff8a86] px-1 mb-1">
+                                <span className="w-1.5 h-1.5 rounded bg-[#d44c47] inline-block"></span>
                                 Laboratorium
                               </div>
                               {(scheduleData[day]?.pagi?.laboratorium || []).map((slot: any, sIdx: number) => (
@@ -3938,10 +3928,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 <button
                                   type="button"
                                   onClick={() => handleAddSlot(day, 'pagi', 'laboratorium')}
-                                  className="w-full py-1 px-2 rounded-lg border border-dashed border-emerald-400 hover:border-emerald-600 bg-white/70 hover:bg-emerald-100 text-emerald-900 text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
+                                  className="w-full py-1 px-2 rounded-lg border border-dashed border-[#f9d1d3] hover:border-[#d44c47] bg-white/70 hover:bg-[#fbe4e4]/20 text-[#a83030] dark:text-[#ff8a86] text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
                                   title="Tambah slot pemateri baru di Laboratorium Pagi"
                                 >
-                                  <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                                  <Plus className="w-3.5 h-3.5 text-[#d44c47]" />
                                   <span>Tambah Pemateri Lab</span>
                                 </button>
                               )}
@@ -3951,28 +3941,28 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
                         {/* Special HSE safety talk on Friday day */}
                         {day === 'Jumat' && (
-                          <div className="bg-emerald-100 border border-emerald-300 rounded-lg p-2 text-center shadow-sm">
-                            <span className="text-[9px] font-bold uppercase font-mono text-emerald-800 block">HSE Dept</span>
-                            <span className="text-[11px] font-bold text-slate-800 block">Safety Talk Mingguan</span>
+                          <div className="bg-white/90 dark:bg-slate-900 border border-[#fadec9] rounded-lg p-2 text-center shadow-xs">
+                            <span className="text-[9px] font-bold uppercase font-mono text-[#8f4226] dark:text-[#ffa775] block">HSE Dept</span>
+                            <span className="text-[11px] font-bold text-[#37352f] dark:text-[#ebebeb] block">Safety Talk Mingguan</span>
                           </div>
                         )}
                       </div>
 
-                      {/* 🌙 Night Shift Section */}
-                      <div className="bg-[var(--bg-main)]/40 p-1.5 flex-1 space-y-1.5 min-h-[160px]">
-                        <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 px-1 pt-0.5 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block shadow-sm"></span>
+                      {/* 🌙 Night Shift Section (Notion Brown Background) */}
+                      <div className="bg-[#f4eeee] dark:bg-[#2a2423] p-1.5 flex-1 space-y-1.5 min-h-[160px]">
+                        <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-[#9f6b53] dark:text-[#c4927b] px-1 pt-0.5 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#9f6b53] inline-block"></span>
                           <span>🌙 Night Shift</span>
                         </div>
 
                         {day === 'Minggu' ? (
-                          <div className="p-3 text-center text-[10px] text-[var(--text-muted)] font-mono italic">
+                          <div className="p-3 text-center text-[10px] text-[#787774] dark:text-[#9b9b9b] font-mono italic">
                             — Libur Night Shift —
                           </div>
                         ) : isG ? (
-                          <div className="bg-amber-50/40 rounded-xl p-1.5 border-2 border-amber-300 space-y-1.5 shadow-sm">
-                            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-amber-900 px-1 mb-1">
-                              <span className="w-2 h-2 rounded bg-amber-500 inline-block shadow-sm"></span>
+                          <div className="bg-white/95 dark:bg-[#191919]/95 rounded-xl p-1.5 border border-[#fadec9] dark:border-[#d9730d]/50 space-y-1.5 shadow-xs">
+                            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-[#8f4226] dark:text-[#ffa775] px-1 mb-1">
+                              <span className="w-1.5 h-1.5 rounded bg-[#d9730d] inline-block"></span>
                               Gabungan (All Team)
                             </div>
                             {(scheduleData[day]?.malam?.gabungan || []).map((slot: any, sIdx: number) => (
@@ -3998,20 +3988,20 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                               <button
                                 type="button"
                                 onClick={() => handleAddSlot(day, 'malam', 'gabungan')}
-                                className="w-full py-1 px-2 rounded-lg border border-dashed border-amber-400 hover:border-amber-600 bg-white/70 hover:bg-amber-100 text-amber-900 text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
+                                className="w-full py-1 px-2 rounded-lg border border-dashed border-[#fadec9] hover:border-[#d9730d] bg-white/70 hover:bg-[#fadec9]/20 text-[#8f4226] dark:text-[#ffa775] text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
                                 title="Tambah slot pemateri baru di sesi Malam Gabungan"
                               >
-                                <Plus className="w-3.5 h-3.5 text-amber-600" />
+                                <Plus className="w-3.5 h-3.5 text-[#d9730d]" />
                                 <span>Tambah Pemateri Malam</span>
                               </button>
                             )}
                           </div>
                         ) : (
                           <div className="space-y-1.5">
-                            {/* Prep */}
-                            <div className="bg-orange-50/40 rounded-xl p-1.5 border-2 border-orange-300 space-y-1.5 shadow-sm">
-                              <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-orange-900 px-1 mb-1">
-                                <span className="w-2 h-2 rounded bg-orange-500 inline-block shadow-sm"></span>
+                            {/* Prep (Yellow Outline) */}
+                            <div className="bg-white/95 dark:bg-[#191919]/95 rounded-xl p-1.5 border border-[#f2e5bc] dark:border-[#cb912f]/50 space-y-1.5 shadow-xs">
+                              <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-[#8f6b00] dark:text-[#f4d178] px-1 mb-1">
+                                <span className="w-1.5 h-1.5 rounded bg-[#cb912f] inline-block"></span>
                                 Preparasi
                               </div>
                               {(scheduleData[day]?.malam?.preparasi || []).map((slot: any, sIdx: number) => (
@@ -4037,19 +4027,19 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 <button
                                   type="button"
                                   onClick={() => handleAddSlot(day, 'malam', 'preparasi')}
-                                  className="w-full py-1 px-2 rounded-lg border border-dashed border-orange-400 hover:border-orange-600 bg-white/70 hover:bg-orange-100 text-orange-900 text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
+                                  className="w-full py-1 px-2 rounded-lg border border-dashed border-[#f2e5bc] hover:border-[#cb912f] bg-white/70 hover:bg-[#fbf3db]/20 text-[#8f6b00] dark:text-[#f4d178] text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
                                   title="Tambah slot pemateri baru di Preparasi Malam"
                                 >
-                                  <Plus className="w-3.5 h-3.5 text-orange-600" />
+                                  <Plus className="w-3.5 h-3.5 text-[#cb912f]" />
                                   <span>Tambah Pemateri Prep</span>
                                 </button>
                               )}
                             </div>
 
-                            {/* Lab */}
-                            <div className="bg-emerald-50/40 rounded-xl p-1.5 border-2 border-emerald-300 space-y-1.5 shadow-sm">
-                              <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-emerald-900 px-1 mb-1">
-                                <span className="w-2 h-2 rounded bg-emerald-600 inline-block shadow-sm"></span>
+                            {/* Lab (Red Outline) */}
+                            <div className="bg-white/95 dark:bg-[#191919]/95 rounded-xl p-1.5 border border-[#f9d1d3] dark:border-[#d44c47]/50 space-y-1.5 shadow-xs">
+                              <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase font-mono text-[#a83030] dark:text-[#ff8a86] px-1 mb-1">
+                                <span className="w-1.5 h-1.5 rounded bg-[#d44c47] inline-block"></span>
                                 Laboratorium
                               </div>
                               {(scheduleData[day]?.malam?.laboratorium || []).map((slot: any, sIdx: number) => (
@@ -4075,10 +4065,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                                 <button
                                   type="button"
                                   onClick={() => handleAddSlot(day, 'malam', 'laboratorium')}
-                                  className="w-full py-1 px-2 rounded-lg border border-dashed border-emerald-400 hover:border-emerald-600 bg-white/70 hover:bg-emerald-100 text-emerald-900 text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
+                                  className="w-full py-1 px-2 rounded-lg border border-dashed border-[#f9d1d3] hover:border-[#d44c47] bg-white/70 hover:bg-[#fbe4e4]/20 text-[#a83030] dark:text-[#ff8a86] text-[10.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs mt-1"
                                   title="Tambah slot pemateri baru di Laboratorium Malam"
                                 >
-                                  <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                                  <Plus className="w-3.5 h-3.5 text-[#d44c47]" />
                                   <span>Tambah Pemateri Lab</span>
                                 </button>
                               )}
@@ -5998,19 +5988,18 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
   const isEmptySDM = !slot.nama || slot.nama.includes('KOSONG');
 
   // Determine card base theme based on session / zone
-  let cardStyle = 'bg-white text-slate-900 shadow-xs transition-all';
+  let cardStyle = 'bg-white dark:bg-[#191919] text-[#37352f] dark:text-[#ebebeb] shadow-[0_1px_2px_rgba(15,15,15,0.05)] transition-all';
   if (isEmptySDM) {
-    cardStyle += ' bg-rose-50 border-2 border-rose-300 text-rose-800';
+    cardStyle += ' bg-[#fbe4e4]/40 border border-[#f9d1d3] dark:border-[#d44c47]/60 text-[#a83030] dark:text-[#ff8a86]';
+  } else if (zone === 'prep') {
+    // Sesi Terpisah - Preparasi: Outline Yellow
+    cardStyle += ' border border-[#cb912f] dark:border-[#cb912f]/70 hover:border-[#b07d24] hover:shadow-sm bg-white dark:bg-[#191919]';
+  } else if (zone === 'lab') {
+    // Sesi Terpisah - Laboratorium: Outline Red
+    cardStyle += ' border border-[#d44c47] dark:border-[#d44c47]/70 hover:border-[#b83833] hover:shadow-sm bg-white dark:bg-[#191919]';
   } else {
-    if (zone === 'prep') {
-      cardStyle += ' border-2 border-orange-300 hover:border-orange-500 hover:ring-2 hover:ring-orange-200/80 bg-white';
-    } else if (zone === 'lab') {
-      cardStyle += ' border-2 border-emerald-300 hover:border-emerald-500 hover:ring-2 hover:ring-emerald-200/80 bg-white';
-    } else if (zone === 'gabungan' || zone === 'day') {
-      cardStyle += ' border-2 border-amber-300 hover:border-amber-500 hover:ring-2 hover:ring-amber-200/80 bg-white';
-    } else {
-      cardStyle += ' border-2 border-indigo-300 hover:border-indigo-500 hover:ring-2 hover:ring-indigo-200/80 bg-white';
-    }
+    // Sesi Gabungan (All Team & Senam): Outline Orange
+    cardStyle += ' border border-[#d9730d] dark:border-[#d9730d]/70 hover:border-[#b85e05] hover:shadow-sm bg-white dark:bg-[#191919]';
   }
 
   const isNight = shift === 'malam';
@@ -6019,6 +6008,19 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
 
   return (
     <div className={`p-2.5 rounded-xl transition-all text-xs flex flex-col gap-1.5 ${cardStyle} ${selectNameOpen || selectMateriOpen ? 'z-40 relative' : ''}`}>
+      {/* Notion Tag Header for Senam */}
+      {isSenamSlot && (
+        <div className="flex items-center justify-between gap-1 pb-1 border-b border-[#fadec9] dark:border-[#d9730d]/30">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9.5px] font-semibold bg-[#fadec9]/40 text-[#8f4226] border border-[#fadec9] dark:bg-[#fadec9]/20 dark:text-[#ffa775] dark:border-[#d9730d]/40 tracking-tight">
+            <span>🤸</span>
+            <span>Instruktur Senam</span>
+          </span>
+          <span className="text-[8.5px] font-mono text-[#787774] dark:text-slate-400 bg-[#f1f1ef] dark:bg-slate-800 px-1.5 py-0.2 rounded border border-[#e3e2de] dark:border-slate-700">
+            Duet 2 Kru
+          </span>
+        </div>
+      )}
+
       {/* Backdrop for click outside */}
       {(selectNameOpen || selectMateriOpen) && (
         <div 
@@ -6181,15 +6183,60 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-1">
-            <span
-              className={`font-bold text-[12px] leading-snug break-words ${isEmptySDM ? 'text-rose-600 italic' : 'text-slate-900'}`}
-              title={slot.nama}
-            >
-              {slot.nama || '— Tidak Ada SDM —'}
-            </span>
+          <div className="flex items-center justify-between gap-1 w-full">
+            {slot.nama && slot.nama.includes(' / ') ? (
+              <div className="flex flex-col gap-1 py-0.5 w-full" title={slot.nama}>
+                {/* Instruktur 1 - Prep/Maintenance (Yellow badge per user rule: outline yellow for prep) */}
+                <div className="flex items-center justify-between gap-1.5 px-2 py-1 bg-[#fbf3db]/40 dark:bg-[#252520] rounded-lg border border-[#f2e5bc] dark:border-[#cb912f]/40">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <span className="w-4 h-4 rounded-full bg-[#fbf3db] text-[#8f6b00] border border-[#f2e5bc] text-[9px] font-bold flex items-center justify-center shrink-0">
+                      P
+                    </span>
+                    <span className="font-semibold text-[11.5px] text-[#37352f] dark:text-[#ebebeb] break-words whitespace-normal leading-tight">
+                      {slot.nama.split(' / ')[0]}
+                    </span>
+                  </div>
+                  <span className="text-[8.5px] font-medium px-1.5 py-0.2 rounded bg-[#fbf3db] text-[#8f6b00] border border-[#f2e5bc] shrink-0">
+                    Prep/Maint
+                  </span>
+                </div>
+
+                {/* Instruktur 2 - Laboratory (Red badge per user rule: outline red for lab) */}
+                <div className="flex items-center justify-between gap-1.5 px-2 py-1 bg-[#fbe4e4]/40 dark:bg-[#251f1f] rounded-lg border border-[#f9d1d3] dark:border-[#d44c47]/40">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <span className="w-4 h-4 rounded-full bg-[#fbe4e4] text-[#a83030] border border-[#f9d1d3] text-[9px] font-bold flex items-center justify-center shrink-0">
+                      L
+                    </span>
+                    <span className="font-semibold text-[11.5px] text-[#37352f] dark:text-[#ebebeb] break-words whitespace-normal leading-tight">
+                      {slot.nama.split(' / ')[1]}
+                    </span>
+                  </div>
+                  <span className="text-[8.5px] font-medium px-1.5 py-0.2 rounded bg-[#fbe4e4] text-[#a83030] border border-[#f9d1d3] shrink-0">
+                    Lab
+                  </span>
+                </div>
+              </div>
+            ) : isSenamSlot ? (
+              <div className="flex items-center justify-between gap-1.5 px-2 py-1 bg-[#fadec9]/30 dark:bg-slate-850 rounded-lg border border-[#fadec9] dark:border-[#d9730d]/40 w-full">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span className="w-4 h-4 rounded-full bg-[#fadec9] text-[#8f4226] border border-[#f5d5c8] text-[9px] font-bold flex items-center justify-center shrink-0">
+                    S
+                  </span>
+                  <span className="font-semibold text-[11.5px] text-[#37352f] dark:text-[#ebebeb] break-words whitespace-normal leading-tight">
+                    {slot.nama || '— Tidak Ada SDM —'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <span
+                className={`font-semibold text-[11.5px] leading-tight break-words whitespace-normal ${isEmptySDM ? 'text-[#a83030] italic' : 'text-[#37352f] dark:text-[#ebebeb]'}`}
+                title={slot.nama}
+              >
+                {slot.nama || '— Tidak Ada SDM —'}
+              </span>
+            )}
             {slot.isManagerSpt && (
-              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[9px] rounded-full shrink-0" title="Manajemen (Tidak dihitung beban tugas personil)">
+              <span className="px-1.5 py-0.5 bg-[#f1f1ef] text-[#37352f] dark:bg-slate-800 dark:text-slate-300 border border-[#e3e2de] dark:border-slate-700 font-bold text-[9px] rounded-md shrink-0" title="Manajemen (Tidak dihitung beban tugas personil)">
                 👔 SPT/Manager
               </span>
             )}
@@ -6429,25 +6476,35 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
               </div>
             )}
           </div>
+        ) : isSenamSlot ? (
+          <div className="mt-1 px-2.5 py-1.5 rounded-lg text-[10.5px] leading-snug font-medium break-words border bg-white dark:bg-slate-900 border-[#fadec9] dark:border-[#d9730d]/40 text-[#8f4226] dark:text-[#ffa775] flex items-center justify-between gap-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#d9730d] shrink-0"></span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[#8f4226] dark:text-[#ffa775]">
+                Senam Kebugaran
+              </span>
+            </div>
+            <span className="text-[8.5px] font-medium text-[#787774] dark:text-slate-400 bg-[#f1f1ef] dark:bg-slate-800 px-1.5 py-0.2 rounded border border-[#e3e2de] dark:border-slate-700 shrink-0">
+              Semua Team
+            </span>
+          </div>
         ) : (
-          <div className={`mt-1 px-2.5 py-1.5 rounded-xl text-[10.5px] leading-snug font-medium break-words border-l-2 flex items-start justify-between gap-1.5 ${
-            isSenamSlot
-              ? 'bg-purple-50 border-purple-400 text-purple-900'
-              : slot.isLogbook
-              ? 'bg-blue-50 border-blue-400 text-blue-900'
-              : zone === 'prep'
-              ? 'bg-orange-50 border-orange-400 text-orange-900'
+          <div className={`mt-1 px-2.5 py-1.5 rounded-lg text-[10.5px] leading-snug font-medium break-words border-l-2 flex items-start justify-between gap-1.5 ${
+            zone === 'prep'
+              ? 'bg-[#fbf3db]/40 border-[#cb912f] text-[#37352f] dark:text-[#ebebeb]'
               : zone === 'lab'
-              ? 'bg-emerald-50 border-emerald-400 text-emerald-900'
-              : 'bg-amber-50 border-amber-400 text-amber-900'
+              ? 'bg-[#fbe4e4]/40 border-[#d44c47] text-[#37352f] dark:text-[#ebebeb]'
+              : 'bg-[#fadec9]/30 border-[#d9730d] text-[#37352f] dark:text-[#ebebeb]'
           }`}>
             <div className="flex-1 min-w-0">
-              <span className={`text-[8.5px] font-black uppercase tracking-wider block mb-0.5 ${
-                isSenamSlot ? 'text-purple-600' : slot.isLogbook ? 'text-blue-600' : zone === 'prep' ? 'text-orange-600' : zone === 'lab' ? 'text-emerald-600' : 'text-amber-700'
+              <span className={`text-[8.5px] font-bold uppercase tracking-wider block mb-0.5 ${
+                zone === 'prep' ? 'text-[#8f6b00] dark:text-[#f4d178]' : zone === 'lab' ? 'text-[#a83030] dark:text-[#ff8a86]' : 'text-[#8f4226] dark:text-[#ffa775]'
               }`}>
-                {isSenamSlot ? 'Senam:' : slot.isLogbook ? 'Logbook:' : 'Materi P5M:'}
+                Materi P5M:
               </span>
-              <span>{slot.materi || '— Materi Standar —'}</span>
+              <span className="break-words whitespace-normal leading-snug font-medium text-[#37352f] dark:text-[#ebebeb]">
+                {slot.materi || '— Materi Standar —'}
+              </span>
             </div>
             {slot.fileUrl && (() => {
               const isPdf = slot.fileUrl.toLowerCase().includes('.pdf') || (slot.materi && (/\b(sop|ik)\b|instruksi kerja/i.test(slot.materi) || slot.materi.startsWith('IK ') || slot.materi.startsWith('SOP ')));
@@ -6455,9 +6512,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                 <button
                   type="button"
                   onClick={() => onPreviewImage(slot.fileUrl, slot.materi)}
-                  className={`p-1 rounded-md flex items-center justify-center shrink-0 transition-colors mt-0.5 ${
-                    isPdf ? 'text-orange-600 hover:bg-orange-100' : 'text-amber-600 hover:bg-amber-100'
-                  }`}
+                  className="p-1 rounded-md flex items-center justify-center shrink-0 transition-colors mt-0.5 text-[#8f4226] hover:bg-[#faece6] dark:text-[#ffa775] dark:hover:bg-slate-800"
                   title={isPdf ? "Lihat Dokumen IK / SOP" : "Lihat Flyer Materi"}
                 >
                   {isPdf ? <FileText className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />}

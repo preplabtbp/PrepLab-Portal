@@ -398,7 +398,6 @@ function buildDefaultConfig(): Record<string, any> {
     },
     malam: {
       gabungan: [
-        slot('All', 'Foreman/Officer', 'Safety', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
         slot('Preparation', 'Foreman/Officer', 'Safety'),
         slot('Laboratory', 'Foreman/Officer', 'Safety')
       ]
@@ -1298,8 +1297,13 @@ p5mRouter.post("/randomize", async (req, res) => {
 
     const shiftValid = ['D', 'N', 'LS', 'S', 'NONSHIFT', 'NON-SHIFT'];
 
-    // Include all active materi from database
-    const poolMateri = materiDb.map(m => ({ ...m }));
+    // Include all active materi from database (exclude logbook)
+    const poolMateri = materiDb
+      .filter(m => {
+        const j = (m.judul || '').toLowerCase();
+        return !j.includes('logbook') && !j.includes('evaluasi logbook');
+      })
+      .map(m => ({ ...m }));
 
     // Prepare qualified Golongan 2 & 3 employee pool
     const poolKaryawan = allEmps.map(emp => {
@@ -1464,6 +1468,31 @@ p5mRouter.post("/randomize", async (req, res) => {
       };
     }).filter(Boolean) as any[];
 
+    // Helper: Cek status cuti atau travel
+    function isCutiOrTravel(code?: string): boolean {
+      if (!code) return false;
+      const s = code.toUpperCase().trim();
+      if (['C', 'CE', 'CT', 'CI', 'CS', 'TRV', 'TV', 'XP', 'TT', 'CUTI', 'TRAVEL', 'TR'].includes(s)) return true;
+      if (s.startsWith('CT') || s.startsWith('CE') || s.startsWith('CI') || s.startsWith('CS') || s.startsWith('TRV') || s.startsWith('TV') || s.startsWith('C-') || s.startsWith('TR-')) return true;
+      return false;
+    }
+
+    // Helper: Cek apakah personil adalah Crew / Golongan 1
+    function isCrewOrGol1(k: any): boolean {
+      const g = String(k.gol || '').toUpperCase().trim();
+      if (g === 'I' || g === '1' || g.includes('GOL 1') || g.includes('GOL I') || g.includes('CREW')) return true;
+      const j = (k.jabatan || '').toLowerCase();
+      if (
+        j.includes('operator') || j.includes('sampler') || j.includes('helper') || 
+        j.includes('crew') || j.includes('preparator') || j.includes('laboran') || 
+        j.includes('crusher') || j.includes('technician') || j.includes('teknisi') ||
+        j.includes('analyst') || j.includes('analis')
+      ) {
+        return true;
+      }
+      return false;
+    }
+
     // ── Constraint Solver Candidate Selection ────────────────
     function pilihKandidat(hari: string, shift: string, slot: any, sudahDipilihHariIni: Set<string>, subSessionTipe?: string) {
       function filterDasar(k: any, kelasTarget: string, matchDivisiStrict: boolean = true) {
@@ -1472,6 +1501,13 @@ p5mRouter.post("/randomize", async (req, res) => {
         if (shift === 'pagi' && (jdwl === 'D' || jdwl === 'LS' || jdwl === 'S' || jdwl === 'NONSHIFT')) isMasuk = true;
         if (shift === 'malam' && (jdwl === 'N' || jdwl.startsWith('N'))) isMasuk = true;
         if (!isMasuk) return false;
+
+        // PROTEKSI CUTI / TRAVEL DI HARI SENIN:
+        // Personil yang masih cuti atau travel di hari Senin tidak boleh dapat jadwal minggu ini kecuali dia shift malam
+        const seninStatus = (k.jadwal?.['Senin'] || '').toUpperCase().trim();
+        if (isCutiOrTravel(seninStatus) && shift !== 'malam') {
+          return false;
+        }
 
         // STRICT DAY SHIFT RULE: MAX 1 SLOT PER WEEK PER PERSON (ZERO 2x IN DAY SHIFT)
         if (shift === 'pagi' && k.tugasMingguIni >= 1) return false;
@@ -1508,13 +1544,17 @@ p5mRouter.post("/randomize", async (req, res) => {
 
       // ── ATURAN DISTRIBUSI SENAM MERATA (Mencakup Kru & Staf) ──
       if (isSenam) {
-        // Ambil personil dari poolSenam (termasuk crew!) yang masuk shift hari ini dan belum dapat tugas
         const availableWorkersOnDay = poolSenam.filter(k => {
           const jdwl = (k.jadwal[hari] || '').toUpperCase();
           let isMasuk = false;
           if (shift === 'pagi' && (['D', 'LS', 'S', 'NONSHIFT'].includes(jdwl) || jdwl.startsWith('D'))) isMasuk = true;
           if (shift === 'malam' && (jdwl === 'N' || jdwl.startsWith('N'))) isMasuk = true;
           if (!isMasuk) return false;
+
+          // Proteksi Cuti / Travel hari Senin (kecuali shift malam)
+          const seninStatus = (k.jadwal?.['Senin'] || '').toUpperCase().trim();
+          if (isCutiOrTravel(seninStatus) && shift !== 'malam') return false;
+
           const curTugas = k.refKaryawan ? k.refKaryawan.tugasMingguIni : k.tugasMingguIni;
           if (shift === 'pagi' && curTugas >= 1) return false;
           if (shift === 'malam' && curTugas >= 2) return false;
@@ -1523,12 +1563,8 @@ p5mRouter.post("/randomize", async (req, res) => {
         });
 
         if (availableWorkersOnDay.length > 0) {
-          // Cari angka senam terendah di antara personil yang masuk kerja shift ini
           const globalMinSenam = Math.min(...availableWorkersOnDay.map(c => c.senamCount || 0));
-
-          // Filter ketat: HANYA personil yang memiliki senamCount terendah (semua 0x harus habis dulu sebelum ada yang dapat 2x)
           const strictlyFreshWorkers = availableWorkersOnDay.filter(c => (c.senamCount || 0) === globalMinSenam);
-
           return strictlyFreshWorkers;
         }
       }
@@ -1609,6 +1645,115 @@ p5mRouter.post("/randomize", async (req, res) => {
       const highest = kandidat[0].score;
       const topGrup = kandidat.filter(k => k.score === highest);
       return topGrup[Math.floor(Math.random() * topGrup.length)];
+    }
+
+    // ── Pemilihan 2 Instruktur Senam dalam 1 Slot (Prioritas Kru Gol 1 & Belum Pernah Senam, 1 Prep/Maint + 1 Lab) ──
+    function pilihKandidatSenamPair(hari: string, shift: string, sudahDipilihHariIni: Set<string>, indexHariIni: number) {
+      const availableWorkers = poolSenam.filter(k => {
+        const jdwl = (k.jadwal[hari] || '').toUpperCase().trim();
+        let isMasuk = false;
+        if (shift === 'pagi' && (['D', 'LS', 'S', 'NONSHIFT'].includes(jdwl) || jdwl.startsWith('D'))) isMasuk = true;
+        if (shift === 'malam' && (jdwl === 'N' || jdwl.startsWith('N'))) isMasuk = true;
+        if (!isMasuk) return false;
+
+        // Proteksi Cuti / Travel hari Senin (kecuali shift malam):
+        const seninStatus = (k.jadwal?.['Senin'] || '').toUpperCase().trim();
+        if (isCutiOrTravel(seninStatus) && shift !== 'malam') return false;
+
+        const curTugas = k.refKaryawan ? k.refKaryawan.tugasMingguIni : k.tugasMingguIni;
+        if (shift === 'pagi' && curTugas >= 1) return false;
+        if (shift === 'malam' && curTugas >= 2) return false;
+        if (sudahDipilihHariIni.has(k.nama)) return false;
+        return true;
+      });
+
+      if (availableWorkers.length === 0) return { cand1: null, cand2: null };
+
+      // Helper check divisi / section
+      function isPrepMaint(w: any): boolean {
+        const d = (w.divisi || '').toLowerCase();
+        const s = (w.section || '').toLowerCase();
+        return d === 'preparation' || d === 'maintenance' || s.includes('prep') || s.includes('maint');
+      }
+
+      function isLabGroup(w: any): boolean {
+        const d = (w.divisi || '').toLowerCase();
+        const s = (w.section || '').toLowerCase();
+        return d === 'laboratory' || d === 'quality assurance' || s.includes('lab') || s.includes('qa') || s.includes('analyst');
+      }
+
+      // Scoring kandidat senam:
+      // 1. Crew / Golongan 1 diprioritaskan utama (+3000 poin)
+      // 2. Belum pernah senam (senamCount === 0) prioritas tertinggi (+2000 poin)
+      // 3. Senam count terendah (penalti berdasarkan frekuensi senam yang sudah pernah dijalani)
+      // 4. Tugas minggu ini terendah
+      const scored = availableWorkers.map(w => {
+        const isCrew = isCrewOrGol1(w);
+        const count = w.senamCount || 0;
+        const curTugas = w.refKaryawan ? w.refKaryawan.tugasMingguIni : w.tugasMingguIni;
+        let score = 0;
+        if (isCrew) score += 3000;
+        if (count === 0) score += 2000;
+        else score -= count * 400;
+        score -= curTugas * 200;
+        score += Math.random() * 50;
+        return { worker: w, score };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+
+      // Pisahkan ke dalam grup Prep/Maintenance dan Laboratory
+      const prepScored = scored.filter(s => isPrepMaint(s.worker));
+      const labScored = scored.filter(s => isLabGroup(s.worker));
+
+      let cand1: any = null;
+      let cand2: any = null;
+
+      // Prioritas 1 Prep/Maintenance + 1 Lab tiap jadwal
+      if (prepScored.length > 0 && labScored.length > 0) {
+        cand1 = prepScored[0].worker;
+        cand2 = labScored[0].worker;
+      } else if (labScored.length === 0 && prepScored.length >= 2) {
+        // Jika lab sudah semua / habis, gunakan personil prep yang tersedia
+        cand1 = prepScored[0].worker;
+        cand2 = prepScored[1].worker;
+      } else if (prepScored.length === 0 && labScored.length >= 2) {
+        // Jika prep habis, gunakan personil lab yang tersedia
+        cand1 = labScored[0].worker;
+        cand2 = labScored[1].worker;
+      } else {
+        // Fallback umum
+        cand1 = scored[0]?.worker || null;
+        if (scored.length > 1) {
+          cand2 = scored.find(s => s.worker.nama !== cand1?.nama)?.worker || null;
+        }
+      }
+
+      if (cand1) {
+        sudahDipilihHariIni.add(cand1.nama);
+        cand1.tugasMingguIni++;
+        cand1.senamCount = (cand1.senamCount || 0) + 1;
+        cand1.hariTerakhirBriefingSesi = indexHariIni;
+        if (cand1.refKaryawan) {
+          cand1.refKaryawan.tugasMingguIni++;
+          cand1.refKaryawan.senamCount = cand1.senamCount;
+          cand1.refKaryawan.hariTerakhirBriefingSesi = indexHariIni;
+        }
+      }
+
+      if (cand2) {
+        sudahDipilihHariIni.add(cand2.nama);
+        cand2.tugasMingguIni++;
+        cand2.senamCount = (cand2.senamCount || 0) + 1;
+        cand2.hariTerakhirBriefingSesi = indexHariIni;
+        if (cand2.refKaryawan) {
+          cand2.refKaryawan.tugasMingguIni++;
+          cand2.refKaryawan.senamCount = cand2.senamCount;
+          cand2.refKaryawan.hariTerakhirBriefingSesi = indexHariIni;
+        }
+      }
+
+      return { cand1, cand2 };
     }
 
     // ── Logika Pemilihan & Daur Ulang Materi ──
@@ -1725,7 +1870,7 @@ p5mRouter.post("/randomize", async (req, res) => {
       return false;
     }
 
-    function pilihMateri(divisiTarget: string, kategoriTarget: string, materiTetap?: string | null, candidateDivision?: string, isGabunganSession?: boolean) {
+    function pilihMateri(divisiTarget: string, kategoriTarget: string, materiTetap?: string | null, candidateDivision?: string, isGabunganSession?: boolean, prioritizeGeneral?: boolean) {
       // Kategori Senam
       if (kategoriTarget === 'Senam' || materiTetap?.toLowerCase().includes('senam')) {
         return {
@@ -1808,6 +1953,25 @@ p5mRouter.post("/randomize", async (req, res) => {
         new Date(m.lastUsed).getTime() < cooldownDate.getTime()
       );
 
+      // ── PRIORITAS SECTION GENERAL (Khusus Hari Kamis, Jumat, & Minggu) ──
+      if (prioritizeGeneral) {
+        const generalTier1 = tier1Candidates.filter(m => {
+          const sub = (m.subKategori || 'General').toLowerCase().trim();
+          return sub === 'general' || sub === 'all';
+        });
+        if (generalTier1.length > 0) {
+          tier1Candidates = generalTier1;
+        } else {
+          const generalTier2 = tier2Candidates.filter(m => {
+            const sub = (m.subKategori || 'General').toLowerCase().trim();
+            return sub === 'general' || sub === 'all';
+          });
+          if (generalTier2.length > 0) {
+            tier2Candidates = generalTier2;
+          }
+        }
+      }
+
       let selected: any = null;
 
       if (tier1Candidates.length > 0) {
@@ -1820,6 +1984,16 @@ p5mRouter.post("/randomize", async (req, res) => {
         // Prioritas Fallback 1: Daur ulang materi terlama dari tema aktif pada section yang sama
         let recycleTheme = themePool.filter(m => !usedMateriIdsInWeek.has(m.id));
         if (recycleTheme.length === 0) recycleTheme = themePool;
+
+        if (prioritizeGeneral) {
+          const generalRecycle = recycleTheme.filter(m => {
+            const sub = (m.subKategori || 'General').toLowerCase().trim();
+            return sub === 'general' || sub === 'all';
+          });
+          if (generalRecycle.length > 0) {
+            recycleTheme = generalRecycle;
+          }
+        }
 
         if (recycleTheme.length > 0) {
           recycleTheme.sort((a, b) => {
@@ -1844,6 +2018,16 @@ p5mRouter.post("/randomize", async (req, res) => {
           // Urutkan sectionPool: belum dipakai minggu ini -> fresh / terlama
           let sectionCandidates = sectionPool.filter(m => !usedMateriIdsInWeek.has(m.id));
           if (sectionCandidates.length === 0) sectionCandidates = sectionPool;
+
+          if (prioritizeGeneral) {
+            const generalSection = sectionCandidates.filter(m => {
+              const sub = (m.subKategori || 'General').toLowerCase().trim();
+              return sub === 'general' || sub === 'all';
+            });
+            if (generalSection.length > 0) {
+              sectionCandidates = generalSection;
+            }
+          }
 
           if (sectionCandidates.length > 0) {
             sectionCandidates.sort((a, b) => {
@@ -1902,7 +2086,7 @@ p5mRouter.post("/randomize", async (req, res) => {
       const sudahDipilihPagi = new Set<string>();
       if (isGabungan) {
         let rawSlots = dayCfg.pagi?.gabungan || [];
-        // Khusus hari Senin: Pastikan ada slot Prep (General Prep), slot Lab (General Lab), dan 2 slot Senam
+        // Khusus hari Senin: Pastikan ada slot Prep (General Prep), slot Lab (General Lab), dan tepat 1 slot Senam (Duet 2 nama)
         if (hari === 'Senin') {
           const hasPrep = rawSlots.some((s: any) => s.divisi === 'Preparation');
           const hasLab = rawSlots.some((s: any) => s.divisi === 'Laboratory');
@@ -1919,13 +2103,39 @@ p5mRouter.post("/randomize", async (req, res) => {
             mondaySlots.push({ divisi: 'Laboratory', kelas: 'SPV', kategori: 'Safety', label: 'General Laboratory' });
           }
 
-          // 2 slot instruktur senam (termasuk crew)
-          mondaySlots.push({ divisi: 'All', kelas: 'All', kategori: 'Senam', isSenam: true, label: 'Instruktur Senam 1' });
-          mondaySlots.push({ divisi: 'All', kelas: 'All', kategori: 'Senam', isSenam: true, label: 'Instruktur Senam 2' });
+          // Cukup 1 slot Senam (berisi duet 2 instruktur senam kru)
+          mondaySlots.push({ divisi: 'All', kelas: 'All', kategori: 'Senam', isSenam: true, label: 'Instruktur Senam' });
           rawSlots = mondaySlots;
         }
 
         hasilHari.pagi.gabungan = rawSlots.map((sl: any, slotIdx: number) => {
+          const isSenamSlot = Boolean(sl.isSenam || sl.kategori === 'Senam' || sl.materiTetap?.toLowerCase().includes('senam'));
+
+          // Slot Senam: langsung ambil 2 nama instruktur senam dalam 1 slot
+          if (isSenamSlot) {
+            const { cand1, cand2 } = pilihKandidatSenamPair(hari, 'pagi', sudahDipilihPagi, indexHariIni);
+            const namaDisplay = cand1 && cand2 ? `${cand1.nama} / ${cand2.nama}` : cand1 ? cand1.nama : 'KOSONG (Tdk ada SDM)';
+            const nikDisplay = cand1 && cand2 ? `${cand1.nik} / ${cand2.nik}` : cand1 ? cand1.nik : '';
+            const ptDisplay = cand1 ? cand1.pt : (cand2 ? cand2.pt : 'TBP');
+
+            return {
+              nama: namaDisplay,
+              nik: nikDisplay,
+              pt: ptDisplay,
+              materi: 'Senam',
+              kategori: 'Senam',
+              subKategori: 'General',
+              kelas: 'All',
+              divisi: 'All',
+              fileUrl: null,
+              isFallback: false,
+              isLogbook: false,
+              isSenam: true,
+              materiId: null,
+              isManagerSpt: false
+            };
+          }
+
           let terpilih: any = null;
           let isManagerSpt = false;
           let isFallback = false;
@@ -1956,35 +2166,26 @@ p5mRouter.post("/randomize", async (req, res) => {
               sudahDipilihPagi.add(terpilih.nama);
               terpilih.tugasMingguIni++;
               terpilih.hariTerakhirBriefingSesi = indexHariIni;
-              if (sl.kategori === 'Senam' || sl.isSenam) {
-                terpilih.senamCount = (terpilih.senamCount || 0) + 1;
-                if (terpilih.refKaryawan) {
-                  terpilih.refKaryawan.tugasMingguIni++;
-                  terpilih.refKaryawan.senamCount = terpilih.senamCount;
-                }
-              }
             }
             isFallback = Boolean((cand as any)?._isFallback);
           }
           
           // Pemilihan Materi:
           let materiRes: any = null;
-          if (sl.kategori === 'Senam' || sl.isSenam) {
-            materiRes = { judul: 'Senam', kategori: 'Senam', subKategori: 'General', id: null, fileUrl: null };
-          } else if (hari === 'Senin' && slotIdx === 0 && sl.divisi === 'Preparation' && seninConfig?.prepMateriJudul) {
+          if (hari === 'Senin' && slotIdx === 0 && sl.divisi === 'Preparation') {
             materiRes = { 
-              judul: seninConfig.prepMateriJudul, 
-              kategori: seninConfig.prepMateriKategori || 'Safety', 
+              judul: seninConfig?.prepMateriJudul || 'General Preparation', 
+              kategori: seninConfig?.prepMateriKategori || 'Safety', 
               subKategori: 'Preparation', 
-              id: seninConfig.prepMateriId || null, 
+              id: seninConfig?.prepMateriId || null, 
               fileUrl: null 
             };
-          } else if (hari === 'Senin' && slotIdx === 1 && sl.divisi === 'Laboratory' && seninConfig?.labMateriJudul) {
+          } else if (hari === 'Senin' && slotIdx === 1 && sl.divisi === 'Laboratory') {
             materiRes = { 
-              judul: seninConfig.labMateriJudul, 
-              kategori: seninConfig.labMateriKategori || 'Safety', 
+              judul: seninConfig?.labMateriJudul || 'General Laboratory', 
+              kategori: seninConfig?.labMateriKategori || 'Safety', 
               subKategori: 'Laboratory', 
-              id: seninConfig.labMateriId || null, 
+              id: seninConfig?.labMateriId || null, 
               fileUrl: null 
             };
           } else {
@@ -1993,14 +2194,14 @@ p5mRouter.post("/randomize", async (req, res) => {
             if (satRes) {
               materiRes = satRes;
             } else {
-              const isSeninPrep = hari === 'Senin' && sl.divisi === 'Preparation';
-              const isSeninLab = hari === 'Senin' && sl.divisi === 'Laboratory';
+              const isPrioritizeGeneral = ['Kamis', 'Jumat', 'Minggu'].includes(hari);
               materiRes = pilihMateri(
                 sl.divisi, 
                 sl.kategori, 
                 sl.materiTetap, 
                 terpilih?.divisi || sl.divisi, 
-                !(isSeninPrep || isSeninLab)
+                true,
+                isPrioritizeGeneral
               );
             }
           }
@@ -2017,7 +2218,7 @@ p5mRouter.post("/randomize", async (req, res) => {
             fileUrl: materiRes.fileUrl,
             isFallback: isFallback,
             isLogbook: Boolean(sl.isLogbook),
-            isSenam: sl.kategori === 'Senam' || Boolean(sl.isSenam) || Boolean(sl.materiTetap?.toLowerCase().includes('senam')),
+            isSenam: false,
             materiId: materiRes.id,
             isManagerSpt: isManagerSpt
           };
@@ -2123,19 +2324,38 @@ p5mRouter.post("/randomize", async (req, res) => {
               mondaySlots.push({ divisi: 'Laboratory', kelas: 'SPV', kategori: 'Safety', label: 'General Laboratory' });
             }
 
-            // 2 slot instruktur senam malam (termasuk crew)
-            mondaySlots.push({ divisi: 'All', kelas: 'All', kategori: 'Senam', isSenam: true, label: 'Instruktur Senam 1' });
-            mondaySlots.push({ divisi: 'All', kelas: 'All', kategori: 'Senam', isSenam: true, label: 'Instruktur Senam 2' });
+            // Cukup 1 slot Senam malam (berisi duet 2 instruktur senam)
+            mondaySlots.push({ divisi: 'All', kelas: 'All', kategori: 'Senam', isSenam: true, label: 'Instruktur Senam' });
             rawSlots = mondaySlots;
           }
 
           hasilHari.malam.gabungan = rawSlots.map((sl: any, slotIdx: number) => {
-            if (hari === 'Jumat' && slotIdx === 0) {
-              sl.isLogbook = true;
-              if (!sl.materiTetap) sl.materiTetap = 'Briefing Evaluasi Logbook Shift & Operasional Mingguan';
-            }
-
             const isSenamSlot = Boolean(sl.isSenam || sl.kategori === 'Senam' || sl.materiTetap?.toLowerCase().includes('senam'));
+
+            // Slot Senam Malam: ambil 2 nama instruktur senam shift malam dalam 1 slot
+            if (isSenamSlot) {
+              const { cand1, cand2 } = pilihKandidatSenamPair(hari, 'malam', sudahDipilihMalam, indexHariIni);
+              const namaDisplay = cand1 && cand2 ? `${cand1.nama} / ${cand2.nama}` : cand1 ? cand1.nama : 'KOSONG (Tdk ada SDM)';
+              const nikDisplay = cand1 && cand2 ? `${cand1.nik} / ${cand2.nik}` : cand1 ? cand1.nik : '';
+              const ptDisplay = cand1 ? cand1.pt : (cand2 ? cand2.pt : 'TBP');
+
+              return {
+                nama: namaDisplay,
+                nik: nikDisplay,
+                pt: ptDisplay,
+                materi: 'Senam',
+                kategori: 'Senam',
+                subKategori: 'General',
+                kelas: 'All',
+                divisi: 'All',
+                fileUrl: null,
+                isFallback: false,
+                isLogbook: false,
+                isSenam: true,
+                materiId: null,
+                isManagerSpt: false
+              };
+            }
 
             const cand = pilihKandidat(hari, 'malam', sl, sudahDipilihMalam);
             const terpilih = pilihDariKandidat(cand, indexHariIni);
@@ -2143,20 +2363,25 @@ p5mRouter.post("/randomize", async (req, res) => {
               sudahDipilihMalam.add(terpilih.nama);
               terpilih.tugasMingguIni++;
               terpilih.hariTerakhirBriefingSesi = indexHariIni;
-              if (isSenamSlot && terpilih.refKaryawan) {
-                terpilih.refKaryawan.tugasMingguIni++;
-              }
             }
             const isFallback = Boolean((cand as any)?._isFallback);
 
             // Sinkronkan materi malam dengan materi pagi hari yang sama
             let materiRes: any = null;
-            if (isSenamSlot) {
+            if (hari === 'Senin' && slotIdx === 0 && sl.divisi === 'Preparation') {
               materiRes = {
-                judul: 'Senam',
-                kategori: 'Senam',
-                subKategori: 'General',
-                id: null,
+                judul: morningSlots[0]?.materi || 'General Preparation',
+                kategori: morningSlots[0]?.kategori || 'Safety',
+                subKategori: 'Preparation',
+                id: morningSlots[0]?.materiId || null,
+                fileUrl: null
+              };
+            } else if (hari === 'Senin' && slotIdx === 1 && sl.divisi === 'Laboratory') {
+              materiRes = {
+                judul: morningSlots[1]?.materi || 'General Laboratory',
+                kategori: morningSlots[1]?.kategori || 'Safety',
+                subKategori: 'Laboratory',
+                id: morningSlots[1]?.materiId || null,
                 fileUrl: null
               };
             } else if (sl.materiTetap) {
@@ -2181,9 +2406,8 @@ p5mRouter.post("/randomize", async (req, res) => {
                   fileUrl: matchMorning.fileUrl
                 };
               } else {
-                const isSeninPrep = hari === 'Senin' && sl.divisi === 'Preparation';
-                const isSeninLab = hari === 'Senin' && sl.divisi === 'Laboratory';
-                materiRes = pilihMateri(sl.divisi, sl.kategori, sl.materiTetap, terpilih?.divisi || sl.divisi, !(isSeninPrep || isSeninLab));
+                const isPrioritizeGeneral = ['Kamis', 'Jumat', 'Minggu'].includes(hari);
+                materiRes = pilihMateri(sl.divisi, sl.kategori, sl.materiTetap, terpilih?.divisi || sl.divisi, true, isPrioritizeGeneral);
               }
             }
 
@@ -2199,7 +2423,7 @@ p5mRouter.post("/randomize", async (req, res) => {
               fileUrl: materiRes.fileUrl,
               isFallback: isFallback,
               isLogbook: Boolean(sl.isLogbook),
-              isSenam: isSenamSlot,
+              isSenam: false,
               materiId: materiRes.id
             };
           });
