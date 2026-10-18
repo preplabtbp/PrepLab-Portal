@@ -78,25 +78,30 @@ export const DEFAULT_SUPERMINI_ROWS: StandardRowInput[] = [
   { standardCode: 'OREAS195', sampleLabel: 'VER-OREAS195',  sequenceNo: 17, analyzedAt: '01:25', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
 ];
 
-// 4. Zetium WDXRF (PANalytical TBP) 17 Standard Rows in default sequence
+// 4. Zetium WDXRF (PANalytical TBP) 22 Standard Rows in verification sequence
 export const DEFAULT_ZETIUM_ROWS: StandardRowInput[] = [
-  { standardCode: 'BLANK_A',  sampleLabel: 'BLANK A',       sequenceNo: 1,  analyzedAt: '00:05', ni: '0.000', co: '0.000', fe: '0.000', cao: '0.000', sio2: '0.00', al2o3: '0.00', mgo: '0.00', p: '0.000', s: '0.000', cr2o3: '0.000', mno: '0.000' },
-  { standardCode: 'BLANK_B',  sampleLabel: 'VER-BLANK B',   sequenceNo: 2,  analyzedAt: '00:10', ni: '0.000', co: '0.000', fe: '0.000', cao: '0.000', sio2: '0.00', al2o3: '0.00', mgo: '0.00', p: '0.000', s: '0.000', cr2o3: '0.000', mno: '0.000' },
-  { standardCode: 'OREAS184', sampleLabel: 'VER-OREAS184',  sequenceNo: 3,  analyzedAt: '00:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'LIM01',    sampleLabel: 'VER-LIM01',     sequenceNo: 4,  analyzedAt: '00:20', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'LIM02',    sampleLabel: 'VER-LIM02',     sequenceNo: 5,  analyzedAt: '00:25', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'LIM03',    sampleLabel: 'VER-LIM03',     sequenceNo: 6,  analyzedAt: '00:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'OREAS187', sampleLabel: 'VER-OREAS187',  sequenceNo: 7,  analyzedAt: '00:35', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'LIM04',    sampleLabel: 'VER-LIM04',     sequenceNo: 8,  analyzedAt: '00:40', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'OREAS189', sampleLabel: 'VER-OREAS189',  sequenceNo: 9,  analyzedAt: '00:45', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'LIM05',    sampleLabel: 'VER-LIM05',     sequenceNo: 10, analyzedAt: '00:50', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'OREAS190', sampleLabel: 'VER-OREAS190',  sequenceNo: 11, analyzedAt: '00:55', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'OREAS191', sampleLabel: 'VER-OREAS191',  sequenceNo: 12, analyzedAt: '01:00', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'OREAS192', sampleLabel: 'VER-OREAS192',  sequenceNo: 13, analyzedAt: '01:05', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'OREAS193', sampleLabel: 'VER-OREAS193',  sequenceNo: 14, analyzedAt: '01:10', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'SAP19',    sampleLabel: 'VER-SAP19',     sequenceNo: 15, analyzedAt: '01:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'OREAS194', sampleLabel: 'VER-OREAS194',  sequenceNo: 16, analyzedAt: '01:20', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
-  { standardCode: 'OREAS195', sampleLabel: 'VER-OREAS195',  sequenceNo: 17, analyzedAt: '01:25', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS70B', sampleLabel: 'VER-OREAS 70B', sequenceNo: 1,  analyzedAt: '00:05', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'BRK03',    sampleLabel: 'VER-BRK03',     sequenceNo: 2,  analyzedAt: '00:10', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS182', sampleLabel: 'VER-OREAS 182', sequenceNo: 3,  analyzedAt: '00:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'NILTRT11', sampleLabel: 'VER-NILTRT 11', sequenceNo: 4,  analyzedAt: '00:20', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS184', sampleLabel: 'VER-OREAS 184', sequenceNo: 5,  analyzedAt: '00:25', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM13',    sampleLabel: 'VER-LIM13',     sequenceNo: 6,  analyzedAt: '00:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OB',       sampleLabel: 'VER-OB',        sequenceNo: 7,  analyzedAt: '00:35', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS187', sampleLabel: 'VER-OREAS 187', sequenceNo: 8,  analyzedAt: '00:40', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'NILTRT45', sampleLabel: 'VER-NILTRT 45', sequenceNo: 9,  analyzedAt: '00:45', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS189', sampleLabel: 'VER-OREAS 189', sequenceNo: 10, analyzedAt: '00:50', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS190', sampleLabel: 'VER-OREAS 190', sequenceNo: 11, analyzedAt: '00:55', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'LIM',      sampleLabel: 'VER-LIM',       sequenceNo: 12, analyzedAt: '01:00', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS191', sampleLabel: 'VER-OREAS 191', sequenceNo: 13, analyzedAt: '01:05', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS192', sampleLabel: 'VER-OREAS 192', sequenceNo: 14, analyzedAt: '01:10', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'SAP16',    sampleLabel: 'VER-SAP16',     sequenceNo: 15, analyzedAt: '01:15', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS193', sampleLabel: 'VER-OREAS 193', sequenceNo: 16, analyzedAt: '01:20', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'SAP19',    sampleLabel: 'VER-SAP19',     sequenceNo: 17, analyzedAt: '01:25', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS194', sampleLabel: 'VER-OREAS 194', sequenceNo: 18, analyzedAt: '01:30', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'SAP',      sampleLabel: 'VER-SAP',       sequenceNo: 19, analyzedAt: '01:35', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS72B', sampleLabel: 'VER-OREAS 72B', sequenceNo: 20, analyzedAt: '01:40', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'OREAS185', sampleLabel: 'VER-OREAS 185', sequenceNo: 21, analyzedAt: '01:45', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
+  { standardCode: 'ZBK411',   sampleLabel: 'VER-ZBK411',    sequenceNo: 22, analyzedAt: '01:50', ni: '', co: '', fe: '', cao: '', sio2: '', al2o3: '', mgo: '', p: '', s: '', cr2o3: '', mno: '' },
 ];
 
 export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({

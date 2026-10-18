@@ -112,7 +112,58 @@ export function extractSmartStandardCode(rawLabel: string): SmartStandardResult 
     };
   }
 
-  // 8. Cek Standar CRM Internasional Lain (GBW, NIST, SARM, AMIS, JDO, BCS, BAS)
+  // 8. Cek BRK (BRK 03, BRK03, BRK)
+  const brkMatch = cleaned.match(/\bBRK[\s_-]*([0-9]*)\b/i);
+  if (brkMatch) {
+    const rawNum = brkMatch[1];
+    const num = rawNum ? (rawNum.length === 1 ? `0${rawNum}` : rawNum) : '03';
+    return {
+      standardCode: `BRK${num}`,
+      displayName: `BRK ${num}`,
+      originalLabel: original,
+      isRecognizedCrm: true,
+      category: 'CRM_OTHER',
+    };
+  }
+
+  // 9. Cek ZBK (ZBK 411, ZBK411, ZBK 412, ZBK412)
+  const zbkMatch = cleaned.match(/\bZBK[\s_-]*([0-9]+)\b/i);
+  if (zbkMatch) {
+    const num = zbkMatch[1];
+    return {
+      standardCode: `ZBK${num}`,
+      displayName: `ZBK ${num}`,
+      originalLabel: original,
+      isRecognizedCrm: true,
+      category: 'CRM_OTHER',
+    };
+  }
+
+  // 10. Cek NILTRT (NILTRT 11, NILTRT 45, dsb.)
+  const nilMatch = cleaned.match(/\bNILTRT[\s_-]*([0-9]+)\b/i);
+  if (nilMatch) {
+    const num = nilMatch[1];
+    return {
+      standardCode: `NILTRT${num}`,
+      displayName: `NILTRT ${num}`,
+      originalLabel: original,
+      isRecognizedCrm: true,
+      category: 'CRM_OTHER',
+    };
+  }
+
+  // 11. Cek OB (Overburden CRM standalone)
+  if (/^OB\b/i.test(cleaned)) {
+    return {
+      standardCode: 'OB',
+      displayName: 'OB',
+      originalLabel: original,
+      isRecognizedCrm: true,
+      category: 'LIMONITE',
+    };
+  }
+
+  // 12. Cek Standar CRM Internasional Lain (GBW, NIST, SARM, AMIS, JDO, BCS, BAS)
   const crmMatch = cleaned.match(/\b(GBW|NIST|SARM|AMIS|JDO|BCS|BAS|SY)[\s_-]*([0-9A-Za-z]+)\b/i);
   if (crmMatch) {
     const prefix = crmMatch[1].toUpperCase();
@@ -197,5 +248,20 @@ export function formatStandardDisplayName(standardCode: string): string {
     const num = clean.replace(/SAP/i, '');
     return `SAP ${num}`;
   }
-  return clean.replace('_', ' ');
+  if (/^BRK\d+/i.test(clean)) {
+    const num = clean.replace(/BRK0?/i, '');
+    return `BRK ${num.padStart(2, '0')}`;
+  }
+  if (/^ZBK\d+/i.test(clean)) {
+    const num = clean.replace(/ZBK/i, '');
+    return `ZBK ${num}`;
+  }
+  if (/^NILTRT\d+/i.test(clean)) {
+    const num = clean.replace(/NILTRT/i, '');
+    return `NILTRT ${num}`;
+  }
+  if (clean === 'OB') return 'OB';
+  if (clean === 'LIM') return 'LIM';
+  if (clean === 'SAP') return 'SAP';
+  return clean.replace(/_/g, ' ');
 }

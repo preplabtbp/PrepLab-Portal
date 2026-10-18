@@ -9,7 +9,7 @@ import {
   xrfVerifications,
   xrfVerificationItems
 } from "../../src/db/schema.js";
-import { extractSmartStandardCode } from "../../src/utils/xrfStandardDetector.js";
+import { extractSmartStandardCode, isWdxrfInstrument } from "../../src/utils/xrfStandardDetector.js";
 
 export const xrfRouter = Router();
 
@@ -70,7 +70,8 @@ export async function ensureXrfTables() {
       ADD COLUMN IF NOT EXISTS lower_warning DOUBLE PRECISION,
       ADD COLUMN IF NOT EXISTS upper_warning DOUBLE PRECISION,
       ADD COLUMN IF NOT EXISTS lower_action DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS upper_action DOUBLE PRECISION;
+      ADD COLUMN IF NOT EXISTS upper_action DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS stdev_wdxrf DOUBLE PRECISION;
     `);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_xrf_std_ref_code_elem ON xrf_standard_references(standard_code, element_name);`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_std_ref_std ON xrf_standard_references(standard_code);`);
@@ -1356,14 +1357,28 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
           actionSigma: 3.0,
         };
 
-        const nominal = ref.nominalValue;
-        const sigma = ref.stdevFixed;
-        const upperAction = ref.upperAction !== null && ref.upperAction !== undefined ? Number(ref.upperAction) : Number((nominal + 3 * sigma).toFixed(3));
-        const upperWarning = ref.upperWarning !== null && ref.upperWarning !== undefined ? Number(ref.upperWarning) : Number((nominal + 2 * sigma).toFixed(3));
-        const lowerWarning = ref.lowerWarning !== null && ref.lowerWarning !== undefined ? Number(ref.lowerWarning) : Number((nominal - 2 * sigma).toFixed(3));
-        const lowerAction = ref.lowerAction !== null && ref.lowerAction !== undefined ? Number(ref.lowerAction) : Number((nominal - 3 * sigma).toFixed(3));
+        const nominal = Number(ref.nominalValue !== undefined && ref.nominalValue !== null ? ref.nominalValue : defaultNominal);
 
         for (const inst of instrumentsParam) {
+          const isWdxrf = isWdxrfInstrument(inst);
+          const hasWdxrfSigma = isWdxrf && ref.stdevWdxrf !== null && ref.stdevWdxrf !== undefined && Number(ref.stdevWdxrf) > 0;
+          const sigma = hasWdxrfSigma 
+            ? Number(ref.stdevWdxrf) 
+            : Number(ref.stdevFixed !== undefined && ref.stdevFixed !== null ? ref.stdevFixed : defaultSigma);
+
+          const upperAction = hasWdxrfSigma
+            ? Number((nominal + 3 * sigma).toFixed(3))
+            : (ref.upperAction !== null && ref.upperAction !== undefined ? Number(ref.upperAction) : Number((nominal + 3 * sigma).toFixed(3)));
+          const upperWarning = hasWdxrfSigma
+            ? Number((nominal + 2 * sigma).toFixed(3))
+            : (ref.upperWarning !== null && ref.upperWarning !== undefined ? Number(ref.upperWarning) : Number((nominal + 2 * sigma).toFixed(3)));
+          const lowerWarning = hasWdxrfSigma
+            ? Number((nominal - 2 * sigma).toFixed(3))
+            : (ref.lowerWarning !== null && ref.lowerWarning !== undefined ? Number(ref.lowerWarning) : Number((nominal - 2 * sigma).toFixed(3)));
+          const lowerAction = hasWdxrfSigma
+            ? Number((nominal - 3 * sigma).toFixed(3))
+            : (ref.lowerAction !== null && ref.lowerAction !== undefined ? Number(ref.lowerAction) : Number((nominal - 3 * sigma).toFixed(3)));
+
           const normStd = std.trim().replace(' ', '_');
           const matchingRows = groupedData.get(`${normStd}::${inst}`) || groupedData.get(`${std}::${inst}`) || [];
 
