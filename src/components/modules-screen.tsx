@@ -55,7 +55,12 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
     inspectorNik === 'M0403240177';   // Aldy Aldersun Puluh
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
   const isLab = isMeetingRoom || userSection.toLowerCase().includes('laboratory') || isDeveloper;
-  const isMaintenance = isMeetingRoom || userSection.toLowerCase().includes('maintenance') || isDeveloper;
+  const isMaintenance = 
+    isMeetingRoom || 
+    userSection.toLowerCase().includes('maintenance') || 
+    isDeveloper || 
+    inspectorNik === 'M0401260003' || 
+    inspectorName?.toLowerCase().includes('sarjon');
   const hasInventoryAccess = true;
   const isQA = isMeetingRoom || userSection.toLowerCase().includes('qa') || userSection.toLowerCase().includes('quality assurance') || isDeveloper;
   const isCrew = isMeetingRoom ? false : userJabatan.toLowerCase().includes('crew');
@@ -116,6 +121,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
       bgIcon: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20',
       items: [
         { id: 'quiz', title: "Quiz Safety & SOP", desc: "Uji pemahaman prosedur", icon: <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('quiz') },
+        { id: 'parampaa', title: "Kuis Parampaa (Arcade)", desc: "Game asah otak legendaris (Offline)", icon: <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('parampaa') },
         { id: 'manual', title: "Buku Panduan", desc: "User Manual Sistem", icon: <Info className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('manual') },
         ...(isQA ? [{ id: 'quiz-admin', title: "Manajemen Quiz", desc: "Tambah, Edit & Hapus Soal", icon: <Settings className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'blue', action: () => onNav('quiz-admin') }] : []),
       ]
@@ -130,7 +136,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('induksi') },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('employee-database') },
         ...(isQA ? [{ id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('p5m') }] : []),
-        { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('agenda') },
+        { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('agenda?tab=Private') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('roster-admin') },
         { id: 'meal-orders', title: "Orderan Makanan", desc: "Order harian Kantin & Lapangan", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => onNav('meal-orders') },
         // { id: 'food-report', title: "Lapor Makan", desc: "Status konsumsi", icon: <Utensils className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'indigo', action: () => setShowFoodReportModal(true) }, // Di-hide sementara (belum operasional)

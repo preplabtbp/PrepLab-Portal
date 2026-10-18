@@ -13,7 +13,7 @@ import {
 import { generatePdfFromTemplate, generateMonitoringPdfWithDynamicTable, listExistingMonitoringPdfs, drive } from '../../google-services.js';
 import { 
   sendWebPush, getUniverse, uploadFileToDrive, syncBulletinToAgenda, 
-  getNotificationTargets, getTableObj, sanitizePayload 
+  getNotificationTargets, getTableObj, sanitizePayload, getIoInstance 
 } from "../utils.js";
 import webpush from 'web-push';
 import { invalidateScheduleCache, fetchInspectionScheduleFromSheet, rekapInspeksiCache, REKAP_INSPEKSI_CACHE_TTL } from "./inspections.js";
@@ -2129,6 +2129,166 @@ router.post("/api/settings", async (req, res) => {
       res.status(500).json({ error: "Failed to save setting" });
     }
   });
+
+// --- SHARED HOME WIDGETS & NOTES (ACCROSS DEVICES & USERS) ---
+router.get("/api/widgets/configs", async (_req, res) => {
+  try {
+    const row = await db.select().from(appSettings).where(eq(appSettings.settingKey, 'shared_home_widgets_config')).limit(1);
+    if (row.length > 0 && row[0].settingValue) {
+      try {
+        const parsed = JSON.parse(row[0].settingValue);
+        return res.json({ success: true, configs: parsed, updatedAt: row[0].updatedAt });
+      } catch {
+        return res.json({ success: true, configs: null });
+      }
+    }
+    return res.json({ success: true, configs: null });
+  } catch (error) {
+    console.error('Error fetching widget configs:', error);
+    res.status(500).json({ success: false, error: "Failed to fetch widget configs" });
+  }
+});
+
+router.post("/api/widgets/configs", async (req, res) => {
+  try {
+    const { configs } = req.body;
+    if (!Array.isArray(configs)) {
+      return res.status(400).json({ success: false, error: "Invalid configs payload" });
+    }
+
+    const settingKey = 'shared_home_widgets_config';
+    const settingValue = JSON.stringify(configs);
+    const description = 'Shared home widgets layout, order, size and active status across all devices';
+
+    const existing = await db.select().from(appSettings).where(eq(appSettings.settingKey, settingKey)).limit(1);
+    if (existing.length > 0) {
+      await db.update(appSettings)
+        .set({ settingValue, description, updatedAt: new Date() })
+        .where(eq(appSettings.settingKey, settingKey));
+    } else {
+      await db.insert(appSettings)
+        .values({ settingKey, settingValue, description });
+    }
+
+    // Broadcast update to all connected clients via Socket.IO
+    try {
+      getIoInstance()?.emit('widgets:config_updated', configs);
+    } catch (sockErr) {
+      console.warn('Socket emit failed for widget configs:', sockErr);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving widget configs:', error);
+    res.status(500).json({ success: false, error: "Failed to save widget configs" });
+  }
+});
+
+router.get("/api/widgets/notes", async (_req, res) => {
+  try {
+    const row = await db.select().from(appSettings).where(eq(appSettings.settingKey, 'shared_sticky_notes')).limit(1);
+    if (row.length > 0 && row[0].settingValue) {
+      try {
+        const parsed = JSON.parse(row[0].settingValue);
+        return res.json({ success: true, notes: parsed, updatedAt: row[0].updatedAt });
+      } catch {
+        return res.json({ success: true, notes: null });
+      }
+    }
+    return res.json({ success: true, notes: null });
+  } catch (error) {
+    console.error('Error fetching sticky notes:', error);
+    res.status(500).json({ success: false, error: "Failed to fetch sticky notes" });
+  }
+});
+
+router.post("/api/widgets/notes", async (req, res) => {
+  try {
+    const { notes } = req.body;
+    if (!Array.isArray(notes)) {
+      return res.status(400).json({ success: false, error: "Invalid notes payload" });
+    }
+
+    const settingKey = 'shared_sticky_notes';
+    const settingValue = JSON.stringify(notes);
+    const description = 'Shared sticky notes across all devices';
+
+    const existing = await db.select().from(appSettings).where(eq(appSettings.settingKey, settingKey)).limit(1);
+    if (existing.length > 0) {
+      await db.update(appSettings)
+        .set({ settingValue, description, updatedAt: new Date() })
+        .where(eq(appSettings.settingKey, settingKey));
+    } else {
+      await db.insert(appSettings)
+        .values({ settingKey, settingValue, description });
+    }
+
+    // Broadcast update to all connected clients via Socket.IO
+    try {
+      getIoInstance()?.emit('widgets:notes_updated', notes);
+    } catch (sockErr) {
+      console.warn('Socket emit failed for sticky notes:', sockErr);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving sticky notes:', error);
+    res.status(500).json({ success: false, error: "Failed to save sticky notes" });
+  }
+});
+
+router.get("/api/widgets/calendar-notes", async (_req, res) => {
+  try {
+    const row = await db.select().from(appSettings).where(eq(appSettings.settingKey, 'shared_calendar_notes')).limit(1);
+    if (row.length > 0 && row[0].settingValue) {
+      try {
+        const parsed = JSON.parse(row[0].settingValue);
+        return res.json({ success: true, calendarNotes: parsed, updatedAt: row[0].updatedAt });
+      } catch {
+        return res.json({ success: true, calendarNotes: {} });
+      }
+    }
+    return res.json({ success: true, calendarNotes: {} });
+  } catch (error) {
+    console.error('Error fetching calendar notes:', error);
+    res.status(500).json({ success: false, error: "Failed to fetch calendar notes" });
+  }
+});
+
+router.post("/api/widgets/calendar-notes", async (req, res) => {
+  try {
+    const { calendarNotes } = req.body;
+    if (typeof calendarNotes !== 'object' || calendarNotes === null) {
+      return res.status(400).json({ success: false, error: "Invalid calendarNotes payload" });
+    }
+
+    const settingKey = 'shared_calendar_notes';
+    const settingValue = JSON.stringify(calendarNotes);
+    const description = 'Shared calendar date memos across all devices';
+
+    const existing = await db.select().from(appSettings).where(eq(appSettings.settingKey, settingKey)).limit(1);
+    if (existing.length > 0) {
+      await db.update(appSettings)
+        .set({ settingValue, description, updatedAt: new Date() })
+        .where(eq(appSettings.settingKey, settingKey));
+    } else {
+      await db.insert(appSettings)
+        .values({ settingKey, settingValue, description });
+    }
+
+    // Broadcast update to all connected clients via Socket.IO
+    try {
+      getIoInstance()?.emit('widgets:calendar_notes_updated', calendarNotes);
+    } catch (sockErr) {
+      console.warn('Socket emit failed for calendar notes:', sockErr);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving calendar notes:', error);
+    res.status(500).json({ success: false, error: "Failed to save calendar notes" });
+  }
+});
 
 router.get("/api/gallery/image-proxy", async (req, res) => {
   try {

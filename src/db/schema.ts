@@ -995,7 +995,8 @@ export const xrfStandardReferences = pgTable('xrf_standard_references', {
   standardCode: text('standard_code').notNull(), // 'LIM01', 'LIM02', dst.
   elementName: text('element_name').notNull(),   // 'Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO', 'P', 'S', etc.
   nominalValue: doublePrecision('nominal_value').notNull(), // Expected/Certified Value (Garis Tengah)
-  stdevFixed: doublePrecision('stdev_fixed').notNull(),     // Fixed STDEV
+  stdevFixed: doublePrecision('stdev_fixed').notNull(),     // Fixed STDEV (EDXRF / General)
+  stdevWdxrf: doublePrecision('stdev_wdxrf'),               // Fixed STDEV khusus WDXRF
   lowerWarning: doublePrecision('lower_warning'),           // -2σ dari CSV
   upperWarning: doublePrecision('upper_warning'),           // +2σ dari CSV
   lowerAction: doublePrecision('lower_action'),             // -3σ dari CSV

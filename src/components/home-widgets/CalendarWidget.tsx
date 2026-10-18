@@ -5,6 +5,7 @@ import {
   RotateCcw, Edit3, Check, Trash2, BookmarkCheck, Sparkles, ArrowRight 
 } from 'lucide-react';
 import { WidgetSize } from './types';
+import { getGlobalSocket } from '../../lib/socketClient';
 
 interface CalendarWidgetProps {
   size: WidgetSize;
@@ -26,6 +27,48 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
   });
   const [memoInput, setMemoInput] = useState<string>('');
   const [isEditingNote, setIsEditingNote] = useState<boolean>(false);
+
+  // Sync calendar notes across devices & listen to socket events
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRemoteCalendarNotes = async () => {
+      try {
+        const res = await fetch('/api/widgets/calendar-notes');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+        if (data.success && data.calendarNotes && Object.keys(data.calendarNotes).length > 0) {
+          setNotes(data.calendarNotes);
+          try {
+            localStorage.setItem('preplab_calendar_notes', JSON.stringify(data.calendarNotes));
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('Could not fetch calendar notes:', err);
+      }
+    };
+    fetchRemoteCalendarNotes();
+
+    const socket = getGlobalSocket();
+    const handleRemoteCalendarUpdate = (remote: Record<string, string>) => {
+      if (!isMounted) return;
+      if (remote && typeof remote === 'object') {
+        setNotes((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(remote)) return prev;
+          try {
+            localStorage.setItem('preplab_calendar_notes', JSON.stringify(remote));
+          } catch {}
+          return remote;
+        });
+      }
+    };
+
+    socket.on('widgets:calendar_notes_updated', handleRemoteCalendarUpdate);
+    return () => {
+      isMounted = false;
+      socket.off('widgets:calendar_notes_updated', handleRemoteCalendarUpdate);
+    };
+  }, []);
 
   const monthNames = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -77,6 +120,18 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
     setSelectedDate(new Date(year, month, day));
   };
 
+  const saveCalendarNotes = (updated: Record<string, string>) => {
+    setNotes(updated);
+    try {
+      localStorage.setItem('preplab_calendar_notes', JSON.stringify(updated));
+    } catch {}
+    fetch('/api/widgets/calendar-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ calendarNotes: updated })
+    }).catch((err) => console.warn('Failed to sync calendar notes:', err));
+  };
+
   const handleSaveNote = () => {
     const updated = { ...notes };
     if (memoInput.trim()) {
@@ -84,21 +139,15 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
     } else {
       delete updated[selectedKey];
     }
-    setNotes(updated);
-    try {
-      localStorage.setItem('preplab_calendar_notes', JSON.stringify(updated));
-    } catch {}
+    saveCalendarNotes(updated);
     setIsEditingNote(false);
   };
 
   const handleDeleteNote = () => {
     const updated = { ...notes };
     delete updated[selectedKey];
-    setNotes(updated);
+    saveCalendarNotes(updated);
     setMemoInput('');
-    try {
-      localStorage.setItem('preplab_calendar_notes', JSON.stringify(updated));
-    } catch {}
     setIsEditingNote(false);
   };
 
@@ -233,7 +282,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
               {/* Tombol Menu Agenda Personal */}
               <button
                 type="button"
-                onClick={() => navigate('/agenda')}
+                onClick={() => navigate('/agenda?tab=Private')}
                 className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-xs transition-all text-left cursor-pointer group active:scale-[0.98]"
                 title="Buka Menu Agenda Personal (Jadwal & kegiatan)"
               >
@@ -324,7 +373,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
               </span>
               <button
                 type="button"
-                onClick={() => navigate('/agenda')}
+                onClick={() => navigate('/agenda?tab=Private')}
                 className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
               >
                 Buka Agenda →
@@ -336,7 +385,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
           <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
             <button
               type="button"
-              onClick={() => navigate('/agenda')}
+              onClick={() => navigate('/agenda?tab=Private')}
               className="w-full flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 text-xs font-bold transition-all cursor-pointer group shadow-2xs"
               title="Buka Menu Agenda Personal"
             >

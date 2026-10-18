@@ -431,29 +431,24 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
   // Determine progress color
   const isDone = progress.isAllCompleted && progress.total > 0;
   const isInProgress = progress.percentage > 0 && !isDone;
-  const progressBgClass = isDone ? 'bg-emerald-500' : isInProgress ? 'bg-teal-500' : 'bg-slate-300';
+  const progressBgClass = isDone ? 'bg-emerald-500' : isInProgress ? 'bg-[#2383E2]' : 'bg-[#EDEDEC] dark:bg-[#2F2F2F]';
   const progressBadgeClass = isDone 
-    ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25' 
     : isInProgress 
-    ? 'bg-amber-100 text-amber-900 border-amber-300' 
-    : 'bg-blue-100 text-blue-800 border-blue-200';
+    ? 'bg-[#2383E2]/10 text-[#2383E2] dark:text-[#479CFF] border-[#2383E2]/25' 
+    : 'bg-[#F7F7F5] dark:bg-[#252525] text-[#787774] dark:text-[#9B9A97] border-[#EDEDEC] dark:border-[#2F2F2F]';
 
   return (
     <div 
-      className="space-y-3 p-3.5 sm:p-4 rounded-2xl border transition-all shadow-xs"
-      style={{
-        backgroundColor: '#ffffff',
-        borderColor: '#cbd5e1',
-        color: '#000000'
-      }}
+      className="space-y-3.5 p-3.5 sm:p-4 rounded-xl border border-[#EDEDEC] dark:border-[#2F2F2F] bg-white dark:bg-[#1E1E1E] text-[#37352F] dark:text-[#E6E6E5] shadow-xs transition-colors"
     >
       {/* Header & Mode Switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[#EDEDEC] dark:border-[#2F2F2F]">
         <div className="flex items-center gap-2">
-          <ListTodo className="w-4 h-4 text-teal-600 shrink-0" />
-          <span className="font-black text-xs sm:text-sm tracking-tight text-black">{label}</span>
+          <ListTodo className="w-4 h-4 text-[#787774] dark:text-[#9B9A97] shrink-0" />
+          <span className="font-semibold text-xs sm:text-sm text-[#37352F] dark:text-[#E6E6E5]">{label}</span>
           {progress.hasTasklist && (
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-black border ${progressBadgeClass}`}>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-medium border ${progressBadgeClass}`}>
               {progress.completed}/{progress.total} Selesai ({progress.percentage}%)
             </span>
           )}
@@ -461,17 +456,17 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
 
         {/* Mode Switch Toggle (Checklist vs Freeform Text) */}
         {allowModeSwitch && (
-          <div className="flex items-center gap-1 p-0.5 rounded-xl border border-slate-300 bg-slate-100 text-[11px] font-black">
+          <div className="flex items-center gap-1 p-0.5 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#F7F7F5] dark:bg-[#252525] text-xs">
             <button
               type="button"
               onClick={() => setMode('checklist')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 mode === 'checklist'
-                  ? 'bg-white text-black shadow-xs font-black border border-slate-300'
-                  : 'text-slate-700 hover:text-black'
+                  ? 'bg-white dark:bg-[#1E1E1E] text-[#37352F] dark:text-white shadow-xs border border-[#EDEDEC] dark:border-[#2F2F2F]'
+                  : 'text-[#787774] dark:text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white'
               }`}
             >
-              <CheckSquare className="w-3 h-3 text-teal-600" />
+              <CheckSquare className="w-3.5 h-3.5 text-[#2383E2]" />
               <span>Checklist</span>
             </button>
             <button
@@ -480,13 +475,13 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                 setMode('text');
                 setFreeformText(value || '');
               }}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 mode === 'text'
-                  ? 'bg-white text-black shadow-xs font-black border border-slate-300'
-                  : 'text-slate-700 hover:text-black'
+                  ? 'bg-white dark:bg-[#1E1E1E] text-[#37352F] dark:text-white shadow-xs border border-[#EDEDEC] dark:border-[#2F2F2F]'
+                  : 'text-[#787774] dark:text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white'
               }`}
             >
-              <FileText className="w-3 h-3 text-teal-600" />
+              <FileText className="w-3.5 h-3.5 text-[#787774] dark:text-[#9B9A97]" />
               <span>Teks Bebas</span>
             </button>
           </div>
@@ -496,11 +491,11 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
       {/* Progress Bar (If in checklist mode) */}
       {showProgressBar && mode === 'checklist' && progress.hasTasklist && (
         <div className="space-y-1">
-          <div className="flex items-center justify-between text-[11px] font-mono font-black text-black">
+          <div className="flex items-center justify-between text-[11px] font-medium text-[#787774] dark:text-[#9B9A97]">
             <span>Otomatisasi Status: {isDone ? 'Closed (100%)' : isInProgress ? 'On Progress' : 'Open (0%)'}</span>
-            <span>{progress.percentage}%</span>
+            <span className="font-mono">{progress.percentage}%</span>
           </div>
-          <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
+          <div className="w-full h-1.5 bg-[#EDEDEC] dark:bg-[#2F2F2F] rounded-full overflow-hidden">
             <div 
               className={`h-full rounded-full transition-all duration-300 ${progressBgClass}`}
               style={{ width: `${progress.percentage}%` }}
@@ -515,7 +510,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
           {/* List of Subtasks */}
           <div className={`space-y-1.5 ${compact ? 'max-h-48' : 'max-h-80'} overflow-y-auto pr-1`}>
             {progress.items.length === 0 ? (
-              <div className="p-4 rounded-xl border border-dashed border-slate-300 text-center text-xs font-bold text-slate-600">
+              <div className="p-3.5 rounded-lg border border-dashed border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#FAFAFA] dark:bg-[#181818] text-center text-xs text-[#787774] dark:text-[#9B9A97]">
                 Belum ada butir checklist subtask. Silakan tambahkan butir di bawah.
               </div>
             ) : (
@@ -549,18 +544,18 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                       setDraggedIdx(null);
                       setDragOverIdx(null);
                     }}
-                    className={`flex items-start gap-2 p-2.5 rounded-xl border transition-all select-none ${
+                    className={`group flex items-start gap-2 p-2 px-2.5 rounded-lg border transition-all select-none ${
                       isDragging
-                        ? 'opacity-40 border-2 border-dashed border-teal-500 bg-teal-50'
+                        ? 'opacity-40 border-2 border-dashed border-[#2383E2] bg-[#2383E2]/5'
                         : item.checked
-                        ? 'bg-slate-50 border-slate-300 shadow-2xs'
-                        : 'bg-white border-slate-300 hover:border-teal-500 hover:shadow-xs'
-                    } ${isDragOver ? 'border-t-2 border-teal-600 bg-teal-50' : ''}`}
+                        ? 'bg-[#F7F7F5] dark:bg-[#222222] border-[#EDEDEC] dark:border-[#2F2F2F]'
+                        : 'bg-white dark:bg-[#1E1E1E] border-[#EDEDEC] dark:border-[#2F2F2F] hover:border-[#D0D0CE] dark:hover:border-[#3D3D3D]'
+                    } ${isDragOver ? 'border-t-2 border-[#2383E2] bg-[#2383E2]/5' : ''}`}
                   >
                     {/* Drag Handle */}
                     {!isReadOnly && (
                       <div 
-                        className="cursor-grab active:cursor-grabbing p-0.5 text-slate-500 hover:text-teal-600 transition-colors shrink-0 mt-0.5"
+                        className="cursor-grab active:cursor-grabbing p-0.5 text-[#B4B4B0] group-hover:text-[#787774] dark:group-hover:text-[#9B9A97] transition-colors shrink-0 mt-0.5"
                         title="Geser untuk mengatur urutan (Drag & Drop)"
                       >
                         <GripVertical className="w-3.5 h-3.5" />
@@ -576,9 +571,9 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                       title={item.checked ? 'Tandai belum selesai' : 'Tandai selesai'}
                     >
                       {item.checked ? (
-                        <CheckSquare className="w-4 h-4 text-teal-600 fill-teal-100" />
+                        <CheckSquare className="w-4 h-4 text-[#2383E2] fill-[#2383E2]/15 shrink-0" />
                       ) : (
-                        <Square className="w-4 h-4 text-slate-500 hover:text-teal-600" />
+                        <Square className="w-4 h-4 text-[#787774] hover:text-[#2383E2] shrink-0" />
                       )}
                     </button>
 
@@ -605,7 +600,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                               if (e.key === 'Escape') setEditingTitleIdx(null);
                             }}
                             onBlur={() => handleCommitTitle(item.index)}
-                            className="w-full text-xs font-black px-2 py-1 rounded-lg border-2 border-teal-500 outline-none bg-white text-black"
+                            className="w-full text-xs font-medium px-2 py-1 rounded-md border border-[#2383E2] outline-none bg-white dark:bg-[#1E1E1E] text-[#37352F] dark:text-[#E6E6E5]"
                           />
                         </div>
                       ) : (
@@ -619,15 +614,15 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                             }}
                             className={`text-xs sm:text-sm leading-snug break-words ${
                               item.checked 
-                                ? 'line-through text-slate-500 font-bold opacity-80' 
-                                : 'font-bold text-black'
+                                ? 'line-through text-[#9B9A97] dark:text-[#787774]' 
+                                : 'font-medium text-[#37352F] dark:text-[#E6E6E5]'
                             }`}
                             dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(item.text) }}
                           />
 
                           {/* Checked Date Badge */}
                           {item.checkedDate && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded font-black border bg-slate-200 text-slate-900 border-slate-300 inline-flex items-center gap-0.5 w-fit">
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded font-normal bg-[#EDEDEC] dark:bg-[#2F2F2F] text-[#787774] dark:text-[#9B9A97] inline-flex items-center gap-0.5 w-fit">
                               Diceklis: {item.checkedDate}
                             </span>
                           )}
@@ -636,7 +631,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                     </div>
 
                     {/* Action Buttons: Note Popover (!), Color Picker, and Edit/Delete */}
-                    <div className="flex items-center gap-1 shrink-0 relative">
+                    <div className="flex items-center gap-0.5 shrink-0 relative">
                       {/* Color Picker for Subtask */}
                       {!isReadOnly && (
                         <div className="relative">
@@ -646,14 +641,14 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                               e.stopPropagation();
                               setActiveColorPickerIdx(activeColorPickerIdx === idx ? null : idx);
                             }}
-                            className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                            className="p-1 rounded-md text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white hover:bg-[#F7F7F5] dark:hover:bg-[#252525] transition-colors cursor-pointer"
                             title="Ubah warna teks subtask"
                           >
                             <Palette className="w-3.5 h-3.5" />
                           </button>
                           {activeColorPickerIdx === idx && (
                             <div 
-                              className="absolute right-0 top-7 z-30 p-2 bg-white rounded-xl shadow-xl border border-slate-200 flex items-center gap-1.5 animate-in fade-in duration-100"
+                              className="absolute right-0 top-7 z-30 p-2 bg-white dark:bg-[#222222] rounded-lg shadow-xl border border-[#EDEDEC] dark:border-[#2F2F2F] flex items-center gap-1.5 animate-in fade-in duration-100"
                               onClick={(e) => e.stopPropagation()}
                             >
                               {Object.entries(NOTION_COLORS).map(([cKey, cVal]) => (
@@ -662,10 +657,10 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                                   type="button"
                                   onClick={() => handleChangeItemColor(item.index, cKey)}
                                   title={cVal.label}
-                                  className="w-5 h-5 rounded-full border border-slate-300 transition-transform hover:scale-125 cursor-pointer flex items-center justify-center"
+                                  className="w-5 h-5 rounded-full border border-[#EDEDEC] dark:border-[#2F2F2F] transition-transform hover:scale-125 cursor-pointer flex items-center justify-center"
                                   style={{ backgroundColor: cVal.hex }}
                                 >
-                                  {cKey === 'default' && <span className="text-[8px] font-bold text-slate-500">A</span>}
+                                  {cKey === 'default' && <span className="text-[8px] font-bold text-[#787774]">A</span>}
                                 </button>
                               ))}
                             </div>
@@ -681,15 +676,15 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                           handleOpenNoteModal(item);
                         }}
                         title={noteCount > 0 ? `${noteCount} Catatan Subtask (Klik untuk lihat)` : 'Tambah catatan subtask (!)'}
-                        className={`relative p-1 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
+                        className={`relative p-1 rounded-md transition-all flex items-center justify-center cursor-pointer ${
                           noteCount > 0
-                            ? 'text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 shadow-2xs'
-                            : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                            ? 'text-[#D9730D] bg-[#D9730D]/10 hover:bg-[#D9730D]/20 border border-[#D9730D]/30'
+                            : 'text-[#9B9A97] hover:text-[#D9730D] hover:bg-[#F7F7F5] dark:hover:bg-[#252525]'
                         }`}
                       >
                         <MessageSquare className="w-3.5 h-3.5" />
                         {noteCount > 0 && (
-                          <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-500 text-white font-black text-[9px] flex items-center justify-center shadow-xs">
+                          <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#D9730D] text-white font-bold text-[9px] flex items-center justify-center shadow-xs">
                             {noteCount}
                           </span>
                         )}
@@ -703,7 +698,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                             setEditingTitleIdx(idx);
                             setEditingTitleValue(item.text);
                           }}
-                          className="p-1 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition-colors cursor-pointer"
+                          className="p-1 rounded-md text-[#9B9A97] hover:text-[#2383E2] hover:bg-[#2383E2]/10 transition-colors cursor-pointer"
                           title="Ubah teks subtask"
                         >
                           <Edit2 className="w-3 h-3" />
@@ -715,7 +710,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRemoveSubtask(item.index)}
-                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          className="p-1 rounded-md text-[#9B9A97] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
                           title="Hapus butir subtask ini"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -752,14 +747,14 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                     }
                   }}
                   placeholder={placeholder}
-                  className="flex-1 px-3 py-2 text-xs rounded-xl border-2 outline-none font-bold focus:border-teal-500 transition-all bg-white text-black border-slate-400 placeholder:text-slate-500 shadow-2xs"
+                  className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] focus:border-[#2383E2] outline-none transition-colors bg-white dark:bg-[#1E1E1E] text-[#37352F] dark:text-[#E6E6E5] placeholder-[#9B9A97]"
                 />
                 <button
                   type="button"
                   onClick={handleAddSubtask}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black text-white bg-teal-600 hover:bg-teal-700 active:scale-95 transition-all shadow-xs cursor-pointer shrink-0"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#2383E2] hover:bg-[#1D70C2] transition-colors cursor-pointer shrink-0 shadow-xs"
                 >
-                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                  <Plus className="w-3.5 h-3.5" />
                   <span>Tambah</span>
                 </button>
               </div>
@@ -767,9 +762,9 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
           )}
 
           {/* Extra Notes (Non-Checklist Part) */}
-          <div className="pt-2 border-t space-y-1.5" style={{ borderColor: '#cbd5e1' }}>
+          <div className="pt-2 border-t border-[#EDEDEC] dark:border-[#2F2F2F] space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-[10px] font-black uppercase tracking-wider block text-black">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-[#787774] dark:text-[#9B9A97]">
                 Catatan Umum / Instruksi Khusus (Opsional)
               </label>
               <div className="flex items-center gap-1.5">
@@ -778,15 +773,15 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                     <button
                       type="button"
                       onClick={handleStartEditNotes}
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300"
+                      className="px-2.5 py-1 rounded-md text-[10px] font-medium border border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#F7F7F5] dark:bg-[#252525] hover:bg-[#EFEFED] dark:hover:bg-[#333333] text-[#37352F] dark:text-[#E6E6E5] transition-colors flex items-center gap-1 cursor-pointer"
                       title="Buka editor teks untuk mengubah catatan"
                     >
-                      <Edit2 className="w-2.5 h-2.5 text-teal-600" />
+                      <Edit2 className="w-2.5 h-2.5 text-[#787774] dark:text-[#9B9A97]" />
                       <span>Edit Teks</span>
                     </button>
                   )
                 ) : (
-                  <span className="text-[10px] font-bold text-teal-700 px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200">
+                  <span className="text-[10px] font-medium text-[#2383E2] px-2 py-0.5 rounded-full bg-[#2383E2]/10 border border-[#2383E2]/20">
                     Mode Edit Aktif
                   </span>
                 )}
@@ -794,7 +789,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                   <button
                     type="button"
                     onClick={handleResetTagNotes}
-                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
+                    className="px-2 py-0.5 rounded-md text-[10px] font-medium border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 transition-colors flex items-center gap-1 cursor-pointer"
                     title="Hapus semua tag warna / format yang berantakan"
                   >
                     <Sparkles className="w-2.5 h-2.5" />
@@ -808,16 +803,16 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
               extraNotes.trim() ? (
                 <div 
                   onClick={handleStartEditNotes}
-                  className="w-full text-xs font-sans font-medium p-3 rounded-xl border-2 border-slate-300 bg-slate-50/90 text-[#37352f] leading-relaxed cursor-pointer hover:border-teal-500 transition-colors shadow-2xs group relative"
+                  className="w-full text-xs p-3 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#FAFAFA] dark:bg-[#181818] text-[#37352F] dark:text-[#E6E6E5] leading-relaxed cursor-pointer hover:border-[#D0D0CE] dark:hover:border-[#3D3D3D] transition-colors group relative"
                   title="Klik untuk mengedit catatan ini"
                 >
                   <div 
                     className="space-y-1"
                     dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(extraNotes)) }}
                   />
-                  <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                  <div className="mt-2 pt-1 border-t border-[#EDEDEC] dark:border-[#2F2F2F] flex items-center justify-between text-[10px] text-[#9B9A97]">
                     <span>💡 Tampilan visual rapi (Notion)</span>
-                    <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-1">
+                    <span className="text-[#2383E2] font-medium group-hover:underline flex items-center gap-1">
                       <Edit2 className="w-2.5 h-2.5" /> Klik untuk edit
                     </span>
                   </div>
@@ -825,14 +820,14 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
               ) : (
                 <div 
                   onClick={handleStartEditNotes}
-                  className="w-full p-2.5 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 hover:bg-slate-100/80 hover:border-teal-500 text-slate-500 hover:text-teal-700 text-xs font-medium cursor-pointer transition-all flex items-center justify-between group"
+                  className="w-full p-2.5 rounded-lg border border-dashed border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#FAFAFA] dark:bg-[#181818] hover:bg-[#F7F7F5] dark:hover:bg-[#252525] text-[#787774] dark:text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white text-xs font-normal cursor-pointer transition-colors flex items-center justify-between group"
                   title="Klik untuk menambahkan catatan umum"
                 >
                   <span className="flex items-center gap-1.5 text-[11px]">
-                    <Plus className="w-3.5 h-3.5 text-teal-600" />
+                    <Plus className="w-3.5 h-3.5 text-[#787774] dark:text-[#9B9A97] group-hover:text-[#2383E2]" />
                     <span>Belum ada catatan umum. Klik di sini untuk menambahkan...</span>
                   </span>
-                  <span className="text-[10px] font-bold text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-[10px] font-medium text-[#2383E2] opacity-0 group-hover:opacity-100 transition-opacity">
                     + Tulis Catatan
                   </span>
                 </div>
@@ -861,22 +856,22 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
         /* Mode Freeform Text View */
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-600">Laporan / Keterangan Bebas</span>
+            <span className="text-[11px] font-semibold text-[#787774] dark:text-[#9B9A97]">Laporan / Keterangan Bebas</span>
             <div className="flex items-center gap-1.5">
               {freeformViewMode === 'visual' ? (
                 !isReadOnly && (
                   <button
                     type="button"
                     onClick={handleStartEditFreeform}
-                    className="px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300"
+                    className="px-2.5 py-1 rounded-md text-[10px] font-medium border border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#F7F7F5] dark:bg-[#252525] hover:bg-[#EFEFED] dark:hover:bg-[#333333] text-[#37352F] dark:text-[#E6E6E5] transition-colors flex items-center gap-1 cursor-pointer"
                     title="Buka editor teks untuk mengubah keterangan"
                   >
-                    <Edit2 className="w-2.5 h-2.5 text-teal-600" />
+                    <Edit2 className="w-2.5 h-2.5 text-[#787774] dark:text-[#9B9A97]" />
                     <span>Edit Teks</span>
                   </button>
                 )
               ) : (
-                <span className="text-[10px] font-bold text-teal-700 px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200">
+                <span className="text-[10px] font-medium text-[#2383E2] px-2 py-0.5 rounded-full bg-[#2383E2]/10 border border-[#2383E2]/20">
                   Mode Edit Aktif
                 </span>
               )}
@@ -884,7 +879,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                 <button
                   type="button"
                   onClick={handleResetTagFreeform}
-                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
+                  className="px-2 py-0.5 rounded-md text-[10px] font-medium border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <Sparkles className="w-2.5 h-2.5" />
                   <span>Reset Tag</span>
@@ -897,16 +892,16 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
             freeformText.trim() ? (
               <div 
                 onClick={handleStartEditFreeform}
-                className="w-full text-xs font-sans font-medium p-3.5 rounded-xl border-2 border-slate-300 bg-slate-50/90 text-[#37352f] leading-relaxed cursor-pointer hover:border-teal-500 transition-colors shadow-2xs group relative"
+                className="w-full text-xs p-3.5 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#FAFAFA] dark:bg-[#181818] text-[#37352F] dark:text-[#E6E6E5] leading-relaxed cursor-pointer hover:border-[#D0D0CE] dark:hover:border-[#3D3D3D] transition-colors group relative"
                 title="Klik untuk mengedit keterangan ini"
               >
                 <div 
                   className="space-y-1.5 leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: formatColorTagsToHtml(markdownToVisualHtml(freeformText)) }}
                 />
-                <div className="mt-2 pt-1 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+                <div className="mt-2 pt-1 border-t border-[#EDEDEC] dark:border-[#2F2F2F] flex items-center justify-between text-[10px] text-[#9B9A97]">
                   <span>💡 Tampilan visual rapi (Notion)</span>
-                  <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-1">
+                  <span className="text-[#2383E2] font-medium group-hover:underline flex items-center gap-1">
                     <Edit2 className="w-2.5 h-2.5" /> Klik untuk edit
                   </span>
                 </div>
@@ -914,14 +909,14 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
             ) : (
               <div 
                 onClick={handleStartEditFreeform}
-                className="w-full p-3.5 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 hover:bg-slate-100/80 hover:border-teal-500 text-slate-500 hover:text-teal-700 text-xs font-medium cursor-pointer transition-all flex items-center justify-between group"
+                className="w-full p-3 rounded-lg border border-dashed border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#FAFAFA] dark:bg-[#181818] hover:bg-[#F7F7F5] dark:hover:bg-[#252525] text-[#787774] dark:text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white text-xs font-normal cursor-pointer transition-colors flex items-center justify-between group"
                 title="Klik untuk menulis laporan atau keterangan"
               >
                 <span className="flex items-center gap-1.5 text-xs">
-                  <Plus className="w-4 h-4 text-teal-600" />
+                  <Plus className="w-4 h-4 text-[#787774] dark:text-[#9B9A97] group-hover:text-[#2383E2]" />
                   <span>Belum ada keterangan. Klik di sini untuk menulis laporan / keterangan...</span>
                 </span>
-                <span className="text-[11px] font-bold text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-[11px] font-medium text-[#2383E2] opacity-0 group-hover:opacity-100 transition-opacity">
                   + Tulis Keterangan
                 </span>
               </div>
@@ -944,7 +939,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
               />
             </div>
           )}
-          <p className="text-[11px] font-bold text-slate-500">
+          <p className="text-[11px] text-[#9B9A97] dark:text-[#787774]">
             Tip: Sorot / seleksi teks apa saja untuk memunculkan toolbar editing melayang (Warna, Bold, Italic, Strikethrough, Code).
           </p>
         </div>
@@ -953,28 +948,28 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
       {/* Subtask Note Modal (Identik dengan Log Book) */}
       {activeNoteModal && (
         <div 
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150"
           onClick={() => setActiveNoteModal(null)}
         >
           <div 
-            className="w-full max-w-lg rounded-2xl border shadow-2xl p-5 space-y-4 max-h-[90vh] flex flex-col bg-white border-slate-300 text-black"
+            className="w-full max-w-lg rounded-xl border shadow-2xl p-4 sm:p-5 space-y-4 max-h-[90vh] flex flex-col bg-white dark:bg-[#1E1E1E] border-[#EDEDEC] dark:border-[#2F2F2F] text-[#37352F] dark:text-[#E6E6E5]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-[#EDEDEC] dark:border-[#2F2F2F]">
               <div className="space-y-0.5">
-                <div className="flex items-center gap-1.5 text-xs font-black text-amber-800">
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-[#D9730D]">
+                  <AlertCircle className="w-4 h-4 text-[#D9730D]" />
                   <span>Catatan Khusus Subtask</span>
                 </div>
-                <h4 className="text-sm font-black text-black line-clamp-2">
+                <h4 className="text-sm font-semibold text-[#37352F] dark:text-[#E6E6E5] line-clamp-2">
                   {activeNoteModal.itemText}
                 </h4>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveNoteModal(null)}
-                className="p-1 rounded-lg text-slate-500 hover:text-black hover:bg-slate-100 cursor-pointer"
+                className="p-1 rounded-md text-[#9B9A97] hover:text-[#37352F] dark:hover:text-white hover:bg-[#F7F7F5] dark:hover:bg-[#252525] cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -983,29 +978,29 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
             {/* Notes History List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[140px] max-h-[300px]">
               {activeNoteModal.notes.length === 0 ? (
-                <div className="p-4 rounded-xl border border-dashed border-slate-300 text-center text-xs font-bold text-slate-500">
+                <div className="p-4 rounded-lg border border-dashed border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#FAFAFA] dark:bg-[#181818] text-center text-xs text-[#9B9A97]">
                   Belum ada catatan temuan/kendala untuk subtask ini.
                 </div>
               ) : (
                 activeNoteModal.notes.map((note) => (
                   <div 
                     key={note.id}
-                    className="p-3 rounded-xl border bg-slate-50 border-slate-300 space-y-1.5"
+                    className="p-3 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] bg-[#FAFAFA] dark:bg-[#181818] space-y-1.5"
                   >
-                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-600">
+                    <div className="flex items-center justify-between text-[11px] font-mono text-[#787774] dark:text-[#9B9A97]">
                       <div className="flex items-center gap-2">
                         {note.author && (
-                          <span className="font-black text-teal-800 flex items-center gap-1">
+                          <span className="font-medium text-[#2383E2] flex items-center gap-1">
                             <User className="w-3 h-3" />
                             {note.author}
                           </span>
                         )}
-                        <span className="flex items-center gap-1 font-bold">
+                        <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
                           {note.date}
                         </span>
                         {note.time && (
-                          <span className="flex items-center gap-1 font-bold">
+                          <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {note.time}
                           </span>
@@ -1015,14 +1010,14 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDeleteNote(note.id)}
-                          className="text-slate-400 hover:text-rose-600 p-0.5 rounded cursor-pointer"
+                          className="text-[#9B9A97] hover:text-rose-500 p-0.5 rounded cursor-pointer transition-colors"
                           title="Hapus catatan ini"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
                       )}
                     </div>
-                    <p className="text-xs font-bold text-black leading-relaxed whitespace-pre-wrap">
+                    <p className="text-xs text-[#37352F] dark:text-[#E6E6E5] leading-relaxed whitespace-pre-wrap">
                       {note.text}
                     </p>
                   </div>
@@ -1032,7 +1027,7 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
 
             {/* Add Note Input */}
             {!isReadOnly && (
-              <div className="pt-2 border-t border-slate-200 space-y-2">
+              <div className="pt-2 border-t border-[#EDEDEC] dark:border-[#2F2F2F] space-y-2">
                 <textarea
                   rows={2}
                   value={newNoteInput}
@@ -1044,14 +1039,14 @@ export const SharedSubtaskManager: React.FC<SharedSubtaskManagerProps> = ({
                     }
                   }}
                   placeholder="Ketik catatan kendala, temuan, atau perkembangan subtask..."
-                  className="w-full text-xs font-sans font-bold p-2.5 rounded-xl border-2 outline-none resize-none focus:border-teal-500 bg-white text-black border-slate-400 placeholder:text-slate-500"
+                  className="w-full text-xs p-2.5 rounded-lg border border-[#EDEDEC] dark:border-[#2F2F2F] focus:border-[#2383E2] outline-none resize-none bg-white dark:bg-[#1E1E1E] text-[#37352F] dark:text-[#E6E6E5] placeholder-[#9B9A97] transition-colors"
                 />
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-semibold text-slate-600">Tekan Enter untuk menyimpan catatan</span>
+                  <span className="text-[10px] text-[#9B9A97]">Tekan Enter untuk menyimpan catatan</span>
                   <button
                     type="button"
                     onClick={handleAddNote}
-                    className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs active:scale-95 transition-all cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-lg bg-[#2383E2] hover:bg-[#1D70C2] text-white font-medium text-xs shadow-xs transition-colors cursor-pointer"
                   >
                     Tambah Catatan
                   </button>

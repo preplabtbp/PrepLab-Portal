@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { subscribeUserToPush } from '../push-notifications';
 import { WorkOrderDetailModal } from './WorkOrderDetailModal';
-import { io } from 'socket.io-client';
+import { getGlobalSocket } from '../lib/socketClient';
 
 interface NotificationBellProps {
   userNik?: string;
@@ -119,10 +119,9 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
   // Real-time Socket.IO listener for instant notification delivery
   useEffect(() => {
     if (!userNik) return;
-    const token = typeof window !== 'undefined' ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '') : '';
-    const socket = io({ auth: { token } });
+    const socket = getGlobalSocket();
 
-    socket.on('notification:new', (notif: any) => {
+    const handleNewNotification = (notif: any) => {
       if (!notif) return;
       // Determine if relevant to this user
       const isPersonal = notif.userId && notif.userId === userNik;
@@ -170,10 +169,12 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
         // Immediate fetch
         fetchNotifications();
       }
-    });
+    };
+
+    socket.on('notification:new', handleNewNotification);
 
     return () => {
-      socket.disconnect();
+      socket.off('notification:new', handleNewNotification);
     };
   }, [userNik, userJabatan, isDev, isSpvUp]);
 

@@ -89,6 +89,7 @@ const ApdSettingsScreen = lazyWithRetry(() => import('./components/apd-settings-
 const ApdMonitoringScreen = lazyWithRetry(() => import('./components/apd-monitoring-screen').then(m => ({ default: m.ApdMonitoringScreen })));
 const InduksiScreen = lazyWithRetry(() => import('./components/induksi-screen').then(m => ({ default: m.InduksiScreen })));
 const HomeScreen = lazyWithRetry(() => import('./components/home-screen').then(m => ({ default: m.HomeScreen })));
+const ParampaaArcadeScreen = lazyWithRetry(() => import('./components/ParampaaArcadeScreen').then(m => ({ default: m.ParampaaArcadeScreen })));
 const QuizScreen = lazyWithRetry(() => import('./components/quiz-screen').then(m => ({ default: m.QuizScreen })));
 const QuizAdminScreen = lazyWithRetry(() => import('./components/quiz-admin-screen').then(m => ({ default: m.QuizAdminScreen })));
 const InspectionScreen = lazyWithRetry(() => import('./components/inspection-screen').then(m => ({ default: m.InspectionScreen })));
@@ -579,11 +580,12 @@ export default function App() {
   useEffect(() => {
     if (!isCrewRole) return;
     const path = location.pathname.replace(/^\//, '');
-    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'settings', 'logbook'];
     if (isMaintenanceCrew) {
-      allowedCrewPaths.push('wo-list');
+      allowedCrewPaths.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
     }
-    if (path && !allowedCrewPaths.includes(path)) {
+    const isAllowed = allowedCrewPaths.includes(path) || path.startsWith('bulletin');
+    if (path && !isAllowed) {
       navigate('/', { replace: true });
     }
   }, [isCrewRole, isMaintenanceCrew, location.pathname, navigate]);
@@ -793,11 +795,11 @@ export default function App() {
 
     // Role guard for Crew: restrict navigation to allowed modules only
     if (isCrewRole) {
-      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'settings', 'logbook'];
       if (isMaintenanceCrew) {
-        allowedCrewTabs.push('wo-list');
+        allowedCrewTabs.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
       }
-      if (!allowedCrewTabs.includes(cleanTab)) {
+      if (!allowedCrewTabs.includes(cleanTab) && !cleanTab.startsWith('bulletin')) {
         toast.error('Akses modul ini tidak tersedia untuk akun Crew.');
         navigate('/');
         return;
@@ -1119,252 +1121,158 @@ export default function App() {
   if (isGoogleLoading && !isEmbedMode) {
     return <div className="min-h-screen bg-[#F4F7F6] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-700"></div></div>;
   }
-  if (!inspectorNik && !inspectorName && !isEmbedMode) {
+      if (!inspectorNik && !inspectorName && !isEmbedMode) {
     return (
-      <div className="min-h-screen w-full bg-[#080c14] text-slate-100 flex flex-col items-stretch relative overflow-hidden selection:bg-teal-500 selection:text-white font-sans">
+      <div className="min-h-screen w-full relative flex flex-col items-center justify-center px-4 py-12 selection:bg-[#22a7b8] selection:text-white font-sans overflow-x-hidden">
 
-        {/* Ambient Glow Orbs */}
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-teal-500/15 rounded-full blur-[120px] pointer-events-none animate-pulse duration-1000" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[550px] h-[550px] bg-emerald-500/15 rounded-full blur-[140px] pointer-events-none animate-pulse duration-700" />
-        <div className="absolute top-[40%] right-[25%] w-[350px] h-[350px] bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none" />
-
-        {/* Subtle Tech Grid Pattern */}
-        <div
-          className="absolute inset-0 opacity-[0.07] pointer-events-none"
-          style={{
-            backgroundImage: `radial-gradient(#2dd4bf 1px, transparent 1px)`,
-            backgroundSize: '32px 32px'
-          }}
-        />
-
-        {/* ── HEADER BANNER ── */}
-        <div className="relative z-10 w-full bg-[#0a1628]/95 backdrop-blur-md border-b border-teal-500/25 shadow-[0_4px_32px_-8px_rgba(20,184,166,0.25)]">
-          {/* Accent line top */}
-          <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-teal-400 to-transparent" />
-
-          <div className="max-w-6xl mx-auto px-4 sm:px-8">
-            {/* 4 Logo Row */}
-            <div className="flex items-center justify-center gap-6 sm:gap-10 py-4 sm:py-5">
-              {/* Logo 1: PrepLab */}
-              <div className="flex flex-col items-center gap-1.5 group">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950/80 border border-orange-400/30 p-1.5 flex items-center justify-center shadow-lg group-hover:border-orange-400/60 group-hover:shadow-orange-500/20 transition-all duration-200">
-                  <img src="/preplab-logo.png" alt="PrepLab" className="w-full h-full object-contain filter drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]" />
-                </div>
-                <span className="text-[9px] sm:text-[10px] font-bold text-orange-300/90 uppercase tracking-widest font-mono">PrepLab</span>
-              </div>
-
-              <div className="h-10 w-px bg-teal-500/20" />
-
-              {/* Logo 2: TBP */}
-              <div className="flex flex-col items-center gap-1.5 group">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950/80 border border-teal-400/30 p-1.5 flex items-center justify-center shadow-lg group-hover:border-teal-400/60 group-hover:shadow-teal-500/20 transition-all duration-200">
-                  <img src="/tbp-header-logo.png" alt="TBP" className="w-full h-full object-contain filter brightness-110" />
-                </div>
-                <span className="text-[9px] sm:text-[10px] font-bold text-teal-300/90 uppercase tracking-widest font-mono">TBP</span>
-              </div>
-
-              <div className="h-10 w-px bg-teal-500/20" />
-
-              {/* Logo 3: GPS */}
-              <div className="flex flex-col items-center gap-1.5 group">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950/80 border border-blue-400/30 p-1.5 flex items-center justify-center shadow-lg group-hover:border-blue-400/60 group-hover:shadow-blue-500/20 transition-all duration-200">
-                  <img src="/gps-logo.svg" alt="GPS" className="w-full h-full object-contain" />
-                </div>
-                <span className="text-[9px] sm:text-[10px] font-bold text-blue-300/90 uppercase tracking-widest font-mono">GPS</span>
-              </div>
-
-              <div className="h-10 w-px bg-teal-500/20" />
-
-              {/* Logo 4: GTS */}
-              <div className="flex flex-col items-center gap-1.5 group">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950/80 border border-emerald-400/30 p-1.5 flex items-center justify-center shadow-lg group-hover:border-emerald-400/60 group-hover:shadow-emerald-500/20 transition-all duration-200">
-                  <img src="/gts-logo.svg" alt="GTS" className="w-full h-full object-contain" />
-                </div>
-                <span className="text-[9px] sm:text-[10px] font-bold text-emerald-300/90 uppercase tracking-widest font-mono">GTS</span>
-              </div>
-            </div>
-
-            {/* Title Row */}
-            <div className="text-center pb-4 sm:pb-5 border-t border-teal-500/15 pt-3">
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-white via-teal-100 to-teal-400 bg-clip-text text-transparent">
-                Preparation &amp; Laboratory
-              </h1>
-              <p className="text-[10px] sm:text-xs text-teal-300/70 mt-0.5 font-medium tracking-[0.15em] uppercase">
-                Harita Nickel • Quality Assurance &amp; Laboratorium Division
-              </p>
-            </div>
-          </div>
-
-          {/* Accent line bottom */}
-          <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-teal-500/50 to-transparent" />
+        {/* Enterprise Clean White Background with subtle soft ambient light (Same as Database Karyawan) */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white via-slate-50/80 to-[#f0fdfa] z-0 pointer-events-none">
+          {/* Subtle Grid overlay */}
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMTksOTQsMTA1LDAuMDQpIi8+PC9zdmc+')] [mask-image:linear-gradient(to_bottom,white,transparent)] z-0"></div>
+          {/* Soft glowing orbs */}
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#22a7b8]/10 rounded-full blur-3xl -translate-y-1/2"></div>
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f09b13]/10 rounded-full blur-3xl translate-y-1/2"></div>
         </div>
 
-        {/* ── CONTENT AREA ── */}
-        <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 sm:p-8">
+        {/* Center Content Container - No Card, Open & Floating Center */}
+        <div className="relative z-10 w-full max-w-2xl mx-auto flex flex-col items-center text-center">
 
-          {/* Status pill */}
-          <div className="mb-5 flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-slate-900/80 border border-teal-500/30 backdrop-blur-md text-[11px] font-mono shadow-lg">
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
-            </span>
-            <span className="text-teal-300 font-semibold">PREPLAB ENTERPRISE GATEWAY</span>
-            <span className="text-teal-500/50">|</span>
-            <span className="text-teal-100/80">Sistem Aktif</span>
+          {/* PrepLab Official Logo */}
+          <div className="mb-3.5 group">
+            <img 
+              src="/preplab-logo.png" 
+              alt="PrepLab" 
+              className="h-14 sm:h-16 md:h-20 w-auto object-contain filter drop-shadow-sm hover:scale-105 transition-transform duration-300 select-none"
+            />
           </div>
 
-          {/* Main Glassmorphic Login Card */}
-          <div className="relative w-full max-w-md bg-[#0d1527]/90 backdrop-blur-2xl rounded-3xl border border-teal-500/30 shadow-[0_0_60px_-15px_rgba(20,184,166,0.35)] p-8 sm:p-10 space-y-6 overflow-hidden">
+          {/* Pill Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#f09b13] text-white text-xs font-extrabold uppercase tracking-wider mb-4 shadow-md ring-2 ring-[#f09b13]/20">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Portal Gateway</span>
+          </div>
 
-            {/* Card Top Light Accent Streak */}
-            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-80" />
-            <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-12 bg-teal-500/20 blur-xl pointer-events-none" />
+          {/* Headline */}
+          <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-3 tracking-tight">
+            Preparation &amp; Laboratory
+          </h1>
 
-            {/* Card Header — compact, no big logo */}
-            <div className="flex flex-col items-center text-center space-y-1.5">
-              <div className="flex items-center gap-2 text-teal-300/80">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-semibold tracking-wide uppercase font-mono">Portal Login</span>
-              </div>
-              <p className="text-[11px] text-slate-400 font-medium">
-                Masukkan NIK atau Username yang terdaftar
-              </p>
-            </div>
+          {/* Subtitle */}
+          <p className="text-slate-500 text-sm md:text-base max-w-xl mx-auto font-medium tracking-wide">
+            Quality Assurance &amp; Laboratorium Division
+          </p>
 
-          {/* Form Content per Step */}
-          <form onSubmit={handleNikLogin} className="space-y-4 pt-2 text-left">
+          {/* Form Area - Centered Floating Input Bar */}
+          <form onSubmit={handleNikLogin} className="w-full max-w-xl mx-auto mt-8">
             {loginStep === 'nik' && (
-              <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-teal-100 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-teal-400" />
-                    <span>NIK atau Username</span>
-                  </label>
-                  <div className="relative">
-                    <input 
-                      type="text"
-                      placeholder="Contoh: 02D... atau budi_lab"
-                      value={nikInput}
-                      onChange={e => setNikInput(e.target.value)}
-                      required
-                      autoFocus
-                      className="w-full px-4 py-3 bg-slate-950/80 border border-teal-500/30 rounded-xl text-white placeholder:text-slate-400 font-mono text-center text-sm sm:text-base tracking-wider focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30 transition-all shadow-inner"
-                    />
-                  </div>
-                  <p className="text-[11px] text-teal-300/80 text-center pt-0.5 font-medium">
-                    Gunakan NIK resmi karyawan atau username yang terdaftar
-                  </p>
+              <div className="w-full relative group animate-in fade-in duration-300">
+                <div className="absolute inset-0 bg-[#22a7b8]/15 blur-xl rounded-full transition-opacity group-hover:opacity-100 opacity-60"></div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Ketik NIK atau Username..."
+                    value={nikInput}
+                    onChange={e => setNikInput(e.target.value)}
+                    required
+                    autoFocus
+                    className="w-full rounded-2xl shadow-sm border border-slate-200 focus:ring-4 focus:ring-[#22a7b8]/20 focus:border-[#22a7b8] bg-white pl-12 pr-32 py-4 sm:py-5 text-base sm:text-lg text-slate-800 placeholder:text-slate-400 font-mono tracking-wide transition-all outline-none"
+                  />
+                  <User className="absolute left-4 w-5 h-5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <button
+                    type="submit"
+                    disabled={isVerifyingNik || !nikInput.trim()}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2.5 sm:py-3 rounded-xl bg-[#22a7b8] hover:bg-[#1b8f9e] text-white font-bold text-sm tracking-wide transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {isVerifyingNik ? (
+                      <>
+                        <Activity className="w-4 h-4 animate-spin" />
+                        <span className="hidden sm:inline">Cek...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Masuk</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
                 </div>
-
-                <button 
-                  type="submit" 
-                  disabled={isVerifyingNik || !nikInput.trim()} 
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {isVerifyingNik ? (
-                    <>
-                      <Activity className="w-4 h-4 animate-spin text-slate-950" />
-                      <span>Mengecek Akun...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Lanjut Masuk</span>
-                      <ArrowRight className="w-4 h-4 text-slate-950" />
-                    </>
-                  )}
-                </button>
+                <p className="text-center text-xs text-slate-400 mt-2.5 font-mono">
+                  Contoh: 02D... atau username akun
+                </p>
               </div>
             )}
 
             {loginStep === 'password' && (
-              <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="p-3 bg-slate-950/70 rounded-xl border border-teal-500/30 flex items-center justify-between">
+              <div className="w-full space-y-3 animate-in fade-in duration-300 text-left">
+                {/* Selected Account Pill */}
+                <div className="flex items-center justify-between px-4 py-2.5 rounded-2xl bg-white border border-slate-200 shadow-2xs">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-teal-950/80 border border-teal-500/50 flex items-center justify-center text-teal-400">
+                    <div className="w-8 h-8 rounded-xl bg-teal-50 text-[#22a7b8] flex items-center justify-center">
                       <User className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-[10px] text-teal-300/80 uppercase font-mono block font-semibold">Akun Terpilih</span>
-                      <span className="text-xs font-bold text-white font-mono">{nikInput}</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-mono block font-semibold">Akun Terpilih</span>
+                      <span className="text-xs font-bold text-slate-800 font-mono">{nikInput}</span>
                     </div>
                   </div>
-                  <button 
-                    type="button" 
-                    onClick={() => setLoginStep('nik')} 
-                    className="text-xs text-teal-300 hover:text-teal-100 font-bold underline underline-offset-2 cursor-pointer transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => setLoginStep('nik')}
+                    className="text-xs font-bold text-[#22a7b8] hover:text-[#1b8f9e] underline cursor-pointer"
                   >
-                    Ganti
+                    Ganti Akun
                   </button>
                 </div>
 
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-teal-100 flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-teal-400" />
-                      <span>Password Akun</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-[11px] text-teal-300/90 hover:text-teal-100 flex items-center gap-1 cursor-pointer transition-colors font-medium"
-                    >
-                      {showPassword ? (
-                        <>
-                          <EyeOff className="w-3.5 h-3.5 text-teal-400" />
-                          <span className="text-teal-300 font-semibold">Sembunyikan</span>
-                        </>
-                      ) : (
-                        <>
-                          <Eye className="w-3.5 h-3.5 text-teal-400" />
-                          <span>Lihat Password</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                {/* Password Input Bar */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-[#22a7b8]/15 blur-xl rounded-full transition-opacity group-hover:opacity-100 opacity-60"></div>
                   <div className="relative">
-                    <input 
+                    <input
                       type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
+                      placeholder="Masukkan Password Akun..."
                       value={passwordInput}
                       onChange={e => setPasswordInput(e.target.value)}
                       required
                       autoFocus
-                      className="w-full px-4 py-3 pr-11 bg-slate-950/80 border border-teal-500/30 rounded-xl text-white placeholder:text-slate-400 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30 transition-all shadow-inner font-sans"
+                      className="w-full rounded-2xl shadow-sm border border-slate-200 focus:ring-4 focus:ring-[#22a7b8]/20 focus:border-[#22a7b8] bg-white pl-12 pr-40 py-4 sm:py-5 text-base sm:text-lg text-slate-800 placeholder:text-slate-400 transition-all outline-none"
                     />
+                    <Lock className="absolute left-4 w-5 h-5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-teal-400/80 hover:text-teal-200 p-1 cursor-pointer transition-colors"
+                      className="absolute right-32 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1.5 cursor-pointer"
                       title={showPassword ? "Sembunyikan password" : "Lihat password"}
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4 text-teal-300" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? <EyeOff className="w-4 h-4 text-slate-600" /> : <Eye className="w-4 h-4" />}
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={isVerifyingNik || !passwordInput.trim()}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2.5 sm:py-3 rounded-xl bg-[#22a7b8] hover:bg-[#1b8f9e] text-white font-bold text-sm tracking-wide transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {isVerifyingNik ? (
+                        <>
+                          <Activity className="w-4 h-4 animate-spin" />
+                          <span className="hidden sm:inline">Verifikasi...</span>
+                        </>
+                      ) : (
+                        <>
+                          <KeyRound className="w-4 h-4" />
+                          <span>Masuk</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
 
-                <button 
-                  type="submit" 
-                  disabled={isVerifyingNik || !passwordInput.trim()} 
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {isVerifyingNik ? (
-                    <>
-                      <Activity className="w-4 h-4 animate-spin text-slate-950" />
-                      <span>Verifikasi Password...</span>
-                    </>
-                  ) : (
-                    <>
-                      <KeyRound className="w-4 h-4 text-slate-950" />
-                      <span>Masuk ke Sistem</span>
-                    </>
-                  )}
-                </button>
-
                 <div className="text-center pt-1">
-                  <button 
-                    type="button" 
-                    onClick={() => setLoginStep('forgot')} 
-                    className="text-xs text-teal-300/90 hover:text-teal-100 font-semibold transition-colors cursor-pointer"
+                  <button
+                    type="button"
+                    onClick={() => setLoginStep('forgot')}
+                    className="text-xs text-[#22a7b8] hover:text-[#1b8f9e] font-semibold transition-colors cursor-pointer"
                   >
                     Lupa Password?
                   </button>
@@ -1373,36 +1281,36 @@ export default function App() {
             )}
 
             {loginStep === 'setup' && (
-              <div className="space-y-3.5 animate-in fade-in duration-300">
-                <div className="p-2.5 rounded-xl bg-teal-950/50 border border-teal-500/40 text-teal-200 text-xs">
-                  <p className="font-bold flex items-center gap-1.5 mb-0.5 text-teal-100">
-                    <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+              <div className="w-full max-w-md mx-auto bg-white rounded-2xl border border-slate-200 shadow-md p-6 space-y-3.5 text-left animate-in fade-in duration-300">
+                <div className="p-2.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs">
+                  <p className="font-bold flex items-center gap-1.5 mb-0.5 text-teal-900">
+                    <Sparkles className="w-3.5 h-3.5 text-[#22a7b8]" />
                     <span>Setup Akun Pertama Kali</span>
                   </p>
-                  <p className="text-[11px] text-teal-200/90">Lengkapi data di bawah untuk mengamankan akun Anda.</p>
+                  <p className="text-[11px] text-teal-700">Lengkapi data di bawah untuk mengamankan akun Anda.</p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-teal-100">Email Aktif (Reset Password)</label>
+                  <label className="text-[11px] font-semibold text-slate-700">Email Aktif (Reset Password)</label>
                   <input 
                     type="email"
                     placeholder="nama@haritanickel.com"
                     value={setupEmail}
                     onChange={e => setSetupEmail(e.target.value)}
                     required
-                    className="w-full px-3 py-2 bg-slate-950/80 border border-teal-500/30 rounded-lg text-white placeholder:text-slate-400 text-xs focus:outline-none focus:border-teal-400"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 text-xs focus:outline-none focus:bg-white focus:border-[#22a7b8] focus:ring-1 focus:ring-[#22a7b8]"
                   />
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-semibold text-teal-100">Password Baru</label>
+                    <label className="text-[11px] font-semibold text-slate-700">Password Baru</label>
                     <button
                       type="button"
                       onClick={() => setShowSetupPassword1(!showSetupPassword1)}
-                      className="text-[10px] text-teal-300 hover:text-teal-100 flex items-center gap-1 cursor-pointer font-medium"
+                      className="text-[10px] text-[#22a7b8] hover:text-[#1b8f9e] flex items-center gap-1 cursor-pointer font-medium"
                     >
-                      {showSetupPassword1 ? <EyeOff className="w-3 h-3 text-teal-400" /> : <Eye className="w-3 h-3" />}
+                      {showSetupPassword1 ? <EyeOff className="w-3 h-3 text-[#22a7b8]" /> : <Eye className="w-3 h-3" />}
                     </button>
                   </div>
                   <div className="relative">
@@ -1412,27 +1320,27 @@ export default function App() {
                       value={setupPassword1}
                       onChange={e => setSetupPassword1(e.target.value)}
                       required
-                      className="w-full px-3 py-2 pr-9 bg-slate-950/80 border border-teal-500/30 rounded-lg text-white placeholder:text-slate-400 text-xs focus:outline-none focus:border-teal-400"
+                      className="w-full px-3 py-2 pr-9 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 text-xs focus:outline-none focus:bg-white focus:border-[#22a7b8] focus:ring-1 focus:ring-[#22a7b8]"
                     />
                     <button
                       type="button"
                       onClick={() => setShowSetupPassword1(!showSetupPassword1)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-teal-400 hover:text-teal-200 p-0.5 cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
                     >
-                      {showSetupPassword1 ? <EyeOff className="w-3.5 h-3.5 text-teal-400" /> : <Eye className="w-3.5 h-3.5" />}
+                      {showSetupPassword1 ? <EyeOff className="w-3.5 h-3.5 text-slate-600" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-semibold text-teal-100">Konfirmasi Password Baru</label>
+                    <label className="text-[11px] font-semibold text-slate-700">Konfirmasi Password Baru</label>
                     <button
                       type="button"
                       onClick={() => setShowSetupPassword2(!showSetupPassword2)}
-                      className="text-[10px] text-teal-300 hover:text-teal-100 flex items-center gap-1 cursor-pointer font-medium"
+                      className="text-[10px] text-[#22a7b8] hover:text-[#1b8f9e] flex items-center gap-1 cursor-pointer font-medium"
                     >
-                      {showSetupPassword2 ? <EyeOff className="w-3 h-3 text-teal-400" /> : <Eye className="w-3 h-3" />}
+                      {showSetupPassword2 ? <EyeOff className="w-3 h-3 text-[#22a7b8]" /> : <Eye className="w-3 h-3" />}
                     </button>
                   </div>
                   <div className="relative">
@@ -1442,14 +1350,14 @@ export default function App() {
                       value={setupPassword2}
                       onChange={e => setSetupPassword2(e.target.value)}
                       required
-                      className="w-full px-3 py-2 pr-9 bg-slate-950/80 border border-teal-500/30 rounded-lg text-white placeholder:text-slate-400 text-xs focus:outline-none focus:border-teal-400"
+                      className="w-full px-3 py-2 pr-9 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 text-xs focus:outline-none focus:bg-white focus:border-[#22a7b8] focus:ring-1 focus:ring-[#22a7b8]"
                     />
                     <button
                       type="button"
                       onClick={() => setShowSetupPassword2(!showSetupPassword2)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-teal-400 hover:text-teal-200 p-0.5 cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
                     >
-                      {showSetupPassword2 ? <EyeOff className="w-3.5 h-3.5 text-teal-400" /> : <Eye className="w-3.5 h-3.5" />}
+                      {showSetupPassword2 ? <EyeOff className="w-3.5 h-3.5 text-slate-600" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
@@ -1457,14 +1365,14 @@ export default function App() {
                 <button 
                   type="submit" 
                   disabled={isVerifyingNik} 
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-slate-950 font-bold text-xs tracking-wide transition-all shadow-md active:scale-95 cursor-pointer mt-2"
+                  className="w-full py-3 rounded-xl bg-[#22a7b8] hover:bg-[#1b8f9e] text-white font-bold text-xs tracking-wide transition-all shadow-xs active:scale-95 cursor-pointer mt-2"
                 >
                   {isVerifyingNik ? 'Menyimpan...' : 'Simpan Password & Profil'}
                 </button>
                 <button 
                   type="button" 
                   onClick={() => setLoginStep('nik')} 
-                  className="w-full py-2 text-xs text-teal-300/80 hover:text-white font-medium cursor-pointer transition-colors"
+                  className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 font-medium cursor-pointer transition-colors"
                 >
                   Batal
                 </button>
@@ -1472,24 +1380,24 @@ export default function App() {
             )}
 
             {loginStep === 'forgot' && (
-              <div className="space-y-3.5 animate-in fade-in duration-300">
-                <div className="p-2.5 rounded-xl bg-indigo-950/60 border border-indigo-500/40 text-indigo-200 text-xs">
-                  <p className="font-bold mb-0.5 text-indigo-100">Reset Password Mandiri</p>
-                  <p className="text-[11px] text-indigo-200/90">Masukkan email aktif yang terdaftar pada akun Anda.</p>
+              <div className="w-full max-w-md mx-auto bg-white rounded-2xl border border-slate-200 shadow-md p-6 space-y-3.5 text-left animate-in fade-in duration-300">
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+                  <p className="font-bold mb-0.5 text-amber-900">Reset Password Mandiri</p>
+                  <p className="text-[11px] text-amber-700">Masukkan email aktif yang terdaftar pada akun Anda.</p>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-teal-100">Nomor Induk Karyawan (NIK)</label>
+                  <label className="text-[11px] font-semibold text-slate-700">Nomor Induk Karyawan (NIK)</label>
                   <input 
                     type="text"
                     value={nikInput}
                     disabled
-                    className="w-full px-3 py-2 bg-slate-900/90 border border-slate-700/80 rounded-lg text-teal-200/80 font-mono text-xs cursor-not-allowed"
+                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-600 font-mono text-xs cursor-not-allowed"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-teal-100">Email Terdaftar</label>
+                  <label className="text-[11px] font-semibold text-slate-700">Email Terdaftar</label>
                   <input 
                     type="email"
                     placeholder="nama@haritanickel.com"
@@ -1497,21 +1405,21 @@ export default function App() {
                     onChange={e => setForgotEmail(e.target.value)}
                     required
                     autoFocus
-                    className="w-full px-3 py-2 bg-slate-950/80 border border-teal-500/30 rounded-lg text-white placeholder:text-slate-400 text-xs focus:outline-none focus:border-teal-400"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 placeholder:text-slate-400 text-xs focus:outline-none focus:bg-white focus:border-[#22a7b8]"
                   />
                 </div>
 
                 <button 
                   type="submit" 
                   disabled={isVerifyingNik} 
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-teal-500 hover:from-indigo-400 hover:to-teal-400 text-white font-bold text-xs tracking-wide transition-all shadow-md active:scale-95 cursor-pointer mt-2"
+                  className="w-full py-3 rounded-xl bg-[#f09b13] hover:bg-[#dc8c0f] text-white font-bold text-xs tracking-wide transition-all shadow-xs active:scale-95 cursor-pointer mt-2"
                 >
                   {isVerifyingNik ? 'Memproses...' : 'Kirim Link Reset'}
                 </button>
                 <button 
                   type="button" 
                   onClick={() => setLoginStep('password')} 
-                  className="w-full py-2 text-xs text-teal-300/80 hover:text-white font-medium cursor-pointer transition-colors"
+                  className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 font-medium cursor-pointer transition-colors"
                 >
                   Batal
                 </button>
@@ -1519,29 +1427,56 @@ export default function App() {
             )}
           </form>
 
-          {/* Bottom Trust Badge */}
-          <div className="pt-4 border-t border-teal-500/20 flex items-center justify-between text-[10px] text-teal-300/80 font-mono">
-            <span className="flex items-center gap-1.5 text-teal-200/90">
-              <Shield className="w-3.5 h-3.5 text-teal-400" />
+          {/* 3 Operating Entities Cards Row (TBP, GPS, GTS) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 w-full max-w-xl mt-10">
+            {/* Card 1: TBP */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-teal-300 p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group">
+              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                <img src="/tbp-header-logo.png" alt="TBP" className="w-full h-full object-contain" />
+              </div>
+              <span className="text-xs font-bold text-slate-800">PT TBP</span>
+              <span className="text-[10px] text-slate-400 font-mono mt-0.5">Trimegah Bangun Persada</span>
+            </div>
+
+            {/* Card 2: GPS */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group">
+              <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                <img src="/gps-logo.png" alt="GPS" className="w-full h-full object-contain" />
+              </div>
+              <span className="text-xs font-bold text-blue-700">PT GPS</span>
+              <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Permai Sentosa</span>
+            </div>
+
+            {/* Card 3: GTS */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group">
+              <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                <img src="/gts-logo.png" alt="GTS" className="w-full h-full object-contain" />
+              </div>
+              <span className="text-xs font-bold text-blue-700">PT GTS</span>
+              <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Tambang Sentosa</span>
+            </div>
+          </div>
+
+          {/* Bottom Trust & Motto */}
+          <div className="mt-8 flex items-center justify-center gap-3 text-xs text-slate-500 font-mono">
+            <span className="flex items-center gap-1.5 text-slate-600">
+              <Shield className="w-3.5 h-3.5 text-emerald-600" />
               <span>SSL 256-Bit Encrypted</span>
             </span>
-            <span className="text-teal-400 font-semibold">v2.6 Enterprise</span>
+            <span className="text-slate-300">&bull;</span>
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold border border-slate-200">v2.6 Enterprise</span>
+          </div>
+
+          <div className="mt-3 text-center text-xs">
+            <p className="font-semibold text-slate-600">Divisi Quality Assurance &amp; Laboratorium &bull; Harita Nickel</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Safety &bull; Precision &bull; Integrity &bull; Continuous Improvement</p>
           </div>
 
         </div>
 
-        {/* Global Footer Motto */}
-        <div className="mt-6 text-center text-xs">
-          <p className="font-semibold text-teal-200/90">Divisi Quality Assurance &amp; Laboratorium • Harita Nickel</p>
-          <p className="text-[11px] text-teal-400/70 mt-0.5">Safety • Precision • Integrity • Continuous Improvement</p>
-        </div>
-
       </div>
-
-    </div>
     );
   }
-
 
   return (
     <div className="flex w-full min-h-[100dvh] h-[100dvh] overflow-hidden transition-colors duration-300" style={{ backgroundColor: activeModuleStyle.bg }}>
@@ -1678,6 +1613,13 @@ export default function App() {
                 title: 'Labnote & Pengumuman',
               },
               {
+                id: 'cloud',
+                label: 'Cloud',
+                icon: Cloud,
+                onClick: () => handleNav('preplab-cloud'),
+                title: 'PrepLab Cloud Storage',
+              },
+              {
                 id: 'chat',
                 label: 'Chat',
                 icon: MessageSquare,
@@ -1690,13 +1632,6 @@ export default function App() {
                 icon: Trophy,
                 onClick: () => handleNav('leaderboard'),
                 title: 'PrepLab Hall of Fame & Leaderboard',
-              },
-              {
-                id: 'cloud',
-                label: 'Cloud',
-                icon: Cloud,
-                onClick: () => handleNav('preplab-cloud'),
-                title: 'PrepLab Cloud Storage',
               },
               {
                 id: 'settings',
@@ -1989,6 +1924,8 @@ export default function App() {
   <Route path="/monitoring" element={<MonitoringDashboard inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} />} />
   <Route path="/guest/monitoring" element={<GuestMonitoringScreen />} />
   <Route path="/quiz-admin" element={<QuizAdminScreen userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
+    <Route path="/parampaa" element={<ParampaaArcadeScreen onBack={() => handleNav('home')} />} />
+  <Route path="/arcade" element={<ParampaaArcadeScreen onBack={() => handleNav('home')} />} />
   <Route path="/quiz" element={<QuizScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userSection={userProfile?.section || ''} onBack={() => handleNav('home')} />} />
   <Route path="/apd" element={<Navigate to="/apd-input" replace />} />
   <Route path="/apd/*" element={<Navigate to="/apd-input" replace />} />

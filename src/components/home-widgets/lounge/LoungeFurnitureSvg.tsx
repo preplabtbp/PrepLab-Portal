@@ -813,5 +813,117 @@ export const GbaGazeboTerraceEntranceDoor: React.FC<{
   );
 };
 
+// 12. UNDERGROUND BUNKER FLOOR TRAPDOOR (Pintu Rahasia Lantai Menuju Bunker Terbengkalai)
+export const GbaMineFloorTrapdoor: React.FC<{
+  x?: number;
+  y?: number;
+  isUnlocked?: boolean;
+  isCutsceneActive?: boolean;
+  className?: string;
+  onClick?: () => void;
+}> = ({ x = 0, y = 0, isUnlocked = false, isCutsceneActive = false, className = '', onClick }) => {
+  return (
+    <svg
+      x={x}
+      y={y}
+      width={22}
+      height={14}
+      viewBox="0 0 22 14"
+      className={`select-none overflow-visible cursor-pointer group transition-all duration-300 ${className} ${
+        isCutsceneActive ? 'animate-bounce drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]' : ''
+      }`}
+      style={{ shapeRendering: 'crispEdges', imageRendering: 'pixelated' }}
+      onClick={onClick}
+    >
+      <title>
+        {isUnlocked
+          ? '🪜 Pintu Rahasia Lantai (Tangga ke Bunker Terbengkalai - Klik untuk Turun)'
+          : '🔒 Pintu Rahasia Lantai (Terkunci Rapat - Menangkan 5x Suwit PvP untuk Membuka)'}
+      </title>
 
+      {/* Recessed Floor Base Border */}
+      <rect x="0" y="0" width="22" height="14" rx="1" fill="#0F172A" stroke="#1E293B" strokeWidth="0.8" />
 
+      {/* Hazard Warning Trim Along Edge */}
+      <rect x="1" y="1" width="20" height="1" fill="#EAB308" />
+      <rect x="1" y="12" width="20" height="1" fill="#EAB308" />
+
+      {!isUnlocked ? (
+        /* ── LOCKED STATE: Flush Heavy Iron Plate with Padlock ── */
+        <g>
+          {/* Iron Hatch Plates */}
+          <rect x="1.5" y="2" width="9" height="10" fill="#334155" stroke="#1E293B" strokeWidth="0.4" />
+          <rect x="11.5" y="2" width="9" height="10" fill="#334155" stroke="#1E293B" strokeWidth="0.4" />
+
+          {/* Heavy Steel Bracing Bars */}
+          <line x1="2" y1="2" x2="10" y2="12" stroke="#475569" strokeWidth="0.8" />
+          <line x1="12" y1="2" x2="20" y2="12" stroke="#475569" strokeWidth="0.8" />
+
+          {/* Corner Rivets */}
+          <rect x="2.5" y="3" width="1" height="1" fill="#94A3B8" />
+          <rect x="8.5" y="3" width="1" height="1" fill="#94A3B8" />
+          <rect x="2.5" y="10" width="1" height="1" fill="#94A3B8" />
+          <rect x="8.5" y="10" width="1" height="1" fill="#94A3B8" />
+          <rect x="12.5" y="3" width="1" height="1" fill="#94A3B8" />
+          <rect x="18.5" y="3" width="1" height="1" fill="#94A3B8" />
+          <rect x="12.5" y="10" width="1" height="1" fill="#94A3B8" />
+          <rect x="18.5" y="10" width="1" height="1" fill="#94A3B8" />
+
+          {/* Heavy Center Padlock & Latch */}
+          <rect x="9.5" y="5.5" width="3" height="3.5" rx="0.5" fill="#D97706" stroke="#78350F" strokeWidth="0.4" />
+          <path d="M10 5.5 V4 A1 1 0 0 1 12 4 V5.5" fill="none" stroke="#CBD5E1" strokeWidth="0.6" />
+          <rect x="10.8" y="7" width="0.4" height="1" fill="#451A03" />
+        </g>
+      ) : (
+        /* ── UNLOCKED STATE: Open Trapdoor Revealing Shaft and Wooden Ladder Rungs ── */
+        <g>
+          {/* Dark Mine Shaft Opening */}
+          <rect x="2" y="2" width="18" height="10" fill="#050505" />
+
+          {/* Warm Amber Glow from Lanterns in Bunker Below */}
+          <ellipse cx="11" cy="7" rx="6" ry="3" fill="#F59E0B" opacity="0.25">
+            <animate attributeName="opacity" values="0.2;0.35;0.2" dur="2s" repeatCount="indefinite" />
+          </ellipse>
+
+          {/* Top Wooden Rails of the Underground Ladder */}
+          <rect x="6" y="2" width="1.6" height="10" fill="#78350F" stroke="#451A03" strokeWidth="0.3" />
+          <rect x="14.4" y="2" width="1.6" height="10" fill="#78350F" stroke="#451A03" strokeWidth="0.3" />
+          <rect x="6.4" y="2" width="0.6" height="10" fill="#B45309" />
+          <rect x="14.8" y="2" width="0.6" height="10" fill="#B45309" />
+
+          {/* Top Iron Rungs Leading Down */}
+          <rect x="7.4" y="3.5" width="7.2" height="1.2" fill="#64748B" stroke="#1E293B" strokeWidth="0.3" />
+          <rect x="8" y="3.8" width="6" height="0.5" fill="#CBD5E1" />
+
+          <rect x="7.4" y="7" width="7.2" height="1.2" fill="#64748B" stroke="#1E293B" strokeWidth="0.3" />
+          <rect x="8" y="7.3" width="6" height="0.5" fill="#CBD5E1" />
+
+          <rect x="7.4" y="10.5" width="7.2" height="1.2" fill="#64748B" stroke="#1E293B" strokeWidth="0.3" />
+          <rect x="8" y="10.8" width="6" height="0.5" fill="#CBD5E1" />
+
+          {/* Open Iron Hatch Door Flapped Upwards to the Sides */}
+          <polygon points="1.5,2 0.5,-3 2,-3 3,2" fill="#475569" stroke="#1E293B" strokeWidth="0.3" />
+          <polygon points="20.5,2 21.5,-3 20,-3 19,2" fill="#475569" stroke="#1E293B" strokeWidth="0.3" />
+        </g>
+      )}
+
+      {/* Cutscene Dust Puffs / Smoke Particles Rising */}
+      {isCutsceneActive && (
+        <g>
+          <circle cx="5" cy="2" r="2" fill="#CBD5E1" opacity="0.8">
+            <animate attributeName="cy" values="2;-5" dur="1s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.8;0" dur="1s" repeatCount="indefinite" />
+          </circle>
+          <circle cx="11" cy="2" r="2.5" fill="#94A3B8" opacity="0.9">
+            <animate attributeName="cy" values="2;-6" dur="0.9s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.9;0" dur="0.9s" repeatCount="indefinite" />
+          </circle>
+          <circle cx="17" cy="2" r="2" fill="#CBD5E1" opacity="0.8">
+            <animate attributeName="cy" values="2;-4" dur="1.2s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.8;0" dur="1.2s" repeatCount="indefinite" />
+          </circle>
+        </g>
+      )}
+    </svg>
+  );
+};

@@ -4,5 +4,6 @@
   "google.cloud.project": "project-054e3351-b8d1-42f7-9c8",
   "google.cloud.region": "asia-southeast2",
   "google.cloud.location": "asia-southeast2",
-  "google.cloud.bigquery.location": "asia-southeast2"
+  "google.cloud.bigquery.location": "asia-southeast2",
+  "google.cloud.billingQuotaProject": "project-054e3351-b8d1-42f7-9c8"
 }

@@ -10,6 +10,7 @@ let consecutiveErrors = 0;
 const CIRCUIT_RESET_MS = process.env.NODE_ENV === 'production' ? 20000 : 60000;
 
 export function isDbCircuitBroken(): boolean {
+  if (process.env.NODE_ENV !== 'production') return false;
   if (consecutiveErrors < 2) return false;
   if (Date.now() - lastFailureTimestamp > CIRCUIT_RESET_MS) {
     // Try probing again after recovery window
@@ -54,10 +55,12 @@ export async function withDbFallback<T>(
 }
 
 export const createPool = () => {
+  const isProd = process.env.NODE_ENV === 'production';
+  const defaultMax = 10;
   const poolConfig: any = {
     connectionTimeoutMillis: 30000,
-    idleTimeoutMillis: 30000,
-    max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 10,
+    idleTimeoutMillis: isProd ? 30000 : 15000,
+    max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : defaultMax,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
     allowExitOnIdle: true,
@@ -78,8 +81,16 @@ export const createPool = () => {
 export const pool = createPool();
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle SQL pool client:', err?.message || err);
-  reportDbError(err);
+  console.warn('⚠️ [DB Pool] Idle client reset/closed:', err?.message || err);
 });
+
+// Clean up pool connections when server process shuts down or restarts
+const gracefulPoolExit = async () => {
+  try {
+    await pool.end();
+  } catch {}
+};
+process.once('SIGINT', gracefulPoolExit);
+process.once('SIGTERM', gracefulPoolExit);
 
 export const db = drizzle(pool, { schema });

@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button, Input, Textarea } from './ui';
 import { ChevronLeft, Send, X, FileText, User, Paperclip, MessageSquare, Clock, Edit2, Check, ExternalLink, Trash2, Image as ImageIcon, FileSpreadsheet, Download, Maximize2, FileDown, Reply, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -134,36 +134,95 @@ export function BulletinTopicDetail({
     content: string;
   } | null>(null);
 
+  const activeUploadsCountRef = useRef(0);
+
   const processAndUploadBulletinFiles = async (rawFiles: File[]) => {
     if (rawFiles.length === 0) return;
+    activeUploadsCountRef.current += 1;
     setIsUploadingFile(true);
     const toastId = toast.loading(`Mengompres dan mengunggah ${rawFiles.length} lampiran...`, { id: 'upload-bulletin' });
     try {
       const uploadedList: Array<{ name: string; url: string; previewUrl?: string; isImage?: boolean }> = [];
       for (const file of rawFiles) {
         const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name);
-        const base64 = await new Promise<string>((resolve, reject) => {
+        const base64Raw = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (ev) => resolve(ev.target?.result as string);
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
-        const base64Data = base64.split(',')[1];
-        const url = await uploadPhotoToDrive(base64Data, file.type, file.name, 'Bulletin Board');
+
+        let finalBase64 = base64Raw;
+        let mimeType = file.type || 'image/jpeg';
+
+        if (isImg) {
+          try {
+            const img = new Image();
+            await new Promise((resolve) => {
+              img.onload = () => resolve(true);
+              img.onerror = () => resolve(false);
+              img.src = base64Raw;
+            });
+
+            const canvas = document.createElement('canvas');
+            const maxW = 1600;
+            const maxH = 1200;
+            let w = img.width || 1200;
+            let h = img.height || 900;
+
+            if (w > maxW || h > maxH) {
+              if (w > h) {
+                h = Math.round((h * maxW) / w);
+                w = maxW;
+              } else {
+                w = Math.round((w * maxH) / h);
+                h = maxH;
+              }
+            }
+
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, w, h);
+              finalBase64 = canvas.toDataURL('image/jpeg', 0.85);
+              mimeType = 'image/jpeg';
+            }
+          } catch (cErr) {
+            console.warn('Canvas compression fallback to raw base64', cErr);
+          }
+        }
+
+        let uploadedUrl = finalBase64;
+        try {
+          const base64Clean = finalBase64.replace(/^data:.*?;base64,/, "");
+          const driveUrl = await uploadPhotoToDrive(base64Clean, mimeType, file.name, 'Bulletin Board');
+          if (driveUrl) {
+            uploadedUrl = driveUrl;
+          }
+        } catch (uErr) {
+          console.warn('Drive upload fallback to compressed base64 url', uErr);
+        }
+
         uploadedList.push({
           name: file.name,
-          url,
+          url: uploadedUrl,
           isImage: isImg,
-          previewUrl: isImg ? base64 : undefined
+          previewUrl: isImg ? finalBase64 : undefined
         });
       }
+
+      // Selalu gabungkan (append) lampiran yang baru di-paste dengan lampiran yang sudah ada sebelumnya
       setSelectedFiles(prev => [...prev, ...uploadedList]);
-      toast.success(`${uploadedList.length} lampiran siap dikirim!`, { id: 'upload-bulletin' });
+      toast.success(`${uploadedList.length} lampiran siap dikirim! (Bisa paste screenshot lagi)`, { id: 'upload-bulletin' });
     } catch (err) {
       console.error(err);
       toast.error('Gagal mengunggah lampiran', { id: 'upload-bulletin' });
     } finally {
-      setIsUploadingFile(false);
+      activeUploadsCountRef.current = Math.max(0, activeUploadsCountRef.current - 1);
+      if (activeUploadsCountRef.current === 0) {
+        setIsUploadingFile(false);
+      }
     }
   };
 
@@ -175,44 +234,67 @@ export function BulletinTopicDetail({
   };
 
   // Handler paste screenshot/gambar langsung di kolom komentar bulletin (Ctrl+V)
-  const handleCommentPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const clipboardItems = e.clipboardData?.items;
-    if (!clipboardItems) return;
+  const handleCommentPaste = async (e: React.ClipboardEvent<any>) => {
+    const rawFiles = e.clipboardData?.files ? Array.from(e.clipboardData.files) : [];
+    const rawItems = e.clipboardData?.items ? Array.from(e.clipboardData.items) : [];
 
     const imageFiles: File[] = [];
-    for (let i = 0; i < clipboardItems.length; i++) {
-      const item = clipboardItems[i];
-      if (item.type.startsWith('image/')) {
-        const blob = item.getAsFile();
-        if (blob) {
-          const now = new Date();
-          const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-          const ext = blob.type.split('/')[1] || 'png';
-          const filename = blob.name && blob.name !== 'image.png' 
-            ? blob.name 
-            : `pasted_bulletin_${timestamp}_${i + 1}.${ext}`;
-          imageFiles.push(new File([blob], filename, { type: blob.type }));
+
+    // 1. Cek jika clipboard langsung berisi file image (misal dicopy dari File Explorer / multi-file)
+    for (const f of rawFiles) {
+      if (f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name)) {
+        imageFiles.push(f);
+      }
+    }
+
+    // 2. Jika tidak ada file langsung, cek clipboard items (buffer screenshot Snipping Tool / PrtScn)
+    if (imageFiles.length === 0 && rawItems.length > 0) {
+      for (let i = 0; i < rawItems.length; i++) {
+        const item = rawItems[i];
+        if (item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          if (blob) {
+            const now = new Date();
+            const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+            const randSuffix = Math.random().toString(36).substring(2, 6);
+            const ext = blob.type.split('/')[1] || 'png';
+            const filename = blob.name && blob.name !== 'image.png' && blob.name !== 'blob'
+              ? blob.name 
+              : `pasted_bulletin_${timestamp}_${i + 1}_${randSuffix}.${ext}`;
+            imageFiles.push(new File([blob], filename, { type: blob.type }));
+          }
         }
       }
     }
 
     if (imageFiles.length > 0) {
       e.preventDefault();
+      e.stopPropagation();
       await processAndUploadBulletinFiles(imageFiles);
+
+      // Auto-focus textarea agar user bisa langsung mengetik pesan atau menekan Enter
+      setTimeout(() => {
+        const el = document.getElementById('bulletin-comment-textarea');
+        if (el) el.focus();
+      }, 50);
     }
   };
 
   const submitComment = async () => {
     const hasFiles = selectedFiles.length > 0;
-    const finalContent = newComment.trim() || (fileCaption.trim() ? `📎 ${selectedFiles[0]?.name}\n\n${fileCaption.trim()}` : (hasFiles ? 'Sent attachments' : ''));
+    const finalContent = newComment.trim() || (
+      fileCaption.trim() 
+        ? `📎 ${selectedFiles.length > 1 ? `${selectedFiles.length} Lampiran Foto` : (selectedFiles[0]?.name || 'Lampiran')}\n\n${fileCaption.trim()}`
+        : (hasFiles ? (selectedFiles.length > 1 ? `📎 ${selectedFiles.length} Lampiran Foto` : `📎 ${selectedFiles[0]?.name || 'Lampiran'}`) : '')
+    );
     if (!finalContent && !hasFiles) return;
     try {
-      const fileUrlPayload = hasFiles ? JSON.stringify(selectedFiles.map((f, idx) => ({
+      const fileUrlPayload = hasFiles ? JSON.stringify(selectedFiles.map((f) => ({
         url: f.url,
         name: f.name,
-        caption: idx === 0 ? fileCaption.trim() : '',
+        caption: '',
         directUrl: f.url,
-        isImage: f.isImage
+        isImage: f.isImage !== false
       }))) : null;
 
       const res = await fetch(`/api/bulletin/${post.id}/comments`, {
@@ -783,7 +865,7 @@ export function BulletinTopicDetail({
                 </div>
 
                 {/* Chat Input Area (padded at bottom to prevent footer occlusion) */}
-                <div className="p-4 pb-20 md:pb-6 bg-white border-t border-slate-200">
+                <div className="p-4 pb-20 md:pb-6 bg-white border-t border-slate-200" onPaste={handleCommentPaste}>
                    {selectedFiles.length > 0 && (
                      <div className="mb-3 p-3 bg-blue-50/90 border border-blue-200 rounded-2xl space-y-2.5 shadow-2xs animate-in fade-in">
                        <div className="flex items-center justify-between">
@@ -877,6 +959,7 @@ export function BulletinTopicDetail({
                         </label>
                        
                        <textarea 
+                         id="bulletin-comment-textarea"
                          placeholder="Tulis update atau pesan... (Enter untuk kirim, bisa Ctrl+V / Paste gambar)" 
                          className="w-full bg-transparent border-none focus:ring-0 text-sm py-2 px-1 resize-none min-h-[40px] max-h-[120px] text-slate-700 placeholder:text-slate-400"
                          value={newComment}

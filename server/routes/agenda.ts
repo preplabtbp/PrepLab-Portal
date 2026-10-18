@@ -15,12 +15,36 @@ import {
 } from "../utils.js";
 import webpush from 'web-push';
 import path from "path";
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../middleware/auth.js';
 
 export const router = Router();
 
 router.get("/api/agenda", async (req, res) => {
     try {
-      const data: any[] = await db.select().from(agendaEvents);
+      let requesterNik = String(req.query.nik || '').trim();
+      if (!requesterNik && (req as any).cookies?.token) {
+        try {
+          const decoded = jwt.verify((req as any).cookies.token, JWT_SECRET) as any;
+          if (decoded?.nik) requesterNik = String(decoded.nik).trim();
+        } catch(e) {}
+      }
+
+      const allAgenda: any[] = await db.select().from(agendaEvents);
+      
+      // Filter agenda pribadi: pastikan setiap user HANYA mendapatkan agenda pribadinya masing-masing
+      const data: any[] = allAgenda.filter(evt => {
+        const kat = (evt.kategori || '').toLowerCase();
+        const isPrivate = kat === 'private' || kat === 'personal' || kat === 'pribadi';
+        if (isPrivate) {
+          if (!requesterNik) return false;
+          const creatorNik = String(evt.creatorNik || '').trim();
+          const pic = String(evt.pic || '').trim();
+          return creatorNik.toUpperCase() === requesterNik.toUpperCase() ||
+                 pic.toUpperCase() === requesterNik.toUpperCase();
+        }
+        return true;
+      });
       
       const allEmps = await db.select().from(employees);
       const currentYear = new Date().getFullYear();
@@ -74,7 +98,7 @@ router.get("/api/agenda", async (req, res) => {
       });
       
       res.json({ status: "success", data });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
@@ -149,3 +173,92 @@ router.delete("/api/agenda/routine/:routineId", async (req, res) => {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
+
+router.all("/api/agenda/cleanup-duplicates", async (req, res) => {
+    try {
+      const allEvents = await db.select().from(agendaEvents);
+      const groups: Record<string, typeof allEvents> = {};
+
+      for (const ev of allEvents) {
+        let key = '';
+        if (ev.bulletinPostId) {
+          key = `bulletin-post-${ev.bulletinPostId}`;
+        } else if (ev.id.startsWith('ag-bulletin-')) {
+          const parts = ev.id.split('-');
+          const postId = parts[2] || 'unknown';
+          key = `bulletin-post-${postId}`;
+        } else if (ev.title && (ev.title.includes('Weekly') || ev.title.includes('weekly'))) {
+          const dStr = ev.startDate ? new Date(ev.startDate).toISOString().slice(0, 10) : 'nodate';
+          key = `weekly-title-${ev.title}-${dStr}`;
+        } else {
+          key = `single-${ev.id}`;
+        }
+
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(ev);
+      }
+
+      const idsToDelete: string[] = [];
+      const recordsToKeep: Array<{ key: string; keptId: string; title: string; duplicateCount: number }> = [];
+
+      for (const [key, evList] of Object.entries(groups)) {
+        if (evList.length > 1) {
+          evList.sort((a, b) => {
+            const tA = (a.createdAt ? new Date(a.createdAt).getTime() : 0) || (a.startDate ? new Date(a.startDate).getTime() : 0);
+            const tB = (b.createdAt ? new Date(b.createdAt).getTime() : 0) || (b.startDate ? new Date(b.startDate).getTime() : 0);
+            return tA - tB;
+          });
+
+          const canonical = evList[0];
+          recordsToKeep.push({ key, keptId: canonical.id, title: canonical.title, duplicateCount: evList.length - 1 });
+
+          for (let i = 1; i < evList.length; i++) {
+            idsToDelete.push(evList[i].id);
+          }
+        }
+      }
+
+      let deletedCount = 0;
+      if (idsToDelete.length > 0) {
+        const chunkSize = 50;
+        for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+          const chunk = idsToDelete.slice(i, i + chunkSize);
+          await db.delete(agendaEvents).where(inArray(agendaEvents.id, chunk));
+          deletedCount += chunk.length;
+        }
+      }
+
+      // Rename kept bulletin event ID to canonical format if needed
+      for (const r of recordsToKeep) {
+        if (r.key.startsWith('bulletin-post-')) {
+          const postId = r.key.replace('bulletin-post-', '');
+          const canonicalId = `ag-bulletin-${postId}`;
+          if (r.keptId !== canonicalId) {
+            try {
+              const existing = await db.select().from(agendaEvents).where(eq(agendaEvents.id, canonicalId)).limit(1);
+              if (existing.length === 0) {
+                await db.update(agendaEvents).set({ id: canonicalId, bulletinPostId: Number(postId) }).where(eq(agendaEvents.id, r.keptId));
+              }
+            } catch (e) {
+              // Ignore rename collision
+            }
+          }
+        }
+      }
+
+      const remainingEvents = await db.select().from(agendaEvents);
+      console.log(`[Agenda Cleanup] Deleted ${deletedCount} duplicate events. Remaining: ${remainingEvents.length}`);
+
+      res.json({
+        status: "success",
+        totalBefore: allEvents.length,
+        totalAfter: remainingEvents.length,
+        deletedCount,
+        deduplicatedGroupsCount: recordsToKeep.length
+      });
+    } catch (error: any) {
+      console.error("Cleanup duplicates error:", error);
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+

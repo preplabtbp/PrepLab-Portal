@@ -56,6 +56,11 @@ export function setupGlobalAttachmentPaste(): () => void {
 
     // Cek apakah ada input teks/textarea yang sedang fokus
     const activeEl = document.activeElement as HTMLElement | null;
+    if (activeEl && (activeEl.id === 'notion-comment-textarea' || activeEl.closest('#notion-comment-textarea') || activeEl.closest('form')?.querySelector('#notion-comment-textarea'))) {
+      // Jika pengguna sedang fokus pada kolom komentar Notion, biarkan handler onPaste lokal menangani tanpa intervensi global
+      return;
+    }
+
     const isTextInputFocused = activeEl && (
       activeEl.tagName === 'INPUT' && (activeEl as HTMLInputElement).type === 'text' ||
       activeEl.tagName === 'TEXTAREA'
@@ -99,7 +104,8 @@ export function setupGlobalAttachmentPaste(): () => void {
       for (const sel of modalSelectors) {
         const modal = document.querySelector(sel);
         if (modal) {
-          const inp = modal.querySelector('input[type="file"][accept*="image"]:not([disabled])') as HTMLInputElement | null;
+          // Cari input file yang tidak ditandai data-no-global-paste
+          const inp = modal.querySelector('input[type="file"][accept*="image"]:not([disabled]):not([data-no-global-paste])') as HTMLInputElement | null;
           if (inp) {
             targetInput = inp;
             break;
@@ -111,13 +117,13 @@ export function setupGlobalAttachmentPaste(): () => void {
       if (!targetInput && activeEl) {
         const container = activeEl.closest('form') || activeEl.closest('.modal') || activeEl.parentElement;
         if (container) {
-          targetInput = container.querySelector('input[type="file"][accept*="image"]:not([disabled])') as HTMLInputElement | null;
+          targetInput = container.querySelector('input[type="file"][accept*="image"]:not([disabled]):not([data-no-global-paste])') as HTMLInputElement | null;
         }
       }
 
       // Prioritas 3: Cari input file gambar visible di halaman
       if (!targetInput) {
-        const allInputs = Array.from(document.querySelectorAll('input[type="file"][accept*="image"]:not([disabled])')) as HTMLInputElement[];
+        const allInputs = Array.from(document.querySelectorAll('input[type="file"][accept*="image"]:not([disabled]):not([data-no-global-paste])')) as HTMLInputElement[];
         targetInput = allInputs.find((inp) => {
           const rect = inp.getBoundingClientRect();
           const parentRect = inp.parentElement?.getBoundingClientRect();

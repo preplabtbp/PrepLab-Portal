@@ -18,7 +18,8 @@ export interface ClockSettings {
 }
 
 export interface StickyNotesSettings {
-  color: 'amber' | 'emerald' | 'blue' | 'purple' | 'rose';
+  color?: string;
+  defaultMode?: 'checklist' | 'text';
 }
 
 export type AvatarGender = 'male' | 'female' | 'robot' | 'chibi';
