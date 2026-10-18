@@ -72,8 +72,8 @@ export const CompanyLibraryHub: React.FC<CompanyLibraryHubProps> = ({
 
       const isLibrary = 
         cat.startsWith('LIBRARY') ||
-        ['SOP', 'JSA', 'IK', 'SAFETY_FLASH', 'MSDS', 'STANDAR', 'PROCEDURE'].includes(cat) ||
-        tags.some(t => ['LIBRARY', 'SOP', 'JSA', 'IK', 'SAFETY_FLASH', 'MSDS'].includes(t)) ||
+        ['SOP', 'JSA', 'IK', 'SAFETY_FLASH', 'MSDS', 'STANDAR', 'PROCEDURE', 'PROSEDUR'].includes(cat) ||
+        tags.some(t => ['LIBRARY', 'SOP', 'JSA', 'IK', 'SAFETY_FLASH', 'MSDS', 'PROSEDUR'].includes(t)) ||
         dept === 'LIBRARY' ||
         dept.includes('HSE');
 

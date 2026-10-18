@@ -77,22 +77,41 @@ const KELAS_OPTIONS = [
   { value: 'Admin', label: 'Admin / Staff' }
 ];
 
+export const JENIS_DOKUMEN_OPTIONS = [
+  { value: 'Health', label: 'Health (Kesehatan Kerja)', color: 'emerald' },
+  { value: 'Safety', label: 'Safety (Keselamatan Kerja)', color: 'blue' },
+  { value: 'IK', label: 'IK (Instruksi Kerja)', color: 'purple' },
+  { value: 'JSA', label: 'JSA (Job Safety Analysis)', color: 'amber' },
+  { value: 'SOP', label: 'SOP (Standard Operating Procedure)', color: 'cyan' },
+  { value: 'SDS', label: 'SDS (Safety Data Sheet)', color: 'violet' },
+  { value: 'Kebijakan', label: 'Kebijakan Perusahaan', color: 'indigo' },
+  { value: 'IBPR', label: 'IBPR (Bahaya & Risiko)', color: 'rose' },
+  { value: 'IADL', label: 'IADL (Aspek Lingkungan)', color: 'teal' },
+];
+
 const KATEGORI_OPTIONS = [
-  { value: 'All', label: 'Semua Kategori' },
+  { value: 'All', label: 'Semua Jenis Dokumen' },
+  { value: 'Health', label: 'Health (Kesehatan Kerja)' },
+  { value: 'Safety', label: 'Safety (Keselamatan Kerja)' },
+  { value: 'IK', label: 'IK (Instruksi Kerja)' },
   { value: 'JSA', label: 'JSA (Job Safety Analysis)' },
   { value: 'SOP', label: 'SOP (Standard Operating Procedure)' },
-  { value: 'IK', label: 'IK (Instruksi Kerja)' },
-  { value: 'Teknis', label: 'Teknis' },
-  { value: 'Non-Teknis', label: 'Non-Teknis' },
+  { value: 'SDS', label: 'SDS (Safety Data Sheet)' },
+  { value: 'Kebijakan', label: 'Kebijakan Perusahaan' },
+  { value: 'IBPR', label: 'IBPR (Bahaya & Risiko)' },
+  { value: 'IADL', label: 'IADL (Aspek Lingkungan)' },
   { value: 'Senam', label: 'Senam' }
 ];
 
 const SUB_KATEGORI_OPTIONS = [
-  { value: 'All', label: 'Semua Sub-Kategori' },
-  { value: 'General', label: 'Teknis General (Semua Section)' },
-  { value: 'Laboratory', label: 'Teknis Laboratory (Lab & QA)' },
-  { value: 'Preparation', label: 'Teknis Preparation' },
-  { value: 'Maintenance', label: 'Teknis Maintenance' }
+  { value: 'All', label: 'Semua Section' },
+  { value: 'General', label: 'General (Universal / Gabungan)' },
+  { value: 'Preparation', label: 'Preparation' },
+  { value: 'Laboratory', label: 'Laboratory' },
+  { value: 'Maintenance', label: 'Maintenance' },
+  { value: 'Inventory Control', label: 'Inventory Control (IC)' },
+  { value: 'Quality Assurance', label: 'Quality Assurance (QA)' },
+  { value: 'Administration', label: 'Administration' }
 ];
 
 export function isTopicForbiddenForSection(title?: string, sec?: string): boolean {
@@ -156,16 +175,18 @@ export function buildJsaIkConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'JSA'),
-        slot('Laboratory', 'SPV', 'IK'),
-        slot('All', 'All', 'Senam', { isSenam: true })
+        slot('Preparation', 'SPV', 'JSA', { label: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'IK', { label: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'IK'),
-        slot('Laboratory', 'SPV', 'JSA'),
-        slot('All', 'All', 'Senam', { isSenam: true })
+        slot('Preparation', 'SPV', 'IK', { label: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'JSA', { label: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
       ]
     }
   };
@@ -309,16 +330,18 @@ export function buildAllIkConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'IK'),
-        slot('Laboratory', 'SPV', 'IK'),
-        slot('All', 'All', 'Senam', { isSenam: true })
+        slot('Preparation', 'SPV', 'IK', { label: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'IK', { label: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'IK'),
-        slot('Laboratory', 'SPV', 'IK'),
-        slot('All', 'All', 'Senam', { isSenam: true })
+        slot('Preparation', 'SPV', 'IK', { label: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'IK', { label: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
       ]
     }
   };
@@ -463,16 +486,18 @@ export function buildAllSopConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'SOP'),
-        slot('Laboratory', 'SPV', 'SOP'),
-        slot('All', 'All', 'Senam', { isSenam: true })
+        slot('Preparation', 'SPV', 'SOP', { label: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'SOP', { label: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'SOP'),
-        slot('Laboratory', 'SPV', 'SOP'),
-        slot('All', 'All', 'Senam', { isSenam: true })
+        slot('Preparation', 'SPV', 'SOP', { label: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'SOP', { label: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
       ]
     }
   };
@@ -616,16 +641,18 @@ export function buildDefaultConfig() {
   cfg['Senin'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Teknis'),
-        slot('Laboratory', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Senam', { isSenam: true })
+        slot('Preparation', 'SPV', 'Safety', { label: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'Safety', { label: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Teknis'),
-        slot('Laboratory', 'SPV', 'Teknis'),
-        slot('All', 'All', 'Senam', { isSenam: true })
+        slot('Preparation', 'SPV', 'Safety', { label: 'General Preparation' }),
+        slot('Laboratory', 'SPV', 'Safety', { label: 'General Laboratory' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 1' }),
+        slot('All', 'All', 'Senam', { isSenam: true, label: 'Instruktur Senam 2' })
       ]
     }
   };
@@ -634,22 +661,22 @@ export function buildDefaultConfig() {
   cfg['Selasa'] = {
     pagi: {
       preparasi: [
-        slot('Preparation', 'Foreman/Officer', 'Teknis'),
-        slot('Maintenance', 'Foreman/Officer', 'Teknis')
+        slot('Preparation', 'Foreman/Officer', 'Safety'),
+        slot('Maintenance', 'Foreman/Officer', 'Safety')
       ],
       laboratorium: [
-        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
-        slot('IC', 'Admin', 'Teknis')
+        slot('Laboratory', 'Foreman/Officer', 'Safety'),
+        slot('IC', 'Admin', 'Safety')
       ]
     },
     malam: {
       preparasi: [
-        slot('Preparation', 'Foreman/Officer', 'Teknis'),
-        slot('Maintenance', 'Foreman/Officer', 'Teknis')
+        slot('Preparation', 'Foreman/Officer', 'Safety'),
+        slot('Maintenance', 'Foreman/Officer', 'Safety')
       ],
       laboratorium: [
-        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
-        slot('Laboratory', 'Foreman/Officer', 'Teknis')
+        slot('Laboratory', 'Foreman/Officer', 'Safety'),
+        slot('Laboratory', 'Foreman/Officer', 'Safety')
       ]
     }
   };
@@ -658,22 +685,22 @@ export function buildDefaultConfig() {
   cfg['Rabu'] = {
     pagi: {
       preparasi: [
-        slot('Preparation', 'Foreman/Officer', 'Teknis'),
-        slot('Preparation', 'All', 'Teknis')
+        slot('Preparation', 'Foreman/Officer', 'Safety'),
+        slot('Preparation', 'All', 'Safety')
       ],
       laboratorium: [
-        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
-        slot('Administration', 'Admin', 'Teknis')
+        slot('Laboratory', 'Foreman/Officer', 'Safety'),
+        slot('Administration', 'Admin', 'Safety')
       ]
     },
     malam: {
       preparasi: [
-        slot('Preparation', 'Foreman/Officer', 'Teknis'),
-        slot('Preparation', 'Foreman/Officer', 'Teknis')
+        slot('Preparation', 'Foreman/Officer', 'Safety'),
+        slot('Preparation', 'Foreman/Officer', 'Safety')
       ],
       laboratorium: [
-        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
-        slot('Laboratory', 'Foreman/Officer', 'Teknis')
+        slot('Laboratory', 'Foreman/Officer', 'Safety'),
+        slot('Laboratory', 'Foreman/Officer', 'Safety')
       ]
     }
   };
@@ -682,15 +709,15 @@ export function buildDefaultConfig() {
   cfg['Kamis'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Teknis'),
-        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('Preparation', 'SPV', 'Safety'),
+        slot('Laboratory', 'Foreman/Officer', 'Safety'),
         slot('All', 'All', 'Senam', { isSenam: true })
       ]
     },
     malam: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Teknis'),
-        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
+        slot('Preparation', 'SPV', 'Safety'),
+        slot('Laboratory', 'Foreman/Officer', 'Safety'),
         slot('All', 'All', 'Senam', { isSenam: true })
       ]
     }
@@ -700,16 +727,16 @@ export function buildDefaultConfig() {
   cfg['Jumat'] = {
     pagi: {
       gabungan: [
-        slot('Preparation', 'SPV', 'Teknis'),
-        slot('Laboratory', 'SPV', 'Teknis'),
-        slot('All', 'Foreman/Officer', 'Teknis')
+        slot('Preparation', 'SPV', 'Safety'),
+        slot('Laboratory', 'SPV', 'Safety'),
+        slot('All', 'Foreman/Officer', 'Safety')
       ]
     },
     malam: {
       gabungan: [
-        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
-        slot('Preparation', 'Foreman/Officer', 'Teknis'),
-        slot('Laboratory', 'Foreman/Officer', 'Teknis')
+        slot('All', 'Foreman/Officer', 'Safety', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
+        slot('Preparation', 'Foreman/Officer', 'Safety'),
+        slot('Laboratory', 'Foreman/Officer', 'Safety')
       ]
     }
   };
@@ -718,22 +745,22 @@ export function buildDefaultConfig() {
   cfg['Sabtu'] = {
     pagi: {
       preparasi: [
-        slot('Preparation', 'Foreman/Officer', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('Preparation', 'Foreman/Officer', 'Safety'),
+        slot('All', 'All', 'Safety')
       ],
       laboratorium: [
-        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
-        slot('All', 'All', 'Teknis')
+        slot('Laboratory', 'Foreman/Officer', 'Safety'),
+        slot('All', 'All', 'Safety')
       ]
     },
     malam: {
       preparasi: [
-        slot('Preparation', 'Foreman/Officer', 'Teknis'),
-        slot('Preparation', 'Foreman/Officer', 'Teknis')
+        slot('Preparation', 'Foreman/Officer', 'Safety'),
+        slot('Preparation', 'Foreman/Officer', 'Safety')
       ],
       laboratorium: [
-        slot('Laboratory', 'Foreman/Officer', 'Teknis'),
-        slot('Laboratory', 'Foreman/Officer', 'Teknis')
+        slot('Laboratory', 'Foreman/Officer', 'Safety'),
+        slot('Laboratory', 'Foreman/Officer', 'Safety')
       ]
     }
   };
@@ -742,8 +769,8 @@ export function buildDefaultConfig() {
   cfg['Minggu'] = {
     pagi: {
       gabungan: [
-        slot('All', 'SPV', 'Teknis'),
-        slot('All', 'SPV', 'Teknis'),
+        slot('All', 'SPV', 'Safety'),
+        slot('All', 'SPV', 'Safety'),
         slot('All', 'All', 'Senam', { isSenam: true })
       ]
     },
@@ -787,7 +814,33 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
   // Employee Pool State
   const [karyawanPool, setKaryawanPool] = useState<any[]>([]);
+  const [managersList, setManagersList] = useState<any[]>([]);
   const [loadingPool, setLoadingPool] = useState(false);
+
+  // Senin Special Briefing Configuration State
+  const [seninConfig, setSeninConfig] = useState<{
+    prepPresenter: string; // 'SPV' or manager NIK
+    prepMateriId: number | null;
+    prepMateriJudul: string;
+    prepMateriKategori?: string;
+    labPresenter: string; // 'SPV' or manager NIK
+    labMateriId: number | null;
+    labMateriJudul: string;
+    labMateriKategori?: string;
+  }>({
+    prepPresenter: 'SPV',
+    prepMateriId: null,
+    prepMateriJudul: '',
+    prepMateriKategori: 'Safety',
+    labPresenter: 'SPV',
+    labMateriId: null,
+    labMateriJudul: '',
+    labMateriKategori: 'Safety'
+  });
+  const [searchMateriPrepQuery, setSearchMateriPrepQuery] = useState('');
+  const [isPrepMateriPickerOpen, setIsPrepMateriPickerOpen] = useState(false);
+  const [searchMateriLabQuery, setSearchMateriLabQuery] = useState('');
+  const [isLabMateriPickerOpen, setIsLabMateriPickerOpen] = useState(false);
 
   // Config State
   const [uiConfig, setUiConfig] = useState<Record<string, any>>(() => {
@@ -830,6 +883,10 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('ALL');
   const [viewModeMobile, setViewModeMobile] = useState<'card' | 'table'>('card');
   const [activeDayMobile, setActiveDayMobile] = useState<string>('Kamis');
+  const [selectedDocumentTypes, setSelectedDocumentTypes] = useState<string[]>([
+    'Health', 'Safety', 'IK', 'JSA', 'SOP', 'Kebijakan', 'IBPR', 'IADL'
+  ]);
+  const [showThemeFilter, setShowThemeFilter] = useState(true);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isDraggingRef = useRef(false);
@@ -902,7 +959,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
   const [materiModalOpen, setMateriModalOpen] = useState(false);
   const [editingMateri, setEditingMateri] = useState<any | null>(null);
   const [formJudul, setFormJudul] = useState('');
-  const [formKategori, setFormKategori] = useState('Teknis');
+  const [formKategori, setFormKategori] = useState('Safety');
   const [formSubKategori, setFormSubKategori] = useState('General');
   const [formDivisi, setFormDivisi] = useState('Preparation');
   const [formIsInternal, setFormIsInternal] = useState(false);
@@ -1100,6 +1157,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       const data = await res.json();
       if (data.success) {
         setKaryawanPool(data.pool || []);
+        if (data.managers) setManagersList(data.managers);
         setDatesMeta(data.dates || {});
       }
     } catch (err) {
@@ -1188,7 +1246,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
           uiConfig, 
           weekDate: targetDateStr,
           userPt: selectedPt,
-          creatorPt: selectedPt 
+          creatorPt: selectedPt,
+          allowedJenisDokumen: selectedDocumentTypes,
+          seninConfig
         })
       });
       const data = await res.json();
@@ -1886,7 +1946,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       const payload = {
         judul: formJudul,
         kategori: formKategori,
-        subKategori: formKategori === 'Non-Teknis' ? 'General' : formSubKategori,
+        subKategori: formSubKategori,
         divisi: formDivisi,
         isInternal: formIsInternal,
         base64Data: formImageBase64,
@@ -2217,16 +2277,27 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       const matchSearch = m.judul?.toLowerCase().includes(materiSearch.toLowerCase());
       let matchKat = false;
       if (materiFilterKat === 'All') matchKat = true;
+      else if (m.kategori === materiFilterKat) matchKat = true;
       else if (materiFilterKat === 'JSA') {
         matchKat = m.kategori === 'JSA' || /\bjsa\b/i.test(m.judul || '') || (m.judul || '').toLowerCase().includes('job safety analysis');
       } else if (materiFilterKat === 'SOP') {
         matchKat = (m.kategori === 'SOP' || /\bsop\b/i.test(m.judul || '') || (m.judul || '').toLowerCase().includes('standar operasional') || (m.judul || '').toLowerCase().includes('standar operasi')) && m.kategori !== 'JSA';
       } else if (materiFilterKat === 'IK') {
         matchKat = (m.kategori === 'IK' || /\bik\b/i.test(m.judul || '') || (m.judul || '').toLowerCase().includes('instruksi kerja')) && m.kategori !== 'JSA' && m.kategori !== 'SOP';
+      } else if (materiFilterKat === 'SDS') {
+        matchKat = m.kategori === 'SDS' || /\b(sds|msds)\b/i.test(m.judul || '');
+      } else if (materiFilterKat === 'IBPR') {
+        matchKat = m.kategori === 'IBPR' || /\bibpr\b/i.test(m.judul || '');
+      } else if (materiFilterKat === 'IADL') {
+        matchKat = m.kategori === 'IADL' || /\biadl\b/i.test(m.judul || '');
+      } else if (materiFilterKat === 'Kebijakan') {
+        matchKat = m.kategori === 'Kebijakan' || /\bkebijakan\b/i.test(m.judul || '');
       } else {
         matchKat = m.kategori === materiFilterKat;
       }
-      const matchSubKat = materiFilterSubKat === 'All' || m.subKategori === materiFilterSubKat;
+      const matchSubKat = materiFilterSubKat === 'All' 
+        || m.subKategori === materiFilterSubKat 
+        || (materiFilterSubKat === 'General' && (!m.subKategori || m.subKategori === 'General'));
       const matchDiv = materiFilterDiv === 'All' || m.divisi === materiFilterDiv;
       return matchSearch && matchKat && matchSubKat && matchDiv;
     });
@@ -2591,6 +2662,486 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
       {activeTab === 'schedule' && (isQATeam || showFullSchedulePreview) && (
         <div className="space-y-6">
           
+          {/* Panel Pengaturan Tema Materi Mingguan */}
+          {isQATeam && (
+            <div className="bg-[var(--card-bg)] border border-[var(--border-main)] rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 font-bold">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-[var(--text-main)] flex items-center gap-2">
+                      <span>Pengaturan Tema Materi Mingguan</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] font-semibold border border-[var(--primary)]/20">
+                        {selectedDocumentTypes.length} Jenis Dokumen Aktif
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      Pilih jenis dokumen yang ingin diikutsertakan dalam pengacakan otomatis jadwal minggu ini.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Preset Buttons */}
+                <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocumentTypes(['Health', 'Safety', 'IK', 'JSA', 'SOP', 'SDS', 'Kebijakan', 'IBPR', 'IADL'])}
+                    className="px-2.5 py-1 rounded-lg bg-[var(--input-bg)] hover:bg-[var(--primary)]/10 hover:text-[var(--primary)] border border-[var(--border-main)] font-medium transition-colors cursor-pointer"
+                  >
+                    Pilih Semua
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocumentTypes(['IK'])}
+                    className={`px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                      selectedDocumentTypes.length === 1 && selectedDocumentTypes[0] === 'IK'
+                        ? 'bg-purple-600 text-white border-purple-500'
+                        : 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100'
+                    }`}
+                  >
+                    Hanya IK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocumentTypes(['JSA'])}
+                    className={`px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                      selectedDocumentTypes.length === 1 && selectedDocumentTypes[0] === 'JSA'
+                        ? 'bg-amber-600 text-white border-amber-500'
+                        : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+                    }`}
+                  >
+                    Hanya JSA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocumentTypes(['SOP'])}
+                    className={`px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                      selectedDocumentTypes.length === 1 && selectedDocumentTypes[0] === 'SOP'
+                        ? 'bg-cyan-600 text-white border-cyan-500'
+                        : 'bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800 hover:bg-cyan-100'
+                    }`}
+                  >
+                    Hanya SOP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocumentTypes(['SDS'])}
+                    className={`px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                      selectedDocumentTypes.length === 1 && selectedDocumentTypes[0] === 'SDS'
+                        ? 'bg-purple-600 text-white border-purple-500'
+                        : 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100'
+                    }`}
+                  >
+                    Hanya SDS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocumentTypes(['IBPR'])}
+                    className={`px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                      selectedDocumentTypes.length === 1 && selectedDocumentTypes[0] === 'IBPR'
+                        ? 'bg-rose-600 text-white border-rose-500'
+                        : 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 hover:bg-rose-100'
+                    }`}
+                  >
+                    Hanya IBPR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocumentTypes(['IADL'])}
+                    className={`px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                      selectedDocumentTypes.length === 1 && selectedDocumentTypes[0] === 'IADL'
+                        ? 'bg-teal-600 text-white border-teal-500'
+                        : 'bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800 hover:bg-teal-100'
+                    }`}
+                  >
+                    Hanya IADL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocumentTypes(['Health', 'Safety'])}
+                    className={`px-2.5 py-1 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                      selectedDocumentTypes.length === 2 && selectedDocumentTypes.includes('Health') && selectedDocumentTypes.includes('Safety')
+                        ? 'bg-blue-600 text-white border-blue-500'
+                        : 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100'
+                    }`}
+                  >
+                    K3 (Health &amp; Safety)
+                  </button>
+                </div>
+              </div>
+
+              {/* Checklist Pills */}
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[var(--border-main)]">
+                {JENIS_DOKUMEN_OPTIONS.map(doc => {
+                  const isChecked = selectedDocumentTypes.includes(doc.value);
+                  return (
+                    <button
+                      key={doc.value}
+                      type="button"
+                      onClick={() => {
+                        if (isChecked) {
+                          if (selectedDocumentTypes.length === 1) {
+                            toast.error('Minimal harus ada 1 jenis dokumen yang dipilih');
+                            return;
+                          }
+                          setSelectedDocumentTypes(selectedDocumentTypes.filter(t => t !== doc.value));
+                        } else {
+                          setSelectedDocumentTypes([...selectedDocumentTypes, doc.value]);
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                        isChecked
+                          ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs'
+                          : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--border-main)] hover:border-slate-400 opacity-60'
+                      }`}
+                    >
+                      {isChecked ? (
+                        <CheckSquare className="w-3.5 h-3.5" />
+                      ) : (
+                        <Square className="w-3.5 h-3.5" />
+                      )}
+                      <span>{doc.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── PANEL PENGATURAN KHUSUS HARI SENIN (BRIEFING GABUNGAN) ── */}
+          {isQATeam && (
+            <div className="bg-[var(--card-bg)] border border-[var(--border-main)] p-3 sm:p-4 rounded-2xl shadow-sm text-[var(--text-main)] space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-main)] pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                  <h4 className="text-xs sm:text-sm font-bold text-[var(--text-main)] uppercase tracking-wider font-mono flex items-center gap-2">
+                    📅 Pengaturan Khusus Hari Senin (Briefing Gabungan)
+                  </h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-mono">
+                    General Prep, General Lab &amp; Senam 2 Orang
+                  </span>
+                </div>
+                <div className="text-[11px] text-[var(--text-muted)] italic">
+                  *SPT/Manager otomatis bebas kuota (tidak dihitung beban tugas personil)
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {/* ── KOLOM 1: PREPARASI ── */}
+                <div className="bg-[var(--bg-main)] border border-[var(--border-main)] p-3 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-1.5">
+                    <span className="text-xs font-bold text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
+                      🏗️ Slot 1: Preparasi (General Preparation)
+                    </span>
+                    {seninConfig.prepPresenter !== 'SPV' ? (
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40">
+                        🛡️ Bebas Kuota
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-[var(--text-muted)] font-mono">
+                        Rotasi SPV
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Selector Pembawa Materi */}
+                  <div>
+                    <label className="text-[10px] uppercase font-mono font-bold text-[var(--text-muted)] block mb-1">
+                      Pembawa Materi:
+                    </label>
+                    <select
+                      value={seninConfig.prepPresenter}
+                      onChange={e => setSeninConfig(prev => ({ ...prev, prepPresenter: e.target.value }))}
+                      className="w-full bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none cursor-pointer focus:border-amber-500"
+                    >
+                      <option value="SPV">👤 SPV Preparation (Acak Otomatis)</option>
+                      <optgroup label="Pilihan SPT / Manager:">
+                        {managersList.length > 0 ? (
+                          managersList.map(m => (
+                            <option key={m.nik} value={m.nik}>
+                              👔 {m.nama} - {m.jabatan} ({m.pt})
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="04D20020842">👔 Deni Nugraha Perdiana - Preparation &amp; Laboratory Manager</option>
+                            <option value="02D24000009">👔 Arif Maulana Lessy - Preparation Superintendent</option>
+                          </>
+                        )}
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  {/* Searchable Materi Selector */}
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] uppercase font-mono font-bold text-[var(--text-muted)]">
+                        Materi Briefing (Searchable):
+                      </label>
+                      {seninConfig.prepMateriJudul && (
+                        <button
+                          type="button"
+                          onClick={() => setSeninConfig(prev => ({ ...prev, prepMateriJudul: '', prepMateriId: null }))}
+                          className="text-[9.5px] text-rose-500 hover:text-rose-600 font-semibold cursor-pointer"
+                        >
+                          ✕ Reset ke Acak Otomatis
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsPrepMateriPickerOpen(!isPrepMateriPickerOpen);
+                          setIsLabMateriPickerOpen(false);
+                        }}
+                        className="w-full bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none flex items-center justify-between gap-1 text-left hover:border-amber-500 cursor-pointer"
+                      >
+                        <span className="truncate">
+                          {seninConfig.prepMateriJudul ? `📘 ${seninConfig.prepMateriJudul}` : '🎲 Acak Otomatis (General Preparation)'}
+                        </span>
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      </button>
+
+                      {isPrepMateriPickerOpen && (
+                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[var(--card-bg)] border border-[var(--border-main)] rounded-xl shadow-2xl p-2 space-y-1.5 max-h-60 overflow-y-auto">
+                          <input
+                            type="text"
+                            placeholder="Cari materi preparation / general..."
+                            value={searchMateriPrepQuery}
+                            onChange={e => setSearchMateriPrepQuery(e.target.value)}
+                            className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-lg px-2 py-1 text-xs text-[var(--text-main)] outline-none focus:border-amber-500"
+                            autoFocus
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSeninConfig(prev => ({ ...prev, prepMateriJudul: '', prepMateriId: null }));
+                              setIsPrepMateriPickerOpen(false);
+                              setSearchMateriPrepQuery('');
+                            }}
+                            className={`w-full text-left px-2 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                              !seninConfig.prepMateriJudul
+                                ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                                : 'text-[var(--text-main)] hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <span>🎲</span>
+                            <span>Acak Otomatis (General Preparation)</span>
+                          </button>
+
+                          <div className="text-[9px] font-mono uppercase text-[var(--text-muted)] font-bold px-1 pt-1 border-t border-[var(--border-main)]">
+                            Daftar Materi Sesuai:
+                          </div>
+
+                          {materiList
+                            .filter(m => {
+                              const sec = (m.subKategori || '').toLowerCase();
+                              const isPrepOrGen = sec === 'preparation' || sec === 'general';
+                              if (!isPrepOrGen) return false;
+                              if (!searchMateriPrepQuery) return true;
+                              const q = searchMateriPrepQuery.toLowerCase();
+                              return (m.judul || '').toLowerCase().includes(q) || (m.kategori || '').toLowerCase().includes(q);
+                            })
+                            .slice(0, 30)
+                            .map(m => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => {
+                                  setSeninConfig(prev => ({
+                                    ...prev,
+                                    prepMateriJudul: m.judul,
+                                    prepMateriId: m.id,
+                                    prepMateriKategori: m.kategori
+                                  }));
+                                  setIsPrepMateriPickerOpen(false);
+                                  setSearchMateriPrepQuery('');
+                                }}
+                                className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors cursor-pointer flex flex-col gap-0.5 ${
+                                  seninConfig.prepMateriJudul === m.judul
+                                    ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold'
+                                    : 'text-[var(--text-main)] hover:bg-slate-100 dark:hover:bg-slate-800'
+                                }`}
+                              >
+                                <span className="line-clamp-1">{m.judul}</span>
+                                <span className="text-[9px] text-[var(--text-muted)] font-mono">
+                                  {m.kategori} • {m.subKategori || 'General'}
+                                </span>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── KOLOM 2: LABORATORIUM ── */}
+                <div className="bg-[var(--bg-main)] border border-[var(--border-main)] p-3 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-1.5">
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                      🔬 Slot 2: Laboratorium (General Laboratory)
+                    </span>
+                    {seninConfig.labPresenter !== 'SPV' ? (
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40">
+                        🛡️ Bebas Kuota
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-[var(--text-muted)] font-mono">
+                        Rotasi SPV
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Selector Pembawa Materi */}
+                  <div>
+                    <label className="text-[10px] uppercase font-mono font-bold text-[var(--text-muted)] block mb-1">
+                      Pembawa Materi:
+                    </label>
+                    <select
+                      value={seninConfig.labPresenter}
+                      onChange={e => setSeninConfig(prev => ({ ...prev, labPresenter: e.target.value }))}
+                      className="w-full bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none cursor-pointer focus:border-amber-500"
+                    >
+                      <option value="SPV">👤 SPV Laboratory (Acak Otomatis)</option>
+                      <optgroup label="Pilihan SPT / Manager:">
+                        {managersList.length > 0 ? (
+                          managersList.map(m => (
+                            <option key={m.nik} value={m.nik}>
+                              👔 {m.nama} - {m.jabatan} ({m.pt})
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="04D20020842">👔 Deni Nugraha Perdiana - Preparation &amp; Laboratory Manager</option>
+                            <option value="04D23000004">👔 Tigwa Anggawikara - Laboratory Superintendent</option>
+                          </>
+                        )}
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  {/* Searchable Materi Selector */}
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] uppercase font-mono font-bold text-[var(--text-muted)]">
+                        Materi Briefing (Searchable):
+                      </label>
+                      {seninConfig.labMateriJudul && (
+                        <button
+                          type="button"
+                          onClick={() => setSeninConfig(prev => ({ ...prev, labMateriJudul: '', labMateriId: null }))}
+                          className="text-[9.5px] text-rose-500 hover:text-rose-600 font-semibold cursor-pointer"
+                        >
+                          ✕ Reset ke Acak Otomatis
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsLabMateriPickerOpen(!isLabMateriPickerOpen);
+                          setIsPrepMateriPickerOpen(false);
+                        }}
+                        className="w-full bg-[var(--input-bg)] text-[var(--text-main)] border border-[var(--border-main)] rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none flex items-center justify-between gap-1 text-left hover:border-amber-500 cursor-pointer"
+                      >
+                        <span className="truncate">
+                          {seninConfig.labMateriJudul ? `📘 ${seninConfig.labMateriJudul}` : '🎲 Acak Otomatis (General Laboratory)'}
+                        </span>
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      </button>
+
+                      {isLabMateriPickerOpen && (
+                        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[var(--card-bg)] border border-[var(--border-main)] rounded-xl shadow-2xl p-2 space-y-1.5 max-h-60 overflow-y-auto">
+                          <input
+                            type="text"
+                            placeholder="Cari materi laboratory / general..."
+                            value={searchMateriLabQuery}
+                            onChange={e => setSearchMateriLabQuery(e.target.value)}
+                            className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-lg px-2 py-1 text-xs text-[var(--text-main)] outline-none focus:border-amber-500"
+                            autoFocus
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSeninConfig(prev => ({ ...prev, labMateriJudul: '', labMateriId: null }));
+                              setIsLabMateriPickerOpen(false);
+                              setSearchMateriLabQuery('');
+                            }}
+                            className={`w-full text-left px-2 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                              !seninConfig.labMateriJudul
+                                ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                                : 'text-[var(--text-main)] hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <span>🎲</span>
+                            <span>Acak Otomatis (General Laboratory)</span>
+                          </button>
+
+                          <div className="text-[9px] font-mono uppercase text-[var(--text-muted)] font-bold px-1 pt-1 border-t border-[var(--border-main)]">
+                            Daftar Materi Sesuai:
+                          </div>
+
+                          {materiList
+                            .filter(m => {
+                              const sec = (m.subKategori || '').toLowerCase();
+                              const isLabOrGen = sec === 'laboratory' || sec === 'general';
+                              if (!isLabOrGen) return false;
+                              if (!searchMateriLabQuery) return true;
+                              const q = searchMateriLabQuery.toLowerCase();
+                              return (m.judul || '').toLowerCase().includes(q) || (m.kategori || '').toLowerCase().includes(q);
+                            })
+                            .slice(0, 30)
+                            .map(m => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => {
+                                  setSeninConfig(prev => ({
+                                    ...prev,
+                                    labMateriJudul: m.judul,
+                                    labMateriId: m.id,
+                                    labMateriKategori: m.kategori
+                                  }));
+                                  setIsLabMateriPickerOpen(false);
+                                  setSearchMateriLabQuery('');
+                                }}
+                                className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-colors cursor-pointer flex flex-col gap-0.5 ${
+                                  seninConfig.labMateriJudul === m.judul
+                                    ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold'
+                                    : 'text-[var(--text-main)] hover:bg-slate-100 dark:hover:bg-slate-800'
+                                }`}
+                              >
+                                <span className="line-clamp-1">{m.judul}</span>
+                                <span className="text-[9px] text-[var(--text-muted)] font-mono">
+                                  {m.kategori} • {m.subKategori || 'General'}
+                                </span>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info Senam */}
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+                <Zap className="w-4 h-4 shrink-0 text-amber-500" />
+                <span>
+                  <strong>Slot 3 &amp; 4: Senam Bersama</strong> &mdash; 2 orang instruktur tiap sesi (Pagi &amp; Malam) diacak otomatis dari seluruh personil yang masuk kerja termasuk <strong>Crew/Operator</strong> dengan rotasi paling merata.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Action Toolbar for QA Builder */}
           {isQATeam && (
             <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--card-bg)] border border-[var(--border-main)] p-2.5 sm:p-3 rounded-2xl shadow-sm text-[var(--text-main)]">
@@ -3936,7 +4487,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     onClick={() => {
                       setEditingMateri(null);
                       setFormJudul('');
-                      setFormKategori('Teknis');
+                      setFormKategori('Safety');
                       setFormSubKategori('General');
                       setFormDivisi('Preparation');
                       setFormIsInternal(false);
@@ -4013,12 +4564,17 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               onChange={e => setMateriFilterKat(e.target.value)}
               className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-main)] outline-none cursor-pointer"
             >
-              <option value="All">Semua Kategori</option>
+              <option value="All">Semua Jenis Dokumen</option>
+              <option value="Health">🏥 Health</option>
+              <option value="Safety">🦺 Safety</option>
+              <option value="IK">📘 IK (Instruksi Kerja)</option>
               <option value="JSA">🛡️ JSA (Job Safety Analysis)</option>
               <option value="SOP">📙 SOP (Standard Operating Procedure)</option>
-              <option value="IK">📘 IK (Instruksi Kerja)</option>
-              <option value="Teknis">Teknis</option>
-              <option value="Non-Teknis">Non-Teknis</option>
+              <option value="SDS">🧪 SDS (Safety Data Sheet)</option>
+              <option value="Kebijakan">📋 Kebijakan</option>
+              <option value="IBPR">⚠️ IBPR</option>
+              <option value="IADL">🌿 IADL</option>
+              <option value="Senam">🧘 Senam</option>
             </select>
 
             <select
@@ -4026,11 +4582,14 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
               onChange={e => setMateriFilterSubKat(e.target.value)}
               className="bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-main)] outline-none cursor-pointer"
             >
-              <option value="All">Semua Sub-Kategori</option>
-              <option value="General">General (Semua Section)</option>
-              <option value="Laboratory">Laboratory &amp; QA</option>
+              <option value="All">Semua Section</option>
               <option value="Preparation">Preparation</option>
+              <option value="Laboratory">Laboratory</option>
               <option value="Maintenance">Maintenance</option>
+              <option value="Inventory Control">Inventory Control</option>
+              <option value="Quality Assurance">Quality Assurance</option>
+              <option value="Administration">Administration</option>
+              <option value="General">General (Semua Section)</option>
             </select>
           </div>
 
@@ -4115,8 +4674,18 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                               ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30'
                               : item.kategori === 'IK'
                               ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30'
-                              : item.kategori === 'Teknis' 
-                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                              : item.kategori === 'SDS'
+                              ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30'
+                              : item.kategori === 'Health'
+                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                              : item.kategori === 'Safety'
+                              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                              : item.kategori === 'Kebijakan'
+                              ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30'
+                              : item.kategori === 'IBPR'
+                              ? 'bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30'
+                              : item.kategori === 'IADL'
+                              ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30'
                               : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30'
                           }`}>
                             {item.kategori}
@@ -4124,13 +4693,7 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                         </td>
                         <td className="py-3 px-4 font-mono">
                           <span className="px-2 py-0.5 rounded bg-[var(--input-bg)] border border-[var(--border-main)] text-[var(--text-main)] text-[10px]">
-                            {item.subKategori === 'General' 
-                              ? 'General' 
-                              : item.subKategori === 'Laboratory'
-                              ? 'Teknis Lab & QA'
-                              : item.subKategori === 'Preparation'
-                              ? 'Teknis Prep'
-                              : 'Teknis Maint'}
+                            {item.subKategori || 'General'}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
@@ -4330,54 +4893,64 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[var(--text-main)] font-semibold mb-1">Kategori Utama</label>
+                  <label className="block text-[var(--text-main)] font-semibold mb-1">Jenis Dokumen *</label>
                   <select
                     value={formKategori}
                     onChange={e => setFormKategori(e.target.value)}
                     className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
                   >
-                    <option value="JSA">JSA (Job Safety Analysis)</option>
-                    <option value="SOP">SOP (Standard Operating Procedure)</option>
-                    <option value="IK">IK (Instruksi Kerja)</option>
-                    <option value="Teknis">Teknis</option>
-                    <option value="Non-Teknis">Non-Teknis</option>
-                    <option value="Senam">Senam</option>
+                    <option value="Health">🏥 Health</option>
+                    <option value="Safety">🦺 Safety</option>
+                    <option value="IK">📘 IK (Instruksi Kerja)</option>
+                    <option value="JSA">🛡️ JSA (Job Safety Analysis)</option>
+                    <option value="SOP">📙 SOP (Standard Operating Procedure)</option>
+                    <option value="SDS">🧪 SDS (Safety Data Sheet)</option>
+                    <option value="Kebijakan">📋 Kebijakan</option>
+                    <option value="IBPR">⚠️ IBPR</option>
+                    <option value="IADL">🌿 IADL</option>
+                    <option value="Senam">🧘 Senam</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-[var(--text-main)] font-semibold mb-1">Target Section / Divisi</label>
+                  <label className="block text-[var(--text-main)] font-semibold mb-1">Section / Sub-Kategori *</label>
                   <select
-                    value={formDivisi}
-                    onChange={e => setFormDivisi(e.target.value)}
+                    value={formSubKategori}
+                    onChange={e => {
+                      setFormSubKategori(e.target.value);
+                      if (e.target.value !== 'General') {
+                        setFormDivisi(e.target.value);
+                      }
+                    }}
                     className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
                   >
-                    <option value="All">Semua Section (All)</option>
                     <option value="Preparation">Preparation</option>
                     <option value="Laboratory">Laboratory</option>
                     <option value="Maintenance">Maintenance</option>
+                    <option value="Inventory Control">Inventory Control</option>
                     <option value="Quality Assurance">Quality Assurance (QA)</option>
-                    <option value="IC">Inventory Control (IC)</option>
                     <option value="Administration">Administration</option>
+                    <option value="General">General (Semua Section)</option>
                   </select>
                 </div>
               </div>
 
-              {(formKategori === 'Teknis' || formKategori === 'JSA' || formKategori === 'SOP' || formKategori === 'IK') && (
-                <div>
-                  <label className="block text-[var(--text-main)] font-semibold mb-1">Sub-Kategori Teknis</label>
-                  <select
-                    value={formSubKategori}
-                    onChange={e => setFormSubKategori(e.target.value)}
-                    className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
-                  >
-                    <option value="General">Teknis General (Semua Section)</option>
-                    <option value="Preparation">Teknis Preparation</option>
-                    <option value="Laboratory">Teknis Laboratory (Lab &amp; QA)</option>
-                    <option value="Maintenance">Teknis Maintenance</option>
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-[var(--text-main)] font-semibold mb-1">Target Divisi / Section</label>
+                <select
+                  value={formDivisi}
+                  onChange={e => setFormDivisi(e.target.value)}
+                  className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-xl p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
+                >
+                  <option value="All">Semua Section (All)</option>
+                  <option value="Preparation">Preparation</option>
+                  <option value="Laboratory">Laboratory</option>
+                  <option value="Maintenance">Maintenance</option>
+                  <option value="Quality Assurance">Quality Assurance (QA)</option>
+                  <option value="Inventory Control">Inventory Control (IC)</option>
+                  <option value="Administration">Administration</option>
+                </select>
+              </div>
 
               {/* Checkbox Materi Internal (Sabtu) */}
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
@@ -4858,20 +5431,28 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-[var(--text-muted)] font-semibold text-[11px] mb-1">Kategori</label>
+                    <label className="block text-[var(--text-muted)] font-semibold text-[11px] mb-1">Jenis Dokumen</label>
                     <select
                       value={bulkDefaultKategori}
                       onChange={e => setBulkDefaultKategori(e.target.value)}
                       className="w-full bg-[var(--input-bg)] border border-[var(--border-main)] rounded-lg p-2 text-xs text-[var(--text-main)] outline-none cursor-pointer"
                     >
-                      <option value="auto">✨ Otomatis (Deteksi Kata Kunci)</option>
-                      <option value="Teknis">Teknis</option>
-                      <option value="Non-Teknis">Non-Teknis</option>
+                      <option value="auto">✨ Otomatis (Deteksi Judul &amp; Kata Kunci)</option>
+                      <option value="Health">🏥 Health</option>
+                      <option value="Safety">🦺 Safety</option>
+                      <option value="IK">📘 IK (Instruksi Kerja)</option>
+                      <option value="JSA">🛡️ JSA (Job Safety Analysis)</option>
+                      <option value="SOP">📙 SOP (Standard Operating Procedure)</option>
+                      <option value="SDS">🧪 SDS (Safety Data Sheet)</option>
+                      <option value="Kebijakan">📋 Kebijakan</option>
+                      <option value="IBPR">⚠️ IBPR</option>
+                      <option value="IADL">🌿 IADL</option>
+                      <option value="Senam">🧘 Senam</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-[var(--text-muted)] font-semibold text-[11px] mb-1">Sub-Kategori</label>
+                    <label className="block text-[var(--text-muted)] font-semibold text-[11px] mb-1">Section / Sub-Kategori</label>
                     <select
                       value={bulkDefaultSubKategori}
                       onChange={e => setBulkDefaultSubKategori(e.target.value)}
@@ -4880,8 +5461,11 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                     >
                       <option value="General">General (Semua Section)</option>
                       <option value="Preparation">Preparation</option>
-                      <option value="Laboratory">Laboratory &amp; QA</option>
+                      <option value="Laboratory">Laboratory</option>
                       <option value="Maintenance">Maintenance</option>
+                      <option value="Inventory Control">Inventory Control</option>
+                      <option value="Quality Assurance">Quality Assurance</option>
+                      <option value="Administration">Administration</option>
                     </select>
                   </div>
 
@@ -4897,6 +5481,9 @@ export const P5MScreen: React.FC<P5MScreenProps> = ({ onBack, userProfile }) => 
                       <option value="Preparation">Preparation</option>
                       <option value="Laboratory">Laboratory</option>
                       <option value="Maintenance">Maintenance</option>
+                      <option value="Inventory Control">Inventory Control</option>
+                      <option value="Quality Assurance">Quality Assurance</option>
+                      <option value="Administration">Administration</option>
                     </select>
                   </div>
                 </div>
@@ -5375,15 +5962,19 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
   const availableTabs = useMemo(() => {
     return [
       { key: 'All', label: 'Semua' },
-      { key: 'JSA', label: '🛡️ JSA' },
-      { key: 'SOP', label: '📙 SOP' },
+      { key: 'Health', label: '💚 Health' },
+      { key: 'Safety', label: '🛡️ Safety' },
       { key: 'IK', label: '📘 IK' },
-      { key: 'Teknis', label: 'Teknis' },
-      { key: 'Non-Teknis', label: 'Non-Teknis' }
+      { key: 'JSA', label: '📋 JSA' },
+      { key: 'SOP', label: '📙 SOP' },
+      { key: 'SDS', label: '🧪 SDS' },
+      { key: 'IBPR', label: '⚠️ IBPR' },
+      { key: 'IADL', label: '🌱 IADL' },
+      { key: 'Kebijakan', label: '🏛️ Kebijakan' }
     ];
   }, []);
 
-  // Filtered materi list: bebas filter divisi agar semua materi baru muncul di dropdown
+  // Filtered materi list
   const filteredMateriList = useMemo(() => {
     return materiList.filter(m => {
       const judul = m.judul || '';
@@ -5394,20 +5985,6 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
       if (!matchSearch) return false;
 
       if (mKatFilter === 'All') return true;
-      if (mKatFilter === 'JSA') {
-        return m.kategori === 'JSA' || /\bjsa\b/i.test(judul) || judul.toLowerCase().includes('job safety analysis');
-      }
-      if (mKatFilter === 'SOP') {
-        return (m.kategori === 'SOP' || /\bsop\b/i.test(judul) || judul.toLowerCase().includes('standar operasional') || judul.toLowerCase().includes('standar operasi')) && m.kategori !== 'JSA';
-      }
-      if (mKatFilter === 'IK') {
-        return (m.kategori === 'IK' || /\bik\b/i.test(judul) || judul.toLowerCase().includes('instruksi kerja')) && m.kategori !== 'JSA' && m.kategori !== 'SOP';
-      }
-      if (mKatFilter === 'Teknis') {
-        return m.kategori === 'Teknis' || m.subKategori === 'Preparation' || m.subKategori === 'Laboratory' || m.subKategori === 'General' || m.subKategori === 'Maintenance' || m.subKategori === 'IC';
-      }
-      if (mKatFilter === 'Non-Teknis') return m.kategori === 'Non-Teknis';
-
       return m.kategori === mKatFilter || m.subKategori === mKatFilter;
     });
   }, [materiList, mSearch, mKatFilter]);
@@ -5611,6 +6188,11 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
             >
               {slot.nama || '— Tidak Ada SDM —'}
             </span>
+            {slot.isManagerSpt && (
+              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[9px] rounded-full shrink-0" title="Manajemen (Tidak dihitung beban tugas personil)">
+                👔 SPT/Manager
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -5752,6 +6334,7 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                           const usedLocs = usedMateriMap?.[itemKey] || [];
                           const isUsed = usedLocs.length > 0;
                           const isSelected = slot.materi === item.judul;
+                          const isRecentUsed = Boolean(item.lastUsed && (Date.now() - new Date(item.lastUsed).getTime() < 14 * 24 * 60 * 60 * 1000));
 
                           return (
                             <button
@@ -5789,10 +6372,10 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                               </div>
 
                               <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-500 flex-wrap">
-                                <span className={`px-1 rounded ${item.kategori === 'Teknis' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'}`}>
-                                  {item.kategori}
+                                <span className="px-1 rounded bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                                  {item.kategori || 'Safety'}
                                 </span>
-                                {item.subKategori && item.subKategori !== 'General' && (
+                                {item.subKategori && (
                                   <span className="text-slate-500">
                                     • {item.subKategori}
                                   </span>
@@ -5800,6 +6383,12 @@ const PresenterCard: React.FC<PresenterCardProps> = ({
                                 {item.fileUrl && (
                                   <span className="text-amber-600 flex items-center gap-0.5 font-semibold">
                                     <ImageIcon className="w-2.5 h-2.5" /> Flyer
+                                  </span>
+                                )}
+                                {isRecentUsed && !isUsed && (
+                                  <span className="px-1 py-0.2 text-[8px] font-semibold rounded bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5 whitespace-nowrap">
+                                    <Clock className="w-2.5 h-2.5 text-amber-500" />
+                                    <span>Dipakai {new Date(item.lastUsed).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
                                   </span>
                                 )}
                               </div>
