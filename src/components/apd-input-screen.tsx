@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield, ChevronLeft, ChevronRight, Lock, Table, List, Check, Pencil, ShieldCheck, History, Sparkles } from 'lucide-react';
+import { Search, AlertTriangle, Calendar, User, Save, Package, Trash2, Plus, PlusCircle, UserPlus, CheckCircle2, Upload, Loader2, ExternalLink, Download, X, FileText, ArrowLeft, Shield, ChevronLeft, ChevronRight, Lock, Table, List, Check, Pencil, ShieldCheck, History, Sparkles, Users } from 'lucide-react';
 import { ImageModal } from './image-modal';
 import { Button, Input, Select } from './ui';
 
@@ -10,6 +10,7 @@ import { parseGoogleDriveId } from '../lib/p5m-flyer';
 
 import { getApdSettings, getApdHistoryByNik, recordApdTakes, getEmployees, addEmployee, generateApdDocument, uploadApdProof, uploadPhotoToDrive, updateApdHistoryDate, deleteApdHistoryEntry, addManualApdHistory } from '../sheets-api';
 import { PageHeader } from './PageHeader';
+import { ApdEmployeeDirectory } from './apd-employee-directory';
 
 const APD_TYPES = [
   "Earplug",
@@ -146,6 +147,8 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
   const [apdViewMode, setApdViewMode] = useState<'table' | 'list'>('table');
   const [apdFilterQuery, setApdFilterQuery] = useState('');
   const [apdStatusTab, setApdStatusTab] = useState<'all' | 'eligible' | 'waiting' | 'never'>('all');
+  // Sheet modul: input distribusi per karyawan atau daftar seluruh karyawan per jabatan
+  const [apdSheet, setApdSheet] = useState<'distribusi' | 'karyawan'>('distribusi');
   const pcScrollRef = useRef<HTMLDivElement>(null);
 
   // State untuk upload BA Kerusakan Barang (PDF) jika belum waktunya pengambilan
@@ -896,11 +899,39 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
         </div>
       </div>
 
-      <PageHeader 
+      <PageHeader
         title="Distribusi & Pengambilan APD"
         description="Kelola dan pantau riwayat pengambilan Alat Pelindung Diri (APD) seluruh personil laboratorium & preparasi."
         icon={<Shield />}
       />
+
+      {/* Sheet: Input Distribusi | Daftar Karyawan */}
+      <div className="inline-flex p-1 rounded-2xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-sm">
+        {([
+          { k: 'distribusi', label: 'Input Distribusi', icon: <Package className="w-4 h-4" /> },
+          { k: 'karyawan', label: 'Daftar Karyawan', icon: <Users className="w-4 h-4" /> }
+        ] as const).map(t => (
+          <button
+            key={t.k}
+            type="button"
+            onClick={() => setApdSheet(t.k)}
+            className={`h-9 px-4 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors ${apdSheet === t.k ? 'bg-purple-600 text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {apdSheet === 'karyawan' ? (
+        <ApdEmployeeDirectory
+          onOpenEmployee={nik => {
+            setApdSheet('distribusi');
+            setSearchQuery(nik);
+            handleSearch(undefined, nik);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      ) : (<>
 
       {/* Quick Self-Check Banner */}
       {inspectorNik && (!employeeData || employeeData.nik !== inspectorNik) && (
@@ -2148,6 +2179,7 @@ export function ApdInputScreen({ onBack, onNav, inspectorNik, inspectorName }: A
           </form>
         </div>
       )}
+      </>)}
 
       {showAddedPopup && (
         <div className="fixed inset-0 z-[70] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
