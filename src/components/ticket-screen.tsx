@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import JSZip from 'jszip';
 import { Card, Button, Input, Textarea, Select } from './ui';
 import { getTickets, closeTicket, getGalleryPhotos } from '../sheets-api';
@@ -13,6 +13,7 @@ import { WhatsAppModal } from './whatsapp-modal';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
 import { PageHeader } from './PageHeader';
 import { StructuredFindingList, CompactFindingPreview, parseFindingDescription } from './StructuredFindingList';
+import { renderTicketCardAsJpgBlob } from '../utils/exportTicketRecapJpg';
 
 const formatImageUrl = (url: string) => {
   if (!url || url === '-') return null;
@@ -137,11 +138,59 @@ export function getInspectionPhotoFileName(photo: any, duplicateCount?: number):
   return resultName;
 }
 
+export function getTicketPhotoFileName(ticket: any, photoType: 'OPEN' | 'CLOSED', sequenceNumber: number = 1): string {
+  const isClosed = photoType === 'CLOSED' || ticket?.status?.toUpperCase() === 'CLOSED';
+  return `${isClosed ? 'Closed' : 'Open'}_${sequenceNumber}.jpg`;
+}
+
+export function extractTicketWeek(t: any): { label: string; key: string } {
+  const ticketId = t.ticketId || '';
+  const match = ticketId.match(/W(\d+)[\-_Y\s](\d{2,4})/i) || ticketId.match(/W(\d+)Y(\d+)/i);
+  if (match) {
+    const w = match[1].padStart(2, '0');
+    let y = match[2];
+    if (y.length === 2) y = "20" + y;
+    return {
+      label: `Minggu ke-${w} (${y})`,
+      key: `${y}${w}`
+    };
+  }
+  const matchW = ticketId.match(/W(\d+)/i);
+  if (matchW) {
+    const w = matchW[1].padStart(2, '0');
+    return {
+      label: `Minggu ke-${w} (2026)`,
+      key: `2026${w}`
+    };
+  }
+  if (t.date) {
+    try {
+      const d = new Date(t.date);
+      if (!isNaN(d.getTime())) {
+        const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        const dayNr = target.getUTCDay() || 7;
+        target.setUTCDate(target.getUTCDate() + 4 - dayNr);
+        const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+        const weekNo = Math.ceil((((target.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+        const y = target.getUTCFullYear();
+        const wStr = String(weekNo).padStart(2, '0');
+        return {
+          label: `Minggu ke-${wStr} (${y})`,
+          key: `${y}${wStr}`
+        };
+      }
+    } catch {}
+  }
+  return { label: "Minggu Lainnya", key: "000000" };
+}
+
 export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: string, inspectorNik: string }) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('OPEN');
+  const [selectedTicketWeek, setSelectedTicketWeek] = useState<string>('ALL');
+  const [downloadTargetWeek, setDownloadTargetWeek] = useState<string>('');
   
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
   const [closingNotes, setClosingNotes] = useState('');
@@ -149,6 +198,25 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
   const [waMessageToModal, setWaMessageToModal] = useState('');
   const [isClosing, setIsClosing] = useState(false);
   
+  // Auto Download Rekapan Temuan states
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [isZippingTickets, setIsZippingTickets] = useState(false);
+  const downloadDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (downloadDropdownRef.current && !downloadDropdownRef.current.contains(event.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    if (showDownloadMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDownloadMenu]);
+
   // Gallery states
   const [showGallery, setShowGallery] = useState(false);
   const [galleryPhotos, setGalleryPhotos] = useState<any[]>([]);
@@ -186,6 +254,15 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
   useEffect(() => {
     loadTickets();
   }, [filter]);
+
+  useEffect(() => {
+    // Prefetch available gallery weeks so week selector stays synced with calendar weeks
+    getGalleryPhotos().then(res => {
+      const weeksList = res?.availableWeeks || [];
+      if (weeksList.length > 0) setAvailableGalleryWeeks(weeksList);
+      if (res?.totalPhotos) setTotalGalleryPhotosCount(res.totalPhotos);
+    }).catch(() => {});
+  }, []);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -256,22 +333,58 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
   // Group tickets by Week
   const groupedTickets = useMemo(() => {
     return tickets.reduce((acc: any, t: any) => {
-      const match = (t.ticketId || '').match(/W(\d+)Y(\d+)/);
-      let weekLabel = "Minggu Lainnya";
-      let sortKey = "000000";
-      if (match) {
-        let w = match[1];
-        let y = "20" + match[2];
-        weekLabel = "Minggu ke-" + w + " (Tahun " + y + ")";
-        sortKey = y + w.padStart(2, '0');
-      }
-      if (!acc[sortKey]) acc[sortKey] = { label: weekLabel, tickets: [] };
-      acc[sortKey].tickets.push(t);
+      const { label, key } = extractTicketWeek(t);
+      if (!acc[key]) acc[key] = { label, tickets: [] };
+      acc[key].tickets.push(t);
       return acc;
     }, {});
   }, [tickets]);
 
   const sortedKeys = Object.keys(groupedTickets).sort((a,b) => b.localeCompare(a));
+
+  const availableTicketWeeks = useMemo(() => {
+    const weekMap = new Map<string, string>(); // label -> key
+
+    displayWeeks.forEach(w => {
+      const match = w.match(/Minggu ke-(\d+)\s*\((\d+)\)/i);
+      if (match) {
+        const key = `${match[2]}${match[1].padStart(2, '0')}`;
+        weekMap.set(w, key);
+      } else {
+        weekMap.set(w, w);
+      }
+    });
+
+    Object.keys(groupedTickets).forEach(key => {
+      const label = groupedTickets[key].label;
+      if (!weekMap.has(label) && label !== "Minggu Lainnya") {
+        weekMap.set(label, key);
+      }
+    });
+
+    return Array.from(weekMap.entries())
+      .map(([label, key]) => ({ label, key }))
+      .sort((a, b) => b.key.localeCompare(a.key));
+  }, [displayWeeks, groupedTickets]);
+
+  const displayKeys = useMemo(() => {
+    if (selectedTicketWeek === 'ALL') {
+      return sortedKeys;
+    }
+    return sortedKeys.filter(key => groupedTickets[key]?.label === selectedTicketWeek);
+  }, [sortedKeys, groupedTickets, selectedTicketWeek]);
+
+  useEffect(() => {
+    if (availableTicketWeeks.length > 0 && !downloadTargetWeek) {
+      setDownloadTargetWeek(availableTicketWeeks[0].label);
+    }
+  }, [availableTicketWeeks, downloadTargetWeek]);
+
+  useEffect(() => {
+    if (selectedTicketWeek && selectedTicketWeek !== 'ALL') {
+      setDownloadTargetWeek(selectedTicketWeek);
+    }
+  }, [selectedTicketWeek]);
 
   // Gallery Filters & Categorization
   const availableCategoriesInWeek = useMemo(() => {
@@ -376,6 +489,145 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
       toast.success(`Foto ${fileName} berhasil diunduh!`);
     } catch (err) {
       console.error("Gagal unduh foto satuan:", err);
+    }
+  };
+
+  const handleDownloadSingleTicketPhoto = async (ticket: any, photoType: 'OPEN' | 'CLOSED' = 'OPEN', asCardJpg: boolean = true) => {
+    try {
+      let blob: Blob;
+      if (asCardJpg) {
+        toast.info(`Membuat gambar kartu temuan (.jpg)...`);
+        blob = await renderTicketCardAsJpgBlob(ticket);
+      } else {
+        let url = photoType === 'CLOSED' ? (ticket.closingPhoto || ticket.photoUrl) : ticket.photoUrl;
+        if (!url || url === '-') {
+          toast.error("Foto tidak tersedia untuk diunduh.");
+          return;
+        }
+        toast.info(`Mengunduh foto...`);
+        blob = await fetchPhotoAsBlob(url);
+      }
+
+      const fileName = getTicketPhotoFileName(ticket, photoType, 1);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+      toast.success(`Gambar kartu temuan ${fileName} berhasil diunduh!`);
+    } catch (err) {
+      console.error("Gagal unduh gambar tiket:", err);
+      toast.error("Gagal mengunduh gambar kartu temuan.");
+    }
+  };
+
+  const handleDownloadTicketsZip = async (
+    targetType: 'OPEN' | 'CLOSED' | 'ALL' | 'CURRENT_WEEK',
+    customTickets?: any[],
+    customWeekLabel?: string,
+    rawPhotosOnly: boolean = false,
+    overrideWeek?: string
+  ) => {
+    setIsZippingTickets(true);
+    setZipProgress('Menyiapkan tiket...');
+    try {
+      let targetTickets: any[] = [];
+      if (customTickets && customTickets.length > 0) {
+        targetTickets = customTickets;
+      } else if (targetType === 'OPEN') {
+        targetTickets = filter === 'OPEN' ? tickets : await getTickets('OPEN');
+      } else if (targetType === 'CLOSED') {
+        targetTickets = filter === 'CLOSED' ? tickets : await getTickets('CLOSED');
+      } else {
+        targetTickets = filter === 'ALL' ? tickets : await getTickets('ALL');
+      }
+
+      const activeTargetWeek = overrideWeek || selectedTicketWeek;
+
+      // Filter by selected week if not ALL and not already customTickets
+      if (!customTickets && activeTargetWeek && activeTargetWeek !== 'ALL') {
+        targetTickets = targetTickets.filter((t: any) => extractTicketWeek(t).label === activeTargetWeek);
+      }
+
+      if (targetTickets.length === 0) {
+        toast.error(`Tidak ada tiket temuan yang tersedia untuk diunduh (${targetType}${activeTargetWeek && activeTargetWeek !== 'ALL' ? ` - ${activeTargetWeek}` : ''}).`);
+        setIsZippingTickets(false);
+        setZipProgress('');
+        return;
+      }
+
+      const zip = new JSZip();
+      let zipBaseName = `Rekapan_Kartu_Temuan_${targetType}`;
+      if (customWeekLabel) {
+        zipBaseName = `Rekapan_Kartu_Temuan_${customWeekLabel.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      } else if (activeTargetWeek && activeTargetWeek !== 'ALL') {
+        zipBaseName = `Rekapan_Kartu_Temuan_${targetType}_${activeTargetWeek.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      }
+      const folder = zip.folder(zipBaseName) || zip;
+
+      let openCounter = 0;
+      let closedCounter = 0;
+      let successCount = 0;
+
+      for (let i = 0; i < targetTickets.length; i++) {
+        const ticket = targetTickets[i];
+        setZipProgress(`${i + 1} / ${targetTickets.length}`);
+        try {
+          const isClosed = ticket.status?.toUpperCase() === 'CLOSED';
+          const photoType = isClosed ? 'CLOSED' : 'OPEN';
+
+          let blob: Blob;
+          if (rawPhotosOnly) {
+            const rawUrl = isClosed ? (ticket.closingPhoto || ticket.photoUrl) : ticket.photoUrl;
+            if (!rawUrl || rawUrl === '-') continue;
+            blob = await fetchPhotoAsBlob(rawUrl);
+          } else {
+            // Render exact card matching user's screenshot as JPG
+            blob = await renderTicketCardAsJpgBlob(ticket);
+          }
+
+          let fileName = '';
+          if (isClosed) {
+            closedCounter++;
+            fileName = `Closed_${closedCounter}.jpg`;
+          } else {
+            openCounter++;
+            fileName = `Open_${openCounter}.jpg`;
+          }
+
+          folder.file(fileName, blob);
+          successCount++;
+        } catch (err) {
+          console.warn(`Gagal render kartu tiket ${ticket.ticketId}:`, err);
+        }
+      }
+
+      if (successCount === 0) {
+        toast.error("Gagal membuat gambar kartu temuan.");
+        setIsZippingTickets(false);
+        setZipProgress('');
+        return;
+      }
+
+      setZipProgress('Mengompresi ZIP...');
+      const content = await zip.generateAsync({ type: 'blob' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(content);
+      link.download = `${zipBaseName}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+
+      toast.success(`Berhasil mengunduh ${successCount} kartu temuan (.jpg) dalam file ZIP!`);
+    } catch (err) {
+      console.error("Gagal membuat zip rekapan temuan:", err);
+      toast.error("Terjadi kesalahan saat memproses unduhan ZIP.");
+    } finally {
+      setIsZippingTickets(false);
+      setZipProgress('');
     }
   };
 
@@ -708,9 +960,18 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
             description={selectedTicket.ticketId}
             icon={<AlertTriangle className="w-6 h-6 text-amber-500" />}
           >
-            <Button onClick={() => setSelectedTicket(null)} variant="secondary" className="h-9 bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-md">
-              Kembali
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                onClick={() => handleDownloadSingleTicketPhoto(selectedTicket, isClosed ? 'CLOSED' : 'OPEN', true)} 
+                className="h-9 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                title="Unduh gambar kartu temuan lengkap persis formulir ini (.jpg)"
+              >
+                <Download className="w-3.5 h-3.5" /> Unduh Kartu (JPG)
+              </Button>
+              <Button onClick={() => setSelectedTicket(null)} variant="secondary" className="h-9 bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-md">
+                Kembali
+              </Button>
+            </div>
           </PageHeader>
 
           <Card className={`${isClosed ? 'border-t-4 border-t-teal-500' : 'border-t-4 border-t-rose-500'}`}>
@@ -725,13 +986,23 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                     onClick={() => setSelectedImage(selectedTicket.photoUrl)} 
                     className="w-full h-full object-contain cursor-pointer hover:opacity-95 transition-opacity" 
                   />
-                  <button
-                    type="button"
-                    onClick={() => setSelectedImage(selectedTicket.photoUrl)}
-                    className="absolute bottom-2 right-2 bg-slate-900/80 hover:bg-slate-900 text-white px-2.5 py-1.5 rounded-lg backdrop-blur-sm text-xs font-medium flex items-center gap-1"
-                  >
-                    <ZoomIn className="w-3.5 h-3.5" /> Perbesar
-                  </button>
+                  <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSingleTicketPhoto(selectedTicket, 'OPEN', true)}
+                      className="bg-slate-900/80 hover:bg-slate-900 text-white px-2.5 py-1.5 rounded-lg backdrop-blur-sm text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                      title="Unduh gambar kartu temuan lengkap persis formulir ini (.jpg)"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Unduh Kartu (JPG)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedImage(selectedTicket.photoUrl)}
+                      className="bg-slate-900/80 hover:bg-slate-900 text-white px-2.5 py-1.5 rounded-lg backdrop-blur-sm text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" /> Perbesar
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -782,13 +1053,23 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                           onClick={() => setSelectedImage(selectedTicket.closingPhoto)} 
                           className="w-full h-full object-contain cursor-pointer hover:opacity-95 transition-opacity" 
                         />
-                        <button
-                          type="button"
-                          onClick={() => setSelectedImage(selectedTicket.closingPhoto)}
-                          className="absolute bottom-2 right-2 bg-teal-900/80 hover:bg-teal-900 text-white px-2.5 py-1.5 rounded-lg backdrop-blur-sm text-xs font-medium flex items-center gap-1"
-                        >
-                          <ZoomIn className="w-3.5 h-3.5" /> Perbesar
-                        </button>
+                        <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadSingleTicketPhoto(selectedTicket, 'CLOSED', true)}
+                            className="bg-teal-900/80 hover:bg-teal-900 text-white px-2.5 py-1.5 rounded-lg backdrop-blur-sm text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                            title="Unduh gambar kartu temuan lengkap persis formulir ini (.jpg)"
+                          >
+                            <Download className="w-3.5 h-3.5" /> Unduh Kartu (JPG)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedImage(selectedTicket.closingPhoto)}
+                            className="bg-teal-900/80 hover:bg-teal-900 text-white px-2.5 py-1.5 rounded-lg backdrop-blur-sm text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                          >
+                            <ZoomIn className="w-3.5 h-3.5" /> Perbesar
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -873,6 +1154,150 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
             <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
+          {/* Filter Week Selector (Sama seperti Galeri Foto) */}
+          <div className="relative">
+            <select 
+              value={selectedTicketWeek} 
+              onChange={(e) => setSelectedTicketWeek(e.target.value)}
+              className="h-10 pl-9 pr-8 text-xs font-bold rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition-all outline-none focus:ring-2 focus:ring-teal-500/40 cursor-pointer shadow-xs appearance-none max-w-[210px] sm:max-w-[250px] truncate"
+              title="Pilih Minggu Inspeksi (Filter Temuan)"
+            >
+              <option value="ALL" className="py-1">🗓️ Semua Minggu</option>
+              {availableTicketWeeks.map((wk, idx) => {
+                const count = groupedTickets[wk.key]?.tickets?.length || 0;
+                return (
+                  <option key={wk.label} value={wk.label} className="py-1">
+                    {idx === 0 
+                      ? `⭐ ${wk.label} (Minggu Berjalan)${count > 0 ? ` (${count})` : ''}` 
+                      : `📅 ${wk.label}${count > 0 ? ` (${count})` : ''}`}
+                  </option>
+                );
+              })}
+            </select>
+            <CalendarIcon className="w-3.5 h-3.5 text-teal-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+
+          {/* Tombol Auto Download Rekapan Temuan (ZIP) */}
+          <div className="relative" ref={downloadDropdownRef}>
+            <button 
+              type="button"
+              onClick={() => setShowDownloadMenu(prev => !prev)}
+              disabled={isZippingTickets}
+              className="h-10 px-3.5 sm:px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-950/30 border border-indigo-400/30 transition-all transform hover:scale-[1.02] active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Auto Download Rekapan Foto Temuan Inspeksi (ZIP)"
+            >
+              {isZippingTickets ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span className="font-mono">{zipProgress || 'Memproses...'}</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 text-white" />
+                  <span>Auto Download</span>
+                  <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                </>
+              )}
+            </button>
+
+            {showDownloadMenu && (
+              <div className="absolute right-0 mt-2 w-84 bg-white rounded-2xl shadow-2xl border border-slate-200 py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="px-4 pb-2.5 border-b border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Rekapan Kartu Temuan (.JPG)</p>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                      Weekly / Custom
+                    </span>
+                  </div>
+
+                  {/* Selector Minggu khusus untuk Auto Download */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                      <CalendarIcon className="w-3.5 h-3.5 text-teal-600" />
+                      <span>Target Minggu yang Diunduh:</span>
+                    </label>
+                    <select
+                      value={downloadTargetWeek}
+                      onChange={(e) => setDownloadTargetWeek(e.target.value)}
+                      className="w-full h-8.5 px-2.5 text-xs font-bold rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-300 transition-all outline-none focus:ring-2 focus:ring-teal-500/40 cursor-pointer"
+                    >
+                      {availableTicketWeeks.map((wk, idx) => (
+                        <option key={wk.label} value={wk.label}>
+                          {idx === 0 ? `⭐ ${wk.label} (Minggu Berjalan)` : `📅 ${wk.label}`}
+                        </option>
+                      ))}
+                      <option value="ALL">🗓️ Semua Minggu (Seluruh Data)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pt-1.5 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => { setShowDownloadMenu(false); handleDownloadTicketsZip('OPEN', undefined, undefined, false, downloadTargetWeek); }}
+                    className="w-full px-4 py-2.5 text-left text-xs hover:bg-rose-50 text-slate-700 hover:text-rose-700 flex items-center gap-2.5 transition-colors cursor-pointer group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 group-hover:text-rose-700">Unduh Kartu OPEN (JPG ZIP)</p>
+                      <p className="text-[10px] text-slate-400">
+                        {downloadTargetWeek !== 'ALL' ? `Khusus kartu OPEN ${downloadTargetWeek}` : 'Seluruh kartu OPEN dari semua minggu'}
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setShowDownloadMenu(false); handleDownloadTicketsZip('CLOSED', undefined, undefined, false, downloadTargetWeek); }}
+                    className="w-full px-4 py-2.5 text-left text-xs hover:bg-teal-50 text-slate-700 hover:text-teal-700 flex items-center gap-2.5 transition-colors cursor-pointer group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 group-hover:text-teal-700">Unduh Kartu CLOSED (JPG ZIP)</p>
+                      <p className="text-[10px] text-slate-400">
+                        {downloadTargetWeek !== 'ALL' ? `Khusus kartu CLOSED ${downloadTargetWeek}` : 'Seluruh kartu CLOSED dari semua minggu'}
+                      </p>
+                    </div>
+                  </button>
+
+                  <div className="my-1 border-t border-slate-100" />
+
+                  <button
+                    type="button"
+                    onClick={() => { setShowDownloadMenu(false); handleDownloadTicketsZip('ALL', undefined, undefined, false, downloadTargetWeek); }}
+                    className="w-full px-4 py-2.5 text-left text-xs hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 flex items-center gap-2.5 transition-colors cursor-pointer group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Archive className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 group-hover:text-indigo-700">Unduh Semua Kartu (OPEN & CLOSED)</p>
+                      <p className="text-[10px] text-slate-400">
+                        {downloadTargetWeek !== 'ALL' ? `Seluruh temuan ${downloadTargetWeek}` : 'Seluruh temuan dari semua minggu'}
+                      </p>
+                    </div>
+                  </button>
+
+                  <div className="my-1 border-t border-slate-100" />
+
+                  <button
+                    type="button"
+                    onClick={() => { setShowDownloadMenu(false); handleDownloadTicketsZip('ALL', undefined, undefined, true, downloadTargetWeek); }}
+                    className="w-full px-4 py-2 text-left text-[11px] hover:bg-slate-50 text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Unduh Foto Mentah Saja (Tanpa Kartu Teks)</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Tombol Buka Galeri Foto */}
           <button 
             onClick={loadGallery}
@@ -894,6 +1319,23 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
         inspectorNik={inspectorNik} 
       />
 
+      {/* Active Week Filter Indicator Banner */}
+      {selectedTicketWeek !== 'ALL' && (
+        <div className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded-2xl px-4 py-3 text-xs text-teal-900 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="w-4 h-4 text-teal-600 shrink-0" />
+            <span>Menampilkan temuan khusus: <strong className="font-bold text-teal-950">{selectedTicketWeek}</strong></span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedTicketWeek('ALL')}
+            className="text-xs font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer"
+          >
+            Tampilkan Semua Minggu
+          </button>
+        </div>
+      )}
+
       {/* Ticket List Grouped by Week */}
       <div className="space-y-8">
         {loading ? (
@@ -907,17 +1349,64 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
              <p className="text-slate-700 font-bold text-base">Tidak Ada Tiket Temuan</p>
              <p className="text-slate-400 text-xs mt-1">Semua temuan pada status ini nihil atau telah selesai.</p>
            </div>
+        ) : displayKeys.length === 0 ? (
+           <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
+             <CalendarIcon className="w-12 h-12 text-slate-300 mx-auto" />
+             <p className="text-slate-700 font-bold text-base">Tidak Ada Tiket pada {selectedTicketWeek}</p>
+             <p className="text-slate-400 text-xs">Tidak ada temuan inspeksi dengan status {filter === 'OPEN' ? 'Terbuka' : filter === 'CLOSED' ? 'Selesai' : 'apapun'} pada minggu ini.</p>
+             <button
+               type="button"
+               onClick={() => setSelectedTicketWeek('ALL')}
+               className="px-4 py-2 text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-all cursor-pointer shadow-2xs"
+             >
+               Tampilkan Semua Minggu
+             </button>
+           </div>
         ) : (
-           sortedKeys.map((key) => {
+           displayKeys.map((key) => {
               const group = groupedTickets[key];
               return (
                 <div key={key} className="space-y-4">
-                  <div className="flex items-center gap-2 mb-2 px-1">
-                     <CalendarIcon className="w-4 h-4 text-amber-500" />
-                     <h3 className="font-bold text-slate-800 text-base">{group.label}</h3>
-                     <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
-                       {group.tickets.length} Tiket
-                     </span>
+                  <div className="flex items-center justify-between gap-2 mb-2 px-1 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4 text-amber-500" />
+                      <h3 className="font-bold text-slate-800 text-base">{group.label}</h3>
+                      <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
+                        {group.tickets.length} Tiket
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadTicketsZip('OPEN', group.tickets.filter((t: any) => t.status?.toUpperCase() === 'OPEN'), `${group.label}_OPEN`)}
+                        disabled={isZippingTickets}
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                        title={`Unduh kartu temuan OPEN khusus ${group.label}`}
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Unduh OPEN ({group.tickets.filter((t: any) => t.status?.toUpperCase() === 'OPEN').length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadTicketsZip('CLOSED', group.tickets.filter((t: any) => t.status?.toUpperCase() === 'CLOSED'), `${group.label}_CLOSED`)}
+                        disabled={isZippingTickets}
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                        title={`Unduh kartu temuan CLOSED khusus ${group.label}`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Unduh CLOSED ({group.tickets.filter((t: any) => t.status?.toUpperCase() === 'CLOSED').length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadTicketsZip('CURRENT_WEEK', group.tickets, group.label)}
+                        disabled={isZippingTickets}
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                        title={`Unduh seluruh kartu temuan ${group.label}`}
+                      >
+                        <Download className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Unduh Semua ({group.tickets.length})</span>
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                      {group.tickets.map((t: any, idx: number) => {
@@ -944,18 +1433,31 @@ export function TicketScreen({ inspectorName, inspectorNik }: { inspectorName: s
                                      alt="Temuan" 
                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                                    />
-                                   {/* Direct Zoom Button */}
-                                   <button
-                                     type="button"
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       setSelectedImage(fotoUrl);
-                                     }}
-                                     className="absolute top-2 right-2 bg-slate-900/75 hover:bg-slate-900 text-white p-1.5 rounded-md backdrop-blur-sm shadow transition-opacity opacity-80 hover:opacity-100 flex items-center gap-1 text-[11px]"
-                                     title="Perbesar Foto"
-                                   >
-                                     <ZoomIn className="w-3.5 h-3.5" />
-                                   </button>
+                                   {/* Direct Action Buttons on Thumbnail */}
+                                   <div className="absolute top-2 right-2 flex items-center gap-1">
+                                     <button
+                                       type="button"
+                                       onClick={(e) => {
+                                         e.stopPropagation();
+                                         handleDownloadSingleTicketPhoto(t, isOp ? 'OPEN' : 'CLOSED');
+                                       }}
+                                       className="bg-slate-900/75 hover:bg-slate-900 text-white p-1.5 rounded-md backdrop-blur-sm shadow transition-opacity opacity-80 hover:opacity-100 flex items-center gap-1 text-[11px] cursor-pointer"
+                                       title="Unduh Foto Ini (Format Standar)"
+                                     >
+                                       <Download className="w-3.5 h-3.5" />
+                                     </button>
+                                     <button
+                                       type="button"
+                                       onClick={(e) => {
+                                         e.stopPropagation();
+                                         setSelectedImage(fotoUrl);
+                                       }}
+                                       className="bg-slate-900/75 hover:bg-slate-900 text-white p-1.5 rounded-md backdrop-blur-sm shadow transition-opacity opacity-80 hover:opacity-100 flex items-center gap-1 text-[11px] cursor-pointer"
+                                       title="Perbesar Foto"
+                                     >
+                                       <ZoomIn className="w-3.5 h-3.5" />
+                                     </button>
+                                   </div>
                                 </div>
                               )}
 

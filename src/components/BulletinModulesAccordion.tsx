@@ -33,7 +33,8 @@ import {
   GraduationCap,
   Award,
   Utensils,
-  X
+  X,
+  Sparkles,
 } from 'lucide-react';
 import { getKtaUrl } from '../sheets-api';
 import { groupModuleItems } from '../utils/module-groups';
@@ -118,6 +119,7 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
       pillColor: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-800/60',
       items: [
         { id: 'quiz', title: "Quiz Safety & SOP", desc: "Uji pemahaman prosedur", icon: <BookOpen className="w-5 h-5" />, color: 'emerald', action: () => handleNavigate('quiz') },
+        { id: 'parampaa', title: "Kuis Parampaa", desc: "Game asah otak offline", icon: <Sparkles className="w-5 h-5" />, color: 'emerald', action: () => handleNavigate('parampaa') },
         { id: 'manual', title: "Buku Panduan", desc: "User Manual Sistem", icon: <Info className="w-5 h-5" />, color: 'emerald', action: () => handleNavigate('manual') },
         { id: 'quiz-admin', title: "Manajemen Quiz", desc: "Tambah, Edit & Hapus Soal", icon: <Settings className="w-5 h-5" />, color: 'emerald', action: () => handleNavigate('quiz-admin') },
       ]
@@ -133,7 +135,7 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
         { id: 'induksi', title: "Induksi Internal", desc: "Form & Laporan Induksi", icon: <ShieldCheck className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('induksi') },
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('employee-database') },
         { id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('p5m') },
-        { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('agenda') },
+        { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('agenda?tab=Private') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('roster-admin') },
         { id: 'meal-orders', title: "Orderan Makanan", desc: "Order harian Kantin & Lapangan", icon: <Utensils className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('meal-orders') },
       ]

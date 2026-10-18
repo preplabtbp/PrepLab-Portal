@@ -15,12 +15,36 @@ import {
 } from "../utils.js";
 import webpush from 'web-push';
 import path from "path";
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../middleware/auth.js';
 
 export const router = Router();
 
 router.get("/api/agenda", async (req, res) => {
     try {
-      const data: any[] = await db.select().from(agendaEvents);
+      let requesterNik = String(req.query.nik || '').trim();
+      if (!requesterNik && (req as any).cookies?.token) {
+        try {
+          const decoded = jwt.verify((req as any).cookies.token, JWT_SECRET) as any;
+          if (decoded?.nik) requesterNik = String(decoded.nik).trim();
+        } catch(e) {}
+      }
+
+      const allAgenda: any[] = await db.select().from(agendaEvents);
+      
+      // Filter agenda pribadi: pastikan setiap user HANYA mendapatkan agenda pribadinya masing-masing
+      const data: any[] = allAgenda.filter(evt => {
+        const kat = (evt.kategori || '').toLowerCase();
+        const isPrivate = kat === 'private' || kat === 'personal' || kat === 'pribadi';
+        if (isPrivate) {
+          if (!requesterNik) return false;
+          const creatorNik = String(evt.creatorNik || '').trim();
+          const pic = String(evt.pic || '').trim();
+          return creatorNik.toUpperCase() === requesterNik.toUpperCase() ||
+                 pic.toUpperCase() === requesterNik.toUpperCase();
+        }
+        return true;
+      });
       
       const allEmps = await db.select().from(employees);
       const currentYear = new Date().getFullYear();

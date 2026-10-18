@@ -233,7 +233,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
               {/* Tombol Menu Agenda Personal */}
               <button
                 type="button"
-                onClick={() => navigate('/agenda')}
+                onClick={() => navigate('/agenda?tab=Private')}
                 className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-xs transition-all text-left cursor-pointer group active:scale-[0.98]"
                 title="Buka Menu Agenda Personal (Jadwal & kegiatan)"
               >
@@ -324,7 +324,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
               </span>
               <button
                 type="button"
-                onClick={() => navigate('/agenda')}
+                onClick={() => navigate('/agenda?tab=Private')}
                 className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
               >
                 Buka Agenda →
@@ -336,7 +336,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
           <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
             <button
               type="button"
-              onClick={() => navigate('/agenda')}
+              onClick={() => navigate('/agenda?tab=Private')}
               className="w-full flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 text-xs font-bold transition-all cursor-pointer group shadow-2xs"
               title="Buka Menu Agenda Personal"
             >

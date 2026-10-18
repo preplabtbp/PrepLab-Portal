@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kuis Parampaa — Portal Game Offline</title>
+  <style>
+    :root {
+      --bg-dark: #0a0f1d;
+      --card-bg: rgba(18, 24, 38, 0.85);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #10b981;
+      --primary-glow: rgba(16, 185, 129, 0.35);
+      --accent: #f59e0b;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      user-select: none;
+    }
+    body {
+      background: radial-gradient(circle at 50% 10%, #1e293b 0%, var(--bg-dark) 70%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      overflow-x: hidden;
+    }
+    header {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+    .brand-text h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #34d399, #6ee7b7, #fbbf24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-text p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .offline-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+    .tabs-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+      width: 100%;
+      max-width: 960px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 12px 18px;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .tab-btn:hover {
+      background: rgba(51, 65, 85, 0.7);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 95, 70, 0.3));
+      border-color: #10b981;
+      color: #34d399;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+    }
+    .tab-btn.active-2 {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(180, 83, 9, 0.3));
+      border-color: #f59e0b;
+      color: #fbbf24;
+      box-shadow: 0 4px 20px rgba(245, 158, 11, 0.25);
+    }
+    .arcade-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 960px;
+      background: #000;
+      border: 2px solid #334155;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), inset 0 0 30px rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .game-viewport {
+      width: 100%;
+      height: 560px;
+      max-height: 75vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      position: relative;
+    }
+    #player-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #player-container ruffle-player {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+    .arcade-toolbar {
+      width: 100%;
+      background: #0f172a;
+      border-top: 1px solid #1e293b;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tool-btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .tool-btn:hover {
+      background: #334155;
+      border-color: #64748b;
+      transform: translateY(-1px);
+    }
+    .info-grid {
+      width: 100%;
+      max-width: 960px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .info-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+    .info-card h3 {
+      font-size: 0.88rem;
+      color: #34d399;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .info-card ul {
+      padding-left: 18px;
+      color: var(--text-muted);
+    }
+    .info-card li {
+      margin-bottom: 4px;
+    }
+    .loading-overlay {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 15, 29, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 10;
+      transition: opacity 0.3s ease;
+    }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid rgba(16, 185, 129, 0.2);
+      border-top-color: #10b981;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  <script src="./ruffle/ruffle.js"></script>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">👾</div>
+      <div class="brand-text">
+        <h1>KUIS PARAMPAA</h1>
+        <p>Portal Offline Game Asah Otak Legendaris — By Masova</p>
+      </div>
+    </div>
+    <div class="offline-badge">
+      <div class="pulse-dot"></div>
+      <span>100% OFFLINE</span>
+    </div>
+  </header>
+
+  <div class="tabs-container">
+    <button id="tab-p1" class="tab-btn active" onclick="switchGame(1)">
+      <span>🟢</span>
+      <span>Kuis Parampaa 1 (Level 1 - 100)</span>
+    </button>
+    <button id="tab-p2" class="tab-btn" onclick="switchGame(2)">
+      <span>🎃</span>
+      <span>Kuis Parampaa 2 (Level 101 - 200)</span>
+    </button>
+  </div>
+
+  <div class="arcade-wrapper">
+    <div class="game-viewport" id="viewport">
+      <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+        <p id="loading-text" style="font-weight: 600; color: #94a3b8;">Memuat Ruffle Flash Engine...</p>
+      </div>
+      <div id="player-container"></div>
+    </div>
+
+    <div class="arcade-toolbar">
+      <div class="tool-group">
+        <button class="tool-btn" onclick="restartCurrentGame()" title="Muat ulang game dari level awal">
+          🔄 Mulai Ulang
+        </button>
+        <button class="tool-btn" onclick="toggleFullscreen()" title="Layar Penuh">
+          ⛶ Layar Penuh
+        </button>
+      </div>
+      <div class="tool-group">
+        <span style="font-size: 0.75rem; color: #94a3b8;">Klik area game untuk berinteraksi & audio</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card">
+      <h3>💡 Tips Bermain</h3>
+      <ul>
+        <li>Jangan percaya apa yang Anda lihat pertama kali! Jawaban sering berupa pelintiran kata atau gambar.</li>
+        <li>Terkadang tombol jawaban tersembunyi, bergerak cepat, atau berada di luar kotak pertanyaan.</li>
+        <li>Waktu berjalan mundur, tetap fokus dan jangan ragu mencoba!</li>
+      </ul>
+    </div>
+    <div class="info-card">
+      <h3>⚡ Kontrol & Fitur</h3>
+      <ul>
+        <li><strong>Mouse:</strong> Klik kiri untuk menjawab & berinteraksi.</li>
+        <li><strong>Keyboard:</strong> Beberapa level butuh tombol angka/huruf tertentu.</li>
+        <li><strong>Offline Ready:</strong> Berjalan di Chrome/Edge/Firefox tanpa butuh koneksi internet.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    let currentGame = 1;
+    let ruffleInstance = null;
+    let currentPlayer = null;
+
+    const gameFiles = {
+      1: './games/parampaa1.swf',
+      2: './games/parampaa2.swf'
+    };
+
+    async function initRuffle(initialGame = 1) {
+      const loading = document.getElementById('loading');
+      const loadingText = document.getElementById('loading-text');
+
+      try {
+        if (!window.RufflePlayer) {
+          loadingText.innerText = 'Gagal memuat Ruffle Engine. Pastikan file ruffle.js ada.';
+          return;
+        }
+
+        loadingText.innerText = 'Menyiapkan WebAssembly Flash Player...';
+        ruffleInstance = window.RufflePlayer.newest();
+        loadGame(initialGame);
+      } catch (err) {
+        console.error('Error init Ruffle:', err);
+        loadingText.innerText = 'Error: ' + err.message;
+      }
+    }
+
+    function loadGame(gameNumber) {
+      const loading = document.getElementById('loading');
+      loading.style.display = 'flex';
+      loading.style.opacity = '1';
+
+      const container = document.getElementById('player-container');
+      container.innerHTML = '';
+
+      currentGame = gameNumber;
+
+      const tab1 = document.getElementById('tab-p1');
+      const tab2 = document.getElementById('tab-p2');
+      if (gameNumber === 1) {
+        tab1.className = 'tab-btn active';
+        tab2.className = 'tab-btn';
+      } else {
+        tab1.className = 'tab-btn';
+        tab2.className = 'tab-btn active-2';
+      }
+
+      currentPlayer = ruffleInstance.createPlayer();
+      currentPlayer.style.width = '100%';
+      currentPlayer.style.height = '100%';
+      container.appendChild(currentPlayer);
+
+      currentPlayer.load({
+        url: gameFiles[gameNumber],
+        parameters: '',
+        autoplay: 'on',
+        backgroundColor: '#000000',
+        letterbox: 'on',
+        allowFullscreen: true,
+        openUrlMode: 'confirm'
+      }).then(() => {
+        setTimeout(() => {
+          loading.style.opacity = '0';
+          setTimeout(() => { loading.style.display = 'none'; }, 300);
+        }, 500);
+      }).catch(err => {
+        console.error('Load game error:', err);
+        document.getElementById('loading-text').innerText = 'Gagal memuat SWF: ' + err.message;
+      });
+    }
+
+    function switchGame(num) {
+      if (num === currentGame && currentPlayer) return;
+      loadGame(num);
+    }
+
+    function restartCurrentGame() {
+      loadGame(currentGame);
+    }
+
+    function toggleFullscreen() {
+      const elem = document.getElementById('viewport');
+      if (!document.fullscreenElement) {
+        if (elem.requestFullscreen) elem.requestFullscreen();
+        else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const hash = window.location.hash;
+      const initialGame = hash.includes('2') ? 2 : 1;
+      initRuffle(initialGame);
+    });
+
+    window.addEventListener('hashchange', () => {
+      const hash = window.location.hash;
+      const targetGame = hash.includes('2') ? 2 : 1;
+      if (targetGame !== currentGame) {
+        loadGame(targetGame);
+      }
+    });
+  </script>
+</body>
+</html>
