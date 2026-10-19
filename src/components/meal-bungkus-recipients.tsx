@@ -1,7 +1,22 @@
-import React, { useRef, useState } from 'react';
-import { Download, FileSpreadsheet, Copy, Check, Users, Loader2, Sliders } from 'lucide-react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
+import {
+  Download,
+  FileSpreadsheet,
+  Copy,
+  Check,
+  Users,
+  Loader2,
+  Sliders,
+  Eye,
+  EyeOff,
+  Edit3,
+  RotateCcw,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+
 const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const parseYmd = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)); };
@@ -26,6 +41,83 @@ export interface RecipientOrderRow {
   orderDate?: string;
 }
 
+export type BungkusColumnKey =
+  | 'pagi'
+  | 'siangPrep'
+  | 'siangLabMaint'
+  | 'sorePrep'
+  | 'soreLabMaint'
+  | 'malamPrep'
+  | 'malamLabMaint';
+
+interface BungkusColumnDef {
+  key: BungkusColumnKey;
+  groupKey: 'PAGI' | 'SIANG' | 'SORE' | 'MALAM';
+  groupLabel: string;
+  subLabel: string;
+  groupBg: string;
+  shortLabel: string;
+}
+
+const BUNGKUS_COLUMNS: BungkusColumnDef[] = [
+  {
+    key: 'pagi',
+    groupKey: 'PAGI',
+    groupLabel: '🌅 PAGI',
+    subLabel: 'Prep, Lab & Maint',
+    groupBg: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
+    shortLabel: 'Pagi',
+  },
+  {
+    key: 'siangPrep',
+    groupKey: 'SIANG',
+    groupLabel: '☀️ SIANG',
+    subLabel: 'Preparasi',
+    groupBg: 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
+    shortLabel: 'Siang Prep',
+  },
+  {
+    key: 'siangLabMaint',
+    groupKey: 'SIANG',
+    groupLabel: '☀️ SIANG',
+    subLabel: 'Lab & Maint',
+    groupBg: 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
+    shortLabel: 'Siang Lab',
+  },
+  {
+    key: 'sorePrep',
+    groupKey: 'SORE',
+    groupLabel: '🌇 SORE',
+    subLabel: 'Preparasi',
+    groupBg: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+    shortLabel: 'Sore Prep',
+  },
+  {
+    key: 'soreLabMaint',
+    groupKey: 'SORE',
+    groupLabel: '🌇 SORE',
+    subLabel: 'Lab & Maint',
+    groupBg: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+    shortLabel: 'Sore Lab',
+  },
+  {
+    key: 'malamPrep',
+    groupKey: 'MALAM',
+    groupLabel: '🌙 MALAM',
+    subLabel: 'Preparasi',
+    groupBg: 'linear-gradient(135deg, #4338ca 0%, #3730a3 100%)',
+    shortLabel: 'Malam Prep',
+  },
+  {
+    key: 'malamLabMaint',
+    groupKey: 'MALAM',
+    groupLabel: '🌙 MALAM',
+    subLabel: 'Lab & Maint',
+    groupBg: 'linear-gradient(135deg, #4338ca 0%, #3730a3 100%)',
+    shortLabel: 'Malam Lab',
+  },
+];
+
 const portions = (v: string | null | undefined) => {
   const n = Number(String(v || '').replace(',', '.'));
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -35,6 +127,13 @@ const isPrepSection = (r: RecipientOrderRow) => {
   const s = String(r.section || '').toLowerCase();
   return s.includes('prep') || s.includes('preparasi');
 };
+
+interface RecipientItem {
+  id: string;
+  nama: string;
+  nik?: string;
+  section?: string;
+}
 
 export function MealBungkusRecipientsTable({
   date,
@@ -47,70 +146,216 @@ export function MealBungkusRecipientsTable({
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Mode Edit
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [newRecipientInputs, setNewRecipientInputs] = useState<Record<BungkusColumnKey, string>>({
+    pagi: '',
+    siangPrep: '',
+    siangLabMaint: '',
+    sorePrep: '',
+    soreLabMaint: '',
+    malamPrep: '',
+    malamLabMaint: '',
+  });
+
   // Pengaturan kelegaan kolom dinamis (User Adjustable)
   const [nameColWidth, setNameColWidth] = useState<number>(240); // 240px memastikan nama panjang muat utuh
   const [noColWidth, setNoColWidth] = useState<number>(22);       // 22px ramping & proporsional
   const [fontSize, setFontSize] = useState<number>(11);          // Ukuran font teks nama
 
-  // Hitung total lebar lembar secara dinamis agar 14 kolom muat dengan sangat lega
-  const sheetWidth = Math.max(1780, 7 * (noColWidth + nameColWidth) + 60);
+  // Hitung awal data penerima dari order rows
+  const initialData = useMemo(() => {
+    const pagiList = rows
+      .filter(r => portions(r.pagiLapangan) > 0 || (r.catatan || '').toLowerCase().includes('pagi'))
+      .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
+      .map((r, i) => ({ id: `pagi-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
 
-  // Filter & Urutkan daftar penerima sesuai porsi lapangan / bungkusan
-  // 1. PAGI: Semua Preparasi, Laboratorium & Maintenance
-  const pagi = rows
-    .filter(r => portions(r.pagiLapangan) > 0 || (r.catatan || '').toLowerCase().includes('pagi'))
-    .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama));
+    const siangAll = rows.filter(r => portions(r.siangLapangan) > 0);
+    const siangPrepList = siangAll
+      .filter(isPrepSection)
+      .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
+      .map((r, i) => ({ id: `siangPrep-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
+    const siangLabMaintList = siangAll
+      .filter(r => !isPrepSection(r))
+      .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
+      .map((r, i) => ({ id: `siangLab-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
 
-  // 2. SIANG: Terbagi Preparasi vs Lab & Maintenance
-  const siangAll = rows.filter(r => portions(r.siangLapangan) > 0);
-  const siangPrep = siangAll
-    .filter(isPrepSection)
-    .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama));
-  const siangLabMaint = siangAll
-    .filter(r => !isPrepSection(r))
-    .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama));
+    const soreAll = rows.filter(r => portions(r.soreLapangan) > 0 || (r.catatan || '').toLowerCase().includes('sore'));
+    const sorePrepList = soreAll
+      .filter(isPrepSection)
+      .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
+      .map((r, i) => ({ id: `sorePrep-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
+    const soreLabMaintList = soreAll
+      .filter(r => !isPrepSection(r))
+      .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
+      .map((r, i) => ({ id: `soreLab-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
 
-  // 3. SORE: Terbagi Preparasi vs Lab & Maintenance
-  const soreAll = rows.filter(r => portions(r.soreLapangan) > 0 || (r.catatan || '').toLowerCase().includes('sore'));
-  const sorePrep = soreAll
-    .filter(isPrepSection)
-    .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama));
-  const soreLabMaint = soreAll
-    .filter(r => !isPrepSection(r))
-    .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama));
+    const malamAll = rows.filter(
+      r => portions(r.malamLapangan) > 0 ||
+        String(r.shiftKerja || '').toUpperCase() === 'MALAM' ||
+        String(r.statusKerja || '').toUpperCase() === 'MALAM'
+    );
+    const malamPrepList = malamAll
+      .filter(isPrepSection)
+      .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
+      .map((r, i) => ({ id: `malamPrep-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
+    const malamLabMaintList = malamAll
+      .filter(r => !isPrepSection(r))
+      .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
+      .map((r, i) => ({ id: `malamLab-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
 
-  // 4. MALAM: Terbagi Preparasi vs Lab & Maintenance
-  const malamAll = rows.filter(
-    r => portions(r.malamLapangan) > 0 ||
-      String(r.shiftKerja || '').toUpperCase() === 'MALAM' ||
-      String(r.statusKerja || '').toUpperCase() === 'MALAM'
+    const res: Record<BungkusColumnKey, RecipientItem[]> = {
+      pagi: pagiList,
+      siangPrep: siangPrepList,
+      siangLabMaint: siangLabMaintList,
+      sorePrep: sorePrepList,
+      soreLabMaint: soreLabMaintList,
+      malamPrep: malamPrepList,
+      malamLabMaint: malamLabMaintList,
+    };
+    return res;
+  }, [rows]);
+
+  // State data penerima (dapat diedit secara lokal)
+  const [recipients, setRecipients] = useState<Record<BungkusColumnKey, RecipientItem[]>>(initialData);
+
+  // State kolom yang disembunyikan (Hide)
+  const [hiddenCols, setHiddenCols] = useState<Record<BungkusColumnKey, boolean>>({
+    pagi: false,
+    siangPrep: false,
+    siangLabMaint: false,
+    sorePrep: false,
+    soreLabMaint: false,
+    malamPrep: false,
+    malamLabMaint: false,
+  });
+
+  // Sinkronisasi saat date atau rows berubah: reset recipients dan auto-hide kolom kosong
+  useEffect(() => {
+    setRecipients(initialData);
+    setHiddenCols({
+      pagi: initialData.pagi.length === 0,
+      siangPrep: initialData.siangPrep.length === 0,
+      siangLabMaint: initialData.siangLabMaint.length === 0,
+      sorePrep: initialData.sorePrep.length === 0,
+      soreLabMaint: initialData.soreLabMaint.length === 0,
+      malamPrep: initialData.malamPrep.length === 0,
+      malamLabMaint: initialData.malamLabMaint.length === 0,
+    });
+  }, [initialData, date]);
+
+  // Kolom yang sedang ditampilkan
+  const visibleColumns = useMemo(() => {
+    return BUNGKUS_COLUMNS.filter(col => !hiddenCols[col.key]);
+  }, [hiddenCols]);
+
+  // Toggle Hide/Show Kolom
+  const toggleColumnHide = (colKey: BungkusColumnKey) => {
+    setHiddenCols(prev => {
+      const next = { ...prev, [colKey]: !prev[colKey] };
+      const activeCount = BUNGKUS_COLUMNS.filter(c => !next[c.key]).length;
+      if (activeCount === 0) {
+        toast.warning('Minimal harus ada 1 kolom yang ditampilkan.');
+        return prev;
+      }
+      return next;
+    });
+  };
+
+  const showAllColumns = () => {
+    setHiddenCols({
+      pagi: false,
+      siangPrep: false,
+      siangLabMaint: false,
+      sorePrep: false,
+      soreLabMaint: false,
+      malamPrep: false,
+      malamLabMaint: false,
+    });
+    toast.success('Semua kolom ditampilkan kembali.');
+  };
+
+  const autoHideEmptyColumns = () => {
+    setHiddenCols({
+      pagi: recipients.pagi.length === 0,
+      siangPrep: recipients.siangPrep.length === 0,
+      siangLabMaint: recipients.siangLabMaint.length === 0,
+      sorePrep: recipients.sorePrep.length === 0,
+      soreLabMaint: recipients.soreLabMaint.length === 0,
+      malamPrep: recipients.malamPrep.length === 0,
+      malamLabMaint: recipients.malamLabMaint.length === 0,
+    });
+    toast.success('Kolom kosong otomatis disembunyikan.');
+  };
+
+  // Operasi Edit Baris Penerima
+  const handleEditName = (colKey: BungkusColumnKey, idx: number, val: string) => {
+    setRecipients(prev => {
+      const list = [...prev[colKey]];
+      if (list[idx]) {
+        list[idx] = { ...list[idx], nama: val };
+      }
+      return { ...prev, [colKey]: list };
+    });
+  };
+
+  const handleDeleteRecipient = (colKey: BungkusColumnKey, idx: number) => {
+    setRecipients(prev => {
+      const list = [...prev[colKey]];
+      list.splice(idx, 1);
+      return { ...prev, [colKey]: list };
+    });
+    toast.info('Nama penerima dihapus dari kolom.');
+  };
+
+  const handleAddRecipient = (colKey: BungkusColumnKey) => {
+    const val = (newRecipientInputs[colKey] || '').trim();
+    if (!val) return;
+    setRecipients(prev => {
+      const list = [...prev[colKey]];
+      list.push({
+        id: `manual-${colKey}-${Date.now()}-${Math.random()}`,
+        nama: val,
+      });
+      return { ...prev, [colKey]: list };
+    });
+    setNewRecipientInputs(prev => ({ ...prev, [colKey]: '' }));
+    toast.success(`"${val}" ditambahkan.`);
+  };
+
+  const handleResetToOriginal = () => {
+    setRecipients(initialData);
+    autoHideEmptyColumns();
+    toast.success('Daftar penerima dikembalikan ke data orderan awal.');
+  };
+
+  // Hitung total penerima aktif
+  const totalPenerimaCount = Object.values(recipients).reduce((acc, curr) => acc + curr.length, 0);
+
+  // Hitung max rows dari kolom yang terlihat
+  const maxRows = Math.max(
+    ...visibleColumns.map(col => recipients[col.key]?.length || 0),
+    1
   );
-  const malamPrep = malamAll
-    .filter(isPrepSection)
-    .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama));
-  const malamLabMaint = malamAll
-    .filter(r => !isPrepSection(r))
-    .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama));
 
-  // 5. Karyawan yang belum Lapor
+  // Karyawan belum lapor
   const belumLaporList = rows
     .filter(r => r.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(r.status || '')))
     .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama));
 
-  const maxRows = Math.max(
-    pagi.length,
-    siangPrep.length,
-    siangLabMaint.length,
-    sorePrep.length,
-    soreLabMaint.length,
-    malamPrep.length,
-    malamLabMaint.length,
-    1
-  );
-
   const titleText = `Daftar penerimaan Bungkusan karyawan Prep&Lab  ${dayName(date).toUpperCase()}, ${longDate(date).toUpperCase()}`;
 
-  const totalPenerimaCount = pagi.length + siangAll.length + soreAll.length + malamAll.length;
+  // Lebar lembar dinamis menyesuaikan kolom aktif
+  const visibleColCount = Math.max(visibleColumns.length, 1);
+  const sheetWidth = Math.max(860, visibleColCount * (noColWidth + nameColWidth) + 90);
+
+  // Header groups dinamis
+  const GROUPS: Array<{ key: 'PAGI' | 'SIANG' | 'SORE' | 'MALAM'; label: string; bg: string }> = [
+    { key: 'PAGI', label: `🌅 PAGI (${recipients.pagi.length})`, bg: 'linear-gradient(135deg, #047857 0%, #065f46 100%)' },
+    { key: 'SIANG', label: `☀️ SIANG (${recipients.siangPrep.length + recipients.siangLabMaint.length})`, bg: 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)' },
+    { key: 'SORE', label: `🌇 SORE (${recipients.sorePrep.length + recipients.soreLabMaint.length})`, bg: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)' },
+    { key: 'MALAM', label: `🌙 MALAM (${recipients.malamPrep.length + recipients.malamLabMaint.length})`, bg: 'linear-gradient(135deg, #4338ca 0%, #3730a3 100%)' },
+  ];
 
   // Export Excel
   const exportExcel = () => {
@@ -119,27 +364,36 @@ export function MealBungkusRecipientsTable({
       aoa.push([titleText]);
       aoa.push([]);
 
-      aoa.push(['PAGI', '', 'SIANG', '', '', '', 'SORE', '', '', '', 'MALAM', '', '', '']);
-      aoa.push([
-        'No', 'Prep, Lab & Maintenance',
-        'No', 'Preparasi',
-        'No', 'Lab & Maintenance',
-        'No', 'Preparasi',
-        'No', 'Lab & Maintenance',
-        'No', 'Preparasi',
-        'No', 'Lab & Maintenance',
-      ]);
+      // Baris Grup
+      const groupRow: string[] = [];
+      GROUPS.forEach(g => {
+        const subColsInGroup = visibleColumns.filter(c => c.groupKey === g.key);
+        if (subColsInGroup.length > 0) {
+          groupRow.push(g.label);
+          for (let i = 1; i < subColsInGroup.length * 2; i++) {
+            groupRow.push('');
+          }
+        }
+      });
+      aoa.push(groupRow);
 
+      // Baris Subheader
+      const subHeaderRow: string[] = [];
+      visibleColumns.forEach(c => {
+        subHeaderRow.push('No');
+        subHeaderRow.push(`${c.subLabel} (${recipients[c.key]?.length || 0})`);
+      });
+      aoa.push(subHeaderRow);
+
+      // Data Rows
       for (let i = 0; i < maxRows; i++) {
-        aoa.push([
-          pagi[i] ? i + 1 : '', pagi[i]?.nama || '',
-          siangPrep[i] ? i + 1 : '', siangPrep[i]?.nama || '',
-          siangLabMaint[i] ? i + 1 : '', siangLabMaint[i]?.nama || '',
-          sorePrep[i] ? i + 1 : '', sorePrep[i]?.nama || '',
-          soreLabMaint[i] ? i + 1 : '', soreLabMaint[i]?.nama || '',
-          malamPrep[i] ? i + 1 : '', malamPrep[i]?.nama || '',
-          malamLabMaint[i] ? i + 1 : '', malamLabMaint[i]?.nama || '',
-        ]);
+        const rowData: any[] = [];
+        visibleColumns.forEach(c => {
+          const item = recipients[c.key]?.[i];
+          rowData.push(item ? i + 1 : '');
+          rowData.push(item?.nama || '');
+        });
+        aoa.push(rowData);
       }
 
       aoa.push([]);
@@ -169,8 +423,13 @@ export function MealBungkusRecipientsTable({
   // Export Foto / Gambar PNG Resolusi Tinggi (Anti-oklch error)
   const downloadImage = async () => {
     if (!printRef.current) return;
+    const wasEditing = isEditMode;
+    if (wasEditing) setIsEditMode(false);
     setDownloadingPdf(true);
+
     try {
+      // Berikan jeda render agar elemen input beralih ke teks biasa untuk foto
+      await new Promise(r => setTimeout(r, 60));
       const { default: html2canvas } = await import('html2canvas');
       const canvas = await html2canvas(printRef.current, {
         scale: 2,
@@ -189,19 +448,24 @@ export function MealBungkusRecipientsTable({
     } catch (e: any) {
       toast.error(`Gagal download foto/gambar: ${e?.message || e}`);
     } finally {
+      if (wasEditing) setIsEditMode(true);
       setDownloadingPdf(false);
     }
   };
 
   const copyText = () => {
     let t = `*${titleText}*\n\n`;
-    t += `*PAGI (${pagi.length})*\n` + pagi.map((r, i) => `${i + 1}. ${r.nama}`).join('\n') + '\n\n';
-    t += `*SIANG PREPARASI (${siangPrep.length})*\n` + siangPrep.map((r, i) => `${i + 1}. ${r.nama}`).join('\n') + '\n\n';
-    t += `*SIANG LAB & MAINT (${siangLabMaint.length})*\n` + siangLabMaint.map((r, i) => `${i + 1}. ${r.nama}`).join('\n') + '\n\n';
-    if (sorePrep.length > 0) t += `*SORE PREPARASI (${sorePrep.length})*\n` + sorePrep.map((r, i) => `${i + 1}. ${r.nama}`).join('\n') + '\n\n';
-    t += `*SORE LAB & MAINT (${soreLabMaint.length})*\n` + soreLabMaint.map((r, i) => `${i + 1}. ${r.nama}`).join('\n') + '\n\n';
-    if (malamPrep.length > 0) t += `*MALAM PREPARASI (${malamPrep.length})*\n` + malamPrep.map((r, i) => `${i + 1}. ${r.nama}`).join('\n') + '\n\n';
-    t += `*MALAM LAB & MAINT (${malamLabMaint.length})*\n` + malamLabMaint.map((r, i) => `${i + 1}. ${r.nama}`).join('\n') + '\n\n';
+    visibleColumns.forEach(c => {
+      const list = recipients[c.key] || [];
+      t += `*${c.groupKey} - ${c.subLabel.toUpperCase()} (${list.length})*\n`;
+      if (list.length === 0) {
+        t += `-(Kosong)-\n`;
+      } else {
+        t += list.map((r, i) => `${i + 1}. ${r.nama}`).join('\n') + '\n';
+      }
+      t += '\n';
+    });
+
     if (belumLaporList.length > 0) {
       t += `*KARYAWAN BELUM LAPOR (${belumLaporList.length})*\n` + belumLaporList.map((r, i) => `${i + 1}. ${r.nama} (${r.statusKerja || r.status || 'Cuti'})`).join('\n') + '\n';
     }
@@ -225,15 +489,15 @@ export function MealBungkusRecipientsTable({
   };
 
   const subThBase: React.CSSProperties = {
-    padding: '6px 6px',
+    padding: '6px 8px',
     textAlign: 'center',
     verticalAlign: 'middle',
-    fontSize: '10.5px',
+    fontSize: '11px',
     fontWeight: 700,
-    color: '#334155',
+    color: '#1e293b',
     backgroundColor: '#f1f5f9',
     borderBottom: '1.5px solid #cbd5e1',
-    borderRight: '1px solid #e2e8f0',
+    borderRight: '1.5px solid #cbd5e1',
     boxSizing: 'border-box',
   };
 
@@ -260,9 +524,9 @@ export function MealBungkusRecipientsTable({
     fontSize: `${fontSize}px`,
     fontWeight: 600,
     color: '#0f172a',
-    padding: '4px 8px',
+    padding: '4px 6px',
     whiteSpace: 'nowrap',
-    overflow: 'visible', // Full nama tanpa terpotong ...
+    overflow: 'visible',
     borderRight: '1.5px solid #cbd5e1',
     borderBottom: '1px solid #e2e8f0',
     boxSizing: 'border-box',
@@ -283,6 +547,33 @@ export function MealBungkusRecipientsTable({
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Tombol Mode Edit */}
+            <button
+              type="button"
+              onClick={() => setIsEditMode(!isEditMode)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-xs ${
+                isEditMode
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white ring-2 ring-amber-300'
+                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200'
+              }`}
+              title="Edit nama penerima atau tambahkan manual"
+            >
+              <Edit3 className="w-4 h-4" />
+              {isEditMode ? 'Selesai Edit' : 'Edit Nama / Kolom'}
+            </button>
+
+            {isEditMode && (
+              <button
+                type="button"
+                onClick={handleResetToOriginal}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition-colors"
+                title="Kembalikan ke data asli orderan"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset Data
+              </button>
+            )}
+
             <button
               type="button"
               onClick={copyText}
@@ -313,11 +604,68 @@ export function MealBungkusRecipientsTable({
           </div>
         </div>
 
-        {/* Adjuster Toolbar: Atur Lebar Kolom Nama & Nomor Sesuai Kebutuhan */}
-        <div className="flex items-center gap-4 pt-2.5 border-t border-slate-100 text-xs flex-wrap">
+        {/* Toolbar Visibilitas Kolom & Tanda Hide */}
+        <div className="flex flex-col gap-2 pt-2.5 border-t border-slate-100 text-xs">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+              <Eye className="w-4 h-4 text-emerald-600" />
+              <span>Visibilitas Kolom (Klik untuk Hide / Tampilkan):</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={autoHideEmptyColumns}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer transition-colors"
+                title="Sembunyikan semua kolom yang memiliki 0 penerima"
+              >
+                Sembunyikan Kolom Kosong
+              </button>
+              <button
+                type="button"
+                onClick={showAllColumns}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition-colors"
+                title="Tampilkan semua kolom"
+              >
+                Tampilkan Semua
+              </button>
+            </div>
+          </div>
+
+          {/* Chips toggle per kolom */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {BUNGKUS_COLUMNS.map(col => {
+              const isHidden = hiddenCols[col.key];
+              const count = recipients[col.key]?.length || 0;
+              return (
+                <button
+                  key={col.key}
+                  type="button"
+                  onClick={() => toggleColumnHide(col.key)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all cursor-pointer ${
+                    isHidden
+                      ? 'bg-slate-100 text-slate-400 border-dashed border-slate-300 line-through'
+                      : count === 0
+                      ? 'bg-amber-50 text-amber-700 border-amber-300'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                  }`}
+                  title={isHidden ? `Klik untuk TAMPILKAN kolom ${col.shortLabel}` : `Klik untuk SEMBUNYIKAN (HIDE) kolom ${col.shortLabel}`}
+                >
+                  {isHidden ? <EyeOff className="w-3.5 h-3.5 text-slate-400" /> : <Eye className="w-3.5 h-3.5 text-emerald-600" />}
+                  <span>{col.shortLabel}</span>
+                  <span className={`px-1 rounded text-[10px] ${isHidden ? 'bg-slate-200 text-slate-500' : 'bg-emerald-200/80 text-emerald-900 font-extrabold'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Adjuster Toolbar: Atur Lebar Kolom Nama & Nomor */}
+        <div className="flex items-center gap-4 pt-2 border-t border-slate-100 text-xs flex-wrap">
           <div className="flex items-center gap-2 text-slate-700 font-bold">
             <Sliders className="w-4 h-4 text-emerald-600" />
-            <span>Pengaturan Lebar Kolom:</span>
+            <span>Ukuran Tampilan:</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -329,7 +677,7 @@ export function MealBungkusRecipientsTable({
               step={5}
               value={nameColWidth}
               onChange={e => setNameColWidth(Number(e.target.value))}
-              className="w-28 accent-emerald-600 cursor-pointer"
+              className="w-24 accent-emerald-600 cursor-pointer"
               title={`Lebar Kolom Nama saat ini: ${nameColWidth}px`}
             />
             <span className="font-mono font-bold text-slate-800 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
@@ -338,19 +686,19 @@ export function MealBungkusRecipientsTable({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-medium">Kolom No:</span>
+            <span className="text-slate-500 font-medium">Font:</span>
             <input
               type="range"
-              min={18}
-              max={30}
+              min={9}
+              max={14}
               step={1}
-              value={noColWidth}
-              onChange={e => setNoColWidth(Number(e.target.value))}
+              value={fontSize}
+              onChange={e => setFontSize(Number(e.target.value))}
               className="w-16 accent-emerald-600 cursor-pointer"
-              title={`Lebar Kolom Nomor saat ini: ${noColWidth}px`}
+              title={`Ukuran Font saat ini: ${fontSize}px`}
             />
             <span className="font-mono font-bold text-slate-800 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">
-              {noColWidth}px
+              {fontSize}px
             </span>
           </div>
 
@@ -359,7 +707,7 @@ export function MealBungkusRecipientsTable({
             <span className="text-slate-400 text-[11px] mr-1">Preset:</span>
             <button
               type="button"
-              onClick={() => { setNameColWidth(210); setNoColWidth(20); }}
+              onClick={() => { setNameColWidth(210); setNoColWidth(20); setFontSize(10.5); }}
               className={`px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer ${
                 nameColWidth === 210 ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
               }`}
@@ -368,7 +716,7 @@ export function MealBungkusRecipientsTable({
             </button>
             <button
               type="button"
-              onClick={() => { setNameColWidth(240); setNoColWidth(22); }}
+              onClick={() => { setNameColWidth(240); setNoColWidth(22); setFontSize(11); }}
               className={`px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer ${
                 nameColWidth === 240 ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
               }`}
@@ -377,7 +725,7 @@ export function MealBungkusRecipientsTable({
             </button>
             <button
               type="button"
-              onClick={() => { setNameColWidth(280); setNoColWidth(24); }}
+              onClick={() => { setNameColWidth(280); setNoColWidth(24); setFontSize(12); }}
               className={`px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer ${
                 nameColWidth === 280 ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
               }`}
@@ -386,9 +734,24 @@ export function MealBungkusRecipientsTable({
             </button>
           </div>
         </div>
+
+        {isEditMode && (
+          <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center justify-between">
+            <span className="font-medium">
+              💡 <strong>Mode Edit Aktif:</strong> Anda dapat mengubah nama langsung pada baris tabel, menghapus nama dengan tombol tempat sampah, atau menambahkan nama baru di bagian bawah masing-masing kolom.
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsEditMode(false)}
+              className="px-2.5 py-1 font-bold bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] cursor-pointer"
+            >
+              Selesai Edit
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Lembar Tampilan Executive Manifest (Dibuat Ekstra Lebar & Full Tanpa Terpotong) */}
+      {/* Lembar Tampilan Executive Manifest (Dinamis Sesuai Kolom yang Aktif) */}
       <div className="overflow-x-auto bg-slate-100/80 p-3 sm:p-5 rounded-2xl border border-slate-200 shadow-inner">
         <div
           ref={printRef}
@@ -473,22 +836,22 @@ export function MealBungkusRecipientsTable({
               {/* Mini Badges Per Waktu Makan */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
                 <div style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', padding: '4px 10px', fontSize: '10.5px', fontWeight: 800, color: '#047857' }}>
-                  PAGI: {pagi.length}
+                  PAGI: {recipients.pagi.length}
                 </div>
                 <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '4px 10px', fontSize: '10.5px', fontWeight: 800, color: '#1d4ed8' }}>
-                  SIANG: {siangAll.length}
+                  SIANG: {recipients.siangPrep.length + recipients.siangLabMaint.length}
                 </div>
                 <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', padding: '4px 10px', fontSize: '10.5px', fontWeight: 800, color: '#b45309' }}>
-                  SORE: {soreAll.length}
+                  SORE: {recipients.sorePrep.length + recipients.soreLabMaint.length}
                 </div>
                 <div style={{ backgroundColor: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '6px', padding: '4px 10px', fontSize: '10.5px', fontWeight: 800, color: '#4338ca' }}>
-                  MALAM: {malamAll.length}
+                  MALAM: {recipients.malamPrep.length + recipients.malamLabMaint.length}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Tabel Utama 7 Subkolom dengan Desain Eksekutif */}
+          {/* Tabel Utama Dinamis Sesuai Kolom yang Ditampilkan */}
           <div style={{
             border: '1.5px solid #cbd5e1',
             borderRadius: '10px',
@@ -502,54 +865,87 @@ export function MealBungkusRecipientsTable({
               textAlign: 'left',
             }}>
               <colgroup>
-                {/* 1. PAGI */}
-                <col style={{ width: noColWidth }} />
-                <col style={{ width: nameColWidth }} />
-                {/* 2. SIANG PREP */}
-                <col style={{ width: noColWidth }} />
-                <col style={{ width: nameColWidth }} />
-                {/* 3. SIANG LAB & MAINT */}
-                <col style={{ width: noColWidth }} />
-                <col style={{ width: nameColWidth }} />
-                {/* 4. SORE PREP */}
-                <col style={{ width: noColWidth }} />
-                <col style={{ width: nameColWidth }} />
-                {/* 5. SORE LAB & MAINT */}
-                <col style={{ width: noColWidth }} />
-                <col style={{ width: nameColWidth }} />
-                {/* 6. MALAM PREP */}
-                <col style={{ width: noColWidth }} />
-                <col style={{ width: nameColWidth }} />
-                {/* 7. MALAM LAB & MAINT */}
-                <col style={{ width: noColWidth }} />
-                <col style={{ width: nameColWidth }} />
+                {visibleColumns.map(col => (
+                  <React.Fragment key={col.key}>
+                    <col style={{ width: noColWidth }} />
+                    <col style={{ width: nameColWidth }} />
+                  </React.Fragment>
+                ))}
               </colgroup>
               <thead>
-                {/* Header Waktu Makan */}
+                {/* Header Waktu Makan (Group Headers Dinamis) */}
                 <tr>
-                  <th colSpan={2} style={{ ...thBase, background: 'linear-gradient(135deg, #047857 0%, #065f46 100%)' }}>
-                    🌅 PAGI ({pagi.length})
-                  </th>
-                  <th colSpan={4} style={{ ...thBase, background: 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)' }}>
-                    ☀️ SIANG ({siangAll.length})
-                  </th>
-                  <th colSpan={4} style={{ ...thBase, background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)' }}>
-                    🌇 SORE ({soreAll.length})
-                  </th>
-                  <th colSpan={4} style={{ ...thBase, background: 'linear-gradient(135deg, #4338ca 0%, #3730a3 100%)', borderRight: 'none' }}>
-                    🌙 MALAM ({malamAll.length})
-                  </th>
+                  {GROUPS.map((g, gIdx) => {
+                    const subColsInGroup = visibleColumns.filter(c => c.groupKey === g.key);
+                    if (subColsInGroup.length === 0) return null;
+                    const isLastGroup = gIdx === GROUPS.length - 1;
+                    return (
+                      <th
+                        key={g.key}
+                        colSpan={subColsInGroup.length * 2}
+                        style={{
+                          ...thBase,
+                          background: g.bg,
+                          borderRight: isLastGroup ? 'none' : '1.5px solid #cbd5e1',
+                        }}
+                      >
+                        {g.label}
+                      </th>
+                    );
+                  })}
                 </tr>
 
-                {/* Subheader Bagian */}
+                {/* Subheader Bagian dengan Tombol / Tanda Hide */}
                 <tr>
-                  <th colSpan={2} style={subThBase}>Prep, Lab &amp; Maint</th>
-                  <th colSpan={2} style={subThBase}>Preparasi ({siangPrep.length})</th>
-                  <th colSpan={2} style={subThBase}>Lab &amp; Maint ({siangLabMaint.length})</th>
-                  <th colSpan={2} style={subThBase}>Preparasi ({sorePrep.length})</th>
-                  <th colSpan={2} style={subThBase}>Lab &amp; Maint ({soreLabMaint.length})</th>
-                  <th colSpan={2} style={subThBase}>Preparasi ({malamPrep.length})</th>
-                  <th colSpan={2} style={{ ...subThBase, borderRight: 'none' }}>Lab &amp; Maint ({malamLabMaint.length})</th>
+                  {visibleColumns.map((col, idx) => {
+                    const count = recipients[col.key]?.length || 0;
+                    const isLast = idx === visibleColumns.length - 1;
+                    return (
+                      <th
+                        key={col.key}
+                        colSpan={2}
+                        style={{
+                          ...subThBase,
+                          borderRight: isLast ? 'none' : '1.5px solid #cbd5e1',
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}>
+                          <span>
+                            {col.subLabel} ({count})
+                          </span>
+                          {/* Tombol Tanda Hide Kolom */}
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              toggleColumnHide(col.key);
+                            }}
+                            title={`Sembunyikan kolom ${col.subLabel} (Hide)`}
+                            style={{
+                              border: 'none',
+                              background: '#e2e8f0',
+                              color: '#64748b',
+                              borderRadius: '4px',
+                              padding: '2px 4px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              fontSize: '10px',
+                            }}
+                            className="hover:bg-rose-100 hover:text-rose-700 transition-colors"
+                          >
+                            <EyeOff style={{ width: '12px', height: '12px', marginRight: '2px' }} />
+                            <span>Hide</span>
+                          </button>
+                        </div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -558,36 +954,134 @@ export function MealBungkusRecipientsTable({
                   const rowBg = isZebra ? '#f8fafc' : '#ffffff';
                   return (
                     <tr key={i} style={{ backgroundColor: rowBg, height: '24px' }}>
-                      {/* 1. PAGI */}
-                      <td style={tdNo}>{pagi[i] ? i + 1 : ''}</td>
-                      <td style={tdName} title={pagi[i]?.nama || ''}>{pagi[i]?.nama || ''}</td>
+                      {visibleColumns.map((col, cIdx) => {
+                        const item = recipients[col.key]?.[i];
+                        const isLast = cIdx === visibleColumns.length - 1;
+                        return (
+                          <React.Fragment key={col.key}>
+                            {/* Kolom Nomor */}
+                            <td style={tdNo}>{item ? i + 1 : ''}</td>
 
-                      {/* 2. SIANG PREP */}
-                      <td style={tdNo}>{siangPrep[i] ? i + 1 : ''}</td>
-                      <td style={tdName} title={siangPrep[i]?.nama || ''}>{siangPrep[i]?.nama || ''}</td>
-
-                      {/* 3. SIANG LAB & MAINT */}
-                      <td style={tdNo}>{siangLabMaint[i] ? i + 1 : ''}</td>
-                      <td style={tdName} title={siangLabMaint[i]?.nama || ''}>{siangLabMaint[i]?.nama || ''}</td>
-
-                      {/* 4. SORE PREP */}
-                      <td style={tdNo}>{sorePrep[i] ? i + 1 : ''}</td>
-                      <td style={tdName} title={sorePrep[i]?.nama || ''}>{sorePrep[i]?.nama || ''}</td>
-
-                      {/* 5. SORE LAB & MAINT */}
-                      <td style={tdNo}>{soreLabMaint[i] ? i + 1 : ''}</td>
-                      <td style={tdName} title={soreLabMaint[i]?.nama || ''}>{soreLabMaint[i]?.nama || ''}</td>
-
-                      {/* 6. MALAM PREP */}
-                      <td style={tdNo}>{malamPrep[i] ? i + 1 : ''}</td>
-                      <td style={tdName} title={malamPrep[i]?.nama || ''}>{malamPrep[i]?.nama || ''}</td>
-
-                      {/* 7. MALAM LAB & MAINT */}
-                      <td style={tdNo}>{malamLabMaint[i] ? i + 1 : ''}</td>
-                      <td style={{ ...tdName, borderRight: 'none' }} title={malamLabMaint[i]?.nama || ''}>{malamLabMaint[i]?.nama || ''}</td>
+                            {/* Kolom Nama */}
+                            <td
+                              style={{
+                                ...tdName,
+                                borderRight: isLast ? 'none' : '1.5px solid #cbd5e1',
+                              }}
+                              title={item?.nama || ''}
+                            >
+                              {item ? (
+                                isEditMode ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <input
+                                      type="text"
+                                      value={item.nama}
+                                      onChange={e => handleEditName(col.key, i, e.target.value)}
+                                      style={{
+                                        width: '100%',
+                                        fontSize: `${fontSize}px`,
+                                        padding: '2px 4px',
+                                        border: '1px solid #94a3b8',
+                                        borderRadius: '4px',
+                                        background: '#ffffff',
+                                        color: '#0f172a',
+                                        boxSizing: 'border-box',
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteRecipient(col.key, i)}
+                                      title="Hapus nama ini"
+                                      style={{
+                                        border: 'none',
+                                        background: 'transparent',
+                                        color: '#ef4444',
+                                        cursor: 'pointer',
+                                        padding: '2px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                      }}
+                                    >
+                                      <Trash2 style={{ width: '13px', height: '13px' }} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span>{item.nama}</span>
+                                )
+                              ) : (
+                                ''
+                              )}
+                            </td>
+                          </React.Fragment>
+                        );
+                      })}
                     </tr>
                   );
                 })}
+
+                {/* Baris Tambah Penerima Saat Mode Edit Aktif */}
+                {isEditMode && (
+                  <tr style={{ backgroundColor: '#fffbeb', borderTop: '2px dashed #f59e0b' }}>
+                    {visibleColumns.map((col, cIdx) => {
+                      const isLast = cIdx === visibleColumns.length - 1;
+                      return (
+                        <React.Fragment key={`add-${col.key}`}>
+                          <td style={{ ...tdNo, backgroundColor: '#fef3c7', color: '#b45309' }}>+</td>
+                          <td
+                            style={{
+                              ...tdName,
+                              backgroundColor: '#fffbeb',
+                              borderRight: isLast ? 'none' : '1.5px solid #cbd5e1',
+                              padding: '4px 6px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <input
+                                type="text"
+                                placeholder={`+ Nama ${col.shortLabel}...`}
+                                value={newRecipientInputs[col.key] || ''}
+                                onChange={e => setNewRecipientInputs(prev => ({ ...prev, [col.key]: e.target.value }))}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddRecipient(col.key);
+                                  }
+                                }}
+                                style={{
+                                  width: '100%',
+                                  fontSize: '11px',
+                                  padding: '2px 5px',
+                                  border: '1px solid #f59e0b',
+                                  borderRadius: '4px',
+                                  backgroundColor: '#ffffff',
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleAddRecipient(col.key)}
+                                title="Tambahkan nama ini"
+                                style={{
+                                  border: 'none',
+                                  backgroundColor: '#f59e0b',
+                                  color: '#ffffff',
+                                  borderRadius: '4px',
+                                  padding: '3px 6px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <Plus style={{ width: '12px', height: '12px' }} />
+                              </button>
+                            </div>
+                          </td>
+                        </React.Fragment>
+                      );
+                    })}
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -724,3 +1218,4 @@ export function MealBungkusRecipientsTable({
     </div>
   );
 }
+
