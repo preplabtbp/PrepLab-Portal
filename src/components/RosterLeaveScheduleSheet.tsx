@@ -38,6 +38,7 @@ interface LeaveRecord {
   tambahanTravel: number;
   totalHari: number;
   hasChange: boolean;
+  isCutiSelesai: boolean;
 }
 
 const MONTH_NAMES_ID = [
@@ -123,7 +124,7 @@ export function checkIsGolonganI(emp: any): boolean {
 }
 
 /**
- * Aturan Khusus: Section Manager, Administration, QA, Inventory Control
+ * Aturan Khusus: Manager, Section Manager, Administration, QA, Inventory Control
  * digabung ke dalam naungan kelompok "Laboratory".
  */
 export function getUnifiedSection(emp: any): string {
@@ -131,7 +132,10 @@ export function getUnifiedSection(emp: any): string {
   const sec = String(emp.section || emp.department || '').toLowerCase();
 
   if (
-    jab.includes('section manager') ||
+    jab.includes('manager') ||
+    sec.includes('manager') ||
+    jab.includes('head') ||
+    sec.includes('head') ||
     sec.includes('admin') ||
     sec.includes('administrasi') ||
     sec.includes('qa') ||
@@ -288,6 +292,19 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
         ket = 'Sesuai Roster';
       }
 
+      // Cek apakah tanggal onsite atau perubahan jadwal onsite sudah melewati hari ini
+      const effectiveOnsiteRaw = perubahanJadwalOnsiteRaw || tanggalOnsiteRaw;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const effectiveOnsiteZero = new Date(effectiveOnsiteRaw);
+      effectiveOnsiteZero.setHours(0, 0, 0, 0);
+
+      const isCutiSelesai = effectiveOnsiteZero.getTime() < today.getTime();
+      if (isCutiSelesai) {
+        ket = 'Cuti Selesai';
+      }
+
       records.push({
         id: `${emp.nik}-${blockIdx}-${tanggalCutiRaw.getTime()}`,
         nik: emp.nik,
@@ -315,7 +332,8 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
         izin,
         tambahanTravel,
         totalHari: travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel,
-        hasChange: hasExtension
+        hasChange: hasExtension,
+        isCutiSelesai
       });
     }
   }
@@ -369,14 +387,16 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
     }
   }, [availablePeriods]);
 
-  // Available sections (based on unified section values: Laboratory, Preparation, Maintenance)
+  // Available sections (based on unified section values: Laboratory, Preparation, Maintenance for current tab)
   const availableSections = useMemo(() => {
     const set = new Set<string>();
     allLeaveRecords.forEach(e => {
+      if (activeTab === 'staff' && e.isGol1) return;
+      if (activeTab === 'crew' && !e.isGol1) return;
       if (e.section) set.add(e.section);
     });
     return Array.from(set).sort();
-  }, [allLeaveRecords]);
+  }, [allLeaveRecords, activeTab]);
 
   // Filtered records based on tab, month, section, and search
   const filteredRecords = useMemo(() => {
@@ -871,11 +891,16 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
               ) : (
                 filteredRecords.map((rec, index) => {
                   const isEven = index % 2 === 0;
+                  const isSelesai = rec.isCutiSelesai;
                   return (
                     <tr 
                       key={rec.id}
-                      className={`transition-colors hover:bg-teal-50/40 dark:hover:bg-teal-950/20 ${
-                        isEven ? 'bg-white dark:bg-slate-900/40' : 'bg-slate-50/50 dark:bg-slate-800/20'
+                      className={`transition-colors ${
+                        isSelesai
+                          ? 'bg-rose-100/75 dark:bg-rose-950/40 hover:bg-rose-200/70 dark:hover:bg-rose-950/60 text-rose-950 dark:text-rose-100 border-b border-rose-300/80 dark:border-rose-900/60'
+                          : isEven 
+                            ? 'bg-white dark:bg-slate-900/40 hover:bg-teal-50/40 dark:hover:bg-teal-950/20' 
+                            : 'bg-slate-50/50 dark:bg-slate-800/20 hover:bg-teal-50/40 dark:hover:bg-teal-950/20'
                       }`}
                     >
                       {/* NO */}
@@ -930,7 +955,12 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
 
                       {/* KET */}
                       <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
-                        {rec.hasChange ? (
+                        {rec.isCutiSelesai ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            Cuti Selesai
+                          </span>
+                        ) : rec.hasChange ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
                             <AlertCircle className="w-2.5 h-2.5" />
                             {rec.ket}
