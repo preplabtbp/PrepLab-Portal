@@ -418,7 +418,7 @@ const P = {
 };
 const ROW_H = 26; // tinggi minimum setiap baris isi
 const cellP = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-  padding: '5px 10px', lineHeight: '14px', verticalAlign: 'middle', whiteSpace: 'normal',
+  padding: '2px 10px 4px 10px', lineHeight: '14px', verticalAlign: 'middle', whiteSpace: 'normal',
   wordBreak: 'break-word', overflowWrap: 'anywhere', fontSize: 11, borderBottom: `1px solid ${P.line}`, boxSizing: 'border-box', ...extra,
 });
 // Lebar kolom Area | Qty | Keterangan (dipakai tabel & baris TOTAL agar garisnya 100% sejajar)
@@ -435,16 +435,16 @@ function splitParen(text: string): { main: string; sub: string } {
 function TwoLine({ text, color, weight }: { text: string; color: string; weight: number }) {
   const { main, sub } = splitParen(text);
   return (
-    <>
+    <div style={{ position: 'relative', top: -1.5 }}>
       <div style={{ fontWeight: weight, color, lineHeight: '14px' }}>{main}</div>
       {sub && <div style={{ fontSize: 9.5, fontWeight: 600, color: P.muted, lineHeight: '12px', marginTop: 1 }}>{sub}</div>}
-    </>
+    </div>
   );
 }
 
 function PrintBlock({ block, compact = false }: { block: RecapBlock; compact?: boolean }) {
   const COL_W = compact ? COL_W_COMPACT : COL_W_WIDE;
-  const pad = compact ? '5px 7px' : undefined;
+  const pad = compact ? '2px 7px 4px 7px' : undefined;
   return (
     <div style={{
       border: `1px solid ${P.frame}`,
@@ -473,7 +473,7 @@ function PrintBlock({ block, compact = false }: { block: RecapBlock; compact?: b
         <thead>
           <tr style={{ height: 30 }}>
             <th colSpan={3} style={{
-              padding: '6px 10px',
+              padding: '0 10px 4px 10px',
               verticalAlign: 'middle',
               textAlign: 'center',
               lineHeight: '16px',
@@ -484,14 +484,16 @@ function PrintBlock({ block, compact = false }: { block: RecapBlock; compact?: b
               letterSpacing: 0.8,
               boxSizing: 'border-box',
             }}>
-              {block.title}
+              <div style={{ position: 'relative', top: -2 }}>
+                {block.title}
+              </div>
             </th>
           </tr>
           <tr style={{ background: P.greenSoft, height: 25 }}>
             {(['Area', 'Qty', 'Keterangan'] as const).map((h, i) => (
               <th key={h} style={{
                 width: COL_W[i],
-                padding: '4px 10px',
+                padding: '0 10px 4px 10px',
                 verticalAlign: 'middle',
                 lineHeight: '14px',
                 fontSize: 10,
@@ -504,7 +506,9 @@ function PrintBlock({ block, compact = false }: { block: RecapBlock; compact?: b
                 borderRight: i < 2 ? `1px solid ${P.greenLine}` : 'none',
                 boxSizing: 'border-box',
               }}>
-                {h}
+                <div style={{ position: 'relative', top: -1.5 }}>
+                  {h}
+                </div>
               </th>
             ))}
           </tr>
@@ -513,17 +517,21 @@ function PrintBlock({ block, compact = false }: { block: RecapBlock; compact?: b
           {block.lines.map((l, idx) => (
             <tr key={idx} style={{ height: ROW_H, background: idx % 2 ? '#f8fafc' : '#ffffff' }}>
               <td style={cellP({ width: COL_W[0], borderRight: `1px solid ${P.line}`, ...(pad ? { padding: pad } : {}) })}><TwoLine text={l.area} color={P.ink} weight={600} /></td>
-              <td style={cellP({ width: COL_W[1], textAlign: 'center', fontWeight: 800, fontSize: 13, color: '#047857', borderRight: `1px solid ${P.line}` })}>{l.qty}</td>
+              <td style={cellP({ width: COL_W[1], textAlign: 'center', fontWeight: 800, fontSize: 13, color: '#047857', borderRight: `1px solid ${P.line}` })}>
+                <div style={{ position: 'relative', top: -1.5 }}>{l.qty}</div>
+              </td>
               <td style={cellP({ width: COL_W[2], ...(compact ? { padding: pad, fontSize: 10 } : {}) })}><TwoLine text={l.keterangan} color="#334155" weight={400} /></td>
             </tr>
           ))}
           {block.lines.length === 0 && (
             <tr style={{ height: ROW_H }}>
-              <td colSpan={3} style={cellP({ textAlign: 'center', color: P.muted, fontStyle: 'italic' })}>Tidak ada bungkusan</td>
+              <td colSpan={3} style={cellP({ textAlign: 'center', color: P.muted, fontStyle: 'italic' })}>
+                <div style={{ position: 'relative', top: -1.5 }}>Tidak ada bungkusan</div>
+              </td>
             </tr>
           )}
-          {/* Baris pengisi fleksibel agar border vertikal kolom tetap menyambung sampai ke baris TOTAL */}
-          <tr style={{ height: 'auto', background: '#ffffff' }}>
+          {/* Baris pengisi fleksibel agar menyerap seluruh sisa tinggi tabel sehingga baris TOTAL tidak meregang */}
+          <tr style={{ height: '100%', background: '#ffffff' }}>
             <td style={{ borderRight: `1px solid ${P.line}`, padding: 0 }} />
             <td style={{ borderRight: `1px solid ${P.line}`, padding: 0 }} />
             <td style={{ padding: 0 }} />
@@ -534,6 +542,7 @@ function PrintBlock({ block, compact = false }: { block: RecapBlock; compact?: b
             background: 'linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)',
             borderTop: `2px solid ${P.amberLine}`,
             height: 30,
+            maxHeight: 30,
           }}>
             <td style={{
               width: COL_W[0],
@@ -544,11 +553,12 @@ function PrintBlock({ block, compact = false }: { block: RecapBlock; compact?: b
               letterSpacing: 0.6,
               color: P.amberInk,
               borderRight: `1px solid ${P.amberLine}`,
-              padding: '6px 4px',
-              lineHeight: '14px',
+              padding: '0 4px 6px 4px',
               boxSizing: 'border-box',
             }}>
-              TOTAL
+              <div style={{ position: 'relative', top: -4, lineHeight: '14px' }}>
+                TOTAL
+              </div>
             </td>
             <td style={{
               width: COL_W[1],
@@ -558,11 +568,12 @@ function PrintBlock({ block, compact = false }: { block: RecapBlock; compact?: b
               fontWeight: 800,
               color: P.amberInk,
               borderRight: `1px solid ${P.amberLine}`,
-              padding: '5px 4px',
-              lineHeight: '16px',
+              padding: '0 4px 6px 4px',
               boxSizing: 'border-box',
             }}>
-              {block.total}
+              <div style={{ position: 'relative', top: -4, lineHeight: '16px' }}>
+                {block.total}
+              </div>
             </td>
             <td style={{
               width: COL_W[2],
@@ -571,11 +582,12 @@ function PrintBlock({ block, compact = false }: { block: RecapBlock; compact?: b
               fontSize: 11,
               fontWeight: 700,
               color: P.amberInk,
-              padding: '6px 4px',
-              lineHeight: '14px',
+              padding: '0 4px 6px 4px',
               boxSizing: 'border-box',
             }}>
-              Bungkus
+              <div style={{ position: 'relative', top: -4, lineHeight: '14px' }}>
+                Bungkus
+              </div>
             </td>
           </tr>
         </tfoot>
@@ -640,13 +652,15 @@ export function BungkusRecapPrintSheet({ title, blocks, printedAt }: { title: st
             color: P.green,
             background: P.greenSoft,
             border: `1px solid ${P.greenLine}`,
-            padding: '4px 10px',
+            padding: '2px 10px 4px 10px',
             borderRadius: 6,
             textTransform: 'uppercase',
             width: 'fit-content',
             lineHeight: '14px',
           }}>
-            PREP & LAB TBP · REKAPAN BUNGKUSAN
+            <span style={{ position: 'relative', top: -1.5 }}>
+              PREP &amp; LAB TBP · REKAPAN BUNGKUSAN
+            </span>
           </div>
           <div style={{ fontSize: 21, fontWeight: 900, letterSpacing: 0.3, lineHeight: '26px', marginTop: 6, color: '#0f172a' }}>
             {title}
