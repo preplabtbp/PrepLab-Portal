@@ -602,20 +602,22 @@ function TrainingAchievementDetail({ record, scope }: { record: TrainingRecord; 
             {record.inSap && show('sap') && (
               <MyTrainingSection
                 title="Training SAP"
-                subtitle={`${sapValid}/${required.length} training wajib berlaku · berlaku 2 tahun`}
+                subtitle={`${sapValid}/${required.length} training wajib berlaku · berlaku 2 tahun (warning 1,6 tahun)`}
                 icon={<ClipboardCheck className="w-4 h-4" />}
               >
                 {SAP_TRAININGS.map(t => {
                   const state = sapState(record, t.key, t.statusKey);
                   const date = record[t.key];
-                  const expiry = date ? trainingValidity(date, TODAY).expiryDate : null;
+                  const val = date ? trainingValidity(date, TODAY) : null;
+                  const expiry = val?.expiryDate || null;
+                  const warning = val?.warningDate || null;
                   const meta = SAP_STATE_META[state];
                   return (
                     <MyTrainingRow
                       key={t.key}
                       label={t.label}
                       desc={t.desc}
-                      sub={date ? `${formatTrainingDate(date)} · ${state === 'expired' ? 'expired sejak' : 'berlaku s/d'} ${formatTrainingDate(expiry)}` : undefined}
+                      sub={date ? `${formatTrainingDate(date)} · Warning: ${formatTrainingDate(warning)} · Expired: ${formatTrainingDate(expiry)}` : undefined}
                       right={badge(meta.label, meta.cls)}
                     />
                   );
@@ -2015,10 +2017,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     const sapItems = hasAnySap ? SAP_TRAININGS.map(t => {
       const state = sapState(r, t.key, t.statusKey);
       const date = r[t.key];
-      const expiry = date ? trainingValidity(date, TODAY).expiryDate : null;
+      const val = date ? trainingValidity(date, TODAY) : null;
+      let stateLabel = SAP_STATE_META[state].label;
+      if (state === 'warning') stateLabel = 'Warning';
+      else if (state === 'expired') stateLabel = 'Expired';
       return {
         program: 'Training SAP' as const, label: t.label, desc: t.desc,
-        date, expiry, state: SAP_STATE_META[state].label, stateCls: SAP_STATE_META[state].cls,
+        date, warningDate: val?.warningDate || null, expiry: val?.expiryDate || null,
+        rawState: state, state: stateLabel, stateCls: SAP_STATE_META[state].cls,
       };
     }) : [];
     // K3 trainings
@@ -2396,8 +2402,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     }
     // Tooltip: masa berlaku + instruktur & skor dari file Monitoring
     const d = r.sapDetails?.[key];
+    const val = r[key] ? trainingValidity(r[key]!, TODAY) : null;
     const tip = [
-      r[key] && `Berlaku s/d ${formatTrainingDate(trainingValidity(r[key]!, TODAY).expiryDate)}`,
+      val && `Warning (1,6 Thn): ${formatTrainingDate(val.warningDate)} · Expired (2 Thn): ${formatTrainingDate(val.expiryDate)}`,
       d?.ins && `Instruktur: ${d.ins}`, d?.pre != null && `Pre: ${d.pre}`, d?.post != null && `Post: ${d.post}`, d?.prak != null && `Praktik: ${d.prak}`,
     ].filter(Boolean).join(' · ') || undefined;
     const badge = state === 'warning' ? { text: 'WARNING', cls: STATUS_BADGE.WARNING }
@@ -2926,7 +2933,41 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             {/* ===== MODUL TRAINING INTERNAL: Tabel SAP, K3, & Pra POP ===== */}
             {!isExternal && globalPersonProfile.sapItems.length > 0 && (
               <DashCard>
-                <DashTitle title="Daftar Status Training SAP" sub={`GOL ${globalPersonProfile.record.gol || '-'} · Masa berlaku 2 tahun dari tanggal training`} />
+                <DashTitle
+                  title="Daftar Status Training SAP"
+                  sub={`GOL ${globalPersonProfile.record.gol || '-'} · Masa Berlaku: 2 Tahun · Warning: 1,6 Tahun (18 Bulan) dari Tanggal Training · Expired: 2 Tahun (24 Bulan)`}
+                />
+
+                {/* Banner Peringatan jika ada training SAP Warning (>= 1,6 Tahun) atau Expired (>= 2 Tahun) */}
+                {(() => {
+                  const warningItems = globalPersonProfile.sapItems.filter(i => i.rawState === 'warning');
+                  const expiredItems = globalPersonProfile.sapItems.filter(i => i.rawState === 'expired');
+                  if (warningItems.length === 0 && expiredItems.length === 0) return null;
+                  return (
+                    <div className="mt-2.5 mb-2 p-3 rounded-xl bg-amber-50/90 border border-amber-200/90 text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="font-bold text-[11px] uppercase tracking-wider text-amber-900">
+                          Peringatan Masa Berlaku Training SAP (Warning: 1,6 Tahun · Expired: 2 Tahun)
+                        </p>
+                        <p className="text-[11px] leading-relaxed text-amber-800">
+                          {expiredItems.length > 0 && (
+                            <span className="font-semibold text-rose-700">
+                              {expiredItems.length} training telah expired ({expiredItems.map(x => x.label).join(', ')}).{' '}
+                            </span>
+                          )}
+                          {warningItems.length > 0 && (
+                            <span>
+                              {warningItems.length} training mendekati masa expired (&ge; 1,6 tahun):{' '}
+                              <span className="font-semibold">{warningItems.map(x => x.label).join(', ')}</span>. Harap agendakan penyegaran/refresh training sebelum mencapai batas expired 2 tahun.
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="overflow-x-auto -mx-1 mt-2">
                   <table className="w-full text-left text-xs">
                     <thead>
@@ -2934,17 +2975,32 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                         <th className="px-3 py-2 font-semibold">Training</th>
                         <th className="px-3 py-2 font-semibold">Deskripsi</th>
                         <th className="px-3 py-2 font-semibold">Tgl Training</th>
-                        <th className="px-3 py-2 font-semibold">Berlaku s/d</th>
+                        <th className="px-3 py-2 font-semibold text-amber-700 dark:text-amber-400">Warning (1,6 Thn)</th>
+                        <th className="px-3 py-2 font-semibold">Berlaku s/d (2 Thn)</th>
                         <th className="px-3 py-2 font-semibold text-right">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {globalPersonProfile.sapItems.map(t => (
-                        <tr key={t.label}>
+                        <tr
+                          key={t.label}
+                          className={`transition-colors ${
+                            t.rawState === 'warning'
+                              ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                              : t.rawState === 'expired'
+                              ? 'bg-rose-50/40 hover:bg-rose-50/70'
+                              : 'hover:bg-slate-50/50'
+                          }`}
+                        >
                           <td className="px-3 py-2.5 font-bold text-slate-900 whitespace-nowrap">{t.label}</td>
                           <td className="px-3 py-2.5 text-slate-600">{t.desc}</td>
                           <td className="px-3 py-2.5 text-slate-700 font-mono whitespace-nowrap">{t.date ? formatTrainingDate(t.date) : '-'}</td>
-                          <td className="px-3 py-2.5 text-slate-700 font-mono whitespace-nowrap">{t.expiry ? formatTrainingDate(t.expiry) : '-'}</td>
+                          <td className="px-3 py-2.5 font-mono whitespace-nowrap text-amber-700 dark:text-amber-400 font-medium">
+                            {t.warningDate ? formatTrainingDate(t.warningDate) : '-'}
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-700 font-mono whitespace-nowrap font-medium">
+                            {t.expiry ? formatTrainingDate(t.expiry) : '-'}
+                          </td>
                           <td className="px-3 py-2.5 text-right">
                             <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold border ${t.stateCls}`}>{t.state}</span>
                           </td>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Truck, BarChart3, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp,
+  Utensils, ArrowLeft, ChevronLeft, ChevronRight, Plus, Copy, Download, Search, Trash2, Edit3, Loader2, X, Users, FileSpreadsheet, Upload, RefreshCw, ArrowLeftRight, Package, Truck, BarChart3, Eye, EyeOff, SlidersHorizontal, ChevronDown, ChevronUp, ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,7 @@ import { BungkusRecapSheet, buildBungkusRecap, downloadBungkusRecapPdf, recapTit
 import { mealCounts, bungkusCount, MEAL_SLOT_BY_GROUP, type MealSlot } from '../utils/meal-bungkus-counts';
 import { MealBungkusStats } from './meal-bungkus-stats';
 import { MealBungkusRecipientsTable } from './meal-bungkus-recipients';
+import { EmployeeProfileExcelImportModal } from './EmployeeProfileExcelImportModal';
 
 // ===== Orderan Makanan harian =====
 // Kolom mengikuti sheet order makan: Pagi/Sahur, Siang, Sore (Kantin & Lapangan), Takjil & Malam (Lapangan),
@@ -164,6 +165,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const [copying, setCopying] = useState(false);
   const [syncingRoster, setSyncingRoster] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<MealOrder | null>(null);
+  const [isProfileImportOpen, setIsProfileImportOpen] = useState(false);
 
   // Pengaturan visibilitas kolom & header
   const [columnVisibility, setColumnVisibility] = useState<{
@@ -388,6 +390,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         shift: next.shift,
         section: next.section,
         tempatTinggal: next.tempatTinggal,
+        keteranganLapor: next.keteranganLapor,
       };
       const pref: MealPreference = {
         pagi: (modal?.row?.pilihanPagi as MealChoice) || null,
@@ -1384,6 +1387,15 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }} />
                 <button
                   type="button"
+                  onClick={() => setIsProfileImportOpen(true)}
+                  className={`${UI.btn} bg-emerald-50/80 hover:bg-emerald-100/90 text-emerald-800 border-emerald-300 font-bold shadow-xs`}
+                  title="Import Excel untuk memperbarui Profil Karyawan (PT, Status Mess, Shift, Section, Tempat Tinggal)"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                  <span>Perbarui Profil Karyawan</span>
+                </button>
+                <button
+                  type="button"
                   onClick={openGoogleSheet}
                   disabled={syncingSheet}
                   className={UI.btn}
@@ -1812,7 +1824,12 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                               </button>
                             </div>
                           </th>
-                          <th rowSpan={2} className={thSticky1}>PT</th>
+                          <th rowSpan={2} className={thSticky1} title="PT / Perusahaan (Terkunci: hanya dapat dirubah via Edit Manual atau Import Perbarui Profil Karyawan)">
+                            <div className="flex items-center justify-center gap-1">
+                              <span>PT</span>
+                              <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                            </div>
+                          </th>
                           <th rowSpan={2} className={thSticky1}>Shift</th>
                           <th rowSpan={2} className={thSticky1}>Section</th>
                         </>
@@ -1911,7 +1928,15 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                         {columnVisibility.profile && (
                           <>
                             <td className={`${tdBase} text-center`}>{r.statusMess || '-'}</td>
-                            <td className={`${tdBase} text-center`}>{r.pt || '-'}</td>
+                            <td className={`${tdBase} text-center`} title="PT / Perusahaan (Terkunci)">
+                              <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
+                                String(r.pt || '').toUpperCase().includes('GPS')
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : 'bg-blue-100 text-blue-800 border border-blue-300'
+                              }`}>
+                                {r.pt || '-'}
+                              </span>
+                            </td>
                             <td className={tdBase}>{r.shift || '-'}</td>
                             <td className={tdBase}>{r.section || '-'}</td>
                           </>
@@ -2236,6 +2261,16 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
           </div>
         </div>
       )}
+
+      {/* Modal Import Perbarui Profil Karyawan (Format Excel) */}
+      <EmployeeProfileExcelImportModal
+        isOpen={isProfileImportOpen}
+        onClose={() => setIsProfileImportOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['meal-orders'] });
+          queryClient.invalidateQueries({ queryKey: ['employees-master-lite'] });
+        }}
+      />
     </div>
   );
 }

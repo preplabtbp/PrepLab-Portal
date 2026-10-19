@@ -168,9 +168,14 @@ export function formatReportDateTime(timestamp?: string | number | Date | null):
   }
 }
 
-export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false, mode = 'feed' }: GroupReportProps) {
-  // Main view: 'feed' (modul SAP) atau 'rekap' (dipindahkan ke menu Safety)
-  const activeTab = mode;
+export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false, mode = 'rekap' }: GroupReportProps) {
+  // Main view: 'rekap' (detail status kepatuhan personil) atau 'feed' (linimasa & bukti laporan SAP)
+  const [activeTab, setActiveTab] = useState<'rekap' | 'feed'>(mode || 'rekap');
+
+  useEffect(() => {
+    if (mode) setActiveTab(mode);
+  }, [mode]);
+
   // Category filter for feed: 'ALL' | 'INSPEKSI' | 'KTA_TTA'
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'INSPEKSI' | 'KTA_TTA'>('ALL');
   // Sub-tab for Rekap: 'INSPEKSI' | 'KTA_TTA'
@@ -557,6 +562,14 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
   const loadedFeedWeek = useRef<string | null>(null);
   const loadedRekapWeek = useRef<string | null>(null);
   const loadedRekapKtaWeek = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Proactively fetch feed count for selectedWeek in background
+    if (loadedFeedWeek.current !== selectedWeek) {
+      loadedFeedWeek.current = selectedWeek;
+      fetchGroupFeed(selectedWeek);
+    }
+  }, [selectedWeek]);
 
   useEffect(() => {
     if (activeTab === 'feed') {
@@ -1527,6 +1540,35 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
               </button>
             )}
           </div>
+        </div>
+
+        {/* TAB SWITCHER UTAMA: REKAP STATUS & AKSI PERSONIL VS LINIMASA & BUKTI LAPORAN OBSERVASI */}
+        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[var(--border-main)]">
+          <button
+            type="button"
+            onClick={() => setActiveTab('rekap')}
+            className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'rekap'
+                ? 'bg-[var(--primary)] text-white shadow-md ring-2 ring-[var(--primary)]/30 font-black'
+                : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+            }`}
+          >
+            <Users className="w-4 h-4 shrink-0" />
+            <span>Rekap Status & Aksi Personil</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('feed')}
+            className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'feed'
+                ? 'bg-amber-600 text-white shadow-md ring-2 ring-amber-600/30 font-black'
+                : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+            }`}
+          >
+            <Camera className="w-4 h-4 shrink-0" />
+            <span>Linimasa & Bukti Laporan ({messages.length})</span>
+          </button>
         </div>
 
       </div>
