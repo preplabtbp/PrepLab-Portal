@@ -169,7 +169,8 @@ export function CreateFindingModal({
         photoUrl: finalPhotoUrl,
         requestorName: currentUserName ? (currentUserNik ? `${currentUserName} (${currentUserNik})` : currentUserName) : 'Management Sidak Team',
         status: 'OPEN',
-        date: new Date(date).toISOString()
+        date: date ? new Date(date).toISOString() : new Date().toISOString(),
+        pt: localStorage.getItem('bulletin_active_universe') || 'TBP'
       };
 
       const res = await fetch('/api/tickets', {

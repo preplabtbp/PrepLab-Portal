@@ -1484,8 +1484,8 @@ export function InspectionScheduleCard({
                           alt="Thumbnail SS"
                           onError={(e) => {
                             const driveMatch = ssProofUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || ssProofUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-                            if (driveMatch && !e.currentTarget.src.includes('uc?export=view')) {
-                              e.currentTarget.src = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                            if (driveMatch && !e.currentTarget.src.includes('googleusercontent.com')) {
+                              e.currentTarget.src = `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
                             }
                           }}
                           className="w-full h-full object-cover"
@@ -1758,8 +1758,8 @@ export function InspectionScheduleCard({
                                 alt="Thumbnail KTA"
                                 onError={(e) => {
                                   const driveMatch = ktaProofUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || ktaProofUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-                                  if (driveMatch && !e.currentTarget.src.includes('uc?export=view')) {
-                                    e.currentTarget.src = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                                  if (driveMatch && !e.currentTarget.src.includes('googleusercontent.com')) {
+                                    e.currentTarget.src = `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
                                   }
                                 }}
                                 className="w-full h-full object-cover"

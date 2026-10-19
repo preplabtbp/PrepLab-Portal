@@ -58,7 +58,7 @@ import {
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { ImageModal } from './image-modal';
-import { BulletinModulesAccordion } from './BulletinModulesAccordion';
+import { BulletinLibraryAccordion } from './BulletinLibraryAccordion';
 
 const WeatherIcon = ({ code, className }: { code: number, className?: string }) => {
   if (code < 3) return <Sun className={`text-amber-400 ${className}`} />;
@@ -72,6 +72,7 @@ interface TbpDashboardProps {
   agendaEvents?: any[];
   onOpenFullAgenda?: () => void;
   activeUniverse?: string;
+  onOpenLibrary?: (type?: any) => void;
 }
 
 interface DashboardMediaSettings {
@@ -231,7 +232,8 @@ export function TbpDashboard({
   onSelectPost, 
   agendaEvents = [], 
   onOpenFullAgenda, 
-  activeUniverse 
+  activeUniverse,
+  onOpenLibrary
 }: TbpDashboardProps) {
   const [time, setTime] = useState(new Date());
 
@@ -1305,9 +1307,14 @@ export function TbpDashboard({
               </div>
             </div>
 
-            {/* INTEGRATED MODULES ACCORDION */}
+            {/* PUSAT DOKUMEN RESMI & K3 PERUSAHAAN (COMPANY LIBRARY HUB) */}
             <div className="pt-1">
-              <BulletinModulesAccordion />
+              <BulletinLibraryAccordion 
+                posts={posts}
+                onSelectPost={onSelectPost}
+                onOpenFullLibrary={onOpenLibrary}
+                activeUniverse={activeUniverse}
+              />
             </div>
           </div>
 

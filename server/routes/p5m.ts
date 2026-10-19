@@ -2679,16 +2679,8 @@ p5mRouter.post("/schedules", async (req, res) => {
         }
       }
 
-      // Add general broadcast announcement so all team members receive the notification
-      const broadcastTitle = isUpdate ? "Pembaruan Jadwal & Materi P5M" : "Jadwal P5M Mingguan Dipublikasikan";
-      const broadcastMsg = `Jadwal P5M Mingguan periode ${dateStart} s/d ${dateEnd} telah ${isUpdate ? 'diperbarui' : 'dipublikasikan'}. Silakan periksa jadwal dan materi briefing Anda di modul P5M.`;
-      notificationsList.unshift({
-        userId: null,
-        title: broadcastTitle,
-        message: broadcastMsg,
-        type: 'info',
-        link: '/p5m'
-      });
+      // Notifications are only sent to assigned speakers (slotNik) above.
+      // General broadcast announcement (userId: null) is omitted to avoid spamming team members not on duty.
 
       // Batch insert notifications and trigger Web Push
       if (notificationsList.length > 0) {

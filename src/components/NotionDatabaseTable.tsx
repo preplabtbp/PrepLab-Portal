@@ -1265,30 +1265,6 @@ export function NotionDatabaseTable({
   }
   const [routineCompletionModal, setRoutineCompletionModal] = useState<RoutineCompletionModalData | null>(null);
 
-  // Auto open topic drawer if initialTopicTitle is provided (e.g. from notification deep link)
-  useEffect(() => {
-    if (initialTopicTitle && localRows.length > 0) {
-      let cleanTitle = initialTopicTitle.trim();
-      let detectedSubPeriod = '';
-      if (cleanTitle.includes(' - ')) {
-        const parts = cleanTitle.split(' - ');
-        cleanTitle = parts[0].trim();
-        detectedSubPeriod = parts.slice(1).join(' - ').trim();
-      }
-      const match = localRows.find(r => {
-        const tVal = getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'keterangan') || '';
-        return tVal.toLowerCase().trim() === cleanTitle.toLowerCase().trim() ||
-               tVal.toLowerCase().includes(cleanTitle.toLowerCase().trim()) ||
-               cleanTitle.toLowerCase().includes(tVal.toLowerCase().trim());
-      });
-      if (match) {
-        setSelectedRow(match);
-        if (detectedSubPeriod) {
-          setActiveSubPeriod(detectedSubPeriod);
-        }
-      }
-    }
-  }, [initialTopicTitle, localRows]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['ACTIVE']);
@@ -1411,6 +1387,105 @@ export function NotionDatabaseTable({
   const [expandedParents, setExpandedParents] = useState<Record<string | number, boolean>>({});
   const [creatingSubItemForParent, setCreatingSubItemForParent] = useState<number | null>(null);
   const [newSubItemTitle, setNewSubItemTitle] = useState<string>('');
+
+  // Helper to read row property with fuzzy matching across header aliases
+  const getRowVal = useCallback((row: TableRowData, colName: string): string => {
+    if (!row) return '';
+    const targetLower = colName.toLowerCase().trim();
+
+    if (targetLower === 'description' || targetLower === 'keterangan') {
+      if (row[colName] !== undefined && row[colName] !== '' && row[colName] !== '-') {
+        return row[colName];
+      }
+      for (const key of Object.keys(row)) {
+        const val = row[key];
+        const keyLower = key.toLowerCase().trim();
+        const cleanKey = keyLower.replace(/^[^a-z0-9]+/i, '').trim();
+        if (
+          cleanKey.includes('keterangan') || 
+          cleanKey.includes('description') || 
+          cleanKey.includes('deskripsi') || 
+          cleanKey.includes('catatan') || 
+          cleanKey.includes('rincian')
+        ) {
+          if (val !== undefined && val !== '' && val !== '-') return val;
+        }
+      }
+      return row[colName] || '';
+    }
+
+    if (row[colName] !== undefined && row[colName] !== '') return row[colName];
+
+    const cleanTarget = targetLower.replace(/^[^a-z0-9]+/i, '').trim();
+    let fallbackVal: string | undefined = undefined;
+
+    for (const key of Object.keys(row)) {
+      const val = row[key];
+      const keyLower = key.toLowerCase().trim();
+      const cleanKey = keyLower.replace(/^[^a-z0-9]+/i, '').trim();
+
+      if (keyLower === targetLower || (cleanKey && cleanKey === cleanTarget)) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+
+      if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#' || keyLower === 'index' || cleanKey === 'no' || cleanKey === 'number')) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if ((targetLower === 'activity name' || targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title' || targetLower === 'nama kegiatan') && 
+          (!cleanKey.includes('routine') && !cleanKey.includes('rutin')) &&
+          (cleanKey.includes('jenis kegiatan') || cleanKey.includes('activity name') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if ((targetLower === 'description' || targetLower === 'keterangan') && (cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('description') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if (targetLower === 'pic' && (cleanKey === 'pic' || cleanKey.includes('assignee') || cleanKey.includes('pj') || cleanKey === 'personil')) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if (targetLower === 'priority' && (cleanKey.includes('prioritas') || cleanKey.includes('priority'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if (targetLower === 'status' && cleanKey.includes('status')) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if (targetLower === 'created time' && (cleanKey.includes('created') || cleanKey.includes('tanggal dibuat') || cleanKey.includes('waktu dibuat') || cleanKey === 'dibuat')) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if ((targetLower === 'due date' || targetLower === 'target selesai' || targetLower === 'deadline' || targetLower === 'batas waktu') && 
+          (cleanKey.includes('due') || cleanKey.includes('deadline') || cleanKey.includes('target') || cleanKey.includes('jatuh tempo') || cleanKey.includes('batas waktu'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && 
+          (cleanKey.includes('completed') || cleanKey.includes('completion') || cleanKey.includes('aktual selesai') || cleanKey === 'selesai' || cleanKey.includes('waktu selesai') || cleanKey.includes('tanggal selesai'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if (targetLower === 'kategori' && (cleanKey.includes('kategori') || cleanKey.includes('category') || cleanKey === 'dept')) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if ((targetLower === 'activity (routine/non routine)' || targetLower === 'aktivitas') && 
+          !cleanKey.includes('name') && !cleanKey.includes('judul') && !cleanKey.includes('task') &&
+          (cleanKey.includes('activity') || cleanKey.includes('aktivitas') || cleanKey.includes('routine') || cleanKey.includes('rutin'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if (targetLower === 'period' && (cleanKey === 'period' || cleanKey === 'periode')) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+    }
+    return fallbackVal ?? row[colName] ?? '';
+  }, []);
 
   // Helper to categorize rows into Notion Database Groups (e.g. 'Non Routine Lainnya', 'PTK GTS')
   const getRowGroup = useCallback((row: TableRowData): string => {
@@ -2463,104 +2538,34 @@ export function NotionDatabaseTable({
     toast.success('Urutan dan lebar kolom berhasil dirapikan sesuai standar Notion!');
   };
 
-  // Helper to read row property with fuzzy matching across header aliases
-  const getRowVal = useCallback((row: TableRowData, colName: string): string => {
-    if (!row) return '';
-    const targetLower = colName.toLowerCase().trim();
-
-    if (targetLower === 'description' || targetLower === 'keterangan') {
-      if (row[colName] !== undefined && row[colName] !== '' && row[colName] !== '-') {
-        return row[colName];
+  // Auto open topic drawer if initialTopicTitle is provided (e.g. from notification deep link)
+  useEffect(() => {
+    if (initialTopicTitle && localRows.length > 0) {
+      let cleanTitle = initialTopicTitle.trim();
+      let detectedSubPeriod = '';
+      if (cleanTitle.includes(' - ')) {
+        const parts = cleanTitle.split(' - ');
+        cleanTitle = parts[0].trim();
+        detectedSubPeriod = parts.slice(1).join(' - ').trim();
       }
-      for (const key of Object.keys(row)) {
-        const val = row[key];
-        const keyLower = key.toLowerCase().trim();
-        const cleanKey = keyLower.replace(/^[^a-z0-9]+/i, '').trim();
-        if (
-          cleanKey.includes('keterangan') || 
-          cleanKey.includes('description') || 
-          cleanKey.includes('deskripsi') || 
-          cleanKey.includes('catatan') || 
-          cleanKey.includes('rincian')
-        ) {
-          if (val !== undefined && val !== '' && val !== '-') return val;
+      const targetT = cleanTitle.toLowerCase().trim();
+      const match = localRows.find(r => {
+        const rawT = getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || getRowVal(r, 'Judul') || getRowVal(r, 'keterangan') || '';
+        const dispT = getDisplayTitle(rawT).toLowerCase().trim();
+        const strippedT = stripColorTags(dispT).toLowerCase().trim();
+        return strippedT === targetT ||
+               strippedT.includes(targetT) ||
+               targetT.includes(strippedT) ||
+               rawT.toLowerCase().includes(targetT);
+      });
+      if (match) {
+        setSelectedRow(match);
+        if (detectedSubPeriod) {
+          setActiveSubPeriod(detectedSubPeriod);
         }
       }
-      return row[colName] || '';
     }
-
-    if (row[colName] !== undefined && row[colName] !== '') return row[colName];
-
-    const cleanTarget = targetLower.replace(/^[^a-z0-9]+/i, '').trim();
-    let fallbackVal: string | undefined = undefined;
-
-    for (const key of Object.keys(row)) {
-      const val = row[key];
-      const keyLower = key.toLowerCase().trim();
-      const cleanKey = keyLower.replace(/^[^a-z0-9]+/i, '').trim();
-
-      if (keyLower === targetLower || (cleanKey && cleanKey === cleanTarget)) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-
-      if (targetLower === 'number' && (keyLower === 'no' || keyLower === 'no.' || keyLower === '#' || keyLower === 'index' || cleanKey === 'no' || cleanKey === 'number')) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if ((targetLower === 'activity name' || targetLower === 'jenis kegiatan' || targetLower === 'judul' || targetLower === 'name' || targetLower === 'title' || targetLower === 'nama kegiatan') && 
-          (!cleanKey.includes('routine') && !cleanKey.includes('rutin')) &&
-          (cleanKey.includes('jenis kegiatan') || cleanKey.includes('activity name') || cleanKey === 'task' || cleanKey === 'judul' || cleanKey === 'name' || cleanKey === 'nama' || cleanKey === 'kegiatan' || cleanKey === 'title' || cleanKey === 'materi')) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if ((targetLower === 'description' || targetLower === 'keterangan') && (cleanKey.includes('keterangan') || cleanKey.includes('catatan') || cleanKey.includes('deskripsi') || cleanKey.includes('description') || cleanKey.includes('content') || cleanKey.includes('rincian'))) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if (targetLower === 'pic' && (cleanKey === 'pic' || cleanKey.includes('assignee') || cleanKey.includes('pj') || cleanKey === 'personil')) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if (targetLower === 'priority' && (cleanKey.includes('prioritas') || cleanKey.includes('priority'))) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if (targetLower === 'status' && cleanKey.includes('status')) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if (targetLower === 'created time' && (cleanKey.includes('created') || cleanKey.includes('tanggal dibuat') || cleanKey.includes('waktu dibuat') || cleanKey === 'dibuat')) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if ((targetLower === 'due date' || targetLower === 'target selesai' || targetLower === 'deadline' || targetLower === 'batas waktu') && 
-          (cleanKey.includes('due') || cleanKey.includes('deadline') || cleanKey.includes('target') || cleanKey.includes('jatuh tempo') || cleanKey.includes('batas waktu'))) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && 
-          (cleanKey.includes('completed') || cleanKey.includes('completion') || cleanKey.includes('aktual selesai') || cleanKey === 'selesai' || cleanKey.includes('waktu selesai') || cleanKey.includes('tanggal selesai'))) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if (targetLower === 'kategori' && (cleanKey.includes('kategori') || cleanKey.includes('category') || cleanKey === 'dept')) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if ((targetLower === 'activity (routine/non routine)' || targetLower === 'aktivitas') && 
-          !cleanKey.includes('name') && !cleanKey.includes('judul') && !cleanKey.includes('task') &&
-          (cleanKey.includes('activity') || cleanKey.includes('aktivitas') || cleanKey.includes('routine') || cleanKey.includes('rutin'))) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-      if (targetLower === 'period' && (cleanKey === 'period' || cleanKey === 'periode')) {
-        if (val !== undefined && val !== '') return val;
-        if (fallbackVal === undefined) fallbackVal = val;
-      }
-    }
-    return fallbackVal ?? row[colName] ?? '';
-  }, []);
+  }, [initialTopicTitle, localRows, getRowVal]);
 
   // Helper to ensure both Keterangan, Description, and any matching column are kept 100% in sync
   const setRowDescription = useCallback((targetRow: TableRowData, textVal: string) => {

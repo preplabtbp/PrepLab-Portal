@@ -3,7 +3,7 @@ import { db, isDbCircuitBroken } from "../../src/db/index.js";
 import { tickets, notifications, inspections, employees, bulletinPosts } from "../../src/db/schema.js";
 import { ticketSchema } from "../../src/lib/zod.js";
 import { eq, desc, like } from "drizzle-orm";
-import { sendWebPush, getIoInstance } from "../utils.js";
+import { sendWebPush, getIoInstance, sanitizePayload } from "../utils.js";
 
 export const router = express.Router();
 
@@ -319,7 +319,16 @@ router.post("/api/tickets", async (req, res) => {
       }
     }
 
-    const result = await db.insert(tickets).values(newTicket).returning();
+    if (!newTicket.pt) {
+      newTicket.pt = (req.query.pt as string) || 'TBP';
+    }
+
+    const cleanedTicket = sanitizePayload(tickets, newTicket);
+    if (!cleanedTicket.date) {
+      cleanedTicket.date = new Date();
+    }
+
+    const result = await db.insert(tickets).values(cleanedTicket).returning();
     const ticket = result[0];
     
     const waMessageText = isInternal
@@ -386,7 +395,12 @@ router.put("/api/tickets/:id", async (req, res) => {
       updateData.date = new Date(updateData.date);
     }
     
-    const result = await db.update(tickets).set(updateData).where(eq(tickets.ticketId, req.params.id)).returning();
+    const cleanedUpdate = sanitizePayload(tickets, updateData);
+    if (isClosedStatus && !cleanedUpdate.completionDate) {
+      cleanedUpdate.completionDate = new Date();
+    }
+
+    const result = await db.update(tickets).set(cleanedUpdate).where(eq(tickets.ticketId, req.params.id)).returning();
     const ticket = result[0];
     let waMessageText = '';
 

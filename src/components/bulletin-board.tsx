@@ -60,7 +60,7 @@ import {
 } from "lucide-react";
 import { CompanyLibraryHub, LibraryDocType } from './notion/CompanyLibraryHub';
 import { toast } from "sonner";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { AgendaDashboard } from "./agenda-dashboard";
@@ -102,6 +102,7 @@ export function BulletinBoard({
 }) {
   const { pt } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isSuperAdmin = inspectorNik === '02D24000043' || inspectorNik === '02D25000055' || inspectorNik === 'M0403240177' || inspectorNik === 'preplabadmin';
   const isDev = Boolean(isDeveloper || isSuperAdmin);
   const isManager = Boolean(
@@ -709,18 +710,39 @@ export function BulletinBoard({
     return () => window.removeEventListener('preplab:post-updated', handlePostUpdated);
   }, []);
 
-  // Handle URL persistence on refresh and deep link (e.g. ?page=123 or ?postId=123)
+  // Handle URL persistence on refresh and deep link (e.g. ?page=123 or ?postId=123&topic=...)
   useEffect(() => {
     if (posts.length === 0) return;
     try {
-      const params = new URLSearchParams(window.location.search);
+      const params = new URLSearchParams(location.search || window.location.search);
       const urlPostId = params.get("page") || params.get("postId") || params.get("id");
       const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
-      const targetId = urlPostId || savedPageId;
       const urlTopic = params.get("topic");
       if (urlTopic) {
         setDeepLinkTopic(urlTopic);
       }
+
+      // 1. Explicit Post ID from URL (e.g. from notification click ?postId=123&topic=...)
+      // Always prioritize urlPostId even if another post was previously active
+      if (urlPostId) {
+        if (!selectedPost || String(selectedPost.id) !== String(urlPostId)) {
+          const target = posts.find((p) => String(p.id) === String(urlPostId));
+          if (target) {
+            if (!canAccessAllSections && isLogbookPost(target)) {
+              const sec = getSectionFromPost(target);
+              if (!isUserAllowedToAccessSection(sec, userProfile, canAccessAllSections)) {
+                toast.error(`Akses ditolak: Dokumen Labnote ${sec} hanya dapat diakses oleh personil seksi ${userAllowedSections.join(', ')}.`);
+                openSectionLogbook(userAllowedSections[0] || 'Preparasi');
+                return;
+              }
+            }
+            setSelectedPost(target);
+            addRecentPost(target.id);
+            return;
+          }
+        }
+      }
+
       const urlLogbook = params.get("logbook") || params.get("sectionLogbook");
       if (urlLogbook && !selectedPost) {
         const rawSec = urlLogbook === 'true' ? (userAllowedSections[0] || 'Preparasi') : urlLogbook;
@@ -732,8 +754,8 @@ export function BulletinBoard({
         openSectionLogbook(rawSec);
         return;
       }
-      if (targetId && String(targetId).startsWith('logbook-') && !selectedPost) {
-        const secPart = String(targetId).replace(/^logbook-/, '');
+      if (savedPageId && String(savedPageId).startsWith('logbook-') && !selectedPost) {
+        const secPart = String(savedPageId).replace(/^logbook-/, '');
         if (!canAccessAllSections && !isUserAllowedToAccessSection(secPart, userProfile, canAccessAllSections)) {
           toast.error(`Akses ditolak: Anda hanya dapat mengakses Labnote seksi ${userAllowedSections.join(', ')}.`);
           openSectionLogbook(userAllowedSections[0] || 'Preparasi');
@@ -742,8 +764,8 @@ export function BulletinBoard({
         openSectionLogbook(secPart);
         return;
       }
-      if (targetId && !selectedPost) {
-        const target = posts.find((p) => String(p.id) === String(targetId));
+      if (savedPageId && !selectedPost) {
+        const target = posts.find((p) => String(p.id) === String(savedPageId));
         if (target) {
           if (!canAccessAllSections && isLogbookPost(target)) {
             const sec = getSectionFromPost(target);
@@ -758,7 +780,31 @@ export function BulletinBoard({
         }
       }
     } catch (e) {}
-  }, [posts, addRecentPost, selectedPost, openSectionLogbook, canAccessAllSections, userAllowedSections, userProfile]);
+  }, [posts, location.search, addRecentPost, selectedPost, openSectionLogbook, canAccessAllSections, userAllowedSections, userProfile]);
+
+  // Listen for direct custom event from notification bell when user clicks while already in bulletin
+  useEffect(() => {
+    const handleNavBulletinEvent = (e: any) => {
+      const link = e.detail?.link;
+      if (link && link.includes('?')) {
+        try {
+          const qs = link.split('?')[1];
+          const sp = new URLSearchParams(qs);
+          const pId = sp.get("postId") || sp.get("page") || sp.get("id");
+          const top = sp.get("topic");
+          if (top) setDeepLinkTopic(top);
+          if (pId && posts.length > 0) {
+            const target = posts.find((p) => String(p.id) === String(pId));
+            if (target) {
+              navigateToPost(target);
+            }
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('navigate-bulletin', handleNavBulletinEvent);
+    return () => window.removeEventListener('navigate-bulletin', handleNavBulletinEvent);
+  }, [posts, navigateToPost]);
 
   // Go back to previous history or parent
   const goBack = () => {
@@ -2189,6 +2235,7 @@ ${aiMeetingNotes
                   agendaEvents={agendaEventsList}
                   onOpenFullAgenda={() => setShowFullAgendaModal(true)}
                   activeUniverse={selectedPtFilter}
+                  onOpenLibrary={(type) => openLibraryHub(type || 'ALL')}
                 />
               );
             })()
