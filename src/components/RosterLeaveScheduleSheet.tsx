@@ -3,13 +3,15 @@ import {
   Plane, PlaneTakeoff, Calendar, Users, Search, Filter, 
   FileSpreadsheet, Download, RefreshCw, AlertCircle, CheckCircle2, 
   Clock, Sparkles, Shield, ArrowUpDown, ChevronDown, Check,
-  ChevronRight, Building2, MapPin, Briefcase, Info, Printer
+  ChevronRight, Building2, MapPin, Briefcase, Info, Printer,
+  ChevronLeft, Edit2, Eye, EyeOff, RotateCcw, X, Save, Settings2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 
 interface RosterLeaveScheduleSheetProps {
   roster: any[];
+  returnTo?: string | null;
 }
 
 interface LeaveRecord {
@@ -39,6 +41,7 @@ interface LeaveRecord {
   totalHari: number;
   hasChange: boolean;
   isCutiSelesai: boolean;
+  isCustomEdited?: boolean;
 }
 
 const MONTH_NAMES_ID = [
@@ -342,7 +345,45 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
   return records.sort((a, b) => a.tanggalCutiRaw.getTime() - b.tanggalCutiRaw.getTime());
 }
 
-export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetProps) {
+const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
+  no: true,
+  nama: true,
+  poh: true,
+  jabatan: true,
+  tanggalCuti: true,
+  tanggalOnsite: true,
+  ket: true,
+  perubahanJadwalOnsite: true,
+  travel: true,
+  tahunanIstimewa: true,
+  extra: true,
+  izinKhusus: true,
+  izin: true,
+  tambahanTravel: true,
+  totalHari: true,
+  aksi: true,
+};
+
+const COLUMN_DEFS = [
+  { id: 'no', label: 'NO' },
+  { id: 'nama', label: 'NAMA & NIK' },
+  { id: 'poh', label: 'POH' },
+  { id: 'jabatan', label: 'JABATAN & GOL' },
+  { id: 'tanggalCuti', label: 'TANGGAL CUTI' },
+  { id: 'tanggalOnsite', label: 'TANGGAL ON SITE' },
+  { id: 'ket', label: 'KET' },
+  { id: 'perubahanJadwalOnsite', label: 'PERUBAHAN JADWAL ONSITE' },
+  { id: 'travel', label: 'Travel (TRV)', group: 'duration' as const },
+  { id: 'tahunanIstimewa', label: 'Tahunan / Istimewa', group: 'duration' as const },
+  { id: 'extra', label: 'Extra (CE)', group: 'duration' as const },
+  { id: 'izinKhusus', label: 'Izin Khusus (IK)', group: 'duration' as const },
+  { id: 'izin', label: 'Izin (I / SL)', group: 'duration' as const },
+  { id: 'tambahanTravel', label: 'Tambahan Travel (TT)', group: 'duration' as const },
+  { id: 'totalHari', label: 'TOTAL HARI' },
+  { id: 'aksi', label: 'AKSI (Edit)' },
+];
+
+export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveScheduleSheetProps) {
   // Sub-Sheet Tab: 'staff' (Gol II-V) vs 'crew' (Gol I)
   const [activeTab, setActiveTab] = useState<'staff' | 'crew'>('staff');
 
@@ -351,15 +392,191 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
   const [selectedSection, setSelectedSection] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Extract all leave records
+  // Column Visibility state
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('preplab_leave_visible_cols');
+      if (saved) return { ...DEFAULT_VISIBLE_COLUMNS, ...JSON.parse(saved) };
+    } catch(e) {}
+    return DEFAULT_VISIBLE_COLUMNS;
+  });
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+
+  const toggleColumn = (colKey: string) => {
+    setVisibleColumns(prev => {
+      const next = { ...prev, [colKey]: !prev[colKey] };
+      try {
+        localStorage.setItem('preplab_leave_visible_cols', JSON.stringify(next));
+      } catch(e) {}
+      return next;
+    });
+  };
+
+  const showAllColumns = () => {
+    const allTrue = Object.keys(DEFAULT_VISIBLE_COLUMNS).reduce((acc, k) => ({ ...acc, [k]: true }), {});
+    setVisibleColumns(allTrue);
+    try {
+      localStorage.setItem('preplab_leave_visible_cols', JSON.stringify(allTrue));
+    } catch(e) {}
+  };
+
+  const resetDefaultColumns = () => {
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+    try {
+      localStorage.setItem('preplab_leave_visible_cols', JSON.stringify(DEFAULT_VISIBLE_COLUMNS));
+    } catch(e) {}
+  };
+
+  // Custom Overrides state (persisted to localStorage)
+  const [customOverrides, setCustomOverrides] = useState<Record<string, any>>(() => {
+    try {
+      const saved = localStorage.getItem('preplab_leave_custom_overrides');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {};
+  });
+
+  // Edit Modal State
+  const [editingRecord, setEditingRecord] = useState<LeaveRecord | null>(null);
+  const [editForm, setEditForm] = useState<{
+    poh: string;
+    tanggalCuti: string;
+    tanggalOnsite: string;
+    perubahanJadwalOnsite: string;
+    ket: string;
+    travel: number;
+    tahunanIstimewa: number;
+    extra: number;
+    izinKhusus: number;
+    izin: number;
+    tambahanTravel: number;
+  }>({
+    poh: '',
+    tanggalCuti: '',
+    tanggalOnsite: '',
+    perubahanJadwalOnsite: '',
+    ket: '',
+    travel: 0,
+    tahunanIstimewa: 0,
+    extra: 0,
+    izinKhusus: 0,
+    izin: 0,
+    tambahanTravel: 0
+  });
+
+  const handleOpenEditModal = (rec: LeaveRecord) => {
+    setEditingRecord(rec);
+    setEditForm({
+      poh: rec.poh || '',
+      tanggalCuti: rec.tanggalCuti || '',
+      tanggalOnsite: rec.tanggalOnsite || '',
+      perubahanJadwalOnsite: rec.perubahanJadwalOnsite === '-' ? '' : rec.perubahanJadwalOnsite,
+      ket: rec.ket || '',
+      travel: rec.travel || 0,
+      tahunanIstimewa: rec.tahunanIstimewa || 0,
+      extra: rec.extra || 0,
+      izinKhusus: rec.izinKhusus || 0,
+      izin: rec.izin || 0,
+      tambahanTravel: rec.tambahanTravel || 0
+    });
+  };
+
+  const handleSaveRecordEdit = () => {
+    if (!editingRecord) return;
+    const travel = Math.max(0, Number(editForm.travel) || 0);
+    const tahunanIstimewa = Math.max(0, Number(editForm.tahunanIstimewa) || 0);
+    const extra = Math.max(0, Number(editForm.extra) || 0);
+    const izinKhusus = Math.max(0, Number(editForm.izinKhusus) || 0);
+    const izin = Math.max(0, Number(editForm.izin) || 0);
+    const tambahanTravel = Math.max(0, Number(editForm.tambahanTravel) || 0);
+    const totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
+
+    const overrideData = {
+      poh: editForm.poh.trim() || editingRecord.poh,
+      tanggalCuti: editForm.tanggalCuti.trim() || editingRecord.tanggalCuti,
+      tanggalOnsite: editForm.tanggalOnsite.trim() || editingRecord.tanggalOnsite,
+      perubahanJadwalOnsite: editForm.perubahanJadwalOnsite.trim() || '-',
+      ket: editForm.ket.trim() || editingRecord.ket,
+      travel,
+      tahunanIstimewa,
+      extra,
+      izinKhusus,
+      izin,
+      tambahanTravel,
+      totalHari
+    };
+
+    setCustomOverrides(prev => {
+      const next = { ...prev, [editingRecord.id]: overrideData };
+      try {
+        localStorage.setItem('preplab_leave_custom_overrides', JSON.stringify(next));
+      } catch(e) {}
+      return next;
+    });
+
+    toast.success(`Jadwal cuti ${editingRecord.nama} berhasil diperbarui!`);
+    setEditingRecord(null);
+  };
+
+  const handleResetRecordToOriginal = () => {
+    if (!editingRecord) return;
+    setCustomOverrides(prev => {
+      const next = { ...prev };
+      delete next[editingRecord.id];
+      try {
+        localStorage.setItem('preplab_leave_custom_overrides', JSON.stringify(next));
+      } catch(e) {}
+      return next;
+    });
+
+    toast.info(`Jadwal cuti ${editingRecord.nama} dikembalikan ke kalkulasi roster asli.`);
+    setEditingRecord(null);
+  };
+
+  // Extract all leave records from raw roster
   const allLeaveRecords = useMemo(() => {
     return extractLeaveRecordsFromRoster(roster);
   }, [roster]);
 
+  // Merge with custom overrides
+  const mergedLeaveRecords = useMemo(() => {
+    return allLeaveRecords.map(rec => {
+      const ov = customOverrides[rec.id];
+      if (!ov) return rec;
+      const travel = ov.travel !== undefined ? ov.travel : rec.travel;
+      const tahunanIstimewa = ov.tahunanIstimewa !== undefined ? ov.tahunanIstimewa : rec.tahunanIstimewa;
+      const extra = ov.extra !== undefined ? ov.extra : rec.extra;
+      const izinKhusus = ov.izinKhusus !== undefined ? ov.izinKhusus : rec.izinKhusus;
+      const izin = ov.izin !== undefined ? ov.izin : rec.izin;
+      const tambahanTravel = ov.tambahanTravel !== undefined ? ov.tambahanTravel : rec.tambahanTravel;
+      const totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
+      const perubahanJadwalOnsite = ov.perubahanJadwalOnsite !== undefined ? ov.perubahanJadwalOnsite : rec.perubahanJadwalOnsite;
+      const hasChange = (perubahanJadwalOnsite && perubahanJadwalOnsite !== '-') || rec.hasChange;
+
+      return {
+        ...rec,
+        poh: ov.poh !== undefined ? ov.poh : rec.poh,
+        tanggalCuti: ov.tanggalCuti !== undefined ? ov.tanggalCuti : rec.tanggalCuti,
+        tanggalOnsite: ov.tanggalOnsite !== undefined ? ov.tanggalOnsite : rec.tanggalOnsite,
+        perubahanJadwalOnsite,
+        ket: ov.ket !== undefined ? ov.ket : rec.ket,
+        travel,
+        tahunanIstimewa,
+        extra,
+        izinKhusus,
+        izin,
+        tambahanTravel,
+        totalHari,
+        hasChange,
+        isCustomEdited: true
+      };
+    });
+  }, [allLeaveRecords, customOverrides]);
+
   // Extract available periods (Month + Year) from data
   const availablePeriods = useMemo(() => {
     const periodSet = new Set<string>();
-    allLeaveRecords.forEach(rec => {
+    mergedLeaveRecords.forEach(rec => {
       const d = rec.tanggalCutiRaw;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       periodSet.add(key);
@@ -373,7 +590,7 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
         label: `${MONTH_NAMES_ID[month - 1]} ${year}`
       };
     });
-  }, [allLeaveRecords]);
+  }, [mergedLeaveRecords]);
 
   // Set default month to current month if present in data
   useMemo(() => {
@@ -390,17 +607,36 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
   // Available sections (based on unified section values: Laboratory, Preparation, Maintenance for current tab)
   const availableSections = useMemo(() => {
     const set = new Set<string>();
-    allLeaveRecords.forEach(e => {
+    mergedLeaveRecords.forEach(e => {
       if (activeTab === 'staff' && e.isGol1) return;
       if (activeTab === 'crew' && !e.isGol1) return;
       if (e.section) set.add(e.section);
     });
     return Array.from(set).sort();
-  }, [allLeaveRecords, activeTab]);
+  }, [mergedLeaveRecords, activeTab]);
+
+  // Visible duration columns count & layout helpers
+  const visibleDurationColsCount = useMemo(() => {
+    return ['travel', 'tahunanIstimewa', 'extra', 'izinKhusus', 'izin', 'tambahanTravel']
+      .filter(c => visibleColumns[c]).length;
+  }, [visibleColumns]);
+
+  const visibleBeforeDurationCount = useMemo(() => {
+    return ['no', 'nama', 'poh', 'jabatan', 'tanggalCuti', 'tanggalOnsite', 'ket', 'perubahanJadwalOnsite']
+      .filter(c => visibleColumns[c]).length;
+  }, [visibleColumns]);
+
+  const totalVisibleCols = useMemo(() => {
+    return Object.values(visibleColumns).filter(Boolean).length;
+  }, [visibleColumns]);
+
+  const hiddenColsCount = useMemo(() => {
+    return Object.keys(DEFAULT_VISIBLE_COLUMNS).length - totalVisibleCols;
+  }, [totalVisibleCols]);
 
   // Filtered records based on tab, month, section, and search
   const filteredRecords = useMemo(() => {
-    return allLeaveRecords.filter(rec => {
+    return mergedLeaveRecords.filter(rec => {
       // 1. Tab Golongan
       if (activeTab === 'staff' && rec.isGol1) return false;
       if (activeTab === 'crew' && !rec.isGol1) return false;
@@ -436,7 +672,7 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
 
       return true;
     });
-  }, [allLeaveRecords, activeTab, selectedMonth, selectedSection, searchQuery]);
+  }, [mergedLeaveRecords, activeTab, selectedMonth, selectedSection, searchQuery]);
 
   // Statistics KPI
   const stats = useMemo(() => {
@@ -577,6 +813,280 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
+      {/* Return to Labnote Banner (if opened from Labnote) */}
+      {returnTo && (
+        <div className="p-3.5 sm:p-4 rounded-2xl border border-teal-500/30 bg-teal-500/10 text-teal-900 dark:text-teal-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-teal-600 text-white shadow-sm shrink-0">
+              <FileSpreadsheet className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm font-black flex items-center gap-2">
+                <span>Terhubung dari Modul Labnote</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-teal-600 text-white shadow-2xs">
+                  Labnote Active
+                </span>
+              </div>
+              <div className="text-[11px] text-teal-700 dark:text-teal-300 font-medium mt-0.5">
+                Anda dialihkan dari task Labnote. Klik tombol kembali di samping untuk kembali ke halaman Labnote semula.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                window.location.href = decodeURIComponent(returnTo);
+              } catch(e) {
+                window.location.href = returnTo;
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-sm hover:shadow-teal-500/20 transition-all cursor-pointer shrink-0"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Kembali ke Labnote</span>
+          </button>
+        </div>
+      )}
+
+      {/* Edit Record Modal */}
+      {editingRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    Edit Jadwal & Rincian Cuti
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    {editingRecord.nama} ({editingRecord.nik}) • Gol {editingRecord.gol}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingRecord(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar text-xs">
+              {/* Row 1: POH & KET */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    POH (Point of Hire)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.poh}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, poh: e.target.value }))}
+                    placeholder="Contoh: Ternate, Jakarta, dll."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Keterangan (KET)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.ket}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, ket: e.target.value }))}
+                    placeholder="Normal, Cuti Selesai, Extend, dll."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Tanggal Cuti, Tanggal Onsite, Perubahan Onsite */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-emerald-700 dark:text-emerald-400 mb-1">
+                    Tanggal Cuti
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.tanggalCuti}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, tanggalCuti: e.target.value }))}
+                    placeholder="24 Agu 2026"
+                    className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/20 font-bold text-emerald-800 dark:text-emerald-300 outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-teal-700 dark:text-teal-400 mb-1">
+                    Tanggal On Site
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.tanggalOnsite}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, tanggalOnsite: e.target.value }))}
+                    placeholder="7 Sep 2026"
+                    className="w-full px-3 py-2 rounded-xl border border-teal-300 dark:border-teal-800 bg-teal-50/30 dark:bg-teal-950/20 font-bold text-teal-800 dark:text-teal-300 outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-amber-700 dark:text-amber-400 mb-1">
+                    Perubahan Onsite
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.perubahanJadwalOnsite}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, perubahanJadwalOnsite: e.target.value }))}
+                    placeholder="Kosongkan jika '-' "
+                    className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/20 font-bold text-amber-800 dark:text-amber-300 outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Section: Rincian Durasi / Jenis Cuti (Hari) */}
+              <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-slate-800 dark:text-slate-200 text-xs">
+                    Rincian Durasi & Jenis Cuti (Hari)
+                  </span>
+                  <div className="text-xs font-bold text-slate-500">
+                    Total: <span className="text-teal-600 dark:text-teal-400 font-black text-sm">
+                      {(Number(editForm.travel) || 0) +
+                       (Number(editForm.tahunanIstimewa) || 0) +
+                       (Number(editForm.extra) || 0) +
+                       (Number(editForm.izinKhusus) || 0) +
+                       (Number(editForm.izin) || 0) +
+                       (Number(editForm.tambahanTravel) || 0)} Hari
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
+                      Travel (TRV)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editForm.travel}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, travel: Math.max(0, parseInt(e.target.value) || 0) }))}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
+                      Tahunan / Istimewa (CT/CI)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editForm.tahunanIstimewa}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, tahunanIstimewa: Math.max(0, parseInt(e.target.value) || 0) }))}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
+                      Extra (CE)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editForm.extra}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, extra: Math.max(0, parseInt(e.target.value) || 0) }))}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
+                      Izin Khusus (IK)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editForm.izinKhusus}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, izinKhusus: Math.max(0, parseInt(e.target.value) || 0) }))}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
+                      Izin (I / SL)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editForm.izin}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, izin: Math.max(0, parseInt(e.target.value) || 0) }))}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-amber-700 dark:text-amber-400 text-[11px] mb-1">
+                      Tambahan Travel (TT)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editForm.tambahanTravel}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, tambahanTravel: Math.max(0, parseInt(e.target.value) || 0) }))}
+                      className="w-full px-3 py-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
+              <div>
+                {customOverrides[editingRecord.id] && (
+                  <button
+                    type="button"
+                    onClick={handleResetRecordToOriginal}
+                    className="text-rose-600 hover:text-rose-700 text-xs font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reset ke Roster Asli</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingRecord(null)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveRecordEdit}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Simpan Perubahan</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Entrepreneurial Executive Header Card - Crisp Executive White Style */}
       <div 
         className="p-4 sm:p-6 rounded-2xl border shadow-xs relative overflow-hidden"
@@ -700,7 +1210,7 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
                 ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300'
                 : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
             }`}>
-              {allLeaveRecords.filter(r => !r.isGol1).length}
+              {mergedLeaveRecords.filter(r => !r.isGol1).length}
             </span>
           </button>
 
@@ -720,7 +1230,7 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
                 ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300'
                 : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
             }`}>
-              {allLeaveRecords.filter(r => r.isGol1).length}
+              {mergedLeaveRecords.filter(r => r.isGol1).length}
             </span>
           </button>
         </div>
@@ -734,7 +1244,7 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
         </div>
       </div>
 
-      {/* Filter Bar (Periode Cuti Bulan, Section, Search) */}
+      {/* Filter Bar (Periode Cuti Bulan, Section, Sembunyikan Kolom, Search) */}
       <div 
         className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border shadow-xs space-y-3"
         style={{
@@ -743,7 +1253,7 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
         }}
       >
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          {/* Left filters: Month & Section */}
+          {/* Left filters: Month, Section & Column Visibility */}
           <div className="flex flex-wrap items-center gap-2.5 flex-1">
             {/* Periode Cuti (Bulan) Filter */}
             <div className="flex items-center gap-1.5">
@@ -761,7 +1271,7 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
                   color: 'var(--text-main, #1E293B)'
                 }}
               >
-                <option value="ALL">Semua Periode ({allLeaveRecords.length} Data)</option>
+                <option value="ALL">Semua Periode ({mergedLeaveRecords.length} Data)</option>
                 {availablePeriods.map(p => (
                   <option key={p.key} value={p.key}>
                     {p.label}
@@ -791,6 +1301,96 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
                   <option key={sec} value={sec}>{sec}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Column Visibility Dropdown Toggle */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowColumnMenu(prev => !prev)}
+                className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl border text-xs font-bold transition-all shadow-2xs cursor-pointer bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700"
+                title="Atur kolom yang ingin ditampilkan atau disembunyikan"
+              >
+                <Eye className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>Sembunyikan Kolom</span>
+                {hiddenColsCount > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                    {hiddenColsCount}
+                  </span>
+                )}
+                <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
+              </button>
+
+              {showColumnMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowColumnMenu(false)} 
+                  />
+                  <div className="absolute left-0 sm:right-0 sm:left-auto mt-2 w-72 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl z-50 animate-in fade-in zoom-in-95 space-y-2.5">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <span className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Settings2 className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Atur Visibilitas Kolom</span>
+                      </span>
+                      <button 
+                        type="button"
+                        onClick={() => setShowColumnMenu(false)}
+                        className="text-slate-400 hover:text-slate-600 p-0.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] gap-2 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={showAllColumns}
+                        className="text-teal-600 hover:text-teal-700 font-bold hover:underline"
+                      >
+                        Tampilkan Semua
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetDefaultColumns}
+                        className="text-slate-500 hover:text-slate-700 font-medium hover:underline flex items-center gap-1"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                        <span>Reset Default</span>
+                      </button>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                      {COLUMN_DEFS.map((col) => {
+                        const isVisible = visibleColumns[col.id] !== false;
+                        return (
+                          <label
+                            key={col.id}
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer text-xs select-none transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isVisible}
+                                onChange={() => toggleColumn(col.id)}
+                                className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 cursor-pointer accent-teal-600"
+                              />
+                              <span className={`font-semibold ${isVisible ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 line-through'}`}>
+                                {col.label}
+                              </span>
+                            </div>
+                            {col.group === 'duration' && (
+                              <span className="text-[9px] px-1 py-0.2 rounded font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                Durasi
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -826,7 +1426,7 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
             <thead>
               {/* Header Title Bar */}
               <tr className="bg-slate-900 text-white border-b border-slate-800">
-                <th colSpan={15} className="py-3 px-4 font-black tracking-wide uppercase text-xs sm:text-sm text-center bg-slate-900 text-white">
+                <th colSpan={totalVisibleCols} className="py-3 px-4 font-black tracking-wide uppercase text-xs sm:text-sm text-center bg-slate-900 text-white">
                   {activeTab === 'staff' ? 'PREP & LAB - STAFF LAB' : 'PREP & LAB - CREW PREPARASI & LAB'}
                 </th>
               </tr>
@@ -838,49 +1438,93 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
                   color: 'var(--text-muted, #64748B)'
                 }}
               >
-                <th rowSpan={2} className="py-2.5 px-3 text-center w-12 border-r border-slate-200 dark:border-slate-800">NO</th>
-                <th rowSpan={2} className="py-2.5 px-4 min-w-[180px] border-r border-slate-200 dark:border-slate-800">NAMA & NIK</th>
-                <th rowSpan={2} className="py-2.5 px-3 min-w-[110px] border-r border-slate-200 dark:border-slate-800">POH</th>
-                <th rowSpan={2} className="py-2.5 px-3 min-w-[140px] border-r border-slate-200 dark:border-slate-800">JABATAN</th>
-                <th rowSpan={2} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-emerald-500/5 text-emerald-800 dark:text-emerald-300">
-                  TANGGAL CUTI
-                </th>
-                <th rowSpan={2} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-teal-500/5 text-teal-800 dark:text-teal-300">
-                  TANGGAL ON SITE
-                </th>
-                <th rowSpan={2} className="py-2.5 px-3 min-w-[130px] border-r border-slate-200 dark:border-slate-800">KET</th>
-                <th rowSpan={2} className="py-2.5 px-3 text-center min-w-[120px] border-r border-slate-200 dark:border-slate-800 bg-amber-500/5 text-amber-800 dark:text-amber-300">
-                  PERUBAHAN JADWAL ONSITE
-                </th>
-                <th colSpan={6} className="py-1.5 px-2 text-center border-b border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 font-extrabold">
-                  RINCIAN DURASI / JENIS CUTI (HARI)
-                </th>
-                <th rowSpan={2} className="py-2.5 px-3 text-center min-w-[70px] bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
-                  TOTAL HARI
-                </th>
+                {visibleColumns.no && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center w-12 border-r border-slate-200 dark:border-slate-800">NO</th>
+                )}
+                {visibleColumns.nama && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-4 min-w-[180px] border-r border-slate-200 dark:border-slate-800">NAMA & NIK</th>
+                )}
+                {visibleColumns.poh && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[110px] border-r border-slate-200 dark:border-slate-800">POH</th>
+                )}
+                {visibleColumns.jabatan && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[140px] border-r border-slate-200 dark:border-slate-800">JABATAN</th>
+                )}
+                {visibleColumns.tanggalCuti && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-emerald-500/5 text-emerald-800 dark:text-emerald-300">
+                    TANGGAL CUTI
+                  </th>
+                )}
+                {visibleColumns.tanggalOnsite && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-teal-500/5 text-teal-800 dark:text-teal-300">
+                    TANGGAL ON SITE
+                  </th>
+                )}
+                {visibleColumns.ket && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[130px] border-r border-slate-200 dark:border-slate-800">KET</th>
+                )}
+                {visibleColumns.perubahanJadwalOnsite && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[120px] border-r border-slate-200 dark:border-slate-800 bg-amber-500/5 text-amber-800 dark:text-amber-300">
+                    PERUBAHAN JADWAL ONSITE
+                  </th>
+                )}
+
+                {/* Duration Group Header */}
+                {visibleDurationColsCount > 0 && (
+                  <th colSpan={visibleDurationColsCount} className="py-1.5 px-2 text-center border-b border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 font-extrabold">
+                    RINCIAN DURASI / JENIS CUTI (HARI)
+                  </th>
+                )}
+
+                {visibleColumns.totalHari && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[70px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
+                    TOTAL HARI
+                  </th>
+                )}
+
+                {visibleColumns.aksi && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[70px] bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
+                    AKSI
+                  </th>
+                )}
               </tr>
+
               {/* Sub-headers for duration columns */}
-              <tr 
-                className="border-b text-[10px] font-bold uppercase tracking-wider bg-slate-100/70 dark:bg-slate-800/50"
-                style={{
-                  borderColor: 'var(--border-main, #E2E8F0)',
-                  color: 'var(--text-muted, #64748B)'
-                }}
-              >
-                <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Perjalanan Masuk & Pulang (TRV)">Travel</th>
-                <th className="py-1.5 px-2 text-center w-24 border-r border-slate-200 dark:border-slate-800" title="Cuti Tahunan (CT) & Istimewa (CI)">Tahunan / Istimewa</th>
-                <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Cuti Extra (CE)">Extra</th>
-                <th className="py-1.5 px-2 text-center w-20 border-r border-slate-200 dark:border-slate-800" title="Izin Khusus (IK)">Izin Khusus</th>
-                <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Izin Biasa / Sakit (I / SL)">Izin</th>
-                <th className="py-1.5 px-2 text-center min-w-[140px] border-r border-slate-200 dark:border-slate-800 text-amber-700 dark:text-amber-400" title="Tambahan Travel jika tidak ada transportasi (TT)">
-                  Tambahan Travel (TT)
-                </th>
-              </tr>
+              {visibleDurationColsCount > 0 && (
+                <tr 
+                  className="border-b text-[10px] font-bold uppercase tracking-wider bg-slate-100/70 dark:bg-slate-800/50"
+                  style={{
+                    borderColor: 'var(--border-main, #E2E8F0)',
+                    color: 'var(--text-muted, #64748B)'
+                  }}
+                >
+                  {visibleColumns.travel && (
+                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Perjalanan Masuk & Pulang (TRV)">Travel</th>
+                  )}
+                  {visibleColumns.tahunanIstimewa && (
+                    <th className="py-1.5 px-2 text-center w-24 border-r border-slate-200 dark:border-slate-800" title="Cuti Tahunan (CT) & Istimewa (CI)">Tahunan / Istimewa</th>
+                  )}
+                  {visibleColumns.extra && (
+                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Cuti Extra (CE)">Extra</th>
+                  )}
+                  {visibleColumns.izinKhusus && (
+                    <th className="py-1.5 px-2 text-center w-20 border-r border-slate-200 dark:border-slate-800" title="Izin Khusus (IK)">Izin Khusus</th>
+                  )}
+                  {visibleColumns.izin && (
+                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Izin Biasa / Sakit (I / SL)">Izin</th>
+                  )}
+                  {visibleColumns.tambahanTravel && (
+                    <th className="py-1.5 px-2 text-center min-w-[140px] border-r border-slate-200 dark:border-slate-800 text-amber-700 dark:text-amber-400" title="Tambahan Travel jika tidak ada transportasi (TT)">
+                      Tambahan Travel (TT)
+                    </th>
+                  )}
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="py-12 text-center text-slate-400">
+                  <td colSpan={totalVisibleCols} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Plane className="w-8 h-8 opacity-30 text-teal-500 animate-pulse" />
                       <span className="font-semibold text-sm">Tidak ada jadwal cuti yang sesuai filter.</span>
@@ -904,144 +1548,196 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
                       }`}
                     >
                       {/* NO */}
-                      <td className="py-2.5 px-3 text-center font-bold text-slate-500 border-r border-slate-100 dark:border-slate-800">
-                        {index + 1}
-                      </td>
+                      {visibleColumns.no && (
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-500 border-r border-slate-100 dark:border-slate-800">
+                          {index + 1}
+                        </td>
+                      )}
 
                       {/* NAMA & NIK */}
-                      <td className="py-2.5 px-4 border-r border-slate-100 dark:border-slate-800">
-                        <div className="font-bold text-slate-900 dark:text-white leading-tight">
-                          {rec.nama}
-                        </div>
-                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                          <span>{rec.nik}</span>
-                          <span>•</span>
-                          <span className="text-teal-600 dark:text-teal-400 font-semibold">{rec.section}</span>
-                          {rec.subSection && rec.subSection !== rec.section && (
-                            <span className="text-slate-400 font-normal">({rec.subSection})</span>
-                          )}
-                        </div>
-                      </td>
+                      {visibleColumns.nama && (
+                        <td className="py-2.5 px-4 border-r border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-900 dark:text-white leading-tight">
+                              {rec.nama}
+                            </span>
+                            {rec.isCustomEdited && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 shrink-0" title="Data baris ini telah dimodifikasi secara kustom">
+                                Diedit
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                            <span>{rec.nik}</span>
+                            <span>•</span>
+                            <span className="text-teal-600 dark:text-teal-400 font-semibold">{rec.section}</span>
+                            {rec.subSection && rec.subSection !== rec.section && (
+                              <span className="text-slate-400 font-normal">({rec.subSection})</span>
+                            )}
+                          </div>
+                        </td>
+                      )}
 
                       {/* POH */}
-                      <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span className="truncate">{rec.poh}</span>
-                        </div>
-                      </td>
+                      {visibleColumns.poh && (
+                        <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{rec.poh}</span>
+                          </div>
+                        </td>
+                      )}
 
                       {/* JABATAN */}
-                      <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
-                        <div className="text-slate-800 dark:text-slate-200 font-semibold leading-tight">
-                          {rec.jabatan}
-                        </div>
-                        <div className="mt-0.5">
-                          <span className="inline-block text-[9px] px-1.5 py-0.2 rounded font-black uppercase bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                            Gol {rec.gol}
-                          </span>
-                        </div>
-                      </td>
+                      {visibleColumns.jabatan && (
+                        <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
+                          <div className="text-slate-800 dark:text-slate-200 font-semibold leading-tight">
+                            {rec.jabatan}
+                          </div>
+                          <div className="mt-0.5">
+                            <span className="inline-block text-[9px] px-1.5 py-0.2 rounded font-black uppercase bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                              Gol {rec.gol}
+                            </span>
+                          </div>
+                        </td>
+                      )}
 
                       {/* TANGGAL CUTI */}
-                      <td className="py-2.5 px-3 text-center font-bold text-emerald-700 dark:text-emerald-400 border-r border-slate-100 dark:border-slate-800 bg-emerald-500/5">
-                        {rec.tanggalCuti}
-                      </td>
+                      {visibleColumns.tanggalCuti && (
+                        <td className="py-2.5 px-3 text-center font-bold text-emerald-700 dark:text-emerald-400 border-r border-slate-100 dark:border-slate-800 bg-emerald-500/5">
+                          {rec.tanggalCuti}
+                        </td>
+                      )}
 
                       {/* TANGGAL ON SITE */}
-                      <td className="py-2.5 px-3 text-center font-bold text-teal-700 dark:text-teal-400 border-r border-slate-100 dark:border-slate-800 bg-teal-500/5">
-                        {rec.tanggalOnsite}
-                      </td>
+                      {visibleColumns.tanggalOnsite && (
+                        <td className="py-2.5 px-3 text-center font-bold text-teal-700 dark:text-teal-400 border-r border-slate-100 dark:border-slate-800 bg-teal-500/5">
+                          {rec.tanggalOnsite}
+                        </td>
+                      )}
 
                       {/* KET */}
-                      <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
-                        {rec.isCutiSelesai ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs">
-                            <CheckCircle2 className="w-2.5 h-2.5" />
-                            Cuti Selesai
-                          </span>
-                        ) : rec.hasChange ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
-                            <AlertCircle className="w-2.5 h-2.5" />
-                            {rec.ket}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                            <Check className="w-2.5 h-2.5 text-emerald-500" />
-                            {rec.ket}
-                          </span>
-                        )}
-                      </td>
+                      {visibleColumns.ket && (
+                        <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
+                          {rec.isCutiSelesai ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs">
+                              <CheckCircle2 className="w-2.5 h-2.5" />
+                              Cuti Selesai
+                            </span>
+                          ) : rec.hasChange ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                              <AlertCircle className="w-2.5 h-2.5" />
+                              {rec.ket}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                              <Check className="w-2.5 h-2.5 text-emerald-500" />
+                              {rec.ket}
+                            </span>
+                          )}
+                        </td>
+                      )}
 
                       {/* PERUBAHAN JADWAL ONSITE */}
-                      <td className="py-2.5 px-3 text-center font-bold border-r border-slate-100 dark:border-slate-800">
-                        {rec.hasChange ? (
-                          <span className="px-2 py-1 rounded-lg font-black text-rose-600 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30">
-                            {rec.perubahanJadwalOnsite}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-normal">-</span>
-                        )}
-                      </td>
+                      {visibleColumns.perubahanJadwalOnsite && (
+                        <td className="py-2.5 px-3 text-center font-bold border-r border-slate-100 dark:border-slate-800">
+                          {rec.hasChange ? (
+                            <span className="px-2 py-1 rounded-lg font-black text-rose-600 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30">
+                              {rec.perubahanJadwalOnsite}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">-</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* Travel (TRV) */}
-                      <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                        {rec.travel > 0 ? (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold">
-                            {rec.travel}
-                          </span>
-                        ) : '-'}
-                      </td>
+                      {visibleColumns.travel && (
+                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
+                          {rec.travel > 0 ? (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold">
+                              {rec.travel}
+                            </span>
+                          ) : '-'}
+                        </td>
+                      )}
 
                       {/* Tahunan / Istimewa (CT/CI) */}
-                      <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                        {rec.tahunanIstimewa > 0 ? (
-                          <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold">
-                            {rec.tahunanIstimewa}
-                          </span>
-                        ) : '-'}
-                      </td>
+                      {visibleColumns.tahunanIstimewa && (
+                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
+                          {rec.tahunanIstimewa > 0 ? (
+                            <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold">
+                              {rec.tahunanIstimewa}
+                            </span>
+                          ) : '-'}
+                        </td>
+                      )}
 
                       {/* Extra (CE) */}
-                      <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                        {rec.extra > 0 ? (
-                          <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold">
-                            {rec.extra}
-                          </span>
-                        ) : '-'}
-                      </td>
+                      {visibleColumns.extra && (
+                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
+                          {rec.extra > 0 ? (
+                            <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold">
+                              {rec.extra}
+                            </span>
+                          ) : '-'}
+                        </td>
+                      )}
 
                       {/* Izin Khusus (IK) */}
-                      <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                        {rec.izinKhusus > 0 ? (
-                          <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold">
-                            {rec.izinKhusus}
-                          </span>
-                        ) : '-'}
-                      </td>
+                      {visibleColumns.izinKhusus && (
+                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
+                          {rec.izinKhusus > 0 ? (
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold">
+                              {rec.izinKhusus}
+                            </span>
+                          ) : '-'}
+                        </td>
+                      )}
 
                       {/* Izin / Sakit (I/SL) */}
-                      <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                        {rec.izin > 0 ? (
-                          <span className="px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-800 dark:text-yellow-300 font-bold">
-                            {rec.izin}
-                          </span>
-                        ) : '-'}
-                      </td>
+                      {visibleColumns.izin && (
+                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
+                          {rec.izin > 0 ? (
+                            <span className="px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-800 dark:text-yellow-300 font-bold">
+                              {rec.izin}
+                            </span>
+                          ) : '-'}
+                        </td>
+                      )}
 
                       {/* Tambahan Travel (TT) */}
-                      <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                        {rec.tambahanTravel > 0 ? (
-                          <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-400 font-black">
-                            {rec.tambahanTravel}
-                          </span>
-                        ) : '-'}
-                      </td>
+                      {visibleColumns.tambahanTravel && (
+                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
+                          {rec.tambahanTravel > 0 ? (
+                            <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-400 font-black">
+                              {rec.tambahanTravel}
+                            </span>
+                          ) : '-'}
+                        </td>
+                      )}
 
                       {/* TOTAL HARI */}
-                      <td className="py-2.5 px-3 text-center font-black text-slate-900 dark:text-white bg-slate-100/80 dark:bg-slate-800/80">
-                        {rec.totalHari}
-                      </td>
+                      {visibleColumns.totalHari && (
+                        <td className="py-2.5 px-3 text-center font-black text-slate-900 dark:text-white bg-slate-100/80 dark:bg-slate-800/80 border-r border-slate-200 dark:border-slate-800">
+                          {rec.totalHari}
+                        </td>
+                      )}
+
+                      {/* AKSI (Edit Button) */}
+                      {visibleColumns.aksi && (
+                        <td className="py-2.5 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(rec)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 transition-all cursor-pointer shadow-2xs"
+                            title="Edit data cuti personil ini"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>Edit</span>
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -1051,30 +1747,51 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
             {filteredRecords.length > 0 && (
               <tfoot>
                 <tr className="bg-slate-100 dark:bg-slate-800 font-black text-slate-900 dark:text-white border-t-2 border-slate-300 dark:border-slate-700">
-                  <td colSpan={8} className="py-3 px-4 text-right uppercase tracking-wider text-xs border-r border-slate-200 dark:border-slate-700">
-                    TOTAL KESELURUHAN ({filteredRecords.length} Personil):
-                  </td>
-                  <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-amber-700 dark:text-amber-400">
-                    {stats.traveling}
-                  </td>
-                  <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-purple-700 dark:text-purple-400">
-                    {stats.sumTahunan}
-                  </td>
-                  <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-blue-700 dark:text-blue-400">
-                    {stats.sumExtra}
-                  </td>
-                  <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-400">
-                    {stats.sumIK}
-                  </td>
-                  <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-yellow-800 dark:text-yellow-400">
-                    {stats.sumIzin}
-                  </td>
-                  <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-rose-700 dark:text-rose-400">
-                    {stats.sumTT}
-                  </td>
-                  <td className="py-3 px-3 text-center text-teal-600 dark:text-teal-400 text-sm">
-                    {stats.totalHari}
-                  </td>
+                  {visibleBeforeDurationCount > 0 && (
+                    <td colSpan={visibleBeforeDurationCount} className="py-3 px-4 text-right uppercase tracking-wider text-xs border-r border-slate-200 dark:border-slate-700">
+                      TOTAL KESELURUHAN ({filteredRecords.length} Personil):
+                    </td>
+                  )}
+                  {visibleColumns.travel && (
+                    <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-amber-700 dark:text-amber-400">
+                      {stats.traveling}
+                    </td>
+                  )}
+                  {visibleColumns.tahunanIstimewa && (
+                    <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-purple-700 dark:text-purple-400">
+                      {stats.sumTahunan}
+                    </td>
+                  )}
+                  {visibleColumns.extra && (
+                    <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-blue-700 dark:text-blue-400">
+                      {stats.sumExtra}
+                    </td>
+                  )}
+                  {visibleColumns.izinKhusus && (
+                    <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-400">
+                      {stats.sumIK}
+                    </td>
+                  )}
+                  {visibleColumns.izin && (
+                    <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-yellow-800 dark:text-yellow-400">
+                      {stats.sumIzin}
+                    </td>
+                  )}
+                  {visibleColumns.tambahanTravel && (
+                    <td className="py-3 px-2 text-center border-r border-slate-200 dark:border-slate-700 text-rose-700 dark:text-rose-400">
+                      {stats.sumTT}
+                    </td>
+                  )}
+                  {visibleColumns.totalHari && (
+                    <td className="py-3 px-3 text-center text-teal-600 dark:text-teal-400 text-sm border-r border-slate-200 dark:border-slate-700">
+                      {stats.totalHari}
+                    </td>
+                  )}
+                  {visibleColumns.aksi && (
+                    <td className="py-3 px-2 text-center text-slate-400">
+                      -
+                    </td>
+                  )}
                 </tr>
               </tfoot>
             )}
