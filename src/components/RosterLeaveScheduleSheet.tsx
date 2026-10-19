@@ -4,7 +4,8 @@ import {
   FileSpreadsheet, Download, RefreshCw, AlertCircle, CheckCircle2, 
   Clock, Sparkles, Shield, ArrowUpDown, ChevronDown, Check,
   ChevronRight, Building2, MapPin, Briefcase, Info, Printer,
-  ChevronLeft, Edit2, Eye, EyeOff, RotateCcw, X, Save, Settings2
+  ChevronLeft, Edit2, Eye, EyeOff, RotateCcw, X, Save, Settings2,
+  ShieldAlert, Lock
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -12,6 +13,8 @@ import { toast } from 'sonner';
 interface RosterLeaveScheduleSheetProps {
   roster: any[];
   returnTo?: string | null;
+  currentUser?: any;
+  developerList?: string[];
 }
 
 interface LeaveRecord {
@@ -21,6 +24,7 @@ interface LeaveRecord {
   poh: string;
   jabatan: string;
   gol: string;
+  golLevel: number;
   isGol1: boolean;
   section: string;
   subSection?: string;
@@ -105,6 +109,26 @@ export function formatIndonesianDate(d: Date | null, options?: { withDay?: boole
   return `${day} ${monthName} ${year}`;
 }
 
+export function parseGolonganLevel(val: any, jabatan?: string): number {
+  const s = String(val || '').trim().toUpperCase();
+  if (s === '5' || s === 'V' || (s.includes('V') && !s.includes('IV'))) return 5;
+  if (s === '4' || s === 'IV' || s.includes('IV')) return 4;
+  if (s === '3' || s === 'III' || s.includes('III')) return 3;
+  if (s === '2' || s === 'II' || s.includes('II')) return 2;
+  if (s === '1' || s === 'I' || s.includes('I')) return 1;
+
+  // Fallback analisa nama jabatan
+  const j = String(jabatan || '').toLowerCase();
+  if (j.includes('manager') || j.includes('head') || j.includes('gm') || j.includes('vp')) return 5;
+  if (j.includes('superintendent') || j.includes('spt')) return 4;
+  if (j.includes('supervisor') || j.includes('spv') || j.includes('specialist')) return 3;
+  if (
+    j.includes('foreman') || j.includes('officer') || j.includes('admin') || 
+    j.includes('analyst') || j.includes('chemist') || j.includes('teknisi') || j.includes('technician')
+  ) return 2;
+  return 1;
+}
+
 export function checkIsGolonganI(emp: any): boolean {
   const gol = String(emp.gol || emp.golongan || emp.jobGrade || '').trim().toUpperCase();
   const jab = String(emp.jabatan || emp.position || emp.role || '').trim().toLowerCase();
@@ -123,7 +147,7 @@ export function checkIsGolonganI(emp: any): boolean {
   ) {
     return true;
   }
-  return false;
+  return parseGolonganLevel(gol, jab) === 1;
 }
 
 /**
@@ -210,6 +234,7 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
     const isGol1 = checkIsGolonganI(emp);
     const pohVal = emp.poh || emp.tempatTinggal || emp.domisili || emp.alamatDomisili || emp.kota || '-';
     const jabatanVal = emp.jabatan || emp.position || '-';
+    const golLevel = parseGolonganLevel(emp.gol || emp.golongan || emp.jobGrade, jabatanVal);
     const sectionVal = getUnifiedSection(emp);
     const originalSectionVal = emp.section || emp.department || (jabatanVal.toLowerCase().includes('section manager') ? 'Section Manager' : 'Laboratory');
 
@@ -314,7 +339,8 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
         nama: emp.name || emp.nama || '-',
         poh: pohVal,
         jabatan: jabatanVal,
-        gol: emp.gol || (isGol1 ? 'I' : 'II'),
+        gol: emp.gol || (golLevel === 1 ? 'I' : golLevel === 2 ? 'II' : golLevel === 3 ? 'III' : golLevel === 4 ? 'IV' : 'V'),
+        golLevel,
         isGol1,
         section: sectionVal,
         subSection: originalSectionVal,
@@ -383,14 +409,99 @@ const COLUMN_DEFS = [
   { id: 'aksi', label: 'AKSI (Edit)' },
 ];
 
-export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveScheduleSheetProps) {
+export function RosterLeaveScheduleSheet({ 
+  roster, 
+  returnTo, 
+  currentUser, 
+  developerList = [] 
+}: RosterLeaveScheduleSheetProps) {
+  // 1. Current User Identity & Profile Resolution
+  const user = useMemo(() => {
+    if (currentUser) return currentUser;
+    try {
+      const saved = localStorage.getItem('p2h_inspector_profile');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return {};
+  }, [currentUser]);
+
+  const userNik = String(user?.nik || (typeof localStorage !== 'undefined' ? localStorage.getItem('p2h_inspector_nik') : '') || '').trim();
+
+  // Find user in roster to get the most accurate employee details
+  const userFromRoster = useMemo(() => {
+    if (!userNik || !roster) return null;
+    return roster.find((e: any) => String(e.nik || '').trim() === userNik) || null;
+  }, [userNik, roster]);
+
+  const effectiveUser = useMemo(() => {
+    return { ...user, ...(userFromRoster || {}) };
+  }, [user, userFromRoster]);
+
+  const effNik = String(effectiveUser?.nik || userNik).trim();
+  const effRole = String(effectiveUser?.jabatan || effectiveUser?.position || effectiveUser?.role || '').toLowerCase();
+  const effSection = String(effectiveUser?.section || effectiveUser?.department || '').toLowerCase();
+  const effNama = String(effectiveUser?.nama || effectiveUser?.name || '').toLowerCase();
+
+  // 2. Hak Akses Edit:
+  // Hanya Section Administration, Manager, Developer, dan Meeting Room
+  const isSuperAdmin = effNik === '02D25000055' || effNik === '02D24000043' || effNik === 'M0403240177' || effNik === 'preplabadmin';
+  const isDeveloper = isSuperAdmin || (developerList && developerList.includes(effNik));
+
+  const isAdministration = 
+    effSection.includes('admin') || 
+    effSection.includes('administrasi') || 
+    effRole.includes('admin') || 
+    effRole.includes('administrasi');
+
+  const isManager = 
+    effRole.includes('manager') || 
+    effSection.includes('manager') || 
+    effRole.includes('head') || 
+    effSection.includes('head');
+
+  const isMeetingRoom = 
+    effNik.toLowerCase().includes('meeting') || 
+    effNama.includes('meeting') || 
+    effRole.includes('meeting') || 
+    effSection.includes('meeting');
+
+  const canEditLeave = isDeveloper || isAdministration || isManager || isMeetingRoom;
+
+  // 3. User Unified Section
+  const userUnifiedSection = useMemo(() => {
+    return getUnifiedSection(effectiveUser);
+  }, [effectiveUser]);
+
+  // 4. Hak Akses Lihat (Only View Matrix):
+  // - Gol I = tidak bisa dilihat atau di larang
+  // - Gol II = Hanya bisa melihat Cuti Gol I dan II persection
+  // - Gol III dan IV = Hanya bisa Melihat Cuti Gol I, II dan III Persection
+  // - Gol V = Semuanya (begitu pula Admin / Manager / Developer / Meeting Room)
+  const userGolLevel = useMemo(() => {
+    if (canEditLeave) return 5;
+    return parseGolonganLevel(effectiveUser?.gol || effectiveUser?.golongan || effectiveUser?.jobGrade, effRole);
+  }, [canEditLeave, effectiveUser, effRole]);
+
+  const isAccessForbidden = userGolLevel === 1;
+  const isRestrictedPerSection = userGolLevel >= 2 && userGolLevel <= 4;
+
   // Sub-Sheet Tab: 'staff' (Gol II-V) vs 'crew' (Gol I)
   const [activeTab, setActiveTab] = useState<'staff' | 'crew'>('staff');
 
   // Filters
   const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
-  const [selectedSection, setSelectedSection] = useState<string>('ALL');
+  const [selectedSection, setSelectedSection] = useState<string>(() => {
+    if (isRestrictedPerSection) return userUnifiedSection;
+    return 'ALL';
+  });
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Lock section to userUnifiedSection for restricted users
+  React.useEffect(() => {
+    if (isRestrictedPerSection && selectedSection !== userUnifiedSection) {
+      setSelectedSection(userUnifiedSection);
+    }
+  }, [isRestrictedPerSection, userUnifiedSection, selectedSection]);
 
   // Column Visibility state
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
@@ -465,6 +576,10 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
   });
 
   const handleOpenEditModal = (rec: LeaveRecord) => {
+    if (!canEditLeave) {
+      toast.error('Akses ditolak: Hanya Section Administration, Manager, Developer, dan Meeting Room yang dapat mengedit.');
+      return;
+    }
     setEditingRecord(rec);
     setEditForm({
       poh: rec.poh || '',
@@ -482,7 +597,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
   };
 
   const handleSaveRecordEdit = () => {
-    if (!editingRecord) return;
+    if (!editingRecord || !canEditLeave) return;
     const travel = Math.max(0, Number(editForm.travel) || 0);
     const tahunanIstimewa = Math.max(0, Number(editForm.tahunanIstimewa) || 0);
     const extra = Math.max(0, Number(editForm.extra) || 0);
@@ -519,7 +634,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
   };
 
   const handleResetRecordToOriginal = () => {
-    if (!editingRecord) return;
+    if (!editingRecord || !canEditLeave) return;
     setCustomOverrides(prev => {
       const next = { ...prev };
       delete next[editingRecord.id];
@@ -573,10 +688,37 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
     });
   }, [allLeaveRecords, customOverrides]);
 
-  // Extract available periods (Month + Year) from data
+  // Access Control Matrix Filtering:
+  // - Gol I: Dilarang (empty array)
+  // - Gol II: Hanya Gol I dan II pada section yang sama
+  // - Gol III & IV: Hanya Gol I, II, dan III pada section yang sama
+  // - Gol V & Editors: Semuanya
+  const accessibleRecords = useMemo(() => {
+    if (isAccessForbidden) return [];
+    if (userGolLevel >= 5) return mergedLeaveRecords;
+
+    return mergedLeaveRecords.filter(rec => {
+      // Wajib section yang sama
+      if (rec.section !== userUnifiedSection) return false;
+
+      // Gol II: Hanya Gol I dan II
+      if (userGolLevel === 2) {
+        return rec.golLevel <= 2;
+      }
+
+      // Gol III dan IV: Hanya Gol I, II, dan III
+      if (userGolLevel === 3 || userGolLevel === 4) {
+        return rec.golLevel <= 3;
+      }
+
+      return false;
+    });
+  }, [mergedLeaveRecords, isAccessForbidden, userGolLevel, userUnifiedSection]);
+
+  // Extract available periods (Month + Year) from accessible data
   const availablePeriods = useMemo(() => {
     const periodSet = new Set<string>();
-    mergedLeaveRecords.forEach(rec => {
+    accessibleRecords.forEach(rec => {
       const d = rec.tanggalCutiRaw;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       periodSet.add(key);
@@ -590,7 +732,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
         label: `${MONTH_NAMES_ID[month - 1]} ${year}`
       };
     });
-  }, [mergedLeaveRecords]);
+  }, [accessibleRecords]);
 
   // Set default month to current month if present in data
   useMemo(() => {
@@ -604,16 +746,19 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
     }
   }, [availablePeriods]);
 
-  // Available sections (based on unified section values: Laboratory, Preparation, Maintenance for current tab)
+  // Available sections
   const availableSections = useMemo(() => {
+    if (isRestrictedPerSection) {
+      return [userUnifiedSection];
+    }
     const set = new Set<string>();
-    mergedLeaveRecords.forEach(e => {
+    accessibleRecords.forEach(e => {
       if (activeTab === 'staff' && e.isGol1) return;
       if (activeTab === 'crew' && !e.isGol1) return;
       if (e.section) set.add(e.section);
     });
     return Array.from(set).sort();
-  }, [mergedLeaveRecords, activeTab]);
+  }, [isRestrictedPerSection, userUnifiedSection, accessibleRecords, activeTab]);
 
   // Visible duration columns count & layout helpers
   const visibleDurationColsCount = useMemo(() => {
@@ -627,16 +772,23 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
   }, [visibleColumns]);
 
   const totalVisibleCols = useMemo(() => {
-    return Object.values(visibleColumns).filter(Boolean).length;
-  }, [visibleColumns]);
+    return Object.keys(visibleColumns).filter(k => {
+      if (k === 'aksi' && !canEditLeave) return false;
+      return visibleColumns[k];
+    }).length;
+  }, [visibleColumns, canEditLeave]);
+
+  const activeColumnDefs = useMemo(() => {
+    return COLUMN_DEFS.filter(col => col.id !== 'aksi' || canEditLeave);
+  }, [canEditLeave]);
 
   const hiddenColsCount = useMemo(() => {
-    return Object.keys(DEFAULT_VISIBLE_COLUMNS).length - totalVisibleCols;
-  }, [totalVisibleCols]);
+    return activeColumnDefs.length - totalVisibleCols;
+  }, [activeColumnDefs, totalVisibleCols]);
 
   // Filtered records based on tab, month, section, and search
   const filteredRecords = useMemo(() => {
-    return mergedLeaveRecords.filter(rec => {
+    return accessibleRecords.filter(rec => {
       // 1. Tab Golongan
       if (activeTab === 'staff' && rec.isGol1) return false;
       if (activeTab === 'crew' && !rec.isGol1) return false;
@@ -672,7 +824,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
 
       return true;
     });
-  }, [mergedLeaveRecords, activeTab, selectedMonth, selectedSection, searchQuery]);
+  }, [accessibleRecords, activeTab, selectedMonth, selectedSection, searchQuery]);
 
   // Statistics KPI
   const stats = useMemo(() => {
@@ -810,6 +962,106 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
   const handlePrint = () => {
     window.print();
   };
+
+  // Golongan I: Dilarang melihat / Akses tidak diizinkan
+  if (isAccessForbidden) {
+    return (
+      <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
+        {/* Return to Labnote Banner (if opened from Labnote) */}
+        {returnTo && (
+          <div className="p-3.5 sm:p-4 rounded-2xl border border-teal-500/30 bg-teal-500/10 text-teal-900 dark:text-teal-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-teal-600 text-white shadow-sm shrink-0">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm font-black flex items-center gap-2">
+                  <span>Terhubung dari Modul Labnote</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-teal-600 text-white shadow-2xs">
+                    Labnote Active
+                  </span>
+                </div>
+                <div className="text-[11px] text-teal-700 dark:text-teal-300 font-medium mt-0.5">
+                  Anda dialihkan dari task Labnote. Klik tombol kembali di samping untuk kembali ke halaman Labnote semula.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  window.location.href = decodeURIComponent(returnTo);
+                } catch(e) {
+                  window.location.href = returnTo;
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-sm hover:shadow-teal-500/20 transition-all cursor-pointer shrink-0"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Kembali ke Labnote</span>
+            </button>
+          </div>
+        )}
+
+        {/* Access Denied Card for Golongan I */}
+        <div className="p-8 sm:p-14 rounded-3xl border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-900 shadow-md text-center max-w-2xl mx-auto space-y-4 my-8">
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/80 mx-auto flex items-center justify-center shadow-sm">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Hak Akses Terbatas &bull; Golongan I</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              Akses Jadwal Cuti Tidak Diizinkan
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+              Berdasarkan kebijakan hak akses operasional PrepLab, modul <strong>Jadwal & Riwayat Cuti Karyawan</strong> tidak dapat dilihat atau diakses oleh personil <strong>Golongan I</strong>.
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-500">
+              Silakan hubungi Section Administration, Pengawas Lapangan, atau Manager Anda untuk kebutuhan informasi jadwal dan perjalanan cuti.
+            </p>
+          </div>
+
+          <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
+            {returnTo ? (
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    window.location.href = decodeURIComponent(returnTo);
+                  } catch(e) {
+                    window.location.href = returnTo;
+                  }
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-sm transition-all cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Kembali ke Labnote</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('view');
+                    window.location.href = url.pathname;
+                  }
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-800 hover:bg-slate-700 text-white shadow-sm transition-all cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Kembali ke Matriks Roster Harian</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
@@ -1098,9 +1350,28 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
       >
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Sistem Manajemen Cuti Terintegrasi Roster</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Sistem Manajemen Cuti Terintegrasi Roster</span>
+              </div>
+
+              {canEditLeave ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                  <Shield className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Akses Editor: {isDeveloper ? 'Developer' : isManager ? 'Manager' : isMeetingRoom ? 'Meeting Room' : 'Section Administration'}</span>
+                </div>
+              ) : isRestrictedPerSection ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-800 border border-sky-300 shadow-2xs">
+                  <Eye className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Mode Lihat: Gol I – {userGolLevel === 2 ? 'II' : 'III'} ({userUnifiedSection})</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 shadow-2xs">
+                  <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Akses Lihat Lengkap (Gol V)</span>
+                </div>
+              )}
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
               <span>Jadwal & Riwayat Cuti Personil</span>
@@ -1210,7 +1481,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
                 ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300'
                 : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
             }`}>
-              {mergedLeaveRecords.filter(r => !r.isGol1).length}
+              {accessibleRecords.filter(r => !r.isGol1).length}
             </span>
           </button>
 
@@ -1230,7 +1501,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
                 ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300'
                 : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
             }`}>
-              {mergedLeaveRecords.filter(r => r.isGol1).length}
+              {accessibleRecords.filter(r => r.isGol1).length}
             </span>
           </button>
         </div>
@@ -1271,7 +1542,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
                   color: 'var(--text-main, #1E293B)'
                 }}
               >
-                <option value="ALL">Semua Periode ({mergedLeaveRecords.length} Data)</option>
+                <option value="ALL">Semua Periode ({accessibleRecords.length} Data)</option>
                 {availablePeriods.map(p => (
                   <option key={p.key} value={p.key}>
                     {p.label}
@@ -1286,21 +1557,37 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
                 Section:
               </span>
-              <select
-                value={selectedSection}
-                onChange={(e) => setSelectedSection(e.target.value)}
-                className="text-xs font-bold py-1.5 px-3 rounded-xl border outline-none cursor-pointer shadow-2xs"
-                style={{
-                  backgroundColor: 'var(--input-bg, #FFFFFF)',
-                  borderColor: 'var(--border-main, #E2E8F0)',
-                  color: 'var(--text-main, #1E293B)'
-                }}
-              >
-                <option value="ALL">Semua Section</option>
-                {availableSections.map(sec => (
-                  <option key={sec} value={sec}>{sec}</option>
-                ))}
-              </select>
+              {isRestrictedPerSection ? (
+                <div 
+                  className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl border text-xs font-bold shadow-2xs"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #F8FAFC)',
+                    borderColor: 'var(--border-main, #CBD5E1)',
+                    color: 'var(--text-main, #0F172A)'
+                  }}
+                  title="Hak akses terkunci pada section Anda"
+                >
+                  <Lock className="w-3 h-3 text-amber-600" />
+                  <span>{userUnifiedSection}</span>
+                  <span className="text-[10px] font-normal text-slate-500">(Seksi Anda)</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedSection}
+                  onChange={(e) => setSelectedSection(e.target.value)}
+                  className="text-xs font-bold py-1.5 px-3 rounded-xl border outline-none cursor-pointer shadow-2xs"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #FFFFFF)',
+                    borderColor: 'var(--border-main, #E2E8F0)',
+                    color: 'var(--text-main, #1E293B)'
+                  }}
+                >
+                  <option value="ALL">Semua Section</option>
+                  {availableSections.map(sec => (
+                    <option key={sec} value={sec}>{sec}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Column Visibility Dropdown Toggle */}
@@ -1361,7 +1648,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
                     </div>
 
                     <div className="max-h-64 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                      {COLUMN_DEFS.map((col) => {
+                      {activeColumnDefs.map((col) => {
                         const isVisible = visibleColumns[col.id] !== false;
                         return (
                           <label
@@ -1482,7 +1769,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
                   </th>
                 )}
 
-                {visibleColumns.aksi && (
+                {canEditLeave && visibleColumns.aksi && (
                   <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[70px] bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
                     AKSI
                   </th>
@@ -1725,7 +2012,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
                       )}
 
                       {/* AKSI (Edit Button) */}
-                      {visibleColumns.aksi && (
+                      {canEditLeave && visibleColumns.aksi && (
                         <td className="py-2.5 px-2 text-center">
                           <button
                             type="button"
@@ -1787,7 +2074,7 @@ export function RosterLeaveScheduleSheet({ roster, returnTo }: RosterLeaveSchedu
                       {stats.totalHari}
                     </td>
                   )}
-                  {visibleColumns.aksi && (
+                  {canEditLeave && visibleColumns.aksi && (
                     <td className="py-3 px-2 text-center text-slate-400">
                       -
                     </td>

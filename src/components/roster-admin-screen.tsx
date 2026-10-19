@@ -61,7 +61,20 @@ export function RosterAdminScreen() {
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   
   // View mode: 'matrix' (Matriks Roster Harian) or 'leave_schedule' (Jadwal Cuti Karyawan)
-  const [activeView, setActiveView] = useState<'matrix' | 'leave_schedule'>('matrix');
+  const [activeView, setActiveView] = useState<'matrix' | 'leave_schedule'>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('view') === 'leave_schedule') return 'leave_schedule';
+    }
+    return 'matrix';
+  });
+
+  const returnTo = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('returnTo');
+    }
+    return null;
+  }, []);
   
   // Date Range (default: Today to +14 days for optimal matrix view)
   const [startDate, setStartDate] = useState(() => {
@@ -530,7 +543,12 @@ export function RosterAdminScreen() {
       </div>
 
       {activeView === 'leave_schedule' ? (
-        <RosterLeaveScheduleSheet roster={roster} />
+        <RosterLeaveScheduleSheet 
+          roster={roster} 
+          returnTo={returnTo}
+          currentUser={currentUser}
+          developerList={developerList}
+        />
       ) : (
         <>
           {/* Control Bar (Filter, Search, Date Range) */}
