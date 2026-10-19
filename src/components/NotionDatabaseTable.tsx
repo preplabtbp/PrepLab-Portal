@@ -956,6 +956,7 @@ interface NotionDatabaseTableProps {
   onPostContentUpdate?: (newContent: string) => void;
   onRowsChange?: (newRows: TableRowData[]) => void;
   initialTopicTitle?: string;
+  onClearInitialTopic?: () => void;
   allPosts?: any[];
   onNavigateToPost?: (post: any) => void;
 }
@@ -1000,9 +1001,13 @@ export function NotionDatabaseTable({
   onPostContentUpdate,
   onRowsChange,
   initialTopicTitle,
+  onClearInitialTopic,
   allPosts,
   onNavigateToPost
 }: NotionDatabaseTableProps) {
+  // Ref untuk melacak topik deep link yang sudah pernah dibuka otomatis agar tidak berulang kali terbuka
+  const consumedTopicRef = useRef<string | null>(null);
+
   // Local table rows for responsive instant CRUD
   const [localRows, setLocalRows] = useState<TableRowData[]>(() => {
     if (!rows || rows.length === 0) return [];
@@ -2541,7 +2546,11 @@ export function NotionDatabaseTable({
   // Auto open topic drawer if initialTopicTitle is provided (e.g. from notification deep link)
   useEffect(() => {
     if (initialTopicTitle && localRows.length > 0) {
-      let cleanTitle = initialTopicTitle.trim();
+      const rawTitle = initialTopicTitle.trim();
+      // Cegah pembukaan berulang jika topik ini sudah pernah dibuka secara otomatis
+      if (consumedTopicRef.current === rawTitle) return;
+
+      let cleanTitle = rawTitle;
       let detectedSubPeriod = '';
       if (cleanTitle.includes(' - ')) {
         const parts = cleanTitle.split(' - ');
@@ -2559,6 +2568,7 @@ export function NotionDatabaseTable({
                rawT.toLowerCase().includes(targetT);
       });
       if (match) {
+        consumedTopicRef.current = rawTitle;
         setSelectedRow(match);
         if (detectedSubPeriod) {
           setActiveSubPeriod(detectedSubPeriod);
@@ -4603,8 +4613,18 @@ export function NotionDatabaseTable({
       subtaskSaveDebounceRef.current = null;
       saveTableToBackend(localRowsRef.current);
     }
+    // Hapus parameter query 'topic' dari URL browser agar modal tidak muncul kembali saat berpindah halaman
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('topic')) {
+        url.searchParams.delete('topic');
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch {}
+
+    onClearInitialTopic?.();
     setSelectedRow(null);
-  }, []);
+  }, [onClearInitialTopic]);
 
   // Toggle Checklist Sub-Item Completed Status & Sinkronkan Progres Task Utama
   const handleToggleSubItemCompleted = (subRowIndex: number, currentCompleted: boolean) => {

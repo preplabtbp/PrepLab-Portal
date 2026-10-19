@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { translateDisplayText } from './notion/logbook-section-utils';
 import { TbpDashboard } from "./TbpDashboard";
 import { SectionHubDashboard, COVER_PRESETS } from "./SectionHubDashboard";
-import { NotionDatabaseTable, TableRowData } from "./NotionDatabaseTable";
+import { NotionDatabaseTable, TableRowData, extractDriveId } from "./NotionDatabaseTable";
 import { isLogbookPost, getSectionFromPost, getLogbookTableData, aggregateSectionActiveTasks, KNOWN_SECTIONS, getUserAllowedSections, isUserAllowedToAccessSection } from "./notion/logbook-section-utils";
 import { EnterpriseWysiwygEditor } from "./notion/EnterpriseWysiwygEditor";
 import { PortalImagePickerModal } from "./PortalImagePickerModal";
@@ -74,6 +74,28 @@ export const extractTextFromReactNode = (node: any): string => {
     return extractTextFromReactNode(node.props.children);
   }
   return "";
+};
+
+export const renderMarkdownImage = ({ src, alt, ...props }: any) => {
+  if (!src) return null;
+  const driveId = extractDriveId(src);
+  const primarySrc = driveId ? `/api/drive/view/${driveId}` : src;
+  return (
+    <img
+      src={primarySrc}
+      alt={alt || "Lampiran"}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      className="rounded-xl border border-slate-200 dark:border-slate-700 max-h-96 object-contain my-2 shadow-xs"
+      onError={(e) => {
+        const target = e.target as HTMLImageElement;
+        if (driveId && !target.src.includes('googleusercontent.com')) {
+          target.src = `https://lh3.googleusercontent.com/d/${driveId}`;
+        }
+      }}
+      {...props}
+    />
+  );
 };
 
 export const cleanLegacyMenuInfo = (text?: string | null): string => {
@@ -818,8 +840,10 @@ export function BulletinBoard({
       const previousPost = newHistory[newHistory.length - 1];
       setNavHistory(newHistory);
       setSelectedPost(previousPost);
+      setDeepLinkTopic(undefined);
       try {
         const url = new URL(window.location.href);
+        url.searchParams.delete("topic");
         if (previousPost?.id) {
           url.searchParams.set("page", String(previousPost.id));
           localStorage.setItem("preplab_active_bulletin_page", String(previousPost.id));
@@ -831,10 +855,12 @@ export function BulletinBoard({
       setNavHistory([]);
       setSelectedPost(null);
       setIsEditing(false);
+      setDeepLinkTopic(undefined);
       try {
         const url = new URL(window.location.href);
         url.searchParams.delete("page");
         url.searchParams.delete("postId");
+        url.searchParams.delete("topic");
         localStorage.removeItem("preplab_active_bulletin_page");
         sessionStorage.removeItem("preplab_cached_selected_post");
         window.history.replaceState({}, "", url.toString());
@@ -2729,7 +2755,8 @@ ${aiMeetingNotes
                             {children}
                           </a>
                         );
-                      }
+                      },
+                      img: renderMarkdownImage
                     }}
                     remarkPlugins={[remarkGfm]}
                   >
@@ -2751,6 +2778,7 @@ ${aiMeetingNotes
                 beforeText={parsedTableData.beforeText}
                 afterText={parsedTableData.afterText}
                 initialTopicTitle={deepLinkTopic}
+                onClearInitialTopic={() => setDeepLinkTopic(undefined)}
                 allPosts={posts}
                 onNavigateToPost={(p: any) => navigateToPost(p)}
                 onPostContentUpdate={(newContent: string) => {
@@ -2817,7 +2845,8 @@ ${aiMeetingNotes
                         >
                           {children}
                         </a>
-                      )
+                      ),
+                      img: renderMarkdownImage
                     }}
                     remarkPlugins={[remarkGfm]}
                   >
@@ -3093,6 +3122,7 @@ ${aiMeetingNotes
                         </a>
                       );
                     },
+                    img: renderMarkdownImage,
                     table: ({ children }) => (
                       <div 
                         className="overflow-x-auto my-4 rounded-xl border shadow-sm"

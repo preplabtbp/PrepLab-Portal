@@ -556,22 +556,22 @@ export function XrfChartFullscreenModal({
           {/* HIGH-RES SVG CHART CARD */}
           <div 
             ref={chartContainerRef}
-            className="p-5 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl relative overflow-hidden"
+            className="p-5 rounded-3xl bg-slate-50/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg relative overflow-hidden"
           >
             {/* Top Chart Overlay Info */}
-            <div className="flex items-center justify-between pb-3 text-slate-300 text-xs border-b border-slate-800 mb-2">
+            <div className="flex items-center justify-between pb-3 text-slate-700 dark:text-slate-300 text-xs border-b border-slate-200 dark:border-slate-800 mb-2">
               <div className="flex items-center gap-3">
-                <span className="font-extrabold text-sm text-white tracking-wide">
+                <span className="font-extrabold text-sm text-slate-900 dark:text-white tracking-wide">
                   {instrumentName} • {standardCode} • Unsur {currentElement}
                 </span>
-                <span className="font-mono text-slate-400 text-[11px]">
-                  Target CRM: <strong className="text-emerald-400">{limits.nominalValue.toFixed(4)}%</strong> (±{limits.stdevFixed.toFixed(4)})
+                <span className="font-mono text-slate-500 dark:text-slate-400 text-[11px]">
+                  Target CRM: <strong className="text-emerald-600 dark:text-emerald-400">{limits.nominalValue.toFixed(4)}%</strong> (±{limits.stdevFixed.toFixed(4)})
                 </span>
               </div>
               <div className="flex items-center gap-3 text-[11px] font-mono">
-                <span>Rata-rata: <strong className="text-cyan-400">{dynamicStats.mean.toFixed(4)}%</strong></span>
-                <span>Recovery: <strong className="text-teal-400">{recoveryPct}%</strong></span>
-                <span>Titik: <strong className="text-white">{activePoints.length}</strong> / {slicedPoints.length}</span>
+                <span>Rata-rata: <strong className="text-cyan-600 dark:text-cyan-400">{dynamicStats.mean.toFixed(4)}%</strong></span>
+                <span>Recovery: <strong className="text-teal-600 dark:text-teal-400">{recoveryPct}%</strong></span>
+                <span>Titik: <strong className="text-slate-900 dark:text-white">{activePoints.length}</strong> / {slicedPoints.length}</span>
               </div>
             </div>
 
@@ -586,9 +586,10 @@ export function XrfChartFullscreenModal({
                 y={padding.top}
                 width={plotWidth}
                 height={plotHeight}
-                fill="#0f172a"
-                stroke="#1e293b"
-                strokeWidth="1.5"
+                fill="#FFFFFF"
+                stroke="#CBD5E1"
+                className="dark:fill-slate-950 dark:stroke-slate-800"
+                strokeWidth="1.2"
                 rx="6"
               />
 
@@ -638,7 +639,8 @@ export function XrfChartFullscreenModal({
                       y1={yPos}
                       x2={padding.left + plotWidth}
                       y2={yPos}
-                      stroke="#1e293b"
+                      stroke="#E2E8F0"
+                      className="dark:stroke-slate-800/80"
                       strokeWidth="1"
                       strokeDasharray="4 4"
                     />
@@ -885,7 +887,7 @@ export function XrfChartFullscreenModal({
             </svg>
 
             {/* Bottom Chart Legend */}
-            <div className="flex items-center justify-between pt-3 text-[11px] text-slate-400 border-t border-slate-800 flex-wrap gap-2">
+            <div className="flex items-center justify-between pt-3 text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 flex-wrap gap-2">
               <div className="flex items-center gap-4 flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />

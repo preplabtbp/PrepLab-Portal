@@ -21,7 +21,7 @@ export function getGlobalSocket(): Socket {
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.5,
       timeout: 15000,
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       autoConnect: true,
       auth: (cb) => {
         const token = typeof window !== 'undefined' 
@@ -83,6 +83,16 @@ export function getGlobalSocket(): Socket {
     });
 
     globalSocket.on('connect_error', (err) => {
+      // Hentikan spam loop rekoneksi jika token belum tersedia atau server menolak autentikasi
+      if (
+        err.message?.includes('Authentication required') ||
+        err.message?.includes('Invalid token') ||
+        err.message?.includes('websocket error')
+      ) {
+        console.info('[SocketClient] Menunggu autentikasi pengguna untuk koneksi real-time.');
+        globalSocket?.disconnect();
+        return;
+      }
       console.warn('[SocketClient] Connection error:', err.message);
     });
   }
@@ -102,7 +112,13 @@ export function registerPresence(user: {
   if (!user || !user.nik) return;
   registeredUser = user;
   const socket = getGlobalSocket();
-  if (socket.connected) {
+  const token = typeof window !== 'undefined'
+    ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '')
+    : '';
+  (socket as any).auth = { token };
+  if (!socket.connected) {
+    socket.connect();
+  } else {
     socket.emit('presence:join', user);
   }
 }

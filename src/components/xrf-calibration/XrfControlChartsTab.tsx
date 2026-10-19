@@ -416,6 +416,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   const [fullscreenModalState, setFullscreenModalState] = useState<{
     isOpen: boolean;
     standardCode: string;
+    standardRawCode?: string;
     instrumentName: string;
     instrumentCode: string;
     headerColorClass?: string;
@@ -956,13 +957,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       fetchChartData();
     }, 70);
     return () => clearTimeout(timer);
-  }, [selectedInstruments, selectedStandards, dateRange]);
+  }, [selectedInstruments, selectedStandards, dateRange, selectedElement]);
 
   // Handle Synchronized Element Selection from ANY chart card dropdown
   const handleSelectElement = (el: string) => {
     setSelectedElement(el);
     if (allElementsData[el]) {
       setGridData(allElementsData[el]);
+    } else {
+      setTimeout(() => fetchChartData(), 10);
     }
     toast.success(`Parameter diubah ke ${el} untuk semua grafik.`);
   };
@@ -1645,6 +1648,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                               onOpenFullscreen={() => setFullscreenModalState({
                                 isOpen: true,
                                 standardCode: std.name,
+                                standardRawCode: std.code,
                                 instrumentName: theme.name,
                                 instrumentCode: instCode,
                                 headerColorClass: theme.headerBg
@@ -1700,6 +1704,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                             onOpenFullscreen={() => setFullscreenModalState({
                               isOpen: true,
                               standardCode: std.name,
+                              standardRawCode: std.code,
                               instrumentName: theme.name,
                               instrumentCode: instCode,
                               headerColorClass: theme.headerBg
@@ -2018,12 +2023,57 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       {/* Fullscreen Shewhart QC Control Chart Modal */}
       {fullscreenModalState && fullscreenModalState.isOpen && (() => {
         const fsStdCode = fullscreenModalState.standardCode;
-        const fsStdData = currentGridData[fsStdCode] || currentGridData[fsStdCode.replace('_', ' ')] || currentGridData[fsStdCode.replace(' ', '_')] || {};
-        const fsInstData = fsStdData[fullscreenModalState.instrumentCode] || {
-          limits: { nominalValue: 0, stdevFixed: 0.05, upperAction: 0, upperWarning: 0, lowerWarning: 0, lowerAction: 0 },
-          statistics: { count: 0, mean: 0, median: 0, min: 0, max: 0, actualStdev: 0 },
-          points: [],
+        const fsRawCode = fullscreenModalState.standardRawCode;
+
+        // Cari data standar di currentGridData dengan berbagai variasi (OREAS 184, OREAS184, OREAS_184, case-insensitive)
+        const findStdData = () => {
+          if (fsRawCode && currentGridData[fsRawCode]) return currentGridData[fsRawCode];
+          if (currentGridData[fsStdCode]) return currentGridData[fsStdCode];
+          if (currentGridData[fsStdCode.replace('_', ' ')]) return currentGridData[fsStdCode.replace('_', ' ')];
+          if (currentGridData[fsStdCode.replace(' ', '_')]) return currentGridData[fsStdCode.replace(' ', '_')];
+          const noSpace = fsStdCode.replace(/[\s_-]+/g, '');
+          if (currentGridData[noSpace]) return currentGridData[noSpace];
+
+          const normTarget = fsStdCode.toLowerCase().replace(/[\s_-]+/g, '');
+          const foundKey = Object.keys(currentGridData).find(
+            k => k.toLowerCase().replace(/[\s_-]+/g, '') === normTarget
+          );
+          if (foundKey && currentGridData[foundKey]) return currentGridData[foundKey];
+
+          if (fsRawCode) {
+            const normRaw = fsRawCode.toLowerCase().replace(/[\s_-]+/g, '');
+            const foundRawKey = Object.keys(currentGridData).find(
+              k => k.toLowerCase().replace(/[\s_-]+/g, '') === normRaw
+            );
+            if (foundRawKey && currentGridData[foundRawKey]) return currentGridData[foundRawKey];
+          }
+
+          return {};
         };
+
+        const fsStdData = findStdData();
+
+        // Cari data instrumen dengan toleransi nama/kode (EPSILON_F, EPSILON F, case-insensitive)
+        const findInstData = () => {
+          const targetInst = fullscreenModalState.instrumentCode;
+          if (fsStdData[targetInst]) return fsStdData[targetInst];
+          if (fsStdData[targetInst.replace('_', ' ')]) return fsStdData[targetInst.replace('_', ' ')];
+          if (fsStdData[targetInst.replace(' ', '_')]) return fsStdData[targetInst.replace(' ', '_')];
+
+          const normInst = targetInst.toLowerCase().replace(/[\s_-]+/g, '');
+          const foundInstKey = Object.keys(fsStdData).find(
+            k => k.toLowerCase().replace(/[\s_-]+/g, '') === normInst
+          );
+          if (foundInstKey && fsStdData[foundInstKey]) return fsStdData[foundInstKey];
+
+          return {
+            limits: { nominalValue: 0, stdevFixed: 0.05, upperAction: 0, upperWarning: 0, lowerWarning: 0, lowerAction: 0 },
+            statistics: { count: 0, mean: 0, median: 0, min: 0, max: 0, actualStdev: 0 },
+            points: [],
+          };
+        };
+
+        const fsInstData = findInstData();
 
         const fsCardKey = `${fullscreenModalState.instrumentCode}-${fsStdCode}-${selectedElement}`;
         const fsCardAnnotations: Record<number, XrfPointAnnotation> = {};
