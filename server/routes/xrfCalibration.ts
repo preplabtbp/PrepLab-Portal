@@ -7,7 +7,8 @@ import {
   xrfStandards,
   xrfStandardReferences,
   xrfVerifications,
-  xrfVerificationItems
+  xrfVerificationItems,
+  xrfOffspecTakeoutLogs
 } from "../../src/db/schema.js";
 import { extractSmartStandardCode, isWdxrfInstrument } from "../../src/utils/xrfStandardDetector.js";
 
@@ -127,6 +128,32 @@ export async function ensureXrfTables() {
     );`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_ver_items_ver_id ON xrf_verification_items(verification_id);`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_ver_items_std_code ON xrf_verification_items(standard_code);`);
+
+    // 6. Table Audit Trail Log Take Out Data Off-Spec
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS xrf_offspec_takeout_logs (
+      id SERIAL PRIMARY KEY,
+      action TEXT NOT NULL,
+      user_nik TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      user_jabatan TEXT,
+      user_role TEXT,
+      instrument_code TEXT,
+      instrument_name TEXT,
+      standard_code TEXT,
+      element TEXT,
+      point_index INTEGER,
+      measured_value DOUBLE PRECISION,
+      nominal_value DOUBLE PRECISION,
+      sigma_dist DOUBLE PRECISION,
+      diff DOUBLE PRECISION,
+      status_label TEXT,
+      reason TEXT,
+      sample_date TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_takeout_user ON xrf_offspec_takeout_logs(user_nik);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_takeout_inst ON xrf_offspec_takeout_logs(instrument_code);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_takeout_created ON xrf_offspec_takeout_logs(created_at);`);
 
     // Auto Seed Initial Master Data jika masih kosong
     await seedInitialXrfData();
@@ -2036,5 +2063,109 @@ xrfRouter.post("/bulk-import-paste", async (req, res) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ===================================================================
+// 8. AUDIT TRAIL LOG TAKE OUT DATA OFFSPEC (RESTRICTED PERMISSIONS)
+// ===================================================================
+
+function isAuthorizedTakeoutUser(nik?: string, jabatan?: string, role?: string): { allowed: boolean; roleCategory: string } {
+  const superAdminNiks = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177'];
+  const cleanNik = String(nik || '').trim();
+  if (superAdminNiks.includes(cleanNik) || cleanNik === 'preplabadmin' || cleanNik.startsWith('02D24')) {
+    return { allowed: true, roleCategory: 'DEV' };
+  }
+  const jab = `${jabatan || ''} ${role || ''}`.toLowerCase();
+  if (jab.includes('manager')) return { allowed: true, roleCategory: 'MANAGER' };
+  if (jab.includes('superintendent') || jab.includes('spt')) return { allowed: true, roleCategory: 'SPT' };
+  if (jab.includes('supervisor') || jab.includes('spv')) return { allowed: true, roleCategory: 'SPV' };
+  return { allowed: false, roleCategory: 'UNAUTHORIZED' };
+}
+
+// GET /api/xrf/takeout-logs - Ambil riwayat audit log take out data off-spec
+xrfRouter.get("/takeout-logs", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const { instrumentCode, standardCode, element, limit } = req.query;
+    const maxLimit = Math.min(parseInt(String(limit || '200'), 10) || 200, 500);
+
+    const conditions: any[] = [];
+    if (instrumentCode && instrumentCode !== 'ALL') {
+      conditions.push(eq(xrfOffspecTakeoutLogs.instrumentCode, String(instrumentCode)));
+    }
+    if (standardCode && standardCode !== 'ALL') {
+      conditions.push(eq(xrfOffspecTakeoutLogs.standardCode, String(standardCode)));
+    }
+    if (element && element !== 'ALL') {
+      conditions.push(eq(xrfOffspecTakeoutLogs.element, String(element)));
+    }
+
+    const query = conditions.length > 0
+      ? db.select().from(xrfOffspecTakeoutLogs).where(and(...conditions)).orderBy(desc(xrfOffspecTakeoutLogs.createdAt)).limit(maxLimit)
+      : db.select().from(xrfOffspecTakeoutLogs).orderBy(desc(xrfOffspecTakeoutLogs.createdAt)).limit(maxLimit);
+
+    const logs = await query;
+    return res.json({ success: true, data: logs });
+  } catch (err: any) {
+    console.error("[XRF Takeout Logs GET] Error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/xrf/takeout-logs - Rekam log take out data off-spec baru (Hanya SPV, SPT, Dev, Manager)
+xrfRouter.post("/takeout-logs", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const payload = req.body;
+    const rawLogs: any[] = Array.isArray(payload.logs) ? payload.logs : [payload];
+
+    if (rawLogs.length === 0) {
+      return res.status(400).json({ success: false, error: "Data log tidak boleh kosong." });
+    }
+
+    // Role check: All submitted logs must be from an authorized user
+    for (const log of rawLogs) {
+      const auth = isAuthorizedTakeoutUser(log.userNik, log.userJabatan, log.userRole);
+      if (!auth.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: "Akses Ditolak: Fitur Take Out data off-spec dibatasi secara ketat hanya untuk SPV & SPT Lab, Developer, dan Manager."
+        });
+      }
+    }
+
+    const rowsToInsert = rawLogs.map(log => ({
+      action: String(log.action || 'ISOLATE'),
+      userNik: String(log.userNik || 'UNKNOWN'),
+      userName: String(log.userName || 'Anonymous'),
+      userJabatan: log.userJabatan ? String(log.userJabatan) : null,
+      userRole: log.userRole ? String(log.userRole) : null,
+      instrumentCode: log.instrumentCode ? String(log.instrumentCode) : null,
+      instrumentName: log.instrumentName ? String(log.instrumentName) : null,
+      standardCode: log.standardCode ? String(log.standardCode) : null,
+      element: log.element ? String(log.element) : null,
+      pointIndex: typeof log.pointIndex === 'number' ? log.pointIndex : null,
+      measuredValue: typeof log.measuredValue === 'number' ? log.measuredValue : null,
+      nominalValue: typeof log.nominalValue === 'number' ? log.nominalValue : null,
+      sigmaDist: typeof log.sigmaDist === 'number' ? log.sigmaDist : null,
+      diff: typeof log.diff === 'number' ? log.diff : null,
+      statusLabel: log.statusLabel ? String(log.statusLabel) : null,
+      reason: log.reason ? String(log.reason) : null,
+      sampleDate: log.sampleDate ? String(log.sampleDate) : null,
+      createdAt: log.timestamp ? new Date(log.timestamp) : new Date(),
+    }));
+
+    await db.insert(xrfOffspecTakeoutLogs).values(rowsToInsert);
+
+    return res.json({
+      success: true,
+      message: `Audit log take out (${rowsToInsert.length} data) berhasil direkam.`,
+      insertedCount: rowsToInsert.length
+    });
+  } catch (err: any) {
+    console.error("[XRF Takeout Logs POST] Error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 

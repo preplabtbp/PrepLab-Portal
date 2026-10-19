@@ -132,7 +132,7 @@ export function AgendaDashboard({
       const year = new Date().getFullYear();
       const [agendaRes, notesRes, holidaysRes] = await Promise.all([
         fetch(`/api/agenda?nik=${encodeURIComponent(inspectorNik || '')}`).then(r => r.json()),
-        fetch('/api/notes').then(r => r.json()),
+        fetch(`/api/notes?nik=${encodeURIComponent(inspectorNik || '')}`).then(r => r.json()),
         fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/ID`).then(r => r.ok ? r.json() : []).catch(() => [])
       ]);
       
@@ -197,8 +197,8 @@ export function AgendaDashboard({
       
       setEvents(evts);
       
-      if (notesRes.status === 'success') {
-        setNotes(notesRes.data.filter((n:any) => n.nik === inspectorNik));
+      if (notesRes.status === 'success' && Array.isArray(notesRes.data)) {
+        setNotes(notesRes.data);
       }
       
     } catch (e) {
@@ -225,7 +225,7 @@ export function AgendaDashboard({
   const deleteNote = async (id: string) => {
     if (!confirm('Hapus catatan?')) return;
     try {
-      await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+      await fetch(`/api/notes/${id}?nik=${encodeURIComponent(inspectorNik || '')}`, { method: 'DELETE' });
       setShowNoteModal(false);
       fetchData();
     } catch(e) {}

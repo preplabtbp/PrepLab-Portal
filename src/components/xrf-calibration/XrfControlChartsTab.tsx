@@ -4,18 +4,29 @@ import {
   HelpCircle, Sparkles, Filter, Check, Eye, EyeOff, 
   LayoutGrid, Columns, Layers, CheckSquare, Square, Info, ShieldCheck,
   CheckCircle2, Database, ChevronDown, Activity, Building2, Cpu, ShieldAlert,
-  Plus, X, Archive
+  Plus, X, Archive, Lock, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { XrfQcChartCard, QC_ELEMENTS_LIST, XrfPointData, XrfChartLimitData, XrfPointAnnotation } from './XrfQcChartCard';
 import { XrfOffspecIsolationModal, IsolatedOffspecPoint } from './XrfOffspecIsolationModal';
 import { formatStandardDisplayName, isWdxrfInstrument } from '../../utils/xrfStandardDetector';
+import { XrfChartFullscreenModal } from './XrfChartFullscreenModal';
+import { 
+  getTakeoutUserAuth, 
+  recordTakeoutAuditLogs, 
+  XrfOffspecAuditLog 
+} from '../../utils/xrfTakeoutAuth';
+import { XrfTakeoutReasonModal } from './XrfTakeoutReasonModal';
+import { XrfTakeoutAuditLogsModal } from './XrfTakeoutAuditLogsModal';
 
 interface XrfControlChartsTabProps {
   instruments: Array<{ code: string; name: string }>;
   standards: Array<{ code: string; name: string }>;
   assignedSite?: 'GTS' | 'TBP';
   isDevOrManager?: boolean;
+  currentUserNik?: string;
+  currentUserName?: string;
+  currentUserJabatan?: string;
   onInstrumentsChanged?: () => Promise<void> | void;
 }
 
@@ -280,8 +291,43 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   standards,
   assignedSite = 'GTS',
   isDevOrManager = false,
+  currentUserNik,
+  currentUserName,
+  currentUserJabatan,
   onInstrumentsChanged,
 }) => {
+  // Otorisasi Take Out Data Off-Spec (Hanya SPV, SPT Lab, Dev, dan Manager)
+  const auth = useMemo(() => {
+    return getTakeoutUserAuth({
+      nik: currentUserNik,
+      name: currentUserName,
+      jabatan: currentUserJabatan,
+    });
+  }, [currentUserNik, currentUserName, currentUserJabatan]);
+
+  const checkTakeoutPermissionOrWarn = useCallback(() => {
+    if (!auth.allowed) {
+      toast.error("Akses Ditolak: Fitur Take Out data off-spec hanya diizinkan untuk SPV & SPT Lab, Developer, dan Manager.", {
+        duration: 5000,
+      });
+      return false;
+    }
+    return true;
+  }, [auth.allowed]);
+
+  // Modal State: Konfirmasi Take Out dengan Alasan
+  const [takeoutPendingPoint, setTakeoutPendingPoint] = useState<{
+    point: XrfPointData;
+    element: string;
+    limits: XrfChartLimitData;
+    instrumentCode: string;
+    instrumentName: string;
+    standardCode: string;
+  } | null>(null);
+
+  // Modal State: Riwayat Audit Trail Log Take Out
+  const [showTakeoutAuditModal, setShowTakeoutAuditModal] = useState<boolean>(false);
+
   // -----------------------------------------------------------------
   // 1. SIMPLIFIED ENTERPRISE HIERARCHY (SITE -> METHOD -> MATRIX)
   // -----------------------------------------------------------------
@@ -367,6 +413,13 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     }
   });
   const [showOffspecModal, setShowOffspecModal] = useState<boolean>(false);
+  const [fullscreenModalState, setFullscreenModalState] = useState<{
+    isOpen: boolean;
+    standardCode: string;
+    instrumentName: string;
+    instrumentCode: string;
+    headerColorClass?: string;
+  } | null>(null);
 
   // Anomaly point annotations: Issue, Solution, PIC (persistent in localStorage)
   const [pointAnnotations, setPointAnnotations] = useState<Record<string, XrfPointAnnotation>>(() => {
@@ -446,59 +499,149 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     instName: string, 
     stdCode: string
   ) => {
+    if (!checkTakeoutPermissionOrWarn()) return;
     const pointId = `${instCode}-${stdCode}-${element}-${point.index}`;
-    setIsolatedPoints(prev => {
-      const exists = prev.some(p => p.id === pointId);
-      if (exists) {
-        toast.info(`Titik #${point.index} (${element}) dikeluarkan dari isolasi data off-spec`);
-        return prev.filter(p => p.id !== pointId);
-      } else {
-        const pointSigma = limits.stdevFixed > 0 
-          ? ((point.value - limits.nominalValue) / limits.stdevFixed) 
-          : 0;
-        const absSigma = Math.abs(pointSigma);
-        const status = absSigma > 3.0 ? 'action' : absSigma > 2.0 ? 'warning' : 'normal';
-        const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : status === 'warning' ? 'Off-Spec Warning (2-3σ)' : 'In-Control (≤2σ)';
-        const ann = pointAnnotations[pointId];
+    const exists = isolatedPoints.some(p => p.id === pointId);
 
-        const newPoint: IsolatedOffspecPoint = {
-          id: pointId,
-          pointId: point.id,
-          index: point.index,
-          date: point.date || new Date().toISOString().split('T')[0],
-          analyzedAt: point.analyzedAt,
-          instrumentCode: instCode,
-          instrumentName: instName,
-          standardCode: stdCode,
-          element,
-          value: point.value,
-          nominalValue: limits.nominalValue,
-          stdevFixed: limits.stdevFixed,
-          diff: point.value - limits.nominalValue,
-          sigmaDist: pointSigma,
-          status,
-          statusLabel,
-          isolatedAt: new Date().toISOString(),
-          issue: ann?.issue,
-          solution: ann?.solution,
-          picNik: ann?.picNik,
-          picName: ann?.picName,
-        };
-        toast.success(`Titik #${point.index} (${element}) berhasil diisolasi ke chart off-spec`);
-        return [...prev, newPoint];
-      }
+    if (exists) {
+      // Pulihkan kembali ke grafik kontrol utama
+      setIsolatedPoints(prev => prev.filter(p => p.id !== pointId));
+      recordTakeoutAuditLogs({
+        action: 'RESTORE',
+        userNik: auth.userInfo.nik,
+        userName: auth.userInfo.name,
+        userJabatan: auth.userInfo.jabatan,
+        userRole: auth.userInfo.role,
+        instrumentCode: instCode,
+        instrumentName: instName,
+        standardCode: stdCode,
+        element,
+        pointIndex: point.index,
+        measuredValue: point.value,
+        nominalValue: limits.nominalValue,
+        sigmaDist: limits.stdevFixed > 0 ? ((point.value - limits.nominalValue) / limits.stdevFixed) : 0,
+        diff: point.value - limits.nominalValue,
+        sampleDate: point.date,
+        reason: 'Titik dipulihkan kembali ke grafik kendali utama',
+      });
+      toast.info(`Titik #${point.index} (${element}) dikeluarkan dari isolasi data off-spec`);
+    } else {
+      // Buka modal konfirmasi dengan alasan/justifikasi teknis yang wajib
+      setTakeoutPendingPoint({
+        point,
+        element,
+        limits,
+        instrumentCode: instCode,
+        instrumentName: instName,
+        standardCode: stdCode,
+      });
+    }
+  }, [isolatedPoints, checkTakeoutPermissionOrWarn, auth.userInfo]);
+
+  const handleConfirmTakeout = useCallback((reason: string) => {
+    if (!takeoutPendingPoint) return;
+    const { point, element, limits, instrumentCode: instCode, instrumentName: instName, standardCode: stdCode } = takeoutPendingPoint;
+    const pointId = `${instCode}-${stdCode}-${element}-${point.index}`;
+    const pointSigma = limits.stdevFixed > 0 
+      ? ((point.value - limits.nominalValue) / limits.stdevFixed) 
+      : 0;
+    const absSigma = Math.abs(pointSigma);
+    const status = absSigma > 3.0 ? 'action' : absSigma > 2.0 ? 'warning' : 'normal';
+    const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : status === 'warning' ? 'Off-Spec Warning (2-3σ)' : 'In-Control (≤2σ)';
+    const ann = pointAnnotations[pointId];
+
+    const newPoint: IsolatedOffspecPoint = {
+      id: pointId,
+      pointId: point.id,
+      index: point.index,
+      date: point.date || new Date().toISOString().split('T')[0],
+      analyzedAt: point.analyzedAt,
+      instrumentCode: instCode,
+      instrumentName: instName,
+      standardCode: stdCode,
+      element,
+      value: point.value,
+      nominalValue: limits.nominalValue,
+      stdevFixed: limits.stdevFixed,
+      diff: point.value - limits.nominalValue,
+      sigmaDist: pointSigma,
+      status,
+      statusLabel,
+      isolatedAt: new Date().toISOString(),
+      note: reason,
+      issue: ann?.issue || reason,
+      solution: ann?.solution,
+      picNik: ann?.picNik || auth.userInfo.nik,
+      picName: ann?.picName || auth.userInfo.name,
+    };
+
+    setIsolatedPoints(prev => [...prev.filter(p => p.id !== pointId), newPoint]);
+
+    recordTakeoutAuditLogs({
+      action: 'ISOLATE',
+      userNik: auth.userInfo.nik,
+      userName: auth.userInfo.name,
+      userJabatan: auth.userInfo.jabatan,
+      userRole: auth.userInfo.role,
+      instrumentCode: instCode,
+      instrumentName: instName,
+      standardCode: stdCode,
+      element,
+      pointIndex: point.index,
+      measuredValue: point.value,
+      nominalValue: limits.nominalValue,
+      sigmaDist: pointSigma,
+      diff: point.value - limits.nominalValue,
+      statusLabel,
+      reason,
+      sampleDate: point.date,
     });
-  }, [pointAnnotations]);
+
+    toast.success(`Titik #${point.index} (${element}) berhasil di-take out & dicatat dalam audit trail.`);
+    setTakeoutPendingPoint(null);
+  }, [takeoutPendingPoint, pointAnnotations, auth.userInfo]);
 
   const handleRemovePoint = useCallback((id: string) => {
+    if (!checkTakeoutPermissionOrWarn()) return;
+    const target = isolatedPoints.find(p => p.id === id);
     setIsolatedPoints(prev => prev.filter(p => p.id !== id));
+    if (target) {
+      recordTakeoutAuditLogs({
+        action: 'RESTORE',
+        userNik: auth.userInfo.nik,
+        userName: auth.userInfo.name,
+        userJabatan: auth.userInfo.jabatan,
+        userRole: auth.userInfo.role,
+        instrumentCode: target.instrumentCode,
+        instrumentName: target.instrumentName,
+        standardCode: target.standardCode,
+        element: target.element,
+        pointIndex: target.index,
+        measuredValue: target.value,
+        nominalValue: target.nominalValue,
+        sigmaDist: target.sigmaDist,
+        diff: target.diff,
+        sampleDate: target.date,
+        reason: 'Titik dipulihkan kembali ke grafik kontrol utama',
+      });
+    }
     toast.info('Titik off-spec dihapus dari rekap isolasi');
-  }, []);
+  }, [isolatedPoints, checkTakeoutPermissionOrWarn, auth.userInfo]);
 
   const handleClearAll = useCallback(() => {
+    if (!checkTakeoutPermissionOrWarn()) return;
+    const count = isolatedPoints.length;
     setIsolatedPoints([]);
+    recordTakeoutAuditLogs({
+      action: 'CLEAR_ALL',
+      userNik: auth.userInfo.nik,
+      userName: auth.userInfo.name,
+      userJabatan: auth.userInfo.jabatan,
+      userRole: auth.userInfo.role,
+      reason: `Reset seluruh data isolasi off-spec (${count} titik dipulihkan)`,
+    });
     toast.info('Semua data isolasi off-spec telah dibersihkan');
-  }, []);
+  }, [isolatedPoints.length, checkTakeoutPermissionOrWarn, auth.userInfo]);
 
   const isPointIsolated = useCallback((
     point: XrfPointData, 
@@ -518,6 +661,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     instName: string, 
     stdCode: string
   ) => {
+    if (!checkTakeoutPermissionOrWarn()) return;
     const offspecPoints = cardPoints.filter(p => {
       const dist = limits.stdevFixed > 0 ? Math.abs((p.value - limits.nominalValue) / limits.stdevFixed) : 0;
       return dist > 2.0;
@@ -528,6 +672,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       return;
     }
 
+    const logsToRecord: XrfOffspecAuditLog[] = [];
     setIsolatedPoints(prev => {
       const existingIds = new Set(prev.map(p => p.id));
       const newlyAdded: IsolatedOffspecPoint[] = [];
@@ -559,23 +704,45 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             status,
             statusLabel,
             isolatedAt: new Date().toISOString(),
+            note: 'Bulk take-out titik off-spec pada standar ini',
             issue: ann?.issue,
             solution: ann?.solution,
-            picNik: ann?.picNik,
-            picName: ann?.picName,
+            picNik: ann?.picNik || auth.userInfo.nik,
+            picName: ann?.picName || auth.userInfo.name,
+          });
+
+          logsToRecord.push({
+            action: 'BULK_ISOLATE',
+            userNik: auth.userInfo.nik,
+            userName: auth.userInfo.name,
+            userJabatan: auth.userInfo.jabatan,
+            userRole: auth.userInfo.role,
+            instrumentCode: instCode,
+            instrumentName: instName,
+            standardCode: stdCode,
+            element,
+            pointIndex: p.index,
+            measuredValue: p.value,
+            nominalValue: limits.nominalValue,
+            sigmaDist: pointSigma,
+            diff: p.value - limits.nominalValue,
+            statusLabel,
+            reason: 'Bulk take-out titik off-spec (>2σ) pada standar ini',
+            sampleDate: p.date,
           });
         }
       });
 
       if (newlyAdded.length > 0) {
-        toast.success(`${newlyAdded.length} titik off-spec di ${stdCode} (${element}) berhasil diisolasi!`);
+        toast.success(`${newlyAdded.length} titik off-spec di ${stdCode} (${element}) berhasil di-take out & direkam!`);
+        recordTakeoutAuditLogs(logsToRecord);
       } else {
         toast.info(`Semua titik off-spec di ${stdCode} sudah terisolasi sebelumnya.`);
       }
 
       return [...prev, ...newlyAdded];
     });
-  }, []);
+  }, [pointAnnotations, checkTakeoutPermissionOrWarn, auth.userInfo]);
 
   // Horizontal scroll synchronization for side-by-side mode
   const headerScrollRef = useRef<HTMLDivElement>(null);
@@ -804,9 +971,12 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   const currentGridData = allElementsData[selectedElement] || gridData;
 
   const handleAutoIsolateAllOffspec = useCallback(() => {
+    if (!checkTakeoutPermissionOrWarn()) return;
+
     setIsolatedPoints(prev => {
       const existingIds = new Set(prev.map(p => p.id));
       const newlyAdded: IsolatedOffspecPoint[] = [];
+      const logsToRecord: XrfOffspecAuditLog[] = [];
 
       Object.entries(currentGridData).forEach(([stdCode, instObj]) => {
         const stdName = STANDARD_DISPLAY_NAMES[stdCode] || stdCode;
@@ -825,6 +995,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                   const status = absSigma > 3.0 ? 'action' : 'warning';
                   const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : 'Off-Spec Warning (2-3σ)';
                   const ann = pointAnnotations[pointId];
+
                   newlyAdded.push({
                     id: pointId,
                     pointId: p.id,
@@ -843,10 +1014,31 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                     status,
                     statusLabel,
                     isolatedAt: new Date().toISOString(),
+                    note: 'Auto-deteksi take-out titik off-spec lintas instrumen',
                     issue: ann?.issue,
                     solution: ann?.solution,
-                    picNik: ann?.picNik,
-                    picName: ann?.picName,
+                    picNik: ann?.picNik || auth.userInfo.nik,
+                    picName: ann?.picName || auth.userInfo.name,
+                  });
+
+                  logsToRecord.push({
+                    action: 'BULK_ISOLATE',
+                    userNik: auth.userInfo.nik,
+                    userName: auth.userInfo.name,
+                    userJabatan: auth.userInfo.jabatan,
+                    userRole: auth.userInfo.role,
+                    instrumentCode: instCode,
+                    instrumentName: theme.name,
+                    standardCode: stdName,
+                    element: selectedElement,
+                    pointIndex: p.index,
+                    measuredValue: p.value,
+                    nominalValue: limits.nominalValue,
+                    sigmaDist,
+                    diff: p.value - limits.nominalValue,
+                    statusLabel,
+                    reason: `Auto-deteksi take out titik off-spec (${absSigma.toFixed(2)}σ) pada unsur ${selectedElement}`,
+                    sampleDate: p.date,
                   });
                 }
               }
@@ -856,14 +1048,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       });
 
       if (newlyAdded.length > 0) {
-        toast.success(`${newlyAdded.length} titik off-spec di seluruh instrumen berhasil diisolasi!`);
+        toast.success(`${newlyAdded.length} titik off-spec di seluruh instrumen berhasil di-take out & direkam!`);
+        recordTakeoutAuditLogs(logsToRecord);
       } else {
         toast.info('Semua titik off-spec yang aktif telah diisolasi.');
       }
 
       return [...prev, ...newlyAdded];
     });
-  }, [currentGridData, selectedElement]);
+  }, [currentGridData, selectedElement, checkTakeoutPermissionOrWarn, auth.userInfo, pointAnnotations]);
 
   // Toggle instrument selection (up to 6 instruments side-by-side)
   const toggleInstrument = (code: string) => {
@@ -1179,6 +1372,16 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
               )}
             </button>
 
+            {/* Dedicated Audit Trail Take Out Logs Button */}
+            <button
+              onClick={() => setShowTakeoutAuditModal(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-black border flex items-center gap-1.5 transition-all cursor-pointer shadow-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
+              title="Buka Log Riwayat Take Out Data Off-Spec (ISO 17025 Audit Trail)"
+            >
+              <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Audit Log Take Out</span>
+            </button>
+
             <button
               onClick={fetchChartData}
               disabled={loading}
@@ -1437,6 +1640,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                               points={instData.points}
                               showStats={showStats}
                               compactStats={compactStats}
+                              canTakeOutOffspec={auth.allowed}
+                              userRoleTitle={auth.userInfo.role}
+                              onOpenFullscreen={() => setFullscreenModalState({
+                                isOpen: true,
+                                standardCode: std.name,
+                                instrumentName: theme.name,
+                                instrumentCode: instCode,
+                                headerColorClass: theme.headerBg
+                              })}
                               onToggleIsolatePoint={(pt, el, lim) => handleToggleIsolatePoint(pt, el, lim, instCode, theme.name, std.name)}
                               onOpenOffspecModal={() => setShowOffspecModal(true)}
                               onIsolateAllOffspecInCard={(pts, el, lim) => handleIsolateAllOffspecInCard(pts, el, lim, instCode, theme.name, std.name)}
@@ -1483,6 +1695,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                             points={instData.points}
                             showStats={showStats}
                             compactStats={compactStats}
+                            canTakeOutOffspec={auth.allowed}
+                            userRoleTitle={auth.userInfo.role}
+                            onOpenFullscreen={() => setFullscreenModalState({
+                              isOpen: true,
+                              standardCode: std.name,
+                              instrumentName: theme.name,
+                              instrumentCode: instCode,
+                              headerColorClass: theme.headerBg
+                            })}
                             onToggleIsolatePoint={(pt, el, lim) => handleToggleIsolatePoint(pt, el, lim, instCode, theme.name, std.name)}
                             onOpenOffspecModal={() => setShowOffspecModal(true)}
                             onIsolateAllOffspecInCard={(pts, el, lim) => handleIsolateAllOffspecInCard(pts, el, lim, instCode, theme.name, std.name)}
@@ -1511,6 +1732,9 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         onClearAll={handleClearAll}
         onAutoIsolateAllOffspec={handleAutoIsolateAllOffspec}
         instrumentThemes={INSTRUMENT_THEMES}
+        canTakeOutOffspec={auth.allowed}
+        userRoleTitle={auth.userInfo.role}
+        onOpenAuditLogs={() => setShowTakeoutAuditModal(true)}
       />
 
       {/* Modal Tambah Alat XRF Baru Langsung di Portal */}
@@ -1790,6 +2014,66 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Fullscreen Shewhart QC Control Chart Modal */}
+      {fullscreenModalState && fullscreenModalState.isOpen && (() => {
+        const fsStdCode = fullscreenModalState.standardCode;
+        const fsStdData = currentGridData[fsStdCode] || currentGridData[fsStdCode.replace('_', ' ')] || currentGridData[fsStdCode.replace(' ', '_')] || {};
+        const fsInstData = fsStdData[fullscreenModalState.instrumentCode] || {
+          limits: { nominalValue: 0, stdevFixed: 0.05, upperAction: 0, upperWarning: 0, lowerWarning: 0, lowerAction: 0 },
+          statistics: { count: 0, mean: 0, median: 0, min: 0, max: 0, actualStdev: 0 },
+          points: [],
+        };
+
+        const fsCardKey = `${fullscreenModalState.instrumentCode}-${fsStdCode}-${selectedElement}`;
+        const fsCardAnnotations: Record<number, XrfPointAnnotation> = {};
+        Object.entries(pointAnnotations).forEach(([k, ann]) => {
+          if (k.startsWith(`${fsCardKey}-`)) {
+            const pIdx = parseInt(k.replace(`${fsCardKey}-`, ''), 10);
+            if (!isNaN(pIdx)) fsCardAnnotations[pIdx] = ann;
+          }
+        });
+
+        return (
+          <XrfChartFullscreenModal
+            isOpen={fullscreenModalState.isOpen}
+            onClose={() => setFullscreenModalState(null)}
+            standardCode={fsStdCode}
+            instrumentName={fullscreenModalState.instrumentName}
+            instrumentCode={fullscreenModalState.instrumentCode}
+            headerColorClass={fullscreenModalState.headerColorClass}
+            currentElement={selectedElement}
+            onSelectElement={handleSelectElement}
+            limits={fsInstData.limits}
+            statistics={fsInstData.statistics}
+            points={fsInstData.points}
+            canTakeOutOffspec={auth.allowed}
+            userRoleTitle={auth.userInfo.role}
+            onToggleIsolatePoint={(pt, el, lim) => handleToggleIsolatePoint(pt, el, lim, fullscreenModalState.instrumentCode, fullscreenModalState.instrumentName, fsStdCode)}
+            isPointIsolated={(pt, el) => isPointIsolated(pt, el, fullscreenModalState.instrumentCode, fsStdCode)}
+            annotations={fsCardAnnotations}
+            onSaveAnnotation={(pIdx, ann) => handleSaveAnnotation(fsCardKey, pIdx, ann)}
+            onDeleteAnnotation={(pIdx) => handleDeleteAnnotation(fsCardKey, pIdx)}
+          />
+        );
+      })()}
+
+      {/* Modal Konfirmasi Take Out dengan Justifikasi/Alasan Wajib */}
+      {takeoutPendingPoint && (
+        <XrfTakeoutReasonModal
+          isOpen={Boolean(takeoutPendingPoint)}
+          onClose={() => setTakeoutPendingPoint(null)}
+          userInfo={auth.userInfo}
+          targetPoint={takeoutPendingPoint}
+          onConfirm={handleConfirmTakeout}
+        />
+      )}
+
+      {/* Modal Riwayat Audit Trail Log Take Out Data Off-Spec */}
+      <XrfTakeoutAuditLogsModal
+        isOpen={showTakeoutAuditModal}
+        onClose={() => setShowTakeoutAuditModal(false)}
+      />
     </div>
   );
 };

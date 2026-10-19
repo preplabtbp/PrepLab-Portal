@@ -14,7 +14,7 @@ const MODULES = [
   { id: 'wo', title: 'Work Orders', icon: <FileText className="w-5 h-5" />, tables: ['workOrders', 'tickets', 'downtime'] },
   { id: 'inspect', title: 'Inspeksi & Pantau', icon: <Activity className="w-5 h-5" />, tables: ['inspections', 'pemantauan', 'questions'] },
   { id: 'apd', title: 'Sistem APD', icon: <Shield className="w-5 h-5" />, tables: ['apdSettings', 'apdHistory', 'apdDocuments'] },
-  { id: 'agenda', title: 'Agenda & Notes', icon: <FileText className="w-5 h-5" />, tables: ['agendaEvents', 'privateNotes', 'userThemes'] },
+  { id: 'agenda', title: 'Agenda & Tema', icon: <FileText className="w-5 h-5" />, tables: ['agendaEvents', 'userThemes'] },
   { id: 'system', title: 'System Settings', icon: <Settings2 className="w-5 h-5" />, tables: ['appSettings', 'developerUsers'] },
   { id: 'changelog', title: 'Changelog', icon: <History className="w-5 h-5" />, tables: [] }
 ];

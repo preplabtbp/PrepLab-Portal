@@ -45,14 +45,26 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     return false;
   }, [userNik, developerList]);
 
-  const userJabatan = (() => {
+  const userProfile = useMemo(() => {
     try {
-      const p = JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
-      return (p.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+      return JSON.parse(localStorage.getItem('p2h_inspector_profile') || '{}');
     } catch {
-      return (localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+      return {};
     }
-  })();
+  }, []);
+
+  const userJabatan = useMemo(() => {
+    return (userProfile.jabatan || localStorage.getItem('p2h_inspector_jabatan') || '').toLowerCase();
+  }, [userProfile]);
+
+  const userSection = useMemo(() => {
+    return (userProfile.section || localStorage.getItem('p2h_inspector_section') || '').toLowerCase();
+  }, [userProfile]);
+
+  const userDepartment = useMemo(() => {
+    return (userProfile.department || localStorage.getItem('p2h_inspector_department') || '').toLowerCase();
+  }, [userProfile]);
+
   const isSpvUp = isDev || 
     userJabatan.includes('supervisor') || 
     userJabatan.includes('superintendent') || 
@@ -62,6 +74,7 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     userJabatan.includes('foreman');
 
   const [pushStatus, setPushStatus] = useState<string>('default');
+  const recentNotifKeysRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -100,8 +113,18 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
           return { ...n, isRead: n.isRead || isLocallyRead };
         });
 
-        setNotifications(processedData);
-        setUnreadCount(processedData.filter((n: any) => !n.isRead).length);
+        // Deduplikasi visual di dropdown bell (jika ada kemiripan dalam jendela 10 menit)
+        const seenListKeys = new Set<string>();
+        const uniqueProcessedData = processedData.filter((n: any) => {
+          const timeWindow = n.createdAt ? Math.floor(new Date(n.createdAt).getTime() / 600000) : 0;
+          const key = `${(n.title || '').trim()}|${(n.message || '').trim()}|${(n.link || '').trim()}|${timeWindow}`;
+          if (seenListKeys.has(key)) return false;
+          seenListKeys.add(key);
+          return true;
+        });
+
+        setNotifications(uniqueProcessedData);
+        setUnreadCount(uniqueProcessedData.filter((n: any) => !n.isRead).length);
       }
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
@@ -123,16 +146,49 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
 
     const handleNewNotification = (notif: any) => {
       if (!notif) return;
-      // Determine if relevant to this user
-      const isPersonal = notif.userId && notif.userId === userNik;
-      const isBroadcast = !notif.userId;
-      const isRoleMatch = notif.role && (
-        userJabatan.includes(notif.role.toLowerCase()) || 
+
+      // Jangan bunyikan chime / toast jika notifikasi ini dikirim oleh diri sendiri
+      if (notif.senderNik && userNik && notif.senderNik.toUpperCase() === userNik.toUpperCase()) {
+        fetchNotifications();
+        return;
+      }
+
+      // Determine if relevant to this user:
+      // 1. Personal: notif.userId cocok langsung dengan userNik
+      const isPersonal = Boolean(notif.userId && userNik && notif.userId.toUpperCase() === userNik.toUpperCase());
+      
+      // 2. Role / Section broadcast: notif.userId kosong, role cocok dengan section, dept, jabatan, atau user adalah SPV / Dev
+      const roleLower = (notif.role || '').toLowerCase().trim();
+      const isRoleMatch = !notif.userId && Boolean(roleLower) && (
+        roleLower === 'all' ||
+        roleLower === 'semua' ||
+        userJabatan.includes(roleLower) || 
+        roleLower.includes(userJabatan) ||
+        (Boolean(userSection) && (userSection.includes(roleLower) || roleLower.includes(userSection))) ||
+        (Boolean(userDepartment) && (userDepartment.includes(roleLower) || roleLower.includes(userDepartment))) ||
         isDev || 
         isSpvUp
       );
 
-      if (isPersonal || isBroadcast || isRoleMatch) {
+      // 3. Universal broadcast: notif.userId kosong dan role kosong atau 'all'
+      const isUniversalBroadcast = !notif.userId && (!roleLower || roleLower === 'all' || roleLower === 'semua');
+
+      if (isPersonal || isRoleMatch || isUniversalBroadcast) {
+        // Anti-Spam / Deduplication: Abaikan jika notifikasi dengan judul, pesan, & link yang sama diterima dalam rentang 5 detik
+        const now = Date.now();
+        const dedupKey = `${(notif.title || '').trim()}:${(notif.message || '').trim()}:${(notif.link || '').trim()}`;
+        const lastSeen = recentNotifKeysRef.current.get(dedupKey) || 0;
+        if (now - lastSeen < 5000) {
+          return;
+        }
+        recentNotifKeysRef.current.set(dedupKey, now);
+
+        // Bersihkan cache lama agar memori tetap optimal
+        if (recentNotifKeysRef.current.size > 50) {
+          for (const [k, ts] of recentNotifKeysRef.current.entries()) {
+            if (now - ts > 30000) recentNotifKeysRef.current.delete(k);
+          }
+        }
         // Play soft chime sound
         try {
           const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -176,7 +232,7 @@ export function NotificationBell({ userNik, userName, onOpenP5mModal }: Notifica
     return () => {
       socket.off('notification:new', handleNewNotification);
     };
-  }, [userNik, userJabatan, isDev, isSpvUp]);
+  }, [userNik, userJabatan, userSection, userDepartment, isDev, isSpvUp]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

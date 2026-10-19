@@ -253,6 +253,9 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
             standards={standards}
             assignedSite={assignedSite}
             isDevOrManager={isDevOrManager}
+            currentUserNik={inspectorNik}
+            currentUserName={inspectorName}
+            currentUserJabatan={profileJabatan || userJabatan}
             onInstrumentsChanged={refreshInstruments}
           />
         </div>

@@ -38,7 +38,7 @@ router.get("/api/admin/tables", async (req, res) => {
     res.json([
       "employees", "equipments", "workOrders", "tickets", "downtime", 
       "spareparts", "apdSettings", "apdHistory", "apdDocuments", "roster", 
-      "inspections", "pemantauan", "questions", "agendaEvents", "privateNotes", 
+      "inspections", "pemantauan", "questions", "agendaEvents", 
       "userThemes", "pelanggaran", "appSettings", "developerUsers"
     ]);
   } catch (e: any) { 
@@ -49,6 +49,9 @@ router.get("/api/admin/tables", async (req, res) => {
 router.get("/api/admin/tables/:name", async (req, res) => {
   try {
     const tableName = req.params.name;
+    if (tableName === 'privateNotes') {
+      return res.status(403).json({ error: "Akses ditolak: Private Notes bersifat rahasia dan tidak dapat diakses melalui Admin Table." });
+    }
     const t = getTableObj(tableName);
     if (!t) return res.status(404).json({ error: "Tabel tidak ditemukan" });
 

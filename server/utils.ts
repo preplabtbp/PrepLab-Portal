@@ -22,7 +22,7 @@ export function getIoInstance() {
 
 export async function sendWebPush(
   notifs: any | any[],
-  options?: { targetNiks?: string[]; skipWebPush?: boolean }
+  options?: { targetNiks?: string[]; skipWebPush?: boolean; senderNik?: string }
 ) {
   try {
     if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
@@ -36,15 +36,27 @@ export async function sendWebPush(
     }
 
     const notificationsArray = Array.isArray(notifs) ? notifs : [notifs];
+    const emittedSocketKeys = new Set<string>();
+
     for (const notif of notificationsArray) {
       if (!notif) continue;
 
       // Real-time socket delivery to all connected clients
+      // Deduplicate per batch by title + message + link so multiple DB rows (e.g. broadcast + personal)
+      // for the exact same event only fire ONE socket emission.
       if (_io) {
-        try {
-          _io.emit('notification:new', notif);
-        } catch (ioErr) {
-          console.error('[Socket Notification Emit Error]:', ioErr);
+        const socketDedupKey = `${(notif.title || '').trim()}|${(notif.message || '').trim()}|${(notif.link || '').trim()}`;
+        if (!emittedSocketKeys.has(socketDedupKey)) {
+          emittedSocketKeys.add(socketDedupKey);
+          try {
+            const socketPayload = {
+              ...notif,
+              senderNik: notif.senderNik || options?.senderNik || null
+            };
+            _io.emit('notification:new', socketPayload);
+          } catch (ioErr) {
+            console.error('[Socket Notification Emit Error]:', ioErr);
+          }
         }
       }
 
@@ -80,8 +92,12 @@ export async function sendWebPush(
                      d.includes('qa') || s.includes('qa') || j.includes('supervisor') ||
                      j.includes('manager') || j.includes('superintendent') || j.includes('admin') ||
                      d.includes('admin') || s.includes('admin');
+            } else if (roleLower.includes('prep') || roleLower.includes('lab')) {
+              return d.includes('prep') || d.includes('lab') || s.includes('prep') || s.includes('lab') ||
+                     j.includes('prep') || j.includes('lab') || j.includes('manager') || j.includes('superintendent');
             }
-            return d.includes(roleLower) || s.includes(roleLower) || j.includes(roleLower);
+            return d.includes(roleLower) || s.includes(roleLower) || j.includes(roleLower) ||
+                   roleLower.includes(d) || roleLower.includes(s);
           }).map((e: any) => e.nik);
         }
 
@@ -338,7 +354,6 @@ export const getTableObj = (name: string) => {
     case "pemantauan": return pemantauan;
     case "questions": return questions;
     case "agendaEvents": return agendaEvents;
-    case "privateNotes": return privateNotes;
     case "userThemes": return userThemes;
     case "bulletinPosts": return bulletinPosts;
     case "notifications": return notifications;

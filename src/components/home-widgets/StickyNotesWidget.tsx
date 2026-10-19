@@ -211,38 +211,30 @@ export interface GoogleKeepNote {
 
 interface StickyNotesWidgetProps {
   size: WidgetSize;
+  userNik?: string;
   settings?: StickyNotesSettings;
   onUpdateSettings?: (settings: StickyNotesSettings) => void;
 }
 
-const STORAGE_KEY = 'preplab_keep_notes_v2';
-const SHARED_STORAGE_KEY = 'preplab_shared_keep_notes_v3';
 const TIP_KEY = 'preplab_keep_pin_tip_dismissed';
 const LEGACY_STORAGE_KEY = 'preplab_home_sticky_note';
 
 export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
   size,
+  userNik = 'default',
   settings,
   onUpdateSettings
 }) => {
   const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const effectiveNik = userNik && userNik !== 'default' ? userNik : (localStorage.getItem('p2h_inspector_nik') || 'default');
+  const userStorageKey = `preplab_keep_notes_v3_${effectiveNik}`;
 
-  // 1. Initial State & Data Migration from previous versions
+  // 1. Initial State & Data Migration per-user
   const [notes, setNotes] = useState<GoogleKeepNote[]>(() => {
     try {
-      // 1. Shared notes across devices
-      const savedShared = localStorage.getItem(SHARED_STORAGE_KEY);
-      if (savedShared) {
-        const parsed = JSON.parse(savedShared);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-
-      // 2. Fallback to previous local storage
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      const savedUserNotes = localStorage.getItem(userStorageKey);
+      if (savedUserNotes) {
+        const parsed = JSON.parse(savedUserNotes);
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed;
         }
@@ -352,13 +344,13 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
   const resolvedColorKey = LEGACY_COLOR_ALIAS[rawColor] || rawColor;
   const currentTheme = KEEP_COLORS[resolvedColorKey] || KEEP_COLORS.sand;
 
-  // Sync notes from server & listen to realtime updates across devices
+  // Sync notes from server per-user
   useEffect(() => {
     let isMounted = true;
 
     const fetchRemoteNotes = async () => {
       try {
-        const res = await fetch('/api/widgets/notes');
+        const res = await fetch(`/api/widgets/notes?nik=${encodeURIComponent(effectiveNik)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!isMounted) return;
@@ -366,8 +358,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
         if (data.success && Array.isArray(data.notes) && data.notes.length > 0) {
           setNotes(data.notes);
           try {
-            localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(data.notes));
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data.notes));
+            localStorage.setItem(userStorageKey, JSON.stringify(data.notes));
           } catch {}
           // Keep active note ID valid
           setActiveNoteId((currentId) => {
@@ -375,13 +366,13 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
             return data.notes[0].id;
           });
         } else {
-          // If server has no notes yet, push current local notes to server
+          // If server has no notes yet for this user, push current local notes to server
           const currentNotes = notes.length > 0 ? notes : [];
-          if (currentNotes.length > 0) {
+          if (currentNotes.length > 0 && effectiveNik !== 'default') {
             fetch('/api/widgets/notes', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ notes: currentNotes })
+              body: JSON.stringify({ notes: currentNotes, nik: effectiveNik })
             }).catch(() => {});
           }
         }
@@ -392,42 +383,16 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
 
     fetchRemoteNotes();
 
-    const socket = getGlobalSocket();
-    const handleRemoteNotesUpdate = (remoteNotes: GoogleKeepNote[]) => {
-      if (!isMounted) return;
-      if (Array.isArray(remoteNotes) && remoteNotes.length > 0) {
-        setNotes((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(remoteNotes)) {
-            return prev;
-          }
-          try {
-            localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(remoteNotes));
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteNotes));
-          } catch {}
-          return remoteNotes;
-        });
-
-        setActiveNoteId((currentId) => {
-          if (remoteNotes.some((n) => n.id === currentId)) return currentId;
-          return remoteNotes[0].id;
-        });
-      }
-    };
-
-    socket.on('widgets:notes_updated', handleRemoteNotesUpdate);
-
     return () => {
       isMounted = false;
-      socket.off('widgets:notes_updated', handleRemoteNotesUpdate);
     };
-  }, []);
+  }, [effectiveNik, userStorageKey]);
 
-  // Save to localStorage & synchronize with backend
+  // Save to localStorage & synchronize with backend privately
   const saveNotes = (updated: GoogleKeepNote[], immediate = false) => {
     setNotes(updated);
     try {
-      localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(updated));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem(userStorageKey, JSON.stringify(updated));
       setSavedStatus(true);
       setTimeout(() => setSavedStatus(false), 1400);
     } catch (e) {
@@ -442,7 +407,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
       fetch('/api/widgets/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: updated })
+        body: JSON.stringify({ notes: updated, nik: effectiveNik })
       }).catch((err) => console.warn('Failed syncing notes to server:', err));
     };
 

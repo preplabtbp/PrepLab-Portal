@@ -14,6 +14,8 @@ interface PreplabCloudScreenProps {
   userProfile: any;
   inspectorNik: string;
   inspectorName: string;
+  isDeveloper?: boolean;
+  isManager?: boolean;
 }
 
 const ALL_FOLDERS = [
@@ -215,7 +217,7 @@ function StorageArcGauge({ segments }: { segments: { value: number; color: strin
   );
 }
 
-export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspectorName }: PreplabCloudScreenProps) {
+export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspectorName, isDeveloper, isManager }: PreplabCloudScreenProps) {
   const [allowedFolders, setAllowedFolders] = useState<any[]>([]);
   const [folderPath, setFolderPath] = useState<any[]>([]);
   const currentFolder = folderPath.length > 0 ? folderPath[folderPath.length - 1] : null;
@@ -236,58 +238,74 @@ export function PreplabCloudScreen({ onBack, userProfile, inspectorNik, inspecto
   useEffect(() => {
     determineAllowedFolders();
     fetchLogs();
-  }, [userProfile, inspectorNik]);
+  }, [userProfile, inspectorNik, isDeveloper, isManager]);
 
   const determineAllowedFolders = () => {
     const cleanNik = (inspectorNik || userProfile?.nik || '').trim().toUpperCase();
-    const isSuperNik = 
+    const jab = (userProfile?.jabatan || '').toLowerCase();
+    const role = (userProfile?.role || '').toLowerCase();
+
+    // 1. Cek apakah Developer atau Manager
+    const isDev = Boolean(
+      isDeveloper || 
+      userProfile?.isDeveloper || 
+      userProfile?.isAdmin ||
       cleanNik === '02D24000043' || 
       cleanNik === '02D25000055' || 
+      cleanNik === '04D21001047' || 
+      cleanNik === '04D24000042' || 
       cleanNik === 'M0403240177' || 
       cleanNik === '04D25000064' || 
       cleanNik === 'PREPLABADMIN' || 
       cleanNik === 'ADMIN' ||
-      cleanNik.includes('02D24000043');
+      cleanNik === 'MEETINGROOM' ||
+      cleanNik === 'MEETINGROOMGTS'
+    );
 
-    if (isSuperNik) {
+    const isMgr = Boolean(
+      isManager ||
+      jab.includes('manager') ||
+      role.includes('manager') ||
+      jab.includes('superintendent') ||
+      role.includes('superintendent')
+    );
+
+    // DEVELOPER & MANAGER: Akses penuh ke seluruh folder tanpa batasan
+    if (isDev || isMgr) {
       setAllowedFolders(ALL_FOLDERS);
       return;
     }
 
-    if (!userProfile) return;
-    if (userProfile.pt === 'GTS') {
-      const gtsFolder = ALL_FOLDERS.find(f => f.section === 'GTS');
-      setAllowedFolders(gtsFolder ? [gtsFolder] : []);
-      if (gtsFolder) {
-        setFolderPath([gtsFolder]);
-        fetchFiles(gtsFolder.id);
-      }
-      return;
+    // 2. PERSONIL BIASA: Mengambil langsung dari kolom section di roster/database
+    const sec = (userProfile?.section || '').toLowerCase().trim();
+    const isGts = userProfile?.pt === 'GTS' || sec.includes('gts');
+
+    const matchedSections = new Set<string>(['ALL']); // General Information selalu diikutsertakan
+
+    if (isGts) {
+      matchedSections.add('GTS');
+    }
+    if (sec.includes('preparation') || sec.includes('preparasi')) {
+      matchedSections.add('Preparation');
+    }
+    if (sec.includes('laboratory') || sec.includes('laboratorium') || sec.includes('lab')) {
+      matchedSections.add('Laboratory');
+    }
+    if (sec.includes('maintenance')) {
+      matchedSections.add('Maintenance');
+    }
+    if (sec.includes('administration') || sec.includes('administrasi')) {
+      matchedSections.add('Administration');
+    }
+    if (sec.includes('inventory')) {
+      matchedSections.add('Inventory Control');
+    }
+    if (sec.includes('quality') || sec.includes('qa')) {
+      matchedSections.add('QA');
     }
 
-    const jab = (userProfile.jabatan || '').toLowerCase();
-    const sec = (userProfile.section || '').toLowerCase();
-    const div = (userProfile.divisi || '').toLowerCase();
-    
-    let isSuper = false;
-    if (jab.includes('manager') && (jab.includes('preparation') || jab.includes('laboratory'))) isSuper = true;
-    if (jab.includes('superintendent') && (jab.includes('laboratory') || jab.includes('preparation'))) isSuper = true;
-    if (sec.includes('qa') || sec.includes('quality assurance')) isSuper = true;
-    
-    if (isSuper) {
-      setAllowedFolders(ALL_FOLDERS);
-    } else {
-      const filtered = ALL_FOLDERS.filter(f => {
-         if (f.section === 'ALL') return true;
-         const searchStr = `${sec} ${div}`.toLowerCase();
-         return searchStr.includes(f.section.toLowerCase());
-      });
-      setAllowedFolders(filtered);
-      if (filtered.length === 1) {
-        setFolderPath([filtered[0]]);
-        fetchFiles(filtered[0].id);
-      }
-    }
+    const filtered = ALL_FOLDERS.filter(f => matchedSections.has(f.section));
+    setAllowedFolders(filtered.length > 0 ? filtered : ALL_FOLDERS.filter(f => f.section === 'ALL'));
   };
 
   const fetchFiles = async (folderId: string) => {

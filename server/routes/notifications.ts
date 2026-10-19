@@ -58,6 +58,12 @@ router.get("/api/notifications", async (req, res) => {
             roles.push(pos, pos.toLowerCase());
           }
 
+          const dLower = (dept || '').toLowerCase();
+          const sLower = (sect || '').toLowerCase();
+          if (dLower.includes('prep') || sLower.includes('prep') || dLower.includes('lab') || sLower.includes('lab')) {
+            roles.push('Prep & Lab', 'prep & lab', 'Preparation & Laboratory', 'Preparation', 'Laboratory', 'Laboratorium', 'Preparasi');
+          }
+
           // Smart detection for SPV Up (Supervisor, Superintendent, Manager, Lead, Admin)
           const posLower = (pos || '').toLowerCase();
           const isSpvUp = posLower.includes('supervisor') || 
@@ -102,7 +108,7 @@ router.get("/api/notifications", async (req, res) => {
         const userCondition = eq(notifications.userId, userId);
         const broadcastCondition = roles.length > 0
           ? and(isNull(notifications.userId), or(inArray(notifications.role, roles), isNull(notifications.role)), devFilter)
-          : and(isNull(notifications.userId), devFilter);
+          : and(isNull(notifications.userId), isNull(notifications.role), devFilter);
 
         data = await db.select().from(notifications)
              .where(and(or(userCondition, broadcastCondition), loungeFilter))
@@ -113,7 +119,18 @@ router.get("/api/notifications", async (req, res) => {
           .orderBy(desc(notifications.createdAt));
       }
       
-      res.json(data);
+      // Server-side deduplication: Menghilangkan duplikasi visual jika terdapat notifikasi ganda
+      // dengan judul, isi, dan tautan yang sama dalam jendela waktu 10 menit
+      const seenKeys = new Set<string>();
+      const deduplicatedData = data.filter((item: any) => {
+        const timeWindow = item.createdAt ? Math.floor(new Date(item.createdAt).getTime() / 600000) : 0;
+        const key = `${(item.title || '').trim()}|${(item.message || '').trim()}|${(item.link || '').trim()}|${timeWindow}`;
+        if (seenKeys.has(key)) return false;
+        seenKeys.add(key);
+        return true;
+      });
+
+      res.json(deduplicatedData);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to fetch notifications" });

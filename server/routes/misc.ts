@@ -16,6 +16,8 @@ import {
   getNotificationTargets, getTableObj, sanitizePayload, getIoInstance 
 } from "../utils.js";
 import webpush from 'web-push';
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../middleware/auth.js';
 import { invalidateScheduleCache, fetchInspectionScheduleFromSheet, rekapInspeksiCache, REKAP_INSPEKSI_CACHE_TTL } from "./inspections.js";
 import { invalidateGamificationCache } from "./gamification.js";
 import { isDbCircuitBroken } from "../../src/db/index.js";
@@ -23,6 +25,20 @@ import { getCsvEmployees } from "./employees.js";
 import { generateFallbackRosterData } from "./roster.js";
 
 export const router = Router();
+
+function getRequesterNik(req: any): string {
+  let requesterNik = String(req.query?.nik || req.body?.nik || '').trim();
+  const token = req.cookies?.token || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null);
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded?.nik) {
+        return String(decoded.nik).trim();
+      }
+    } catch(e) {}
+  }
+  return requesterNik;
+}
 
 // Bersihkan cache rekap inspeksi setiap kali ada perubahan data terkait (laporan grup, override, KTA, bukti SS)
 router.use((req, res, next) => {
@@ -2181,9 +2197,14 @@ router.post("/api/widgets/configs", async (req, res) => {
   }
 });
 
-router.get("/api/widgets/notes", async (_req, res) => {
+router.get("/api/widgets/notes", async (req, res) => {
   try {
-    const row = await db.select().from(appSettings).where(eq(appSettings.settingKey, 'shared_sticky_notes')).limit(1);
+    const requesterNik = getRequesterNik(req);
+    if (!requesterNik) {
+      return res.json({ success: true, notes: null });
+    }
+    const settingKey = `sticky_notes_${requesterNik}`;
+    const row = await db.select().from(appSettings).where(eq(appSettings.settingKey, settingKey)).limit(1);
     if (row.length > 0 && row[0].settingValue) {
       try {
         const parsed = JSON.parse(row[0].settingValue);
@@ -2193,7 +2214,7 @@ router.get("/api/widgets/notes", async (_req, res) => {
       }
     }
     return res.json({ success: true, notes: null });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching sticky notes:', error);
     res.status(500).json({ success: false, error: "Failed to fetch sticky notes" });
   }
@@ -2205,10 +2226,14 @@ router.post("/api/widgets/notes", async (req, res) => {
     if (!Array.isArray(notes)) {
       return res.status(400).json({ success: false, error: "Invalid notes payload" });
     }
+    const requesterNik = getRequesterNik(req);
+    if (!requesterNik) {
+      return res.status(401).json({ success: false, error: "Autentikasi NIK diperlukan untuk menyimpan catatan pribadi" });
+    }
 
-    const settingKey = 'shared_sticky_notes';
+    const settingKey = `sticky_notes_${requesterNik}`;
     const settingValue = JSON.stringify(notes);
-    const description = 'Shared sticky notes across all devices';
+    const description = `Private sticky notes for user ${requesterNik}`;
 
     const existing = await db.select().from(appSettings).where(eq(appSettings.settingKey, settingKey)).limit(1);
     if (existing.length > 0) {
@@ -2220,15 +2245,9 @@ router.post("/api/widgets/notes", async (req, res) => {
         .values({ settingKey, settingValue, description });
     }
 
-    // Broadcast update to all connected clients via Socket.IO
-    try {
-      getIoInstance()?.emit('widgets:notes_updated', notes);
-    } catch (sockErr) {
-      console.warn('Socket emit failed for sticky notes:', sockErr);
-    }
-
+    // Catatan pribadi tidak di-broadcast publik ke user lain
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving sticky notes:', error);
     res.status(500).json({ success: false, error: "Failed to save sticky notes" });
   }
@@ -3073,38 +3092,60 @@ router.post("/api/questions/sync", async (req, res) => {
 
 router.get("/api/notes", async (req, res) => {
     try {
-      const data = await db.select().from(privateNotes);
+      const requesterNik = getRequesterNik(req);
+      if (!requesterNik) {
+        return res.json({ status: "success", data: [] });
+      }
+      const data = await db.select().from(privateNotes).where(eq(privateNotes.nik, requesterNik)).orderBy(desc(privateNotes.createdAt));
       res.json({ status: "success", data });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
 
 router.post("/api/notes", async (req, res) => {
     try {
-      if (req.body.id) {
-         // upsert behavior
-         const exists = await db.select().from(privateNotes).where(eq(privateNotes.id, req.body.id));
+      const requesterNik = getRequesterNik(req);
+      if (!requesterNik) {
+        return res.status(401).json({ status: "error", message: "Autentikasi NIK diperlukan" });
+      }
+      const noteData = { ...req.body, nik: requesterNik };
+
+      if (noteData.id) {
+         // Verifikasi kepemilikan note jika update
+         const exists = await db.select().from(privateNotes).where(eq(privateNotes.id, noteData.id));
          if (exists.length > 0) {
-            await db.update(privateNotes).set(req.body).where(eq(privateNotes.id, req.body.id));
+            if (exists[0].nik && exists[0].nik.toUpperCase() !== requesterNik.toUpperCase()) {
+              return res.status(403).json({ status: "error", message: "Tidak memiliki hak akses untuk mengubah catatan milik orang lain" });
+            }
+            await db.update(privateNotes).set(noteData).where(eq(privateNotes.id, noteData.id));
          } else {
-            await db.insert(privateNotes).values(req.body);
+            await db.insert(privateNotes).values(noteData);
          }
       } else {
-        req.body.id = 'note_' + Date.now();
-        await db.insert(privateNotes).values(req.body);
+        noteData.id = 'note_' + Date.now();
+        await db.insert(privateNotes).values(noteData);
       }
       res.json({ status: "success" });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
 
 router.delete("/api/notes/:id", async (req, res) => {
     try {
-      await db.delete(privateNotes).where(eq(privateNotes.id, req.params.id));
+      const requesterNik = getRequesterNik(req);
+      if (!requesterNik) {
+        return res.status(401).json({ status: "error", message: "Autentikasi NIK diperlukan" });
+      }
+      const noteId = req.params.id;
+      const exists = await db.select().from(privateNotes).where(eq(privateNotes.id, noteId));
+      if (exists.length > 0 && exists[0].nik && exists[0].nik.toUpperCase() !== requesterNik.toUpperCase()) {
+        return res.status(403).json({ status: "error", message: "Tidak memiliki hak akses untuk menghapus catatan milik orang lain" });
+      }
+      await db.delete(privateNotes).where(and(eq(privateNotes.id, noteId), eq(privateNotes.nik, requesterNik)));
       res.json({ status: "success" });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });

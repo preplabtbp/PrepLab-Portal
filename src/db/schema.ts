@@ -1071,6 +1071,34 @@ export const xrfVerificationItems = pgTable('xrf_verification_items', {
   index('idx_xrf_ver_items_std_code').on(t.standardCode),
 ]);
 
+// 6. Audit Trail Log Take Out Data Off-Spec (Hanya SPV, SPT Lab, Dev, dan Manager)
+export const xrfOffspecTakeoutLogs = pgTable('xrf_offspec_takeout_logs', {
+  id: serial('id').primaryKey(),
+  action: text('action').notNull(), // 'ISOLATE' | 'RESTORE' | 'CLEAR_ALL' | 'BULK_ISOLATE'
+  userNik: text('user_nik').notNull(),
+  userName: text('user_name').notNull(),
+  userJabatan: text('user_jabatan'),
+  userRole: text('user_role'), // 'SPV' | 'SPT' | 'DEV' | 'MANAGER'
+  instrumentCode: text('instrument_code'),
+  instrumentName: text('instrument_name'),
+  standardCode: text('standard_code'),
+  element: text('element'),
+  pointIndex: integer('point_index'),
+  measuredValue: doublePrecision('measured_value'),
+  nominalValue: doublePrecision('nominal_value'),
+  sigmaDist: doublePrecision('sigma_dist'),
+  diff: doublePrecision('diff'),
+  statusLabel: text('status_label'),
+  reason: text('reason'),
+  sampleDate: text('sample_date'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => [
+  index('idx_xrf_takeout_user').on(t.userNik),
+  index('idx_xrf_takeout_inst').on(t.instrumentCode),
+  index('idx_xrf_takeout_created').on(t.createdAt),
+]);
+
+
 
 // Edit manual baris Rekap KTA/TTA & Inspeksi (menu Safety), per minggu ISO & NIK.
 // Kolom bernilai NULL = ikut data otomatis; terisi = override manual.

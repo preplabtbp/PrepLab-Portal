@@ -1,9 +1,9 @@
 import express from "express";
 import { db, isDbCircuitBroken } from "../../src/db/index.js";
-import { tickets, notifications, inspections, employees } from "../../src/db/schema.js";
+import { tickets, notifications, inspections, employees, bulletinPosts } from "../../src/db/schema.js";
 import { ticketSchema } from "../../src/lib/zod.js";
-import { eq, desc } from "drizzle-orm";
-import { sendWebPush } from "../utils.js";
+import { eq, desc, like } from "drizzle-orm";
+import { sendWebPush, getIoInstance } from "../utils.js";
 
 export const router = express.Router();
 
@@ -442,6 +442,31 @@ router.put("/api/tickets/:id", async (req, res) => {
       } catch (notifErr) {
         console.error("Gagal mengirim notifikasi closing tiket:", notifErr);
       }
+
+      // Zero-Miss Server-Side Atomic Sync: Otomatis sinkronkan status penutupan tiket ke tabel Labnote (bulletin_posts)
+      try {
+        await syncTicketClosureToLabnote(ticket);
+      } catch (syncErr) {
+        console.error("Gagal sinkronisasi closing tiket ke Labnote:", syncErr);
+      }
+
+      // Zero-Miss Realtime Broadcast: Pancarkan event ticket:closed dan ticket:updated ke seluruh browser
+      try {
+        const io = getIoInstance();
+        if (io) {
+          io.emit('ticket:closed', {
+            ticketId: ticket.ticketId,
+            status: 'CLOSED',
+            actionTaken: ticket.actionTaken,
+            closingPhoto: ticket.closingPhoto,
+            pic: ticket.pic,
+            completionDate: ticket.completionDate
+          });
+          io.emit('ticket:updated', ticket);
+        }
+      } catch (ioErr) {
+        console.error("Gagal broadcast socket ticket:closed:", ioErr);
+      }
     }
 
     res.json({ ...(ticket || {}), waMessageText });
@@ -450,6 +475,75 @@ router.put("/api/tickets/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update ticket" });
   }
 });
+
+// Helper untuk memperbarui baris subtask Labnote secara otomatis saat tiket ditutup dari modul temuan
+async function syncTicketClosureToLabnote(ticket: any) {
+  if (!ticket || !ticket.ticketId) return;
+  try {
+    const matchingPosts = await db.select().from(bulletinPosts).where(like(bulletinPosts.content, `%${ticket.ticketId}%`));
+    if (!matchingPosts || matchingPosts.length === 0) return;
+
+    const todayStr = (() => {
+      const d = new Date();
+      return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+    })();
+
+    for (const post of matchingPosts) {
+      if (!post.content || !post.content.includes(ticket.ticketId)) continue;
+      const lines = post.content.split('\n');
+      let modified = false;
+
+      let statusColIdx = -1;
+      let compDateColIdx = -1;
+      const headerLine = lines.find(l => l.startsWith('|') && (l.toLowerCase().includes('status') || l.toLowerCase().includes('activity') || l.toLowerCase().includes('kegiatan')));
+      if (headerLine) {
+        const hCells = headerLine.split('|').map(c => c.trim().toLowerCase()).filter(Boolean);
+        hCells.forEach((h, idx) => {
+          if (h === 'status') statusColIdx = idx;
+          if (h.includes('tanggal selesai') || h.includes('completion date') || h === 'selesai' || h.includes('waktu selesai')) compDateColIdx = idx;
+        });
+      }
+
+      const updatedLines = lines.map(line => {
+        if (!line.includes(ticket.ticketId) || !line.startsWith('|')) return line;
+        modified = true;
+        let newLine = line;
+        if (newLine.includes('↳ [ ]')) {
+          newLine = newLine.replace('↳ [ ]', '↳ [x]');
+        }
+        const cells = newLine.split('|');
+        if (cells.length > 2) {
+          if (statusColIdx !== -1 && cells[statusColIdx + 1] !== undefined) {
+            cells[statusColIdx + 1] = ' Closed ';
+          } else {
+            for (let c = 1; c < cells.length - 1; c++) {
+              const val = cells[c].trim().toLowerCase();
+              if (val === 'open' || val === 'on progress') {
+                cells[c] = ' Closed ';
+                break;
+              }
+            }
+          }
+          if (compDateColIdx !== -1 && cells[compDateColIdx + 1] !== undefined) {
+            const curVal = cells[compDateColIdx + 1].trim();
+            if (!curVal || curVal === '-' || curVal === 'false') {
+              cells[compDateColIdx + 1] = ` ${todayStr} `;
+            }
+          }
+          newLine = cells.join('|');
+        }
+        return newLine;
+      });
+
+      if (modified) {
+        const newContent = updatedLines.join('\n');
+        await db.update(bulletinPosts).set({ content: newContent }).where(eq(bulletinPosts.id, post.id));
+      }
+    }
+  } catch (err) {
+    console.error('[syncTicketClosureToLabnote Error]:', err);
+  }
+}
 
 // Helper date parser for Google Sheet date formats
 function parseCustomDate(dateStr: string): Date | null {

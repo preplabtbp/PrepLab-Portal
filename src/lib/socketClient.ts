@@ -7,23 +7,19 @@ let activeLoungePayload: any = null;
 
 const getSocketServerUrl = (): string => {
   if (typeof window === 'undefined') return '';
-  const host = window.location.hostname;
-  // Use local server during development
-  if (host === 'localhost' || host === '127.0.0.1') {
-    return window.location.origin;
-  }
-  // Connect directly to Cloud Run backend in production
-  // (Firebase Hosting rewrites block WebSocket upgrades)
-  return 'https://preplab-portal-scgudezxqq-et.a.run.app';
+  // Always use the official host/origin (portal.preplabtbp.com or localhost in dev)
+  // Connecting to the same origin ensures valid enterprise SSL and avoids antivirus blocks on raw cloud domains (*.run.app)
+  return window.location.origin;
 };
 
 export function getGlobalSocket(): Socket {
   if (!globalSocket) {
     globalSocket = io(getSocketServerUrl(), {
       reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 15,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      randomizationFactor: 0.5,
       timeout: 15000,
       transports: ['websocket', 'polling'],
       autoConnect: true,
@@ -34,6 +30,15 @@ export function getGlobalSocket(): Socket {
         cb({ token });
       }
     });
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        if (globalSocket && !globalSocket.connected) {
+          console.log('[SocketClient] Network online, reconnecting socket...');
+          globalSocket.connect();
+        }
+      });
+    }
 
     globalSocket.on('connect', () => {
       console.log('[SocketClient] Connected to server, ID:', globalSocket?.id);

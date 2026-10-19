@@ -3,7 +3,7 @@ import {
   AlertTriangle, AlertCircle, CheckCircle2, ChevronDown, 
   Layers, Sliders, Activity, Info, ShieldAlert, Check, 
   X, Sparkles, ExternalLink, Pin, User, Search, Edit3, 
-  Trash2, MessageSquare 
+  Trash2, MessageSquare, Maximize2, Lock 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -69,6 +69,9 @@ interface XrfQcChartCardProps {
   points: XrfPointData[];
   showStats?: boolean;
   compactStats?: boolean;
+  onOpenFullscreen?: () => void;
+  canTakeOutOffspec?: boolean;
+  userRoleTitle?: string;
   // Off-spec isolation callbacks
   onToggleIsolatePoint?: (point: XrfPointData, element: string, limits: XrfChartLimitData) => void;
   onOpenOffspecModal?: () => void;
@@ -119,6 +122,9 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
   points,
   showStats = true,
   compactStats = false,
+  onOpenFullscreen,
+  canTakeOutOffspec = true,
+  userRoleTitle,
   onToggleIsolatePoint,
   onOpenOffspecModal,
   onIsolateAllOffspecInCard,
@@ -408,13 +414,43 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
               In-Control
             </span>
           )}
+
+          {/* Fullscreen Modal Trigger Button */}
+          {onOpenFullscreen && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenFullscreen();
+              }}
+              className="p-1 px-1.5 rounded-lg text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 border border-slate-200 dark:border-slate-700 hover:border-teal-400 transition-all cursor-pointer shadow-2xs flex items-center gap-1 group/fs ml-0.5"
+              title="Perbesar Grafik Layar Penuh (Fullscreen) & Analisis Lengkap"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 group-hover/fs:scale-110 transition-transform" />
+              <span className="hidden sm:inline text-[10.5px] font-bold">Fullscreen</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
       {/* 2. ENTERPRISE SHEWHART QC CONTROL CHART CANVAS               */}
       {/* ------------------------------------------------------------- */}
-      <div className="p-3 relative bg-slate-50/40 dark:bg-slate-950/30 border-b border-slate-200 dark:border-slate-800">
+      <div 
+        onClick={() => {
+          if (onOpenFullscreen) onOpenFullscreen();
+        }}
+        className={`p-3 relative bg-slate-50/40 dark:bg-slate-950/30 border-b border-slate-200 dark:border-slate-800 group/chart-canvas ${
+          onOpenFullscreen ? 'cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-950/50 transition-colors' : ''
+        }`}
+        title={onOpenFullscreen ? "Klik untuk melihat grafik dalam tampilan Full Screen dengan analisis detail" : undefined}
+      >
+        {onOpenFullscreen && (
+          <div className="absolute top-4 right-4 z-10 opacity-0 group-hover/chart-canvas:opacity-100 transition-opacity bg-slate-900/80 text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-1 pointer-events-none shadow-md backdrop-blur-xs">
+            <Maximize2 className="w-3 h-3 text-teal-400" />
+            <span>Klik untuk Layar Penuh</span>
+          </div>
+        )}
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
           className="w-full h-auto select-none overflow-visible"
@@ -1034,17 +1070,29 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!canTakeOutOffspec) {
+                      toast.error("Akses Ditolak: Fitur Take Out data off-spec hanya diizinkan untuk SPV & SPT Lab, Developer, dan Manager.");
+                      return;
+                    }
                     if (onToggleIsolatePoint) {
                       onToggleIsolatePoint(selectedPoint, currentElement, limits);
                     }
                   }}
                   className={`w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs ${
-                    isIsolated
+                    !canTakeOutOffspec
+                      ? 'bg-slate-100 dark:bg-neutral-800 text-slate-500 border border-slate-300 dark:border-neutral-700 opacity-80'
+                      : isIsolated
                       ? 'bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-slate-800 dark:text-neutral-100 border border-slate-300 dark:border-neutral-600'
                       : 'bg-rose-600 hover:bg-rose-700 text-white border border-rose-700'
                   }`}
+                  title={!canTakeOutOffspec ? "Hanya SPV & SPT Lab, Developer, dan Manager yang memiliki izin Take Out data" : undefined}
                 >
-                  {isIsolated ? (
+                  {!canTakeOutOffspec ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Take Out (Khusus SPV/SPT/Dev/Mgr)</span>
+                    </>
+                  ) : isIsolated ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Kembalikan Titik ke Chart Utama</span>
@@ -1074,6 +1122,10 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (!canTakeOutOffspec) {
+                        toast.error("Akses Ditolak: Fitur Take Out data off-spec hanya diizinkan untuk SPV & SPT Lab, Developer, dan Manager.");
+                        return;
+                      }
                       onIsolateAllOffspecInCard(validPoints, currentElement, limits);
                     }}
                     className="w-full py-1 px-2 rounded-lg text-[10.5px] font-bold text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center justify-center gap-1 transition-all cursor-pointer"

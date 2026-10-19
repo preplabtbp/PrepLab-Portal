@@ -64,7 +64,8 @@ import {
   Pin,
   Lock,
   Target,
-  ClipboardCheck
+  ClipboardCheck,
+  Link2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -100,6 +101,10 @@ import { LogbookChangelogCard } from './notion/LogbookChangelogCard';
 import { LogbookDailyNotesCard } from './notion/LogbookDailyNotesCard';
 import { FloatingSelectionToolbar, FormatAction, formatSelectedText } from './notion/FloatingSelectionToolbar';
 import { PicAvatarGroup, smartSplitPicString } from './PicAvatarGroup';
+import { FindingResolutionModal } from './notion/FindingResolutionModal';
+import { CreateFindingModal } from './notion/CreateFindingModal';
+import { LinkModuleModal, LinkedModuleInfo } from './notion/LinkModuleModal';
+import { getGlobalSocket } from '../lib/socketClient';
 import {
   normalizeCadence,
   isPeriodicCadence,
@@ -468,6 +473,59 @@ export const getDisplayTitle = (title: string): string => {
     .replace(/<!--.*$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+};
+
+export const extractLinkedTicketId = (row: TableRowData): string | null => {
+  if (!row) return null;
+  const rawTitle = (
+    getCellValue(row, 'Activity Name') || 
+    getCellValue(row, 'Jenis kegiatan') || 
+    getCellValue(row, 'Jenis Kegiatan') || 
+    getCellValue(row, 'Name') || 
+    getCellValue(row, 'Judul') || 
+    ''
+  );
+  const linkIdMatch = rawTitle.match(/<!--link-id:([^\s>]+)-->/i);
+  if (linkIdMatch && linkIdMatch[1].toUpperCase().startsWith('TKT-')) {
+    return linkIdMatch[1].trim();
+  }
+  const bracketMatch = rawTitle.match(/\[(TKT-[^\]]+)\]/i);
+  if (bracketMatch) {
+    return bracketMatch[1].trim();
+  }
+  const ket = getCellValue(row, 'Keterangan') || getCellValue(row, 'Description') || '';
+  const ketLinkId = ket.match(/<!--link-id:([^\s>]+)-->/i) || ket.match(/\[(TKT-[^\]]+)\]/i);
+  if (ketLinkId && ketLinkId[1].toUpperCase().startsWith('TKT-')) {
+    return ketLinkId[1].trim();
+  }
+  return null;
+};
+
+export const extractRowLinkInfo = (row: TableRowData): LinkedModuleInfo | null => {
+  if (!row) return null;
+  const rawTitle = (
+    getCellValue(row, 'Activity Name') || 
+    getCellValue(row, 'Jenis kegiatan') || 
+    getCellValue(row, 'Jenis Kegiatan') || 
+    getCellValue(row, 'Name') || 
+    getCellValue(row, 'Judul') || 
+    ''
+  );
+  const typeMatch = rawTitle.match(/<!--link-type:([a-z0-9_-]+)-->/i);
+  const idMatch = rawTitle.match(/<!--link-id:([^>]+)-->/i) || rawTitle.match(/\[(TKT-[^\]]+)\]/i);
+  const urlMatch = rawTitle.match(/<!--link-url:([^>]+)-->/i);
+  const labelMatch = rawTitle.match(/<!--link-label:([^>]+)-->/i);
+
+  if (typeMatch || idMatch || urlMatch) {
+    const type = (typeMatch?.[1] as any) || (idMatch?.[1]?.toUpperCase().startsWith('TKT-') ? 'ticket' : 'url');
+    return {
+      type,
+      id: idMatch?.[1]?.trim(),
+      url: urlMatch?.[1]?.trim(),
+      label: labelMatch ? decodeURIComponent(labelMatch[1]) : (idMatch?.[1]?.trim() || (type === 'ticket' ? 'Tiket Temuan' : 'Tautan'))
+    };
+  }
+  return null;
 };
 
 // Canonical Notion Table Column definition in exact order
@@ -1002,6 +1060,43 @@ export function NotionDatabaseTable({
 
   // Row Action 3-Dots Dropdown Menu State
   const [activeActionMenuRowIndex, setActiveActionMenuRowIndex] = useState<number | string | null>(null);
+
+  // Finding Resolution Modal State (Mandatory Photo Upload upon subtask check)
+  const [findingResolutionModalState, setFindingResolutionModalState] = useState<{
+    isOpen: boolean;
+    ticket: any | null;
+    ticketId?: string;
+    subRowIndex?: number;
+    initialMode?: 'view' | 'resolve';
+  }>({
+    isOpen: false,
+    ticket: null,
+    initialMode: 'resolve'
+  });
+
+  // Create Finding Modal State (Direct Input for Sidak Management / Inspeksi Gabungan)
+  const [createFindingModalState, setCreateFindingModalState] = useState<{
+    isOpen: boolean;
+    parentRowIndex?: number;
+    parentTaskId?: string;
+  }>({
+    isOpen: false
+  });
+
+  // Generic Row / Subtask Linking Modal State
+  const [linkModuleModalState, setLinkModuleModalState] = useState<{
+    isOpen: boolean;
+    rowIndex: number;
+    rowTitle: string;
+    currentLink: LinkedModuleInfo | null;
+  }>({
+    isOpen: false,
+    rowIndex: -1,
+    rowTitle: '',
+    currentLink: null
+  });
+
+  const isReconcilingRef = useRef<boolean>(false);
 
   // Floating Selection Toolbar State for "Edit Data Kegiatan" Modal
   const [activeModalSelection, setActiveModalSelection] = useState<{
@@ -3202,6 +3297,432 @@ export function NotionDatabaseTable({
     }
   };
 
+  // Reconcile open/closed findings between /api/tickets and Labnote tasks
+  const reconcileFindingsWithTickets = useCallback(async () => {
+    if (isReconcilingRef.current) return;
+    isReconcilingRef.current = true;
+    try {
+      const res = await fetch('/api/tickets');
+      if (!res.ok) return;
+      const allTickets: any[] = await res.json();
+      if (!Array.isArray(allTickets)) return;
+
+      setLocalRows(currentRows => {
+        let hasChanges = false;
+        const nextRows = [...currentRows];
+
+        // 1. Process "Review temuan SAP"
+        const sapParentIdx = nextRows.findIndex(r => 
+          !isSubItemRow(r) && (
+            (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || '').toLowerCase().includes('review temuan sap') ||
+            (r['Jenis kegiatan'] || r['Name'] || '').toLowerCase().includes('review temuan sap')
+          )
+        );
+
+        // 2. Process "Review temuan inspeksi gabungan"
+        const gabunganParentIdx = nextRows.findIndex(r => 
+          !isSubItemRow(r) && (
+            (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || '').toLowerCase().includes('review temuan inspeksi gabungan') ||
+            (r['Jenis kegiatan'] || r['Name'] || '').toLowerCase().includes('review temuan inspeksi gabungan')
+          )
+        );
+
+        if (sapParentIdx === -1 && gabunganParentIdx === -1) {
+          return currentRows;
+        }
+
+        const syncParentWithTickets = (pIdx: number, targetTickets: any[], parentTitle: string) => {
+          if (pIdx === -1) return;
+          const parentRow = nextRows[pIdx];
+          const rawParentTitle = getRowVal(parentRow, 'Jenis kegiatan') || getRowVal(parentRow, 'Name') || '';
+          const parentTaskId = (rawParentTitle.match(/<!--task-id:([^>]+)-->/)?.[1]) || parentRow.id || `task_${Date.now()}`;
+
+          // Find existing subtasks for this parent
+          const existingSubIndices: number[] = [];
+          for (let i = pIdx + 1; i < nextRows.length; i++) {
+            if (isSubItemRow(nextRows[i])) {
+              existingSubIndices.push(i);
+            } else {
+              break;
+            }
+          }
+
+          const existingTicketMap = new Map<string, number>();
+          existingSubIndices.forEach(idx => {
+            const row = nextRows[idx];
+            const tId = extractLinkedTicketId(row);
+            if (tId) {
+              existingTicketMap.set(tId.toUpperCase(), idx);
+            }
+          });
+
+          const openTickets = targetTickets.filter(t => (t.status || '').toUpperCase() !== 'CLOSED');
+          const closedTickets = targetTickets.filter(t => (t.status || '').toUpperCase() === 'CLOSED');
+
+          // A. Mark completed subtasks for closed tickets
+          closedTickets.forEach(t => {
+            const sIdx = existingTicketMap.get(t.ticketId.toUpperCase());
+            if (sIdx !== undefined) {
+              const subRow = nextRows[sIdx];
+              if (!isSubItemCompleted(subRow)) {
+                const updatedSub = { ...subRow };
+                updatedSub.isCompleted = 'true';
+                updatedSub.Status = 'Closed';
+                const titleVal = getRowVal(updatedSub, 'Jenis kegiatan') || getRowVal(updatedSub, 'Name') || '';
+                const cleanT = getDisplayTitle(titleVal);
+                const newT = `↳ [x] ${cleanT}`;
+                if (updatedSub['Jenis kegiatan'] !== undefined) updatedSub['Jenis kegiatan'] = newT;
+                if (updatedSub['Jenis Kegiatan'] !== undefined) updatedSub['Jenis Kegiatan'] = newT;
+                if (updatedSub['Name'] !== undefined) updatedSub['Name'] = newT;
+                nextRows[sIdx] = updatedSub;
+                hasChanges = true;
+              }
+            }
+          });
+
+          // B. Add new subtasks for open tickets not yet in subtasks
+          const newSubRowsToAdd: TableRowData[] = [];
+          openTickets.forEach(t => {
+            if (!existingTicketMap.has(t.ticketId.toUpperCase())) {
+              const cleanDesc = (t.description || '').replace(/\r?\n/g, ' ').slice(0, 70);
+              const subTitle = `↳ [ ] [${t.ticketId}] ${t.location ? t.location + ' - ' : ''}${cleanDesc} <!--link-type:ticket--> <!--link-id:${t.ticketId}--> <!--parent-id:${parentTaskId}-->`;
+              const newSubRow: TableRowData = {
+                id: `sub_${parentTaskId}_${t.ticketId}_${Date.now()}`,
+                'Jenis kegiatan': subTitle,
+                'Jenis Kegiatan': subTitle,
+                'Name': subTitle,
+                'Activity Name': subTitle,
+                'Keterangan': t.description || '-',
+                'Description': t.description || '-',
+                'PIC': t.pic || '-',
+                'Priority': t.priority || t.risk || 'Normal',
+                'Status': 'Open',
+                'Tanggal Selesai': '-',
+                'Completion Date': '-',
+                'Due Date': t.targetDate ? formatToDDMMYYYY(t.targetDate) : getTodayDDMMYYYY(),
+                'Aktivitas': 'Daily',
+                'isSubItem': 'true',
+                'isCompleted': 'false',
+                'parentId': parentTaskId,
+                'parentRowId': parentTaskId,
+                '_parentTitle': parentTitle
+              };
+              newSubRowsToAdd.push(newSubRow);
+              hasChanges = true;
+            }
+          });
+
+          if (newSubRowsToAdd.length > 0) {
+            const insertPosition = existingSubIndices.length > 0
+              ? existingSubIndices[existingSubIndices.length - 1] + 1
+              : pIdx + 1;
+            nextRows.splice(insertPosition, 0, ...newSubRowsToAdd);
+          }
+        };
+
+        // Routine SAP tickets
+        const sapTickets = allTickets.filter(t => 
+          (t.source === 'inspeksi' || (t.ticketId || '').includes('SAP') || (t.ticketId || '').includes('W42Y26')) && 
+          (t.category || '').toLowerCase() !== 'inspeksi gabungan' &&
+          t.source !== 'sidak_management'
+        );
+        syncParentWithTickets(sapParentIdx, sapTickets, 'Review temuan SAP');
+
+        // Inspeksi Gabungan / Sidak Management tickets
+        const gabunganTickets = allTickets.filter(t => 
+          (t.category || '').toLowerCase().includes('inspeksi gabungan') || 
+          t.source === 'sidak_management'
+        );
+        syncParentWithTickets(gabunganParentIdx, gabunganTickets, 'Review temuan inspeksi gabungan');
+
+        if (hasChanges) {
+          saveTableToBackend(nextRows);
+          onRowsChange?.(nextRows);
+          return nextRows;
+        }
+        return currentRows;
+      });
+    } catch (err) {
+      console.error('[Findings Reconciliation] Error:', err);
+    } finally {
+      isReconcilingRef.current = false;
+    }
+  }, [saveTableToBackend, onRowsChange, getRowVal]);
+
+  // Real-time WebSocket sync for findings tickets
+  useEffect(() => {
+    reconcileFindingsWithTickets();
+
+    const socket = getGlobalSocket();
+
+    const handleTicketClosed = (payload: { ticketId: string }) => {
+      if (!payload?.ticketId) return;
+      const targetTkt = payload.ticketId.toUpperCase();
+      setLocalRows(currentRows => {
+        let modified = false;
+        const nextRows = currentRows.map(row => {
+          const tktId = extractLinkedTicketId(row);
+          if (tktId && tktId.toUpperCase() === targetTkt) {
+            if (!isSubItemCompleted(row)) {
+              modified = true;
+              const updated = { ...row };
+              updated.isCompleted = 'true';
+              updated.Status = 'Closed';
+              const rawT = getRowVal(updated, 'Jenis kegiatan') || getRowVal(updated, 'Name') || '';
+              const cleanT = getDisplayTitle(rawT);
+              const newT = `↳ [x] ${cleanT}`;
+              if (updated['Jenis kegiatan'] !== undefined) updated['Jenis kegiatan'] = newT;
+              if (updated['Jenis Kegiatan'] !== undefined) updated['Jenis Kegiatan'] = newT;
+              if (updated['Name'] !== undefined) updated['Name'] = newT;
+              return updated;
+            }
+          }
+          return row;
+        });
+
+        if (modified) {
+          saveTableToBackend(nextRows);
+          toast.info(`Temuan ${payload.ticketId} telah diselesaikan dari modul temuan. Subtask otomatis dicentang!`);
+          return nextRows;
+        }
+        return currentRows;
+      });
+    };
+
+    const handleTicketUpdated = () => {
+      reconcileFindingsWithTickets();
+    };
+
+    socket.on('ticket:closed', handleTicketClosed);
+    socket.on('ticket:updated', handleTicketUpdated);
+    window.addEventListener('refresh-tickets', handleTicketUpdated);
+
+    return () => {
+      socket.off('ticket:closed', handleTicketClosed);
+      socket.off('ticket:updated', handleTicketUpdated);
+      window.removeEventListener('refresh-tickets', handleTicketUpdated);
+    };
+  }, [reconcileFindingsWithTickets, saveTableToBackend, getRowVal]);
+
+  // Direct Complete Sub Row for Finding Resolution
+  const handleDirectCompleteSubRow = async (rowIndex: number, updatedTicket?: any) => {
+    const subRow = localRows[rowIndex];
+    if (!subRow) return;
+
+    const todayStr = getTodayDDMMYYYY();
+    const nowIso = new Date().toISOString();
+    const updatedRow = { ...subRow };
+    updatedRow.isCompleted = 'true';
+    updatedRow.Status = 'Closed';
+    updatedRow['Last Modified'] = nowIso;
+
+    let parentIdx = -1;
+    for (let i = rowIndex - 1; i >= 0; i--) {
+      if (!isSubItemRow(localRows[i])) {
+        parentIdx = i;
+        break;
+      }
+    }
+
+    const setRowCompletedDate = (targetRow: TableRowData, dateVal: string) => {
+      for (const k of Object.keys(targetRow)) {
+        const kl = k.toLowerCase().trim();
+        if (kl.includes('tanggal selesai') || kl.includes('completed') || kl.includes('aktual selesai') || kl === 'selesai' || kl.includes('waktu selesai')) {
+          targetRow[k] = dateVal;
+        }
+      }
+      displayHeaders.forEach(h => {
+        const hl = h.toLowerCase().trim();
+        if (hl.includes('tanggal selesai') || hl.includes('completed') || hl.includes('aktual selesai') || hl === 'selesai' || hl.includes('waktu selesai')) {
+          targetRow[h] = dateVal;
+        }
+      });
+      targetRow['Tanggal Selesai'] = dateVal;
+    };
+    setRowCompletedDate(updatedRow, todayStr);
+
+    const currentTitle = getRowVal(subRow, 'Jenis kegiatan') || getRowVal(subRow, 'Jenis Kegiatan') || getRowVal(subRow, 'Name') || '';
+    if (currentTitle) {
+      const cleanTitle = getDisplayTitle(currentTitle);
+      const newTitle = `↳ [x] ${cleanTitle}`;
+      if (updatedRow['Jenis kegiatan'] !== undefined) updatedRow['Jenis kegiatan'] = newTitle;
+      if (updatedRow['Jenis Kegiatan'] !== undefined) updatedRow['Jenis Kegiatan'] = newTitle;
+      if (updatedRow['Name'] !== undefined) updatedRow['Name'] = newTitle;
+      if (updatedRow['Judul'] !== undefined) updatedRow['Judul'] = newTitle;
+    }
+
+    const nextRows = [...localRows];
+    nextRows[rowIndex] = updatedRow;
+
+    if (parentIdx !== -1) {
+      const siblingSubIndices: number[] = [];
+      for (let i = parentIdx + 1; i < nextRows.length; i++) {
+        if (isSubItemRow(nextRows[i])) {
+          siblingSubIndices.push(i);
+        } else {
+          break;
+        }
+      }
+      const totalSubs = siblingSubIndices.length;
+      const completedSubs = siblingSubIndices.filter(idx => isSubItemCompleted(nextRows[idx])).length;
+      const parentRow = { ...nextRows[parentIdx] };
+      parentRow['Last Modified'] = nowIso;
+      const currentParentStatus = (getRowVal(parentRow, 'Status') || '').toUpperCase();
+
+      if (!currentParentStatus.includes('CANCEL')) {
+        if (totalSubs > 0 && completedSubs === totalSubs) {
+          parentRow.Status = 'Closed';
+          setRowCompletedDate(parentRow, todayStr);
+        } else if (completedSubs > 0) {
+          parentRow.Status = 'On Progress';
+        }
+      }
+      nextRows[parentIdx] = parentRow;
+    }
+
+    setLocalRows(nextRows);
+    onRowsChange?.(nextRows);
+    await saveTableToBackend(nextRows);
+
+    const pRow = parentIdx !== -1 ? nextRows[parentIdx] : null;
+    const originId = updatedRow._originPostId || pRow?._originPostId || resolveOriginPostId(pRow || updatedRow, allPosts || [], section);
+    if (originId && allPosts && allPosts.length > 0) {
+      syncLogbookRowsGroupToOrigin(originId, pRow ? [pRow, updatedRow] : [updatedRow], allPosts);
+    }
+
+    toast.success('Temuan berhasil diselesaikan dan subtask telah dicentang!');
+  };
+
+  const handleFindingResolved = async (updatedTicket: any) => {
+    const { subRowIndex } = findingResolutionModalState;
+    setFindingResolutionModalState({ isOpen: false, ticket: null });
+
+    if (subRowIndex !== undefined && subRowIndex >= 0 && subRowIndex < localRows.length) {
+      handleDirectCompleteSubRow(subRowIndex, updatedTicket);
+    } else {
+      const tktId = updatedTicket?.ticketId;
+      if (tktId) {
+        const foundIdx = localRows.findIndex(r => {
+          const id = extractLinkedTicketId(r);
+          return id && id.toUpperCase() === tktId.toUpperCase();
+        });
+        if (foundIdx !== -1) {
+          handleDirectCompleteSubRow(foundIdx, updatedTicket);
+        }
+      }
+    }
+  };
+
+  const handleCreateFindingSuccess = async (newTicket: any) => {
+    const { parentRowIndex, parentTaskId } = createFindingModalState;
+    setCreateFindingModalState({ isOpen: false });
+
+    let pIdx = parentRowIndex !== undefined && parentRowIndex >= 0 ? parentRowIndex : -1;
+    if (pIdx === -1 || pIdx >= localRows.length) {
+      pIdx = localRows.findIndex(r => 
+        !isSubItemRow(r) && (
+          (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || '').toLowerCase().includes('review temuan inspeksi gabungan') ||
+          (r['Jenis kegiatan'] || r['Name'] || '').toLowerCase().includes('review temuan inspeksi gabungan')
+        )
+      );
+    }
+
+    if (pIdx === -1) {
+      toast.success(`Temuan Sidak Management (${newTicket.ticketId}) berhasil dibuat!`);
+      return;
+    }
+
+    const parentRow = localRows[pIdx];
+    const rawParentTitle = getRowVal(parentRow, 'Jenis kegiatan') || getRowVal(parentRow, 'Name') || '';
+    const pTaskId = parentTaskId || (rawParentTitle.match(/<!--task-id:([^>]+)-->/)?.[1]) || parentRow.id || `task_${Date.now()}`;
+
+    let insertIdx = pIdx + 1;
+    while (insertIdx < localRows.length && isSubItemRow(localRows[insertIdx])) {
+      insertIdx++;
+    }
+
+    const cleanDesc = (newTicket.description || '').replace(/\r?\n/g, ' ').slice(0, 70);
+    const subTitle = `↳ [ ] [${newTicket.ticketId}] ${newTicket.location ? newTicket.location + ' - ' : ''}${cleanDesc} <!--link-type:ticket--> <!--link-id:${newTicket.ticketId}--> <!--parent-id:${pTaskId}-->`;
+    const newSubRow: TableRowData = {
+      id: `sub_${pTaskId}_${newTicket.ticketId}_${Date.now()}`,
+      'Jenis kegiatan': subTitle,
+      'Jenis Kegiatan': subTitle,
+      'Name': subTitle,
+      'Activity Name': subTitle,
+      'Keterangan': newTicket.description || '-',
+      'Description': newTicket.description || '-',
+      'PIC': newTicket.pic || '-',
+      'Priority': newTicket.priority || 'Normal',
+      'Status': 'Open',
+      'Tanggal Selesai': '-',
+      'Completion Date': '-',
+      'Due Date': newTicket.targetDate ? formatToDDMMYYYY(newTicket.targetDate) : getTodayDDMMYYYY(),
+      'Aktivitas': 'Daily',
+      'isSubItem': 'true',
+      'isCompleted': 'false',
+      'parentId': pTaskId,
+      'parentRowId': pTaskId,
+      '_parentTitle': 'Review temuan inspeksi gabungan'
+    };
+
+    const nextRows = [...localRows];
+    nextRows.splice(insertIdx, 0, newSubRow);
+
+    const pKey = parentRow.id || String(pIdx);
+    setExpandedParents(prev => ({
+      ...prev,
+      [pIdx]: true,
+      [pKey]: true
+    }));
+
+    setLocalRows(nextRows);
+    onRowsChange?.(nextRows);
+    await saveTableToBackend(nextRows);
+    toast.success(`Temuan Sidak Management (${newTicket.ticketId}) berhasil dibuat dan ditambahkan ke subtask!`);
+  };
+
+  const handleSaveRowLink = async (linkInfo: LinkedModuleInfo | null) => {
+    const { rowIndex } = linkModuleModalState;
+    if (rowIndex < 0 || rowIndex >= localRows.length) {
+      setLinkModuleModalState(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
+
+    const targetRow = { ...localRows[rowIndex] };
+    const currentTitle = getRowVal(targetRow, 'Jenis kegiatan') || getRowVal(targetRow, 'Jenis Kegiatan') || getRowVal(targetRow, 'Name') || '';
+
+    let cleanedTitle = currentTitle
+      .replace(/<!--link-type:[^>]*-->/gi, '')
+      .replace(/<!--link-id:[^>]*-->/gi, '')
+      .replace(/<!--link-url:[^>]*-->/gi, '')
+      .replace(/<!--link-label:[^>]*-->/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (linkInfo) {
+      let metaTags = `<!--link-type:${linkInfo.type}-->`;
+      if (linkInfo.id) metaTags += ` <!--link-id:${linkInfo.id}-->`;
+      if (linkInfo.url) metaTags += ` <!--link-url:${linkInfo.url}-->`;
+      if (linkInfo.label) metaTags += ` <!--link-label:${encodeURIComponent(linkInfo.label)}-->`;
+      cleanedTitle = `${cleanedTitle} ${metaTags}`;
+    }
+
+    if (targetRow['Jenis kegiatan'] !== undefined) targetRow['Jenis kegiatan'] = cleanedTitle;
+    if (targetRow['Jenis Kegiatan'] !== undefined) targetRow['Jenis Kegiatan'] = cleanedTitle;
+    if (targetRow['Name'] !== undefined) targetRow['Name'] = cleanedTitle;
+    if (targetRow['Judul'] !== undefined) targetRow['Judul'] = cleanedTitle;
+    if (targetRow['Activity Name'] !== undefined) targetRow['Activity Name'] = cleanedTitle;
+
+    const nextRows = [...localRows];
+    nextRows[rowIndex] = targetRow;
+    setLocalRows(nextRows);
+    onRowsChange?.(nextRows);
+    await saveTableToBackend(nextRows);
+
+    setLinkModuleModalState(prev => ({ ...prev, isOpen: false }));
+    toast.success(linkInfo ? 'Tautan modul berhasil disimpan!' : 'Tautan modul berhasil dihapus.');
+  };
+
   // Handler untuk mengedit sel secara langsung di tabel tanpa membuka modal
   const handleUpdateCellDirect = (targetRowIndex: number, colName: string, newValue: string) => {
     setLocalRows(prev => {
@@ -4085,6 +4606,19 @@ export function NotionDatabaseTable({
     const nextCompleted = !currentCompleted;
     const subRow = localRows[subRowIndex];
     if (!subRow) return;
+
+    // Intercept: If subtask is linked to a ticket, completing it requires mandatory photo upload in FindingResolutionModal
+    const linkedTicketId = extractLinkedTicketId(subRow);
+    if (nextCompleted && linkedTicketId) {
+      setFindingResolutionModalState({
+        isOpen: true,
+        ticket: null,
+        ticketId: linkedTicketId,
+        subRowIndex,
+        initialMode: 'resolve'
+      });
+      return;
+    }
 
     // Temukan baris kegiatan utama (parent) untuk sub-item ini
     let parentIdx = -1;
@@ -7991,6 +8525,68 @@ export function NotionDatabaseTable({
                                                 <span>PINNED</span>
                                               </span>
                                             )}
+
+                                            {/* Linked Module Badge (ExternalLink) */}
+                                            {(() => {
+                                              const linkInfo = extractRowLinkInfo(row);
+                                              if (!linkInfo) return null;
+                                              const isTicket = linkInfo.type === 'ticket' || (linkInfo.id && linkInfo.id.toUpperCase().startsWith('TKT-'));
+                                              return (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (isTicket) {
+                                                      setFindingResolutionModalState({
+                                                        isOpen: true,
+                                                        ticket: null,
+                                                        ticketId: linkInfo.id,
+                                                        subRowIndex: isSubItem ? actualRowIndex : undefined,
+                                                        initialMode: isSubCompleted ? 'view' : 'resolve'
+                                                      });
+                                                    } else if (linkInfo.type === 'wo' && linkInfo.id) {
+                                                      window.open(`/wo-maintenance-dashboard?wo=${encodeURIComponent(linkInfo.id)}`, '_blank');
+                                                    } else if (linkInfo.type === 'route' && linkInfo.url) {
+                                                      window.location.href = linkInfo.url;
+                                                    } else if (linkInfo.url) {
+                                                      window.open(linkInfo.url, '_blank', 'noopener,noreferrer');
+                                                    }
+                                                  }}
+                                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all cursor-pointer shrink-0 shadow-2xs ${
+                                                    isTicket
+                                                      ? isSubCompleted
+                                                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                                                        : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 hover:bg-rose-100'
+                                                      : 'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800 hover:bg-sky-100'
+                                                  }`}
+                                                  title={isTicket ? `Buka detail temuan inspeksi (${linkInfo.id})` : `Buka tautan modul: ${linkInfo.label || linkInfo.url}`}
+                                                >
+                                                  <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                                                  <span className="truncate max-w-[130px]">{linkInfo.id || linkInfo.label || 'Tautan'}</span>
+                                                </button>
+                                              );
+                                            })()}
+
+                                            {/* Button Input Temuan Sidak Management (Only on parent task "Review temuan inspeksi gabungan") */}
+                                            {!isSubItem && (displayTitle.toLowerCase().includes('review temuan inspeksi gabungan') || rawTitle.toLowerCase().includes('review temuan inspeksi gabungan')) && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const parentTaskId = (rawTitle.match(/<!--task-id:([^>]+)-->/)?.[1]) || row.id || `task_${Date.now()}`;
+                                                  setCreateFindingModalState({
+                                                    isOpen: true,
+                                                    parentRowIndex: actualRowIndex,
+                                                    parentTaskId
+                                                  });
+                                                }}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95 text-white shadow-2xs transition-all cursor-pointer shrink-0 ml-1"
+                                                title="Input temuan baru Sidak Management (Inspeksi Gabungan)"
+                                              >
+                                                <Plus className="w-3 h-3 stroke-[3]" />
+                                                <span>+ Input Temuan Sidak</span>
+                                              </button>
+                                            )}
                                             
                                             {/* Open Badge / Button */}
                                             <button
@@ -8032,6 +8628,28 @@ export function NotionDatabaseTable({
                                           </div>
 
                                           <div className="flex items-center gap-1 shrink-0">
+                                            {/* Link Module Action Button */}
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setLinkModuleModalState({
+                                                  isOpen: true,
+                                                  rowIndex: actualRowIndex,
+                                                  rowTitle: String(row['Jenis kegiatan'] || row['Name'] || row['Activity Name'] || 'Kegiatan'),
+                                                  currentLink: extractRowLinkInfo(row)
+                                                });
+                                              }}
+                                              title="Tautkan baris ini ke Tiket K3/SAP, WO, atau Modul Lain"
+                                              className={`opacity-0 group-hover/cell:opacity-100 p-1 rounded transition-all cursor-pointer ${
+                                                extractRowLinkInfo(row)
+                                                  ? 'text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/50'
+                                                  : 'text-slate-400 hover:text-sky-500 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                              }`}
+                                            >
+                                              <Link2 className="w-3 h-3" />
+                                            </button>
+
                                             <button
                                               type="button"
                                               onClick={(e) => {
@@ -8844,6 +9462,24 @@ export function NotionDatabaseTable({
                                        >
                                          <Edit2 className="w-3.5 h-3.5 shrink-0 text-amber-500" />
                                          <span>Edit Data Kegiatan</span>
+                                       </button>
+                                       <button
+                                         type="button"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           setLinkModuleModalState({
+                                             isOpen: true,
+                                             rowIndex: actualRowIndex,
+                                              rowTitle: String(row["Jenis kegiatan"] || row["Name"] || row["Activity Name"] || "Kegiatan"),
+                                             currentLink: extractRowLinkInfo(row)
+                                           });
+                                           setActiveActionMenuRowIndex(null);
+                                         }}
+                                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg hover:bg-sky-50 dark:hover:bg-sky-950/40 text-sky-700 dark:text-sky-300 font-medium transition-colors cursor-pointer"
+                                         title="Tautkan dengan Tiket K3, Work Order, atau Modul Lain"
+                                       >
+                                         <Link2 className="w-3.5 h-3.5 shrink-0 text-sky-500" />
+                                         <span>{extractRowLinkInfo(row) ? 'Ubah Tautan Modul' : 'Tautkan Modul'}</span>
                                        </button>
                                        <button
                                          type="button"
@@ -11545,6 +12181,39 @@ export function NotionDatabaseTable({
         isSaving={isPersistingChanges}
         tableName={title}
         isNotionLight={isNotionLight}
+      />
+
+      {/* Finding Resolution Modal (Mandatory Photo Upload & Resolution Details) */}
+      <FindingResolutionModal
+        isOpen={findingResolutionModalState.isOpen}
+        ticket={findingResolutionModalState.ticket}
+        ticketId={findingResolutionModalState.ticketId}
+        initialMode={findingResolutionModalState.initialMode}
+        currentUserName={currentAuthorName}
+        currentUserNik={currentAuthorNik}
+        employeesList={employeesList}
+        onClose={() => setFindingResolutionModalState({ isOpen: false, ticket: null })}
+        onResolved={handleFindingResolved}
+      />
+
+      {/* Create Finding Modal (Direct Input for Sidak Management / Inspeksi Gabungan) */}
+      <CreateFindingModal
+        isOpen={createFindingModalState.isOpen}
+        currentUserName={currentAuthorName}
+        currentUserNik={currentAuthorNik}
+        defaultCategory="Inspeksi Gabungan"
+        employeesList={employeesList}
+        onClose={() => setCreateFindingModalState({ isOpen: false })}
+        onCreated={handleCreateFindingSuccess}
+      />
+
+      {/* Link Module Modal (Generic linking to Tiket, WO, Route, or URL) */}
+      <LinkModuleModal
+        isOpen={linkModuleModalState.isOpen}
+        rowTitle={linkModuleModalState.rowTitle}
+        currentLink={linkModuleModalState.currentLink}
+        onClose={() => setLinkModuleModalState(prev => ({ ...prev, isOpen: false }))}
+        onSaveLink={handleSaveRowLink}
       />
     </div>
   );

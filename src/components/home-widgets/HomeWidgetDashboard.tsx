@@ -309,6 +309,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
         return (
           <StickyNotesWidget
             size={item.size}
+            userNik={userNik}
             settings={item.settings as any}
             onUpdateSettings={(s) => handleUpdateWidgetSettings('notes', s)}
           />
