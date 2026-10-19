@@ -21,6 +21,7 @@ interface LeaveRecord {
   gol: string;
   isGol1: boolean;
   section: string;
+  subSection?: string;
   pt: string;
   tanggalCuti: string;
   tanggalCutiRaw: Date;
@@ -121,6 +122,37 @@ export function checkIsGolonganI(emp: any): boolean {
   return false;
 }
 
+/**
+ * Aturan Khusus: Section Manager, Administration, QA, Inventory Control
+ * digabung ke dalam naungan kelompok "Laboratory".
+ */
+export function getUnifiedSection(emp: any): string {
+  const jab = String(emp.jabatan || emp.position || emp.role || '').toLowerCase();
+  const sec = String(emp.section || emp.department || '').toLowerCase();
+
+  if (
+    jab.includes('section manager') ||
+    sec.includes('admin') ||
+    sec.includes('administrasi') ||
+    sec.includes('qa') ||
+    sec.includes('quality assurance') ||
+    sec.includes('inventory') ||
+    sec.includes('control') ||
+    sec.includes('lab') ||
+    sec.includes('laboratory')
+  ) {
+    return 'Laboratory';
+  }
+
+  if (sec.includes('prep') || sec.includes('preparasi')) {
+    return 'Preparation';
+  }
+  if (sec.includes('maint') || sec.includes('pemeliharaan')) {
+    return 'Maintenance';
+  }
+  return emp.section || 'Laboratory';
+}
+
 export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
   const records: LeaveRecord[] = [];
 
@@ -171,7 +203,8 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
     const isGol1 = checkIsGolonganI(emp);
     const pohVal = emp.poh || emp.tempatTinggal || emp.domisili || emp.alamatDomisili || emp.kota || '-';
     const jabatanVal = emp.jabatan || emp.position || '-';
-    const sectionVal = emp.section || emp.department || 'Preparation';
+    const sectionVal = getUnifiedSection(emp);
+    const originalSectionVal = emp.section || emp.department || (jabatanVal.toLowerCase().includes('section manager') ? 'Section Manager' : 'Laboratory');
 
     let blockIdx = 0;
     for (const block of blocks) {
@@ -264,6 +297,7 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
         gol: emp.gol || (isGol1 ? 'I' : 'II'),
         isGol1,
         section: sectionVal,
+        subSection: originalSectionVal,
         pt: emp.pt || 'TBP',
         tanggalCuti: formatIndonesianDate(tanggalCutiRaw, { shortMonth: true }),
         tanggalCutiRaw,
@@ -335,14 +369,14 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
     }
   }, [availablePeriods]);
 
-  // Available sections
+  // Available sections (based on unified section values: Laboratory, Preparation, Maintenance)
   const availableSections = useMemo(() => {
     const set = new Set<string>();
-    roster.forEach(e => {
+    allLeaveRecords.forEach(e => {
       if (e.section) set.add(e.section);
     });
     return Array.from(set).sort();
-  }, [roster]);
+  }, [allLeaveRecords]);
 
   // Filtered records based on tab, month, section, and search
   const filteredRecords = useMemo(() => {
@@ -523,27 +557,25 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
-      {/* Top Entrepreneurial Executive Header Card */}
+      {/* Top Entrepreneurial Executive Header Card - Crisp Executive White Style */}
       <div 
-        className="p-4 sm:p-6 rounded-2xl border shadow-sm relative overflow-hidden backdrop-blur-md"
+        className="p-4 sm:p-6 rounded-2xl border shadow-xs relative overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
-          borderColor: 'rgba(255, 255, 255, 0.1)',
-          color: '#FFFFFF'
+          backgroundColor: '#FFFFFF',
+          borderColor: 'var(--border-main, #E2E8F0)',
+          color: '#0F172A'
         }}
       >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-teal-500/15 via-emerald-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
-
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              <Sparkles className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
               <span>Sistem Manajemen Cuti Terintegrasi Roster</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
               <span>Jadwal & Riwayat Cuti Personil</span>
             </h2>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl font-normal leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 max-w-2xl font-normal leading-relaxed">
               Otomatisasi kalkulasi tanggal cuti, perjalanan (TRV), kuota cuti tahunan/extra/khusus, serta monitoring perubahan jadwal on-site terverifikasi dari Roster Harian.
             </p>
           </div>
@@ -551,70 +583,70 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               onClick={handleExportExcel}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md hover:shadow-emerald-500/25 transition-all cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm hover:shadow-emerald-500/20 transition-all cursor-pointer"
             >
               <Download className="w-4 h-4" />
               <span>Ekspor Excel (.xlsx)</span>
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 border border-slate-700 transition-all cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer"
               title="Cetak Jadwal Cuti"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-4 h-4 text-slate-500" />
               <span>Cetak</span>
             </button>
           </div>
         </div>
 
-        {/* Executive KPI Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 mt-5 border-t border-slate-700/60">
-          <div className="bg-slate-800/50 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-slate-700/60">
-            <div className="flex items-center justify-between text-slate-400 text-[11px] font-semibold mb-1">
+        {/* Executive KPI Stats Cards - Clean White Background */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 mt-5 border-t border-slate-200">
+          <div className="bg-slate-50/80 p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
               <span>Total Personil Cuti</span>
-              <Users className="w-3.5 h-3.5 text-teal-400" />
+              <Users className="w-3.5 h-3.5 text-teal-600" />
             </div>
-            <div className="text-lg sm:text-2xl font-black text-white">
-              {stats.totalPersonil} <span className="text-xs font-normal text-slate-400">Orang</span>
+            <div className="text-lg sm:text-2xl font-black text-slate-900">
+              {stats.totalPersonil} <span className="text-xs font-normal text-slate-500">Orang</span>
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">
               Tercatat pada periode terpilih
             </div>
           </div>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-slate-700/60">
-            <div className="flex items-center justify-between text-slate-400 text-[11px] font-semibold mb-1">
+          <div className="bg-slate-50/80 p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
               <span>Total Travel (TRV)</span>
-              <Plane className="w-3.5 h-3.5 text-amber-400" />
+              <Plane className="w-3.5 h-3.5 text-amber-500" />
             </div>
-            <div className="text-lg sm:text-2xl font-black text-amber-400">
-              {stats.traveling} <span className="text-xs font-normal text-slate-400">Hari</span>
+            <div className="text-lg sm:text-2xl font-black text-amber-600">
+              {stats.traveling} <span className="text-xs font-normal text-slate-500">Hari</span>
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">
               Akumulasi hari perjalanan
             </div>
           </div>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-slate-700/60">
-            <div className="flex items-center justify-between text-slate-400 text-[11px] font-semibold mb-1">
+          <div className="bg-slate-50/80 p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
               <span>Perubahan Onsite</span>
-              <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+              <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
             </div>
-            <div className="text-lg sm:text-2xl font-black text-rose-400">
-              {stats.withChanges} <span className="text-xs font-normal text-slate-400">Orang</span>
+            <div className="text-lg sm:text-2xl font-black text-rose-600">
+              {stats.withChanges} <span className="text-xs font-normal text-slate-500">Orang</span>
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">
               Extend / Delay transportasi
             </div>
           </div>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm p-3 sm:p-3.5 rounded-xl border border-slate-700/60">
-            <div className="flex items-center justify-between text-slate-400 text-[11px] font-semibold mb-1">
+          <div className="bg-slate-50/80 p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
               <span>Rata-rata Durasi</span>
-              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <Clock className="w-3.5 h-3.5 text-teal-600" />
             </div>
-            <div className="text-lg sm:text-2xl font-black text-cyan-400">
-              {stats.avgHari} <span className="text-xs font-normal text-slate-400">Hari / Orang</span>
+            <div className="text-lg sm:text-2xl font-black text-teal-700">
+              {stats.avgHari} <span className="text-xs font-normal text-slate-500">Hari / Orang</span>
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">
               Total {stats.totalHari} hari cuti
@@ -859,7 +891,10 @@ export function RosterLeaveScheduleSheet({ roster }: RosterLeaveScheduleSheetPro
                         <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
                           <span>{rec.nik}</span>
                           <span>•</span>
-                          <span className="text-teal-600 dark:text-teal-400 font-medium">{rec.section}</span>
+                          <span className="text-teal-600 dark:text-teal-400 font-semibold">{rec.section}</span>
+                          {rec.subSection && rec.subSection !== rec.section && (
+                            <span className="text-slate-400 font-normal">({rec.subSection})</span>
+                          )}
                         </div>
                       </td>
 
