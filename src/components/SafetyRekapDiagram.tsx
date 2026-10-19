@@ -739,7 +739,7 @@ function ClusteredSapChart({
 export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary }: SafetyRekapDiagramProps) {
   const [selectedYear, setSelectedYear] = useState<number>(year);
   const [activeTab, setActiveTab] = useState<'monthly' | 'periodic' | 'yearly' | 'all'>('monthly');
-  const [periodQuarter, setPeriodQuarter] = useState<'ALL' | 'Q1' | 'Q2' | 'Q3' | 'Q4'>('ALL');
+  const [selectedWeekFilter, setSelectedWeekFilter] = useState<string>('ALL');
   const [chartStyle, setChartStyle] = useState<ChartStyleMode>('infographic-capsule');
   const [data, setData] = useState<DiagramStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -823,25 +823,44 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
     }));
   }, [data?.monthly]);
 
-  // Data Periode (Mingguan) terfilter
+  // Opsi Dropdown Filter Per Week (W1 - W52)
+  const weekFilterOptions = useMemo(() => {
+    if (data?.periods && data.periods.length > 0) {
+      return data.periods.map(p => ({
+        value: p.week,
+        label: `Week ${p.weekNum} (${p.week}${p.dateRange ? ` • ${p.dateRange.replace(` ${selectedYear}`, '')}` : ''})${p.week === activeWeek ? ' [Aktif]' : ''}`
+      }));
+    }
+    const opts = [];
+    for (let w = 1; w <= 52; w++) {
+      opts.push({
+        value: `W${w}`,
+        label: `Week ${w} (W${w})${`W${w}` === activeWeek ? ' [Aktif]' : ''}`
+      });
+    }
+    return opts;
+  }, [data?.periods, activeWeek, selectedYear]);
+
+  // Data Mingguan terfilter Per Week
   const periodicItems = useMemo<DiagramItem[]>(() => {
     if (!data?.periods) return [];
     let list = data.periods;
-    if (periodQuarter === 'Q1') list = list.filter(p => p.weekNum >= 1 && p.weekNum <= 13);
-    else if (periodQuarter === 'Q2') list = list.filter(p => p.weekNum >= 14 && p.weekNum <= 26);
-    else if (periodQuarter === 'Q3') list = list.filter(p => p.weekNum >= 27 && p.weekNum <= 39);
-    else if (periodQuarter === 'Q4') list = list.filter(p => p.weekNum >= 40 && p.weekNum <= 52);
+    if (selectedWeekFilter !== 'ALL') {
+      list = list.filter(p => p.week === selectedWeekFilter);
+    }
 
     return list.map(p => ({
       label: p.week,
-      subLabel: p.monthName.slice(0, 3),
+      subLabel: selectedWeekFilter !== 'ALL' && p.dateRange
+        ? p.dateRange.replace(` ${selectedYear}`, '')
+        : p.monthName.slice(0, 3),
       inspeksiPct: p.inspeksiPct,
       ktaPct: p.ktaPct,
       targetCount: p.targetCount,
       inspeksiCount: p.inspeksiCount,
       ktaCount: p.ktaCount,
     }));
-  }, [data?.periods, periodQuarter]);
+  }, [data?.periods, selectedWeekFilter, selectedYear]);
 
   // Data Tahunan terformat
   const yearlyItems = useMemo<DiagramItem[]>(() => {
@@ -888,7 +907,7 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
         <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)]">
           {[
             { id: 'monthly', label: 'Diagram Per Bulan', icon: <Calendar className="w-3.5 h-3.5" /> },
-            { id: 'periodic', label: 'Diagram Per Periode', icon: <BarChart3 className="w-3.5 h-3.5" /> },
+            { id: 'periodic', label: 'Diagram Per Week', icon: <BarChart3 className="w-3.5 h-3.5" /> },
             { id: 'yearly', label: 'Diagram Per Tahun', icon: <TrendingUp className="w-3.5 h-3.5" /> },
             { id: 'all', label: 'Semua Diagram', icon: <Layers className="w-3.5 h-3.5" /> }
           ].map(t => (
@@ -1063,47 +1082,46 @@ export function SafetyRekapDiagram({ year = 2026, activeWeek, activeWeekSummary 
         </div>
       )}
 
-      {/* ── SECTION 2: DIAGRAM PER PERIODE (MINGGUAN) ── */}
+      {/* ── SECTION 2: DIAGRAM PER WEEK (MINGGUAN) ── */}
       {(activeTab === 'periodic' || activeTab === 'all') && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-[var(--card-bg)] border border-[var(--border-main)]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-3xl bg-[var(--card-bg)] border border-[var(--border-main)] shadow-xs">
             <div>
-              <h3 className="text-sm font-bold text-[var(--text-main)]">Filter Rentang Periode Minggu</h3>
-              <p className="text-xs text-[var(--text-muted)]">Pilih kuartal untuk memperjelas visualisasi mingguan</p>
+              <h3 className="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-[#24A1B2]" />
+                Filter Minggu (Per Week)
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">Pilih week tertentu atau tampilkan semua week</p>
             </div>
-            <div className="flex flex-wrap gap-1.5 p-1 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)]">
-              {[
-                { id: 'ALL', label: 'Semua (W1 - W52)' },
-                { id: 'Q1', label: 'Q1 (W1 - W13)' },
-                { id: 'Q2', label: 'Q2 (W14 - W26)' },
-                { id: 'Q3', label: 'Q3 (W27 - W39)' },
-                { id: 'Q4', label: 'Q4 (W40 - W52)' },
-              ].map(q => (
-                <button
-                  key={q.id}
-                  onClick={() => setPeriodQuarter(q.id as any)}
-                  className={`h-8 px-3 rounded-xl text-xs font-bold cursor-pointer transition-all ${
-                    periodQuarter === q.id
-                      ? 'bg-[#24A1B2] text-white shadow-xs'
-                      : 'text-[var(--text-muted)] hover:text-[#24A1B2]'
-                  }`}
-                >
-                  {q.label}
-                </button>
-              ))}
+            <div className="relative min-w-[240px] sm:w-80">
+              <select
+                value={selectedWeekFilter}
+                onChange={e => setSelectedWeekFilter(e.target.value)}
+                className="w-full h-10 pl-3.5 pr-10 rounded-2xl bg-[var(--input-bg)] border border-[var(--border-main)] text-xs font-bold text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[#24A1B2]/30 cursor-pointer transition-all shadow-xs"
+              >
+                <option value="ALL">Semua Week (W1 - W52)</option>
+                {weekFilterOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-[var(--text-muted)]">
+                <ChevronRight className="w-4 h-4 rotate-90" />
+              </div>
             </div>
           </div>
 
           <ClusteredSapChart
             chartRef={periodicChartRef}
             year={selectedYear}
-            title={`Pencapaian SAP Per Periode Mingguan - Dept. Preparation & Laboratory ${selectedYear}`}
-            subtitle={`Tinjauan Kepatuhan Tiap Periode Minggu (${periodQuarter === 'ALL' ? 'W1 - W52' : periodQuarter})`}
+            title={`Pencapaian SAP Per Week - Dept. Preparation & Laboratory ${selectedYear}`}
+            subtitle={`Tinjauan Kepatuhan Tiap Week (${selectedWeekFilter === 'ALL' ? 'Semua Week W1 - W52' : selectedWeekFilter})`}
             items={periodicItems}
             exporting={exportingPng}
             styleMode={chartStyle}
             onStyleChange={setChartStyle}
-            onDownloadPng={() => handleExportPng(periodicChartRef, `Diagram_SAP_Per_Periode_${selectedYear}_${periodQuarter}.png`)}
+            onDownloadPng={() => handleExportPng(periodicChartRef, `Diagram_SAP_Per_Week_${selectedYear}_${selectedWeekFilter}.png`)}
           />
         </div>
       )}

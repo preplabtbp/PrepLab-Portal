@@ -15,6 +15,7 @@ import {
   getPossibleRosterDateStrings,
   getPreviousDateString,
   isCatatanDisabledForEmployee,
+  isCutiRosterStatus,
   isLeaveOrPermissionRosterStatus,
   isTuesdayWednesdaySaturday,
   isWorkOrOffRosterStatus,
@@ -1105,7 +1106,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       shift: lockedShift,
       section: lockedSection,
       tempatTinggal: lockedTt,
-      keteranganLapor: current?.keteranganLapor,
+      keteranganLapor: current ? current.keteranganLapor : undefined,
     };
     const prevStatus = prevStatuses.get(nik);
 
@@ -1136,9 +1137,21 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     // Jangan rubah ke Bungkusan Sore saat pindah tanggal jika tidak diganti!
     const isExplicitBungkusSore = finalCatatan === 'Bungkusan Sore' || finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore' || empPref.sore === 'lapangan';
     const isKawasiLS = (lockedTt || '').toLowerCase().includes('kawasi') && computed.shiftKerja === 'Longshift';
-    if (!isKawasiLS && !isExplicitBungkusSore) {
+    const skCheck = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
+    const isNoSoreMeal = isCutiRosterStatus(skCheck)
+      || (skCheck.includes('IZIN') && isCutiRosterStatus(prevStatus))
+      || (skCheck === 'CS' && (lockedTt || '').toLowerCase().includes('kawasi'))
+      || computed.keteranganLapor === 'Belum Lapor'
+      || ((lockedTt || '').toLowerCase().includes('kawasi') && !isKawasiLS);
+
+    if (isNoSoreMeal) {
       computed.soreLapangan = null;
-      computed.soreKantin = (lockedTt || '').toLowerCase().includes('nirwana') && (lockedStatusMess || '').toUpperCase() === 'NR' ? '1' : 'K';
+      computed.soreKantin = null;
+      computed.batchSore = null;
+    } else if (!isKawasiLS && !isExplicitBungkusSore) {
+      computed.soreLapangan = null;
+      const isNRNirwana = (lockedTt || '').toLowerCase().includes('nirwana') && (lockedStatusMess || '').toUpperCase() === 'NR';
+      computed.soreKantin = isNRNirwana ? '1' : 'K';
       computed.batchSore = (lockedTt || '').toLowerCase().includes('nirwana') ? '1' : null;
     }
 
@@ -1155,6 +1168,20 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       } else if (finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
         finalCatatan = 'Bungkusan Pagi';
       }
+    }
+
+    // Proteksi mutlak: Cuti (C/CE/CT/CI/TRV), Izin setelah Cuti, CS Kampung Kawasi TIDAK DIORDERKAN MAKANAN
+    if (isCutiRosterStatus(skCheck) || (skCheck.includes('IZIN') && isCutiRosterStatus(prevStatus)) || (skCheck === 'CS' && (lockedTt || '').toLowerCase().includes('kawasi'))) {
+      computed.pagiKantin = null;
+      computed.pagiLapangan = null;
+      computed.siangKantin = null;
+      computed.siangLapangan = null;
+      computed.soreKantin = null;
+      computed.soreLapangan = null;
+      computed.malamLapangan = null;
+      computed.batchPagi = null;
+      computed.batchSore = null;
+      finalCatatan = null;
     }
 
     rowsToSave.push({
@@ -1286,7 +1313,7 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     }
 
     const computed = computeMealOrderByRoster(
-      { ...emp, name: master?.nama || emp.name, statusMess: lockedStatusMess, shift: lockedShift, section: lockedSection, tempatTinggal: lockedTt, alamatDomisili: null, keteranganLapor: current.keteranganLapor },
+      { ...emp, name: master?.nama || emp.name, statusMess: lockedStatusMess, shift: lockedShift, section: lockedSection, tempatTinggal: lockedTt, alamatDomisili: null, keteranganLapor: current ? current.keteranganLapor : undefined },
       rosterStatus, ymd, empPref, prevStatus,
     );
     if (computed.shiftKerja === 'SIANG' && (lockedShift === 'Nonshift' || (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik))) computed.shiftKerja = 'Nonshift';
@@ -1298,10 +1325,22 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     // Jangan rubah ke Bungkusan Sore saat pindah tanggal jika tidak diganti!
     const isExplicitSoreSingle = finalCatatan === 'Bungkusan Sore' || finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore' || empPref.sore === 'lapangan';
     const isKawasiLSSingle = (lockedTt || '').toLowerCase().includes('kawasi') && computed.shiftKerja === 'Longshift';
-    if (!isKawasiLSSingle && !isExplicitSoreSingle) {
+    const skCheckSingle = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
+    const isNoSoreMealSingle = isCutiRosterStatus(skCheckSingle)
+      || (skCheckSingle.includes('IZIN') && isCutiRosterStatus(prevStatus))
+      || (skCheckSingle === 'CS' && (lockedTt || '').toLowerCase().includes('kawasi'))
+      || computed.keteranganLapor === 'Belum Lapor'
+      || ((lockedTt || '').toLowerCase().includes('kawasi') && !isKawasiLSSingle);
+
+    if (isNoSoreMealSingle) {
       computed.soreLapangan = null;
-      computed.soreKantin = 'K';
+      computed.soreKantin = null;
       computed.batchSore = null;
+    } else if (!isKawasiLSSingle && !isExplicitSoreSingle) {
+      computed.soreLapangan = null;
+      const isNRNirwana = (lockedTt || '').toLowerCase().includes('nirwana') && (lockedStatusMess || '').toUpperCase() === 'NR';
+      computed.soreKantin = isNRNirwana ? '1' : 'K';
+      computed.batchSore = (lockedTt || '').toLowerCase().includes('nirwana') ? '1' : null;
     }
 
     if (isCR && isTueWedSat) {
@@ -1317,6 +1356,20 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
       } else if (finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
         finalCatatan = 'Bungkusan Pagi';
       }
+    }
+
+    // Proteksi mutlak: Cuti (C/CE/CT/CI/TRV), Izin setelah Cuti, CS Kampung Kawasi TIDAK DIORDERKAN MAKANAN
+    if (isCutiRosterStatus(skCheckSingle) || (skCheckSingle.includes('IZIN') && isCutiRosterStatus(prevStatus)) || (skCheckSingle === 'CS' && (lockedTt || '').toLowerCase().includes('kawasi'))) {
+      computed.pagiKantin = null;
+      computed.pagiLapangan = null;
+      computed.siangKantin = null;
+      computed.siangLapangan = null;
+      computed.soreKantin = null;
+      computed.soreLapangan = null;
+      computed.malamLapangan = null;
+      computed.batchPagi = null;
+      computed.batchSore = null;
+      finalCatatan = null;
     }
 
     const updateValues: any = {
@@ -1889,7 +1942,10 @@ mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res
             pagi: (currentRow.pilihanPagi as MealChoice) || null,
             sore: (currentRow.pilihanSore as MealChoice) || null,
           };
-          const computed = computeMealOrderByRoster(currentRow, rosterCode, ymd(currentRow.orderDate), pref);
+          const orderYmd = ymd(currentRow.orderDate);
+          const prevStatuses = await loadPreviousRosterStatuses(orderYmd, currentRow.nik);
+          const prevStatus = prevStatuses.get(currentRow.nik.toUpperCase().trim());
+          const computed = computeMealOrderByRoster(currentRow, rosterCode, orderYmd, pref, prevStatus);
           fields.shiftKerja = canonicalShift;
           fields.statusKerja = computed.statusKerja;
           fields.status = computed.status;

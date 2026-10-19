@@ -84,6 +84,20 @@ export function isLeaveOrPermissionRosterStatus(val: string | null | undefined):
 }
 
 /**
+ * Cek apakah status roster adalah Cuti kepulangan / off-site:
+ * C, CE, CT, CI, TRV, TV, XP, CUTI, TRAVEL
+ */
+export function isCutiRosterStatus(val: string | null | undefined): boolean {
+  if (!val) return false;
+  const s = val.trim().toUpperCase();
+  if (['C', 'CE', 'CT', 'CI', 'TRV', 'TV', 'XP', 'CUTI', 'TRAVEL'].includes(s)) return true;
+  if (s.startsWith('CUTI') || s.startsWith('TRAVEL')) return true;
+  if (/^(C|CE|CT|CI|TRV|TV|XP)\s*[-/(]?\s*\d*\)?$/.test(s)) return true;
+  const prefixes = ['CE', 'CT', 'CI', 'TRV', 'TV', 'XP', 'C'];
+  return prefixes.some(p => s === p || s.startsWith(p + ' ') || s.startsWith(p + '-') || s.startsWith(p + '(') || s.startsWith(p + '/'));
+}
+
+/**
  * Cek apakah keterangan/status roster tanggal saat ini adalah kerja atau off:
  * D, N, LS, Atau OFF
  */
@@ -237,6 +251,8 @@ export function computeMealOrderByRoster(
     code = 'LS';
   }
 
+  const isAfterCuti = isCutiRosterStatus(prevRosterStatus);
+
   // Inisialisasi kosong
   const res: RosterMealCalculation = {
     statusKerja: '-',
@@ -365,10 +381,12 @@ export function computeMealOrderByRoster(
       res.shiftKerja = 'Izin';
       res.statusKerja = 'Izin';
       res.status = 'IZIN';
-      res.pagiKantin = 'K';
-      res.siangKantin = 'K';
-      res.soreKantin = 'K';
       res.catatan = null;
+      if (!isAfterCuti) {
+        res.pagiKantin = 'K';
+        res.siangKantin = 'K';
+        res.soreKantin = 'K';
+      }
     } else if (code === 'OFF') {
       res.shiftKerja = 'Off';
       res.statusKerja = 'Off';
@@ -438,12 +456,14 @@ export function computeMealOrderByRoster(
       res.shiftKerja = 'Izin';
       res.statusKerja = 'Izin';
       res.status = 'IZIN';
-      res.pagiKantin = '1';
-      res.batchPagi = '1';
-      res.siangKantin = '1';
-      res.soreKantin = '1';
-      res.batchSore = '1';
       res.catatan = null;
+      if (!isAfterCuti) {
+        res.pagiKantin = '1';
+        res.batchPagi = '1';
+        res.siangKantin = '1';
+        res.soreKantin = '1';
+        res.batchSore = '1';
+      }
     } else if (code === 'OFF') {
       res.shiftKerja = 'Off';
       res.statusKerja = 'Off';
@@ -497,14 +517,20 @@ export function computeMealOrderByRoster(
   }
 
   // Aturan status Belum Lapor:
-  // 1. Jika Tanggal sebelumnya "C,CE,CT,CS,TRV,I,BELUM LAPOR" dan Tanggal berikutnya keterangannya "D, N, LS Atau OFF"
-  //    maka Keterangan belum lapor Otomatis Aktif
-  // 2. Atau jika karyawan saat ini memang masih berstatus Belum Lapor (belum dimatikan oleh admin)
-  if (isLeaveOrPermissionRosterStatus(prevRosterStatus) && isWorkOrOffRosterStatus(code)) {
+  // 1. Jika kode roster hari ini secara eksplisit bertuliskan Belum Lapor / BL:
+  const isExplicitRosterBL = /belum\s*lapor|\bBL\b/i.test(rawCode) || /belum\s*lapor/i.test(String(emp.status || ''));
+  // 2. Cek apakah di baris yang sudah ada, Belum Lapor sudah dimatikan / diedit oleh admin (bukan 'Belum Lapor')
+  const isAlreadyClearedByAdmin = emp.keteranganLapor !== undefined && (emp.keteranganLapor === null || !/belum\s*lapor/i.test(String(emp.keteranganLapor || '')));
+
+  if (isExplicitRosterBL) {
     res.keteranganLapor = 'Belum Lapor';
-  } else if (/belum\s*lapor|\bBL\b/i.test(rawCode) || /belum\s*lapor/i.test(String(emp.status || ''))) {
-    res.keteranganLapor = 'Belum Lapor';
+  } else if (isAlreadyClearedByAdmin) {
+    // Admin sudah mematikan/mengedit Belum Lapor sebelumnya -> JANGAN aktifkan kembali saat sinkronisasi!
+    res.keteranganLapor = null;
   } else if (emp.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(emp.keteranganLapor || ''))) {
+    res.keteranganLapor = 'Belum Lapor';
+  } else if (emp.keteranganLapor === undefined && isLeaveOrPermissionRosterStatus(prevRosterStatus) && isWorkOrOffRosterStatus(code)) {
+    // Hanya aktifkan otomatis untuk baris baru yang belum ada di database sebelumnya
     res.keteranganLapor = 'Belum Lapor';
   }
 
@@ -512,6 +538,24 @@ export function computeMealOrderByRoster(
   // Selama "Belum Lapor" belum dimatikan, seluruh porsi orderan makanan AKAN TETAP KOSONG
   if (res.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(res.keteranganLapor || ''))) {
     res.keteranganLapor = 'Belum Lapor';
+    res.pagiKantin = null;
+    res.pagiLapangan = null;
+    res.sahurKantin = null;
+    res.sahurLapangan = null;
+    res.siangKantin = null;
+    res.siangLapangan = null;
+    res.soreKantin = null;
+    res.soreLapangan = null;
+    res.takjilLapangan = null;
+    res.malamLapangan = null;
+    res.batchPagi = null;
+    res.batchSore = null;
+    res.catatan = null;
+  }
+
+  // TEGAS: Karyawan C/CE/CT/CI/TRV, I (jika hari sebelumnya Cuti), atau CS di Kampung Kawasi:
+  // Seluruh porsi orderan makanan, batch, dan catatan TIDAK DIORDERKAN MAKANAN (100% KOSONG)!
+  if (code === 'CUTI' || (code === 'I' && isAfterCuti) || (code === 'CS' && isKawasi)) {
     res.pagiKantin = null;
     res.pagiLapangan = null;
     res.sahurKantin = null;

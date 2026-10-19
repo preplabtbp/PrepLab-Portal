@@ -289,9 +289,19 @@ function mergeRekapLists(lists: any[][]): any[] {
     const reports = [...(prev.reports || []), ...(emp.reports || [])];
     const seen = new Set<string>();
     const manual = (e: any) => e.isManualOverride && e.status === 'SUDAH';
+    const isSudah = (e: any) => e.status === 'SUDAH';
+    const takeNew = (isSudah(emp) && !isSudah(prev)) || (manual(emp) && !manual(prev));
     map.set(key, {
       ...prev,
-      ...(manual(emp) && !manual(prev) ? { isManualOverride: true, status: 'SUDAH', checkDetails: emp.checkDetails } : {}),
+      ...(takeNew ? {
+        status: emp.status,
+        checkDetails: emp.checkDetails,
+        completedAt: emp.completedAt,
+        pdfTitle: emp.pdfTitle,
+        ssUrl: emp.ssUrl,
+        pdfUrl: emp.pdfUrl,
+        isManualOverride: emp.isManualOverride,
+      } : {}),
       reports: reports.filter(r => {
         const id = String(r.id ?? `${r.reportType}-${r.timestamp}`);
         if (seen.has(id)) return false;
@@ -916,18 +926,22 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
 
     inspeksiData.rekapList.filter(isValidEmployee).forEach(merged => {
       const { auto } = ensure(merged, null);
-      // Cek data dari tiap minggu ISO; hanya tanggal inspeksi yang masuk periode Sabtu – Jumat yang dihitung
+      // Cek data dari tiap minggu ISO; Inspeksi hanya direkap ketika sudah lengkap dengan hasil screenshot
       for (const emp of (merged._sources || [merged])) {
         const cd = emp.checkDetails || {};
-        const tgl = pickInPeriod(weekRange, cd.pdfTimestamp, cd.ssTimestamp, emp.completedAt);
         const isManual = emp.isManualOverride && emp.status === 'SUDAH';
-        const done = emp.status === 'SUDAH' && (isManual || tgl !== null);
-        if (done || (!auto.inspeksiDone && tgl !== null)) {
-          auto.inspeksiDone = done;
-          auto.keteranganInspeksi = emp.pdfTitle || cd.pdfTitle || '';
+        const hasCompleteScreenshot = Boolean(cd.ssDone || cd.ssUrl || emp.ssUrl || isManual);
+        const isComplete = (emp.status === 'SUDAH' || (cd.pdfDone && cd.ssDone)) && hasCompleteScreenshot;
+        // Ambil tanggal dalam periode (prioritaskan tanggal bukti screenshot karena melengkapi inspeksi)
+        const tgl = pickInPeriod(weekRange, cd.ssTimestamp, cd.pdfTimestamp, emp.completedAt);
+        const done = isComplete && (isManual || tgl !== null);
+
+        if (done) {
+          auto.inspeksiDone = true;
+          auto.keteranganInspeksi = emp.pdfTitle || cd.pdfTitle || 'Inspeksi Selesai';
           auto.tglInspeksi = tgl !== null ? toIsoDate(parseLocalDate(tgl)) : '√';
+          break;
         }
-        if (done) break;
       }
     });
     ktaData.rekapList.filter(isValidEmployee).forEach(emp => {

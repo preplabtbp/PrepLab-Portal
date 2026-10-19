@@ -1315,8 +1315,22 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
           week: p.week,
           timestamp: p.createdAt ? new Date(p.createdAt).toISOString() : new Date().toISOString()
         };
-        if (p.nik) registerProof(p.nik, info);
-        if (p.name) registerProof(p.name, info);
+        if (p.nik) {
+          registerProof(p.nik, info);
+          const emp = empByNikLower.get(p.nik.trim().toLowerCase());
+          if (emp) {
+            if (emp.nik) registerProof(emp.nik, info);
+            if (emp.name) registerProof(emp.name, info);
+          }
+        }
+        if (p.name) {
+          registerProof(p.name, info);
+          const emp = empByNameLower.get(p.name.trim().toLowerCase());
+          if (emp) {
+            if (emp.nik) registerProof(emp.nik, info);
+            if (emp.name) registerProof(emp.name, info);
+          }
+        }
       });
     } catch (proofErr) {
       console.error('Error scanning DB inspection_proofs for rekap:', proofErr);
@@ -1334,8 +1348,22 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
             week: msgWeek,
             timestamp: m.timestamp
           };
-          if (m.senderNik) registerProof(m.senderNik, info);
-          if (m.senderName) registerProof(m.senderName, info);
+          if (m.senderNik) {
+            registerProof(m.senderNik, info);
+            const emp = empByNikLower.get(m.senderNik.trim().toLowerCase());
+            if (emp) {
+              if (emp.nik) registerProof(emp.nik, info);
+              if (emp.name) registerProof(emp.name, info);
+            }
+          }
+          if (m.senderName) {
+            registerProof(m.senderName, info);
+            const emp = empByNameLower.get(m.senderName.trim().toLowerCase());
+            if (emp) {
+              if (emp.nik) registerProof(emp.nik, info);
+              if (emp.name) registerProof(emp.name, info);
+            }
+          }
         }
       }
     });

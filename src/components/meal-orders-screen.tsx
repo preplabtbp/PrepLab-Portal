@@ -390,6 +390,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         shift: next.shift,
         section: next.section,
         tempatTinggal: next.tempatTinggal,
+        keteranganLapor: next.keteranganLapor,
       };
       const pref: MealPreference = {
         pagi: (modal?.row?.pilihanPagi as MealChoice) || null,

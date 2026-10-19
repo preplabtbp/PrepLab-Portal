@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  BriefcaseMedical, 
+  BriefcaseMedical,
+  BarChart3,
+  Table2,
+  ImageDown, 
   Search, 
   Plus, 
   Calendar, 
@@ -33,6 +36,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ClinicMonthlyDiagramSheet } from './ClinicMonthlyDiagramSheet';
 
 export interface ClinicVisit {
   id: number;
@@ -93,6 +97,7 @@ const SECTION_OPTIONS = [
   'Maintenance',
   'Quality Assurance',
   'Inventory Control',
+  'Administration',
   'Admin / HR',
   'General',
   'HSE / Safety',
@@ -109,7 +114,7 @@ export const normalizeSectionName = (raw?: string | null): string => {
   if (lower === 'lab' || lower === 'laboratory' || lower.includes('laboratory')) return 'Laboratory';
   if (lower === 'maint' || lower === 'maintenance' || lower.includes('maintenance')) return 'Maintenance';
   if (lower.includes('inventory')) return 'Inventory Control';
-  if (lower === 'admin' || lower.includes('administration') || lower.includes('hr')) return 'Admin / HR';
+  if (lower === 'admin' || lower.includes('administration') || lower.includes('administrasi') || lower.includes('hr')) return 'Administration';
   return s;
 };
 
@@ -139,6 +144,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
   const [visits, setVisits] = useState<ClinicVisit[]>([]);
   const [summary, setSummary] = useState<ClinicSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeSheet, setActiveSheet] = useState<'tabel' | 'diagram'>('tabel');
 
   // State: Employee master for autocomplete
   const [employees, setEmployees] = useState<EmployeeMaster[]>([]);
@@ -327,7 +333,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     return list;
   }, [employees, formSection]);
 
-  // Select employee from autocomplete -> AUTOFILL all fields including Seksi
+  // Select employee from autocomplete -> AUTOFILL all fields including Section
   const handleSelectEmployee = (emp: EmployeeMaster) => {
     setFormNik(emp.nik);
     setFormName(emp.name);
@@ -497,7 +503,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
       return;
     }
 
-    const headers = ['No', 'Tanggal', 'Jam', 'NIK', 'Nama Karyawan', 'Seksi', 'PT', 'Kategori', 'Alasan / Keluhan', 'Diagnosa', 'Tindakan Medis', 'Rekomendasi', 'Tenaga Medis', 'Petugas Pelapor', 'NIK Pelapor', 'Catatan'];
+    const headers = ['No', 'Tanggal', 'Jam', 'NIK', 'Nama Karyawan', 'Section', 'PT', 'Kategori', 'Alasan / Keluhan', 'Diagnosa', 'Tindakan Medis', 'Rekomendasi', 'Tenaga Medis', 'Petugas Pelapor', 'NIK Pelapor', 'Catatan'];
     const rows = displayedVisits.map((v, i) => [
       i + 1,
       v.visitDate,
@@ -542,7 +548,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
     let text = `*🏥 REKAP KUNJUNGAN KLINIK KARYAWAN PREP & LAB*\n`;
     text += `📅 *Periode*: ${startDate || 'Awal'} s/d ${endDate || 'Hari Ini'}\n`;
-    text += `🏢 *Seksi Filter*: ${selectedSection}\n`;
+    text += `🏢 *Section Filter*: ${selectedSection}\n`;
     text += `📊 *Total Kunjungan*: ${total} orang\n`;
     text += `✅ *Fit to Work*: ${fit} orang\n`;
     text += `🛌 *Istirahat Mess / Rujuk*: ${resting} orang\n\n`;
@@ -551,7 +557,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
     displayedVisits.forEach((v, idx) => {
       const isRest = (v.recommendation || '').toLowerCase().includes('istirahat') || (v.recommendation || '').toLowerCase().includes('rujuk');
       const badge = isRest ? '🛌' : '✅';
-      text += `${idx + 1}. ${badge} *${v.name}* (${v.nik}) - Seksi: ${v.section || 'General'}\n`;
+      text += `${idx + 1}. ${badge} *${v.name}* (${v.nik}) - Section: ${v.section || 'General'}\n`;
       text += `   - Tanggal & Jam: ${v.visitDate} (${v.visitTime})\n`;
       text += `   - Keluhan/Alasan: ${v.reason}\n`;
       text += `   - Rekomendasi: ${v.recommendation || 'Fit to Work'}\n`;
@@ -633,6 +639,20 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
             <button
               type="button"
+              onClick={() => setActiveSheet(activeSheet === 'diagram' ? 'tabel' : 'diagram')}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                activeSheet === 'diagram'
+                  ? 'bg-teal-600 text-white shadow-teal-600/25 ring-2 ring-teal-500/20'
+                  : 'border border-teal-300 bg-teal-50/60 hover:bg-teal-100 text-teal-900 font-black'
+              }`}
+              title="Beralih antara Sheet Tabel dan Sheet Diagram Per Section"
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-teal-700" />
+              <span>{activeSheet === 'diagram' ? 'Buka Tabel' : 'Sheet Diagram'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleCopyWhatsAppReport}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50/50 hover:bg-emerald-100 text-xs font-bold transition-all cursor-pointer shadow-2xs text-slate-950"
               title="Salin rekap format WhatsApp untuk Morning Meeting"
@@ -665,6 +685,54 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+        {/* Sheet Switcher Tabs */}
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <button
+            type="button"
+            onClick={() => setActiveSheet('tabel')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer ${
+              activeSheet === 'tabel'
+                ? 'bg-teal-600 text-white shadow-sm shadow-teal-600/30 ring-2 ring-teal-500/20'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-teal-400'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Sheet 1: Data Kunjungan</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+              activeSheet === 'tabel' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+            }`}>
+              {displayedVisits.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSheet('diagram')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer ${
+              activeSheet === 'diagram'
+                ? 'bg-teal-600 text-white shadow-sm shadow-teal-600/30 ring-2 ring-teal-500/20'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-teal-400'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Sheet 2: Diagram Kunjungan</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              activeSheet === 'diagram' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-900'
+            }`}>
+              Per Section
+            </span>
+          </button>
+        </div>
+
+        {activeSheet === 'diagram' ? (
+          <ClinicMonthlyDiagramSheet 
+            visits={visits}
+            employees={employees}
+            onSelectVisit={(visit) => setDetailModalVisit(visit)}
+            onBackToTable={() => setActiveSheet('tabel')}
+          />
+        ) : (
+          <>
         {/* 2. Executive KPI & Analytics Overview Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {/* Card 1: Total Kunjungan Bulan Ini */}
@@ -733,13 +801,13 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
             <p className="text-[10px] text-slate-600 font-semibold mt-1">Diberikan obat & kembali bertugas</p>
           </div>
 
-          {/* Card 4: Seksi Terbanyak Berkunjung */}
+          {/* Card 4: Section Terbanyak Berkunjung */}
           <div 
             className="p-4 rounded-2xl border shadow-xs relative overflow-hidden transition-all"
             style={{ backgroundColor: 'var(--card-bg, #ffffff)', borderColor: 'var(--border-main, #e2e8f0)' }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-900">Seksi Teratas</span>
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-900">Section Teratas</span>
               <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-700 flex items-center justify-center">
                 <Building2 className="w-4 h-4" />
               </div>
@@ -822,7 +890,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Cari NIK, Nama Karyawan, Seksi, Keluhan..."
+                placeholder="Cari NIK, Nama Karyawan, Section, Keluhan..."
                 className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 placeholder:text-slate-400 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-semibold"
               />
               {searchQuery && (
@@ -839,16 +907,16 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
 
           {/* Secondary Dropdown Filters: Section, Category, Recommendation, Custom Dates */}
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 text-xs">
-            {/* Seksi Filter */}
+            {/* Section Filter */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-black text-slate-900">Seksi:</span>
+              <span className="text-[11px] font-black text-slate-900">Section:</span>
               <select
                 value={selectedSection}
                 onChange={(e) => setSelectedSection(e.target.value)}
                 className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-slate-950 text-xs font-bold outline-none cursor-pointer"
               >
                 {SECTION_OPTIONS.map(s => (
-                  <option key={s} value={s}>{s === 'ALL' ? 'Semua Seksi' : s}</option>
+                  <option key={s} value={s}>{s === 'ALL' ? 'Semua Section' : s}</option>
                 ))}
               </select>
             </div>
@@ -947,7 +1015,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                   >
                     <th className="py-3 px-4 w-12 text-center text-slate-950">#</th>
                     <th className="py-3 px-4 text-slate-950">Karyawan</th>
-                    <th className="py-3 px-4 text-slate-950">Seksi &amp; PT</th>
+                    <th className="py-3 px-4 text-slate-950">Section &amp; PT</th>
                     <th className="py-3 px-4 text-slate-950">Waktu Kunjungan</th>
                     <th className="py-3 px-4 text-slate-950">Alasan &amp; Keluhan</th>
                     <th className="py-3 px-4 text-slate-950">Rekomendasi Dokter</th>
@@ -991,7 +1059,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                           </div>
                         </td>
 
-                        {/* Seksi & PT */}
+                        {/* Section & PT */}
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${getSectionBadgeClass(visit.section)}`}>
@@ -1109,6 +1177,8 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* 5. Modal: Form Catat / Edit Kunjungan Klinik */}
@@ -1126,7 +1196,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                     {isEditing ? 'Edit Laporan Kunjungan Klinik' : 'Form Pelaporan Kunjungan Klinik Baru'}
                   </h3>
                   <p className="text-[11px] text-teal-100 font-medium">
-                    Autofill data NIK &amp; Seksi, pilih kalender &amp; detail alasan kunjungan
+                    Autofill data NIK &amp; Section, pilih kalender &amp; detail alasan kunjungan
                   </p>
                 </div>
               </div>
@@ -1217,7 +1287,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                 </div>
               </div>
 
-              {/* Autofilled Fields: NIK, Nama, Seksi, PT - Clean Light Card with Crisp Black Text */}
+              {/* Autofilled Fields: NIK, Nama, Section, PT - Clean Light Card with Crisp Black Text */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-100 border border-slate-200">
                 <div>
                   <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block mb-1">
@@ -1247,7 +1317,7 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                 </div>
                 <div>
                   <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block mb-1">
-                    Seksi / Section
+                    Section
                   </label>
                   <select
                     value={formSection}
