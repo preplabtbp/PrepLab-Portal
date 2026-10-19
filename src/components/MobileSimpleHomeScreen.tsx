@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   ClipboardList, ClipboardCheck, Camera, Users, Utensils, Shield, 
-  FileText, MessageSquare, Trophy, Sparkles, ChevronRight, 
+  FileText, FileSpreadsheet, MessageSquare, Trophy, Sparkles, ChevronRight, 
   CheckCircle2, Clock, AlertTriangle, ArrowRight, Settings2,
   ThermometerSun, Heart, RefreshCw, Smartphone, Eye, ShieldAlert,
   Wrench, PlusCircle, BarChart3, BookOpen, GraduationCap, Award, Search
@@ -308,6 +308,9 @@ export function MobileSimpleHomeScreen({
     !isDeveloper && !isSuperAdmin
   );
 
+  // Golongan I Check (Gol I & Crew Operasional)
+  const isGol1 = (profile?.gol === 'I' || profile?.gol === '1') || isCrew;
+
   const isCrewMaintenance = isCrew && (
     secLower.includes('maint') || 
     secLower.includes('pemeliharaan') || 
@@ -405,6 +408,72 @@ export function MobileSimpleHomeScreen({
               </div>
             )}
           </div>
+
+          {/* 📋 KHUSUS GOL I: FORM PELAPORAN IZIN KARYAWAN (GOOGLE FORM CARD) 📋 */}
+          {isGol1 && (
+            <div 
+              id="home-gol1-leave-form-card"
+              className="relative overflow-hidden rounded-3xl p-4 sm:p-5 border shadow-sm transition-all hover:shadow-md"
+              style={{
+                backgroundColor: 'var(--card-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)'
+              }}
+            >
+              {/* Top Google Forms Accent Strip */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#673ab7]" />
+
+              <div className="flex items-start justify-between gap-3 pt-1 mb-2.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-100 dark:bg-purple-950/70 text-[#673ab7] dark:text-purple-300 flex items-center justify-center font-bold shadow-2xs shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white font-display">
+                        Form Pelaporan Izin Karyawan
+                      </h3>
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/80 text-[#673ab7] dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                        GOL I
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                      Format Google Form &bull; Autosearch Pengawas (Gol II-V)
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-purple-50/70 dark:bg-purple-950/30 p-2.5 sm:p-3 rounded-2xl border border-purple-100 dark:border-purple-900/40 text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
+                <p>
+                  Berhalangan hadir atau sakit? Isi formulir resmi izin di sini agar otomatis tercatat di <strong>Rekapan Google Sheet PrepLab Cloud</strong> dan diketahui pengawas shift bertugas.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  id="btn-home-open-form-izin"
+                  onClick={() => onNav('pelaporan-izin')}
+                  className="flex-1 py-2.5 px-3.5 rounded-xl bg-[#673ab7] hover:bg-[#5e35b1] text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Isi Formulir Izin</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-home-open-rekap-izin"
+                  onClick={() => onNav('employee-leaves')}
+                  className="py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors flex items-center gap-1.5"
+                  title="Lihat Rekapan Izin"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <span className="hidden sm:inline">Rekapan</span>
+                </button>
+              </div>
+            </div>
+          )}
+
 
           {/* Quick Search Bar for Mobile View */}
           <div className="sm:hidden">

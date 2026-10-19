@@ -11,6 +11,7 @@ import { PageHeader } from './PageHeader';
 import { RosterExcelImportModal } from './RosterExcelImportModal';
 import { toast } from 'sonner';
 import { calculateRosterLeave } from '../lib/rosterLeave';
+import { RosterLeaveScheduleSheet } from './RosterLeaveScheduleSheet';
 
 function safeFormatDate(date: any, options: any) {
   if (!date) return '-';
@@ -58,6 +59,9 @@ export function RosterAdminScreen() {
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  
+  // View mode: 'matrix' (Matriks Roster Harian) or 'leave_schedule' (Jadwal Cuti Karyawan)
+  const [activeView, setActiveView] = useState<'matrix' | 'leave_schedule'>('matrix');
   
   // Date Range (default: Today to +14 days for optimal matrix view)
   const [startDate, setStartDate] = useState(() => {
@@ -487,15 +491,57 @@ export function RosterAdminScreen() {
         </div>
       )}
 
-      {/* Control Bar (Filter, Search, Date Range) */}
+      {/* Top View Selector Tabs: Matriks Roster Harian vs Jadwal Cuti Karyawan */}
       <div 
-        className="p-3 sm:p-4 rounded-xl sm:rounded-2xl border shadow-xs space-y-2.5 sm:space-y-3.5"
+        className="p-1.5 rounded-2xl border shadow-xs flex flex-wrap items-center gap-2"
         style={{
           backgroundColor: 'var(--card-bg, #FFFFFF)',
-          borderColor: 'var(--border-main, #E2E8F0)',
-          color: 'var(--text-main, #1E293B)'
+          borderColor: 'var(--border-main, #E2E8F0)'
         }}
       >
+        <button
+          type="button"
+          onClick={() => setActiveView('matrix')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            activeView === 'matrix'
+              ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>Matriks Roster Harian</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveView('leave_schedule')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            activeView === 'leave_schedule'
+              ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <PlaneTakeoff className="w-4 h-4" />
+          <span>Jadwal Cuti Karyawan</span>
+          <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-white/20 text-white font-black">
+            Baru
+          </span>
+        </button>
+      </div>
+
+      {activeView === 'leave_schedule' ? (
+        <RosterLeaveScheduleSheet roster={roster} />
+      ) : (
+        <>
+          {/* Control Bar (Filter, Search, Date Range) */}
+          <div 
+            className="p-3 sm:p-4 rounded-xl sm:rounded-2xl border shadow-xs space-y-2.5 sm:space-y-3.5"
+            style={{
+              backgroundColor: 'var(--card-bg, #FFFFFF)',
+              borderColor: 'var(--border-main, #E2E8F0)',
+              color: 'var(--text-main, #1E293B)'
+            }}
+          >
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
           {/* Section & Department Filter */}
           <div className="flex items-center gap-2 flex-1">
@@ -852,6 +898,8 @@ export function RosterAdminScreen() {
             </span>
           </div>
         </div>
+      )}
+        </>
       )}
 
       {/* Inline Cell Editor Popover Modal (For Admin & QA) */}
