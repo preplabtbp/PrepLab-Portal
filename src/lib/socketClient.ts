@@ -7,14 +7,9 @@ let activeLoungePayload: any = null;
 
 const getSocketServerUrl = (): string => {
   if (typeof window === 'undefined') return '';
-  const host = window.location.hostname;
-  // Use local server during development
-  if (host === 'localhost' || host === '127.0.0.1') {
-    return window.location.origin;
-  }
-  // Connect directly to Cloud Run backend in production
-  // (Firebase Hosting rewrites block WebSocket upgrades)
-  return 'https://preplab-portal-scgudezxqq-et.a.run.app';
+  // Always connect through current domain (e.g. https://portal.preplabtbp.com or localhost)
+  // to avoid corporate firewall / ESET Endpoint Security blocks on raw *.run.app URLs
+  return window.location.origin;
 };
 
 export function getGlobalSocket(): Socket {

@@ -42,7 +42,8 @@ export interface RecipientOrderRow {
 }
 
 export type BungkusColumnKey =
-  | 'pagi'
+  | 'pagiPrep'
+  | 'pagiLabMaint'
   | 'siangPrep'
   | 'siangLabMaint'
   | 'sorePrep'
@@ -61,12 +62,20 @@ interface BungkusColumnDef {
 
 const BUNGKUS_COLUMNS: BungkusColumnDef[] = [
   {
-    key: 'pagi',
+    key: 'pagiPrep',
     groupKey: 'PAGI',
     groupLabel: '🌅 PAGI',
-    subLabel: 'Prep, Lab & Maint',
+    subLabel: 'Preparasi',
     groupBg: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
-    shortLabel: 'Pagi',
+    shortLabel: 'Pagi Prep',
+  },
+  {
+    key: 'pagiLabMaint',
+    groupKey: 'PAGI',
+    groupLabel: '🌅 PAGI',
+    subLabel: 'Lab & Maint',
+    groupBg: 'linear-gradient(135deg, #047857 0%, #065f46 100%)',
+    shortLabel: 'Pagi Lab',
   },
   {
     key: 'siangPrep',
@@ -128,6 +137,11 @@ const isPrepSection = (r: RecipientOrderRow) => {
   return s.includes('prep') || s.includes('preparasi');
 };
 
+const isOffOrAbsent = (r: RecipientOrderRow) => {
+  const st = `${r.statusKerja || ''} ${r.status || ''} ${r.keteranganLapor || ''}`.toLowerCase();
+  return st.includes('cuti') || st.includes('izin') || st.includes('sakit') || st.includes('off') || st.includes('resigned');
+};
+
 interface RecipientItem {
   id: string;
   nama: string;
@@ -149,7 +163,8 @@ export function MealBungkusRecipientsTable({
   // Mode Edit
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [newRecipientInputs, setNewRecipientInputs] = useState<Record<BungkusColumnKey, string>>({
-    pagi: '',
+    pagiPrep: '',
+    pagiLabMaint: '',
     siangPrep: '',
     siangLabMaint: '',
     sorePrep: '',
@@ -163,14 +178,21 @@ export function MealBungkusRecipientsTable({
   const [noColWidth, setNoColWidth] = useState<number>(22);       // 22px ramping & proporsional
   const [fontSize, setFontSize] = useState<number>(11);          // Ukuran font teks nama
 
-  // Hitung awal data penerima dari order rows
+  // Hitung awal data penerima dari order rows (Hanya yang memesan porsi lapangan > 0 & aktif bertugas)
   const initialData = useMemo(() => {
-    const pagiList = rows
-      .filter(r => portions(r.pagiLapangan) > 0 || (r.catatan || '').toLowerCase().includes('pagi'))
+    // 1. PAGI
+    const pagiAll = rows.filter(r => !isOffOrAbsent(r) && portions(r.pagiLapangan) > 0);
+    const pagiPrepList = pagiAll
+      .filter(isPrepSection)
       .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
-      .map((r, i) => ({ id: `pagi-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
+      .map((r, i) => ({ id: `pagiPrep-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
+    const pagiLabMaintList = pagiAll
+      .filter(r => !isPrepSection(r))
+      .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
+      .map((r, i) => ({ id: `pagiLab-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
 
-    const siangAll = rows.filter(r => portions(r.siangLapangan) > 0);
+    // 2. SIANG
+    const siangAll = rows.filter(r => !isOffOrAbsent(r) && portions(r.siangLapangan) > 0);
     const siangPrepList = siangAll
       .filter(isPrepSection)
       .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
@@ -180,7 +202,8 @@ export function MealBungkusRecipientsTable({
       .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
       .map((r, i) => ({ id: `siangLab-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
 
-    const soreAll = rows.filter(r => portions(r.soreLapangan) > 0 || (r.catatan || '').toLowerCase().includes('sore'));
+    // 3. SORE
+    const soreAll = rows.filter(r => !isOffOrAbsent(r) && portions(r.soreLapangan) > 0);
     const sorePrepList = soreAll
       .filter(isPrepSection)
       .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
@@ -190,11 +213,8 @@ export function MealBungkusRecipientsTable({
       .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
       .map((r, i) => ({ id: `soreLab-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
 
-    const malamAll = rows.filter(
-      r => portions(r.malamLapangan) > 0 ||
-        String(r.shiftKerja || '').toUpperCase() === 'MALAM' ||
-        String(r.statusKerja || '').toUpperCase() === 'MALAM'
-    );
+    // 4. MALAM
+    const malamAll = rows.filter(r => !isOffOrAbsent(r) && portions(r.malamLapangan) > 0);
     const malamPrepList = malamAll
       .filter(isPrepSection)
       .sort((a, b) => (a.sortNo ?? 9999) - (b.sortNo ?? 9999) || a.nama.localeCompare(b.nama))
@@ -205,7 +225,8 @@ export function MealBungkusRecipientsTable({
       .map((r, i) => ({ id: `malamLab-${r.nik || r.nama}-${i}`, nama: r.nama, nik: r.nik, section: r.section || '' }));
 
     const res: Record<BungkusColumnKey, RecipientItem[]> = {
-      pagi: pagiList,
+      pagiPrep: pagiPrepList,
+      pagiLabMaint: pagiLabMaintList,
       siangPrep: siangPrepList,
       siangLabMaint: siangLabMaintList,
       sorePrep: sorePrepList,
@@ -221,7 +242,8 @@ export function MealBungkusRecipientsTable({
 
   // State kolom yang disembunyikan (Hide)
   const [hiddenCols, setHiddenCols] = useState<Record<BungkusColumnKey, boolean>>({
-    pagi: false,
+    pagiPrep: false,
+    pagiLabMaint: false,
     siangPrep: false,
     siangLabMaint: false,
     sorePrep: false,
@@ -234,7 +256,8 @@ export function MealBungkusRecipientsTable({
   useEffect(() => {
     setRecipients(initialData);
     setHiddenCols({
-      pagi: initialData.pagi.length === 0,
+      pagiPrep: initialData.pagiPrep.length === 0,
+      pagiLabMaint: initialData.pagiLabMaint.length === 0,
       siangPrep: initialData.siangPrep.length === 0,
       siangLabMaint: initialData.siangLabMaint.length === 0,
       sorePrep: initialData.sorePrep.length === 0,
@@ -264,7 +287,8 @@ export function MealBungkusRecipientsTable({
 
   const showAllColumns = () => {
     setHiddenCols({
-      pagi: false,
+      pagiPrep: false,
+      pagiLabMaint: false,
       siangPrep: false,
       siangLabMaint: false,
       sorePrep: false,
@@ -277,7 +301,8 @@ export function MealBungkusRecipientsTable({
 
   const autoHideEmptyColumns = () => {
     setHiddenCols({
-      pagi: recipients.pagi.length === 0,
+      pagiPrep: recipients.pagiPrep.length === 0,
+      pagiLabMaint: recipients.pagiLabMaint.length === 0,
       siangPrep: recipients.siangPrep.length === 0,
       siangLabMaint: recipients.siangLabMaint.length === 0,
       sorePrep: recipients.sorePrep.length === 0,
@@ -351,7 +376,7 @@ export function MealBungkusRecipientsTable({
 
   // Header groups dinamis
   const GROUPS: Array<{ key: 'PAGI' | 'SIANG' | 'SORE' | 'MALAM'; label: string; bg: string }> = [
-    { key: 'PAGI', label: `🌅 PAGI (${recipients.pagi.length})`, bg: 'linear-gradient(135deg, #047857 0%, #065f46 100%)' },
+    { key: 'PAGI', label: `🌅 PAGI (${recipients.pagiPrep.length + recipients.pagiLabMaint.length})`, bg: 'linear-gradient(135deg, #047857 0%, #065f46 100%)' },
     { key: 'SIANG', label: `☀️ SIANG (${recipients.siangPrep.length + recipients.siangLabMaint.length})`, bg: 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)' },
     { key: 'SORE', label: `🌇 SORE (${recipients.sorePrep.length + recipients.soreLabMaint.length})`, bg: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)' },
     { key: 'MALAM', label: `🌙 MALAM (${recipients.malamPrep.length + recipients.malamLabMaint.length})`, bg: 'linear-gradient(135deg, #4338ca 0%, #3730a3 100%)' },
@@ -836,7 +861,7 @@ export function MealBungkusRecipientsTable({
               {/* Mini Badges Per Waktu Makan */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
                 <div style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', padding: '4px 10px', fontSize: '10.5px', fontWeight: 800, color: '#047857' }}>
-                  PAGI: {recipients.pagi.length}
+                  PAGI: {recipients.pagiPrep.length + recipients.pagiLabMaint.length}
                 </div>
                 <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '4px 10px', fontSize: '10.5px', fontWeight: 800, color: '#1d4ed8' }}>
                   SIANG: {recipients.siangPrep.length + recipients.siangLabMaint.length}
