@@ -3,7 +3,7 @@ import {
   AlertTriangle, AlertCircle, CheckCircle2, ChevronDown, 
   Layers, Sliders, Activity, Info, ShieldAlert, Check, 
   X, Sparkles, ExternalLink, Pin, User, Search, Edit3, 
-  Trash2, MessageSquare, Maximize2, Lock 
+  Trash2, MessageSquare, Maximize2, Lock, Calendar 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -294,6 +294,28 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
   const isLatestNeedRecalibration = lastActivePoint && lastPointSigma > 3.0;
   const isLatestWarning = lastActivePoint && lastPointSigma > 2.0 && lastPointSigma <= 3.0;
 
+  const formattedLastUpdate = useMemo(() => {
+    if (!lastActivePoint) return null;
+    const str = lastActivePoint.analyzedAt || lastActivePoint.date;
+    if (!str) return null;
+    try {
+      const cleanStr = str.replace('T', ' ');
+      const [datePart, timePart] = cleanStr.split(' ');
+      const dateSegments = datePart.split('-');
+      if (dateSegments.length === 3) {
+        const [y, m, d] = dateSegments;
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const mIdx = parseInt(m, 10) - 1;
+        const mStr = monthNames[mIdx] || m;
+        const timeClean = timePart ? timePart.slice(0, 5) : '';
+        return timeClean ? `${d} ${mStr} ${y} ${timeClean}` : `${d} ${mStr} ${y}`;
+      }
+      return str;
+    } catch {
+      return str;
+    }
+  }, [lastActivePoint]);
+
   // Recalculated dynamic KPI statistics based on active non-isolated points
   const displayedStats = useMemo(() => {
     if (isolatedPointsInCard.length === 0 || activePoints.length === 0) {
@@ -393,25 +415,18 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
             )}
           </div>
 
-          {/* Latest Data Point Status: In-Control vs Need Re-calibration */}
+          {/* Latest Data Update Indicator */}
           {activePoints.length === 0 ? (
             <span className="px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 border border-stone-200 dark:border-stone-700">
               No Data
             </span>
-          ) : isLatestNeedRecalibration ? (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEE2E2] text-[#991B1B] dark:bg-rose-950/70 dark:text-rose-200 border border-[#FCA5A5] dark:border-rose-800 flex items-center gap-1 shadow-2xs">
-              <AlertCircle className="w-3.5 h-3.5 text-[#DC2626]" />
-              Need Re-cal
-            </span>
-          ) : isLatestWarning ? (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEF3C7] text-[#92400E] dark:bg-amber-950/70 dark:text-amber-200 border border-[#FCD34D] dark:border-amber-800 flex items-center gap-1 shadow-2xs">
-              <AlertTriangle className="w-3.5 h-3.5 text-[#D97706]" />
-              Warning (2-3σ)
-            </span>
           ) : (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#DCFCE7] text-[#166534] dark:bg-emerald-950/70 dark:text-emerald-200 border border-[#86EFAC] dark:border-emerald-800 flex items-center gap-1 shadow-2xs">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
-              In-Control
+            <span 
+              className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800/90 dark:text-slate-200 border border-slate-300 dark:border-slate-700 flex items-center gap-1.5 shadow-2xs"
+              title={`Last Data Update: ${lastActivePoint?.analyzedAt || lastActivePoint?.date || '-'}`}
+            >
+              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Update: <span className="font-mono text-slate-900 dark:text-white font-black">{formattedLastUpdate}</span></span>
             </span>
           )}
 
@@ -709,24 +724,34 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
                   setSelectedPoint(isSelected ? null : p);
                 }}
               >
-                {/* Visual Pin / Flag indicator for points with Annotation */}
+                {/* Visual Exclamation Bubble Indicator for points with Annotation */}
                 {hasAnnotation && (
                   <g className="pointer-events-none">
+                    <polygon
+                      points={`${cx - 2.5},${cy - 7.5} ${cx + 2.5},${cy - 7.5} ${cx},${cy - 3}`}
+                      fill="#F59E0B"
+                    />
+                    <circle
+                      cx={cx}
+                      cy={cy - 12}
+                      r={6}
+                      fill="#F59E0B"
+                      stroke="#FFFFFF"
+                      strokeWidth={1.2}
+                    />
+                    <rect
+                      x={cx - 0.75}
+                      y={cy - 14.8}
+                      width={1.5}
+                      height={3.2}
+                      rx={0.75}
+                      fill="#FFFFFF"
+                    />
                     <circle
                       cx={cx}
                       cy={cy - 10}
-                      r={3}
-                      fill="#F59E0B"
-                      stroke="#FFFFFF"
-                      strokeWidth={1}
-                    />
-                    <line
-                      x1={cx}
-                      y1={cy - 7}
-                      x2={cx}
-                      y2={cy - 3}
-                      stroke="#F59E0B"
-                      strokeWidth={1.5}
+                      r={0.85}
+                      fill="#FFFFFF"
                     />
                   </g>
                 )}

@@ -823,11 +823,24 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   const [latestBatchStandards, setLatestBatchStandards] = useState<string[]>([]);
   const [showHistoricalStandards, setShowHistoricalStandards] = useState(false);
 
-  // Map of standardCode -> count for quick lookup
+  // Map of standardCode -> count for quick lookup with aliases
   const standardCountMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const item of availableStandardsData) {
-      map[item.standardCode] = item.count;
+      const c = item.standardCode;
+      const cnt = item.count;
+      map[c] = (map[c] || 0) + cnt;
+      const clean = c.toUpperCase().replace(/[\s_-]+/g, '');
+      const space = c.replace(/_/g, ' ');
+      const under = c.replace(/\s+/g, '_');
+      map[clean] = (map[clean] || 0) + cnt;
+      map[space] = (map[space] || 0) + cnt;
+      map[under] = (map[under] || 0) + cnt;
+      if (clean === 'BRK03' || clean === 'BRK') {
+        map['BRK'] = (map['BRK'] || 0) + cnt;
+        map['BRK03'] = (map['BRK03'] || 0) + cnt;
+        map['BRK 03'] = (map['BRK 03'] || 0) + cnt;
+      }
     }
     return map;
   }, [availableStandardsData]);
@@ -1102,9 +1115,18 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       matrixType = isSaprolite ? 'SAPROLITE' : 'LIMONITE';
     }
 
+    const isCodeMatch = (code1: string, code2: string) => {
+      if (code1 === code2) return true;
+      const c1 = code1.toUpperCase().replace(/[\s_-]+/g, '');
+      const c2 = code2.toUpperCase().replace(/[\s_-]+/g, '');
+      if (c1 === c2) return true;
+      if ((c1 === 'BRK' || c1 === 'BRK03') && (c2 === 'BRK' || c2 === 'BRK03')) return true;
+      return false;
+    };
+
     // Identifikasi standar historis yang memiliki data pengukuran tapi tidak ada di set batch terakhir
     const historicalCodes = availableStandardsData
-      .filter(s => s.count > 0 && !candidateCodes.includes(s.standardCode) && !candidateCodes.includes(s.standardCode.replace(' ', '_')))
+      .filter(s => s.count > 0 && !candidateCodes.some(c => isCodeMatch(c, s.standardCode)))
       .map(s => s.standardCode);
 
     if (showHistoricalStandards && historicalCodes.length > 0) {
@@ -1115,11 +1137,12 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       const existing = standards.find(s => s.code === code || s.code === code.replace('_', ' ') || s.name === code);
       const isHist = historicalCodes.includes(code);
       const baseDisp = existing?.name || STANDARD_DISPLAY_NAMES[code] || formatStandardDisplayName(code);
+      const clean = code.toUpperCase().replace(/[\s_-]+/g, '');
       return {
         code,
         name: isHist ? `${baseDisp} (Arsip/Historis)` : baseDisp,
         matrix: matrixType,
-        count: standardCountMap[code] || standardCountMap[code.replace('_', ' ')] || 0,
+        count: standardCountMap[code] || standardCountMap[clean] || standardCountMap[code.replace('_', ' ')] || 0,
         isHistorical: isHist,
       };
     });
@@ -1140,8 +1163,17 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
     }
 
+    const isCodeMatch = (code1: string, code2: string) => {
+      if (code1 === code2) return true;
+      const c1 = code1.toUpperCase().replace(/[\s_-]+/g, '');
+      const c2 = code2.toUpperCase().replace(/[\s_-]+/g, '');
+      if (c1 === c2) return true;
+      if ((c1 === 'BRK' || c1 === 'BRK03') && (c2 === 'BRK' || c2 === 'BRK03')) return true;
+      return false;
+    };
+
     return availableStandardsData.filter(s => 
-      s.count > 0 && !candidateCodes.includes(s.standardCode) && !candidateCodes.includes(s.standardCode.replace(' ', '_'))
+      s.count > 0 && !candidateCodes.some(c => isCodeMatch(c, s.standardCode))
     ).length;
   }, [availableStandardsData, latestBatchStandards, selectedMethod, selectedMatrix, selectedInstruments]);
 
@@ -1152,15 +1184,22 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
 
     const listWithData = visibleStandards.filter(std => {
       const stdCode = std.code;
-      const stdData = currentGridData[stdCode] || currentGridData[stdCode.replace('_', ' ')] || currentGridData[std.name] || {};
+      const clean = stdCode.toUpperCase().replace(/[\s_-]+/g, '');
+      const stdData = currentGridData[stdCode] 
+        || currentGridData[clean] 
+        || currentGridData[stdCode.replace('_', ' ')] 
+        || currentGridData[stdCode.replace(' ', '_')] 
+        || currentGridData[std.name] 
+        || (clean === 'BRK03' || clean === 'BRK' ? (currentGridData['BRK03'] || currentGridData['BRK 03'] || currentGridData['BRK']) : null)
+        || {};
       const hasPoints = selectedInstruments.some(instCode => (stdData[instCode]?.points?.length || 0) > 0);
-      const hasCount = (std.count || 0) > 0;
+      const hasCount = (std.count || 0) > 0 || (standardCountMap[stdCode] || 0) > 0 || (standardCountMap[clean] || 0) > 0;
       return hasPoints || hasCount;
     });
 
     if (loading && listWithData.length === 0) return [];
     return listWithData.length > 0 ? listWithData : visibleStandards;
-  }, [visibleStandards, currentGridData, selectedInstruments, showHistoricalStandards, loading]);
+  }, [visibleStandards, currentGridData, selectedInstruments, showHistoricalStandards, loading, standardCountMap]);
 
   // Calculate Grid Columns Class for responsive layout
   const getGridColsClass = () => {
@@ -1587,8 +1626,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         ) : (
           renderedStandards.map(std => {
             const stdCode = std.code;
-            const stdData = currentGridData[stdCode] || currentGridData[stdCode.replace('_', ' ')] || currentGridData[std.name] || {};
-            const stdCount = std.count || standardCountMap[stdCode] || standardCountMap[stdCode.replace('_', ' ')] || 0;
+            const cleanCode = stdCode.toUpperCase().replace(/[\s_-]+/g, '');
+            const stdData = currentGridData[stdCode] 
+              || currentGridData[cleanCode] 
+              || currentGridData[stdCode.replace('_', ' ')] 
+              || currentGridData[stdCode.replace(' ', '_')] 
+              || currentGridData[std.name] 
+              || (cleanCode === 'BRK03' || cleanCode === 'BRK' ? (currentGridData['BRK03'] || currentGridData['BRK 03'] || currentGridData['BRK']) : null)
+              || {};
+            const stdCount = std.count || standardCountMap[stdCode] || standardCountMap[cleanCode] || standardCountMap[stdCode.replace('_', ' ')] || 0;
 
             return (
               <div 

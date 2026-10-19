@@ -949,6 +949,8 @@ xrfRouter.post("/verifications", async (req, res) => {
     }));
     await db.insert(xrfVerificationItems).values(itemsToInsert);
 
+    invalidateXrfChartCache();
+
     return res.json({
       success: true,
       message: "Data verifikasi harian berhasil disimpan.",
@@ -1078,6 +1080,7 @@ xrfRouter.post("/verifications/bulk-reassign", async (req, res) => {
 // 7c. GET Available Standards with Data Count
 xrfRouter.get("/available-standards", async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     await ensureXrfTables();
     const { instrumentCode, startDate, endDate } = req.query;
 
@@ -1118,6 +1121,7 @@ xrfRouter.get("/available-standards", async (req, res) => {
 // 7d. GET Latest Verification Batch Standards (Baseline Aktif untuk Control Chart & Form Input Dinamis)
 xrfRouter.get("/latest-batch-standards", async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     await ensureXrfTables();
     const { instrumentCode, startDate, endDate } = req.query;
     if (!instrumentCode) {
@@ -1239,6 +1243,7 @@ export function invalidateXrfChartCache() {
 // High-performance with in-memory cache and precomputed all-elements data
 xrfRouter.get("/qc-chart-data", async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     if (!xrfTablesEnsured) {
       await ensureXrfTables();
     }
@@ -1285,12 +1290,28 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
       endDate ? lte(xrfVerifications.verificationDate, endDate) : sql`1=1`,
     ];
     if (standardsParam.length > 0) {
-      const expandedStandards = Array.from(new Set([
-        ...standardsParam,
-        ...standardsParam.map(s => s.replace('_', ' ')),
-        ...standardsParam.map(s => s.replace(' ', '_')),
-      ]));
-      whereConditions.push(sql`${xrfVerificationItems.standardCode} IN (${sql.join(expandedStandards.map(s => sql`${s}`), sql`, `)})`);
+      const expandedStandards = new Set<string>();
+      for (const s of standardsParam) {
+        if (!s) continue;
+        const trimmed = s.trim();
+        const compact = trimmed.toUpperCase().replace(/[\s_-]+/g, '');
+        const withSpace = trimmed.replace(/_/g, ' ');
+        const withUnderscore = trimmed.replace(/\s+/g, '_');
+        expandedStandards.add(trimmed);
+        expandedStandards.add(compact);
+        expandedStandards.add(withSpace);
+        expandedStandards.add(withUnderscore);
+        expandedStandards.add(trimmed.toUpperCase());
+        expandedStandards.add(withSpace.toUpperCase());
+        expandedStandards.add(withUnderscore.toUpperCase());
+        if (compact === 'BRK03' || compact === 'BRK') {
+          expandedStandards.add('BRK');
+          expandedStandards.add('BRK03');
+          expandedStandards.add('BRK 03');
+          expandedStandards.add('BRK_03');
+        }
+      }
+      whereConditions.push(sql`${xrfVerificationItems.standardCode} IN (${sql.join(Array.from(expandedStandards).map(s => sql`${s}`), sql`, `)})`);
     }
 
     const rawData = await db.select({
@@ -1345,23 +1366,31 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
     const groupedData = new Map<string, typeof rawData>();
     for (const d of rawData) {
       const stdCode = (d.standardCode || '').trim();
-      const normStd = stdCode.replace(' ', '_');
-      const key1 = `${normStd}::${d.instrumentCode}`;
-      let list1 = groupedData.get(key1);
-      if (!list1) {
-        list1 = [];
-        groupedData.set(key1, list1);
-      }
-      list1.push(d);
+      const normStd = stdCode.replace(/\s+/g, '_');
+      const cleanStd = stdCode.toUpperCase().replace(/[\s_-]+/g, '');
+      const spaceStd = stdCode.replace(/_/g, ' ');
 
-      const key2 = `${stdCode}::${d.instrumentCode}`;
-      if (key2 !== key1) {
-        let list2 = groupedData.get(key2);
-        if (!list2) {
-          list2 = [];
-          groupedData.set(key2, list2);
+      const keys = new Set([
+        `${stdCode}::${d.instrumentCode}`,
+        `${normStd}::${d.instrumentCode}`,
+        `${cleanStd}::${d.instrumentCode}`,
+        `${spaceStd}::${d.instrumentCode}`,
+      ]);
+
+      if (cleanStd === 'BRK03' || cleanStd === 'BRK') {
+        keys.add(`BRK::${d.instrumentCode}`);
+        keys.add(`BRK03::${d.instrumentCode}`);
+        keys.add(`BRK 03::${d.instrumentCode}`);
+        keys.add(`BRK_03::${d.instrumentCode}`);
+      }
+
+      for (const k of keys) {
+        let list = groupedData.get(k);
+        if (!list) {
+          list = [];
+          groupedData.set(k, list);
         }
-        list2.push(d);
+        list.push(d);
       }
     }
 
@@ -1374,15 +1403,23 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
 
       for (const std of standardsParam) {
         currentGrid[std] = {};
+        const cleanStd = std.toUpperCase().replace(/[\s_-]+/g, '');
+        const normStd = std.trim().replace(/\s+/g, '_');
+        const spaceStd = std.trim().replace(/_/g, ' ');
         const isBlank = std.toUpperCase().includes('BLANK');
         const defaultNominal = isBlank ? 0.000 : 2.0;
         const defaultSigma = isBlank ? 0.010 : 0.08;
-        const ref = refMap[std]?.[elKey] || refMap[std.replace('_', ' ')]?.[elKey] || refMap[std.replace(' ', '_')]?.[elKey] || {
-          nominalValue: defaultNominal,
-          stdevFixed: defaultSigma,
-          warningSigma: 2.0,
-          actionSigma: 3.0,
-        };
+        const ref = refMap[std]?.[elKey] 
+          || refMap[cleanStd]?.[elKey] 
+          || refMap[spaceStd]?.[elKey] 
+          || refMap[normStd]?.[elKey] 
+          || (cleanStd === 'BRK03' || cleanStd === 'BRK' ? (refMap['BRK 03']?.[elKey] || refMap['BRK03']?.[elKey] || refMap['BRK']?.[elKey]) : null)
+          || {
+            nominalValue: defaultNominal,
+            stdevFixed: defaultSigma,
+            warningSigma: 2.0,
+            actionSigma: 3.0,
+          };
 
         const nominal = Number(ref.nominalValue !== undefined && ref.nominalValue !== null ? ref.nominalValue : defaultNominal);
 
@@ -1406,8 +1443,11 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
             ? Number((nominal - 3 * sigma).toFixed(3))
             : (ref.lowerAction !== null && ref.lowerAction !== undefined ? Number(ref.lowerAction) : Number((nominal - 3 * sigma).toFixed(3)));
 
-          const normStd = std.trim().replace(' ', '_');
-          const matchingRows = groupedData.get(`${normStd}::${inst}`) || groupedData.get(`${std}::${inst}`) || [];
+          const matchingRows = groupedData.get(`${cleanStd}::${inst}`)
+            || groupedData.get(`${std}::${inst}`)
+            || groupedData.get(`${normStd}::${inst}`)
+            || groupedData.get(`${spaceStd}::${inst}`)
+            || [];
 
           const pointsForGrid = matchingRows.map((d, idx) => {
             const val = getter(d);
@@ -1466,6 +1506,16 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
             },
             points: pointsForGrid,
           };
+        }
+
+        // Aliases so whether frontend looks up by code, cleanCode, normCode, or spaceCode, data is resolved
+        if (!currentGrid[cleanStd]) currentGrid[cleanStd] = currentGrid[std];
+        if (!currentGrid[normStd]) currentGrid[normStd] = currentGrid[std];
+        if (!currentGrid[spaceStd]) currentGrid[spaceStd] = currentGrid[std];
+        if (cleanStd === 'BRK03' || cleanStd === 'BRK') {
+          currentGrid['BRK'] = currentGrid[std];
+          currentGrid['BRK03'] = currentGrid[std];
+          currentGrid['BRK 03'] = currentGrid[std];
         }
       }
 

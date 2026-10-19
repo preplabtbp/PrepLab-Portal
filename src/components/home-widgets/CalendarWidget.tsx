@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, 
-  RotateCcw, Edit3, Check, Trash2, BookmarkCheck, Sparkles, ArrowRight 
+  RotateCcw, Edit3, Check, Trash2, BookmarkCheck, Sparkles, ArrowRight,
+  Lock, Users, Plus, Clock
 } from 'lucide-react';
 import { WidgetSize } from './types';
 import { getGlobalSocket } from '../../lib/socketClient';
@@ -10,13 +11,20 @@ import { getGlobalSocket } from '../../lib/socketClient';
 interface CalendarWidgetProps {
   size: WidgetSize;
   isEditMode?: boolean;
+  userNik?: string;
+  userName?: string;
 }
 
-export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
+export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ 
+  size,
+  userNik,
+  userName
+}) => {
   const navigate = useNavigate();
   const today = new Date();
   const [currentDate, setCurrentDate] = useState<Date>(today);
   const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const [agendas, setAgendas] = useState<any[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>(() => {
     try {
       const saved = localStorage.getItem('preplab_calendar_notes');
@@ -27,6 +35,45 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
   });
   const [memoInput, setMemoInput] = useState<string>('');
   const [isEditingNote, setIsEditingNote] = useState<boolean>(false);
+
+  // Fetch real agendas from /api/agenda synchronized with user's NIK
+  const fetchAgendas = async () => {
+    try {
+      const res = await fetch(`/api/agenda?nik=${encodeURIComponent(userNik || '')}`);
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json.status === 'success' && Array.isArray(json.data)) {
+        const cleanUserNik = (userNik || '').trim().toUpperCase();
+        // Strict privacy filter: private agendas only visible to their creator
+        const safeData = json.data.filter((e: any) => {
+          const kat = String(e.kategori || '').toLowerCase();
+          const isPrivate = kat === 'private' || kat === 'personal' || kat === 'pribadi';
+          if (isPrivate) {
+            const creator = String(e.creatorNik || '').trim().toUpperCase();
+            const pic = String(e.pic || '').trim().toUpperCase();
+            return (cleanUserNik && creator === cleanUserNik) || (cleanUserNik && pic === cleanUserNik);
+          }
+          return true;
+        });
+        setAgendas(safeData);
+      }
+    } catch (err) {
+      console.warn('Could not fetch agendas for widget:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAgendas();
+
+    const handleAgendaUpdated = () => fetchAgendas();
+    window.addEventListener('agenda:updated', handleAgendaUpdated);
+    window.addEventListener('focus', handleAgendaUpdated);
+
+    return () => {
+      window.removeEventListener('agenda:updated', handleAgendaUpdated);
+      window.removeEventListener('focus', handleAgendaUpdated);
+    };
+  }, [userNik]);
 
   // Sync calendar notes across devices & listen to socket events
   useEffect(() => {
@@ -78,7 +125,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  // Helper date key for notes (YYYY-MM-DD)
+  // Helper date key for notes & agendas (YYYY-MM-DD)
   const getDateKey = (d: Date) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -172,6 +219,21 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
     return !!notes[k];
   };
 
+  const getAgendasForDay = (day: number) => {
+    const k = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return agendas.filter((e) => {
+      if (!e.startDate) return false;
+      const startStr = new Date(e.startDate).toLocaleDateString('en-CA');
+      return startStr === k;
+    });
+  };
+
+  const selectedDayAgendas = agendas.filter((e) => {
+    if (!e.startDate) return false;
+    const startStr = new Date(e.startDate).toLocaleDateString('en-CA');
+    return startStr === selectedKey;
+  });
+
   const selectedDayFormatted = `${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
 
   return (
@@ -246,6 +308,16 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
               const todayFlag = isToday(d);
               const selectedFlag = isSelected(d);
               const noteFlag = hasNote(d);
+              const dayAgendas = getAgendasForDay(d);
+              const hasAgenda = dayAgendas.length > 0;
+              const hasPrivate = dayAgendas.some((e) => {
+                const k = String(e.kategori || '').toLowerCase();
+                return k === 'private' || k === 'personal' || k === 'pribadi';
+              });
+              const hasTeam = dayAgendas.some((e) => {
+                const k = String(e.kategori || '').toLowerCase();
+                return k !== 'private' && k !== 'personal' && k !== 'pribadi';
+              });
 
               return (
                 <button
@@ -261,166 +333,252 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
                   }`}
                 >
                   <span>{d}</span>
-                  {/* Dot indicator for note */}
-                  {noteFlag && (
-                    <span 
-                      className={`absolute bottom-0.5 w-1 h-1 rounded-full ${
-                        selectedFlag ? 'bg-amber-300' : 'bg-indigo-500'
-                      }`} 
-                    />
-                  )}
+                  {/* Dot indicators for Agendas & Notes */}
+                  <div className="absolute bottom-0.5 flex items-center justify-center gap-0.5">
+                    {hasPrivate && (
+                      <span 
+                        className={`w-1 h-1 rounded-full ${selectedFlag ? 'bg-amber-300' : 'bg-emerald-500'}`}
+                        title="Ada agenda pribadi" 
+                      />
+                    )}
+                    {hasTeam && (
+                      <span 
+                        className={`w-1 h-1 rounded-full ${selectedFlag ? 'bg-white' : 'bg-indigo-600'}`}
+                        title="Ada agenda tim / umum" 
+                      />
+                    )}
+                    {noteFlag && !hasAgenda && (
+                      <span 
+                        className={`w-1 h-1 rounded-full ${selectedFlag ? 'bg-amber-300' : 'bg-amber-500'}`} 
+                        title="Ada catatan memo"
+                      />
+                    )}
+                  </div>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Side Memo Panel (Always visible in 2x, or bottom preview in 1x) */}
+        {/* Side Memo & Agenda Panel (Always visible in 2x, or bottom preview in 1x) */}
         {size === '2x' ? (
           <div className="sm:col-span-5 h-full flex flex-col justify-between p-2.5 rounded-2xl bg-slate-100/90 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 text-xs">
             <div className="space-y-2">
-              {/* Tombol Menu Agenda Personal */}
+              {/* Tombol Header Menu Agenda Personal */}
               <button
                 type="button"
                 onClick={() => navigate('/agenda?tab=Private')}
-                className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-xs transition-all text-left cursor-pointer group active:scale-[0.98]"
-                title="Buka Menu Agenda Personal (Jadwal & kegiatan)"
+                className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-xs transition-all text-left cursor-pointer group active:scale-[0.98]"
+                title="Buka Modul Agenda Personal"
               >
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                   <CalendarIcon className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-xs text-[var(--text-main)] group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center justify-between">
-                    <span>Agenda Personal</span>
+                    <span>Modul Agenda</span>
                     <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600 dark:text-indigo-400" />
                   </h4>
                   <p className="text-[10px] text-[var(--text-muted)] truncate">
-                    Jadwal &amp; kegiatan
+                    Jadwal, rapat &amp; kegiatan pribadi
                   </p>
                 </div>
               </button>
 
               <div className="pt-0.5">
-                <div className="flex items-center justify-between mb-1.5">
+                {/* Tanggal & Tombol + Agenda Cepat */}
+                <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200/80 dark:border-slate-700/60">
                   <span className="font-extrabold text-[11px] text-black dark:text-black flex items-center gap-1">
                     <BookmarkCheck className="w-3.5 h-3.5 text-indigo-600" />
                     <span>{selectedDayFormatted}</span>
                   </span>
-                  {notes[selectedKey] && !isEditingNote && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteNote}
-                      className="text-rose-600 hover:text-rose-700 p-0.5 rounded cursor-pointer"
-                      title="Hapus Memo"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/agenda?tab=Private&date=${selectedKey}&openNew=1`)}
+                    className="px-2 py-0.5 rounded text-[10px] font-black bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
+                    title="Tambah agenda baru di tanggal ini"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>+ Agenda</span>
+                  </button>
+                </div>
+
+                {/* List Agenda Tanggal Terpilih */}
+                <div className="space-y-1.5 max-h-[115px] overflow-y-auto custom-scrollbar pr-0.5 mb-2">
+                  {selectedDayAgendas.length > 0 ? (
+                    selectedDayAgendas.map((evt, idx) => {
+                      const isPriv = ['private', 'personal', 'pribadi'].includes(String(evt.kategori || '').toLowerCase());
+                      const startTimeStr = evt.startDate ? new Date(evt.startDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+                      const endTimeStr = evt.endDate ? new Date(evt.endDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+
+                      return (
+                        <div
+                          key={evt.id || idx}
+                          onClick={() => navigate(`/agenda?tab=${isPriv ? 'Private' : 'All'}&initialEventId=${evt.id}`)}
+                          className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 cursor-pointer transition-all text-[10.5px] shadow-2xs group"
+                          title="Klik untuk membuka detail agenda"
+                        >
+                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <span className="font-bold text-[var(--text-main)] group-hover:text-indigo-600 truncate flex-1">
+                              {evt.title}
+                            </span>
+                            <span className={`text-[8.5px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-0.5 shrink-0 ${
+                              isPriv 
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                : 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                            }`}>
+                              {isPriv ? <Lock className="w-2 h-2" /> : <Users className="w-2 h-2" />}
+                              {isPriv ? 'Pribadi' : 'Tim'}
+                            </span>
+                          </div>
+                          <div className="text-[9.5px] text-[var(--text-muted)] flex items-center gap-1 font-medium">
+                            <Clock className="w-2.5 h-2.5" />
+                            <span>{startTimeStr ? `${startTimeStr} - ${endTimeStr || 'Selesai'}` : 'Sepanjang Hari'}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="py-2 px-1 text-center text-[10px] text-slate-500 italic">
+                      Belum ada agenda kegiatan di tanggal ini
+                    </div>
                   )}
                 </div>
 
-                {isEditingNote ? (
-                  <div className="space-y-1.5">
-                    <textarea
-                      value={memoInput}
-                      onChange={(e) => setMemoInput(e.target.value)}
-                      placeholder="Tulis agenda / catatan tanggal ini..."
-                      rows={2}
-                      className="w-full text-xs p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 resize-none text-black dark:text-white placeholder:text-slate-500 font-medium"
-                      autoFocus
-                    />
-                    <div className="flex items-center justify-end gap-1">
+                {/* Bagian Catatan Memo Lokal */}
+                <div className="pt-1.5 border-t border-slate-200/80 dark:border-slate-700/60">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                      Memo Catatan:
+                    </span>
+                    {notes[selectedKey] && !isEditingNote && (
                       <button
                         type="button"
-                        onClick={() => setIsEditingNote(false)}
-                        className="px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 hover:bg-slate-200 cursor-pointer"
+                        onClick={handleDeleteNote}
+                        className="text-rose-600 hover:text-rose-700 p-0.5 rounded cursor-pointer"
+                        title="Hapus Memo"
                       >
-                        Batal
+                        <Trash2 className="w-3 h-3" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={handleSaveNote}
-                        className="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-600 text-white flex items-center gap-1 shadow-xs cursor-pointer"
-                      >
-                        <Check className="w-2.5 h-2.5" />
-                        <span>Simpan</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => setIsEditingNote(true)}
-                    className="min-h-[46px] p-2 rounded-lg bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 cursor-pointer hover:border-indigo-500 transition-all flex flex-col justify-center"
-                  >
-                    {notes[selectedKey] ? (
-                      <p className="text-[11px] text-black dark:text-slate-200 font-semibold line-clamp-2 leading-relaxed">
-                        {notes[selectedKey]}
-                      </p>
-                    ) : (
-                      <div className="text-center text-[10px] text-slate-800 dark:text-slate-300 font-bold flex items-center justify-center gap-1">
-                        <Edit3 className="w-3 h-3 text-indigo-600" />
-                        <span>Klik untuk tambah catatan</span>
-                      </div>
                     )}
                   </div>
-                )}
+
+                  {isEditingNote ? (
+                    <div className="space-y-1.5">
+                      <textarea
+                        value={memoInput}
+                        onChange={(e) => setMemoInput(e.target.value)}
+                        placeholder="Tulis catatan kecil tanggal ini..."
+                        rows={2}
+                        className="w-full text-xs p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 resize-none text-black dark:text-white placeholder:text-slate-500 font-medium"
+                        autoFocus
+                      />
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingNote(false)}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold text-slate-700 hover:bg-slate-200 cursor-pointer"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveNote}
+                          className="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-600 text-white flex items-center gap-1 shadow-xs cursor-pointer"
+                        >
+                          <Check className="w-2.5 h-2.5" />
+                          <span>Simpan</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => setIsEditingNote(true)}
+                      className="min-h-[38px] p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 cursor-pointer hover:border-indigo-500 transition-all flex flex-col justify-center"
+                    >
+                      {notes[selectedKey] ? (
+                        <p className="text-[10.5px] text-black dark:text-slate-200 font-semibold line-clamp-2 leading-relaxed">
+                          {notes[selectedKey]}
+                        </p>
+                      ) : (
+                        <div className="text-center text-[9.5px] text-slate-600 dark:text-slate-400 font-bold flex items-center justify-center gap-1">
+                          <Edit3 className="w-3 h-3 text-indigo-600" />
+                          <span>+ Catatan kecil</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="mt-2 pt-1 border-t border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between text-[9.5px]">
-              <span className="text-black dark:text-slate-400 font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-                Titik biru = tanggal beragenda
-              </span>
+            <div className="mt-2 pt-1.5 border-t border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between text-[9.5px]">
+              <div className="flex items-center gap-2 text-[9px] text-slate-600 dark:text-slate-400 font-bold">
+                <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Pribadi</span>
+                <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full bg-indigo-600" /> Tim</span>
+              </div>
               <button
                 type="button"
                 onClick={() => navigate('/agenda?tab=Private')}
-                className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
               >
-                Buka Agenda →
+                <span>Buka Agenda</span>
+                <ArrowRight className="w-3 h-3" />
               </button>
             </div>
           </div>
         ) : (
-          /* In 1x Size: Compact Bottom Memo Strip */
+          /* In 1x Size: Compact Bottom Memo & Agenda Strip */
           <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
-            <button
-              type="button"
-              onClick={() => navigate('/agenda?tab=Private')}
-              className="w-full flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 text-xs font-bold transition-all cursor-pointer group shadow-2xs"
-              title="Buka Menu Agenda Personal"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center shrink-0">
-                  <CalendarIcon className="w-3.5 h-3.5" />
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => navigate('/agenda?tab=Private')}
+                className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-main)] hover:text-indigo-600 cursor-pointer"
+                title="Buka Menu Agenda Personal"
+              >
+                <div className="w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0">
+                  <CalendarIcon className="w-3 h-3" />
                 </div>
-                <div className="text-left">
-                  <div className="text-[11px] font-bold text-[var(--text-main)] group-hover:text-indigo-600 transition-colors">Agenda Personal</div>
-                  <div className="text-[9px] text-[var(--text-muted)] leading-none">Jadwal &amp; kegiatan</div>
+                <span>Agenda Personal</span>
+                <ArrowRight className="w-3 h-3 opacity-60" />
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(`/agenda?tab=Private&date=${selectedKey}&openNew=1`)}
+                className="px-1.5 py-0.5 rounded text-[9.5px] font-black bg-teal-600 text-white flex items-center gap-0.5 hover:bg-teal-700 cursor-pointer"
+                title="Tambah agenda baru di tanggal terpilih"
+              >
+                <Plus className="w-2.5 h-2.5" />
+                <span>+ Agenda</span>
+              </button>
+            </div>
+
+            {selectedDayAgendas.length > 0 ? (
+              <div 
+                onClick={() => navigate(`/agenda?tab=Private&date=${selectedKey}`)}
+                className="text-[10px] p-1.5 rounded-lg bg-indigo-50 dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-indigo-950 dark:text-indigo-200 font-medium cursor-pointer hover:border-indigo-400 transition-colors"
+              >
+                <div className="font-bold flex items-center justify-between gap-1">
+                  <span className="truncate flex-1">{selectedDayAgendas[0].title}</span>
+                  {selectedDayAgendas.length > 1 && (
+                    <span className="text-[8.5px] font-black px-1 rounded-sm bg-indigo-200 text-indigo-900 shrink-0">
+                      +{selectedDayAgendas.length - 1} lagi
+                    </span>
+                  )}
                 </div>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-
-            {notes[selectedKey] ? (
-              <div className="text-[10px] p-1.5 rounded-lg bg-indigo-50 text-black border border-indigo-200 truncate">
-                <span className="font-extrabold text-black">{selectedDate.getDate()} {monthNames[selectedDate.getMonth()].slice(0, 3)}:</span> <span className="font-semibold text-black">{notes[selectedKey]}</span>
+            ) : notes[selectedKey] ? (
+              <div className="text-[10px] p-1.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 truncate">
+                <span className="font-bold">{selectedDate.getDate()} {monthNames[selectedDate.getMonth()].slice(0, 3)}:</span> {notes[selectedKey]}
               </div>
             ) : (
               <div 
-                onClick={() => {
-                  const memo = prompt(`Tambah catatan untuk tanggal ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()]}:`, notes[selectedKey] || '');
-                  if (memo !== null) {
-                    const updated = { ...notes };
-                    if (memo.trim()) updated[selectedKey] = memo.trim();
-                    else delete updated[selectedKey];
-                    setNotes(updated);
-                    localStorage.setItem('preplab_calendar_notes', JSON.stringify(updated));
-                  }
-                }}
-                className="text-[9.5px] text-center text-black font-bold hover:text-indigo-700 cursor-pointer py-0.5 flex items-center justify-center gap-1"
+                onClick={() => navigate(`/agenda?tab=Private&date=${selectedKey}&openNew=1`)}
+                className="text-[9.5px] text-center text-slate-500 font-semibold hover:text-indigo-700 cursor-pointer py-0.5 flex items-center justify-center gap-1"
               >
-                <Edit3 className="w-2.5 h-2.5 text-indigo-600" />
-                <span>+ Catatan {selectedDate.getDate()} {monthNames[selectedDate.getMonth()].slice(0, 3)}</span>
+                <Plus className="w-2.5 h-2.5 text-indigo-600" />
+                <span>Tambah agenda {selectedDate.getDate()} {monthNames[selectedDate.getMonth()].slice(0, 3)}</span>
               </div>
             )}
           </div>

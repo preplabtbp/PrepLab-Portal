@@ -6,7 +6,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import multiMonthPlugin from '@fullcalendar/multimonth';
-import { Calendar, Plus, FolderOpen, StickyNote, X, Search, Filter, Loader2, Edit, Trash2, CalendarDays, Palette, CloudUpload, Clock, FileText, CheckCircle2 } from 'lucide-react';
+import { Calendar, Plus, FolderOpen, StickyNote, X, Search, Filter, Loader2, Edit, Trash2, CalendarDays, Palette, CloudUpload, Clock, FileText, CheckCircle2, Lock, Users } from 'lucide-react';
 import { Card, Button, Input, Select, Textarea } from './ui';
 import { toast } from 'sonner';
 
@@ -77,12 +77,109 @@ export function AgendaDashboard({
   const [showDayEventsModal, setShowDayEventsModal] = useState(false);
   const [selectedDayDateStr, setSelectedDayDateStr] = useState<string>('');
   const [selectedDayEvents, setSelectedDayEvents] = useState<any[]>([]);
+
+  // Enterprise Controlled Agenda Form State
+  const [agendaForm, setAgendaForm] = useState({
+    id: undefined as string | undefined,
+    title: '',
+    isAllDay: false,
+    startDate: new Date().toLocaleDateString('en-CA'),
+    endDate: new Date().toLocaleDateString('en-CA'),
+    startTime: '09:00',
+    endTime: '10:00',
+    kategori: 'Personal',
+    pic: inspectorName || '',
+    deskripsi: '',
+    isRoutine: false,
+    frekuensi: 'harian'
+  });
   
   const calendarRef = useRef<FullCalendar>(null);
+
+  const openNewAgendaModal = (targetDateStr?: string) => {
+    const dStr = targetDateStr || new Date().toLocaleDateString('en-CA');
+    const now = new Date();
+    const startHour = String((now.getHours() + 1) % 24).padStart(2, '0');
+    const endHour = String((now.getHours() + 2) % 24).padStart(2, '0');
+
+    setAgendaForm({
+      id: undefined,
+      title: '',
+      isAllDay: false,
+      startDate: dStr,
+      endDate: dStr,
+      startTime: `${startHour}:00`,
+      endTime: `${endHour}:00`,
+      kategori: categoryFilter === 'All' ? 'General' : 'Personal',
+      pic: inspectorName || '',
+      deskripsi: '',
+      isRoutine: false,
+      frekuensi: 'harian'
+    });
+    setCurrentAgenda(null);
+    setShowAgendaModal(true);
+  };
+
+  const openEditAgendaModal = (eventObj: any) => {
+    const p = eventObj.extendedProps || {};
+    let sDate = '';
+    let eDate = '';
+    let sTime = '09:00';
+    let eTime = '10:00';
+
+    if (eventObj.start) {
+      const d = new Date(eventObj.start);
+      sDate = d.toLocaleDateString('en-CA');
+      sTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+    if (eventObj.end) {
+      const d = new Date(eventObj.end);
+      eDate = d.toLocaleDateString('en-CA');
+      eTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    } else {
+      eDate = sDate;
+    }
+
+    setAgendaForm({
+      id: eventObj.id,
+      title: eventObj.title || '',
+      isAllDay: Boolean(eventObj.allDay || p.isAllDay),
+      startDate: sDate || new Date().toLocaleDateString('en-CA'),
+      endDate: eDate || sDate || new Date().toLocaleDateString('en-CA'),
+      startTime: sTime,
+      endTime: eTime,
+      kategori: p.kategori || 'Personal',
+      pic: p.pic || inspectorName || '',
+      deskripsi: p.deskripsi || '',
+      isRoutine: Boolean(p.isRoutine),
+      frekuensi: p.frekuensi || 'harian'
+    });
+    setCurrentAgenda(eventObj);
+    setShowAgendaModal(true);
+  };
   
   useEffect(() => {
     fetchData();
   }, [userDept]);
+
+  // Support direct navigation from home widget: ?tab=Private&date=YYYY-MM-DD&openNew=1
+  useEffect(() => {
+    const dateParam = searchParams.get('date');
+    const openNewParam = searchParams.get('openNew');
+    if (openNewParam === '1' && dateParam) {
+      openNewAgendaModal(dateParam);
+      if (calendarRef.current) {
+        try {
+          calendarRef.current.getApi().gotoDate(dateParam);
+        } catch(err) {}
+      }
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.delete('openNew');
+        return next;
+      }, { replace: true });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (initialEventId && events.length > 0) {
@@ -106,23 +203,14 @@ export function AgendaDashboard({
       return d.toLocaleDateString('en-CA') === arg.dateStr;
     });
 
-    if (dayEvts.length === 1) {
-      setCurrentAgenda(dayEvts[0]);
-      setShowAgendaDetail(true);
-    } else if (dayEvts.length > 1) {
+    if (dayEvts.length === 0) {
+      // Tanggal kosong: langsung buka Form Agenda dengan tanggal tersebut terisi
+      openNewAgendaModal(arg.dateStr);
+    } else {
+      // Ada 1 atau lebih agenda: buka modal daftar kegiatan hari itu
       setSelectedDayDateStr(arg.dateStr);
       setSelectedDayEvents(dayEvts);
       setShowDayEventsModal(true);
-    } else {
-      const startIso = new Date(new Date(arg.date).setHours(9, 0, 0, 0)).toISOString().slice(0, 16);
-      const endIso = new Date(new Date(arg.date).setHours(10, 0, 0, 0)).toISOString().slice(0, 16);
-      setCurrentAgenda({
-        extendedProps: {
-          startDate: startIso,
-          endDate: endIso,
-        }
-      });
-      setShowAgendaModal(true);
     }
   };
 
@@ -238,19 +326,28 @@ export function AgendaDashboard({
       const url = isNew ? '/api/agenda' : `/api/agenda/${agenda.id}`;
       const method = isNew ? 'POST' : 'PUT';
       
-      await fetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           ...agenda, 
           creatorNik: inspectorNik, 
-          isRoutine: agenda.isRoutine === 'yes',
+          isRoutine: agenda.isRoutine === 'yes' || agenda.isRoutine === true,
           department: userDept || null
         })
       });
-      setShowAgendaModal(false);
-      fetchData();
-    } catch (e) {}
+
+      if (res.ok) {
+        toast.success('Agenda berhasil disimpan!', { id: 'save-agenda' });
+        setShowAgendaModal(false);
+        fetchData();
+        window.dispatchEvent(new CustomEvent('agenda:updated'));
+      } else {
+        toast.error('Gagal menyimpan agenda', { id: 'save-agenda' });
+      }
+    } catch (e) {
+      toast.error('Terjadi kesalahan saat menyimpan', { id: 'save-agenda' });
+    }
   };
 
   const deleteAgenda = async (id: string, isRoutine: boolean = false, routineId?: string) => {
@@ -267,6 +364,7 @@ export function AgendaDashboard({
       }
       setShowAgendaDetail(false);
       fetchData();
+      window.dispatchEvent(new CustomEvent('agenda:updated'));
     } catch (e) {}
   };
 
@@ -364,7 +462,7 @@ export function AgendaDashboard({
               </button>
             ))}
           </div>
-          <Button onClick={() => { setCurrentAgenda(null); setShowAgendaModal(true); }} style={{ backgroundColor: 'var(--primary)', color: '#fff' }} className="shadow-sm border-0 !w-auto">
+          <Button onClick={() => openNewAgendaModal()} style={{ backgroundColor: 'var(--primary)', color: '#fff' }} className="shadow-sm border-0 !w-auto cursor-pointer">
             <Plus className="w-4 h-4 mr-2" /> Agenda Baru
           </Button>
 
@@ -605,56 +703,292 @@ export function AgendaDashboard({
         </div>
       )}
 
-      {/* Agenda Editor Modal */}
+      {/* Enterprise Agenda Editor Modal */}
       {showAgendaModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-xl overflow-hidden shadow-2xl flex flex-col" style={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-main)', borderWidth: 1 }}>
-            <div className="p-4 border-b flex justify-between items-center" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)' }}>
-              <h2 className="font-bold flex items-center gap-2" style={{ color: 'var(--primary)' }}><CalendarDays className="w-5 h-5"/> Form Agenda</h2>
-              <button onClick={() => setShowAgendaModal(false)}><X className="w-5 h-5 opacity-50 hover:opacity-100"/></button>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/15 text-teal-700 dark:text-teal-400 flex items-center justify-center">
+                  <CalendarDays className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-base text-slate-900 dark:text-white">
+                    {agendaForm.id ? 'Edit Agenda' : 'Agenda Kegiatan Baru'}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {agendaForm.startDate ? new Date(agendaForm.startDate).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Atur jadwal kegiatan'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAgendaModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5"/>
+              </button>
             </div>
-            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-              <Input id="ag-title" label="Judul Kegiatan" defaultValue={currentAgenda?.title || ''} style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)' }}/>
-              <div className="grid grid-cols-2 gap-4">
-                <Input id="ag-start" type="datetime-local" label="Waktu Mulai" defaultValue={currentAgenda?.extendedProps?.startDate ? new Date(currentAgenda.extendedProps.startDate).toISOString().slice(0,16) : ''} style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)' }}/>
-                <Input id="ag-end" type="datetime-local" label="Waktu Selesai" defaultValue={currentAgenda?.extendedProps?.endDate ? new Date(currentAgenda.extendedProps.endDate).toISOString().slice(0,16) : ''} style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)' }}/>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Select id="ag-kategori" label="Kategori" defaultValue={currentAgenda?.extendedProps?.kategori || (categoryFilter === 'All' ? 'General' : 'Personal')} options={[
-                  {value: 'Personal', label: 'Pribadi (Agenda Saya)'}, 
-                  {value: 'General', label: 'Semua / Umum (Publik)'}
-                ]} style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)' }}/>
-                <Input id="ag-pic" label="Nama PIC" defaultValue={currentAgenda?.extendedProps?.pic || inspectorName} style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)' }}/>
-              </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              {/* Judul Kegiatan */}
               <div>
-                <label className="block text-xs font-bold mb-1" style={{ color: 'var(--text-muted)' }}>Laporan / Deskripsi</label>
-                <textarea id="ag-desc" defaultValue={currentAgenda?.extendedProps?.deskripsi || ''} className="w-full h-24 rounded-md p-3 text-sm focus:outline-none focus:ring-2 border shadow-sm resize-none" style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)', outlineColor: 'var(--primary)' }}></textarea>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Judul Kegiatan <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={agendaForm.title}
+                  onChange={(e) => setAgendaForm(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Contoh: Rapat Mingguan, Kalibrasi XRF, Rencana Kegiatan..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-teal-500 placeholder:text-slate-400"
+                  autoFocus
+                />
               </div>
-              {!currentAgenda?.id && (
-                <div className="p-3 rounded-lg border" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)' }}>
-                  <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: 'var(--text-main)' }}>
-                    <input type="checkbox" id="ag-routine" className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500"/>
-                    Buat Agenda Rutin
+
+              {/* Kategori & PIC */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Kategori Agenda
                   </label>
-                  <Select id="ag-freq" options={[{value: 'harian', label: 'Harian'}, {value: 'mingguan', label: 'Mingguan'}, {value: 'bulanan', label: 'Bulanan'}]} style={{ backgroundColor: 'var(--input-bg)', color: 'var(--text-main)', borderColor: 'var(--border-main)' }}/>
+                  <select
+                    value={agendaForm.kategori}
+                    onChange={(e) => setAgendaForm(prev => ({ ...prev, kategori: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="Personal">🔒 Pribadi (Hanya Saya)</option>
+                    <option value="General">👥 Umum / Semua (Publik)</option>
+                    <option value="Meeting">🤝 Rapat / Pertemuan</option>
+                    <option value="QA">🔬 Quality Assurance (QA)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Penanggung Jawab (PIC)
+                  </label>
+                  <input
+                    type="text"
+                    value={agendaForm.pic}
+                    onChange={(e) => setAgendaForm(prev => ({ ...prev, pic: e.target.value }))}
+                    placeholder="Nama PIC"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              {/* Opsi Acara Sepanjang Hari */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Acara Sepanjang Hari (All Day)
+                  </span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agendaForm.isAllDay}
+                    onChange={(e) => setAgendaForm(prev => ({ ...prev, isAllDay: e.target.checked }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-600"></div>
+                </label>
+              </div>
+
+              {/* Pengaturan Tanggal & Waktu */}
+              <div className="space-y-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/20">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 mb-1">
+                      Tanggal Mulai
+                    </label>
+                    <input
+                      type="date"
+                      value={agendaForm.startDate}
+                      onChange={(e) => {
+                        const newStart = e.target.value;
+                        setAgendaForm(prev => ({
+                          ...prev,
+                          startDate: newStart,
+                          endDate: prev.endDate < newStart ? newStart : prev.endDate
+                        }));
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-hidden focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 mb-1">
+                      Tanggal Selesai
+                    </label>
+                    <input
+                      type="date"
+                      value={agendaForm.endDate}
+                      min={agendaForm.startDate}
+                      onChange={(e) => setAgendaForm(prev => ({ ...prev, endDate: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-hidden focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Jam Mulai & Selesai (Jika bukan sepanjang hari) */}
+                {!agendaForm.isAllDay && (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 space-y-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 mb-1">
+                          Jam Mulai
+                        </label>
+                        <input
+                          type="time"
+                          value={agendaForm.startTime}
+                          onChange={(e) => {
+                            const newStart = e.target.value;
+                            const [h, m] = newStart.split(':').map(Number);
+                            const endH = String((h + 1) % 24).padStart(2, '0');
+                            const endM = String(m || 0).padStart(2, '0');
+                            setAgendaForm(prev => ({
+                              ...prev,
+                              startTime: newStart,
+                              endTime: `${endH}:${endM}`
+                            }));
+                          }}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-hidden focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 mb-1">
+                          Jam Selesai
+                        </label>
+                        <input
+                          type="time"
+                          value={agendaForm.endTime}
+                          onChange={(e) => setAgendaForm(prev => ({ ...prev, endTime: e.target.value }))}
+                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-hidden focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Duration Chips */}
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold mr-1">Durasi:</span>
+                      {[
+                        { label: '30 Mnt', mins: 30 },
+                        { label: '1 Jam', mins: 60 },
+                        { label: '2 Jam', mins: 120 },
+                        { label: '3 Jam', mins: 180 },
+                      ].map((dur) => (
+                        <button
+                          key={dur.label}
+                          type="button"
+                          onClick={() => {
+                            const [h, m] = agendaForm.startTime.split(':').map(Number);
+                            const totalMins = (h * 60) + m + dur.mins;
+                            const newH = String(Math.floor(totalMins / 60) % 24).padStart(2, '0');
+                            const newM = String(totalMins % 60).padStart(2, '0');
+                            setAgendaForm(prev => ({ ...prev, endTime: `${newH}:${newM}` }));
+                          }}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-teal-100 hover:text-teal-800 dark:hover:bg-teal-900/50 dark:hover:text-teal-300 transition-colors cursor-pointer"
+                        >
+                          +{dur.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Deskripsi */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Deskripsi / Catatan Tambahan
+                </label>
+                <textarea
+                  value={agendaForm.deskripsi}
+                  onChange={(e) => setAgendaForm(prev => ({ ...prev, deskripsi: e.target.value }))}
+                  placeholder="Tuliskan detail agenda kegiatan, lokasi, link meeting, atau persiapan yang dibutuhkan..."
+                  rows={3}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-teal-500 resize-none placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Buat Agenda Rutin (hanya saat buat baru) */}
+              {!agendaForm.id && (
+                <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30 space-y-2">
+                  <label className="flex items-center gap-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={agendaForm.isRoutine}
+                      onChange={(e) => setAgendaForm(prev => ({ ...prev, isRoutine: e.target.checked }))}
+                      className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300"
+                    />
+                    <span>Buat Agenda Rutin / Berulang</span>
+                  </label>
+                  {agendaForm.isRoutine && (
+                    <div className="pt-2 pl-6">
+                      <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+                        Ulangi Setiap:
+                      </label>
+                      <select
+                        value={agendaForm.frekuensi}
+                        onChange={(e) => setAgendaForm(prev => ({ ...prev, frekuensi: e.target.value }))}
+                        className="w-full sm:w-48 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                      >
+                        <option value="harian">Harian (14 Hari ke Depan)</option>
+                        <option value="mingguan">Mingguan (8 Minggu ke Depan)</option>
+                        <option value="bulanan">Bulanan (4 Bulan ke Depan)</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-            <div className="p-4 border-t flex justify-end gap-2" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)' }}>
-              <Button onClick={() => setShowAgendaModal(false)} variant="secondary" className="flex-1 md:flex-none md:!w-auto">Batal</Button>
-              <Button onClick={() => {
-                saveAgenda({
-                  id: currentAgenda?.id,
-                  title: (document.getElementById('ag-title') as HTMLInputElement).value,
-                  startDate: (document.getElementById('ag-start') as HTMLInputElement).value,
-                  endDate: (document.getElementById('ag-end') as HTMLInputElement).value,
-                  kategori: (document.getElementById('ag-kategori') as HTMLSelectElement).value,
-                  pic: (document.getElementById('ag-pic') as HTMLInputElement).value,
-                  deskripsi: (document.getElementById('ag-desc') as HTMLTextAreaElement).value,
-                  isRoutine: (document.getElementById('ag-routine') as HTMLInputElement)?.checked ? 'yes' : 'no',
-                  frekuensi: (document.getElementById('ag-freq') as HTMLSelectElement)?.value,
-                });
-              }} className="flex-1 md:flex-none md:!w-auto" style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>Simpan Agenda</Button>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2 bg-slate-50 dark:bg-slate-800/50">
+              <button
+                type="button"
+                onClick={() => setShowAgendaModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!agendaForm.title.trim()) {
+                    toast.error('Judul kegiatan wajib diisi');
+                    return;
+                  }
+                  let startIso: string;
+                  let endIso: string;
+                  if (agendaForm.isAllDay) {
+                    startIso = `${agendaForm.startDate}T00:00:00`;
+                    endIso = `${agendaForm.endDate}T23:59:59`;
+                  } else {
+                    startIso = `${agendaForm.startDate}T${agendaForm.startTime}:00`;
+                    endIso = `${agendaForm.endDate}T${agendaForm.endTime}:00`;
+                  }
+
+                  await saveAgenda({
+                    id: agendaForm.id,
+                    title: agendaForm.title.trim(),
+                    startDate: startIso,
+                    endDate: endIso,
+                    kategori: agendaForm.kategori,
+                    pic: agendaForm.pic,
+                    deskripsi: agendaForm.deskripsi,
+                    isRoutine: agendaForm.isRoutine ? 'yes' : 'no',
+                    frekuensi: agendaForm.frekuensi,
+                    isAllDay: agendaForm.isAllDay
+                  });
+                }}
+                className="px-5 py-2 rounded-xl text-xs font-black bg-teal-600 hover:bg-teal-700 text-white shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Simpan Agenda</span>
+              </button>
             </div>
           </div>
         </div>
@@ -696,7 +1030,7 @@ export function AgendaDashboard({
             </div>
             <div className="p-4 border-t flex flex-col gap-2" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)' }}>
                <div className="flex gap-2">
-                 <Button onClick={() => { setShowAgendaDetail(false); setShowAgendaModal(true); }} className="flex-1" style={{ backgroundColor: 'var(--accent)', color: 'var(--text-main)' }}><Edit className="w-4 h-4 mr-2"/> Edit</Button>
+                 <Button onClick={() => { setShowAgendaDetail(false); openEditAgendaModal(currentAgenda); }} className="flex-1" style={{ backgroundColor: 'var(--accent)', color: 'var(--text-main)' }}><Edit className="w-4 h-4 mr-2"/> Edit</Button>
                  <Button onClick={() => deleteAgenda(currentAgenda.id)} variant="danger" className="flex-1"><Trash2 className="w-4 h-4 mr-2"/> Hapus</Button>
                </div>
                {currentAgenda.extendedProps?.routineId && (
@@ -733,7 +1067,22 @@ export function AgendaDashboard({
               </button>
             </div>
             
-            <div className="p-4 space-y-2.5 overflow-y-auto max-h-[55vh] custom-scrollbar">
+            {/* Tombol Cepat Tambah Agenda pada Tanggal Ini */}
+            <div className="p-3 bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDayEventsModal(false);
+                  openNewAgendaModal(selectedDayDateStr);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Tambah Agenda pada {selectedDayDateStr ? new Date(selectedDayDateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Tanggal Ini'}</span>
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-2.5 overflow-y-auto max-h-[50vh] custom-scrollbar">
               {selectedDayEvents.map((evt, idx) => (
                 <div 
                   key={evt.id || idx}
@@ -779,13 +1128,7 @@ export function AgendaDashboard({
               <Button 
                 onClick={() => {
                   setShowDayEventsModal(false);
-                  setCurrentAgenda({
-                    extendedProps: {
-                      startDate: selectedDayDateStr ? new Date(`${selectedDayDateStr}T09:00:00`).toISOString() : new Date().toISOString(),
-                      endDate: selectedDayDateStr ? new Date(`${selectedDayDateStr}T10:00:00`).toISOString() : new Date().toISOString(),
-                    }
-                  });
-                  setShowAgendaModal(true);
+                  openNewAgendaModal(selectedDayDateStr);
                 }}
                 className="!w-auto"
                 style={{ backgroundColor: 'var(--primary)', color: '#fff' }}

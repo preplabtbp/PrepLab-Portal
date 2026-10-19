@@ -301,6 +301,8 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
           <CalendarWidget
             size={item.size}
             isEditMode={isEditMode}
+            userNik={userNik}
+            userName={userName}
           />
         );
       case 'weather':

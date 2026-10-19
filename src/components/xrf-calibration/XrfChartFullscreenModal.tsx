@@ -5,7 +5,7 @@ import {
   ShieldAlert, RefreshCw, Layers, Sparkles, Filter, 
   Eye, EyeOff, Sliders, ChevronDown, Calendar, Search, 
   TrendingUp, FileSpreadsheet, Info, Check, ArrowUpDown,
-  FileDown, ZoomIn, Lock
+  FileDown, ZoomIn, Lock, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
@@ -78,6 +78,14 @@ export function XrfChartFullscreenModal({
   const [tableSearchQuery, setTableSearchQuery] = useState<string>('');
   const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'normal' | 'warning' | 'action' | 'isolated'>('all');
   const [isExportingImage, setIsExportingImage] = useState<boolean>(false);
+
+  // Hovered Point for Floating Tooltip / Catatan Inspector
+  const [hoveredPointData, setHoveredPointData] = useState<{
+    point: XrfPointData;
+    xCoord: number;
+    yCoord: number;
+    annotation?: XrfPointAnnotation;
+  } | null>(null);
 
   // Note form state
   const [noteIssue, setNoteIssue] = useState<string>('');
@@ -167,6 +175,28 @@ export function XrfChartFullscreenModal({
     : 0;
   const isLatestNeedRecalibration = lastActivePoint && lastPointSigma > 3.0;
   const isLatestWarning = lastActivePoint && lastPointSigma > 2.0 && lastPointSigma <= 3.0;
+
+  const formattedLastUpdate = useMemo(() => {
+    if (!lastActivePoint) return null;
+    const str = lastActivePoint.analyzedAt || lastActivePoint.date;
+    if (!str) return null;
+    try {
+      const cleanStr = str.replace('T', ' ');
+      const [datePart, timePart] = cleanStr.split(' ');
+      const dateSegments = datePart.split('-');
+      if (dateSegments.length === 3) {
+        const [y, m, d] = dateSegments;
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const mIdx = parseInt(m, 10) - 1;
+        const mStr = monthNames[mIdx] || m;
+        const timeClean = timePart ? timePart.slice(0, 5) : '';
+        return timeClean ? `${d} ${mStr} ${y} ${timeClean}` : `${d} ${mStr} ${y}`;
+      }
+      return str;
+    } catch {
+      return str;
+    }
+  }, [lastActivePoint]);
 
   // Western Electric Rules Evaluation
   const spcDiagnostics = useMemo(() => {
@@ -406,25 +436,18 @@ export function XrfChartFullscreenModal({
               STANDAR: {standardCode}
             </div>
 
-            {/* Status Pill */}
+            {/* Last Data Update Pill */}
             {activePoints.length === 0 ? (
               <span className="px-2.5 py-0.8 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                 Belum Ada Data
               </span>
-            ) : isLatestNeedRecalibration ? (
-              <span className="px-3 py-0.8 rounded-xl text-xs font-extrabold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shadow-2xs">
-                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                <span>Need Re-calibration (&gt;3σ)</span>
-              </span>
-            ) : isLatestWarning ? (
-              <span className="px-3 py-0.8 rounded-xl text-xs font-extrabold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1.5 shadow-2xs">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                <span>Warning (2σ - 3σ)</span>
-              </span>
             ) : (
-              <span className="px-3 py-0.8 rounded-xl text-xs font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-2xs">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>In-Control (Optimal)</span>
+              <span 
+                className="px-3 py-0.8 rounded-xl text-xs font-extrabold bg-teal-500/15 text-teal-800 dark:text-teal-200 border border-teal-500/30 flex items-center gap-1.5 shadow-2xs"
+                title={`Last Data Update: ${lastActivePoint?.analyzedAt || lastActivePoint?.date || '-'}`}
+              >
+                <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>Last Update: <span className="font-mono font-black">{formattedLastUpdate}</span></span>
               </span>
             )}
           </div>
@@ -575,11 +598,21 @@ export function XrfChartFullscreenModal({
               </div>
             </div>
 
-            {/* SVG Visualizer */}
-            <svg
-              viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-              className="w-full h-auto select-none overflow-visible max-h-[500px]"
-            >
+            {/* SVG Visualizer Wrapper */}
+            <div className="relative w-full">
+              <svg
+                viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                className="w-full h-auto select-none overflow-visible max-h-[500px]"
+              >
+                <defs>
+                  <filter id="bubbleShadow" x="-30%" y="-30%" width="160%" height="160%">
+                    <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" floodOpacity="0.3" floodColor="#000000" />
+                  </filter>
+                  <linearGradient id="exclamationGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#FBBF24" />
+                    <stop offset="100%" stopColor="#D97706" />
+                  </linearGradient>
+                </defs>
               {/* Background Canvas Card */}
               <rect
                 x={padding.left}
@@ -825,6 +858,20 @@ export function XrfChartFullscreenModal({
                   : '#10b981';
 
                 const isSelected = selectedPointIndex === p.index;
+                const pointAnn = (annotations && annotations[p.index]) || (p as any).annotation;
+                const hasAnnotation = Boolean(
+                  pointAnn && (
+                    pointAnn.issue ||
+                    pointAnn.solution ||
+                    pointAnn.picName ||
+                    (pointAnn as any).note ||
+                    (pointAnn as any).catatan ||
+                    Object.keys(pointAnn).length > 0
+                  )
+                );
+
+                const isNearTop = yCoord - 24 < padding.top;
+                const bubbleY = isNearTop ? yCoord + 20 : yCoord - 20;
 
                 return (
                   <g 
@@ -833,6 +880,17 @@ export function XrfChartFullscreenModal({
                     onClick={() => {
                       setSelectedPointIndex(p.index);
                       setActiveBottomTab('notes');
+                    }}
+                    onMouseEnter={() => {
+                      setHoveredPointData({
+                        point: p,
+                        xCoord,
+                        yCoord,
+                        annotation: pointAnn
+                      });
+                    }}
+                    onMouseLeave={() => {
+                      setHoveredPointData(null);
                     }}
                   >
                     {/* Outer Glow / Ring on hover or selection */}
@@ -857,16 +915,59 @@ export function XrfChartFullscreenModal({
                       className="transition-all"
                     />
 
-                    {/* Annotation Badge indicator */}
-                    {annotations[p.index] && (
-                      <circle
-                        cx={xCoord + 4}
-                        cy={yCoord - 4}
-                        r={2.5}
-                        fill="#38bdf8"
-                        stroke="#0f172a"
-                        strokeWidth="1"
-                      />
+                    {/* BUBBLE TANDA SERU JIKA MEMILIKI CATATAN */}
+                    {hasAnnotation && (
+                      <g className="cursor-pointer transition-transform duration-200 hover:scale-125 origin-center">
+                        {/* Triangle pointer connecting bubble to data point */}
+                        <polygon
+                          points={
+                            isNearTop
+                              ? `${xCoord - 3.5},${bubbleY - 7} ${xCoord + 3.5},${bubbleY - 7} ${xCoord},${yCoord + 5}`
+                              : `${xCoord - 3.5},${bubbleY + 7} ${xCoord + 3.5},${bubbleY + 7} ${xCoord},${yCoord - 5}`
+                          }
+                          fill="#F59E0B"
+                          stroke="#FFFFFF"
+                          strokeWidth="0.8"
+                        />
+
+                        {/* Subtle Animated Pulsing Ring */}
+                        <circle
+                          cx={xCoord}
+                          cy={bubbleY}
+                          r="9.5"
+                          fill="none"
+                          stroke="#F59E0B"
+                          strokeWidth="1.2"
+                          className="animate-ping opacity-40"
+                        />
+
+                        {/* Main Bubble Circle */}
+                        <circle
+                          cx={xCoord}
+                          cy={bubbleY}
+                          r="9"
+                          fill="url(#exclamationGrad)"
+                          stroke="#FFFFFF"
+                          strokeWidth="1.6"
+                          filter="url(#bubbleShadow)"
+                        />
+
+                        {/* Exclamation mark '!' (Vertical rounded bar + dot) */}
+                        <rect
+                          x={xCoord - 1.1}
+                          y={bubbleY - 5}
+                          width="2.2"
+                          height="5"
+                          rx="1.1"
+                          fill="#FFFFFF"
+                        />
+                        <circle
+                          cx={xCoord}
+                          cy={bubbleY + 2.7}
+                          r="1.25"
+                          fill="#FFFFFF"
+                        />
+                      </g>
                     )}
 
                     {/* X-Axis Tick Label */}
@@ -886,6 +987,163 @@ export function XrfChartFullscreenModal({
               })}
             </svg>
 
+            {/* FLOATING DETAIL CATATAN & POINT INSPECTOR TOOLTIP */}
+            {hoveredPointData && (() => {
+              const { point, xCoord, yCoord, annotation } = hoveredPointData;
+              const leftPct = (xCoord / svgWidth) * 100;
+              const topPct = (yCoord / svgHeight) * 100;
+
+              const diff = point.value - limits.nominalValue;
+              const sigmaDist = limits.stdevFixed > 0 ? Math.abs(diff / limits.stdevFixed) : 0;
+              const hasAnn = Boolean(
+                annotation && (
+                  annotation.issue ||
+                  annotation.solution ||
+                  annotation.picName ||
+                  (annotation as any).note ||
+                  (annotation as any).catatan ||
+                  Object.keys(annotation).length > 0
+                )
+              );
+
+              // Horizontal smart clamping
+              const isRightSide = xCoord > 750;
+              const isLeftSide = xCoord < 350;
+              const horizontalTransform = isRightSide
+                ? '-translate-x-[calc(100%+12px)]'
+                : isLeftSide
+                ? 'translate-x-3'
+                : '-translate-x-1/2';
+
+              // Vertical smart clamping
+              const isNearTopEdge = yCoord < 190;
+              const verticalTransform = isNearTopEdge ? 'translate-y-5' : '-translate-y-[calc(100%+22px)]';
+
+              return (
+                <div
+                  style={{
+                    left: `${leftPct}%`,
+                    top: `${topPct}%`,
+                  }}
+                  className={`absolute z-40 pointer-events-none transition-all duration-75 ${horizontalTransform} ${verticalTransform}`}
+                >
+                  {hasAnn ? (
+                    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-amber-500/80 dark:border-amber-500/80 rounded-2xl shadow-2xl p-4 text-xs font-sans max-w-sm w-80 text-slate-900 dark:text-slate-100 space-y-3 animate-in fade-in zoom-in-95 duration-150">
+                      {/* Header with Exclamation Bubble Badge & Titik Info */}
+                      <div className="flex items-center justify-between border-b border-amber-200 dark:border-amber-800/60 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                            !
+                          </span>
+                          <div>
+                            <div className="text-[10px] uppercase font-black tracking-wider text-amber-600 dark:text-amber-400">
+                              Catatan Anomali
+                            </div>
+                            <div className="text-xs font-extrabold text-slate-900 dark:text-white">
+                              Pengukuran Titik #{point.index}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-[10.5px] font-mono px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-bold border border-amber-300 dark:border-amber-800">
+                          {point.value.toFixed(4)}%
+                        </span>
+                      </div>
+
+                      {/* Measurement Quick Info */}
+                      <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono bg-slate-100/70 dark:bg-slate-800/60 p-2 rounded-xl">
+                        <div>
+                          <span className="text-slate-400 dark:text-slate-500 block text-[9.5px] font-sans">Tanggal / Waktu</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 truncate block">
+                            {point.analyzedAt ? new Date(point.analyzedAt).toLocaleString('id-ID') : (point.date || '-')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 dark:text-slate-500 block text-[9.5px] font-sans">Deviasi / Sigma</span>
+                          <span className={`font-bold ${diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                            {diff >= 0 ? `+${diff.toFixed(4)}` : diff.toFixed(4)} ({sigmaDist.toFixed(2)}σ)
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Issue / Masalah Section */}
+                      {annotation?.issue && (
+                        <div className="p-2.5 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 space-y-1">
+                          <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-bold text-[11px]">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <span>Masalah / Temuan:</span>
+                          </div>
+                          <p className="text-xs text-slate-800 dark:text-slate-200 pl-5 leading-relaxed font-medium">
+                            {annotation.issue}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Solution / Tindakan Perbaikan Section */}
+                      {annotation?.solution && (
+                        <div className="p-2.5 rounded-xl bg-teal-50/90 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900/60 space-y-1">
+                          <div className="flex items-center gap-1.5 text-teal-800 dark:text-teal-300 font-bold text-[11px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                            <span>Tindakan / Solusi:</span>
+                          </div>
+                          <p className="text-xs text-slate-800 dark:text-slate-200 pl-5 leading-relaxed font-medium">
+                            {annotation.solution}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Footer: PIC & Timestamp */}
+                      <div className="flex items-center justify-between text-[10.5px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+                        <span className="flex items-center gap-1 font-medium">
+                          <span>👤 PIC:</span>
+                          <strong className="text-slate-700 dark:text-slate-300">{annotation?.picName || 'Analis Lab'}</strong>
+                        </span>
+                        {annotation?.updatedAt && (
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(annotation.updatedAt).toLocaleDateString('id-ID')}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Helpful Action Hint */}
+                      <div className="text-[10px] text-teal-600 dark:text-teal-400 text-center font-semibold bg-teal-500/10 py-1 px-2 rounded-lg">
+                        👆 Klik titik ini untuk mengedit catatan di form bawah
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-3 text-xs font-sans max-w-xs w-64 text-slate-900 dark:text-slate-100 space-y-2 animate-in fade-in zoom-in-95 duration-100">
+                      {/* Standard tooltip for point without note */}
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                        <span className="font-extrabold text-xs">Titik #{point.index}</span>
+                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                          {point.analyzedAt ? new Date(point.analyzedAt).toLocaleDateString('id-ID') : (point.date || '-')}
+                        </span>
+                      </div>
+                      <div className="space-y-1 font-mono text-[11px]">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-sans">Hasil {currentElement}:</span>
+                          <span className="font-bold">{point.value.toFixed(4)}%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-sans">Target CRM:</span>
+                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">{limits.nominalValue.toFixed(4)}%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-sans">Deviasi / Sigma:</span>
+                          <span className={`font-semibold ${diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                            {diff >= 0 ? `+${diff.toFixed(4)}` : diff.toFixed(4)} ({sigmaDist.toFixed(2)}σ)
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-slate-400 text-center pt-1 border-t border-slate-100 dark:border-slate-800">
+                        Klik untuk melihat detail & tambah catatan
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
             {/* Bottom Chart Legend */}
             <div className="flex items-center justify-between pt-3 text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 flex-wrap gap-2">
               <div className="flex items-center gap-4 flex-wrap">
@@ -900,6 +1158,12 @@ export function XrfChartFullscreenModal({
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
                   <span>Action / Need Re-cal (&gt;3σ)</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded-full bg-amber-500 text-white font-black text-[9px] flex items-center justify-center shadow-2xs">
+                    !
+                  </span>
+                  <span className="font-semibold text-amber-700 dark:text-amber-400">Ada Catatan (Arahkan kursor)</span>
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
@@ -1429,15 +1693,35 @@ export function XrfChartFullscreenModal({
                           className="text-xs p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex-1"
                         />
 
-                        {onSaveAnnotation && (
-                          <button
-                            type="button"
-                            onClick={handleSaveCurrentNote}
-                            className="px-3 py-2 rounded-lg text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white transition-colors cursor-pointer"
-                          >
-                            Simpan Catatan
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {selectedPointIndex !== null && annotations[selectedPointIndex] && onDeleteAnnotation && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDeleteAnnotation(selectedPointIndex);
+                                setNoteIssue('');
+                                setNoteSolution('');
+                                setNotePicName('');
+                                toast.info(`Catatan anomali titik #${selectedPointIndex} telah dihapus.`);
+                              }}
+                              className="px-3 py-2 rounded-lg text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/60 transition-colors cursor-pointer flex items-center gap-1"
+                              title="Hapus Catatan Titik Ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Hapus</span>
+                            </button>
+                          )}
+
+                          {onSaveAnnotation && (
+                            <button
+                              type="button"
+                              onClick={handleSaveCurrentNote}
+                              className="px-3 py-2 rounded-lg text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white transition-colors cursor-pointer"
+                            >
+                              Simpan Catatan
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
