@@ -184,6 +184,31 @@ export function getUnifiedSection(emp: any): string {
   return emp.section || 'Laboratory';
 }
 
+/**
+ * Aturan Perusahaan: Hanya karyawan PT TBP dan PT GPS yang diambil.
+ * Karyawan dari PT lain (seperti GTS, vendor, kontraktor) jangan diambil.
+ */
+export function isTbpOrGpsEmployee(emp: any): boolean {
+  if (!emp) return false;
+  const rawPt = String(emp.pt || emp.perusahaan || emp.company || '').trim().toUpperCase();
+  const nik = String(emp.nik || '').trim().toUpperCase();
+
+  // Jika PT eksplisit diisi
+  if (rawPt) {
+    if (rawPt.includes('TBP') || rawPt.includes('TRIMEGAH')) return true;
+    if (rawPt.includes('GPS') || rawPt.includes('GEBE PRIMA')) return true;
+    return false; // PT lain dilarang
+  }
+
+  // Jika PT kosong, cek NIK (misal GTS)
+  if (nik.startsWith('GTS') || nik.includes('GTS')) {
+    return false;
+  }
+
+  // Default PrepLab roster personil adalah PT TBP
+  return true;
+}
+
 export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
   const records: LeaveRecord[] = [];
 
@@ -193,6 +218,11 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
   };
 
   for (const emp of roster) {
+    // Filter PT: Hanya PT TBP dan GPS saja yang diambil, jangan ambil PT lain
+    if (!isTbpOrGpsEmployee(emp)) {
+      continue;
+    }
+
     const sched = emp.fullSchedule || {};
     const entries = Object.entries(sched)
       .map(([dateStr, code]) => ({
@@ -344,7 +374,7 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
         isGol1,
         section: sectionVal,
         subSection: originalSectionVal,
-        pt: emp.pt || 'TBP',
+        pt: String(emp.pt || '').toUpperCase().includes('GPS') ? 'GPS' : 'TBP',
         tanggalCuti: formatIndonesianDate(tanggalCutiRaw, { shortMonth: true }),
         tanggalCutiRaw,
         tanggalOnsite: formatIndonesianDate(tanggalOnsiteRaw, { shortMonth: true }),
@@ -861,20 +891,22 @@ export function RosterLeaveScheduleSheet({
       return;
     }
 
-    const titleSheet = activeTab === 'staff' ? 'STAFF LAB (Gol II-V)' : 'CREW PREP & LAB (Gol I)';
+    const titleSheet = activeTab === 'staff' ? 'PT TBP & PT GPS - STAFF LAB (Gol II-V)' : 'PT TBP & PT GPS - CREW PREP & LAB (Gol I)';
     const periodLabel = selectedMonth === 'ALL' 
       ? 'Semua Periode' 
       : availablePeriods.find(p => p.key === selectedMonth)?.label || selectedMonth;
 
-    // Build worksheet data matching the physical screenshot format
+    // Build worksheet data matching the physical format
     const wsData: any[][] = [
       [`PREP & LAB - ${titleSheet.toUpperCase()}`],
       [`Periode Cuti: ${periodLabel} | Section: ${selectedSection === 'ALL' ? 'Semua Section' : selectedSection}`],
+      [`Entitas: PT Trimegah Bangun Persada (TBP) & PT Gebe Prima Sentosa (GPS)`],
       [`Tanggal Unduh: ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}`],
       [], // blank line
       [
         'NO',
-        'NAMA',
+        'NAMA & NIK',
+        'PERUSAHAAN (PT)',
         'POH',
         'JABATAN',
         'TANGGAL CUTI',
@@ -894,7 +926,8 @@ export function RosterLeaveScheduleSheet({
     filteredRecords.forEach((rec, idx) => {
       wsData.push([
         idx + 1,
-        rec.nama,
+        `${rec.nama} (${rec.nik})`,
+        rec.pt,
         rec.poh,
         rec.jabatan,
         rec.tanggalCuti,
@@ -921,6 +954,7 @@ export function RosterLeaveScheduleSheet({
       '',
       '',
       '',
+      '',
       stats.traveling,
       stats.sumTahunan,
       stats.sumExtra,
@@ -935,7 +969,8 @@ export function RosterLeaveScheduleSheet({
     // Set column widths
     ws['!cols'] = [
       { wch: 5 },   // NO
-      { wch: 28 },  // NAMA
+      { wch: 32 },  // NAMA & NIK
+      { wch: 18 },  // PERUSAHAAN (PT)
       { wch: 16 },  // POH
       { wch: 24 },  // JABATAN
       { wch: 16 },  // TANGGAL CUTI
@@ -952,7 +987,7 @@ export function RosterLeaveScheduleSheet({
     ];
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, activeTab === 'staff' ? 'Staff_Gol_II-V' : 'Crew_Gol_I');
+    XLSX.utils.book_append_sheet(wb, ws, activeTab === 'staff' ? 'Staff_TBP_GPS' : 'Crew_TBP_GPS');
 
     const fileName = `Jadwal_Cuti_${activeTab === 'staff' ? 'Staff_Gol_II-V' : 'Crew_Gol_I'}_${periodLabel.replace(/\s+/g, '_')}.xlsx`;
     XLSX.writeFile(wb, fileName);
@@ -1856,6 +1891,14 @@ export function RosterLeaveScheduleSheet({
                           </div>
                           <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
                             <span>{rec.nik}</span>
+                            <span>•</span>
+                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
+                              rec.pt === 'GPS' 
+                                ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30' 
+                                : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                            }`}>
+                              PT {rec.pt}
+                            </span>
                             <span>•</span>
                             <span className="text-teal-600 dark:text-teal-400 font-semibold">{rec.section}</span>
                             {rec.subSection && rec.subSection !== rec.section && (
