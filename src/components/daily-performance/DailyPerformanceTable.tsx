@@ -1,0 +1,361 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  Search, Filter, ChevronDown, ChevronRight, Download, FileSpreadsheet,
+  Eye, EyeOff
+} from 'lucide-react';
+import { DailyPerformanceRecord } from './daily-performance-types';
+import { formatNumber } from './daily-performance-utils';
+
+interface DailyPerformanceTableProps {
+  records: DailyPerformanceRecord[];
+}
+
+export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ records }) => {
+  const [search, setSearch] = useState('');
+  const [selectedWeek, setSelectedWeek] = useState<string>('all');
+  const [selectedRegu, setSelectedRegu] = useState<string>('all');
+  const [selectedShift, setSelectedShift] = useState<string>('all');
+
+  // Collapsible column group toggles
+  const [showEdxrfDetails, setShowEdxrfDetails] = useState(false);
+  const [showZetiumDetails, setShowZetiumDetails] = useState(false);
+
+  // Distinct weeks
+  const availableWeeks = useMemo(() => {
+    const set = new Set<number>();
+    records.forEach(r => set.add(r.week));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [records]);
+
+  // Filtered records
+  const filteredRecords = useMemo(() => {
+    return records.filter(r => {
+      if (search && !r.date.includes(search) && !r.isoDate.includes(search)) return false;
+      if (selectedWeek !== 'all' && r.week !== Number(selectedWeek)) return false;
+      if (selectedRegu !== 'all' && r.regu !== selectedRegu) return false;
+      if (selectedShift !== 'all' && r.shiftType !== selectedShift) return false;
+      return true;
+    });
+  }, [records, search, selectedWeek, selectedRegu, selectedShift]);
+
+  // Quick export CSV
+  const handleExportCsv = () => {
+    const headers = [
+      'No', 'Date', 'Week', 'Regu', 'Shift',
+      'Staff_Shift', 'Crew_Shift',
+      'GC_Shift', 'Prod_Shift', 'Exp_Shift', 'Smelter_Shift',
+      'Press_Fin_Shift',
+      'EDXRF_Total', 'FuseBead_Fin', 'FuseBead_Bal',
+      'LOI_Fin', 'LOI_Bal',
+      'ZTM_A_Total', 'ZTM_B_Total', 'WDXRF_Bal',
+      'QC_Fin', 'QC_Bal',
+      'Report_Done', 'Report_Bal'
+    ];
+
+    const rows = filteredRecords.map(r => [
+      r.no, r.date, r.week, r.regu, r.shiftType,
+      r.manpower.staff.shift, r.manpower.crew.shift,
+      r.sampleReceived.gc.shift, r.sampleReceived.prod.shift, r.sampleReceived.exp.shift, r.sampleReceived.smelter.shift,
+      r.pressPowder.finish.shift,
+      r.edxrf.shift, r.fuseBead.finishShift, r.fuseBead.balExp,
+      r.loi.finLoiShift, r.loi.bal,
+      r.wdxrf.zetiumA.total, r.wdxrf.zetiumB.total, r.wdxrf.bal,
+      r.qc.finishShift, r.qc.bal,
+      r.report.finishReportDay, r.report.bal
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Daily_Performance_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Controls Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search Date */}
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text"
+              placeholder="Cari tanggal (DD/MM)..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-200"
+            />
+          </div>
+
+          {/* Week Filter */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+            <span>Minggu:</span>
+            <select
+              value={selectedWeek}
+              onChange={e => setSelectedWeek(e.target.value)}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer focus:outline-none"
+            >
+              <option value="all">Semua Minggu</option>
+              {availableWeeks.map(w => (
+                <option key={w} value={w}>Week {w}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Regu Filter */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+            <span>Regu:</span>
+            <select
+              value={selectedRegu}
+              onChange={e => setSelectedRegu(e.target.value)}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer focus:outline-none"
+            >
+              <option value="all">Semua Regu</option>
+              <option value="A">Regu A</option>
+              <option value="B">Regu B</option>
+            </select>
+          </div>
+
+          {/* Shift Filter */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+            <span>Shift:</span>
+            <select
+              value={selectedShift}
+              onChange={e => setSelectedShift(e.target.value)}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer focus:outline-none"
+            >
+              <option value="all">Semua Shift</option>
+              <option value="DAY">DAY (Siang)</option>
+              <option value="NIGHT">NIGHT (Malam)</option>
+              <option value="LS">LS (Long Shift)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowEdxrfDetails(!showEdxrfDetails)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs cursor-pointer transition-all"
+            title="Tampilkan / sembunyikan kolom mesin Epsilon"
+          >
+            {showEdxrfDetails ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>Unit EDXRF</span>
+          </button>
+
+          <button
+            onClick={() => setShowZetiumDetails(!showZetiumDetails)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs cursor-pointer transition-all"
+            title="Tampilkan / sembunyikan kategori WDXRF"
+          >
+            {showZetiumDetails ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>Kategori ZTM</span>
+          </button>
+
+          <button
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs cursor-pointer transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Table Container */}
+      <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto max-h-[600px] scrollbar-thin">
+          <table className="w-full text-xs text-left border-collapse">
+            <thead className="bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 sticky top-0 z-20 shadow-xs text-[11px] font-bold">
+              {/* Top Category Headers */}
+              <tr>
+                <th colSpan={4} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 bg-slate-200/60 dark:bg-slate-800 text-center">
+                  JADWAL & SHIFT
+                </th>
+                <th colSpan={2} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-teal-500/10 text-teal-800 dark:text-teal-300">
+                  MANPOWER
+                </th>
+                <th colSpan={4} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-blue-500/10 text-blue-800 dark:text-blue-300">
+                  SAMPLE RECEIVED (SHIFT)
+                </th>
+                <th colSpan={showEdxrfDetails ? 8 : 1} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-sky-500/10 text-sky-800 dark:text-sky-300">
+                  EDXRF RUNS
+                </th>
+                <th colSpan={2} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-amber-500/10 text-amber-800 dark:text-amber-300">
+                  FUSE BEAD
+                </th>
+                <th colSpan={2} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-orange-500/10 text-orange-800 dark:text-orange-300">
+                  LOI EXP
+                </th>
+                <th colSpan={3} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-indigo-500/10 text-indigo-800 dark:text-indigo-300">
+                  WDXRF ZETIUM
+                </th>
+                <th colSpan={2} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-purple-500/10 text-purple-800 dark:text-purple-300">
+                  QC EXP
+                </th>
+                <th colSpan={2} className="p-2 border-b border-slate-200 dark:border-slate-700 text-center bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
+                  REPORT EXP
+                </th>
+              </tr>
+
+              {/* Specific Sub Headers */}
+              <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700">Tanggal</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Wk</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Regu</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Shift</th>
+
+                {/* Manpower */}
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Staff</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-center">Crew</th>
+
+                {/* Sample Recv */}
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">GC</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Prod</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Exp</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Smelt</th>
+
+                {/* EDXRF */}
+                {showEdxrfDetails ? (
+                  <>
+                    <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">EPS C</th>
+                    <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">EPS D</th>
+                    <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">EPS E</th>
+                    <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">EPS F</th>
+                    <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">EPS G</th>
+                    <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">EPS H</th>
+                    <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">S2 Puma</th>
+                    <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right font-bold text-teal-600">Total</th>
+                  </>
+                ) : (
+                  <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right font-bold text-teal-600">Total Run</th>
+                )}
+
+                {/* Fuse Bead */}
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Fin</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right font-semibold text-amber-600">Bal</th>
+
+                {/* LOI */}
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Fin</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right font-semibold text-orange-600">Bal</th>
+
+                {/* WDXRF */}
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">ZTM A</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">ZTM B</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right font-semibold text-rose-600">Bal</th>
+
+                {/* QC */}
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Fin</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right font-semibold text-purple-600">Bal</th>
+
+                {/* Report */}
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Done</th>
+                <th className="p-2 text-right font-semibold text-emerald-600">Bal</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredRecords.map((r, idx) => (
+                <tr 
+                  key={r.id || idx} 
+                  className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${
+                    r.shiftType === 'LS' ? 'bg-amber-50/30 dark:bg-amber-950/20' : ''
+                  }`}
+                >
+                  <td className="p-2 font-mono font-semibold text-slate-800 dark:text-slate-200 border-r border-slate-100 dark:border-slate-800">
+                    {r.date}
+                  </td>
+                  <td className="p-2 text-center text-slate-500 border-r border-slate-100 dark:border-slate-800 font-mono">
+                    {r.week}
+                  </td>
+                  <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800">
+                    <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                      r.regu === 'A' 
+                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300' 
+                        : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300'
+                    }`}>
+                      {r.regu}
+                    </span>
+                  </td>
+                  <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800 font-semibold text-[10px]">
+                    <span className={`px-2 py-0.5 rounded-md ${
+                      r.shiftType === 'DAY' ? 'text-amber-700 dark:text-amber-400' :
+                      r.shiftType === 'NIGHT' ? 'text-sky-700 dark:text-sky-400' : 'text-purple-700 dark:text-purple-400'
+                    }`}>
+                      {r.shiftType}
+                    </span>
+                  </td>
+
+                  {/* Manpower */}
+                  <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800 font-mono">{r.manpower.staff.shift}</td>
+                  <td className="p-2 text-center border-r border-slate-100 dark:border-slate-800 font-mono">{r.manpower.crew.shift}</td>
+
+                  {/* Sample Received */}
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.sampleReceived.gc.shift)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.sampleReceived.prod.shift)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.sampleReceived.exp.shift)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.sampleReceived.smelter.shift)}</td>
+
+                  {/* EDXRF */}
+                  {showEdxrfDetails ? (
+                    <>
+                      <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{r.edxrf.epsC || '-'}</td>
+                      <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{r.edxrf.epsD || '-'}</td>
+                      <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{r.edxrf.epsE || '-'}</td>
+                      <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{r.edxrf.epsF || '-'}</td>
+                      <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{r.edxrf.epsG || '-'}</td>
+                      <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{r.edxrf.epsH || '-'}</td>
+                      <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{r.edxrf.s2Puma || '-'}</td>
+                      <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-teal-600 dark:text-teal-400">
+                        {formatNumber(r.edxrf.shift)}
+                      </td>
+                    </>
+                  ) : (
+                    <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-teal-600 dark:text-teal-400">
+                      {formatNumber(r.edxrf.shift)}
+                    </td>
+                  )}
+
+                  {/* Fuse Bead */}
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.fuseBead.finishShift)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-amber-600 dark:text-amber-400">
+                    {r.fuseBead.balExp > 0 ? formatNumber(r.fuseBead.balExp) : '-'}
+                  </td>
+
+                  {/* LOI */}
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.loi.finLoiShift)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-orange-600 dark:text-orange-400">
+                    {r.loi.bal > 0 ? formatNumber(r.loi.bal) : '-'}
+                  </td>
+
+                  {/* WDXRF */}
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.wdxrf.zetiumA.total)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.wdxrf.zetiumB.total)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-rose-600 dark:text-rose-400">
+                    {r.wdxrf.bal > 0 ? formatNumber(r.wdxrf.bal) : '-'}
+                  </td>
+
+                  {/* QC */}
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.qc.finishShift)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-purple-600 dark:text-purple-400">
+                    {r.qc.bal > 0 ? formatNumber(r.qc.bal) : '-'}
+                  </td>
+
+                  {/* Report */}
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.report.finishReportDay)}</td>
+                  <td className="p-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    {r.report.bal > 0 ? formatNumber(r.report.bal) : '0'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};

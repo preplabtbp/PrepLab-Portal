@@ -115,6 +115,7 @@ const ModulesScreen = lazyWithRetry(() => import('./components/modules-screen').
 const ClinicScreen = lazyWithRetry(() => import('./components/clinic-screen').then(m => ({ default: m.ClinicScreen })));
 const XrfCalibrationScreen = lazyWithRetry(() => import('./components/xrf-calibration/XrfCalibrationScreen').then(m => ({ default: m.XrfCalibrationScreen })));
 const ScreenTestSmelterScreen = lazyWithRetry(() => import('./components/screen-test/ScreenTestSmelterScreen').then(m => ({ default: m.ScreenTestSmelterScreen })));
+const DailyPerformanceScreen = lazyWithRetry(() => import('./components/daily-performance/DailyPerformanceScreen').then(m => ({ default: m.DailyPerformanceScreen })));
 const GuestMonitoringScreen = lazyWithRetry(() => import('./components/GuestMonitoringScreen').then(m => ({ default: m.GuestMonitoringScreen })));
 import { ModulesDrawer } from './components/ModulesDrawer';
 import { LabBotWidget } from './components/LabBotWidget';
@@ -1974,6 +1975,8 @@ export default function App() {
   <Route path="/kalibrasi-xrf" element={<Navigate to="/xrf-calibration" replace />} />
   <Route path="/screen-test-smelter" element={<ScreenTestSmelterScreen inspectorName={inspectorName || 'Tamu Presentasi'} inspectorNik={inspectorNik || 'guest'} onBack={() => handleNav('home')} />} />
   <Route path="/screen-test" element={<Navigate to="/screen-test-smelter" replace />} />
+  <Route path="/daily-performance" element={<DailyPerformanceScreen inspectorName={inspectorName || 'Tamu Presentasi'} inspectorNik={inspectorNik || 'guest'} userPt={effectiveUniverse} onBack={() => handleNav('home')} />} />
+  <Route path="/daily-performance-lab" element={<Navigate to="/daily-performance" replace />} />
   <Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
   </AnimatePresence>
