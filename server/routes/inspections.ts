@@ -2126,7 +2126,7 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
 }
 
 // Jadwal yang disusun di portal (menu Jadwal Inspeksi) untuk minggu ISO tsb, bila ada
-async function findPortalPlan(isoWeekTag: string, isoYear?: number) {
+export async function findPortalPlan(isoWeekTag: string, isoYear?: number) {
   try {
     const rows = await db.select().from(inspectionSchedulePlans)
       .where(isoYear
@@ -2141,7 +2141,7 @@ async function findPortalPlan(isoWeekTag: string, isoYear?: number) {
 }
 
 // Ubah jadwal portal ke bentuk baris yang sama dengan hasil parse Google Sheet
-function portalPlanToSchedules(plan: any): { schedules: any[]; agendaShifts: { no: number; agenda: string; shift: string }[] } {
+export function portalPlanToSchedules(plan: any): { schedules: any[]; agendaShifts: { no: number; agenda: string; shift: string }[] } {
   const members: any[] = Array.isArray(plan.publishedMembers) ? plan.publishedMembers : [];
   const shiftLabel = (m: any) => {
     const group = m.shiftGroup === 'Malam' ? 'Malam' : m.shiftGroup === 'Siang' ? 'Siang' : 'Nonshift';

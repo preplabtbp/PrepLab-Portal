@@ -18,7 +18,7 @@ import {
 import webpush from 'web-push';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../middleware/auth.js';
-import { invalidateScheduleCache, fetchInspectionScheduleFromSheet, rekapInspeksiCache, REKAP_INSPEKSI_CACHE_TTL } from "./inspections.js";
+import { invalidateScheduleCache, fetchInspectionScheduleFromSheet, findPortalPlan, portalPlanToSchedules, rekapInspeksiCache, REKAP_INSPEKSI_CACHE_TTL } from "./inspections.js";
 import { invalidateGamificationCache } from "./gamification.js";
 import { isDbCircuitBroken } from "../../src/db/index.js";
 import { getCsvEmployees } from "./employees.js";
@@ -861,10 +861,16 @@ export async function getRekapPersonnelClassification(
   }
 
   const sheetActiveNames = new Set<string>();
+  const sheetActiveNiks = new Set<string>();
   const sheetCutiNames = new Set<string>();
 
   try {
-    let sheetSchedules = await fetchInspectionScheduleFromSheet(forceRefresh, targetSheet).catch(() => null);
+    const targetWeekTag = selectedWeek.startsWith('W') || selectedWeek.startsWith('w')
+      ? selectedWeek.toUpperCase()
+      : `W${selectedWeek.replace(/\D/g, '')}`;
+    const portalPlan = targetSheet.toLowerCase() === 'currentweek' ? await findPortalPlan(targetWeekTag).catch(() => null) : null;
+    const portal = portalPlan ? portalPlanToSchedules(portalPlan) : null;
+    let sheetSchedules = portal ? portal.schedules : await fetchInspectionScheduleFromSheet(forceRefresh, targetSheet).catch(() => null);
     if ((!sheetSchedules || sheetSchedules.length === 0) && targetSheet !== 'CurrentWeek') {
       sheetSchedules = await fetchInspectionScheduleFromSheet(forceRefresh, 'CurrentWeek').catch(() => null);
     }
@@ -874,8 +880,9 @@ export async function getRekapPersonnelClassification(
         const cleanName = item.name.trim().toLowerCase();
         if (item.isCuti || item.inspeksi?.toLowerCase() === 'cuti' || item.shift?.toLowerCase() === 'cuti') {
           sheetCutiNames.add(cleanName);
-        } else if (item.inspeksi) {
+        } else {
           sheetActiveNames.add(cleanName);
+          if (item.nik) sheetActiveNiks.add(item.nik.trim().toLowerCase());
         }
       });
     }
@@ -921,6 +928,16 @@ export async function getRekapPersonnelClassification(
       if (manualCutiOverridesMap.get(cleanNik) === true) {
         onCutiSet.add(cleanNik);
       }
+      return;
+    }
+
+    // ATURAN RESMI: Jika karyawan masuk dalam jadwal inspeksi berjalan maka WAJIB melakukan KTA/TTA!
+    const isActiveInInspectionSchedule = 
+      (cleanNik && sheetActiveNiks.has(cleanNik.toLowerCase())) ||
+      matchesSheet(empName, sheetActiveNames);
+
+    if (isActiveInInspectionSchedule) {
+      // Terdaftar dalam jadwal inspeksi aktif: MUTLAK WAJIB KTA/TTA & Inspeksi (tidak cuti)
       return;
     }
 
@@ -978,6 +995,10 @@ export async function getRekapPersonnelClassification(
     const rawName = (emp.name || '').toString().trim();
     if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) {
       return false;
+    }
+    // Karyawan di jadwal inspeksi aktif selalu eligible dan wajib KTA/TTA
+    if (sheetActiveNiks.has(rawNik.toLowerCase()) || matchesSheet(rawName, sheetActiveNames)) {
+      return true;
     }
 
     if (isResignedOrInactive(emp)) {
