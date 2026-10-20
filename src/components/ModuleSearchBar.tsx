@@ -188,13 +188,13 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
   },
   {
     id: 'training-database',
-    title: 'Training Internal',
-    desc: 'Rekap training SAP (HAZID, JSA, IUT OTT, IAI, BFA, BS) & K3 per karyawan',
+    title: 'Training',
+    desc: 'Database Training Internal (SAP & K3) dan Training External (POP, POM & Sertifikasi)',
     category: 'Administrasi & SDM',
     icon: <GraduationCap className="w-5 h-5" />,
     iconBg: 'bg-indigo-500/15 border-indigo-500/25',
     iconColor: 'text-indigo-600 dark:text-indigo-400',
-    tags: ['training', 'internal', 'database training', 'pelatihan', 'hazid', 'jsa', 'iut', 'ott', 'iai', 'bfa', 'sap', 'k3', 'wah', 'loto'],
+    tags: ['training', 'internal', 'external', 'eksternal', 'training external', 'training internal', 'database training', 'pelatihan', 'hazid', 'jsa', 'iut', 'ott', 'iai', 'bfa', 'sap', 'k3', 'wah', 'loto', 'pop', 'pra pop', 'pom', 'pengawas operasional', 'sertifikasi'],
     actionType: 'nav',
     target: 'training-database'
   },
@@ -209,18 +209,6 @@ export const ALL_PORTAL_MODULES: PortalModuleItem[] = [
     tags: ['makan', 'makanan', 'order', 'orderan', 'catering', 'kantin', 'lapangan', 'sahur', 'takjil', 'konsumsi'],
     actionType: 'nav',
     target: 'meal-orders'
-  },
-  {
-    id: 'training-external',
-    title: 'Sertifikasi',
-    desc: 'Rekap sertifikasi Pra POP, POP & POM per karyawan',
-    category: 'Administrasi & SDM',
-    icon: <GraduationCap className="w-5 h-5" />,
-    iconBg: 'bg-indigo-500/15 border-indigo-500/25',
-    iconColor: 'text-indigo-600 dark:text-indigo-400',
-    tags: ['training', 'external', 'eksternal', 'pop', 'pra pop', 'pom', 'pengawas operasional', 'sertifikasi'],
-    actionType: 'nav',
-    target: 'training-external'
   },
   {
     id: 'agenda',

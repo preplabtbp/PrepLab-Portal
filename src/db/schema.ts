@@ -456,6 +456,30 @@ export const bulletinPosts = pgTable('bulletin_posts', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// --- Bulletin Recycle Bin & Activity Deletion Audit Trail ---
+export const bulletinRecycleBin = pgTable('bulletin_recycle_bin', {
+  id: serial('id').primaryKey(),
+  postId: integer('post_id'),
+  postTitle: text('post_title'),
+  section: text('section'),
+  taskTitle: text('task_title').notNull(),
+  rowData: text('row_data').notNull(), // JSON string of the deleted row
+  subtasksData: text('subtasks_data'), // JSON string of subtask rows if any
+  subtaskCount: integer('subtask_count').default(0),
+  deletedByNik: text('deleted_by_nik').notNull(),
+  deletedByName: text('deleted_by_name').notNull(),
+  deletedByJabatan: text('deleted_by_jabatan'),
+  deletedAt: timestamp('deleted_at').defaultNow(),
+  restoreStatus: text('restore_status').default('DELETED'), // 'DELETED' | 'RESTORED'
+  restoredAt: timestamp('restored_at'),
+  restoredByNik: text('restored_by_nik'),
+  restoredByName: text('restored_by_name'),
+}, (t) => [
+  index('idx_bulletin_recycle_post_id').on(t.postId),
+  index('idx_bulletin_recycle_deleted_at').on(t.deletedAt),
+  index('idx_bulletin_recycle_status').on(t.restoreStatus),
+]);
+
 // --- Notifications ---
 export const notifications = pgTable('notifications', {
   id: serial('id').primaryKey(),

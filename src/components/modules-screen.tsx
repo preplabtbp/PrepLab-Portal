@@ -98,8 +98,7 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
         { id: 'safety-rekap', group: 'Observasi & Pelaporan', title: "Rekap KTA/TTA & Inspeksi", desc: "Rekap mingguan KTA/TTA & inspeksi", icon: <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('safety-rekap') },
         { id: 'inspection-schedule', group: 'Observasi & Pelaporan', title: "Jadwal Inspeksi", desc: "Jadwal inspeksi mingguan Prep & Lab", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('inspection-schedule') },
         { id: 'general-inspection', group: 'Observasi & Pelaporan', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
-        { id: 'training-database', group: 'Training', title: "Training Internal", desc: "SAP (HAZID, JSA, IUT OTT, IAI, BFA, BS) & K3", icon: <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('training-database') },
-        { id: 'training-external', group: 'Training', title: "Sertifikasi", desc: "Sertifikasi POP, POM & Eksternal", icon: <Award className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('training-external') },
+        { id: 'training-database', group: 'Training', title: "Training", desc: "Training Internal (SAP & K3) & Training External", icon: <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('training-database') },
       ]
     },
     ...(hasInventoryAccess ? [{
