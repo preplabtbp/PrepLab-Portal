@@ -6,6 +6,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { submitPemantauanBatch, uploadPhotoToDrive } from '../sheets-api';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
 import { PageHeader } from './PageHeader';
+import { VerifiedSignaturePad } from './VerifiedSignaturePad';
 
 const RUANGAN_SUHU = ["Balance Room", "XRF Room", "Chiller Room", "Fusion Room", "Chemical Room"];
 const TABUNG_GAS = ["Tabung Gas Zetium A (Argon)", "Tabung Gas Zetium B (Argon)", "Tabung Gas Epsilon C (Helium)"];
@@ -25,7 +26,7 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
   const [loading, setLoading] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   
-  const sigPadRef = useRef<SignatureCanvas>(null);
+  const [signatureUrl, setSignatureUrl] = useState('');
   
   const { devOptions, setDevOptions, parsedDevOptions } = useDevOptions(inspectorNik);
 
@@ -54,13 +55,9 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
     }
   };
 
-  const clearPad = () => {
-    sigPadRef.current?.clear();
-  };
-
   const handleSubmit = async () => {
     if (!shift) return toast.error("Pilih shift terlebih dahulu");
-    if (sigPadRef.current?.isEmpty()) return toast.error("Tanda tangan wajib diisi");
+    if (!signatureUrl) return toast.error("Tanda tangan wajib diisi");
     
     setLoading(true);
     try {
@@ -70,7 +67,7 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
          photoUrl = await uploadPhotoToDrive(base64, "image/jpeg", `Pemantauan_${inspectorName.replace(/\s+/g, '_')}_${new Date().getTime()}.jpg`, 'Pemantauan');
       }
 
-      const sigBase64 = sigPadRef.current?.getCanvas().toDataURL('image/png').split(',')[1];
+      const sigBase64 = signatureUrl.includes(',') ? signatureUrl.split(',')[1] : signatureUrl;
       const sigUrl = sigBase64 ? await uploadPhotoToDrive(sigBase64, "image/png", `Sig_${inspectorName.replace(/\s+/g, '_')}_${new Date().getTime()}.png`, 'Pemantauan') : "";
 
       await submitPemantauanBatch({
@@ -91,8 +88,7 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
       setGasData({});
       setShift('');
       setCatatan('');
-      setPhotoPreview(null);
-      clearPad();
+      setSignatureUrl('');
       
     } catch (e) {
       console.error(e);
@@ -351,21 +347,17 @@ export function PemantauanScreen({ inspectorName, inspectorNik }: { inspectorNam
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
             Verifikasi Petugas
           </h3>
-          <div className="mb-4">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1 block">
-              Tanda Tangan <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative border-2 border-dashed border-indigo-200 rounded-xl bg-slate-50 mb-2 overflow-hidden">
-               <Button onClick={clearPad} variant="secondary" className="absolute top-2 right-2 h-7 px-3 text-xs z-10 bg-white/90 backdrop-blur text-rose-600 border-rose-200 hover:bg-rose-50 shadow-sm font-bold">
-                 <Trash2 className="w-3 h-3 mr-1" /> Ulangi
-               </Button>
-               <SignatureCanvas
-                  ref={sigPadRef}
-                  penColor="#000000"
-                  canvasProps={{ className: 'w-full h-40 block touch-none cursor-crosshair' }}
-                />
-            </div>
-            <p className="text-[10px] text-slate-500 text-center font-medium">Tanda tangan di dalam area garis putus-putus</p>
+          <div className="mb-2">
+            <VerifiedSignaturePad
+              signerName={inspectorName}
+              signerNik={inspectorNik}
+              label="Tanda Tangan Petugas"
+              required
+              value={signatureUrl}
+              onChange={setSignatureUrl}
+              accentColor="teal"
+              heightClass="h-40"
+            />
           </div>
         </Card>
 

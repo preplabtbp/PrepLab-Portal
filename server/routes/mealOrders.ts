@@ -32,7 +32,7 @@ export const mealOrdersRouter = Router();
 
 // Kolom yang boleh diisi dari form / edit sel
 const EDITABLE_FIELDS = [
-  'sortNo', 'nama', 'statusMess', 'pt', 'shift', 'section', 'statusKerja', 'sahur', 'tidakPuasa', 'tempatTinggal', 'shiftKerja',
+  'nik', 'sortNo', 'nama', 'statusMess', 'pt', 'shift', 'section', 'statusKerja', 'sahur', 'tidakPuasa', 'tempatTinggal', 'shiftKerja',
   'pagiKantin', 'pagiLapangan', 'sahurKantin', 'sahurLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan', 'takjilLapangan', 'malamLapangan',
   'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan', 'pilihanPagi', 'pilihanSore',
 ] as const;
@@ -945,16 +945,37 @@ async function loadRosterForDate(date: string): Promise<{ emps: RosterEmp[]; sou
   // Karyawan Nonaktif di Database Karyawan tidak ikut walau masih ada di sheet roster
   const isInactive = (nik: string) => { const e = dbByNik.get(nik); return !!e && isResignedOrNonActiveStatus(e); };
 
+    const norm = (s: string | null | undefined) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const empByName = new Map<string, typeof dbEmps[0]>();
+    for (const emp of dbEmps) {
+      if (emp.name) empByName.set(norm(emp.name), emp);
+    }
+    const masterByName = new Map<string, { nik: string; nama: string }>();
+    for (const [mNik, mProf] of masterProfiles.entries()) {
+      if (mProf.nama) masterByName.set(norm(mProf.nama), { nik: mNik, nama: mProf.nama });
+    }
+
   try {
     const sheet = await fetchRosterSheetForDate(dateFormats);
     if (sheet.dateFound && sheet.entries.length > 0) {
       return {
         source: 'sheet',
         emps: sheet.entries.filter(e => !isInactive(e.nik.toUpperCase())).map(e => {
-          const nik = e.nik.toUpperCase();
-          const master = masterProfiles.get(nik);
-          const profile = profileOf(nik, { statusMess: e.statusMess || null, pt: e.pt || null, shift: e.shift || null, section: e.section || null, tempatTinggal: null });
-          return { nik: e.nik, name: master?.nama || e.name, ...profile, gol: e.gol || null, status: e.status };
+          const rawNik = e.nik.toUpperCase().trim();
+          const nameKey = norm(e.name);
+          const matchedEmp = dbByNik.get(rawNik) || empByName.get(nameKey);
+          const matchedMasterByNik = masterProfiles.get(rawNik);
+          const matchedMasterByName = masterByName.get(nameKey);
+
+          // PENGUNCIAN NIK: Utamakan NIK resmi dari Database Karyawan atau Master Orderan Makanan
+          // JANGAN PERNAH menimpa NIK dengan NIK dari Google Sheet Roster!
+          const canonicalNik = matchedEmp?.nik
+            ? matchedEmp.nik.trim().toUpperCase()
+            : (matchedMasterByName ? matchedMasterByName.nik : (matchedMasterByNik ? rawNik : rawNik));
+          const canonicalName = matchedMasterByNik?.nama || matchedMasterByName?.nama || matchedEmp?.name || e.name;
+
+          const profile = profileOf(canonicalNik, { statusMess: e.statusMess || null, pt: e.pt || null, shift: e.shift || null, section: e.section || null, tempatTinggal: null });
+          return { nik: canonicalNik, name: canonicalName, ...profile, gol: e.gol || null, status: e.status };
         }),
       };
     }
@@ -1487,41 +1508,65 @@ function getMealOrderSeedRows(date: string) {
 }
 
 async function getMealOrderRowsWithLatestProfiles(date: string) {
-  const seedRows = getMealOrderSeedRows(date);
   try {
-    const lastOrders = await db.select({
-      nik: mealOrders.nik, pt: mealOrders.pt, tempatTinggal: mealOrders.tempatTinggal,
-      statusMess: mealOrders.statusMess, shift: mealOrders.shift, section: mealOrders.section,
-    }).from(mealOrders)
-      .orderBy(sql`CASE WHEN ${mealOrders.orderDate} < ${date} THEN 0 ELSE 1 END`, sql`ABS(${mealOrders.orderDate} - ${date}::date)`);
-    const lastByNik = new Map<string, typeof lastOrders[0]>();
-    for (const lo of lastOrders) {
-      const k = String(lo.nik || '').toUpperCase().trim();
-      if (!lastByNik.has(k)) lastByNik.set(k, lo);
-    }
-    const masterProfiles = await loadMasterEmployeeProfileMap();
-    const dbEmps = await db.select({ nik: employees.nik, pt: employees.pt, statusMess: employees.statusMess, shift: employees.shift, section: employees.section }).from(employees);
-    const empByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
+    // 1. Cari tanggal terdekat yang memiliki orderan di database mealOrders
+    const nearestDateRes = await db.select({ orderDate: mealOrders.orderDate })
+      .from(mealOrders)
+      .where(sql`${mealOrders.orderDate} <> ${date}`)
+      .orderBy(sql`CASE WHEN ${mealOrders.orderDate} < ${date} THEN 0 ELSE 1 END`, sql`ABS(${mealOrders.orderDate} - ${date}::date)`)
+      .limit(1);
+    const nearestDate = nearestDateRes[0]?.orderDate ? ymd(nearestDateRes[0].orderDate) : null;
 
-    return seedRows.map(r => {
+    let baseRows: any[] = [];
+    if (nearestDate) {
+      const inactive = await getInactiveNiks().catch(() => new Set<string>());
+      baseRows = (await db.select().from(mealOrders)
+        .where(eq(mealOrders.orderDate, nearestDate))
+        .orderBy(sql`${mealOrders.sortNo} ASC NULLS LAST`, asc(mealOrders.nama)))
+        .filter(isActiveRow(inactive));
+    }
+
+    if (!baseRows || baseRows.length === 0) {
+      baseRows = getMealOrderSeedRows(date);
+    }
+
+    const masterProfiles = await loadMasterEmployeeProfileMap();
+    const dbEmps = await db.select({ nik: employees.nik, name: employees.name, pt: employees.pt, statusMess: employees.statusMess, shift: employees.shift, section: employees.section }).from(employees);
+    const empByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
+    const norm = (s: string | null | undefined) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const empByName = new Map(dbEmps.map(e => [norm(e.name), e]));
+
+    return baseRows.map((r, idx) => {
       const k = String(r.nik || '').toUpperCase().trim();
-      const last = lastByNik.get(k);
+      const nKey = norm(r.nama);
       const master = masterProfiles.get(k);
-      const emp = empByNik.get(k);
-      const pt = last?.pt || master?.pt || emp?.pt || r.pt || null;
-      const tempatTinggal = (last?.tempatTinggal && last.tempatTinggal.length <= 25 ? last.tempatTinggal : null) || master?.tempatTinggal || r.tempatTinggal || null;
+      const emp = empByNik.get(k) || empByName.get(nKey);
+      // NIK & Nama dikunci sesuai master / data tanggal terdekat yang sudah tersimpan
+      const canonicalNik = emp?.nik ? emp.nik.trim().toUpperCase() : r.nik;
+      const canonicalNama = r.nama || master?.nama || emp?.name;
+      const pt = r.pt || master?.pt || emp?.pt || null;
+      const tempatTinggal = (r.tempatTinggal && r.tempatTinggal.length <= 25 ? r.tempatTinggal : null) || master?.tempatTinggal || null;
+
       return {
         ...r,
+        id: idx + 1,
+        orderDate: date,
+        nik: canonicalNik,
+        nama: canonicalNama,
         pt,
         tempatTinggal,
-        statusMess: last?.statusMess || master?.statusMess || emp?.statusMess || r.statusMess || null,
-        shift: last?.shift || master?.shift || emp?.shift || r.shift || null,
-        section: last?.section || master?.section || emp?.section || r.section || null,
+        statusMess: r.statusMess || master?.statusMess || emp?.statusMess || null,
+        shift: r.shift || master?.shift || emp?.shift || null,
+        section: r.section || master?.section || emp?.section || null,
+        // Reset status harian untuk tanggal baru
+        keteranganLapor: null,
+        batchPagi: null,
+        batchSore: null,
       };
     });
   } catch (err: any) {
     console.warn('[MealOrders latest profiles fallback warn]:', err?.message);
-    return seedRows;
+    return getMealOrderSeedRows(date);
   }
 }
 
@@ -1901,6 +1946,18 @@ mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res
     const fields = pickFields(req.body);
     if (!id || Object.keys(fields).length === 0) return res.status(400).json({ status: "error", message: "Tidak ada perubahan." });
     if ('nama' in fields && !fields.nama) return res.status(400).json({ status: "error", message: "Nama tidak boleh kosong." });
+    if ('nik' in fields) {
+      if (!fields.nik) return res.status(400).json({ status: "error", message: "NIK tidak boleh kosong." });
+      fields.nik = String(fields.nik).trim().toUpperCase();
+      const [currentRow] = await db.select({ nik: mealOrders.nik }).from(mealOrders).where(eq(mealOrders.id, id)).limit(1);
+      if (currentRow && currentRow.nik && currentRow.nik.toUpperCase().trim() !== fields.nik) {
+        const oldNik = currentRow.nik.toUpperCase().trim();
+        const newNik = fields.nik;
+        // Sinkronkan juga perubahan NIK manual ke tabel employees
+        await db.update(employees).set({ nik: newNik })
+          .where(sql`UPPER(TRIM(${employees.nik})) = ${oldNik}`);
+      }
+    }
 
     // Jika Belum Lapor diset aktif, seluruh porsi makanan, batch, dan catatan wajib dikosongkan
     if (fields.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(fields.keteranganLapor || ''))) {

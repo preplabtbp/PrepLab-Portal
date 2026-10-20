@@ -113,6 +113,8 @@ const EasterEggGame = lazyWithRetry(() => import('./components/easter-egg-game')
 const FinanceScreen = lazyWithRetry(() => import('./components/FinanceScreen').then(m => ({ default: m.FinanceScreen || m.default })));
 const ModulesScreen = lazyWithRetry(() => import('./components/modules-screen').then(m => ({ default: m.ModulesScreen })));
 const ClinicScreen = lazyWithRetry(() => import('./components/clinic-screen').then(m => ({ default: m.ClinicScreen })));
+const EmployeeLeavesScreen = lazyWithRetry(() => import('./components/employee-leaves-screen').then(m => ({ default: m.EmployeeLeavesScreen })));
+const EmployeeLeaveFormScreen = lazyWithRetry(() => import('./components/employee-leave-form-screen').then(m => ({ default: m.EmployeeLeaveFormScreen })));
 const XrfCalibrationScreen = lazyWithRetry(() => import('./components/xrf-calibration/XrfCalibrationScreen').then(m => ({ default: m.XrfCalibrationScreen })));
 const ScreenTestSmelterScreen = lazyWithRetry(() => import('./components/screen-test/ScreenTestSmelterScreen').then(m => ({ default: m.ScreenTestSmelterScreen })));
 const DailyPerformanceScreen = lazyWithRetry(() => import('./components/daily-performance/DailyPerformanceScreen').then(m => ({ default: m.DailyPerformanceScreen })));
@@ -582,7 +584,7 @@ export default function App() {
   useEffect(() => {
     if (!isCrewRole) return;
     const path = location.pathname.replace(/^\//, '');
-    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'settings', 'logbook'];
+    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'form-izin', 'rekapan-izin', 'form-izin', 'rekapan-izin', 'settings', 'logbook'];
     if (isMaintenanceCrew) {
       allowedCrewPaths.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
     }
@@ -797,7 +799,7 @@ export default function App() {
 
     // Role guard for Crew: restrict navigation to allowed modules only
     if (isCrewRole) {
-      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'settings', 'logbook'];
+      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'settings', 'logbook'];
       if (isMaintenanceCrew) {
         allowedCrewTabs.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
       }
@@ -1938,6 +1940,11 @@ export default function App() {
   <Route path="/preplab-cloud" element={<PreplabCloudScreen onBack={() => handleNav('home')} userProfile={userProfile} inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} isManager={isManager} />} />
   <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
+  <Route path="/employee-leaves" element={<EmployeeLeavesScreen userProfile={userProfile} inspectorName={inspectorName!} inspectorNik={inspectorNik!} userPt={effectiveUniverse || 'TBP'} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/rekapan-izin" element={<Navigate to="/employee-leaves" replace />} />
+  <Route path="/izin-karyawan" element={<Navigate to="/employee-leaves" replace />} />
+  <Route path="/pelaporan-izin" element={<EmployeeLeaveFormScreen inspectorName={inspectorName!} inspectorNik={inspectorNik!} userProfile={userProfile} onNav={handleNav} onBack={() => handleNav('home')} />} />
+  <Route path="/form-izin" element={<Navigate to="/pelaporan-izin" replace />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
   <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleNav('home')} />} />

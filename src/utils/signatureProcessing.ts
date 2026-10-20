@@ -394,7 +394,7 @@ export async function processSignatureImage(
 /**
  * Draws a clean, proportional security watermark on the signature canvas.
  */
-function applyWatermarkToCanvas(
+export function applyWatermarkToCanvas(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
@@ -452,30 +452,82 @@ function applyWatermarkToCanvas(
     // Discreet small badge in bottom-right corner
     const baseFontSize = Math.max(12, Math.round(height * 0.08));
     const fontSize = Math.max(9, Math.min(Math.round(height * 0.25), Math.round(baseFontSize * sizeMultiplier)));
-    ctx.font = `600 ${fontSize}px system-ui, -apple-system, sans-serif`;
+    const padding = Math.max(8, Math.round(fontSize * 0.8));
     ctx.textAlign = 'right';
     ctx.textBaseline = 'bottom';
-    const padding = Math.max(8, Math.round(fontSize * 0.8));
-    ctx.fillText(`🔒 ${watermark.text}`, width - padding, height - padding);
+
+    const subText = watermark.subText?.trim();
+    if (subText) {
+      const subFontSize = Math.max(8, Math.round(fontSize * 0.75));
+      ctx.font = `600 ${subFontSize}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText(subText, width - padding, height - padding);
+
+      ctx.font = `bold ${fontSize}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText(`🔒 ${watermark.text}`, width - padding, height - padding - (subFontSize * 1.3));
+    } else {
+      ctx.font = `600 ${fontSize}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText(`🔒 ${watermark.text}`, width - padding, height - padding);
+    }
   } else if (watermark.style === 'pattern') {
-    // Repeating diagonal tile pattern
+    // Repeating diagonal tile pattern with subText support
     ctx.rotate((-20 * Math.PI) / 180);
     const baseFontSize = Math.max(12, Math.round(width / 28));
     const fontSize = Math.max(9, Math.min(Math.round(height * 0.22), Math.round(baseFontSize * sizeMultiplier)));
+
+    const subText = watermark.subText?.trim();
+    const subFontSize = Math.max(8, Math.round(fontSize * 0.72));
+
     ctx.font = `bold ${fontSize}px system-ui, -apple-system, sans-serif`;
+    const textWidth = ctx.measureText(watermark.text).width;
 
-    // Measure text width dynamically so repeating tiles adapt perfectly to font size
-    const textMetrics = ctx.measureText(watermark.text);
-    const textWidth = Math.max(100, textMetrics.width);
-    const stepX = textWidth + fontSize * 2.5;
-    const stepY = fontSize * 3.2;
+    let subWidth = 0;
+    if (subText) {
+      ctx.font = `600 ${subFontSize}px system-ui, -apple-system, sans-serif`;
+      subWidth = ctx.measureText(subText).width;
+    }
 
-    for (let x = -width * 1.5; x < width * 2.5; x += stepX) {
-      for (let y = -height * 1.5; y < height * 2.5; y += stepY) {
-        ctx.fillText(watermark.text, x, y);
+    const tileWidth = Math.max(textWidth, subWidth, 60);
+    const stepX = tileWidth + Math.max(24, fontSize * 2.2);
+    const stepY = subText ? fontSize * 3.8 : fontSize * 3.0;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    let rowIndex = 0;
+    for (let y = -height * 1.5; y < height * 2.5; y += stepY) {
+      // Stagger alternate rows (brick layout) for a clean security watermark pattern
+      const offsetX = (rowIndex % 2 === 0) ? 0 : stepX / 2;
+      for (let x = -width * 1.5 + offsetX; x < width * 2.5; x += stepX) {
+        ctx.font = `bold ${fontSize}px system-ui, -apple-system, sans-serif`;
+        ctx.fillText(watermark.text, x, subText ? y - (subFontSize * 0.5) : y);
+
+        if (subText) {
+          ctx.font = `600 ${subFontSize}px system-ui, -apple-system, sans-serif`;
+          ctx.fillText(subText, x, y + (fontSize * 0.65));
+        }
       }
+      rowIndex++;
     }
   }
 
   ctx.restore();
+}
+
+/**
+ * Stamps a security watermark onto a signature Data URL.
+ */
+export async function stampWatermarkOnDataUrl(
+  dataUrl: string,
+  watermark: WatermarkOptions,
+  aspectRatio: SignatureAspectRatio = 'standard'
+): Promise<string> {
+  if (!watermark.enabled) return dataUrl;
+  const result = await processSignatureImage(dataUrl, {
+    ...DEFAULT_SIGNATURE_OPTIONS,
+    colorMode: 'black',
+    trim: true,
+    aspectRatio,
+    watermark
+  });
+  return result.dataUrl;
 }

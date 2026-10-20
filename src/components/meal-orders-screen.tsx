@@ -592,26 +592,62 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     const header1 = [...fixed, 'Kantin', '', '', 'Bungkusan', ...bungkusCols.slice(1).map(() => '')];
     const header2 = [...fixed.map(() => ''), 'Pagi', 'Siang', 'Sore', ...bungkusCols.map(c => c.label)];
     const body = list.map((r, i) => {
-      const kantin = kantinSlots.map(s => mealCounts(r, s).makanKantin);
-      const bungkus = bungkusCols.map(c => bungkusOf(r, c.slot));
-      const jenisMeal = kantin.some(Boolean) || !bungkus.some(Boolean) ? 'Kantin' : 'Bungkusan';
       // Status CS (Cuti Site) dianggap tetap On Duty di site, tidak ditaruh CS lagi di kolom Status
       const sk = String(r.statusKerja || '').trim();
       const st = String(r.status || '').trim();
       const sh = String(r.shiftKerja || '').trim();
+      const kl = String(r.keteranganLapor || '').trim();
+      const cat = String(r.catatan || '').trim();
+
       const isCutiSite = sk.toUpperCase() === 'CS' || /cuti\s*site/i.test(sk) ||
                          st.toUpperCase() === 'CS' || /cuti\s*site/i.test(st) ||
                          sh.toUpperCase() === 'CS' || /cuti\s*site/i.test(sh);
 
+      // Cek apakah ada Izin atau Sakit di kolom status kerja, status, shift kerja, keterangan, atau catatan
+      const isIzin = /^(i|izin)\b/i.test(sk) || /izin/i.test(sk) ||
+                     /^(i|izin)\b/i.test(st) || /izin/i.test(st) ||
+                     /izin/i.test(sh) || /izin/i.test(kl) || /izin/i.test(cat);
+
+      const isSakit = /^(s|sakit|ss)\b/i.test(sk) || /sakit/i.test(sk) ||
+                      /^(s|sakit|ss)\b/i.test(st) || /sakit/i.test(st) ||
+                      /sakit/i.test(sh) || /sakit/i.test(kl) || /sakit/i.test(cat);
+
+      const isIzinOrSakit = isIzin || isSakit;
+
       let statusExport = 'On Duty';
-      if (!isCutiSite) {
-        const absent = sk.match(/^(cuti|izin|sakit|off|dinas)\b/i) ||
-                       st.match(/^(cuti|izin|sakit|off|dinas)\b/i) ||
-                       sh.match(/^(cuti|izin|sakit|off|dinas)\b/i);
+      if (isIzinOrSakit || isCutiSite) {
+        // PERMINTAAN USER: Izin / Sakit keterangan status pada Excel tetap "On Duty"
+        statusExport = 'On Duty';
+      } else {
+        const absent = sk.match(/^(cuti|off|dinas)\b/i) ||
+                       st.match(/^(cuti|off|dinas)\b/i) ||
+                       sh.match(/^(cuti|off|dinas)\b/i) ||
+                       cat.match(/^(cuti|off|dinas)\b/i);
         if (absent) {
           statusExport = titleCase(absent[1]);
         }
       }
+
+      // PERMINTAAN USER: ketika di orderan makanan ada Izin/Sakit maka Orderan makanan TETAP KOSONG pada Excel
+      const isAbsentWithoutMeal = isIzinOrSakit || statusExport === 'Cuti' || statusExport === 'Off';
+
+      const kantin = isAbsentWithoutMeal
+        ? kantinSlots.map(() => '')
+        : kantinSlots.map(s => {
+            const count = mealCounts(r, s).makanKantin;
+            return count > 0 ? count : '';
+          });
+
+      const bungkus = isAbsentWithoutMeal
+        ? bungkusCols.map(() => '')
+        : bungkusCols.map(c => {
+            const count = bungkusOf(r, c.slot);
+            return count > 0 ? count : '';
+          });
+
+      const hasKantin = kantin.some(v => typeof v === 'number' && v > 0);
+      const hasBungkus = bungkus.some(v => typeof v === 'number' && v > 0);
+      const jenisMeal = isAbsentWithoutMeal ? '-' : (hasKantin || !hasBungkus ? 'Kantin' : 'Bungkusan');
 
       return [
         // Shift hanya Siang / Malam / Longshift: Nonshift, Cuti, Cuti Site, dll. → Siang
@@ -2147,7 +2183,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
             <div className="px-5 py-4">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Profil Karyawan</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-              <Input label="NIK" value={form.nik || ''} onChange={e => updateForm('nik', e.target.value)} disabled={modal.mode === 'edit'} placeholder="Ketik NIK — profil terisi otomatis" />
+              <Input label="NIK" value={form.nik || ''} onChange={e => updateForm('nik', e.target.value)} disabled={!canManage} placeholder="Ketik NIK — profil terisi otomatis" />
               <Input label="Nama Karyawan" value={form.nama || ''} onChange={e => updateForm('nama', e.target.value)} />
               {PROFILE_FIELDS.map(f => (
                 f.key === 'keteranganLapor' ? (

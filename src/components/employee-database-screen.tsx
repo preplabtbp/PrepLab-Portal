@@ -42,7 +42,7 @@ function getEmployeeShiftBadge(rawShift: string | undefined | null) {
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 import { 
-  ArrowLeft, Search, User, MapPin, Briefcase, Calendar, Phone, Activity, 
+  ArrowLeft, Search, User, MapPin, Home, Briefcase, Calendar, Phone, Activity, 
   FileText, BarChart3, ChevronRight, ChevronDown, ChevronUp, ExternalLink, CheckCircle2, AlertTriangle, Fingerprint, 
   Users, X, Database, RefreshCw, FileSpreadsheet, UploadCloud, Camera, Pencil, 
   Plus, Edit3, ShieldAlert, Scale, Gavel, Clock, AlertOctagon, Info, ShieldCheck,
@@ -1099,6 +1099,13 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     setTenureDropdownPeriod('sekarang');
   }, [selectedEmployee?.nik]);
 
+    // State & Perhitungan Kotak Status Mess & Residence Karyawan
+  const [activeMessCategory, setActiveMessCategory] = useState<'cr_mess' | 'nr_mess' | 'nr' | null>(null);
+  const [nrSubFilter, setNrSubFilter] = useState<'all' | 'kampung_baru' | 'kampung_lama' | 'lainnya'>('all');
+  const [messSearch, setMessSearch] = useState('');
+
+
+
   const [activeStatDetail, setActiveStatDetail] = useState<'permanent' | 'kontrak' | 'izin' | 'spdk' | 'active' | 'onsite' | 'counseling' | 'inactive' | null>(null);
   const [statDetailSearch, setStatDetailSearch] = useState('');
   const [ptFilter, setPtFilter] = useState<'ALL' | 'TBP' | 'GTS'>('ALL');
@@ -1202,6 +1209,81 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
     return deduplicated;
   }, [employees, isSectionManager, ptFilter, viewerPt]);
+
+  const messResidenceStats = useMemo(() => {
+    let crMess = 0;
+    let nrMess = 0;
+    let nrKampungBaru = 0;
+    let nrKampungLama = 0;
+    let nrLainnya = 0;
+    let totalWithData = 0;
+
+    const listCrMess: any[] = [];
+    const listNrMess: any[] = [];
+    const listNrKampungBaru: any[] = [];
+    const listNrKampungLama: any[] = [];
+    const listNrLainnya: any[] = [];
+
+    scopedEmployees.forEach((emp: any) => {
+      if (isResignedOrNonActiveStatus(emp)) return;
+      const sm = String(emp.statusMess || emp.status_mess || '').trim().toUpperCase();
+      const res = String(emp.residence || emp.tempatTinggal || emp.tempat_tinggal || '').trim();
+      const resLower = res.toLowerCase();
+
+      if (!sm && !res) return;
+      totalWithData++;
+
+      if (sm === 'CR' || sm === 'CRR') {
+        crMess++;
+        listCrMess.push(emp);
+      } else if (sm === 'NR') {
+        if (resLower === 'mess') {
+          nrMess++;
+          listNrMess.push(emp);
+        } else if (resLower.includes('baru')) {
+          nrKampungBaru++;
+          listNrKampungBaru.push(emp);
+        } else if (resLower.includes('lama')) {
+          nrKampungLama++;
+          listNrKampungLama.push(emp);
+        } else {
+          nrLainnya++;
+          listNrLainnya.push(emp);
+        }
+      } else {
+        if (resLower === 'mess') {
+          crMess++;
+          listCrMess.push(emp);
+        } else if (resLower.includes('baru')) {
+          nrKampungBaru++;
+          listNrKampungBaru.push(emp);
+        } else if (resLower.includes('lama')) {
+          nrKampungLama++;
+          listNrKampungLama.push(emp);
+        } else {
+          nrLainnya++;
+          listNrLainnya.push(emp);
+        }
+      }
+    });
+
+    const totalNR = nrMess + nrKampungBaru + nrKampungLama + nrLainnya;
+
+    return {
+      crMess,
+      nrMess,
+      totalNR,
+      nrKampungBaru,
+      nrKampungLama,
+      nrLainnya,
+      totalWithData,
+      listCrMess,
+      listNrMess,
+      listNrKampungBaru,
+      listNrKampungLama,
+      listNrLainnya
+    };
+  }, [scopedEmployees]);
 
   // 1. Data & List Karyawan Aktif (Diurutkan sesuai Hirarki Jabatan Resmi)
   const activeEmployeesList = useMemo(() => {
@@ -2622,6 +2704,347 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                       {activeStatDetail === 'spdk' ? '▲ Tutup Rincian' : '▼ Klik Lihat Detail'}
                     </div>
                   </button>
+                </div>
+
+
+
+                {/* KOTAK: STATUS MESS & RESIDENCE KARYAWAN */}
+                <div className="w-full bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs mt-3.5 space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-700 flex items-center justify-center font-bold">
+                        <Home className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-sm sm:text-base text-slate-800 tracking-tight flex items-center gap-2">
+                          <span>Status Mess &amp; Residence Karyawan</span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                            {messResidenceStats.totalWithData} Terdata
+                          </span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          Klasifikasi akomodasi resmi (Mess Perusahaan CR/NR &amp; Domisili Residence Luar Mess)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                    {/* 1. CR Mess */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveMessCategory(prev => prev === 'cr_mess' ? null : 'cr_mess');
+                        setMessSearch('');
+                      }}
+                      className={`rounded-xl p-4 border text-left transition-all cursor-pointer flex flex-col justify-between group ${
+                        activeMessCategory === 'cr_mess'
+                          ? 'bg-sky-50/80 border-sky-400 ring-2 ring-sky-300 shadow-md'
+                          : 'bg-gradient-to-br from-sky-50/50 to-blue-50/30 border-sky-200 hover:border-sky-400 hover:shadow-xs'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="text-xs font-black tracking-wider text-sky-900 uppercase flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-sky-500"></span>
+                            CR Mess
+                          </span>
+                          <span className="text-2xl sm:text-3xl font-black text-sky-950 tracking-tight mt-1 block">
+                            {messResidenceStats.crMess} <span className="text-xs font-bold text-sky-700">Karyawan</span>
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                          MESS
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-sky-700/90 font-medium mt-2">
+                        Karyawan Reguler yang tinggal di Mess Perusahaan
+                      </p>
+                      <div className="text-[10px] text-sky-600 font-bold mt-1 group-hover:underline">
+                        {activeMessCategory === 'cr_mess' ? '▲ Tutup Rincian' : '▼ Klik Lihat Nama'}
+                      </div>
+                    </button>
+
+                    {/* 2. NR Mess */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveMessCategory(prev => prev === 'nr_mess' ? null : 'nr_mess');
+                        setMessSearch('');
+                      }}
+                      className={`rounded-xl p-4 border text-left transition-all cursor-pointer flex flex-col justify-between group ${
+                        activeMessCategory === 'nr_mess'
+                          ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-300 shadow-md'
+                          : 'bg-gradient-to-br from-amber-50/50 to-orange-50/30 border-amber-200 hover:border-amber-400 hover:shadow-xs'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="text-xs font-black tracking-wider text-amber-900 uppercase flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                            NR Mess
+                          </span>
+                          <span className="text-2xl sm:text-3xl font-black text-amber-950 tracking-tight mt-1 block">
+                            {messResidenceStats.nrMess} <span className="text-xs font-bold text-amber-700">Karyawan</span>
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          NR • MESS
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-amber-700/90 font-medium mt-2">
+                        Karyawan Non-Reguler yang difasilitasi tinggal di Mess
+                      </p>
+                      <div className="text-[10px] text-amber-600 font-bold mt-1 group-hover:underline">
+                        {activeMessCategory === 'nr_mess' ? '▲ Tutup Rincian' : '▼ Klik Lihat Nama'}
+                      </div>
+                    </button>
+
+                    {/* 3. NR (Non-Reguler) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveMessCategory(prev => prev === 'nr' ? null : 'nr');
+                        setNrSubFilter('all');
+                        setMessSearch('');
+                      }}
+                      className={`rounded-xl p-4 border text-left transition-all cursor-pointer flex flex-col justify-between group ${
+                        activeMessCategory === 'nr'
+                          ? 'bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-300 shadow-md'
+                          : 'bg-gradient-to-br from-emerald-50/60 to-teal-50/30 border-emerald-200 hover:border-emerald-400 hover:shadow-xs'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="text-xs font-black tracking-wider text-emerald-900 uppercase flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            NR = {messResidenceStats.totalNR} Karyawan
+                          </span>
+                          <span className="text-2xl sm:text-3xl font-black text-emerald-950 tracking-tight mt-1 block">
+                            {messResidenceStats.totalNR} <span className="text-xs font-bold text-emerald-700">Karyawan</span>
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          NR • LOCAL
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-700/90 font-medium mt-2">
+                        Karyawan Non-Reguler (Kampung Baru, Kampung Lama & Lainnya)
+                      </p>
+                      <div className="text-[10px] text-emerald-600 font-bold mt-1 group-hover:underline">
+                        {activeMessCategory === 'nr' ? '▲ Tutup Rincian' : '▼ Klik Buka & Sortir'}
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* INTERACTIVE DETAIL DRAWER UNTUK STATUS MESS & RESIDENCE */}
+                  <AnimatePresence>
+                    {activeMessCategory && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden mt-3 pt-3 border-t border-slate-200"
+                      >
+                        <div className="bg-slate-50/80 rounded-xl p-3 sm:p-4 border border-slate-200">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">
+                                  {activeMessCategory === 'cr_mess' && 'Daftar Karyawan CR Mess'}
+                                  {activeMessCategory === 'nr_mess' && 'Daftar Karyawan NR Mess'}
+                                  {activeMessCategory === 'nr' && 'Daftar Karyawan NR (Non-Reguler)'}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-white text-slate-700 border border-slate-200">
+                                  {activeMessCategory === 'cr_mess' && `${messResidenceStats.listCrMess.length} Orang`}
+                                  {activeMessCategory === 'nr_mess' && `${messResidenceStats.listNrMess.length} Orang`}
+                                  {activeMessCategory === 'nr' && (
+                                    nrSubFilter === 'all' ? `Total: ${messResidenceStats.totalNR} Orang` :
+                                    nrSubFilter === 'kampung_baru' ? `${messResidenceStats.nrKampungBaru} Orang` :
+                                    nrSubFilter === 'kampung_lama' ? `${messResidenceStats.nrKampungLama} Orang` :
+                                    `${messResidenceStats.nrLainnya} Orang`
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                              <input
+                                type="text"
+                                placeholder="Cari nama atau NIK..."
+                                value={messSearch}
+                                onChange={(e) => setMessSearch(e.target.value)}
+                                className="px-3 py-1 bg-white border border-slate-300 rounded-lg text-xs w-full sm:w-56 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setActiveMessCategory(null)}
+                                className="px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                              >
+                                ✕ Tutup
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* KOTAK SORTIR DI DALAM NR */}
+                          {activeMessCategory === 'nr' && (
+                            <div className="mb-3.5 p-3 rounded-xl bg-white border border-emerald-200 shadow-2xs">
+                              <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-100">
+                                <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                  Sortir Residence Non-Reguler (NR):
+                                </span>
+                                <span className="text-[10px] font-medium text-slate-500">
+                                  Pilih kategori untuk menyaring daftar karyawan di bawah
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                {/* Semua NR */}
+                                <button
+                                  type="button"
+                                  onClick={() => setNrSubFilter('all')}
+                                  className={`p-2.5 rounded-lg border text-center transition-all cursor-pointer ${
+                                    nrSubFilter === 'all'
+                                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs ring-2 ring-emerald-300'
+                                      : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-700 border-slate-200'
+                                  }`}
+                                >
+                                  <span className="text-[10px] font-bold block opacity-90 uppercase">Semua NR</span>
+                                  <span className="text-base font-black block mt-0.5">{messResidenceStats.totalNR}</span>
+                                  <span className="text-[9px] opacity-80 font-semibold">Orang</span>
+                                </button>
+
+                                {/* a. Kampung Baru */}
+                                <button
+                                  type="button"
+                                  onClick={() => setNrSubFilter('kampung_baru')}
+                                  className={`p-2.5 rounded-lg border text-center transition-all cursor-pointer ${
+                                    nrSubFilter === 'kampung_baru'
+                                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs ring-2 ring-emerald-300'
+                                      : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-700 border-slate-200'
+                                  }`}
+                                >
+                                  <span className="text-[10px] font-bold block opacity-90">Kampung Baru</span>
+                                  <span className="text-base font-black block mt-0.5">{messResidenceStats.nrKampungBaru}</span>
+                                  <span className="text-[9px] opacity-80 font-semibold">Orang</span>
+                                </button>
+
+                                {/* b. Kampung Lama */}
+                                <button
+                                  type="button"
+                                  onClick={() => setNrSubFilter('kampung_lama')}
+                                  className={`p-2.5 rounded-lg border text-center transition-all cursor-pointer ${
+                                    nrSubFilter === 'kampung_lama'
+                                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs ring-2 ring-emerald-300'
+                                      : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-700 border-slate-200'
+                                  }`}
+                                >
+                                  <span className="text-[10px] font-bold block opacity-90">Kampung Lama</span>
+                                  <span className="text-base font-black block mt-0.5">{messResidenceStats.nrKampungLama}</span>
+                                  <span className="text-[9px] opacity-80 font-semibold">Orang</span>
+                                </button>
+
+                                {/* c. Lainnya */}
+                                <button
+                                  type="button"
+                                  onClick={() => setNrSubFilter('lainnya')}
+                                  className={`p-2.5 rounded-lg border text-center transition-all cursor-pointer ${
+                                    nrSubFilter === 'lainnya'
+                                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs ring-2 ring-emerald-300'
+                                      : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-700 border-slate-200'
+                                  }`}
+                                >
+                                  <span className="text-[10px] font-bold block opacity-90">Lainnya</span>
+                                  <span className="text-base font-black block mt-0.5">{messResidenceStats.nrLainnya}</span>
+                                  <span className="text-[9px] opacity-80 font-semibold">Soligi dll</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* List Table */}
+                          <div className="overflow-x-auto max-h-72 custom-scrollbar bg-white rounded-lg border border-slate-200">
+                            <table className="w-full text-xs text-left">
+                              <thead className="bg-slate-100 text-slate-700 uppercase font-extrabold text-[10px] sticky top-0">
+                                <tr>
+                                  <th className="py-2 px-3 text-center w-10">No</th>
+                                  <th className="py-2 px-3">Nama Karyawan</th>
+                                  <th className="py-2 px-3 font-mono">NIK</th>
+                                  <th className="py-2 px-3">Bagian / Section</th>
+                                  <th className="py-2 px-3">Jabatan</th>
+                                  <th className="py-2 px-3 text-center">Status Mess</th>
+                                  <th className="py-2 px-3">Residence</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 text-slate-700">
+                                {(() => {
+                                  const baseList = (() => {
+                                    if (activeMessCategory === 'cr_mess') return messResidenceStats.listCrMess;
+                                    if (activeMessCategory === 'nr_mess') return messResidenceStats.listNrMess;
+                                    if (activeMessCategory === 'nr') {
+                                      if (nrSubFilter === 'kampung_baru') return messResidenceStats.listNrKampungBaru;
+                                      if (nrSubFilter === 'kampung_lama') return messResidenceStats.listNrKampungLama;
+                                      if (nrSubFilter === 'lainnya') return messResidenceStats.listNrLainnya;
+                                      return [
+                                        ...messResidenceStats.listNrKampungBaru,
+                                        ...messResidenceStats.listNrKampungLama,
+                                        ...messResidenceStats.listNrLainnya
+                                      ];
+                                    }
+                                    return [];
+                                  })();
+
+                                  const filtered = baseList.filter((e: any) => {
+                                    if (!messSearch.trim()) return true;
+                                    const q = messSearch.toLowerCase();
+                                    return (e.name || '').toLowerCase().includes(q) || (e.nik || '').toLowerCase().includes(q);
+                                  });
+
+                                  if (filtered.length === 0) {
+                                    return (
+                                      <tr>
+                                        <td colSpan={7} className="py-6 text-center text-slate-400 italic">
+                                          Tidak ada karyawan yang cocok dengan pencarian.
+                                        </td>
+                                      </tr>
+                                    );
+                                  }
+
+                                  return filtered.map((emp: any, idx: number) => (
+                                    <tr
+                                      key={emp.nik || idx}
+                                      onClick={() => setSelectedEmployee(emp)}
+                                      className="hover:bg-teal-50/50 cursor-pointer transition-colors"
+                                      title="Klik untuk membuka profil lengkap karyawan"
+                                    >
+                                      <td className="py-2 px-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                                      <td className="py-2 px-3 font-bold text-slate-900">{emp.name}</td>
+                                      <td className="py-2 px-3 font-mono text-[11px] text-slate-600">{emp.nik}</td>
+                                      <td className="py-2 px-3">{emp.section || '-'}</td>
+                                      <td className="py-2 px-3">{emp.jabatan || '-'}</td>
+                                      <td className="py-2 px-3 text-center">
+                                        <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                                          (emp.statusMess || emp.status_mess) === 'CR'
+                                            ? 'bg-sky-100 text-sky-800'
+                                            : 'bg-emerald-100 text-emerald-800'
+                                        }`}>
+                                          {emp.statusMess || emp.status_mess || '-'}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-3 font-semibold text-slate-800">
+                                        {emp.residence || emp.tempatTinggal || emp.tempat_tinggal || '-'}
+                                      </td>
+                                    </tr>
+                                  ));
+                                })()}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* EXPANDABLE DETAIL DRAWER / LIST ACCORDION */}

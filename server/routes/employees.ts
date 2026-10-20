@@ -1209,6 +1209,8 @@ employeesRouter.post("/import", async (req, res) => {
           phoneDarurat: normalized['notelephonedaruratorangterdekat'] || normalized['notelpdarurat'] || normalized['telpdarurat'] || null,
           alamatKtp: normalized['alamatsesuaiktp'] || normalized['alamatktp'] || null,
           alamatDomisili: normalized['alamatdomisili'] || normalized['domisili'] || null,
+          statusMess: normalized['statusmess'] || normalized['mess'] || raw['Status Mess'] || raw['status_mess'] || null,
+          residence: normalized['residence'] || normalized['tempattinggal'] || raw['Residence'] || raw['tempat_tinggal'] || null,
           jumlahCutiSite: normalized['jumlahcutisite'] || normalized['cutisite'] || normalized['jumlahcutisiteperperiode'] || normalized['cutisiteperiode'] || raw['Jumlah Cuti Site'] || raw['Jumlah Cuti Site per Periode'] || null,
           ...(driveAvatarUrl ? { photo: driveAvatarUrl } : {})
         };
