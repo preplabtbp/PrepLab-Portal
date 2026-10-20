@@ -293,7 +293,7 @@ export function FloatingFeedbackButton({
           hasMobileBottomNav 
             ? 'bottom-[5.25rem] right-3.5 sm:right-4' 
             : 'bottom-4 right-3.5 sm:right-4'
-        } ${isHome ? 'md:right-28 md:bottom-6' : 'md:right-6 md:bottom-6'}`}
+        } md:right-28 md:bottom-6`}
       >
         <button
           type="button"

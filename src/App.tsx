@@ -22,6 +22,7 @@ import { PromotionWelcomeModal } from './components/PromotionWelcomeModal';
 import { GamificationAlertCenter } from './components/GamificationAlertCenter';
 import { MeetingRoomDevModal } from './components/MeetingRoomDevModal';
 import { FloatingFeedbackButton } from './components/FloatingFeedbackButton';
+import { FloatingGeminiButton } from './components/FloatingGeminiButton';
 import { initFontSize } from './utils/fontSize';
 import { withReadableThemeColors } from './utils/contrast';
 import { formatAvatarUrl } from './lib/avatarUtils';
@@ -2272,6 +2273,14 @@ export default function App() {
         isCrewRole={isCrewRole}
         currentPath={location.pathname}
         onNavigate={handleNav}
+      />
+
+      {/* Floating Google Gemini AI Assistant Button */}
+      <FloatingGeminiButton
+        isCrewRole={isCrewRole}
+        isBulletin={isBulletin}
+        isBulletinFocusMode={bulletinFocusMode}
+        currentPath={location.pathname}
       />
 
     </div>
