@@ -141,7 +141,8 @@ export function formatReportTime(timestamp?: string | number | Date | null): str
     if (isNaN(d.getTime())) return '';
     return d.toLocaleTimeString('id-ID', {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: false
     });
   } catch {
     return '';
@@ -160,7 +161,8 @@ export function formatReportDateTime(timestamp?: string | number | Date | null):
     });
     const timeStr = d.toLocaleTimeString('id-ID', {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: false
     });
     return `${dateStr}, ${timeStr}`;
   } catch {

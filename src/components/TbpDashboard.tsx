@@ -1562,7 +1562,7 @@ export function TbpDashboard({
                                 <span>
                                   {evtDate.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
                                   {' • '}
-                                  {evtDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIT
+                                  {evtDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })} WIT
                                 </span>
                               </div>
                               {agenda.pic && (

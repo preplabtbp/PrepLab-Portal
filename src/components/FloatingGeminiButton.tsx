@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ExternalLink, Sparkles } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FloatingGeminiButtonProps {
@@ -55,55 +55,51 @@ export function FloatingGeminiButton({
   const hasMobileBottomNav = !isCrewRole && !(isBulletin && isBulletinFocusMode);
 
   const handleClick = () => {
-    toast.info('Membuka Google Gemini AI di tab baru... ✨', {
-      description: 'Gunakan akun Google Anda untuk login.',
-      duration: 3000,
+    toast.info('Membuka Google Gemini AI... ✨', {
+      duration: 2500,
     });
   };
 
   return (
     <aside
-      aria-label="Google Gemini AI Assistant"
+      aria-label="Google Gemini AI"
       className={`fixed z-40 transition-all duration-300 pointer-events-auto ${
         hasMobileBottomNav 
-          ? 'bottom-[8.25rem] right-3.5 sm:right-4' 
-          : 'bottom-16 right-3.5 sm:right-4'
-      } md:bottom-6 md:right-6`}
+          ? 'bottom-[5.25rem] left-3.5 sm:left-4' 
+          : 'bottom-4 left-3.5 sm:left-4'
+      } md:bottom-6 md:left-6`}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
       <div className="relative group">
         {/* Hover Tooltip - Desktop & Tablet */}
         {showTooltip && (
-          <div className="hidden sm:flex absolute bottom-full right-0 mb-2.5 flex-col items-end pointer-events-none animate-in fade-in zoom-in-95 duration-150 z-50">
-            <div className="bg-slate-900/95 dark:bg-slate-950/95 text-white backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-2xl border border-slate-700/80 text-right space-y-0.5 whitespace-nowrap">
-              <div className="flex items-center gap-1.5 justify-end">
+          <div className="hidden sm:flex absolute bottom-full left-0 mb-2.5 flex-col items-start pointer-events-none animate-in fade-in zoom-in-95 duration-150 z-50">
+            <div className="bg-slate-900/95 dark:bg-slate-950/95 text-white backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-2xl border border-slate-700/80 text-left space-y-0.5 whitespace-nowrap">
+              <div className="flex items-center gap-1.5 justify-start">
                 <span className="font-bold text-xs text-white flex items-center gap-1">
                   Google Gemini AI
                 </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               </div>
-              <p className="text-[11px] text-slate-300">
-                Buka tab baru (Gunakan akun Google masing-masing)
-              </p>
-              <div className="text-[10px] font-mono text-purple-400 font-semibold pt-0.5 flex items-center justify-end gap-1">
+              <div className="text-[10px] font-mono text-purple-400 font-semibold pt-0.5 flex items-center justify-start gap-1">
                 <span>gemini.google.com</span>
                 <ExternalLink className="w-2.5 h-2.5" />
               </div>
             </div>
-            {/* Tooltip Arrow */}
-            <div className="w-2.5 h-2.5 bg-slate-900/95 dark:bg-slate-950/95 border-r border-b border-slate-700/80 rotate-45 mr-5 -mt-1.5" />
+            {/* Tooltip Arrow pointing to button */}
+            <div className="w-2.5 h-2.5 bg-slate-900/95 dark:bg-slate-950/95 border-r border-b border-slate-700/80 rotate-45 ml-4.5 -mt-1.5" />
           </div>
         )}
 
-        {/* Floating Anchor Link Button */}
+        {/* Floating Anchor Link Button (Only Logo) */}
         <a
           href="https://gemini.google.com/"
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleClick}
-          className="group relative flex items-center gap-2.5 p-2 sm:px-4 sm:py-2.5 rounded-full bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-slate-100 border border-slate-200/90 dark:border-slate-700/90 shadow-xl shadow-purple-500/10 hover:shadow-2xl hover:shadow-purple-500/25 hover:border-purple-400 dark:hover:border-purple-400 backdrop-blur-md hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none ring-1 ring-black/5 dark:ring-white/5"
-          title="Buka Google Gemini AI di tab baru (Gunakan akun masing-masing untuk login)"
+          className="group relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-slate-100 border border-slate-200/90 dark:border-slate-700/90 shadow-xl shadow-purple-500/10 hover:shadow-2xl hover:shadow-purple-500/25 hover:border-purple-400 dark:hover:border-purple-400 backdrop-blur-md hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none ring-1 ring-black/5 dark:ring-white/5"
+          title="Google Gemini AI"
         >
           {/* Subtle cosmic aura glow behind */}
           <span className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-20 blur-xs group-hover:opacity-40 transition-opacity animate-pulse" />
@@ -111,14 +107,6 @@ export function FloatingGeminiButton({
           {/* Gemini Sparkle Logo */}
           <div className="relative flex items-center justify-center shrink-0">
             <GeminiLogoIcon className="w-5 h-5 sm:w-5 sm:h-5 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300 drop-shadow-xs" />
-          </div>
-
-          {/* Text Labels: Visible on sm+ devices */}
-          <div className="relative hidden sm:flex items-center gap-1.5 leading-none">
-            <span className="text-xs font-black tracking-tight bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-blue-400 dark:via-purple-300 dark:to-pink-400 bg-clip-text text-transparent">
-              Gemini
-            </span>
-            <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-purple-600 dark:group-hover:text-purple-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
           </div>
         </a>
       </div>

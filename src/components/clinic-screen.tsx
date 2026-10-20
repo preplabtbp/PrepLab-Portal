@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ClinicMonthlyDiagramSheet } from './ClinicMonthlyDiagramSheet';
+import { TimeInput24 } from './ui/TimeInput24';
 
 export interface ClinicVisit {
   id: number;
@@ -1401,26 +1402,12 @@ export function ClinicScreen({ inspectorName = '', inspectorNik = '', userPt = '
                   <label className="text-xs font-black block text-slate-950 mb-1">
                     Jam Kunjungan (WIT) <span className="text-rose-500">*</span>
                   </label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="time"
-                      value={formVisitTime}
-                      onChange={(e) => setFormVisitTime(e.target.value)}
-                      required
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 bg-white text-slate-950 outline-none font-mono font-bold"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const d = new Date();
-                        setFormVisitTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
-                      }}
-                      className="px-3 py-2 rounded-xl border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-950 text-xs font-bold transition-colors shrink-0 cursor-pointer"
-                      title="Set jam saat ini"
-                    >
-                      Sekarang
-                    </button>
-                  </div>
+                  <TimeInput24
+                    value={formVisitTime}
+                    onChange={(val) => setFormVisitTime(val)}
+                    required
+                    showNowButton={true}
+                  />
                 </div>
               </div>
 

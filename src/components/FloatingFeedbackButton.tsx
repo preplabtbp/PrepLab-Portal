@@ -59,6 +59,7 @@ export function FloatingFeedbackButton({
     !jab.includes('analyst') && !jab.includes('superintendent') && !jab.includes('manager') && !jab.includes('admin'));
 
   const [isOpen, setIsOpen] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
   const [type, setType] = useState<'suggestion' | 'bug' | 'improvement' | 'question'>('suggestion');
   const [module, setModule] = useState(() => {
     if (currentPath.startsWith('/bulletin')) return 'Labnote & Pengumuman';
@@ -293,34 +294,53 @@ export function FloatingFeedbackButton({
           hasMobileBottomNav 
             ? 'bottom-[5.25rem] right-3.5 sm:right-4' 
             : 'bottom-4 right-3.5 sm:right-4'
-        } md:right-28 md:bottom-6`}
+        } md:right-6 md:bottom-6`}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
       >
-        <button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          className="group relative flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-700 hover:from-teal-500 hover:to-emerald-600 text-white shadow-lg shadow-teal-900/30 hover:shadow-xl hover:shadow-teal-600/35 border border-teal-400/40 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none"
-          title="Kirim Masukan, Ide, atau Laporkan Kendala (+35 EXP)"
-        >
-          {/* Subtle pulse aura */}
-          <span className="absolute -inset-0.5 rounded-full bg-teal-400 opacity-20 blur-xs group-hover:opacity-40 transition-opacity" />
+        <div className="relative group">
+          {/* Hover Tooltip - Desktop & Tablet ("keterangan muncul ketika cursor kesana") */}
+          {showTooltip && (
+            <div className="hidden sm:flex absolute bottom-full right-0 mb-2.5 flex-col items-end pointer-events-none animate-in fade-in zoom-in-95 duration-150 z-50">
+              <div className="bg-slate-900/95 dark:bg-slate-950/95 text-white backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-2xl border border-slate-700/80 text-right space-y-0.5 whitespace-nowrap">
+                <div className="flex items-center gap-1.5 justify-end">
+                  <span className="font-bold text-xs text-white flex items-center gap-1">
+                    Masukan &amp; Saran
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-mono font-bold border border-amber-300/30">
+                    +35 EXP
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  Kirim masukan, ide baru, atau laporkan kendala
+                </p>
+              </div>
+              {/* Tooltip Arrow pointing to button */}
+              <div className="w-2.5 h-2.5 bg-slate-900/95 dark:bg-slate-950/95 border-r border-b border-slate-700/80 rotate-45 mr-4.5 -mt-1.5" />
+            </div>
+          )}
 
-          {/* Icon */}
-          <div className="relative flex items-center justify-center">
-            <Lightbulb className="w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform duration-300" />
-            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-          </div>
+          {/* Floating Action Button (Only Logo) */}
+          <button
+            type="button"
+            onClick={() => {
+              setShowTooltip(false);
+              setIsOpen(true);
+            }}
+            className="group relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-r from-teal-600 via-teal-700 to-emerald-700 hover:from-teal-500 hover:to-emerald-600 text-white shadow-lg shadow-teal-900/30 hover:shadow-xl hover:shadow-teal-600/35 border border-teal-400/40 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none ring-1 ring-black/5 dark:ring-white/5"
+            title="Masukan &amp; Saran (+35 EXP)"
+          >
+            {/* Subtle pulse aura */}
+            <span className="absolute -inset-0.5 rounded-full bg-teal-400 opacity-20 blur-xs group-hover:opacity-40 transition-opacity" />
 
-          {/* Text Labels: Compact on mobile, descriptive on desktop */}
-          <div className="relative flex items-center gap-1.5 font-medium leading-none">
-            <span className="text-xs font-bold tracking-tight">
-              <span className="inline sm:hidden">Saran</span>
-              <span className="hidden sm:inline">Masukan &amp; Saran</span>
-            </span>
-            <span className="hidden sm:inline-block px-1.5 py-0.2 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-mono font-bold border border-amber-300/30">
-              +35 EXP
-            </span>
-          </div>
-        </button>
+            {/* Icon */}
+            <div className="relative flex items-center justify-center">
+              <Lightbulb className="w-5 h-5 text-amber-300 group-hover:rotate-12 transition-transform duration-300" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400" />
+            </div>
+          </button>
+        </div>
       </aside>
 
       {/* Quick Feedback Modal Dialog */}

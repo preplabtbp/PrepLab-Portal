@@ -163,7 +163,7 @@ export function LabBotWidget({ inspectorName, inspectorNik }: { inspectorName?: 
       id: 'welcome',
       role: 'assistant',
       content: `Halo ${inspectorName ? inspectorName.split(' ')[0] : 'Rekan Lab'}! 👋\n\nSaya **LabBot**, asisten cerdas khusus **SOP Laboratorium Preparasi & Keselamatan K3LH** PT Harita Nickel.\n\nAnda dapat menanyakan:\n- 🛠️ **SOP & Troubleshooting Alat** (XRF, ICP, Jaw Crusher, Pulverizer, Oven, Balance)\n- 🧪 **MSDS & Penanganan Bahan Kimia** (HF, HNO3, HCl, Fluks Borat)\n- 🦺 **Standar APD & Prosedur Tanggap Darurat K3**\n\nSilakan pilih topik cepat di atas atau ketik pertanyaan Anda!`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
     }
   ]);
   const [inputText, setInputText] = useState('');
@@ -190,7 +190,7 @@ export function LabBotWidget({ inspectorName, inspectorNik }: { inspectorName?: 
       id: `user-${Date.now()}`,
       role: 'user',
       content: text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
     };
 
     setMessages(prev => [...prev, userMsg]);
@@ -214,7 +214,7 @@ export function LabBotWidget({ inspectorName, inspectorNik }: { inspectorName?: 
           id: `bot-${Date.now()}`,
           role: 'assistant',
           content: data.reply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
         };
         setMessages(prev => [...prev, botMsg]);
       } else {
@@ -223,7 +223,7 @@ export function LabBotWidget({ inspectorName, inspectorNik }: { inspectorName?: 
           id: `err-${Date.now()}`,
           role: 'assistant',
           content: `⚠️ Maaf, terjadi kendala saat menghubungi server AI: ${data.error || 'Silakan coba sesaat lagi.'}`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
         };
         setMessages(prev => [...prev, errorMsg]);
       }
@@ -247,7 +247,7 @@ export function LabBotWidget({ inspectorName, inspectorNik }: { inspectorName?: 
         id: 'welcome',
         role: 'assistant',
         content: `Obrolan di-reset. Ada SOP alat atau panduan K3 lain yang ingin Anda tanyakan? 🧪`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
       }
     ]);
     toast.info('Riwayat obrolan LabBot telah dibersihkan');
