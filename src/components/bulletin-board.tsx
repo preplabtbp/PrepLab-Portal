@@ -743,6 +743,7 @@ export function BulletinBoard({
       const params = new URLSearchParams(location.search || window.location.search);
       const urlPostId = params.get("page") || params.get("postId") || params.get("id");
       const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
+      const targetId = urlPostId || savedPageId;
       const urlTopic = params.get("topic");
       if (urlTopic) {
         setDeepLinkTopic(urlTopic);
