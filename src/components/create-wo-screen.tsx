@@ -9,10 +9,10 @@ import {
 import { ImageModal } from './image-modal';
 import { DevModeAccordion, useDevOptions } from './dev-mode-accordion';
 import { WhatsAppModal } from './whatsapp-modal';
-import SignatureCanvas from 'react-signature-canvas';
 import { toast } from 'sonner';
 import { workOrderSchema } from '../lib/zod';
 import { PageHeader } from './PageHeader';
+import { VerifiedSignaturePad } from './VerifiedSignaturePad';
 import { 
   normalizeEquipment, 
   STANDARD_NON_INSTRUMENT_NAMES, 
@@ -50,6 +50,7 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
   const [isUploading, setIsUploading] = useState(false);
   const [selectedTool, setSelectedTool] = useState<ToolRecord | null>(null);
   
+  const [signatureUrl, setSignatureUrl] = useState('');
   const sigPad = useRef<any>(null);
 
   const { devOptions, setDevOptions, parsedDevOptions } = useDevOptions(inspectorNik);
@@ -225,10 +226,9 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
         return;
       }
 
-      let signatureData = '';
-      if (sigPad.current && !sigPad.current.isEmpty()) {
-         const rawData = sigPad.current.getCanvas().toDataURL('image/png');
-         const base64Data = rawData.split(',')[1];
+      let signatureData = signatureUrl || '';
+      if (signatureData && signatureData.startsWith('data:image')) {
+         const base64Data = signatureData.split(',')[1];
          // Upload signature to Drive
          signatureData = await uploadPhotoToDrive(base64Data, 'image/png', `signature_${new Date().getTime()}.png`, 'Signatures');
       }
@@ -692,23 +692,14 @@ export function CreateWOScreen({ inspectorName, inspectorNik, equipmentCategorie
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">Tanda Tangan Pelapor</label>
-            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm relative">
-                <SignatureCanvas 
-                  ref={sigPad}
-                  penColor="#000000"
-                  canvasProps={{className: "w-full h-40"}}
-                  backgroundColor="rgba(255,255,255,1)"
-                />
-                <button 
-                  type="button" 
-                  onClick={() => sigPad.current?.clear()}
-                  className="absolute top-2 right-2 bg-slate-100 text-slate-500 hover:text-rose-500 p-1.5 rounded-lg shadow-sm transition-colors text-xs flex items-center gap-1"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> Ulangi
-                </button>
-            </div>
-            <p className="text-xs text-slate-400">Pastikan tanda tangan Anda sudah sesuai.</p>
+            <VerifiedSignaturePad
+              signerName={inspectorName}
+              signerNik={inspectorNik}
+              value={signatureUrl}
+              onChange={setSignatureUrl}
+              label="Tanda Tangan Pelapor"
+              theme="teal"
+            />
           </div>
 
           <div className="pt-4 mt-2 border-t border-slate-100">

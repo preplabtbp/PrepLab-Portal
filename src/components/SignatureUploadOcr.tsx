@@ -377,7 +377,7 @@ export function SignatureUploadOcr({
                 <div className="space-y-0.5">
                   <p className="font-bold text-teal-950 dark:text-teal-100">Mode Polos Aktif (Rekomendasi)</p>
                   <p className="leading-relaxed opacity-90">
-                    File tanda tangan bersih tanpa teks dicap di dalam gambar. Watermark resmi (<em>PREPLAB SECURE VERIFIED • AES-256</em>) sudah otomatis disediakan oleh sistem portal saat pratinjau dan tanda tangan formulir, sehingga <strong>tidak terjadi watermark ganda/tumpuk</strong>.
+                    File tanda tangan bersih tanpa teks watermark tambahan di dalam gambar. Cocok untuk dokumen yang membutuhkan tanda tangan polos dan profesional.
                   </p>
                 </div>
               </div>

@@ -1,8 +1,8 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from './ui';
-import SignatureCanvas from 'react-signature-canvas';
-import { Trash2, PenTool, Search, Users } from 'lucide-react';
+import { Search, Users, UserCheck } from 'lucide-react';
 import { getEmployees } from '../sheets-api';
+import { VerifiedSignaturePad } from './VerifiedSignaturePad';
 
 interface InspectorSignaturesProps {
   inspectorName: string;
@@ -24,10 +24,6 @@ export interface SignatureData {
 
 export function InspectorSignatures({ inspectorName, inspectorNik, onChange }: InspectorSignaturesProps) {
   const [employees, setEmployees] = useState<any[]>([]);
-  
-  const sigPad1 = useRef<SignatureCanvas>(null);
-  const sigPad2 = useRef<SignatureCanvas>(null);
-  const sigPad3 = useRef<SignatureCanvas>(null);
 
   const [ttd1, setTtd1] = useState('');
   const [ttd2, setTtd2] = useState('');
@@ -58,190 +54,207 @@ export function InspectorSignatures({ inspectorName, inspectorNik, onChange }: I
     });
   };
 
-  const handleClear1 = () => { sigPad1.current?.clear(); setTtd1(''); triggerChange({ ttd1: '' }); };
-  const handleClear2 = () => { sigPad2.current?.clear(); setTtd2(''); triggerChange({ ttd2: '' }); };
-  const handleClear3 = () => { sigPad3.current?.clear(); setTtd3(''); triggerChange({ ttd3: '' }); };
-
-  const getCompressedDataUrl = (sigPad: any): string => {
-    if (!sigPad.current || sigPad.current.isEmpty()) return '';
-    const rawCanvas = sigPad.current.getCanvas();
-    if (!rawCanvas) return '';
-
-    const maxW = 360;
-    const maxH = 180;
-    let { width, height } = rawCanvas;
-    if (width > maxW || height > maxH) {
-      const ratio = Math.min(maxW / width, maxH / height);
-      width = Math.round(width * ratio);
-      height = Math.round(height * ratio);
-    }
-
-    const offscreen = document.createElement('canvas');
-    offscreen.width = width;
-    offscreen.height = height;
-    const ctx = offscreen.getContext('2d');
-    if (!ctx) return rawCanvas.toDataURL('image/png');
-    ctx.drawImage(rawCanvas, 0, 0, width, height);
-    return offscreen.toDataURL('image/png');
-  };
-
-  const handleEnd1 = () => { const val = getCompressedDataUrl(sigPad1); setTtd1(val); triggerChange({ ttd1: val }); };
-  const handleEnd2 = () => { const val = getCompressedDataUrl(sigPad2); setTtd2(val); triggerChange({ ttd2: val }); };
-  const handleEnd3 = () => { const val = getCompressedDataUrl(sigPad3); setTtd3(val); triggerChange({ ttd3: val }); };
-
   return (
     <div className="space-y-4">
-      {/* Inspector 1 */}
-      <Card className="border-l-4 border-l-slate-400">
-        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1">
-          <PenTool className="w-4 h-4 text-slate-500" />
-          Tanda Tangan Inspektor Utama <span className="text-rose-500">*</span>
-        </label>
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 font-medium text-slate-700 text-sm mb-3">
+      {/* 1. Inspector 1 (Inspektor Utama) */}
+      <Card className="border-l-4 border-l-teal-500 shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-teal-800 dark:text-teal-300 uppercase tracking-wider flex items-center gap-1.5">
+            <UserCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            Inspektor Utama <span className="text-rose-500">*</span>
+          </label>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-bold">
+            {inspectorNik || 'NIK -'}
+          </span>
+        </div>
+
+        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 font-bold text-slate-800 dark:text-slate-100 text-sm">
           {inspectorName}
         </div>
-        <div className="relative border-2 border-dashed border-blue-300 rounded-xl bg-slate-50">
-          <Button onClick={handleClear1} variant="secondary" className="absolute top-2 right-2 h-7 px-2 text-xs z-10 bg-white/80 backdrop-blur text-rose-600 border-rose-200 hover:bg-rose-50">
-            <Trash2 className="w-3 h-3 mr-1" /> Ulangi
-          </Button>
-          <SignatureCanvas 
-            ref={sigPad1} 
-            penColor="black"
-            onEnd={handleEnd1}
-            clearOnResize={false}
-                canvasProps={{ className: 'w-full h-40 rounded-xl' }} 
-          />
-        </div>
+
+        <VerifiedSignaturePad
+          signerName={inspectorName}
+          signerNik={inspectorNik}
+          label="Tanda Tangan Inspektor Utama"
+          required
+          value={ttd1}
+          onChange={(val) => {
+            setTtd1(val);
+            triggerChange({ ttd1: val });
+          }}
+          accentColor="teal"
+          heightClass="h-36"
+        />
       </Card>
 
-      {/* Inspector 2 */}
-      <Card className="border-l-4 border-l-blue-400">
-        <label className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2 flex items-center gap-1">
-          <Users className="w-4 h-4 text-blue-500" />
+      {/* 2. Inspector 2 (Opsional) */}
+      <Card className="border-l-4 border-l-blue-500 shadow-sm p-4 space-y-3">
+        <label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+          <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           Inspektor 2 (Opsional)
         </label>
         
         {!insp2 ? (
-          <div className="relative mb-3">
+          <div className="relative">
             <div className="flex relative items-center">
               <Search className="w-4 h-4 text-slate-400 absolute left-3" />
               <Input
-                placeholder="Cari nama karyawan..."
+                placeholder="Cari nama karyawan rekan inspeksi..."
                 value={search2}
                 onChange={e => setSearch2(e.target.value)}
-                className="w-full text-sm pl-9"
+                className="w-full text-sm pl-9 rounded-xl"
               />
             </div>
             {search2 && (
-              <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl z-50">
+              <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50">
                 {employees
                   .filter(e => e.nama.toLowerCase().includes(search2.toLowerCase()) && e.nama !== inspectorName)
-                  .slice(0, 5)
+                  .slice(0, 6)
                   .map(e => (
                     <div
                       key={e.nama}
                       onClick={() => {
                         setInsp2(e);
                         setSearch2('');
-                        triggerChange({ insp2Name: e.nama, insp2Nik: e.nik });
+                        setTtd2('');
+                        triggerChange({ 
+                          insp2Name: e.nama, 
+                          insp2Nik: e.nik, 
+                          insp2Jabatan: e.jabatan,
+                          ttd2: '' 
+                        });
                       }}
-                      className="px-3 py-2 border-b border-slate-100 hover:bg-blue-50 cursor-pointer flex flex-col"
+                      className="px-3.5 py-2.5 border-b border-slate-100 dark:border-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer flex items-center justify-between transition-colors"
                     >
-                      <span className="font-semibold text-sm text-slate-800">{e.nama}</span>
+                      <div>
+                        <span className="font-semibold text-sm text-slate-800 dark:text-slate-100 block">{e.nama}</span>
+                        <span className="text-[11px] text-slate-400">{e.jabatan || 'Crew'} • {e.nik}</span>
+                      </div>
+                      <span className="text-xs font-bold text-blue-600 dark:text-blue-400">Pilih</span>
                     </div>
                   ))}
               </div>
             )}
           </div>
         ) : (
-          <>
-            <div className="flex justify-between items-center mb-3">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 font-medium text-blue-800 text-sm flex-1">
-                {insp2.nama}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-2.5">
+              <div>
+                <span className="font-bold text-sm text-blue-950 dark:text-blue-100 block">{insp2.nama}</span>
+                <span className="text-[11px] text-blue-600 dark:text-blue-300 font-mono">{insp2.jabatan || 'Crew'} • {insp2.nik}</span>
               </div>
-              <Button onClick={() => { setInsp2(null); handleClear2(); triggerChange({ insp2Name: '', insp2Nik: '', ttd2: '' }); }} variant="ghost" className="text-rose-500 ml-2">
-                Hapus
+              <Button 
+                onClick={() => { 
+                  setInsp2(null); 
+                  setTtd2(''); 
+                  triggerChange({ insp2Name: '', insp2Nik: '', insp2Jabatan: '', ttd2: '' }); 
+                }} 
+                variant="ghost" 
+                className="text-rose-500 hover:bg-rose-50 text-xs px-2.5 py-1"
+              >
+                Ganti Rekan
               </Button>
             </div>
-            <div className="relative border-2 border-dashed border-blue-300 rounded-xl bg-slate-50">
-              <Button onClick={handleClear2} variant="secondary" className="absolute top-2 right-2 h-7 px-2 text-xs z-10 bg-white/80 backdrop-blur text-rose-600 border-rose-200 hover:bg-rose-50">
-                <Trash2 className="w-3 h-3 mr-1" /> Ulangi
-              </Button>
-              <SignatureCanvas 
-                ref={sigPad2} 
-                penColor="black"
-                onEnd={handleEnd2}
-                clearOnResize={false}
-                canvasProps={{ className: 'w-full h-40 rounded-xl' }} 
-              />
-            </div>
-          </>
+
+            <VerifiedSignaturePad
+              signerName={insp2.nama}
+              signerNik={insp2.nik}
+              label={`Tanda Tangan Inspektor 2 (${insp2.nama})`}
+              value={ttd2}
+              onChange={(val) => {
+                setTtd2(val);
+                triggerChange({ ttd2: val });
+              }}
+              accentColor="blue"
+              heightClass="h-36"
+            />
+          </div>
         )}
       </Card>
 
-      {/* Inspector 3 */}
+      {/* 3. Inspector 3 (Opsional) */}
       {insp2 && (
-        <Card className="border-l-4 border-l-purple-400">
-          <label className="text-xs font-bold text-purple-700 uppercase tracking-wider mb-2 flex items-center gap-1">
-            <Users className="w-4 h-4 text-purple-500" />
+        <Card className="border-l-4 border-l-purple-500 shadow-sm p-4 space-y-3">
+          <label className="text-xs font-bold text-purple-800 dark:text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
             Inspektor 3 (Opsional)
           </label>
           
           {!insp3 ? (
-            <div className="relative mb-3">
+            <div className="relative">
               <div className="flex relative items-center">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3" />
                 <Input
-                  placeholder="Cari nama karyawan..."
+                  placeholder="Cari nama karyawan rekan inspeksi ke-3..."
                   value={search3}
                   onChange={e => setSearch3(e.target.value)}
-                  className="w-full text-sm pl-9"
+                  className="w-full text-sm pl-9 rounded-xl"
                 />
               </div>
               {search3 && (
-                <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-xl z-50">
+                <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50">
                   {employees
                     .filter(e => e.nama.toLowerCase().includes(search3.toLowerCase()) && e.nama !== inspectorName && e.nama !== insp2.nama)
-                    .slice(0, 5)
+                    .slice(0, 6)
                     .map(e => (
                       <div
                         key={e.nama}
                         onClick={() => {
                           setInsp3(e);
                           setSearch3('');
-                          triggerChange({ insp3Name: e.nama, insp3Nik: e.nik });
+                          setTtd3('');
+                          triggerChange({ 
+                            insp3Name: e.nama, 
+                            insp3Nik: e.nik, 
+                            insp3Jabatan: e.jabatan,
+                            ttd3: '' 
+                          });
                         }}
-                        className="px-3 py-2 border-b border-slate-100 hover:bg-blue-50 cursor-pointer flex flex-col"
+                        className="px-3.5 py-2.5 border-b border-slate-100 dark:border-slate-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 cursor-pointer flex items-center justify-between transition-colors"
                       >
-                        <span className="font-semibold text-sm text-slate-800">{e.nama}</span>
+                        <div>
+                          <span className="font-semibold text-sm text-slate-800 dark:text-slate-100 block">{e.nama}</span>
+                          <span className="text-[11px] text-slate-400">{e.jabatan || 'Crew'} • {e.nik}</span>
+                        </div>
+                        <span className="text-xs font-bold text-purple-600 dark:text-purple-400">Pilih</span>
                       </div>
                     ))}
                 </div>
               )}
             </div>
           ) : (
-            <>
-              <div className="flex justify-between items-center mb-3">
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 font-medium text-purple-800 text-sm flex-1">
-                  {insp3.nama}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-2.5">
+                <div>
+                  <span className="font-bold text-sm text-purple-950 dark:text-purple-100 block">{insp3.nama}</span>
+                  <span className="text-[11px] text-purple-600 dark:text-purple-300 font-mono">{insp3.jabatan || 'Crew'} • {insp3.nik}</span>
                 </div>
-                <Button onClick={() => { setInsp3(null); handleClear3(); triggerChange({ insp3Name: '', insp3Nik: '', ttd3: '' }); }} variant="ghost" className="text-rose-500 ml-2">
-                  Hapus
+                <Button 
+                  onClick={() => { 
+                    setInsp3(null); 
+                    setTtd3(''); 
+                    triggerChange({ insp3Name: '', insp3Nik: '', insp3Jabatan: '', ttd3: '' }); 
+                  }} 
+                  variant="ghost" 
+                  className="text-rose-500 hover:bg-rose-50 text-xs px-2.5 py-1"
+                >
+                  Ganti Rekan
                 </Button>
               </div>
-              <div className="relative border-2 border-dashed border-purple-300 rounded-xl bg-slate-50">
-                <Button onClick={handleClear3} variant="secondary" className="absolute top-2 right-2 h-7 px-2 text-xs z-10 bg-white/80 backdrop-blur text-rose-600 border-rose-200 hover:bg-rose-50">
-                  <Trash2 className="w-3 h-3 mr-1" /> Ulangi
-                </Button>
-                <SignatureCanvas 
-                  ref={sigPad3} 
-                  penColor="black"
-                  onEnd={handleEnd3}
-                  clearOnResize={false}
-                canvasProps={{ className: 'w-full h-40 rounded-xl' }} 
-                />
-              </div>
-            </>
+
+              <VerifiedSignaturePad
+                signerName={insp3.nama}
+                signerNik={insp3.nik}
+                label={`Tanda Tangan Inspektor 3 (${insp3.nama})`}
+                value={ttd3}
+                onChange={(val) => {
+                  setTtd3(val);
+                  triggerChange({ ttd3: val });
+                }}
+                accentColor="purple"
+                heightClass="h-36"
+              />
+            </div>
           )}
         </Card>
       )}
