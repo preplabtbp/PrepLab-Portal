@@ -1,12 +1,12 @@
 # Graph Report - PrepLab-Portal  (2026-10-21)
 
 ## Corpus Check
-- 604 files · ~1,964,289 words
+- 606 files · ~1,968,664 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 28 file(s) not represented in the graph (top: (none) 8, .gs 6, .map 3)
 
 ## Summary
-- 5114 nodes · 11243 edges · 354 communities (244 shown, 110 thin omitted)
+- 5128 nodes · 11263 edges · 347 communities (239 shown, 108 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 148 edges (avg confidence: 0.9)
 - Token cost: 0 input · 0 output
 
@@ -72,13 +72,13 @@
 - xrfCalibration.ts
 - sync-prosedur-notion.ts
 - react
-- MobileSimpleHomeScreen.tsx
+- ticket-screen.tsx
 - inspection-schedule-screen.tsx
 - GroupReportScreen.tsx
 - compilerOptions
 - notification-bell.tsx
 - sync-information-full.ts
-- pelanggaran-dashboard.tsx
+- sonner
 - qe
 - safety-rekap-screen.tsx
 - App Hosting CLI Commands
@@ -98,8 +98,8 @@
 - Core Directives
 - test-p5m-standalone.cjs
 - clinic-screen.tsx
-- NotionDropdownCell.tsx
-- employee-leaves-screen.tsx
+- meal-bungkus-counts.ts
+- period-utils.ts
 - DeveloperChangelog.tsx
 - verify-bulletin-api.cjs
 - migrate-comment-attachments-to-drive.cjs
@@ -173,10 +173,10 @@
 - check-db-schema.js
 - check-dupes-universes.cjs
 - check-hubs.js
-- getGlobalSocket
+- personAchievement
 - check-latest-p5m-schedule.cjs
-- check-materi-db.cjs
-- check-notion-prefixes.cjs
+- inspect-loker-comment.cjs
+- check-lab-posts.cjs
 - check-p3k-tickets.ts
 - check-post-103.cjs
 - check-preparasi-items.js
@@ -190,7 +190,7 @@
 - inspect-hubs.cjs
 - list-drive-files.cjs
 - list-section-posts.cjs
-- map-tbp-post-ids.cjs
+- check-tbp-lab.cjs
 - merge-existing-p3k-tickets.ts
 - Native SQL Examples
 - read-post-516.js
@@ -201,9 +201,9 @@
 - test-parser.cjs
 - test-sop-parser.cjs
 - Temuan #1: Socket.IO CORS Wildcard + Tanpa Auth
-- verify-ik-materi.cjs
+- clear-p5m-schedules.cjs
 - vite-env.d.ts
-- deepFindUrls
+- map-employees.cjs
 - firebase_basics/SKILL.md
 - 1. Vector Similarity Search (Semantic)
 - Firestore Web SDK Usage Guide
@@ -219,7 +219,7 @@
 - Schema Reference
 - Firebase SQL Connect
 - Writing Data
-- routes/tickets.ts
+- print-414-535-103.cjs
 - Cloud Functions Integration Reference
 - Realtime Reference
 - Templates
@@ -231,7 +231,7 @@
 - Flutter & Firebase Setup Guide
 - Flutter SDK
 - Audit Codebase & Perbaikan — 15 Oktober 2026
-- RosterExcelImportModal.tsx
+- test-p5m-advanced-rules.cjs
 - XrfDailyInputTab.tsx
 - Firebase AI Logic Basics
 - 🛠️ Firebase Android Setup Guide
@@ -245,7 +245,7 @@
 - Admin Node SDK
 - Cloud Firestore on Android (Kotlin)
 - employeeLeaves.ts
-- training-request-form-sheet.tsx
+- [2.8.16] - 2026-09-02
 - firebase_auth_basics/SKILL.md
 - Firebase Authentication on Android (Kotlin)
 - ⛔️ CRITICAL RULE: NO INLINE INITIALIZATION ⛔️
@@ -268,7 +268,7 @@
 - 🚨 ATURAN UTAMA: DILARANG GIT PUSH & CLOUD BUILD TANPA PERMINTAAN EKSPLISIT
 - migrate-mutu-comments-and-files.ts
 - sync-scrubber-and-pembersihan.ts
-- PicAvatarGroup.tsx
+- [2.8.18] - 2026-09-02
 - Firebase AI Logic Basics
 - Core Capabilities
 - Firebase Auth & Google Sign-In for Flutter
@@ -283,7 +283,7 @@
 - Recommended: Global Setup
 - Recommended: Global Setup
 - Firebase Web Setup Guide
-- sync-inventory-exact.ts
+- [2.8.1] - 2026-09-02
 - test-upload-drive.cjs
 - Antigravity Setup
 - Recommended Method: Using Plugins
@@ -298,7 +298,7 @@
 - [2.9.39] - 2026-10-10
 - check-notion-comments.cjs
 - inspect-paginated-comments.ts
-- pull-tbp-non-routine-lab.cjs
+- [2.8.20] - 2026-09-02
 - recategorize_p5m_materi.ts
 - Security & Production
 - [2.6.0] - 2026-08-25
@@ -307,7 +307,7 @@
 - [2.9.14] - 2026-09-20
 - [2.9.40] - 2026-10-10
 - fix_db_schema.cjs
-- migrate-bulletin-comments.cjs
+- [2.8.24] - 2026-09-12
 - migrate-quotes-theme-likes.js
 - read-post-516.cjs
 - test-stream-proxy.cjs
@@ -316,15 +316,15 @@
 - [2.8.10] - 2026-09-02
 - [2.8.11] - 2026-09-02
 - [2.8.12] - 2026-09-02
-- [2.8.13] - 2026-09-02
-- [2.8.14] - 2026-09-02
+- [2.8.37] - 2026-09-18
+- [2.8.7] - 2026-09-02
 - [2.8.17] - 2026-09-02
-- [2.8.19] - 2026-09-02
+- [2.9.10] - 2026-09-19
 - [2.8.23] - 2026-09-11
 - [2.8.26] - 2026-09-12
 - [2.8.2] - 2026-09-02
 - [2.8.33] - 2026-09-16
-- [2.8.35] - 2026-09-17
+- [2.9.15] - 2026-09-20
 - [2.8.4] - 2026-09-02
 - [2.8.6] - 2026-09-02
 - [2.8.8] - 2026-09-02
@@ -333,17 +333,13 @@
 - [2.9.12] - 2026-09-20
 - [2.9.13] - 2026-09-20
 - [2.9.16] - 2026-09-20
-- [2.9.17] - 2026-09-21
+- [2.9.7] - 2026-09-19
 - [2.9.18] - 2026-09-22
-- [2.9.19] - 2026-09-22
 - [2.9.1] - 2026-09-19
 - [2.9.20] - 2026-09-22
 - [2.9.21] - 2026-09-22
-- [2.9.22] - 2026-09-22
 - [2.9.23] - 2026-09-22
-- [2.9.24] - 2026-09-23
 - [2.9.26] - 2026-09-24
-- [2.9.27] - 2026-09-24
 - [2.9.28] - 2026-09-25
 - [2.9.29] - 2026-09-25
 - [2.9.2] - 2026-09-19
@@ -353,18 +349,15 @@
 - [2.9.34] - 2026-09-28
 - [2.9.35] - 2026-09-29
 - [2.9.36] - 2026-09-30
-- [2.9.37] - 2026-09-30
 - [2.9.3] - 2026-09-19
-- [2.9.3] - 2026-09-19
-- [2.9.4] - 2026-09-19
 - [2.9.5] - 2026-09-19
 - [2.9.6] - 2026-09-19
 - [2.9.8] - 2026-09-19
 - [2.9.9] - 2026-09-19
 
 ## God Nodes (most connected - your core abstractions)
-1. `react` - 204 edges
-2. `lucide-react` - 184 edges
+1. `react` - 206 edges
+2. `lucide-react` - 186 edges
 3. `sonner` - 131 edges
 4. `Button()` - 129 edges
 5. `Catatan Pembaruan (Changelog) - Prep & Lab Portal` - 82 edges
@@ -389,55 +382,55 @@
 ## Import Cycles
 - None detected.
 
-## Communities (354 total, 110 thin omitted)
+## Communities (347 total, 108 thin omitted)
 
 ### Community 0 - "server.ts"
 Cohesion: 0.04
-Nodes (46): express, initDbSchema(), router, router, DEFAULT_APD_SETTINGS, parseTimestamp(), router, syncApdDataFromSheet() (+38 more)
+Nodes (43): express, router, router, DEFAULT_APD_SETTINGS, parseTimestamp(), router, syncApdDataFromSheet(), router (+35 more)
 
 ### Community 1 - "index.ts"
-Cohesion: 0.04
-Nodes (41): drizzle-orm, audit(), blockToMarkdown(), main(), notion, ALIASES, DriveFile, normalizeStr() (+33 more)
+Cohesion: 0.03
+Nodes (74): dotenv, drizzle-orm, googleapis, audit(), blockToMarkdown(), main(), notion, ALIASES (+66 more)
 
 ### Community 2 - "sonner"
-Cohesion: 0.09
-Nodes (61): 1️⃣ Temuan #2: ISO Week-Year Mismatch, 2️⃣ Temuan #3: W53 Overcount, 3️⃣ Temuan #4: Math.max(1, week-1) Edge Case, ✅ SELESAI (Commit 7f55a4c), chart.js, react-chartjs-2, react-signature-canvas, sonner (+53 more)
+Cohesion: 0.12
+Nodes (43): 1️⃣ Temuan #2: ISO Week-Year Mismatch, 2️⃣ Temuan #3: W53 Overcount, 3️⃣ Temuan #4: Math.max(1, week-1) Edge Case, ✅ SELESAI (Commit 7f55a4c), [2.9.11] - 2026-09-19, ⏱️ Format Durasi Jam & Menit Eksplisit, Interaktivitas Filter Grafik Batang, & Presisi Proporsi Kategori, chart.js, react-chartjs-2 (+35 more)
 
 ### Community 3 - "src/db/schema.ts"
-Cohesion: 0.16
-Nodes (57): drive, generatePdfFromTemplate(), web-push, tableCache, agendaShiftsBySheet, compressSignatureBase64(), enrichedScheduleCacheMap, FALLBACK_PEMANTAUAN (+49 more)
+Cohesion: 0.13
+Nodes (62): auth, docs, drive, generatePdfFromTemplate(), web-push, tableCache, agendaShiftsBySheet, compressSignatureBase64() (+54 more)
 
 ### Community 4 - "ProfilePage.tsx"
-Cohesion: 0.07
-Nodes (51): DynamicAvatarFrame(), DynamicAvatarFrameProps, GmSymbioteCanvas(), ExpAuditModal(), ExpAuditModalProps, GamificationAlertCenter(), MiniExpItem, DISCIPLINE_OPTIONS (+43 more)
+Cohesion: 0.06
+Nodes (57): ChatScreen(), ChatScreenProps, getSectionDisplayName(), normalizeSection(), SECTIONS_LIST, DynamicAvatarFrame(), DynamicAvatarFrameProps, GmSymbioteCanvas() (+49 more)
 
 ### Community 5 - "ThemeModal.tsx"
 Cohesion: 0.19
 Nodes (18): SettingsScreen(), COLOR_DEFINITIONS, CustomThemeTemplate, evaluateThemeReadability(), getContrastRatio(), getLuminance(), parseColorToRgb(), PRESET_THEMES (+10 more)
 
 ### Community 6 - "App.tsx"
-Cohesion: 0.05
-Nodes (64): AdmDashboard, AdminDashboard, AgendaDashboard, ApdInputScreen, ApdMonitoringScreen, ApdSettingsScreen, App(), BulletinBoard (+56 more)
+Cohesion: 0.04
+Nodes (76): react-router-dom, recharts, @tanstack/react-query, AdmDashboard, AdminDashboard, AgendaDashboard, ApdInputScreen, ApdMonitoringScreen (+68 more)
 
 ### Community 7 - "gn"
 Cohesion: 0.04
 Nodes (6): bn, gn, Rn(), vn, xn(), zn()
 
 ### Community 8 - "lucide-react"
-Cohesion: 0.09
-Nodes (58): 📚 Perombakan Modul Quiz Kelas Enterprise, Penambahan Materi P5M Secara Bulk, Menu Quiz Mode Simple Crew & Hak Akses Developer, 🔕 Supresi Cerdas Popup Pengingat Bagi yang Sudah Melaksanakan Inspeksi, lucide-react, AdmDashboard(), AdminDashboard(), MODULES, AgendaDashboard(), DeveloperChangelog() (+50 more)
+Cohesion: 0.10
+Nodes (51): 🔕 Supresi Cerdas Popup Pengingat Bagi yang Sudah Melaksanakan Inspeksi, AdmDashboard(), AgendaDashboard(), BulletinTopicDetail(), CATEGORY_OPTIONS, FinanceScreen(), PAYMENT_OPTIONS, TransactionItem (+43 more)
 
 ### Community 9 - "dependencies"
 Cohesion: 0.03
 Nodes (64): dependencies, bcryptjs, chart.js, compression, cookie-parser, csv-parse, csv-parser, date-fns (+56 more)
 
 ### Community 10 - "sheets-api.ts"
-Cohesion: 0.07
-Nodes (45): @tanstack/react-query, migrateData(), APD_TYPES, ApdInputScreen(), ApdInputScreenProps, checkCanEditApdHistory(), getIntervalIgnoreCase(), ApdMonitoringScreen() (+37 more)
+Cohesion: 0.10
+Nodes (35): migrateData(), APD_TYPES, ApdInputScreen(), ApdInputScreenProps, checkCanEditApdHistory(), getIntervalIgnoreCase(), ApdMonitoringScreen(), ApdMonitoringScreenProps (+27 more)
 
 ### Community 11 - "dotenv"
-Cohesion: 0.04
-Nodes (50): dotenv, googleapis, papaparse, downloadFile(), getAllBlocksRecursive(), main(), notion, sanitizeFilename() (+42 more)
+Cohesion: 0.07
+Nodes (25): papaparse, downloadFile(), getAllBlocksRecursive(), main(), notion, sanitizeFilename(), UPLOAD_DIR, __dirname (+17 more)
 
 ### Community 12 - "HomeWidgetDashboard.tsx"
 Cohesion: 0.07
@@ -452,56 +445,56 @@ Cohesion: 0.11
 Nodes (49): EnterpriseWysiwygEditor(), EnterpriseWysiwygEditorProps, parseValueToNotes(), parseValueToSubtasks(), SubtaskItem, FloatingSelectionToolbar(), FloatingSelectionToolbarProps, FormatAction (+41 more)
 
 ### Community 15 - "training-database-screen.tsx"
-Cohesion: 0.05
-Nodes (48): achievementLabels, barPercentLabels, CHART_COLORS, chart.js, countEndLabels, DASH, EmployeeMaster, EMPTY_FORM (+40 more)
+Cohesion: 0.04
+Nodes (45): achievementLabels, BarChartMode, barPercentLabels, CHART_COLORS, chart.js, countEndLabels, DASH, EmployeeMaster (+37 more)
 
 ### Community 16 - "I"
 Cohesion: 0.12
 Nodes (13): B(), De(), H(), I(), K, L(), N, O (+5 more)
 
 ### Community 17 - "create-wo-screen.tsx"
-Cohesion: 0.08
-Nodes (49): getDowntimeRecords(), updateDowntimeRepair(), BulletinTopicDetail(), CreateInternalTicketScreen(), CreateWOScreen(), DevModeAccordion(), DevModeAccordionProps, DevModeOptions (+41 more)
+Cohesion: 0.10
+Nodes (39): getDowntimeRecords(), updateDowntimeRepair(), CreateInternalTicketScreen(), CreateWOScreen(), DevModeAccordion(), DevModeAccordionProps, DevModeOptions, useDevOptions() (+31 more)
 
 ### Community 18 - "110"
 Cohesion: 0.11
 Nodes (38): 110(), A(), Ae(), b(), Be(), c_(), D(), De() (+30 more)
 
 ### Community 19 - "logbook-section-utils.ts"
-Cohesion: 0.10
-Nodes (48): aggregateSectionActiveTasks(), aggregateYesterdayProgress(), buildLogbookChangelogData(), ChangelogItem, cleanFrontEndText(), extractLogbookMeta(), findSectionTaskPosts(), formatToDDMMYYYY() (+40 more)
+Cohesion: 0.12
+Nodes (44): aggregateSectionActiveTasks(), aggregateYesterdayProgress(), buildLogbookChangelogData(), ChangelogItem, cleanFrontEndText(), findSectionTaskPosts(), formatToDDMMYYYY(), generateLogbookChangelogWhatsappText() (+36 more)
 
 ### Community 20 - "NotionDatabaseTable.tsx"
-Cohesion: 0.10
-Nodes (44): LinkedModuleInfo, LinkModuleModal(), LogbookDailyNotesCard(), NotionSaveConfirmationModal(), NotionSaveConfirmationModalProps, detectRowSubPeriod(), generateSubPeriods(), getCurrentWeekNumber() (+36 more)
+Cohesion: 0.06
+Nodes (52): LinkedModuleInfo, LinkModuleModal(), extractLogbookMeta(), getDisplayColumnHeader(), injectLogbookMeta(), LogbookMeta, LogbookDailyNotesCard(), NotionDeleteConfirmationModal() (+44 more)
 
 ### Community 21 - "employee-database-screen.tsx"
-Cohesion: 0.06
-Nodes (54): jszip, AddAttendanceEntryModal(), ApdEmployeeDirectory(), ApdSummary, Avatar(), DirEmployee, GOL_RANK, initials() (+46 more)
+Cohesion: 0.05
+Nodes (56): jszip, AddAttendanceEntryModal(), AddAttendanceEntryModalProps, CATEGORIES, ApdEmployeeDirectory(), ApdSummary, Avatar(), DirEmployee (+48 more)
 
 ### Community 22 - "@notionhq/client"
 Cohesion: 0.07
-Nodes (16): @notionhq/client, { Client }, notion, { Client }, notion, { Client }, notion, { Client } (+8 more)
+Nodes (16): @notionhq/client, { Client }, notion, { Client }, notion, { Client }, notion, { Pool } (+8 more)
 
 ### Community 23 - "training-import.ts"
 Cohesion: 0.06
-Nodes (50): cleanText(), normalizeProgramField(), parseBody(), sanitizePopData(), ALL_TRAININGS, cleanText(), ColumnDef, combineStatuses() (+42 more)
+Nodes (48): cleanText(), normalizeProgramField(), parseBody(), sanitizePopData(), ALL_TRAININGS, cleanText(), ColumnDef, combineStatuses() (+40 more)
 
 ### Community 24 - "training.ts"
 Cohesion: 0.06
 Nodes (41): node-cron, TRAINING_BASIC_SAFETY_SEED_CSV, TRAINING_K3_SEED_CSV, TRAINING_MONITORING_SEED_CSV, TRAINING_POP_SEED_CSV, TRAINING_SAP_SEED, TrainingSeedRow, requireMealManager() (+33 more)
 
 ### Community 25 - "mealOrders.ts"
-Cohesion: 0.06
-Nodes (52): MEAL_ORDER_SEED_CSV, isResignedOrNonActiveStatus(), adminEditorEmails(), applyMealSheetPermissions(), BOOL_FIELDS, buildMealWorkbook(), bulkUpsertMealOrders(), BungkusDailyRow (+44 more)
+Cohesion: 0.08
+Nodes (38): MEAL_ORDER_SEED_CSV, adminEditorEmails(), applyMealSheetPermissions(), BOOL_FIELDS, buildMealWorkbook(), bulkUpsertMealOrders(), BungkusDailyRow, colTotal() (+30 more)
 
 ### Community 26 - "XrfCalibrationScreen.tsx"
-Cohesion: 0.15
-Nodes (17): XrfCalibrationScreen(), XrfCalibrationScreenProps, XrfDailyInputTab(), extractStandardName(), getIsoWeek(), ParsedBatch, ParsedItem, XrfDirectPasteTab() (+9 more)
+Cohesion: 0.17
+Nodes (16): XrfCalibrationScreen(), XrfCalibrationScreenProps, XrfDailyInputTab(), extractStandardName(), getIsoWeek(), ParsedBatch, ParsedItem, XrfDirectPasteTab() (+8 more)
 
 ### Community 27 - "misc.ts"
 Cohesion: 0.05
-Nodes (45): [2.9.25] - 2026-09-23, 🛡️ Integrasi Pelaporan KTA / TTA & Perekapan Otomatis Mingguan via Portal, 📍 Otomatisasi Kunci Lokasi / Sub-Area Inspeksi Umum Tanpa Input Manual, ⚖️ Penyelarasan Data KTA/TTA dengan Jadwal Inspeksi (Perbaikan Deteksi Cuti), 📋 Perbaikan Klasifikasi Kewajiban Inspeksi Mingguan & KTA/TTA untuk Personil Cuti Sebelum Jumat, auth, docs, generateMonitoringPdfWithDynamicTable() (+37 more)
+Nodes (45): [2.8.15] - 2026-09-02, [2.9.25] - 2026-09-23, 📋 Auto-Sync Master Pertanyaan & Formulir Inspeksi (`/api/questions`), 🛡️ Integrasi Pelaporan KTA / TTA & Perekapan Otomatis Mingguan via Portal, 🚫 Pembersihan Personil Resign dari Rekapitulasi Pelaporan Hazard Safety, ⚖️ Penyelarasan Data KTA/TTA dengan Jadwal Inspeksi (Perbaikan Deteksi Cuti), 📋 Perbaikan Klasifikasi Kewajiban Inspeksi Mingguan & KTA/TTA untuk Personil Cuti Sebelum Jumat, generateMonitoringPdfWithDynamicTable() (+37 more)
 
 ### Community 29 - "package.json"
 Cohesion: 0.04
@@ -516,40 +509,40 @@ Cohesion: 0.13
 Nodes (40): 432(), r(), t(), 993(), A(), Ae(), b(), Be() (+32 more)
 
 ### Community 32 - "pg"
-Cohesion: 0.05
-Nodes (13): pg, { Pool }, { Pool }, { Pool }, { Pool }, { Pool }, pool, { Pool } (+5 more)
+Cohesion: 0.06
+Nodes (12): pg, { Pool }, { Pool }, { Pool }, { Pool }, pool, { Pool }, { Pool } (+4 more)
 
 ### Community 33 - "meal-orders-screen.tsx"
 Cohesion: 0.08
-Nodes (33): jspdf, xlsx, EmployeeProfileExcelImportModal(), EmployeeProfileRow, Props, downloadBungkusRecapPdf(), recapTitle(), BatchKey (+25 more)
+Nodes (32): jspdf, EmployeeProfileExcelImportModal(), EmployeeProfileRow, Props, downloadBungkusRecapPdf(), recapTitle(), BatchKey, CardFilter (+24 more)
 
 ### Community 34 - "ruffle.js"
 Cohesion: 0.05
 Nodes (23): Ae(), ca(), Ce(), cn(), createPlayer(), da(), dn(), ea (+15 more)
 
 ### Community 35 - "P2HLaboratoryAccordionForm.tsx"
-Cohesion: 0.13
-Nodes (29): P2HLaboratoryAccordionForm(), P2HLaboratoryAccordionFormProps, parseSpvShift(), SpvLabOption, getBreakdownTools(), getMajorBreakdownTools(), getToolStatusCounts(), isMajorLabTool() (+21 more)
+Cohesion: 0.06
+Nodes (53): html2canvas, DAY_NAMES, EmployeeLeavesAnalyticsChart(), formatDateISO(), getMonday(), LeavesAnalyticsProps, ManpowerFigure(), MONTH_NAMES (+45 more)
 
 ### Community 36 - "TrainingDatabaseScreen"
 Cohesion: 0.11
-Nodes (41): achievementColor(), DashCard(), DashTitle(), fetchTrainingRecords(), formatTrainingDate(), inScope(), isSapComplete(), jabatanRank() (+33 more)
+Nodes (35): achievementColor(), fetchTrainingRecords(), inScope(), isK3Complete(), isSapComplete(), jabatanRank(), k3BadgeOf(), k3DoneCount() (+27 more)
 
 ### Community 37 - "employees.ts"
 Cohesion: 0.08
-Nodes (21): attachAttendanceToEmployee(), cachedHierarchy, cleanupDuplicateEmployees(), employeesRouter, getCounselingMap(), getCsvEmployees(), getLocalEmployeePhotos(), KNOWN_RESIGNED_NIKS (+13 more)
+Nodes (20): cachedHierarchy, cleanupDuplicateEmployees(), employeesRouter, getCounselingMap(), getCsvEmployees(), getLocalEmployeePhotos(), KNOWN_RESIGNED_NIKS, normalizeNameKey() (+12 more)
 
 ### Community 38 - "TempatNongkrongModal.tsx"
-Cohesion: 0.06
-Nodes (46): BeverageBarCounter(), GbaK3SignPost(), GbaNickelSampleDrums(), ModularLoungeSofa(), RoundCoffeeTable(), StandingAshtray(), TeakParkBench(), WoodenDiningChair() (+38 more)
+Cohesion: 0.07
+Nodes (43): socket.io-client, EasterEggGame(), EasterEggGameProps, LeaderboardRecord, PlayerState, CHOICES, GameResult, LoungePvPRpsModal() (+35 more)
 
 ### Community 39 - "meal-roster-sync.ts"
-Cohesion: 0.15
-Nodes (22): isDate(), loadMasterEmployeeProfileMap(), loadMasterSortOrderMap(), loadNonshiftNiks(), loadPreviousRosterStatuses(), loadReferenceCatatanMap(), syncMealOrdersFromRoster(), syncSingleEmployeeMealOrder() (+14 more)
+Cohesion: 0.12
+Nodes (30): ensureMealOrdersTable(), getRosterCodeForDate(), isDate(), loadMasterEmployeeProfileMap(), loadMasterSortOrderMap(), loadMasterTempatTinggalMap(), loadNonshiftNiks(), loadPreviousRosterStatuses() (+22 more)
 
 ### Community 40 - "p5m-screen.tsx"
-Cohesion: 0.10
-Nodes (23): ExcelViewer(), ExcelViewerProps, buildAllIkConfig(), buildAllSopConfig(), buildDefaultConfig(), buildJsaIkConfig(), cleanFilenameToTitle(), DAY_COLORS (+15 more)
+Cohesion: 0.05
+Nodes (44): ExcelViewer(), ExcelViewerProps, FeedbackItem, FeedbackSupportScreen(), MODULE_OPTIONS, FloatingFeedbackButtonProps, MODULE_OPTIONS, GENERAL_INSPECTION_FORM_URL (+36 more)
 
 ### Community 41 - "bulletin-board.tsx"
 Cohesion: 0.08
@@ -569,7 +562,7 @@ Nodes (3): d, f, m
 
 ### Community 45 - "employees"
 Cohesion: 0.06
-Nodes (38): 🛡️ Peningkatan Keamanan Sistem (Enterprise Security Hardening), bcryptjs, jsonwebtoken, nodemailer, 1. Tidak ada otentikasi/otorisasi di seluruh API, 2. Router admin terbuka penuh — termasuk hapus seluruh tabel, 3. Reset password siapa pun tanpa otentikasi, 4. `POST /check-nik` membocorkan seluruh record karyawan tanpa login (+30 more)
+Nodes (36): 🛡️ Peningkatan Keamanan Sistem (Enterprise Security Hardening), bcryptjs, jsonwebtoken, nodemailer, 1. Tidak ada otentikasi/otorisasi di seluruh API, 2. Router admin terbuka penuh — termasuk hapus seluruh tabel, 3. Reset password siapa pun tanpa otentikasi, 4. `POST /check-nik` membocorkan seluruh record karyawan tanpa login (+28 more)
 
 ### Community 46 - ".constructor"
 Cohesion: 0.24
@@ -592,16 +585,16 @@ Cohesion: 0.17
 Nodes (18): isDate(), pickCert(), emptyForm(), fmtDate(), FormState, MONTHS, STATUS_UI, todayYmd() (+10 more)
 
 ### Community 51 - "Avatar3DWidget.tsx"
-Cohesion: 0.13
-Nodes (17): GbaCharacterSprite(), GbaCharacterSpriteProps, TbpAvatarCharacter(), TbpAvatarProps, ACCESSORY_ITEMS, Avatar3DWidget(), Avatar3DWidgetProps, AvatarItem (+9 more)
+Cohesion: 0.08
+Nodes (33): GbaCharacterSprite(), GbaCharacterSpriteProps, TbpAvatarCharacter(), TbpAvatarProps, ACCESSORY_ITEMS, Avatar3DWidget(), Avatar3DWidgetProps, AvatarItem (+25 more)
 
 ### Community 52 - "apps_script_updated.js"
 Cohesion: 0.20
 Nodes (12): bacaRosterSheet(), buatPDFOtomatis(), doPost(), getISOWeekNumber(), getKaryawan(), getKaryawanRooster(), saveBase64ToDrive(), sisipkanBanyakGambarGlobal() (+4 more)
 
 ### Community 53 - "xrfCalibration.ts"
-Cohesion: 0.14
-Nodes (15): evaluateItem(), getIsoWeek(), parseCsv(), ParsedBatch, ParsedItem, runImport(), ensureXrfTables(), seedInitialXrfData() (+7 more)
+Cohesion: 0.07
+Nodes (25): evaluateItem(), getIsoWeek(), parseCsv(), ParsedBatch, ParsedItem, runImport(), router, ABSENCE_STATUSES (+17 more)
 
 ### Community 54 - "sync-prosedur-notion.ts"
 Cohesion: 0.16
@@ -609,35 +602,35 @@ Nodes (18): attachmentCache, auth, CACHE_FILE, convertBlocksToMarkdown(), drive,
 
 ### Community 55 - "react"
 Cohesion: 0.05
-Nodes (44): motion, react, react-dom, AddAttendanceEntryModalProps, CATEGORIES, ChatMessage, ActionItemCard(), BulletinModulesAccordion() (+36 more)
+Nodes (65): [2.8.3] - 2026-09-02, 🛡️ Audit Ronde 3 — Penutupan Celah Akun Aktif & Pemulihan Typecheck, lucide-react, motion, react, react-dom, ChatMessage, ActionItemCard() (+57 more)
 
-### Community 56 - "MobileSimpleHomeScreen.tsx"
-Cohesion: 0.05
-Nodes (61): [2.8.3] - 2026-09-02, 🛡️ Audit Ronde 3 — Penutupan Celah Akun Aktif & Pemulihan Typecheck, date-fns, react-router-dom, ActionCenterBar(), ActionCenterBarProps, ClusteredFindingGroup, clusterFindings() (+53 more)
+### Community 56 - "ticket-screen.tsx"
+Cohesion: 0.13
+Nodes (29): GlobalOpenFindingsReminder(), GlobalOpenFindingsReminderProps, OpenFindingsReminderModal(), OpenFindingsReminderModalProps, SapDashboardProps, CompactFindingPreview(), ParsedFindingItem, parseFindingDescription() (+21 more)
 
 ### Community 57 - "inspection-schedule-screen.tsx"
 Cohesion: 0.09
-Nodes (43): AGENDA_CATEGORY, AgendaCard, Category, CATEGORY_ORDER, EditTarget, findAgenda(), formatIsoLong(), formatShort() (+35 more)
+Nodes (41): AGENDA_CATEGORY, AgendaCard, Category, CATEGORY_ORDER, EditTarget, findAgenda(), formatIsoLong(), formatShort() (+33 more)
 
 ### Community 58 - "GroupReportScreen.tsx"
 Cohesion: 0.06
-Nodes (55): FloatingFeedbackButtonProps, MODULE_OPTIONS, getCurrentISOWeekTag(), GlobalKtaPartialReminderModal(), GlobalKtaPartialReminderModalProps, formatKtaImageUrl(), formatReportDate(), formatReportDateTime() (+47 more)
+Nodes (59): ActionCenterBar(), ActionCenterBarProps, ClusteredFindingGroup, clusterFindings(), FINDINGS_SECTIONS_CONFIG, FindingSectionKey, fmtTrainingDate(), getFindingSection() (+51 more)
 
 ### Community 59 - "compilerOptions"
 Cohesion: 0.11
 Nodes (17): compilerOptions, allowImportingTsExtensions, allowJs, experimentalDecorators, isolatedModules, jsx, lib, module (+9 more)
 
 ### Community 60 - "notification-bell.tsx"
-Cohesion: 0.21
-Nodes (15): NotificationBell(), NotificationBellProps, PushNotificationPrompt(), PushNotificationPromptProps, BeforeInstallPromptEvent, isNewOfficialDomain(), isOldRunAppDomain(), PwaMigrationModal() (+7 more)
+Cohesion: 0.25
+Nodes (13): PushNotificationPrompt(), PushNotificationPromptProps, BeforeInstallPromptEvent, isNewOfficialDomain(), isOldRunAppDomain(), PwaMigrationModal(), autoSubscribeIfPermitted(), isMobileDevice() (+5 more)
 
 ### Community 61 - "sync-information-full.ts"
 Cohesion: 0.21
 Nodes (15): attachmentCache, auth, CACHE_FILE, convertBlocksToMarkdown(), convertDatabaseToMarkdown(), drive, getMimeType(), notion (+7 more)
 
-### Community 62 - "pelanggaran-dashboard.tsx"
-Cohesion: 0.17
-Nodes (11): firebase, recharts, getValidityMonths(), mapStatusToCategory(), PelanggaranDashboard(), auth, getAccessToken(), googleSignIn() (+3 more)
+### Community 62 - "sonner"
+Cohesion: 0.08
+Nodes (29): react-signature-canvas, sonner, ALASAN_PRESETS, EmployeeLeaveFormScreenProps, EmployeeMaster, JAM_SHIFT_OPTIONS, SECTION_OPTIONS, SHIFT_OPTIONS (+21 more)
 
 ### Community 63 - "qe"
 Cohesion: 0.12
@@ -645,7 +638,7 @@ Nodes (10): a(), Fe(), He, hn(), je, Oe(), qe(), Se() (+2 more)
 
 ### Community 64 - "safety-rekap-screen.tsx"
 Cohesion: 0.09
-Nodes (40): buildWeekOptions(), Absence, ABSENCE_KEYS, ABSENCE_OPTIONS, applyEdit(), buildKtaCells(), buildWeekOptions(), DateField() (+32 more)
+Nodes (41): buildWeekOptions(), Absence, ABSENCE_KEYS, ABSENCE_OPTIONS, applyEdit(), buildKtaCells(), buildWeekOptions(), DateField() (+33 more)
 
 ### Community 65 - "App Hosting CLI Commands"
 Cohesion: 0.06
@@ -653,11 +646,11 @@ Nodes (30): App Hosting CLI Commands, Automated deployment via GitHub (CI/CD), B
 
 ### Community 66 - "Catatan Pembaruan (Changelog) - Prep & Lab Portal"
 Cohesion: 0.06
-Nodes (33): [2.8.0] - 2026-09-02, [2.8.15] - 2026-09-02, [2.8.16] - 2026-09-02, [2.8.18] - 2026-09-02, [2.8.1] - 2026-09-02, [2.8.20] - 2026-09-02, [2.8.21] - 2026-09-04, [2.8.24] - 2026-09-12 (+25 more)
+Nodes (33): [2.8.0] - 2026-09-02, [2.8.13] - 2026-09-02, [2.8.14] - 2026-09-02, [2.8.19] - 2026-09-02, [2.8.21] - 2026-09-04, [2.8.25] - 2026-09-12, [2.8.35] - 2026-09-17, [2.8.5] - 2026-09-02 (+25 more)
 
 ### Community 67 - "RosterOffScheduleSheet.tsx"
-Cohesion: 0.11
-Nodes (29): checkIsGolonganI(), COLUMN_DEFS, DEFAULT_VISIBLE_COLUMNS, extractLeaveRecordsFromRoster(), formatIndonesianDate(), getUnifiedSection(), isTbpOrGpsEmployee(), LeaveRecord (+21 more)
+Cohesion: 0.06
+Nodes (49): xlsx, RosterExcelImportModal(), RosterExcelImportModalProps, checkIsGolonganI(), COLUMN_DEFS, DEFAULT_VISIBLE_COLUMNS, extractLeaveRecordsFromRoster(), formatIndonesianDate() (+41 more)
 
 ### Community 68 - "KbbiCorrectorWidget.tsx"
 Cohesion: 0.27
@@ -681,7 +674,7 @@ Nodes (11): auth, { Client }, drive, formatTitle(), getOrCreateFolder(), { googl
 
 ### Community 73 - "inspectionPlanner.ts"
 Cohesion: 0.08
-Nodes (41): addDays(), assignmentSignature(), buildRosterMembers(), canEditPlan(), capacityViolations(), editorName(), getPlan(), GOL_ORDER (+33 more)
+Nodes (42): addDays(), assignmentSignature(), buildRosterMembers(), canEditPlan(), capacityViolations(), editorName(), getPlan(), GOL_ORDER (+34 more)
 
 ### Community 74 - "manifest.json"
 Cohesion: 0.18
@@ -715,17 +708,17 @@ Nodes (5): buildDefaultConfig(), main(), pilihMateri(), { Pool }, URUTAN_HARI
 Cohesion: 0.15
 Nodes (17): CATEGORY_OPTIONS, ClinicScreen(), ClinicScreenProps, ClinicSummary, ClinicVisit, EmployeeMaster, normalizeSectionName(), RECOMMENDATION_OPTIONS (+9 more)
 
-### Community 82 - "NotionDropdownCell.tsx"
-Cohesion: 0.20
-Nodes (9): ACTIVITY_OPTIONS, DropdownOption, DropdownType, NotionDropdownCell(), NotionDropdownCellProps, PERIOD_OPTIONS, PRIORITY_OPTIONS, ROUTINE_CADENCE_OPTIONS (+1 more)
+### Community 82 - "meal-bungkus-counts.ts"
+Cohesion: 0.14
+Nodes (18): isResignedOrNonActiveStatus(), getInactiveNiks(), getMealOrderRowsWithLatestProfiles(), getMealOrderSeedRows(), isActiveRow(), snapshotBungkusDays(), ymd(), bungkusCount() (+10 more)
 
-### Community 83 - "employee-leaves-screen.tsx"
-Cohesion: 0.09
-Nodes (27): html2canvas, DAY_NAMES, EmployeeLeavesAnalyticsChart(), formatDateISO(), getMonday(), LeavesAnalyticsProps, ManpowerFigure(), MONTH_NAMES (+19 more)
+### Community 83 - "period-utils.ts"
+Cohesion: 0.22
+Nodes (17): detectRowSubPeriod(), generateSubPeriods(), getCurrentWeekNumber(), getDefaultActiveSubPeriod(), getNextDefaultTargetDate(), getNextPeriodSchedule(), getNextSubPeriod(), getTopicSubPeriods() (+9 more)
 
 ### Community 84 - "DeveloperChangelog.tsx"
-Cohesion: 0.33
-Nodes (6): BUNDLED_RELEASES, CATEGORY_CONFIG, ChangelogItem, ChangelogRelease, ChangelogSection, parseMarkdownChangelog()
+Cohesion: 0.17
+Nodes (12): 📚 Perombakan Modul Quiz Kelas Enterprise, Penambahan Materi P5M Secara Bulk, Menu Quiz Mode Simple Crew & Hak Akses Developer, date-fns, AdminDashboard(), MODULES, BUNDLED_RELEASES, CATEGORY_CONFIG, DeveloperChangelog(), NotificationBellProps (+4 more)
 
 ### Community 85 - "verify-bulletin-api.cjs"
 Cohesion: 0.28
@@ -788,8 +781,8 @@ Cohesion: 0.43
 Nodes (6): ALL_FOLDERS, FileMenu(), getFileIcon(), PreplabCloudScreen(), PreplabCloudScreenProps, ScrollingText()
 
 ### Community 100 - "lib/auth.ts"
-Cohesion: 0.25
-Nodes (3): app, auth, provider
+Cohesion: 0.20
+Nodes (4): firebase, app, auth, provider
 
 ### Community 101 - "parseMealOrderSheet"
 Cohesion: 0.43
@@ -804,16 +797,16 @@ Cohesion: 0.33
 Nodes (5): fetchBlockChildren(), fetchPageContent(), INFO_PAGES, pool, RULES_PAGES
 
 ### Community 104 - "meal-bungkus-stats.tsx"
-Cohesion: 0.11
-Nodes (25): CompanyFilter, DailyRow, DAYS_SHORT, emptySlots(), Granularity, MealBungkusStats(), MONTHS, MONTHS_LONG (+17 more)
+Cohesion: 0.17
+Nodes (15): CompanyFilter, DailyRow, DAYS_SHORT, emptySlots(), Granularity, MealBungkusStats(), MONTHS, MONTHS_LONG (+7 more)
 
 ### Community 105 - "Mutations"
 Cohesion: 0.07
 Nodes (26): Aliases, Basic Query, Contents, Create, Create with Server Values, Delete, Embedded Queries, Expression Operators (Compare with Server Values) (+18 more)
 
 ### Community 106 - "XrfControlChartsTab.tsx"
-Cohesion: 0.13
-Nodes (23): XrfChartFullscreenModal(), getInstrumentTheme(), INSTRUMENT_THEMES, InstrumentTheme, OFFICIAL_INPUT_STANDARDS_ORDER, STANDARD_DISPLAY_NAMES, WDXRF_SUPERMINI_STANDARDS_ORDER, WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER (+15 more)
+Cohesion: 0.14
+Nodes (22): XrfChartFullscreenModal(), getInstrumentTheme(), INSTRUMENT_THEMES, InstrumentTheme, OFFICIAL_INPUT_STANDARDS_ORDER, STANDARD_DISPLAY_NAMES, WDXRF_SUPERMINI_STANDARDS_ORDER, WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER (+14 more)
 
 ### Community 107 - "Key Attributes"
 Cohesion: 0.08
@@ -937,7 +930,7 @@ Nodes (3): @tailwindcss/vite, vite, @vitejs/plugin-react
 
 ### Community 143 - "gamification.ts"
 Cohesion: 0.13
-Nodes (22): ACTION_XP_WEIGHTS, BULLETIN_DAILY_CAP_COUNT, calculateStreak(), checkAndBroadcastMilestones(), computeAndCacheLeaderboard(), computeUserGamification(), FEEDBACK_MONTHLY_CAP_COUNT, gamificationRouter (+14 more)
+Nodes (21): ACTION_XP_WEIGHTS, BULLETIN_DAILY_CAP_COUNT, calculateStreak(), checkAndBroadcastMilestones(), computeAndCacheLeaderboard(), computeUserGamification(), FEEDBACK_MONTHLY_CAP_COUNT, gamificationRouter (+13 more)
 
 ### Community 145 - "migrate-equipment-normalization.cjs"
 Cohesion: 0.67
@@ -959,9 +952,9 @@ Nodes (3): main(), { Pool }, tentukanDivisi()
 Cohesion: 0.08
 Nodes (22): 1. High Write Rates (Sequential Values), 2. Large String/Map/Array Fields, 3. TTL Fields, Automatic vs. Manual Management, Best Practices & Exemptions, CLI Commands, Composite Indexes, Config files (+14 more)
 
-### Community 158 - "getGlobalSocket"
-Cohesion: 0.17
-Nodes (19): socket.io-client, ChatScreen(), ChatScreenProps, getSectionDisplayName(), normalizeSection(), SECTIONS_LIST, EasterEggGame(), EasterEggGameProps (+11 more)
+### Community 158 - "personAchievement"
+Cohesion: 0.20
+Nodes (15): DashCard(), DashTitle(), formatTrainingDate(), pctColor(), personAchievement(), PersonAchievementModal(), PersonPopCard(), PersonProgramCards() (+7 more)
 
 ### Community 177 - "Native SQL Examples"
 Cohesion: 0.10
@@ -988,8 +981,8 @@ Cohesion: 0.12
 Nodes (16): Add a Document with Auto-ID (`addDoc`), Firestore Web SDK Usage Guide, Get a Single Document (`getDoc`), Get Multiple Documents (`getDocs`), Handle Changes (Added/Modified/Removed), Initialization, Listen to a Document/Query (`onSnapshot`), Order and Limit (+8 more)
 
 ### Community 200 - "XrfQcChartCard.tsx"
-Cohesion: 0.25
-Nodes (12): XrfChartFullscreenModalProps, getSharedEmployees(), QC_ELEMENTS_LIST, XrfChartLimitData, XrfChartStatData, XrfPointAnnotation, XrfPointData, XrfQcChartCard (+4 more)
+Cohesion: 0.23
+Nodes (13): XrfChartFullscreenModalProps, getSharedEmployees(), QC_ELEMENTS_LIST, XrfChartLimitData, XrfChartStatData, XrfPointAnnotation, XrfPointData, XrfQcChartCard (+5 more)
 
 ### Community 201 - "Security Audit — PrepLab-Portal"
 Cohesion: 0.12
@@ -1035,10 +1028,6 @@ Nodes (14): 1. Define Data Model (`schema/schema.gql`), 2. Define Authorized Ope
 Cohesion: 0.14
 Nodes (13): Add a Document with Auto-ID, Get a Single Document, Get Multiple Documents, Order and Limit, Pipeline Queries, Python SDK Usage, Queries, Reading Data (+5 more)
 
-### Community 212 - "routes/tickets.ts"
-Cohesion: 0.15
-Nodes (6): csv-parse, FALLBACK_TICKETS, router, getIoInstance(), ticketSchema, workOrderSchema
-
 ### Community 213 - "Cloud Functions Integration Reference"
 Cohesion: 0.15
 Nodes (12): Accessing User Authentication Context, Auth Context Mappings, Auth Extraction Example, Cloud Functions Integration Reference, Comprehensive Example, Core Trigger Configuration, 🚨 Critical Infinite Loop Constraint, Event Filtering (+4 more)
@@ -1079,10 +1068,6 @@ Nodes (12): Basic Query, Best Practices for Agents, Calling Operations, Client-S
 Cohesion: 0.17
 Nodes (11): Audit Codebase & Perbaikan — 15 Oktober 2026, Commit, Lima Temuan Audit, Rekomendasi Next Steps, Ringkasan Perbaikan, Status Keseluruhan, ✅ Temuan 1: Socket.IO CORS Wildcard + Tanpa Auth (AKAN DITANGANI TERPISAH), ✅ Temuan 2: ISO Week-Year Dicampur dengan Calendar Year — **DIPERBAIKI** (+3 more)
 
-### Community 224 - "RosterExcelImportModal.tsx"
-Cohesion: 0.26
-Nodes (10): RosterExcelImportModal(), RosterExcelImportModalProps, formatToPortalDate(), getExcelSheetNames(), KNOWN_RESIGNED_NIKS, ParsedCutiEntry, ParsedEmployee, ParsedRosterEntry (+2 more)
-
 ### Community 225 - "XrfDailyInputTab.tsx"
 Cohesion: 0.20
 Nodes (10): DEFAULT_LIMONITE_ROWS, DEFAULT_SAPROLITE_ROWS, DEFAULT_SUPERMINI_ROWS, DEFAULT_ZETIUM_ROWS, StandardRowInput, XrfDailyInputTabProps, formatStandardDisplayName(), getWdxrfProfile() (+2 more)
@@ -1108,12 +1093,12 @@ Cohesion: 0.18
 Nodes (10): 1. Import and Initialize, 2. Type-Safe Data Models (Codable), 3. Writing Data (Modern Concurrency & Codable), 4. Reading Data (Modern Concurrency & Codable), 5. Realtime Listeners in SwiftUI (Lifecycle Best Practices), ⛔️ CRITICAL RULE: NO FirebaseFirestoreSwift ⛔️, ⛔️ CRITICAL RULE: NO INLINE INITIALIZATION ⛔️, Firebase Firestore iOS Setup Guide (+2 more)
 
 ### Community 231 - "[2.8.22] - 2026-09-10"
-Cohesion: 0.18
-Nodes (11): [2.8.22] - 2026-09-10, 🛠️ Koreksi Nilai Poin Aktual Inspeksi Pak Roy Marten Bobrikit, 🔢 Pembatasan Input Nilai Point Aktual Inspeksi Hanya 1 Digit (0-4), 🚫 Pembersihan Personil Resign dari Rekapitulasi Pelaporan Hazard Safety, 📸 Penamaan File Dokumentasi Inspeksi & Fitur Unduh Massal (Bulk ZIP Download), 📐 Perbaikan Tampilan Kartu Bertumpuk & Logika Status Rekap KTA (`GroupReportScreen.tsx` & `server/routes/misc.ts`), 🛡️ Rekap Status Laporan Inspeksi: Syarat Wajib Bukti Screenshot (SS) Form General & Ceklis Ganda (PDF + SS), 🔄 Rekonsiliasi Otomatis Data Karyawan & Roster Sinkronisasi Google Sheets (+3 more)
+Cohesion: 0.22
+Nodes (9): [2.8.22] - 2026-09-10, 🛠️ Koreksi Nilai Poin Aktual Inspeksi Pak Roy Marten Bobrikit, 🔢 Pembatasan Input Nilai Point Aktual Inspeksi Hanya 1 Digit (0-4), 📸 Penamaan File Dokumentasi Inspeksi & Fitur Unduh Massal (Bulk ZIP Download), 📐 Perbaikan Tampilan Kartu Bertumpuk & Logika Status Rekap KTA (`GroupReportScreen.tsx` & `server/routes/misc.ts`), 🛡️ Rekap Status Laporan Inspeksi: Syarat Wajib Bukti Screenshot (SS) Form General & Ceklis Ganda (PDF + SS), 🔄 Rekonsiliasi Otomatis Data Karyawan & Roster Sinkronisasi Google Sheets, ⚡ Restrukturisasi Tampilan Pelaporan Hazard Report Safety & Proporsionalitas Filter (+1 more)
 
 ### Community 232 - "syncRoster.ts"
-Cohesion: 0.27
-Nodes (10): CONFIGS, fetchAndSync(), fetchRosterSheetForDate(), initRosterCron(), KNOWN_RESIGNED_NIKS, normalizeDateStr(), RosterConfig, SheetRosterEntry (+2 more)
+Cohesion: 0.29
+Nodes (9): CONFIGS, fetchAndSync(), initRosterCron(), KNOWN_RESIGNED_NIKS, normalizeDateStr(), RosterConfig, SheetRosterEntry, syncCutiTahunan() (+1 more)
 
 ### Community 233 - "🔴 HENTIKAN: commit 8656d2a membuka kembali lubang P0"
 Cohesion: 0.18
@@ -1134,10 +1119,6 @@ Nodes (9): 1. Add Dependencies, 2. Initialize Firestore, 3. Add Data, 4. Read Da
 ### Community 237 - "employeeLeaves.ts"
 Cohesion: 0.24
 Nodes (8): employeeLeavesRouter, fetchGoogleSheetLeaves(), formatExcelDate(), parseDurationDays(), REKAPAN_IZIN_SPREADSHEET_ID, sheetCache, SheetLeaveItem, employeeLeaveRequests
-
-### Community 238 - "training-request-form-sheet.tsx"
-Cohesion: 0.22
-Nodes (9): EmployeeOption, formatIndonesianDate(), PHOTO_FORMAT_TEMPLATE, RequestParticipant, TRAINING_DROPDOWN_OPTIONS, TrainingRequestFormSheet(), TrainingRequestFormSheetProps, TrainingRequestSession (+1 more)
 
 ### Community 239 - "firebase_auth_basics/SKILL.md"
 Cohesion: 0.22
@@ -1227,10 +1208,6 @@ Nodes (6): extractFilename(), getDriveToken(), getMimeType(), notion, run(), upl
 Cohesion: 0.36
 Nodes (7): getDriveToken(), notion, PAGES_TO_SYNC, resolveUserName(), syncPages(), uploadToDrive(), userCache
 
-### Community 261 - "PicAvatarGroup.tsx"
-Cohesion: 0.32
-Nodes (7): ACADEMIC_TITLES, AVATAR_GRADIENTS, getGradientForName(), PicAvatarGroup(), PicAvatarGroupProps, PicItem, smartSplitPicString()
-
 ### Community 262 - "Firebase AI Logic Basics"
 Cohesion: 0.29
 Nodes (7): Advanced Features, Chat Session (Multi-turn), Core Capabilities, Firebase AI Logic Basics, Initialization Pattern, Multimodal (Text + Images/Audio/Video/PDF input), Streaming Responses
@@ -1287,10 +1264,6 @@ Nodes (5): 1. Install and Verify Firebase Skills, 2. Configure and Verify Fireba
 Cohesion: 0.33
 Nodes (5): 1. Create a Firebase Project and App, 2. Installation, 3. Initialization, 4. Using Services, Firebase Web Setup Guide
 
-### Community 276 - "sync-inventory-exact.ts"
-Cohesion: 0.40
-Nodes (5): getPageMarkdown(), n2m, notion, syncAll(), targetPages
-
 ### Community 277 - "test-upload-drive.cjs"
 Cohesion: 0.47
 Nodes (5): { Client }, getDriveToken(), notion, testUploadLoker(), uploadToDrive()
@@ -1332,8 +1305,8 @@ Cohesion: 0.50
 Nodes (4): [2.7.0] - 2026-09-01, 🚀 Fitur Baru & Peningkatan Utama, 🛠 Perbaikan Sistem (Bug Fixes & Optimasi), safeDateDay()
 
 ### Community 287 - "[2.8.34] - 2026-09-16 (Baru Teraplikasi di Staging)"
-Cohesion: 0.50
-Nodes (4): [2.8.34] - 2026-09-16 (Baru Teraplikasi di Staging), 📥 Modal Pasca-Inspeksi: Unduh Laporan PDF & Akses General Submit Safety, 🦺 Otomatisasi Keterangan "Cuti" & Sinkronisasi Personil Roster pada Inspeksi APD, 🔔 Pembukaan Kembali Modal Jadwal P5M dari Lonceng Notifikasi
+Cohesion: 0.40
+Nodes (5): [2.8.34] - 2026-09-16 (Baru Teraplikasi di Staging), 📥 Modal Pasca-Inspeksi: Unduh Laporan PDF & Akses General Submit Safety, 🦺 Otomatisasi Keterangan "Cuti" & Sinkronisasi Personil Roster pada Inspeksi APD, 📍 Otomatisasi Kunci Lokasi / Sub-Area Inspeksi Umum Tanpa Input Manual, 🔔 Pembukaan Kembali Modal Jadwal P5M dari Lonceng Notifikasi
 
 ### Community 288 - "[2.9.39] - 2026-10-10"
 Cohesion: 0.50
@@ -1369,23 +1342,23 @@ Nodes (3): [2.9.40] - 2026-10-10, 🛡️ Strategi Migrasi PWA Mulus (Seamless) 
 
 ## Knowledge Gaps
 - **26 isolated node(s):** `@fullcalendar/core`, `@tailwindcss/typography`, `@types/jszip`, `@types/node-cron`, `@types/papaparse` (+21 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2179 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **110 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 2187 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **108 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `react` to `sonner`, `ProfilePage.tsx`, `PicAvatarGroup.tsx`, `App.tsx`, `ThemeModal.tsx`, `lucide-react`, `sheets-api.ts`, `mobileMode.ts`, `HomeWidgetDashboard.tsx`, `GbaOverworldMap.tsx`, `tasklist-utils.ts`, `training-database-screen.tsx`, `create-wo-screen.tsx`, `logbook-section-utils.ts`, `NotionDatabaseTable.tsx`, `employee-database-screen.tsx`, `XrfCalibrationScreen.tsx`, `package.json`, `getGlobalSocket`, `screen-test-utils.ts`, `meal-orders-screen.tsx`, `P2HLaboratoryAccordionForm.tsx`, `TempatNongkrongModal.tsx`, `p5m-screen.tsx`, `bulletin-board.tsx`, `meal-bungkus-recap.tsx`, `meal-bungkus-recipients.tsx`, `training-certifications-panel.tsx`, `Avatar3DWidget.tsx`, `MobileSimpleHomeScreen.tsx`, `inspection-schedule-screen.tsx`, `GroupReportScreen.tsx`, `notification-bell.tsx`, `pelanggaran-dashboard.tsx`, `safety-rekap-screen.tsx`, `RosterOffScheduleSheet.tsx`, `KbbiCorrectorWidget.tsx`, `NotionDueDateCell.tsx`, `XrfQcChartCard.tsx`, `signatureProcessing.ts`, `SafetyRekapDiagram.tsx`, `clinic-screen.tsx`, `NotionDropdownCell.tsx`, `employee-leaves-screen.tsx`, `DeveloperChangelog.tsx`, `TimeInput24`, `RosterExcelImportModal.tsx`, `XrfDailyInputTab.tsx`, `ContrastGuard.tsx`, `preplab-cloud-screen.tsx`, `meal-bungkus-stats.tsx`, `XrfControlChartsTab.tsx`, `error-boundary.tsx`, `training-request-form-sheet.tsx`?**
-  _High betweenness centrality (0.159) - this node is a cross-community bridge._
+- **Why does `@table` connect `Core Directives` to `parseMealOrderSheet`?**
+  _High betweenness centrality (0.152) - this node is a cross-community bridge._
 - **What connects `@fullcalendar/core`, `@tailwindcss/typography`, `@types/jszip` to the rest of the system?**
   _26 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `server.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.03793574846206425 - nodes in this community are weakly interconnected._
-- **Why does `@table` connect `Core Directives` to `parseMealOrderSheet`?**
-  _High betweenness centrality (0.155) - this node is a cross-community bridge._
-- **Should `index.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.04351851851851852 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.043459174714661986 - nodes in this community are weakly interconnected._
 - **Why does `key()` connect `parseMealOrderSheet` to `Core Directives`?**
-  _High betweenness centrality (0.154) - this node is a cross-community bridge._
+  _High betweenness centrality (0.151) - this node is a cross-community bridge._
+- **Should `index.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.029333333333333333 - nodes in this community are weakly interconnected._
+- **Why does `react` connect `react` to `sonner`, `ProfilePage.tsx`, `ThemeModal.tsx`, `App.tsx`, `lucide-react`, `sheets-api.ts`, `mobileMode.ts`, `HomeWidgetDashboard.tsx`, `GbaOverworldMap.tsx`, `tasklist-utils.ts`, `training-database-screen.tsx`, `create-wo-screen.tsx`, `logbook-section-utils.ts`, `NotionDatabaseTable.tsx`, `employee-database-screen.tsx`, `XrfCalibrationScreen.tsx`, `package.json`, `screen-test-utils.ts`, `meal-orders-screen.tsx`, `P2HLaboratoryAccordionForm.tsx`, `TempatNongkrongModal.tsx`, `p5m-screen.tsx`, `bulletin-board.tsx`, `meal-bungkus-recap.tsx`, `meal-bungkus-recipients.tsx`, `training-certifications-panel.tsx`, `Avatar3DWidget.tsx`, `ticket-screen.tsx`, `inspection-schedule-screen.tsx`, `GroupReportScreen.tsx`, `notification-bell.tsx`, `sonner`, `safety-rekap-screen.tsx`, `RosterOffScheduleSheet.tsx`, `KbbiCorrectorWidget.tsx`, `NotionDueDateCell.tsx`, `XrfQcChartCard.tsx`, `signatureProcessing.ts`, `SafetyRekapDiagram.tsx`, `clinic-screen.tsx`, `period-utils.ts`, `DeveloperChangelog.tsx`, `TimeInput24`, `XrfDailyInputTab.tsx`, `ContrastGuard.tsx`, `preplab-cloud-screen.tsx`, `meal-bungkus-stats.tsx`, `XrfControlChartsTab.tsx`, `error-boundary.tsx`?**
+  _High betweenness centrality (0.146) - this node is a cross-community bridge._
 - **Should `sonner` be split into smaller, more focused modules?**
-  _Cohesion score 0.08530020703933748 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11655874190564293 - nodes in this community are weakly interconnected._
