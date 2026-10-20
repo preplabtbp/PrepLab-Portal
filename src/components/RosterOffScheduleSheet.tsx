@@ -1,12 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Calendar, Users, Search, Filter, FileSpreadsheet, Download,
   RefreshCw, CheckCircle2, Clock, Sparkles, Building2,
-  Printer, ChevronLeft, ChevronRight, ArrowUpDown, ChevronDown,
-  Coffee, CalendarClock, ShieldCheck, Sun, Moon, AlertCircle
+  Printer, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown,
+  ChevronDown, Coffee, CalendarClock, ShieldCheck, Sun, Moon,
+  AlertCircle, Eye, EyeOff, SlidersHorizontal, RotateCcw, Check
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
+import { parseGolonganLevel, checkIsGolonganI } from './RosterLeaveScheduleSheet';
 
 interface RosterOffScheduleSheetProps {
   roster: any[];
@@ -24,6 +26,9 @@ export interface OffRecord {
   poh: string;
   pt: string;
   shift: string;
+  gol: string;
+  golLevel: number;
+  earliestOffTime: number;
   offDates: {
     date: Date;
     dateStr: string;
@@ -42,6 +47,44 @@ export interface OffRecord {
     isToday: boolean;
   }[];
 }
+
+interface ColumnVisibilityConfig {
+  no: boolean;
+  pt: boolean;
+  employee: boolean;
+  gol: boolean;
+  section: boolean;
+  jabatan: boolean;
+  poh: boolean;
+  offSchedule: boolean;
+  totalOff: boolean;
+  matrixSen: boolean;
+  matrixSel: boolean;
+  matrixRab: boolean;
+  matrixKam: boolean;
+  matrixJum: boolean;
+  matrixSab: boolean;
+  matrixMin: boolean;
+}
+
+const DEFAULT_COLUMN_VISIBILITY: ColumnVisibilityConfig = {
+  no: true,
+  pt: true,
+  employee: true,
+  gol: true,
+  section: true,
+  jabatan: true,
+  poh: true,
+  offSchedule: true,
+  totalOff: true,
+  matrixSen: true,
+  matrixSel: true,
+  matrixRab: true,
+  matrixKam: true,
+  matrixJum: true,
+  matrixSab: true,
+  matrixMin: true,
+};
 
 const MONTH_NAMES_ID = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -93,7 +136,6 @@ export function formatIndonesianDate(d: Date | null, options?: { withDay?: boole
   const day = d.getDate();
   const monthIdx = d.getMonth();
   const year = d.getFullYear();
-  const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
   const fullDayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const monthName = options?.shortMonth
     ? MONTH_NAMES_ID[monthIdx].substring(0, 3)
@@ -177,6 +219,31 @@ export function isNonshiftEmployee(emp: any): boolean {
 }
 
 /**
+ * Filter Golongan: Hanya Golongan II s.d. V yang diambil.
+ * Golongan I (crew, operator, helper, dsb.) dikecualikan.
+ */
+export function isGolongan2To5(emp: any): boolean {
+  if (!emp) return false;
+  if (checkIsGolonganI(emp)) return false;
+  const level = parseGolonganLevel(emp.gol || emp.golongan || emp.jobGrade, emp.jabatan || emp.position);
+  return level >= 2 && level <= 5;
+}
+
+export function formatGolonganBadge(level: number, rawGol?: string): string {
+  const g = String(rawGol || '').trim().toUpperCase();
+  if (g && (g.includes('II') || g.includes('III') || g.includes('IV') || g.includes('V') || g.startsWith('2') || g.startsWith('3') || g.startsWith('4') || g.startsWith('5'))) {
+    return g;
+  }
+  switch (level) {
+    case 5: return 'Gol V';
+    case 4: return 'Gol IV';
+    case 3: return 'Gol III';
+    case 2: return 'Gol II';
+    default: return `Gol ${level}`;
+  }
+}
+
+/**
  * Menghitung hari Senin s.d. Minggu pada minggu tertentu (7 hari).
  */
 export function getMondayToSundayWeek(refDate: Date): {
@@ -191,6 +258,7 @@ export function getMondayToSundayWeek(refDate: Date): {
     dateKey: string;
     isoKey: string;
     isToday: boolean;
+    colKey: keyof ColumnVisibilityConfig;
   }[];
 } {
   const d = new Date(refDate);
@@ -208,6 +276,9 @@ export function getMondayToSundayWeek(refDate: Date): {
 
   const dayShortNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
   const fullDayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  const colKeys: (keyof ColumnVisibilityConfig)[] = [
+    'matrixMin', 'matrixSen', 'matrixSel', 'matrixRab', 'matrixKam', 'matrixJum', 'matrixSab'
+  ];
 
   const days: {
     date: Date;
@@ -218,6 +289,7 @@ export function getMondayToSundayWeek(refDate: Date): {
     dateKey: string;
     isoKey: string;
     isToday: boolean;
+    colKey: keyof ColumnVisibilityConfig;
   }[] = [];
 
   for (let i = 0; i < 7; i++) {
@@ -238,7 +310,8 @@ export function getMondayToSundayWeek(refDate: Date): {
       dateNum: `${day} ${parts[1]}`,
       dateKey,
       isoKey,
-      isToday: iter.getTime() === today.getTime()
+      isToday: iter.getTime() === today.getTime(),
+      colKey: colKeys[iter.getDay()]
     });
   }
 
@@ -288,9 +361,56 @@ export function RosterOffScheduleSheet({
   const [searchQuery, setSearchQuery] = useState('');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [ptFilter, setPtFilter] = useState<'ALL' | 'TBP' | 'GPS'>('ALL');
-  const [offDayFilter, setOffDayFilter] = useState<string>('ALL'); // 'ALL' | 'HAS_OFF' | 'SEN' | 'SEL' ...
-  const [sortField, setSortField] = useState<'nama' | 'section' | 'totalOff' | 'pt'>('nama');
+  const [offDayFilter, setOffDayFilter] = useState<string>('ALL');
+
+  // Sorting: sekarang mendukung 'offDate' (urutan tanggal Off tercepat/terlama)
+  const [sortField, setSortField] = useState<'offDate' | 'nama' | 'section' | 'totalOff' | 'pt' | 'gol'>('offDate');
   const [sortAsc, setSortAsc] = useState(true);
+
+  // Column Visibility Popover State & Settings (Persisted in localStorage)
+  const [isColMenuOpen, setIsColMenuOpen] = useState(false);
+  const colMenuRef = useRef<HTMLDivElement>(null);
+
+  const [colVisibility, setColVisibility] = useState<ColumnVisibilityConfig>(() => {
+    try {
+      const saved = localStorage.getItem('preplab_roster_off_visible_cols');
+      if (saved) return { ...DEFAULT_COLUMN_VISIBILITY, ...JSON.parse(saved) };
+    } catch (e) { }
+    return DEFAULT_COLUMN_VISIBILITY;
+  });
+
+  const updateColumnVisibility = (key: keyof ColumnVisibilityConfig, value: boolean) => {
+    setColVisibility(prev => {
+      const updated = { ...prev, [key]: value };
+      try {
+        localStorage.setItem('preplab_roster_off_visible_cols', JSON.stringify(updated));
+      } catch (e) { }
+      return updated;
+    });
+  };
+
+  const resetColumnVisibility = () => {
+    setColVisibility(DEFAULT_COLUMN_VISIBILITY);
+    try {
+      localStorage.removeItem('preplab_roster_off_visible_cols');
+    } catch (e) { }
+    toast.success('Pengaturan kolom dikembalikan ke default.');
+  };
+
+  // Close column menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
+        setIsColMenuOpen(false);
+      }
+    };
+    if (isColMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isColMenuOpen]);
 
   // Week calculation (Monday - Sunday)
   const weekInfo = useMemo(() => {
@@ -320,7 +440,13 @@ export function RosterOffScheduleSheet({
     setSelectedWeekDate(now);
   };
 
-  // Compile unified list of Nonshift personnel with their weekly OFF records
+  /**
+   * Filter Karyawan:
+   * 1. PT TBP & PT GPS Saja
+   * 2. Shift Nonshift Saja
+   * 3. HANYA Golongan II s.d. V (Gol I dilarang)
+   * 4. HANYA karyawan yang memiliki jadwal OFF di minggu berjalan (totalOffDays > 0)
+   */
   const allOffRecords = useMemo<OffRecord[]>(() => {
     const results: OffRecord[] = [];
 
@@ -331,6 +457,9 @@ export function RosterOffScheduleSheet({
       // 2. Filter Shift: Hanya karyawan dengan status shift "Nonshift"
       if (!isNonshiftEmployee(emp)) continue;
 
+      // 3. Filter Golongan: Hanya Golongan II - V (Gol I dikecualikan)
+      if (!isGolongan2To5(emp)) continue;
+
       const nik = String(emp.nik || '').trim();
       const nama = String(emp.name || emp.nama || '').trim();
       if (!nama || nik.includes('DEMO')) continue;
@@ -340,6 +469,8 @@ export function RosterOffScheduleSheet({
       const poh = String(emp.poh || emp.domisili || '-').trim();
       const pt = String(emp.pt || 'TBP').trim().toUpperCase().includes('GPS') ? 'GPS' : 'TBP';
       const shift = String(emp.shift || 'Nonshift').trim();
+      const golLevel = parseGolonganLevel(emp.gol || emp.golongan, jabatan);
+      const gol = formatGolonganBadge(golLevel, emp.gol || emp.golongan);
 
       // Check each day of the current week (Senin s.d. Minggu)
       const offDates: OffRecord['offDates'] = [];
@@ -369,11 +500,14 @@ export function RosterOffScheduleSheet({
         }
       }
 
-      // Summary string for human reading
-      let offSummary = '-';
-      if (offDates.length > 0) {
-        offSummary = offDates.map(o => `${o.dayName} (${o.date.getDate()} ${MONTH_NAMES_ID[o.date.getMonth()].slice(0, 3)})`).join(', ');
+      // 4. ATURAN MUTLAK: Hanya yang memiliki jadwal OFF di minggu berjalan saja yang diambil!
+      if (offDates.length === 0) {
+        continue;
       }
+
+      // Summary string for human reading
+      const offSummary = offDates.map(o => `${o.dayName} (${o.date.getDate()} ${MONTH_NAMES_ID[o.date.getMonth()].slice(0, 3)})`).join(', ');
+      const earliestOffTime = offDates[0].date.getTime();
 
       results.push({
         id: `${nik}_${weekInfo.monday.toISOString()}`,
@@ -384,6 +518,9 @@ export function RosterOffScheduleSheet({
         poh,
         pt,
         shift,
+        gol,
+        golLevel,
+        earliestOffTime,
         offDates,
         totalOffDays: offDates.length,
         offSummary,
@@ -418,9 +555,7 @@ export function RosterOffScheduleSheet({
     }
 
     // Filter Hari Off
-    if (offDayFilter === 'HAS_OFF') {
-      list = list.filter(r => r.totalOffDays > 0);
-    } else if (offDayFilter !== 'ALL') {
+    if (offDayFilter !== 'ALL') {
       const targetDayName = offDayFilter.toLowerCase();
       list = list.filter(r => r.offDates.some(o => o.dayName.toLowerCase().includes(targetDayName)));
     }
@@ -434,6 +569,7 @@ export function RosterOffScheduleSheet({
         r.jabatan.toLowerCase().includes(q) ||
         r.section.toLowerCase().includes(q) ||
         r.poh.toLowerCase().includes(q) ||
+        r.gol.toLowerCase().includes(q) ||
         r.offSummary.toLowerCase().includes(q)
       );
     }
@@ -441,7 +577,10 @@ export function RosterOffScheduleSheet({
     // Sorting
     list.sort((a, b) => {
       let cmp = 0;
-      if (sortField === 'nama') {
+      if (sortField === 'offDate') {
+        // Urutkan berdasarkan tanggal Off pertama tercepat/terlama
+        cmp = a.earliestOffTime - b.earliestOffTime || a.nama.localeCompare(b.nama);
+      } else if (sortField === 'nama') {
         cmp = a.nama.localeCompare(b.nama);
       } else if (sortField === 'section') {
         cmp = a.section.localeCompare(b.section) || a.nama.localeCompare(b.nama);
@@ -449,6 +588,8 @@ export function RosterOffScheduleSheet({
         cmp = b.totalOffDays - a.totalOffDays || a.nama.localeCompare(b.nama);
       } else if (sortField === 'pt') {
         cmp = a.pt.localeCompare(b.pt) || a.nama.localeCompare(b.nama);
+      } else if (sortField === 'gol') {
+        cmp = b.golLevel - a.golLevel || a.nama.localeCompare(b.nama);
       }
       return sortAsc ? cmp : -cmp;
     });
@@ -459,7 +600,6 @@ export function RosterOffScheduleSheet({
   // Statistics KPIs
   const stats = useMemo(() => {
     const totalEmployees = allOffRecords.length;
-    const withOff = allOffRecords.filter(r => r.totalOffDays > 0).length;
 
     // Off Today
     const today = new Date();
@@ -488,7 +628,6 @@ export function RosterOffScheduleSheet({
 
     return {
       totalEmployees,
-      withOff,
       offTodayCount,
       dailyCounts,
       tbpCount,
@@ -500,7 +639,7 @@ export function RosterOffScheduleSheet({
   const handleExportExcel = () => {
     try {
       const periodLabel = `${formatIndonesianDate(weekInfo.monday)} - ${formatIndonesianDate(weekInfo.sunday)}`;
-      const filename = `Jadwal_Off_Karyawan_Nonshift_${weekInfo.monday.getDate()}-${weekInfo.sunday.getDate()}_${MONTH_NAMES_ID[weekInfo.monday.getMonth()].slice(0, 3)}_${weekInfo.monday.getFullYear()}.xlsx`;
+      const filename = `Jadwal_Off_Gol_II-V_${weekInfo.monday.getDate()}-${weekInfo.sunday.getDate()}_${MONTH_NAMES_ID[weekInfo.monday.getMonth()].slice(0, 3)}_${weekInfo.monday.getFullYear()}.xlsx`;
 
       const rowsData = filteredRecords.map((r, idx) => {
         const row: Record<string, any> = {
@@ -508,6 +647,7 @@ export function RosterOffScheduleSheet({
           'PERUSAHAAN': `PT ${r.pt}`,
           'NIK': r.nik,
           'NAMA KARYAWAN': r.nama,
+          'GOLONGAN': r.gol,
           'SECTION': r.section,
           'JABATAN': r.jabatan,
           'POH': r.poh,
@@ -516,7 +656,7 @@ export function RosterOffScheduleSheet({
           'TOTAL HARI OFF': `${r.totalOffDays} Hari`
         };
 
-        // Tambah status masing-masing 7 hari
+        // Tambah status masing-masing 7 hari jika kolom matriks aktif
         weekInfo.days.forEach((d) => {
           const dayStatus = r.weekDailyStatus.find(s => s.date.getTime() === d.date.getTime());
           row[`${d.dayName} (${d.dateNum})`] = dayStatus?.code || 'D';
@@ -533,6 +673,7 @@ export function RosterOffScheduleSheet({
         { wch: 14 }, // PT
         { wch: 15 }, // NIK
         { wch: 28 }, // NAMA
+        { wch: 12 }, // GOL
         { wch: 18 }, // SECTION
         { wch: 24 }, // JABATAN
         { wch: 14 }, // POH
@@ -549,7 +690,7 @@ export function RosterOffScheduleSheet({
       ];
 
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Jadwal Off Karyawan');
+      XLSX.utils.book_append_sheet(wb, ws, 'Jadwal Off Gol II-V');
       XLSX.writeFile(wb, filename);
 
       toast.success(`Berhasil mengunduh Excel Jadwal Off (${periodLabel})!`);
@@ -559,12 +700,17 @@ export function RosterOffScheduleSheet({
     }
   };
 
-  // Print view
-  const handlePrint = () => {
-    window.print();
+  // Toggle sort helper
+  const handleToggleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(true);
+    }
   };
 
-  const periodString = `${formatIndonesianDate(weekInfo.monday, { withDay: true })} s.d. ${formatIndonesianDate(weekInfo.sunday, { withDay: true })}`;
+  const hiddenCount = Object.values(colVisibility).filter(v => !v).length;
   const periodShortString = `${weekInfo.monday.getDate()} ${MONTH_NAMES_ID[weekInfo.monday.getMonth()].slice(0, 3)} - ${weekInfo.sunday.getDate()} ${MONTH_NAMES_ID[weekInfo.sunday.getMonth()].slice(0, 3)} ${weekInfo.sunday.getFullYear()}`;
 
   return (
@@ -582,7 +728,7 @@ export function RosterOffScheduleSheet({
                 Terhubung dengan Modul Labnote
               </div>
               <div className="text-[11px] sm:text-xs text-amber-800">
-                Anda sedang melihat rekapitulasi Jadwal Off Karyawan Nonshift (PT TBP & GPS) untuk minggu berjalan.
+                Menampilkan rekapitulasi personil Golongan II – V yang memiliki jadwal OFF di minggu berjalan ({periodShortString}).
               </div>
             </div>
           </div>
@@ -608,9 +754,13 @@ export function RosterOffScheduleSheet({
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+              <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+              <span>Khusus Golongan II – V</span>
+            </span>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
               <Coffee className="w-3.5 h-3.5 text-amber-600" />
-              <span>Khusus Shift Nonshift</span>
+              <span>Hanya yang Ada OFF Minggu Ini</span>
             </span>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
               <Building2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -628,12 +778,114 @@ export function RosterOffScheduleSheet({
             </span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Daftar ringkasan tanggal OFF personil Nonshift PT Trimegah Bangun Persada & PT Gebe Prima Solusi (Senin – Minggu).
+            Rekapitulasi personil Nonshift Golongan II s.d. V (PT TBP & GPS) yang terdata memiliki jadwal OFF pada minggu berjalan.
           </p>
         </div>
 
-        {/* Toolbar Aksi: Navigasi Minggu & Export */}
+        {/* Toolbar Aksi: Sembunyikan Kolom, Navigasi Minggu & Export */}
         <div className="flex flex-wrap items-center gap-2 print:hidden">
+          
+          {/* Tombol Pengaturan Kolom (Hide / Show Columns) */}
+          <div className="relative" ref={colMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsColMenuOpen(!isColMenuOpen)}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs sm:text-sm font-bold shadow-2xs transition-all active:scale-95 cursor-pointer ${
+                hiddenCount > 0
+                  ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
+                  : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+              }`}
+              title="Atur kolom yang ditampilkan atau disembunyikan"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-slate-500" />
+              <span>Kolom Tampilan</span>
+              {hiddenCount > 0 ? (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white">
+                  {hiddenCount} Tersembunyi
+                </span>
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              )}
+            </button>
+
+            {/* Dropdown Popover Pengaturan Kolom */}
+            {isColMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-72 max-h-[80vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-slate-200 p-3 z-50 text-slate-800">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                    <Eye className="w-4 h-4 text-amber-600" />
+                    <span>Tampilkan / Sembunyikan Kolom</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetColumnVisibility}
+                    className="text-[10px] text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1 cursor-pointer"
+                    title="Kembalikan semua kolom ke default"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reset</span>
+                  </button>
+                </div>
+
+                <div className="space-y-1 text-xs">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pt-1">
+                    Kolom Informasi Utama
+                  </div>
+                  {[
+                    { key: 'no', label: 'Nomor (NO)' },
+                    { key: 'pt', label: 'Perusahaan (PT)' },
+                    { key: 'employee', label: 'Nama & NIK Karyawan' },
+                    { key: 'gol', label: 'Golongan (Gol II - V)' },
+                    { key: 'section', label: 'Section' },
+                    { key: 'jabatan', label: 'Jabatan' },
+                    { key: 'poh', label: 'POH / Asal Domisili' },
+                    { key: 'offSchedule', label: 'Jadwal Hari & Tanggal Off' },
+                    { key: 'totalOff', label: 'Total Hari Off' },
+                  ].map((col) => {
+                    const isChecked = colVisibility[col.key as keyof ColumnVisibilityConfig];
+                    return (
+                      <label
+                        key={col.key}
+                        className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer select-none"
+                      >
+                        <span className="text-slate-700 font-medium">{col.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => updateColumnVisibility(col.key as keyof ColumnVisibilityConfig, e.target.checked)}
+                          className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+                    );
+                  })}
+
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pt-2 border-t border-slate-100 mt-2">
+                    Matriks 7 Hari (Senin - Minggu)
+                  </div>
+                  {weekInfo.days.map((d) => {
+                    const isChecked = colVisibility[d.colKey];
+                    return (
+                      <label
+                        key={d.dateKey}
+                        className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer select-none"
+                      >
+                        <span className="text-slate-700 font-medium">
+                          {d.fullDayName} ({d.dateNum})
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => updateColumnVisibility(d.colKey, e.target.checked)}
+                          className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Week Navigator */}
           <div className="inline-flex items-center bg-slate-50 border border-slate-300 rounded-xl p-1 shadow-2xs">
             <button
@@ -676,7 +928,7 @@ export function RosterOffScheduleSheet({
           {/* Cetak */}
           <button
             type="button"
-            onClick={handlePrint}
+            onClick={() => window.print()}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs sm:text-sm font-bold shadow-2xs transition-all active:scale-95 cursor-pointer"
             title="Cetak Halaman Ini"
           >
@@ -688,33 +940,18 @@ export function RosterOffScheduleSheet({
 
       {/* KPI Cards & Daily Quick Bar */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 print:hidden">
-        {/* Total Personil Nonshift */}
-        <div className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/60 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Total Nonshift</span>
-            <Users className="w-4 h-4 text-slate-600" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900">
-            {stats.totalEmployees}
-            <span className="text-xs font-normal text-slate-500 ml-1.5">Orang</span>
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            PT TBP: <strong className="text-slate-700">{stats.tbpCount}</strong> | PT GPS: <strong className="text-slate-700">{stats.gpsCount}</strong>
-          </div>
-        </div>
-
-        {/* Memiliki Off Minggu Ini */}
-        <div className="p-3.5 sm:p-4 rounded-xl border border-amber-200 bg-amber-50/50 shadow-2xs">
+        {/* Personil Gol II-V yang OFF Minggu Ini */}
+        <div className="p-3.5 sm:p-4 rounded-xl border border-amber-300 bg-amber-50/60 shadow-2xs">
           <div className="flex items-center justify-between text-amber-800 mb-1">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Off Minggu Ini</span>
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Off Minggu Ini (Gol II-V)</span>
             <Coffee className="w-4 h-4 text-amber-600" />
           </div>
           <div className="text-2xl sm:text-3xl font-black text-amber-950">
-            {stats.withOff}
+            {stats.totalEmployees}
             <span className="text-xs font-normal text-amber-800 ml-1.5">Personil</span>
           </div>
           <div className="text-[11px] text-amber-700 mt-1">
-            Terjadwal off pada 19 - 25 Okt 2026
+            PT TBP: <strong className="text-amber-900">{stats.tbpCount}</strong> | PT GPS: <strong className="text-amber-900">{stats.gpsCount}</strong>
           </div>
         </div>
 
@@ -733,6 +970,20 @@ export function RosterOffScheduleSheet({
           </div>
         </div>
 
+        {/* Kriteria Filter Aktif */}
+        <div className="p-3.5 sm:p-4 rounded-xl border border-purple-200 bg-purple-50/50 shadow-2xs">
+          <div className="flex items-center justify-between text-purple-800 mb-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Ketentuan Filter</span>
+            <ShieldCheck className="w-4 h-4 text-purple-600" />
+          </div>
+          <div className="text-sm sm:text-base font-extrabold text-purple-950 leading-tight">
+            Golongan II, III, IV, & V
+          </div>
+          <div className="text-[11px] text-purple-700 mt-1">
+            Gol I dikecualikan & hanya yang ada jadwal OFF
+          </div>
+        </div>
+
         {/* Periode Minggu Berjalan */}
         <div className="p-3.5 sm:p-4 rounded-xl border border-teal-200 bg-teal-50/50 shadow-2xs">
           <div className="flex items-center justify-between text-teal-800 mb-1">
@@ -743,7 +994,7 @@ export function RosterOffScheduleSheet({
             {weekInfo.monday.getDate()} {MONTH_NAMES_ID[weekInfo.monday.getMonth()].slice(0, 3)} – {weekInfo.sunday.getDate()} {MONTH_NAMES_ID[weekInfo.sunday.getMonth()].slice(0, 3)} {weekInfo.sunday.getFullYear()}
           </div>
           <div className="text-[11px] text-teal-700 mt-1">
-            Senin s.d. Minggu (7 Hari Kerja/Off)
+            Senin s.d. Minggu (7 Hari Kalender)
           </div>
         </div>
       </div>
@@ -806,7 +1057,7 @@ export function RosterOffScheduleSheet({
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
+      {/* Filter, Search & Quick Sort Bar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 print:hidden">
         {/* Search */}
         <div className="relative flex-1 min-w-[240px]">
@@ -815,7 +1066,7 @@ export function RosterOffScheduleSheet({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari nama karyawan, NIK, jabatan, atau section..."
+            placeholder="Cari nama karyawan, NIK, jabatan, golongan, atau section..."
             className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-slate-900 placeholder-slate-400 shadow-2xs"
           />
           {searchQuery && (
@@ -829,8 +1080,27 @@ export function RosterOffScheduleSheet({
           )}
         </div>
 
-        {/* Dropdown Filters */}
+        {/* Dropdown Filters & Quick Sort Button */}
         <div className="flex flex-wrap items-center gap-2">
+          
+          {/* Quick Sort Tanggal Off Button */}
+          <button
+            type="button"
+            onClick={() => handleToggleSort('offDate')}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold shadow-2xs transition-all active:scale-95 cursor-pointer ${
+              sortField === 'offDate'
+                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+            }`}
+            title="Klik untuk mengurutkan berdasarkan Tanggal Off (Senin -> Minggu atau sebaliknya)"
+          >
+            <CalendarClock className="w-3.5 h-3.5" />
+            <span>Urutkan Tanggal Off</span>
+            {sortField === 'offDate' && (
+              sortAsc ? <ArrowUp className="w-3.5 h-3.5 text-amber-100" /> : <ArrowDown className="w-3.5 h-3.5 text-amber-100" />
+            )}
+          </button>
+
           {/* Section Filter (Default ALL - All sections merged) */}
           <div className="inline-flex items-center gap-1.5 text-xs text-slate-600 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 shadow-2xs">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
@@ -861,27 +1131,6 @@ export function RosterOffScheduleSheet({
               <option value="GPS">Hanya PT GPS</option>
             </select>
           </div>
-
-          {/* Status Off Filter */}
-          <div className="inline-flex items-center gap-1.5 text-xs text-slate-600 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 shadow-2xs">
-            <Coffee className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-semibold text-slate-500">Status Off:</span>
-            <select
-              value={offDayFilter}
-              onChange={(e) => setOffDayFilter(e.target.value)}
-              className="bg-transparent font-bold text-slate-800 text-xs focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">Semua Karyawan Nonshift</option>
-              <option value="HAS_OFF">Hanya Yang Memiliki Jadwal OFF</option>
-              <option value="Senin">Hanya OFF Hari Senin</option>
-              <option value="Selasa">Hanya OFF Hari Selasa</option>
-              <option value="Rabu">Hanya OFF Hari Rabu</option>
-              <option value="Kamis">Hanya OFF Hari Kamis</option>
-              <option value="Jumat">Hanya OFF Hari Jumat</option>
-              <option value="Sabtu">Hanya OFF Hari Sabtu</option>
-              <option value="Minggu">Hanya OFF Hari Minggu</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -890,149 +1139,237 @@ export function RosterOffScheduleSheet({
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
-              <th className="py-3 px-3 text-center w-12 border-r border-slate-200">NO</th>
-              <th
-                onClick={() => {
-                  if (sortField === 'pt') setSortAsc(!sortAsc);
-                  else { setSortField('pt'); setSortAsc(true); }
-                }}
-                className="py-3 px-3 text-center w-24 border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
-              >
-                <div className="inline-flex items-center gap-1">
-                  <span>PT</span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                </div>
-              </th>
-              <th
-                onClick={() => {
-                  if (sortField === 'nama') setSortAsc(!sortAsc);
-                  else { setSortField('nama'); setSortAsc(true); }
-                }}
-                className="py-3 px-3 min-w-[220px] border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
-              >
-                <div className="inline-flex items-center gap-1">
-                  <span>Nama & NIK Karyawan</span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                </div>
-              </th>
-              <th
-                onClick={() => {
-                  if (sortField === 'section') setSortAsc(!sortAsc);
-                  else { setSortField('section'); setSortAsc(true); }
-                }}
-                className="py-3 px-3 min-w-[170px] border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
-              >
-                <div className="inline-flex items-center gap-1">
-                  <span>Section & Jabatan</span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                </div>
-              </th>
-              <th className="py-3 px-3 min-w-[100px] border-r border-slate-200 text-center">POH</th>
-              <th className="py-3 px-3 min-w-[220px] border-r border-slate-200">
-                <div className="flex items-center gap-1">
-                  <Coffee className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Jadwal Hari & Tanggal Off</span>
-                </div>
-              </th>
-              <th
-                onClick={() => {
-                  if (sortField === 'totalOff') setSortAsc(!sortAsc);
-                  else { setSortField('totalOff'); setSortAsc(false); }
-                }}
-                className="py-3 px-3 text-center w-24 border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
-              >
-                <div className="inline-flex items-center gap-1">
-                  <span>Total Off</span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                </div>
-              </th>
-              {/* Matriks 7 Hari (Senin - Minggu) */}
-              {weekInfo.days.map((d) => (
+              
+              {/* NO */}
+              {colVisibility.no && (
+                <th className="py-3 px-3 text-center w-12 border-r border-slate-200">NO</th>
+              )}
+
+              {/* PT */}
+              {colVisibility.pt && (
                 <th
-                  key={d.dateKey}
-                  className={`py-3 px-2 text-center w-16 border-r border-slate-200 ${
-                    d.isToday ? 'bg-amber-100 text-amber-950 font-black' : ''
-                  }`}
+                  onClick={() => handleToggleSort('pt')}
+                  className="py-3 px-3 text-center w-24 border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  title="Klik untuk mengurutkan Perusahaan"
                 >
-                  <div className="text-[10px] leading-tight">{d.dayName}</div>
-                  <div className="text-[11px] font-black">{d.date.getDate()}</div>
+                  <div className="inline-flex items-center gap-1">
+                    <span>PT</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
                 </th>
-              ))}
+              )}
+
+              {/* Nama & NIK */}
+              {colVisibility.employee && (
+                <th
+                  onClick={() => handleToggleSort('nama')}
+                  className="py-3 px-3 min-w-[210px] border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  title="Klik untuk mengurutkan Nama"
+                >
+                  <div className="inline-flex items-center gap-1">
+                    <span>Nama & NIK Karyawan</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
+              )}
+
+              {/* Golongan */}
+              {colVisibility.gol && (
+                <th
+                  onClick={() => handleToggleSort('gol')}
+                  className="py-3 px-2 text-center w-20 border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  title="Klik untuk mengurutkan Golongan"
+                >
+                  <div className="inline-flex items-center gap-1">
+                    <span>Gol</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
+              )}
+
+              {/* Section */}
+              {colVisibility.section && (
+                <th
+                  onClick={() => handleToggleSort('section')}
+                  className="py-3 px-3 min-w-[130px] border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  title="Klik untuk mengurutkan Section"
+                >
+                  <div className="inline-flex items-center gap-1">
+                    <span>Section</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
+              )}
+
+              {/* Jabatan */}
+              {colVisibility.jabatan && (
+                <th className="py-3 px-3 min-w-[150px] border-r border-slate-200">
+                  Jabatan
+                </th>
+              )}
+
+              {/* POH */}
+              {colVisibility.poh && (
+                <th className="py-3 px-3 min-w-[90px] border-r border-slate-200 text-center">
+                  POH
+                </th>
+              )}
+
+              {/* Jadwal Hari & Tanggal Off (Dengan Sort Button) */}
+              {colVisibility.offSchedule && (
+                <th
+                  onClick={() => handleToggleSort('offDate')}
+                  className={`py-3 px-3 min-w-[220px] border-r border-slate-200 cursor-pointer select-none transition-colors ${
+                    sortField === 'offDate' ? 'bg-amber-100/70 text-amber-950 font-black' : 'hover:bg-slate-200/60'
+                  }`}
+                  title="Klik untuk mengurutkan berdasarkan Tanggal Off (Senin -> Minggu / Sebaliknya)"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Jadwal Hari & Tanggal Off</span>
+                    </div>
+                    <div className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-900 border border-amber-400/40">
+                      {sortField === 'offDate' ? (
+                        sortAsc ? <span>Senin ➔ Min</span> : <span>Min ➔ Senin</span>
+                      ) : (
+                        <span>Urutkan</span>
+                      )}
+                      <ArrowUpDown className="w-3 h-3 text-amber-700" />
+                    </div>
+                  </div>
+                </th>
+              )}
+
+              {/* Total Off */}
+              {colVisibility.totalOff && (
+                <th
+                  onClick={() => handleToggleSort('totalOff')}
+                  className="py-3 px-3 text-center w-24 border-r border-slate-200 cursor-pointer hover:bg-slate-200/60 select-none"
+                  title="Klik untuk mengurutkan Total Hari Off"
+                >
+                  <div className="inline-flex items-center gap-1">
+                    <span>Total Off</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
+              )}
+
+              {/* Matriks 7 Hari (Senin - Minggu) */}
+              {weekInfo.days.map((d) => {
+                if (!colVisibility[d.colKey]) return null;
+                return (
+                  <th
+                    key={d.dateKey}
+                    className={`py-3 px-2 text-center w-16 border-r border-slate-200 ${
+                      d.isToday ? 'bg-amber-100 text-amber-950 font-black' : ''
+                    }`}
+                  >
+                    <div className="text-[10px] leading-tight">{d.dayName}</div>
+                    <div className="text-[11px] font-black">{d.date.getDate()}</div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {filteredRecords.length === 0 ? (
               <tr>
-                <td colSpan={14} className="py-12 text-center text-slate-500">
+                <td colSpan={16} className="py-12 text-center text-slate-500">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Coffee className="w-8 h-8 text-slate-400" />
-                    <span className="font-bold text-sm text-slate-700">Tidak ada data jadwal off karyawan yang sesuai</span>
-                    <span className="text-xs text-slate-400">Coba ubah kata kunci pencarian atau sesuaikan filter section/status.</span>
+                    <span className="font-bold text-sm text-slate-700">
+                      Tidak ada data jadwal off karyawan Golongan II - V di minggu ini
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      Seluruh personil yang ditampilkan hanyalah yang terdata memiliki jadwal OFF pada minggu berjalan.
+                    </span>
                   </div>
                 </td>
               </tr>
             ) : (
               filteredRecords.map((record, index) => {
-                const hasOff = record.totalOffDays > 0;
-
                 return (
                   <tr
                     key={record.id}
-                    className={`hover:bg-slate-50/80 transition-colors ${
-                      hasOff ? 'bg-white' : 'bg-slate-50/30'
-                    }`}
+                    className="hover:bg-slate-50/80 transition-colors bg-white"
                   >
                     {/* NO */}
-                    <td className="py-2.5 px-3 text-center font-bold text-slate-500 border-r border-slate-200">
-                      {index + 1}
-                    </td>
+                    {colVisibility.no && (
+                      <td className="py-2.5 px-3 text-center font-bold text-slate-500 border-r border-slate-200">
+                        {index + 1}
+                      </td>
+                    )}
 
                     {/* PT Badge */}
-                    <td className="py-2.5 px-3 text-center border-r border-slate-200">
-                      {record.pt === 'GPS' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-300">
-                          PT GPS
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          PT TBP
-                        </span>
-                      )}
-                    </td>
+                    {colVisibility.pt && (
+                      <td className="py-2.5 px-3 text-center border-r border-slate-200">
+                        {record.pt === 'GPS' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-300">
+                            PT GPS
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            PT TBP
+                          </span>
+                        )}
+                      </td>
+                    )}
 
                     {/* Nama & NIK */}
-                    <td className="py-2.5 px-3 border-r border-slate-200">
-                      <div className="font-bold text-slate-900 text-xs sm:text-[13px] leading-snug">
-                        {record.nama}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[11px] font-mono text-slate-500">
-                          {record.nik}
-                        </span>
-                        <span className="text-[9.5px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
-                          Nonshift
-                        </span>
-                      </div>
-                    </td>
+                    {colVisibility.employee && (
+                      <td className="py-2.5 px-3 border-r border-slate-200">
+                        <div className="font-bold text-slate-900 text-xs sm:text-[13px] leading-snug">
+                          {record.nama}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[11px] font-mono text-slate-500">
+                            {record.nik}
+                          </span>
+                          <span className="text-[9.5px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                            Nonshift
+                          </span>
+                        </div>
+                      </td>
+                    )}
 
-                    {/* Section & Jabatan */}
-                    <td className="py-2.5 px-3 border-r border-slate-200">
-                      <div className="font-semibold text-slate-800 text-xs">
-                        {record.section}
-                      </div>
-                      <div className="text-[11px] text-slate-500 truncate max-w-[200px]" title={record.jabatan}>
-                        {record.jabatan}
-                      </div>
-                    </td>
+                    {/* Golongan Badge */}
+                    {colVisibility.gol && (
+                      <td className="py-2.5 px-2 text-center border-r border-slate-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-300">
+                          {record.gol}
+                        </span>
+                      </td>
+                    )}
+
+                    {/* Section */}
+                    {colVisibility.section && (
+                      <td className="py-2.5 px-3 border-r border-slate-200">
+                        <div className="font-semibold text-slate-800 text-xs">
+                          {record.section}
+                        </div>
+                      </td>
+                    )}
+
+                    {/* Jabatan */}
+                    {colVisibility.jabatan && (
+                      <td className="py-2.5 px-3 border-r border-slate-200">
+                        <div className="text-[11px] text-slate-600 truncate max-w-[200px]" title={record.jabatan}>
+                          {record.jabatan}
+                        </div>
+                      </td>
+                    )}
 
                     {/* POH */}
-                    <td className="py-2.5 px-3 text-center text-slate-600 border-r border-slate-200">
-                      {record.poh || '-'}
-                    </td>
+                    {colVisibility.poh && (
+                      <td className="py-2.5 px-3 text-center text-slate-600 border-r border-slate-200">
+                        {record.poh || '-'}
+                      </td>
+                    )}
 
                     {/* Jadwal Hari & Tanggal Off */}
-                    <td className="py-2.5 px-3 border-r border-slate-200">
-                      {record.offDates.length > 0 ? (
+                    {colVisibility.offSchedule && (
+                      <td className="py-2.5 px-3 border-r border-slate-200">
                         <div className="flex flex-wrap gap-1.5">
                           {record.offDates.map((off, oIdx) => (
                             <span
@@ -1044,26 +1381,23 @@ export function RosterOffScheduleSheet({
                             </span>
                           ))}
                         </div>
-                      ) : (
-                        <span className="text-slate-400 text-xs italic">
-                          Tidak ada jadwal OFF minggu ini
-                        </span>
-                      )}
-                    </td>
+                      </td>
+                    )}
 
                     {/* Total Off */}
-                    <td className="py-2.5 px-3 text-center border-r border-slate-200">
-                      {record.totalOffDays > 0 ? (
+                    {colVisibility.totalOff && (
+                      <td className="py-2.5 px-3 text-center border-r border-slate-200">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">
                           {record.totalOffDays} Hari
                         </span>
-                      ) : (
-                        <span className="text-slate-400 text-xs font-semibold">-</span>
-                      )}
-                    </td>
+                      </td>
+                    )}
 
                     {/* Matriks 7 Kolom Harian */}
                     {record.weekDailyStatus.map((dayStatus, dIdx) => {
+                      const dayMeta = weekInfo.days[dIdx];
+                      if (!colVisibility[dayMeta.colKey]) return null;
+
                       const isOff = dayStatus.isOff;
                       const code = dayStatus.code;
 
@@ -1120,7 +1454,7 @@ export function RosterOffScheduleSheet({
       <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-200 gap-2">
         <div>
           Menampilkan <strong className="text-slate-800">{filteredRecords.length}</strong> dari{' '}
-          <strong className="text-slate-800">{allOffRecords.length}</strong> personil Nonshift terdaftar (PT TBP & PT GPS).
+          <strong className="text-slate-800">{allOffRecords.length}</strong> personil Golongan II – V yang memiliki jadwal OFF di minggu berjalan (PT TBP & PT GPS).
         </div>
         <div className="flex items-center gap-4 text-[11px]">
           <span className="flex items-center gap-1.5">
