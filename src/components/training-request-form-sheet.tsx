@@ -89,7 +89,7 @@ export const TRAINING_DROPDOWN_OPTIONS = [
     ],
   },
   {
-    category: 'Sertifikasi & Pengawas',
+    category: 'Training External & Pengawas',
     items: [
       { id: 'pra_pop', name: 'Training Pra POP (Internal)', desc: 'Persiapan Pengawas Operasional Pertama' },
       { id: 'pop', name: 'Pengawas Operasional Pertama (POP)', desc: 'Sertifikasi Pengawas Pertama BNSP/KESDM' },

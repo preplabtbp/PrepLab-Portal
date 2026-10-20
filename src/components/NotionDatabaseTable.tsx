@@ -77,9 +77,11 @@ import { ImageModal } from './image-modal';
 import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, formatTitleToVisualHtml, stripColorTags, NOTION_COLORS, TasklistProgress, markdownToVisualHtml, migrateLegacySubtaskText } from './notion/tasklist-utils';
 import { NotionTasklistView } from './notion/NotionTasklistView';
 import { NotionDropdownCell, STATUS_OPTIONS, PRIORITY_OPTIONS } from './notion/NotionDropdownCell';
-import { NotionDueDateCell, calculateTaskKpiStatus } from './notion/NotionDueDateCell';
+import { NotionDueDateCell, calculateTaskKpiStatus, parseDateToMidnight } from './notion/NotionDueDateCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
+import { NotionDeleteConfirmationModal } from './notion/NotionDeleteConfirmationModal';
+import { NotionRecycleBinModal } from './notion/NotionRecycleBinModal';
 import { EnterpriseWysiwygEditor } from './notion/EnterpriseWysiwygEditor';
 import { SharedSubtaskManager } from './notion/SharedSubtaskManager';
 import { 
@@ -630,6 +632,10 @@ export const getCellValue = (row: TableRowData, colName: string): string => {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
     }
+    if ((targetLower === 'remarks' || targetLower === 'keterangan batas waktu') && (keyLower === 'remarks' || keyLower.includes('keterangan batas') || keyLower === 'remark')) {
+      if (val !== undefined && val !== '') return val;
+      if (fallbackVal === undefined) fallbackVal = val;
+    }
     if (targetLower === 'kategori' && (keyLower.includes('kategori') || keyLower.includes('category') || keyLower === 'dept')) {
       if (val !== undefined && val !== '') return val;
       if (fallbackVal === undefined) fallbackVal = val;
@@ -952,6 +958,9 @@ interface NotionDatabaseTableProps {
   section?: string;
   currentAuthorNik?: string;
   currentAuthorName?: string;
+  userJabatan?: string;
+  userRole?: string;
+  isDeveloper?: boolean;
   pt?: string;
   beforeText?: string;
   afterText?: string;
@@ -997,6 +1006,9 @@ export function NotionDatabaseTable({
   section,
   currentAuthorNik,
   currentAuthorName,
+  userJabatan,
+  userRole,
+  isDeveloper = false,
   pt,
   beforeText = '',
   afterText = '',
@@ -1040,6 +1052,60 @@ export function NotionDatabaseTable({
     multiline: boolean;
   } | null>(null);
 
+  // User Identity & Role Permissions for Deletion / Recycle Bin
+  const effectiveNik = currentAuthorNik || localStorage.getItem('p2h_inspector_nik') || '';
+  const effectiveName = currentAuthorName || localStorage.getItem('p2h_inspector_name') || 'User';
+  const effectiveJabatan = userJabatan || localStorage.getItem('p2h_inspector_jabatan') || '';
+  const isSuperUser = Boolean(
+    isDeveloper ||
+    effectiveNik === '02D24000043' || 
+    effectiveNik === '02D25000055' || 
+    effectiveNik === 'M0403240177' || 
+    effectiveNik === 'preplabadmin'
+  );
+  const jabatanLower = effectiveJabatan.toLowerCase();
+  const isForemanOrAbove = Boolean(
+    isSuperUser ||
+    jabatanLower.includes('foreman') || 
+    jabatanLower.includes('supervisor') || 
+    jabatanLower.includes('spv') || 
+    jabatanLower.includes('manager') || 
+    jabatanLower.includes('superintendent') || 
+    jabatanLower.includes('lead') ||
+    userRole?.toLowerCase().includes('admin') ||
+    userRole?.toLowerCase().includes('foreman')
+  );
+
+  // Modern Delete Confirmation Modal State
+  const [deleteConfirmModalState, setDeleteConfirmModalState] = useState<{
+    isOpen: boolean;
+    rowIndex?: number;
+    isBatch?: boolean;
+    rowIndices?: number[];
+    taskName?: string;
+    subtaskCount?: number;
+    subtasks?: TableRowData[];
+    isSubItem?: boolean;
+    isDeleting?: boolean;
+  }>({
+    isOpen: false
+  });
+
+  // Developer Recycle Bin Modal State
+  const [recycleBinModalState, setRecycleBinModalState] = useState<{
+    isOpen: boolean;
+    items: any[];
+    isLoading: boolean;
+    isRestoringId?: number | null;
+    filter: 'all' | 'current';
+  }>({
+    isOpen: false,
+    items: [],
+    isLoading: false,
+    isRestoringId: null,
+    filter: 'current'
+  });
+
   // Logbook Smart Task Recommendation Modal State
   const [showLogbookRecModal, setShowLogbookRecModal] = useState<boolean>(false);
   const isLogbookTable = useMemo(() => {
@@ -1067,6 +1133,32 @@ export function NotionDatabaseTable({
 
   // Row Action 3-Dots Dropdown Menu State
   const [activeActionMenuRowIndex, setActiveActionMenuRowIndex] = useState<number | string | null>(null);
+
+  // Ticket metadata mapping for auto-syncing Created Time, Completion Date, and Due Date
+  const [ticketMetadataMap, setTicketMetadataMap] = useState<Record<string, { date?: string; createdAt?: string; completionDate?: string; targetDate?: string }>>({});
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/tickets')
+      .then(r => r.ok ? r.json() : [])
+      .then((allTickets: any[]) => {
+        if (!isMounted || !Array.isArray(allTickets)) return;
+        const map: Record<string, any> = {};
+        allTickets.forEach(t => {
+          if (t && t.ticketId) {
+            map[t.ticketId.toUpperCase()] = {
+              date: t.date || t.createdAt,
+              createdAt: t.createdAt || t.date,
+              completionDate: t.completionDate,
+              targetDate: t.targetDate
+            };
+          }
+        });
+        setTicketMetadataMap(map);
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
 
   // Finding Resolution Modal State (Mandatory Photo Upload upon subtask check)
   const [findingResolutionModalState, setFindingResolutionModalState] = useState<{
@@ -1473,6 +1565,11 @@ export function NotionDatabaseTable({
       }
       if ((targetLower === 'completion date' || targetLower === 'tanggal selesai' || targetLower === 'completed time' || targetLower === 'completed date') && 
           (cleanKey.includes('completed') || cleanKey.includes('completion') || cleanKey.includes('aktual selesai') || cleanKey === 'selesai' || cleanKey.includes('waktu selesai') || cleanKey.includes('tanggal selesai'))) {
+        if (val !== undefined && val !== '') return val;
+        if (fallbackVal === undefined) fallbackVal = val;
+      }
+      if ((targetLower === 'remarks' || targetLower === 'keterangan batas waktu') && 
+          (cleanKey === 'remarks' || cleanKey.includes('keterangan batas') || cleanKey === 'remark')) {
         if (val !== undefined && val !== '') return val;
         if (fallbackVal === undefined) fallbackVal = val;
       }
@@ -2052,6 +2149,40 @@ export function NotionDatabaseTable({
           ];
         } else {
           finalHeaders = [...headersWithCompleted, 'Due Date'];
+        }
+      }
+    }
+
+    // Ensure 'Remarks' exists next to 'Completion Date' (Evaluasi Batas Waktu: On Time vs Late)
+    const hasRemarks = finalHeaders.some(h => {
+      const l = h.toLowerCase().trim();
+      return l === 'remarks' || l === 'keterangan batas waktu';
+    });
+
+    if (!hasRemarks) {
+      const compIdx = finalHeaders.findIndex(h => {
+        const l = h.toLowerCase().trim();
+        return l.includes('completed') || l.includes('completion') || l.includes('aktual selesai') || l === 'selesai' || l.includes('waktu selesai') || l.includes('tanggal selesai');
+      });
+      if (compIdx !== -1) {
+        finalHeaders = [
+          ...finalHeaders.slice(0, compIdx + 1),
+          'Remarks',
+          ...finalHeaders.slice(compIdx + 1)
+        ];
+      } else {
+        const dueIdx = finalHeaders.findIndex(h => {
+          const l = h.toLowerCase().trim();
+          return l.includes('due') || l.includes('deadline') || l.includes('target');
+        });
+        if (dueIdx !== -1) {
+          finalHeaders = [
+            ...finalHeaders.slice(0, dueIdx),
+            'Remarks',
+            ...finalHeaders.slice(dueIdx)
+          ];
+        } else {
+          finalHeaders = [...finalHeaders, 'Remarks'];
         }
       }
     }
@@ -3376,22 +3507,56 @@ export function NotionDatabaseTable({
           const openTickets = targetTickets.filter(t => (t.status || '').toUpperCase() !== 'CLOSED');
           const closedTickets = targetTickets.filter(t => (t.status || '').toUpperCase() === 'CLOSED');
 
-          // A. Mark completed subtasks for closed tickets
-          closedTickets.forEach(t => {
+          // A. Mark completed subtasks and backfill metadata (Created Time, Due Date, Completion Date)
+          targetTickets.forEach(t => {
             const sIdx = existingTicketMap.get(t.ticketId.toUpperCase());
             if (sIdx !== undefined) {
-              const subRow = nextRows[sIdx];
-              if (!isSubItemCompleted(subRow)) {
-                const updatedSub = { ...subRow };
-                updatedSub.isCompleted = 'true';
-                updatedSub.Status = 'Closed';
-                const titleVal = getRowVal(updatedSub, 'Jenis kegiatan') || getRowVal(updatedSub, 'Name') || '';
+              const subRow = { ...nextRows[sIdx] };
+              let rowChanged = false;
+
+              // Backfill / Clean Created Time from ticket's actual creation date
+              const rawCreated = t.date ? formatToDDMMYYYY(t.date) : (t.createdAt ? formatToDDMMYYYY(t.createdAt) : '');
+              const createdDateFormatted = rawCreated ? (rawCreated.match(/^(\d{2}-\d{2}-\d{4})/)?.[1] || rawCreated) : '';
+              const currentCreated = subRow['Created Time'] || subRow['Tanggal Dibuat'] || '';
+              const needsCreatedCleanup = currentCreated.includes('T') || currentCreated.includes('Z') || currentCreated === '-' || !currentCreated;
+              if (createdDateFormatted && needsCreatedCleanup) {
+                subRow['Created Time'] = createdDateFormatted;
+                subRow['Tanggal Dibuat'] = createdDateFormatted;
+                rowChanged = true;
+              }
+
+              // Backfill Due Date if missing
+              if (t.targetDate && (!subRow['Due Date'] || subRow['Due Date'] === '-' || !subRow['Batas Waktu'] || subRow['Batas Waktu'] === '-')) {
+                const dueFormatted = formatToDDMMYYYY(t.targetDate);
+                subRow['Due Date'] = dueFormatted;
+                subRow['Batas Waktu'] = dueFormatted;
+                rowChanged = true;
+              }
+
+              // Mark completed for closed tickets
+              const isClosed = (t.status || '').toUpperCase() === 'CLOSED';
+              if (isClosed && !isSubItemCompleted(subRow)) {
+                subRow.isCompleted = 'true';
+                subRow.Status = 'Closed';
+                const titleVal = getRowVal(subRow, 'Jenis kegiatan') || getRowVal(subRow, 'Name') || '';
                 const cleanT = getDisplayTitle(titleVal);
                 const newT = `↳ [x] ${cleanT}`;
-                if (updatedSub['Jenis kegiatan'] !== undefined) updatedSub['Jenis kegiatan'] = newT;
-                if (updatedSub['Jenis Kegiatan'] !== undefined) updatedSub['Jenis Kegiatan'] = newT;
-                if (updatedSub['Name'] !== undefined) updatedSub['Name'] = newT;
-                nextRows[sIdx] = updatedSub;
+                if (subRow['Jenis kegiatan'] !== undefined) subRow['Jenis kegiatan'] = newT;
+                if (subRow['Jenis Kegiatan'] !== undefined) subRow['Jenis Kegiatan'] = newT;
+                if (subRow['Name'] !== undefined) subRow['Name'] = newT;
+                rowChanged = true;
+              }
+
+              // Backfill Completion Date if ticket is closed and date exists
+              if (isClosed && t.completionDate && (!subRow['Completion Date'] || subRow['Completion Date'] === '-' || !subRow['Tanggal Selesai'] || subRow['Tanggal Selesai'] === '-')) {
+                const compFormatted = formatToDDMMYYYY(t.completionDate);
+                subRow['Completion Date'] = compFormatted;
+                subRow['Tanggal Selesai'] = compFormatted;
+                rowChanged = true;
+              }
+
+              if (rowChanged) {
+                nextRows[sIdx] = subRow;
                 hasChanges = true;
               }
             }
@@ -3403,6 +3568,8 @@ export function NotionDatabaseTable({
             if (!existingTicketMap.has(t.ticketId.toUpperCase())) {
               const cleanDesc = (t.description || '').replace(/\r?\n/g, ' ').slice(0, 70);
               const subTitle = `↳ [ ] [${t.ticketId}] ${t.location ? t.location + ' - ' : ''}${cleanDesc} <!--link-type:ticket--> <!--link-id:${t.ticketId}--> <!--parent-id:${parentTaskId}-->`;
+              const rawCreated = t.date ? formatToDDMMYYYY(t.date) : (t.createdAt ? formatToDDMMYYYY(t.createdAt) : getTodayDDMMYYYY());
+              const createdDateFormatted = rawCreated.match(/^(\d{2}-\d{2}-\d{4})/)?.[1] || rawCreated;
               const newSubRow: TableRowData = {
                 id: `sub_${parentTaskId}_${t.ticketId}_${Date.now()}`,
                 'Jenis kegiatan': subTitle,
@@ -3416,6 +3583,9 @@ export function NotionDatabaseTable({
                 'Status': 'Open',
                 'Tanggal Selesai': '-',
                 'Completion Date': '-',
+                'Created Time': createdDateFormatted,
+                'Tanggal Dibuat': createdDateFormatted,
+                'Remarks': '-',
                 'Due Date': t.targetDate ? formatToDDMMYYYY(t.targetDate) : getTodayDDMMYYYY(),
                 'Aktivitas': 'Daily',
                 'isSubItem': 'true',
@@ -3660,6 +3830,8 @@ export function NotionDatabaseTable({
 
     const cleanDesc = (newTicket.description || '').replace(/\r?\n/g, ' ').slice(0, 70);
     const subTitle = `↳ [ ] [${newTicket.ticketId}] ${newTicket.location ? newTicket.location + ' - ' : ''}${cleanDesc} <!--link-type:ticket--> <!--link-id:${newTicket.ticketId}--> <!--parent-id:${pTaskId}-->`;
+    const rawCreated = newTicket.date ? formatToDDMMYYYY(newTicket.date) : (newTicket.createdAt ? formatToDDMMYYYY(newTicket.createdAt) : getTodayDDMMYYYY());
+    const createdDateFormatted = rawCreated.match(/^(\d{2}-\d{2}-\d{4})/)?.[1] || rawCreated;
     const newSubRow: TableRowData = {
       id: `sub_${pTaskId}_${newTicket.ticketId}_${Date.now()}`,
       'Jenis kegiatan': subTitle,
@@ -3673,6 +3845,9 @@ export function NotionDatabaseTable({
       'Status': 'Open',
       'Tanggal Selesai': '-',
       'Completion Date': '-',
+      'Created Time': createdDateFormatted,
+      'Tanggal Dibuat': createdDateFormatted,
+      'Remarks': '-',
       'Due Date': newTicket.targetDate ? formatToDDMMYYYY(newTicket.targetDate) : getTodayDDMMYYYY(),
       'Aktivitas': 'Daily',
       'isSubItem': 'true',
@@ -5022,37 +5197,6 @@ export function NotionDatabaseTable({
     toast.success(`Kegiatan baru (${autoTaskCode}) ditambahkan di Baris #1! Silakan ketik nama kegiatan.`);
   };
 
-  // Delete Row Handler
-  const handleDeleteRow = async (index: number, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    const targetRow = localRows[index];
-    const taskName = targetRow ? getRowVal(targetRow, 'Jenis kegiatan') : `Baris #${index + 1}`;
-
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus data kegiatan: "${taskName}"?`)) {
-      return;
-    }
-
-    try {
-      const updatedRows = localRows.filter((_, i) => i !== index);
-      // Re-index number column
-      const reindexed = updatedRows.map((r, i) => ({
-        ...r,
-        number: String(i + 1)
-      }));
-
-      setLocalRows(reindexed);
-      onRowsChange?.(reindexed);
-      await saveTableToBackend(reindexed);
-
-      toast.success(`Data kegiatan "${taskName}" berhasil dihapus!`);
-      if (selectedRow === targetRow) {
-        setSelectedRow(null);
-      }
-    } catch (err) {
-      toast.error('Gagal menghapus baris');
-    }
-  };
-
   // Map setiap baris sub-item ke baris parent-nya di localRows
   const rowToParentMap = useMemo(() => {
     const map = new Map<TableRowData, TableRowData>();
@@ -5073,6 +5217,219 @@ export function NotionDatabaseTable({
     });
     return map;
   }, [localRows, getRowVal]);
+
+  // Request Delete for a single row (opens modern confirmation dialog with subtask cascade detection)
+  const handleRequestDeleteRow = (index: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const targetRow = localRows[index];
+    if (!targetRow) return;
+
+    const isSub = isSubItemRow(targetRow);
+    const taskName = (getRowVal(targetRow, 'Jenis kegiatan') || getRowVal(targetRow, 'Name') || getRowVal(targetRow, 'Judul') || `Baris #${index + 1}`).trim();
+
+    // Find all nested subtasks under this parent
+    const subtasks: TableRowData[] = [];
+    if (!isSub) {
+      for (let i = index + 1; i < localRows.length; i++) {
+        const nextRow = localRows[i];
+        if (!isSubItemRow(nextRow)) break; // reached next parent row
+        if (rowToParentMap.get(nextRow) === targetRow || !rowToParentMap.has(nextRow)) {
+          subtasks.push(nextRow);
+        }
+      }
+    }
+
+    setDeleteConfirmModalState({
+      isOpen: true,
+      rowIndex: index,
+      isBatch: false,
+      taskName,
+      subtaskCount: subtasks.length,
+      subtasks,
+      isSubItem: isSub
+    });
+  };
+
+  // Alias for backward compatibility
+  const handleDeleteRow = handleRequestDeleteRow;
+
+  // Request Batch Delete for selected rows
+  const handleRequestBatchDelete = () => {
+    if (selectedRowIndices.size === 0) return;
+    setDeleteConfirmModalState({
+      isOpen: true,
+      isBatch: true,
+      rowIndices: Array.from(selectedRowIndices),
+      taskName: `${selectedRowIndices.size} kegiatan terpilih`,
+      subtaskCount: 0,
+      subtasks: [],
+      isSubItem: false
+    });
+  };
+
+  // Execute Confirmed Delete: Logs to Recycle Bin & Removes from Table
+  const executeConfirmedDelete = async () => {
+    if (!deleteConfirmModalState.isOpen) return;
+    const { isBatch, rowIndex, rowIndices, taskName, subtasks, subtaskCount } = deleteConfirmModalState;
+    setDeleteConfirmModalState(prev => ({ ...prev, isDeleting: true }));
+
+    try {
+      const rowsToRemoveIndices = new Set<number>();
+      const recyclePayloadItems: any[] = [];
+
+      if (isBatch && rowIndices && rowIndices.length > 0) {
+        rowIndices.forEach(idx => rowsToRemoveIndices.add(idx));
+        rowIndices.forEach(idx => {
+          const r = localRows[idx];
+          if (r) {
+            recyclePayloadItems.push({
+              postId,
+              postTitle: title || 'Daily Laboratory',
+              section: section || 'LABORATORIUM',
+              taskTitle: (getRowVal(r, 'Jenis kegiatan') || getRowVal(r, 'Name') || `Baris #${idx + 1}`).trim(),
+              rowData: r,
+              subtasksData: null,
+              subtaskCount: 0
+            });
+          }
+        });
+      } else if (rowIndex !== undefined && rowIndex >= 0) {
+        rowsToRemoveIndices.add(rowIndex);
+        const targetRow = localRows[rowIndex];
+
+        // Also remove any cascade subtasks
+        if (subtasks && subtasks.length > 0) {
+          subtasks.forEach(s => {
+            const sIdx = localRows.indexOf(s);
+            if (sIdx !== -1) rowsToRemoveIndices.add(sIdx);
+          });
+        }
+
+        if (targetRow) {
+          recyclePayloadItems.push({
+            postId,
+            postTitle: title || 'Daily Laboratory',
+            section: section || 'LABORATORIUM',
+            taskTitle: taskName || 'Kegiatan',
+            rowData: targetRow,
+            subtasksData: subtasks && subtasks.length > 0 ? subtasks : null,
+            subtaskCount: subtaskCount || 0
+          });
+        }
+      }
+
+      if (rowsToRemoveIndices.size === 0) {
+        setDeleteConfirmModalState({ isOpen: false, isDeleting: false });
+        return;
+      }
+
+      // 1. Audit Trail: Send to Recycle Bin API
+      fetch('/api/bulletin/recycle-bin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: recyclePayloadItems,
+          deletedByNik: effectiveNik,
+          deletedByName: effectiveName,
+          deletedByJabatan: effectiveJabatan
+        })
+      }).catch(err => {
+        console.warn('[RecycleBin] Error logging to recycle bin:', err);
+      });
+
+      // 2. Remove rows locally & re-index number
+      const updatedRows = localRows.filter((_, idx) => !rowsToRemoveIndices.has(idx));
+      const reindexed = updatedRows.map((r, i) => ({
+        ...r,
+        number: String(i + 1),
+        Number: String(i + 1)
+      }));
+
+      setLocalRows(reindexed);
+      onRowsChange?.(reindexed);
+      await saveTableToBackend(reindexed);
+
+      // Reset selection
+      setSelectedRowIndices(new Set());
+      setIsSelectionModeActive(false);
+      setDeleteConfirmModalState({ isOpen: false, isDeleting: false });
+
+      toast.success(
+        subtaskCount && subtaskCount > 0 
+          ? `Kegiatan "${taskName}" & ${subtaskCount} sub-kegiatan dipindahkan ke Recycle Bin!`
+          : `Kegiatan "${taskName}" dipindahkan ke Recycle Bin!`
+      );
+      if (selectedRow && rowsToRemoveIndices.has(localRows.indexOf(selectedRow))) {
+        setSelectedRow(null);
+      }
+    } catch (err) {
+      console.error('Error during deletion:', err);
+      toast.error('Gagal menghapus kegiatan');
+      setDeleteConfirmModalState(prev => ({ ...prev, isDeleting: false }));
+    }
+  };
+
+  // Open Developer Recycle Bin Modal
+  const handleOpenRecycleBin = async (filterMode: 'all' | 'current' = 'current') => {
+    setRecycleBinModalState(prev => ({ ...prev, isOpen: true, isLoading: true, filter: filterMode }));
+    try {
+      const url = filterMode === 'current' && postId
+        ? `/api/bulletin/recycle-bin?postId=${postId}`
+        : '/api/bulletin/recycle-bin';
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.status === 'success' && Array.isArray(json.data)) {
+        setRecycleBinModalState(prev => ({ ...prev, items: json.data, isLoading: false }));
+      } else {
+        setRecycleBinModalState(prev => ({ ...prev, items: [], isLoading: false }));
+      }
+    } catch (err) {
+      console.error('Error fetching recycle bin:', err);
+      toast.error('Gagal memuat Recycle Bin');
+      setRecycleBinModalState(prev => ({ ...prev, items: [], isLoading: false }));
+    }
+  };
+
+  // Restore deleted item from Recycle Bin (Developer)
+  const handleRestoreRecycleItem = async (itemId: number) => {
+    setRecycleBinModalState(prev => ({ ...prev, isRestoringId: itemId }));
+    try {
+      const res = await fetch(`/api/bulletin/recycle-bin/${itemId}/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restoredByNik: effectiveNik,
+          restoredByName: effectiveName
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        toast.success(json.message || 'Kegiatan berhasil dipulihkan!');
+        setRecycleBinModalState(prev => ({
+          ...prev,
+          items: prev.items.map(it => it.id === itemId ? { ...it, restoreStatus: 'RESTORED' as const } : it),
+          isRestoringId: null
+        }));
+        if (json.newContent && onPostContentUpdate) {
+          onPostContentUpdate(json.newContent);
+        }
+        if (json.restoredPostId === postId && json.newContent) {
+          const parsed = extractMarkdownTableFromContent(json.newContent);
+          if (parsed.rows && parsed.rows.length > 0) {
+            setLocalRows(parsed.rows);
+            onRowsChange?.(parsed.rows);
+          }
+        }
+      } else {
+        toast.error(json.message || 'Gagal memulihkan kegiatan');
+        setRecycleBinModalState(prev => ({ ...prev, isRestoringId: null }));
+      }
+    } catch (err: any) {
+      console.error('Error restoring recycle item:', err);
+      toast.error('Gagal memulihkan item: ' + err.message);
+      setRecycleBinModalState(prev => ({ ...prev, isRestoringId: null }));
+    }
+  };
 
   // Filter and sort rows
   const filteredRows = useMemo(() => {
@@ -6269,6 +6626,7 @@ export function NotionDatabaseTable({
     if (colLower.includes('keterangan') || colLower.includes('catatan') || colLower.includes('deskripsi') || colLower.includes('description')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
     if (colLower.includes('created') || colLower.includes('tanggal dibuat') || colLower.includes('waktu dibuat')) return <span className="text-slate-400 mr-1 text-xs">📅</span>;
     if (colLower.includes('completed') || colLower.includes('completion') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai') || colLower.includes('tanggal selesai')) return <span className="text-emerald-500 mr-1 text-xs">✓</span>;
+    if (colLower.includes('remarks') || colLower.includes('keterangan batas')) return <span className="text-teal-500 mr-1 text-xs">⚡</span>;
     if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) return <span className="text-amber-500 mr-1 text-xs">🎯</span>;
     if (colLower.includes('status')) return <span className="text-slate-400 mr-1 text-xs">⭕</span>;
     if (colLower.includes('pic') || colLower.includes('assignee')) return <span className="text-slate-400 mr-1 text-xs">≡</span>;
@@ -7385,7 +7743,7 @@ export function NotionDatabaseTable({
                           <button
                             type="button"
                             onClick={() => {
-                              handleDeleteSelectedRows();
+                              handleRequestBatchDelete();
                               setIsFullToolsPopoverOpen(false);
                             }}
                             className="py-1.5 px-2.5 rounded-xl border border-red-500/40 bg-red-600/15 hover:bg-red-600/25 text-red-500 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
@@ -7400,6 +7758,20 @@ export function NotionDatabaseTable({
                 </div>
               )}
             </div>
+
+            {/* Developer-only Recycle Bin Button */}
+            {isSuperUser && (
+              <NotionTooltip content="Recycle Bin (Pemulihan Data Terhapus)" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => handleOpenRecycleBin('current')}
+                  className="ml-1 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 border border-rose-500/30 hover:border-rose-500/60 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                  <span className="hidden sm:inline font-bold">Recycle Bin</span>
+                </button>
+              </NotionTooltip>
+            )}
 
             {/* Dedicated Primary "+ New" Button in Top-Right Corner */}
             <NotionTooltip content="Tambah Baris Kegiatan Baru" position="bottom">
@@ -7775,6 +8147,7 @@ export function NotionDatabaseTable({
                               if (clean.includes('activity name') || clean.includes('jenis kegiatan') || clean === 'task' || clean === 'judul' || clean === 'name') return 'Activity Name';
                               if (clean.includes('keterangan') || clean.includes('deskripsi') || clean.includes('description') || clean.includes('catatan')) return 'Description';
                               if (clean.includes('tanggal selesai') || clean.includes('completed') || clean.includes('completion') || clean === 'selesai' || clean.includes('waktu selesai')) return 'Completion Date';
+                              if (clean === 'remarks' || clean.includes('remarks') || clean.includes('keterangan batas')) return 'Remarks';
                               if (clean.includes('due') || clean.includes('deadline') || clean.includes('target') || clean.includes('jatuh tempo') || clean.includes('batas waktu')) return 'Due Date';
                               if (clean === 'number' || clean === 'no') return 'Number';
                               if (clean.includes('created')) return 'Created Time';
@@ -8406,7 +8779,7 @@ export function NotionDatabaseTable({
                                     checked={isSelected}
                                     onChange={(e) => handleToggleSelectRow(actualRowIndex, e as any)}
                                     className={`w-3.5 h-3.5 rounded cursor-pointer accent-teal-600 transition-opacity ${
-                                      isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                      isSelected ? 'opacity-100' : 'opacity-50 sm:opacity-0 group-hover:opacity-100 hover:opacity-100'
                                     } ${
                                       isNotionLight ? 'border-slate-300' : 'bg-slate-800 border-slate-600'
                                     }`}
@@ -8469,7 +8842,16 @@ export function NotionDatabaseTable({
                                           onToggleExpand(e);
                                         }
                                       }}
-                                      title={!isEditingThis && onToggleExpand ? (isExpanded ? "Klik untuk menutup subtask dan keterangan" : "Klik untuk membuka subtask dan keterangan lengkap") : undefined}
+                                      onDoubleClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveInlineEditor({
+                                          rowIndex: actualRowIndex,
+                                          colName,
+                                          initialValue: displayTitle || val,
+                                          multiline: false
+                                        });
+                                      }}
+                                      title={!isEditingThis ? (onToggleExpand ? (isExpanded ? "Klik untuk menutup subtask. Klik 2x (double-click) untuk edit judul." : "Klik untuk membuka subtask. Klik 2x (double-click) untuk edit judul.") : "Klik 2x (double-click) untuk edit judul.") : undefined}
                                     >
                                       {isEditingThis ? (
                                         <NotionInlineEditor
@@ -8825,6 +9207,15 @@ export function NotionDatabaseTable({
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs overflow-hidden' : 'px-3.5 py-2.5 w-[360px] min-w-[280px] max-w-[450px] overflow-hidden text-[13px]'
                                       }`}
+                                      onDoubleClick={(e) => {
+                                        e.stopPropagation();
+                                        const cleanInitial = val
+                                          .replace(/<!--[\s\S]*?-->/g, '')
+                                          .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
+                                          .replace(/<!--.*$/g, '')
+                                          .trim();
+                                        setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: cleanInitial, multiline: true });
+                                      }}
                                     >
                                       {isEditingThis ? (
                                         <NotionInlineEditor
@@ -8887,6 +9278,12 @@ export function NotionDatabaseTable({
 
                                   let displayDate = val && val !== '-' ? val : '';
                                   if (!displayDate) {
+                                    const linkedId = extractLinkedTicketId(row);
+                                    if (linkedId && ticketMetadataMap[linkedId.toUpperCase()]?.completionDate) {
+                                      displayDate = formatToDDMMYYYY(ticketMetadataMap[linkedId.toUpperCase()].completionDate);
+                                    }
+                                  }
+                                  if (!displayDate) {
                                     const statusStr = (getRowVal(row, 'Status') || '').toUpperCase();
                                     if (statusStr.includes('CLOSE') || statusStr.includes('SELESAI') || statusStr.includes('DONE')) {
                                       const ketVal = getRowVal(row, 'Keterangan');
@@ -8905,11 +9302,24 @@ export function NotionDatabaseTable({
                                   }
 
                                   return (
-                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                    } ${
-                                      fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
-                                    }`}>
+                                    <td 
+                                      key={colName} 
+                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} 
+                                      className={`font-sans border-r cursor-pointer ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${
+                                        fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
+                                      }`}
+                                      onDoubleClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveInlineEditor({
+                                          rowIndex: actualRowIndex,
+                                          colName,
+                                          initialValue: displayDate || '',
+                                          multiline: false
+                                        });
+                                      }}
+                                    >
                                       {isEditingThis ? (
                                         <NotionInlineEditor
                                           initialValue={val}
@@ -8926,7 +9336,7 @@ export function NotionDatabaseTable({
                                         <span 
                                           onClick={() => setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: displayDate, multiline: false })}
                                           className="inline-flex items-center gap-1.5 cursor-pointer hover:underline font-sans font-medium text-slate-700 dark:text-slate-300"
-                                          title="Klik untuk mengubah Tanggal Selesai"
+                                          title="Klik untuk mengubah Tanggal Selesai (atau klik 2x)"
                                         >
                                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                                           <span>{displayDate}</span>
@@ -8947,28 +9357,155 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
+                                // 4a. Remarks Column (Evaluasi Waktu Penyelesaian: Due Date dikurang Completion Date)
+                                if (colLower === 'remarks' || colLower.includes('remarks') || colLower.includes('keterangan batas')) {
+                                  const dueDateVal = getRowVal(row, 'Due Date') || getRowVal(row, 'Batas Waktu') || getRowVal(row, 'Target Date') || row['Due Date'];
+                                  let compDateVal = getRowVal(row, 'Completion Date') || getRowVal(row, 'Tanggal Selesai') || getRowVal(row, 'Completed Time') || row['Completion Date'];
+                                  if (!compDateVal || compDateVal === '-') {
+                                    const linkedId = extractLinkedTicketId(row);
+                                    if (linkedId && ticketMetadataMap[linkedId.toUpperCase()]?.completionDate) {
+                                      compDateVal = formatToDDMMYYYY(ticketMetadataMap[linkedId.toUpperCase()].completionDate);
+                                    }
+                                  }
+
+                                  const due = parseDateToMidnight(dueDateVal);
+                                  const comp = parseDateToMidnight(compDateVal);
+
+                                  let badgeNode = <span className="font-mono text-slate-400">-</span>;
+
+                                  if (comp && due) {
+                                    // Selisih: Due Date dikurang Completion Date
+                                    const diffMs = due.getTime() - comp.getTime();
+                                    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                                    if (diffDays >= 0) {
+                                      // Selesai sebelum atau tepat pada Due Date -> On Time
+                                      badgeNode = (
+                                        <span 
+                                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap shadow-2xs"
+                                          title={`Selesai tepat waktu (${diffDays === 0 ? 'Hari H' : `${diffDays} hari lebih cepat`})`}
+                                        >
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                          <span>On Time</span>
+                                        </span>
+                                      );
+                                    } else {
+                                      // Melewati batas waktu -> Late
+                                      const daysLate = Math.abs(diffDays);
+                                      badgeNode = (
+                                        <span 
+                                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap shadow-2xs"
+                                          title={`Terlambat ${daysLate} hari melewati batas waktu`}
+                                        >
+                                          <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                          <span>Late</span>
+                                        </span>
+                                      );
+                                    }
+                                  } else if (comp && !due) {
+                                    badgeNode = (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap shadow-2xs">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                        <span>On Time</span>
+                                      </span>
+                                    );
+                                  } else if (!comp && due) {
+                                    // Belum selesai, cek jika hari ini sudah melewati due date
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    const diffMs = due.getTime() - today.getTime();
+                                    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                                    if (diffDays < 0) {
+                                      const daysOverdue = Math.abs(diffDays);
+                                      badgeNode = (
+                                        <span 
+                                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25 whitespace-nowrap shadow-2xs"
+                                          title={`Belum selesai dan sudah melewati batas waktu (${daysOverdue} hari lalu)`}
+                                        >
+                                          <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                          <span>Late</span>
+                                        </span>
+                                      );
+                                    } else {
+                                      badgeNode = <span className="font-mono text-slate-400">-</span>;
+                                    }
+                                  }
+
+                                  return (
+                                    <td 
+                                      key={colName} 
+                                      style={getColStyle(colName)} 
+                                      className={`font-sans border-r ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${
+                                        fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
+                                      }`}
+                                    >
+                                      {badgeNode}
+                                    </td>
+                                  );
+                                }
+
                                 // 4b. Due Date Column (Batas Waktu / Parameter Wajib KPI)
                                 if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) {
                                   const compVal = getRowVal(row, 'Tanggal Selesai') || getRowVal(row, 'Completed Time');
                                   const statusVal = getRowVal(row, 'Status');
+                                  const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
+
+                                  // Check fallback from linked ticket if val is empty or '-'
+                                  const linkedId = extractLinkedTicketId(row);
+                                  let effectiveDueDate = val && val !== '-' ? val : '';
+                                  if (!effectiveDueDate && linkedId && ticketMetadataMap[linkedId.toUpperCase()]?.targetDate) {
+                                    effectiveDueDate = formatToDDMMYYYY(ticketMetadataMap[linkedId.toUpperCase()].targetDate);
+                                  }
+
+                                  const startInlineEdit = (e?: React.MouseEvent) => {
+                                    if (e) e.stopPropagation();
+                                    setActiveInlineEditor({
+                                      rowIndex: actualRowIndex,
+                                      colName,
+                                      initialValue: effectiveDueDate || (val && val !== '-' ? val : ''),
+                                      multiline: false
+                                    });
+                                  };
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`font-sans border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                    } ${
-                                      fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'
-                                    }`}>
-                                      <NotionDueDateCell
-                                        value={val}
-                                        completedDate={compVal}
-                                        status={statusVal}
-                                        isSubItem={isSubItem}
-                                        compact={fitPageMode}
-                                        isNotionLight={isNotionLight}
-                                        onChange={(newDate) => {
-                                          handleUpdateCellDirect(actualRowIndex, colName, newDate);
-                                        }}
-                                      />
+                                    <td 
+                                      key={colName} 
+                                      style={getColStyle(colName)} 
+                                      className={`font-sans border-r cursor-pointer ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${
+                                        fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'
+                                      }`}
+                                      onDoubleClick={startInlineEdit}
+                                      title="Klik untuk buka kalender, atau klik 2x (double-click) untuk edit langsung"
+                                    >
+                                      {isEditingThis ? (
+                                        <NotionInlineEditor
+                                          initialValue={effectiveDueDate || (val && val !== '-' ? val : '')}
+                                          fieldLabel="Batas Waktu (Due Date)"
+                                          multiline={false}
+                                          isNotionLight={isNotionLight}
+                                          onSave={(newVal) => {
+                                            handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                            setActiveInlineEditor(null);
+                                          }}
+                                          onCancel={() => setActiveInlineEditor(null)}
+                                        />
+                                      ) : (
+                                        <NotionDueDateCell
+                                          value={effectiveDueDate || val}
+                                          completedDate={compVal}
+                                          status={statusVal}
+                                          isSubItem={isSubItem}
+                                          compact={fitPageMode}
+                                          isNotionLight={isNotionLight}
+                                          onDoubleClick={startInlineEdit}
+                                          onChange={(newDate) => {
+                                            handleUpdateCellDirect(actualRowIndex, colName, newDate);
+                                          }}
+                                        />
+                                      )}
                                     </td>
                                   );
                                 }
@@ -9303,19 +9840,45 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // 8. Created Time Column (Tanggal saja, tanpa jam dan menit)
+                                // 8. Created Time Column (Tanggal dibuat sesuai tanggal tiket / pembuatan)
                                 if (colLower.includes('created')) {
                                   const displayDate = (() => {
-                                    if (!val || val === '-') return '-';
-                                    return formatToDDMMYYYY(val);
+                                    let raw = (val && val !== '-') ? val : '';
+                                    if (!raw) {
+                                      const linkedId = extractLinkedTicketId(row);
+                                      if (linkedId) {
+                                        const meta = ticketMetadataMap[linkedId.toUpperCase()];
+                                        raw = meta?.date || meta?.createdAt || '';
+                                      }
+                                    }
+                                    if (!raw) return '-';
+                                    const formatted = formatToDDMMYYYY(raw);
+                                    if (!formatted || formatted === '-') return '-';
+                                    // Pastikan hanya tanggal DD-MM-YYYY yang ditampilkan agar bersih dari sisa format ISO T...Z
+                                    const dmyMatch = formatted.match(/^(\d{2}-\d{2}-\d{4})/);
+                                    return dmyMatch ? dmyMatch[1] : formatted;
                                   })();
 
                                   return (
-                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} className={`font-sans border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                    } ${
-                                      fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
-                                    }`}>
+                                    <td 
+                                      key={colName} 
+                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} 
+                                      className={`font-sans border-r cursor-pointer ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${
+                                        fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
+                                      }`}
+                                      onDoubleClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveInlineEditor({
+                                          rowIndex: actualRowIndex,
+                                          colName,
+                                          initialValue: displayDate !== '-' ? displayDate : '',
+                                          multiline: false
+                                        });
+                                      }}
+                                      title="Klik 2x (double-click) untuk edit Tanggal Dibuat"
+                                    >
                                       {displayDate !== '-' ? (
                                         <span className="inline-flex items-center gap-1.5 font-sans">
                                           <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -9479,20 +10042,49 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // Default custom column
+                                // Default custom column (e.g. Group, etc.)
                                 const cleanCustomVal = (val || '')
                                   .replace(/<!--[\s\S]*?-->/g, '')
                                   .replace(/<!-?[a-zA-Z0-9_\-\s]+.*?>?/g, '')
                                   .replace(/<!--.*$/g, '')
                                   .trim();
+                                const isEditingCustom = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
 
                                 return (
-                                  <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} className={`whitespace-nowrap border-r ${
-                                    isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                  } ${
-                                    fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
-                                  }`}>
-                                    {cleanCustomVal && cleanCustomVal !== '-' ? cleanCustomVal : <span className="font-mono text-slate-400">-</span>}
+                                  <td 
+                                    key={colName} 
+                                    style={{ ...getColStyle(colName), color: isNotionLight ? '#334155' : 'var(--text-main, #cbd5e1)' }} 
+                                    className={`whitespace-nowrap border-r cursor-pointer ${
+                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                    } ${
+                                      fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
+                                    }`}
+                                    onDoubleClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveInlineEditor({
+                                        rowIndex: actualRowIndex,
+                                        colName,
+                                        initialValue: cleanCustomVal && cleanCustomVal !== '-' ? cleanCustomVal : '',
+                                        multiline: false
+                                      });
+                                    }}
+                                    title="Klik 2x (double-click) untuk edit langsung"
+                                  >
+                                    {isEditingCustom ? (
+                                      <NotionInlineEditor
+                                        initialValue={cleanCustomVal && cleanCustomVal !== '-' ? cleanCustomVal : ''}
+                                        fieldLabel={colName}
+                                        multiline={false}
+                                        isNotionLight={isNotionLight}
+                                        onSave={(newVal) => {
+                                          handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                          setActiveInlineEditor(null);
+                                        }}
+                                        onCancel={() => setActiveInlineEditor(null)}
+                                      />
+                                    ) : (
+                                      cleanCustomVal && cleanCustomVal !== '-' ? cleanCustomVal : <span className="font-mono text-slate-400">-</span>
+                                    )}
                                   </td>
                                 );
                               })}
@@ -9507,7 +10099,20 @@ export function NotionDatabaseTable({
                                  {(() => {
                                    const rowActionKey = row.id ? `action-${row.id}` : `${actualRowIndex}-${isSubItem ? 'sub' : 'parent'}-${(row['Jenis kegiatan'] || row['Name'] || '').slice(0, 20)}`;
                                    return (
-                                     <div className="relative inline-block">
+                                     <div className="relative inline-flex items-center gap-0.5">
+                                        {isForemanOrAbove && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleRequestDeleteRow(actualRowIndex, e);
+                                            }}
+                                            className="p-1 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                            title={isSubItem ? "Hapus Sub-kegiatan Ini" : "Hapus Kegiatan Ini"}
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
                                        <button
                                          type="button"
                                          onClick={(e) => {
@@ -9896,7 +10501,7 @@ export function NotionDatabaseTable({
               {selectedRowIndices.size > 0 && (
                 <button
                   type="button"
-                  onClick={handleDeleteSelectedRows}
+                  onClick={handleRequestBatchDelete}
                   className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white flex items-center gap-1 transition-all cursor-pointer active:scale-95"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -9961,7 +10566,7 @@ export function NotionDatabaseTable({
                 )}
                 <button
                   type="button"
-                  onClick={handleDeleteSelectedRows}
+                  onClick={handleRequestBatchDelete}
                   className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-950/50 active:scale-95 transition-all cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -12444,6 +13049,36 @@ export function NotionDatabaseTable({
         currentLink={linkModuleModalState.currentLink}
         onClose={() => setLinkModuleModalState(prev => ({ ...prev, isOpen: false }))}
         onSaveLink={handleSaveRowLink}
+      />
+
+      {/* Modern Delete Confirmation Modal */}
+      <NotionDeleteConfirmationModal
+        isOpen={deleteConfirmModalState.isOpen}
+        onClose={() => setDeleteConfirmModalState({ isOpen: false, isDeleting: false })}
+        onConfirm={executeConfirmedDelete}
+        taskName={deleteConfirmModalState.taskName}
+        subtaskCount={deleteConfirmModalState.subtaskCount}
+        isBatch={deleteConfirmModalState.isBatch}
+        batchCount={deleteConfirmModalState.rowIndices?.length || 0}
+        isSubItem={deleteConfirmModalState.isSubItem}
+        isDeleting={deleteConfirmModalState.isDeleting}
+        isNotionLight={isNotionLight}
+        deleterName={effectiveName}
+        deleterJabatan={effectiveJabatan}
+      />
+
+      {/* Developer Recycle Bin Modal */}
+      <NotionRecycleBinModal
+        isOpen={recycleBinModalState.isOpen}
+        onClose={() => setRecycleBinModalState(prev => ({ ...prev, isOpen: false }))}
+        items={recycleBinModalState.items}
+        isLoading={recycleBinModalState.isLoading}
+        isRestoringId={recycleBinModalState.isRestoringId}
+        onRestore={handleRestoreRecycleItem}
+        onRefresh={handleOpenRecycleBin}
+        currentPostTitle={title || 'Daily Laboratory'}
+        currentPostId={postId}
+        isNotionLight={isNotionLight}
       />
     </div>
   );

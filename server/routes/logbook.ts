@@ -64,7 +64,7 @@ export function parseMarkdownTableRows(content: string) {
 }
 
 // Helper to re-serialize markdown table
-function serializeMarkdownTable(
+export function serializeMarkdownTable(
   headers: string[],
   rows: Record<string, string>[],
   beforeText: string = '',

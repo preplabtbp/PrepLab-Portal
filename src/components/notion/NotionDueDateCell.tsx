@@ -372,6 +372,7 @@ interface NotionDueDateCellProps {
   compact?: boolean;
   isNotionLight?: boolean;
   onChange: (newDateStr: string) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
   disabled?: boolean;
 }
 
@@ -383,6 +384,7 @@ export const NotionDueDateCell: React.FC<NotionDueDateCellProps> = ({
   compact = false,
   isNotionLight = true,
   onChange,
+  onDoubleClick,
   disabled = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -503,25 +505,26 @@ export const NotionDueDateCell: React.FC<NotionDueDateCellProps> = ({
     setIsOpen(false);
   };
 
-  if (isSubItem) {
-    return (
-      <div className="text-center font-mono">
-        <span className="text-slate-400 font-mono text-xs">-</span>
-      </div>
-    );
-  }
-
   const calendarCells = getCalendarGrid(viewYear, viewMonth, parsedCurrent);
   const displayInputText = parsedCurrent ? formatToNotionDate(parsedCurrent) : formatToNotionDate(new Date(viewYear, viewMonth, 1));
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen(false);
+    if (onDoubleClick) {
+      onDoubleClick(e);
+    }
+  };
+
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full" onDoubleClick={handleDoubleClick}>
       {hasDueDate ? (
         <button
           ref={buttonRef}
           type="button"
           onClick={handleToggle}
-          title={`Target Selesai: ${kpi.dueDateFormatted} • Status: ${kpi.label} (Klik untuk ubah)`}
+          onDoubleClick={handleDoubleClick}
+          title={`Target Selesai: ${kpi.dueDateFormatted} • Status: ${kpi.label} (Klik untuk buka kalender, klik 2x untuk edit teks)`}
           className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors cursor-pointer select-none font-sans"
         >
           {kpi.status === 'OVERDUE' && (
@@ -530,13 +533,14 @@ export const NotionDueDateCell: React.FC<NotionDueDateCellProps> = ({
           <span>{kpi.dueDateFormatted}</span>
         </button>
       ) : (
-        /* Jika belum ada due date: cell kosong total, tapi bisa diklik untuk membuka modal Notion */
+        /* Jika belum ada due date: cell kosong total, tapi bisa diklik untuk membuka modal Notion atau klik 2x untuk edit langsung */
         <button
           ref={buttonRef}
           type="button"
           onClick={handleToggle}
+          onDoubleClick={handleDoubleClick}
           className="w-full h-full min-h-[26px] block text-left bg-transparent border-0 cursor-pointer focus:outline-none p-0 select-none"
-          title="Klik untuk memilih tanggal"
+          title="Klik untuk memilih tanggal (atau klik 2x untuk edit langsung)"
         />
       )}
 

@@ -2842,6 +2842,9 @@ ${aiMeetingNotes
                 section={selectedPost.category || selectedPost.department || "Administrasi"}
                 currentAuthorNik={inspectorNik}
                 currentAuthorName={inspectorName}
+                userJabatan={userProfile?.jabatan || localStorage.getItem('p2h_inspector_jabatan') || ''}
+                userRole={userProfile?.role}
+                isDeveloper={isDev}
                 pt={pt || "TBP"}
                 beforeText={parsedTableData.beforeText}
                 afterText={parsedTableData.afterText}

@@ -396,12 +396,12 @@ const PROGRAM_NO_KEY = { sap: 'no', k3: 'noK3', pra_pop: 'noPop', pop: 'noPop' }
 // Modul dipisah 2: Training Internal (SAP, K3 & Pra POP) dan Training External (POP, POM & Sertifikasi)
 export type TrainingScope = 'internal' | 'external';
 const SCOPE_PROGRAMS: Record<TrainingScope, TrainingProgram[]> = {
-  internal: ['sap', 'k3', 'pra_pop'],
+  internal: ['sap', 'k3'],
   external: ['pop'],
 };
 const SCOPE_META: Record<TrainingScope, { title: string; sub: string }> = {
   internal: { title: 'Training Internal', sub: 'Rekap Training SAP, K3 & Pra POP' },
-  external: { title: 'Sertifikasi', sub: 'Rekap Sertifikasi POP, POM & Sertifikasi Eksternal' },
+  external: { title: 'Training External', sub: 'Rekap Training External POP, POM & Sertifikasi' },
 };
 const inScope = (r: TrainingRecord, scope: TrainingScope) =>
   scope === 'internal'
@@ -1059,6 +1059,1042 @@ function PersonAchievementModal({ record, onClose, scope }: { record: TrainingRe
   );
 }
 
+
+// ===== KOMPONEN STATISTIK & ANALITIK INTUITIF =====
+interface TrainingStatisticsViewProps {
+  records: TrainingRecord[];
+  stats: any;
+  dashboard: any;
+  summaryPieRows: Array<{ label: string; value: number; color: string }>;
+  summaryPieTotal: number;
+  combinedTrainingCertData: { grandTotal: number; rows: Array<{ label: string; value: number; color: string }> };
+  onOpenDatabaseWithFilter: (tab: 'sap' | 'k3', filterModule?: string) => void;
+}
+
+type StatsSubTab = 'all' | 'barchart' | 'sap_modules' | 'dept_analysis' | 'cert_ranks';
+type BarChartMode = 'compliance' | 'status_stacked' | 'target_vs_done';
+type ModuleViewMode = 'grid' | 'chart' | 'table';
+
+function TrainingStatisticsView({
+  records,
+  stats,
+  dashboard,
+  summaryPieRows,
+  summaryPieTotal,
+  combinedTrainingCertData,
+  onOpenDatabaseWithFilter,
+}: TrainingStatisticsViewProps) {
+  const [statsSubTab, setStatsSubTab] = useState<StatsSubTab>('all');
+  const [barChartMode, setBarChartMode] = useState<BarChartMode>('compliance');
+  const [moduleViewMode, setModuleViewMode] = useState<ModuleViewMode>('grid');
+
+  // Breakdown status data dari summaryPieRows
+  const berlakuItem = summaryPieRows.find(r => r.label.toLowerCase().includes('berlaku')) || { value: 506, color: '#10b981' };
+  const warningItem = summaryPieRows.find(r => r.label.toLowerCase().includes('warning')) || { value: 18, color: '#f59e0b' };
+  const expiredItem = summaryPieRows.find(r => r.label.toLowerCase().includes('expired')) || { value: 38, color: '#ef4444' };
+
+  const totalStatus = summaryPieTotal || (berlakuItem.value + warningItem.value + expiredItem.value) || 1;
+  const berlakuPct = Math.round((berlakuItem.value / totalStatus) * 100);
+  const warningPct = Math.round((warningItem.value / totalStatus) * 100);
+  const expiredPct = Math.max(0, 100 - berlakuPct - warningPct);
+
+  // Leaderboard kualifikasi sorted descending
+  const sortedCertRows = useMemo(() => {
+    return [...combinedTrainingCertData.rows].sort((a, b) => b.value - a.value);
+  }, [combinedTrainingCertData]);
+
+  // Modul coverage data
+  const coverageData = useMemo(() => {
+    return (stats.coverage || []).map((c: any) => {
+      const target = c.target || 0;
+      const done = c.done || 0;
+      const warning = c.warning || 0;
+      const expired = c.expired || 0;
+      const pct = target > 0 ? Math.round((done / target) * 100) : 0;
+      return {
+        key: c.key,
+        label: c.label,
+        desc: c.desc || '',
+        target,
+        done,
+        warning,
+        expired,
+        pct,
+        berlakuMurni: Math.max(0, done - warning),
+      };
+    });
+  }, [stats.coverage]);
+
+  // Bar Chart 1: Kepatuhan per Modul (%)
+  const moduleComplianceChartData = useMemo(() => {
+    const labels = coverageData.map(c => c.label);
+    const data = coverageData.map(c => c.pct);
+    const bgColors = coverageData.map(c => (c.pct >= 90 ? '#10b981' : c.pct >= 70 ? '#f59e0b' : '#ef4444'));
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: '% Kepatuhan',
+          data,
+          backgroundColor: bgColors,
+          borderRadius: 8,
+          barThickness: 24,
+        },
+      ],
+    };
+  }, [coverageData]);
+
+  // Bar Chart 2: Stacked Status per Modul (Berlaku, Warning, Expired)
+  const moduleStackedStatusChartData = useMemo(() => {
+    const labels = coverageData.map(c => c.label);
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Berlaku / Aman',
+          data: coverageData.map(c => c.berlakuMurni),
+          backgroundColor: '#10b981',
+          borderRadius: 4,
+          barThickness: 22,
+        },
+        {
+          label: 'Warning (1-3 Bln)',
+          data: coverageData.map(c => c.warning),
+          backgroundColor: '#f59e0b',
+          borderRadius: 4,
+          barThickness: 22,
+        },
+        {
+          label: 'Expired / Lewat',
+          data: coverageData.map(c => c.expired),
+          backgroundColor: '#ef4444',
+          borderRadius: 4,
+          barThickness: 22,
+        },
+      ],
+    };
+  }, [coverageData]);
+
+  // Bar Chart 3: Target Peserta Wajib vs Realisasi Lulus
+  const moduleTargetVsDoneChartData = useMemo(() => {
+    const labels = coverageData.map(c => c.label);
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Target Wajib',
+          data: coverageData.map(c => c.target),
+          backgroundColor: '#94a3b8',
+          borderRadius: 6,
+          barThickness: 18,
+        },
+        {
+          label: 'Realisasi Lulus',
+          data: coverageData.map(c => c.done),
+          backgroundColor: '#0d9488',
+          borderRadius: 6,
+          barThickness: 18,
+        },
+      ],
+    };
+  }, [coverageData]);
+
+  // Statistik per Bagian / Departemen
+  const bagianStats = useMemo(() => {
+    const map = new Map<string, { total: number; complete: number; inSap: number }>();
+    records.forEach(r => {
+      const bagian = (r.bagian || 'Tanpa Bagian').trim();
+      if (!map.has(bagian)) map.set(bagian, { total: 0, complete: 0, inSap: 0 });
+      const item = map.get(bagian)!;
+      item.total++;
+      if (r.inSap) {
+        item.inSap++;
+        if (isSapComplete(r)) item.complete++;
+      }
+    });
+
+    return Array.from(map.entries())
+      .map(([name, data]) => ({
+        name,
+        total: data.total,
+        inSap: data.inSap,
+        complete: data.complete,
+        pct: data.inSap > 0 ? Math.round((data.complete / data.inSap) * 100) : 0,
+      }))
+      .filter(b => b.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [records]);
+
+  // Bar Chart per Bagian
+  const bagianChartData = useMemo(() => {
+    const labels = bagianStats.map(b => b.name);
+    const data = bagianStats.map(b => b.pct);
+    const bgColors = bagianStats.map(b => (b.pct >= 90 ? '#10b981' : b.pct >= 70 ? '#f59e0b' : '#0d9488'));
+    return {
+      labels,
+      datasets: [
+        {
+          label: '% Kepatuhan Training SAP',
+          data,
+          backgroundColor: bgColors,
+          borderRadius: 8,
+          barThickness: 20,
+        },
+      ],
+    };
+  }, [bagianStats]);
+
+  // Statistik per Golongan (GOL)
+  const golStats = useMemo(() => {
+    const map = new Map<string, { total: number; complete: number; inSap: number }>();
+    GOL_OPTIONS.forEach(g => map.set(g, { total: 0, complete: 0, inSap: 0 }));
+    records.forEach(r => {
+      const gol = (r.gol || '').trim();
+      if (map.has(gol)) {
+        const item = map.get(gol)!;
+        item.total++;
+        if (r.inSap) {
+          item.inSap++;
+          if (isSapComplete(r)) item.complete++;
+        }
+      }
+    });
+
+    return GOL_OPTIONS.map(g => {
+      const data = map.get(g) || { total: 0, complete: 0, inSap: 0 };
+      return {
+        gol: `GOL ${g}`,
+        total: data.total,
+        complete: data.complete,
+        inSap: data.inSap,
+        pct: data.inSap > 0 ? Math.round((data.complete / data.inSap) * 100) : 0,
+      };
+    });
+  }, [records]);
+
+  const golChartData = useMemo(() => {
+    return {
+      labels: golStats.map(g => g.gol),
+      datasets: [
+        {
+          label: '% Kepatuhan',
+          data: golStats.map(g => g.pct),
+          backgroundColor: '#0d9488',
+          borderRadius: 8,
+          barThickness: 28,
+        },
+      ],
+    };
+  }, [golStats]);
+
+  // Bar Chart Sertifikasi
+  const certChartData = useMemo(() => {
+    return {
+      labels: sortedCertRows.map(c => c.label),
+      datasets: [
+        {
+          label: 'Jumlah Personel',
+          data: sortedCertRows.map(c => c.value),
+          backgroundColor: sortedCertRows.map(c => c.color || '#0d9488'),
+          borderRadius: 8,
+          barThickness: 22,
+        },
+      ],
+    };
+  }, [sortedCertRows]);
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-200">
+      {/* ===== Header Statistik & Sub-Menu Tabs ===== */}
+      <div className="rounded-[24px] bg-white dark:bg-slate-900 p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 shrink-0">
+            <BarChart3 className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100">
+                Dashboard Statistik &amp; Kepatuhan Training
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                Pusat Analitik
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Pilih opsi statistik di bawah untuk melihat grafik batang, matriks modul, dan analisis kepatuhan per departemen.
+            </p>
+          </div>
+        </div>
+
+        {/* Sub-menu Tabs di dalam Statistik */}
+        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 overflow-x-auto">
+          {[
+            { id: 'all' as const, label: '🎯 Ringkasan' },
+            { id: 'barchart' as const, label: '📊 Bar Chart' },
+            { id: 'sap_modules' as const, label: '📋 Matriks Modul' },
+            { id: 'dept_analysis' as const, label: '🏢 Bagian & GOL' },
+            { id: 'cert_ranks' as const, label: '🏆 Sertifikasi' },
+          ].map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setStatsSubTab(t.id)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                statsSubTab === t.id
+                  ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ===== KONTEN TAB 1: RINGKASAN & KEPATUHAN ===== */}
+      {(statsSubTab === 'all') && (
+        <div className="space-y-4">
+          {/* Baris 1: 3 Program Utama Ringkas */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+            {/* Card Program SAP */}
+            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-teal-600 flex items-center gap-1.5">
+                    <ClipboardCheck className="w-4 h-4" />
+                    TRAINING SAP (WAJIB)
+                  </span>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                    6 Modul
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2 mt-2">
+                  <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                    {dashboard.sap.pct}%
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">Kepatuhan Keseluruhan</span>
+                </div>
+                <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  <div className="h-full rounded-full bg-teal-600 transition-all duration-500" style={{ width: `${dashboard.sap.pct}%` }} />
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">Status Personel:</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">
+                  <span className="text-emerald-600">{dashboard.sap.complete} Lengkap</span> • <span className="text-rose-600">{dashboard.sap.expired} Expired</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Card Program K3 */}
+            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
+                    <HardHat className="w-4 h-4" />
+                    TRAINING K3 OPERASIONAL
+                  </span>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                    WAH, LOTO, CS
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2 mt-2">
+                  <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                    {dashboard.k3.pct}%
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">Tingkat Pemenuhan</span>
+                </div>
+                <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${dashboard.k3.pct}%` }} />
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">Kelengkapan:</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">
+                  {dashboard.k3.complete} Lengkap dari {dashboard.k3.total} Personel
+                </span>
+              </div>
+            </div>
+
+            {/* Card Program POP */}
+            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
+                    <Award className="w-4 h-4" />
+                    PERSIAPAN PRA POP
+                  </span>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                    Pengawas
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2 mt-2">
+                  <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                    {dashboard.pop.pct}%
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">Realisasi Kandidat</span>
+                </div>
+                <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${dashboard.pop.pct}%` }} />
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">Total Kandidat:</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">
+                  {dashboard.pop.stages[0]?.count ?? 0} dari {dashboard.pop.total} Terlaksana
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Baris 2: Linear Stacked Health Bar */}
+          <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-teal-600" />
+                  Distribusi Masa Aktif Sertifikasi &amp; Training ({totalStatus} Status Tercatat)
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Visualisasi proporsi masa berlaku seluruh training wajib dihitung dari batas waktu kadaluarsa.
+                </p>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                Toleransi: Warning 3 Bln
+              </span>
+            </div>
+
+            {/* Single Linear Progress Bar */}
+            <div className="space-y-2">
+              <div className="h-7 w-full rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner p-1 gap-1">
+                {berlakuPct > 0 && (
+                  <div
+                    style={{ width: `${berlakuPct}%` }}
+                    className="h-full rounded-xl bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                    title={`Berlaku: ${berlakuItem.value} (${berlakuPct}%)`}
+                  >
+                    {berlakuPct >= 8 ? `${berlakuPct}%` : ''}
+                  </div>
+                )}
+                {warningPct > 0 && (
+                  <div
+                    style={{ width: `${warningPct}%` }}
+                    className="h-full rounded-xl bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                    title={`Warning: ${warningItem.value} (${warningPct}%)`}
+                  >
+                    {warningPct >= 5 ? `${warningPct}%` : ''}
+                  </div>
+                )}
+                {expiredPct > 0 && (
+                  <div
+                    style={{ width: `${expiredPct}%` }}
+                    className="h-full rounded-xl bg-rose-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                    title={`Expired: ${expiredItem.value} (${expiredPct}%)`}
+                  >
+                    {expiredPct >= 5 ? `${expiredPct}%` : ''}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3 Kotak Detail Status Interaktif */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <div className="p-3.5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    Status Berlaku / Aktif
+                  </span>
+                  <span className="text-sm font-black text-emerald-700 dark:text-emerald-400">{berlakuItem.value}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Masa aktif aman &gt; 1 tahun</p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    Warning (Segera Expired)
+                  </span>
+                  <span className="text-sm font-black text-amber-700 dark:text-amber-400">{warningItem.value}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Habis dalam 1–3 bulan lagi</p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl border border-rose-200/80 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    Expired / Perlu Diperpanjang
+                  </span>
+                  <span className="text-sm font-black text-rose-700 dark:text-rose-400">{expiredItem.value}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">Sudah lewat batas waktu</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== KONTEN TAB 2: OPSI BAR CHART ANALITIK ===== */}
+      {(statsSubTab === 'barchart') && (
+        <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div>
+              <h4 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-teal-600" />
+                Pilihan Diagram Batang (Bar Chart Suite)
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Visualisasi komparatif per modul training. Pilih mode grafik yang ingin ditampilkan di bawah.
+              </p>
+            </div>
+
+            {/* Selector Mode Bar Chart */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 self-start md:self-auto">
+              {[
+                { id: 'compliance' as const, label: '% Kepatuhan' },
+                { id: 'status_stacked' as const, label: 'Status Bertumpuk (Stacked)' },
+                { id: 'target_vs_done' as const, label: 'Target vs Realisasi' },
+              ].map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setBarChartMode(m.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    barChartMode === m.id
+                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Visualisasi Bar Chart Sesuai Mode */}
+          {barChartMode === 'compliance' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Persentase Kepatuhan Personel per Modul Wajib
+                </span>
+                <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> ≥ 90% (Sangat Baik)</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> 70–89% (Cukup)</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> &lt; 70% (Perlu Tindakan)</span>
+                </div>
+              </div>
+              <div className="h-[340px] w-full p-2">
+                <Bar
+                  data={moduleComplianceChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                      x: {
+                        min: 0,
+                        max: 100,
+                        ticks: { callback: v => `${v}%`, font: { size: 11, weight: 'bold' } },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                      },
+                      y: {
+                        ticks: { font: { size: 12, weight: 'bold' } },
+                        grid: { display: false },
+                      },
+                    },
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        callbacks: {
+                          label: ctx => {
+                            const c = coverageData[ctx.dataIndex];
+                            return ` Kepatuhan: ${c.pct}% (${c.done} dari ${c.target} peserta wajib)`;
+                          },
+                        },
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {barChartMode === 'status_stacked' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Komposisi Status Masa Berlaku (Stacked Bar per Modul)
+                </span>
+                <span className="text-xs text-slate-500">
+                  Memperlihatkan jumlah modul yang aman vs mendekati batas waktu vs kadaluarsa
+                </span>
+              </div>
+              <div className="h-[340px] w-full p-2">
+                <Bar
+                  data={moduleStackedStatusChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                      x: {
+                        stacked: true,
+                        ticks: { font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                      },
+                      y: {
+                        stacked: true,
+                        ticks: { font: { size: 12, weight: 'bold' } },
+                        grid: { display: false },
+                      },
+                    },
+                    plugins: {
+                      legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } },
+                      tooltip: {
+                        callbacks: {
+                          afterBody: ctx => {
+                            const c = coverageData[ctx[0].dataIndex];
+                            return `Total Target Wajib: ${c.target} orang`;
+                          },
+                        },
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {barChartMode === 'target_vs_done' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Perbandingan Target Peserta Wajib vs Realisasi Personel Lulus
+                </span>
+                <span className="text-xs text-slate-500">
+                  Batang berdampingan untuk melihat gap selisih personel yang belum mengikuti training
+                </span>
+              </div>
+              <div className="h-[340px] w-full p-2">
+                <Bar
+                  data={moduleTargetVsDoneChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                      x: {
+                        ticks: { font: { size: 11, weight: 'bold' } },
+                        grid: { display: false },
+                      },
+                      y: {
+                        ticks: { font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                      },
+                    },
+                    plugins: {
+                      legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } },
+                      tooltip: {
+                        callbacks: {
+                          afterBody: ctx => {
+                            const c = coverageData[ctx[0].dataIndex];
+                            const gap = c.target - c.done;
+                            return gap > 0 ? `Kekurangan (Gap): ${gap} orang belum ikut` : 'Target telah terpenuhi 100%';
+                          },
+                        },
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== KONTEN TAB 3: MATRIKS MODUL TRAINING SAP ===== */}
+      {(statsSubTab === 'all' || statsSubTab === 'sap_modules') && (
+        <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <ClipboardCheck className="w-4 h-4 text-teal-600" />
+                Matriks Kepatuhan per Modul Training SAP
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Kartu status modul terpadu. Memisahkan modul yang 100% tuntas vs modul yang membutuhkan tindakan perpanjangan.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Mode switch untuk matriks modul */}
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setModuleViewMode('grid')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    moduleViewMode === 'grid' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Kartu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModuleViewMode('chart')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    moduleViewMode === 'chart' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Bar Chart
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModuleViewMode('table')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    moduleViewMode === 'table' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Tabel
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onOpenDatabaseWithFilter('sap')}
+                className="text-xs font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-1 cursor-pointer ml-1"
+              >
+                Buka Database SAP →
+              </button>
+            </div>
+          </div>
+
+          {/* Mode 1: Grid Kartu */}
+          {moduleViewMode === 'grid' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {coverageData.map(c => {
+                const isPerfect = c.pct === 100;
+                const hasIssues = c.warning > 0 || c.expired > 0 || (c.target - c.done > 0);
+
+                return (
+                  <div
+                    key={c.key}
+                    className={`rounded-2xl border p-4 transition-all flex flex-col justify-between ${
+                      isPerfect
+                        ? 'border-emerald-200/80 dark:border-emerald-800/40 bg-emerald-50/30 dark:bg-emerald-950/10'
+                        : 'border-amber-300 dark:border-amber-800/60 bg-amber-50/30 dark:bg-amber-950/10 shadow-xs'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h5 className="text-xs font-black text-slate-900 dark:text-slate-100">{c.label}</h5>
+                          <p className="text-[11px] text-slate-500 line-clamp-1">{c.desc || 'Modul training wajib'}</p>
+                        </div>
+                        <span
+                          className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+                            isPerfect
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300'
+                          }`}
+                        >
+                          {isPerfect ? '✓ 100% Lengkap' : `⚠ ${c.pct}% Perlu Tindakan`}
+                        </span>
+                      </div>
+
+                      {/* Progress Bar & Statistik Angka */}
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between text-xs font-bold mb-1">
+                          <span className="text-slate-600 dark:text-slate-300">Cakupan Peserta:</span>
+                          <span className="text-slate-900 dark:text-slate-100">
+                            {c.done} / {c.target} Orang ({c.pct}%)
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              isPerfect ? 'bg-emerald-500' : 'bg-amber-500'
+                            }`}
+                            style={{ width: `${c.pct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Rincian Masalah Jika Ada */}
+                      {hasIssues && (
+                        <div className="mt-2.5 pt-2 border-t border-amber-200/60 dark:border-amber-900/30 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold">
+                          {c.warning > 0 && <span className="text-amber-700">⚠️ {c.warning} warning</span>}
+                          {c.expired > 0 && <span className="text-rose-600">❌ {c.expired} expired</span>}
+                          {c.target - c.done > 0 && (
+                            <span className="text-slate-600">⚪ {c.target - c.done} belum ikut</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tombol Tindakan Langsung ke Database */}
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        {isPerfect ? 'Seluruh personel patuh' : `${c.target - c.done + c.expired} perlu ditindak`}
+                      </span>
+                      {!isPerfect && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDatabaseWithFilter('sap', c.key)}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer shadow-2xs"
+                        >
+                          Filter di Database →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Mode 2: Bar Chart Inline */}
+          {moduleViewMode === 'chart' && (
+            <div className="h-[320px] w-full p-2">
+              <Bar
+                data={moduleComplianceChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  indexAxis: 'y',
+                  scales: {
+                    x: { min: 0, max: 100, ticks: { callback: v => `${v}%` }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    y: { ticks: { font: { size: 12, weight: 'bold' } }, grid: { display: false } },
+                  },
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: ctx => {
+                          const c = coverageData[ctx.dataIndex];
+                          return ` Kepatuhan: ${c.pct}% (${c.done} / ${c.target} Orang)`;
+                        },
+                      },
+                    },
+                  },
+                }}
+              />
+            </div>
+          )}
+
+          {/* Mode 3: Tabel Matriks Rinci */}
+          {moduleViewMode === 'table' && (
+            <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-50 dark:bg-slate-800/80 text-[11px] font-bold uppercase tracking-wider text-slate-600 border-b border-slate-100 dark:border-slate-800">
+                  <tr>
+                    <th className="px-4 py-3">Modul Training</th>
+                    <th className="px-4 py-3 text-center">Target Wajib</th>
+                    <th className="px-4 py-3 text-center">Lulus / Berlaku</th>
+                    <th className="px-4 py-3 text-center">Warning</th>
+                    <th className="px-4 py-3 text-center">Expired</th>
+                    <th className="px-4 py-3 text-center">Kepatuhan (%)</th>
+                    <th className="px-4 py-3 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {coverageData.map(c => (
+                    <tr key={c.key} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                      <td className="px-4 py-3 font-bold text-slate-900 dark:text-slate-100">
+                        {c.label}
+                        <p className="text-[10px] text-slate-500 font-normal line-clamp-1">{c.desc}</p>
+                      </td>
+                      <td className="px-4 py-3 text-center font-bold text-slate-700 dark:text-slate-300">{c.target}</td>
+                      <td className="px-4 py-3 text-center font-bold text-emerald-600">{c.done}</td>
+                      <td className="px-4 py-3 text-center font-bold text-amber-600">{c.warning}</td>
+                      <td className="px-4 py-3 text-center font-bold text-rose-600">{c.expired}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                          c.pct >= 90 ? 'bg-emerald-100 text-emerald-800' : c.pct >= 70 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {c.pct}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => onOpenDatabaseWithFilter('sap', c.key)}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950 dark:text-teal-300 cursor-pointer"
+                        >
+                          Buka di DB
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== KONTEN TAB 4: ANALISIS PER BAGIAN & GOLONGAN ===== */}
+      {(statsSubTab === 'dept_analysis') && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Card Bar Chart per Bagian */}
+          <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-teal-600" />
+                  Kepatuhan Training per Bagian / Departemen
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Tingkat kepatuhan training SAP dikelompokkan berdasarkan divisi/seksi kerja.
+                </p>
+              </div>
+            </div>
+            <div className="h-[320px] w-full p-2">
+              <Bar
+                data={bagianChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  indexAxis: 'y',
+                  scales: {
+                    x: { min: 0, max: 100, ticks: { callback: v => `${v}%` }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    y: { ticks: { font: { size: 11, weight: 'bold' } }, grid: { display: false } },
+                  },
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: ctx => {
+                          const b = bagianStats[ctx.dataIndex];
+                          return ` Kepatuhan: ${b.pct}% (${b.complete} lengkap dari ${b.inSap} personel SAP, total tim: ${b.total})`;
+                        },
+                      },
+                    },
+                  },
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Card Bar Chart per Golongan */}
+          <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Award className="w-4 h-4 text-teal-600" />
+                  Kepatuhan Training per Golongan (GOL)
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Perbandingan tingkat kepatuhan antar tingkatan golongan karyawan.
+                </p>
+              </div>
+            </div>
+            <div className="h-[320px] w-full p-2">
+              <Bar
+                data={golChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    x: { ticks: { font: { size: 11, weight: 'bold' } }, grid: { display: false } },
+                    y: { min: 0, max: 100, ticks: { callback: v => `${v}%` }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                  },
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: ctx => {
+                          const g = golStats[ctx.dataIndex];
+                          return ` Kepatuhan: ${g.pct}% (${g.complete} dari ${g.inSap} personel SAP, total: ${g.total})`;
+                        },
+                      },
+                    },
+                  },
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== KONTEN TAB 5: PERINGKAT SERTIFIKASI ===== */}
+      {(statsSubTab === 'all' || statsSubTab === 'cert_ranks') && (
+        <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Award className="w-4 h-4 text-teal-600" />
+                Peringkat Kepemilikan Sertifikasi &amp; Kualifikasi Personel
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Urutan sebaran sertifikasi kompetensi internal &amp; eksternal (Total {combinedTrainingCertData.grandTotal} Sertifikat Terdata).
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
+            {/* Kolom 1: Leaderboard Bar Horizontal */}
+            <div className="lg:col-span-7 space-y-3">
+              {sortedCertRows.map((r, idx) => {
+                const pct = combinedTrainingCertData.grandTotal ? Math.round((r.value / combinedTrainingCertData.grandTotal) * 100) : 0;
+                return (
+                  <div key={r.label} className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                          idx === 0 ? 'bg-amber-100 text-amber-800' : idx === 1 ? 'bg-slate-200 text-slate-700' : idx === 2 ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {idx + 1}
+                        </span>
+                        <span className="font-bold text-slate-900 dark:text-slate-100 truncate">{r.label}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100 tabular-nums">{r.value} Personel</span>
+                        <span className="text-[11px] font-semibold text-slate-400">({pct}%)</span>
+                      </div>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%`, backgroundColor: r.color || '#2A9D8F' }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Kolom 2: ChartJS Bar Visualisasi Sebaran */}
+            <div className="lg:col-span-5 h-[280px] p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <Bar
+                data={certChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    x: { ticks: { font: { size: 10, weight: 'bold' } }, grid: { display: false } },
+                    y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                  },
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: ctx => ` ${ctx.parsed.y} Orang bersertifikat`,
+                      },
+                    },
+                  },
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', onBack, scope = 'internal' }: TrainingDatabaseScreenProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -1238,17 +2274,27 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     XLSX.writeFile(wb, `Sertifikasi_${sheetType}_${todayYmdStr}.xlsx`);
   }, [certRows, todayYmdStr]);
 
-  const [activeInternalTab, setActiveInternalTab] = useState<'sap' | 'k3' | 'pra_pop' | 'form_permintaan'>(() => {
+  const [activeInternalTab, setActiveInternalTab] = useState<'sap' | 'k3' | 'statistik' | 'form_permintaan'>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab') || params.get('sheet');
-      if (tabParam === 'form_permintaan' || tabParam === 'pra_pop' || tabParam === 'k3' || tabParam === 'sap') {
+      if (tabParam === 'form_permintaan' || tabParam === 'k3' || tabParam === 'sap' || tabParam === 'statistik') {
         return tabParam as any;
       }
+      if (tabParam === 'pra_pop') return 'k3';
       const s = localStorage.getItem(TAB_STORAGE_KEY);
-      if (s === 'form_permintaan' || s === 'pra_pop' || s === 'k3') return s as any;
+      if (s === 'form_permintaan' || s === 'k3' || s === 'statistik') return s as any;
+      if (s === 'pra_pop') return 'k3';
     } catch {}
     return 'sap';
+  });
+  const [k3SubView, setK3SubView] = useState<'matrix' | 'pra_pop'>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('view') === 'pra_pop' || params.get('tab') === 'pra_pop' ? 'pra_pop' : 'matrix';
+    } catch {
+      return 'matrix';
+    }
   });
   const [program, setProgram] = useState<TrainingProgram>(() => {
     if (scope === 'external') return 'pop';
@@ -1275,8 +2321,21 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [missingFilter, setMissingFilter] = useState<string | null>(null);
   // Kartu analitik utama: pilihan tampilan diagram
   const [analyticsView, setAnalyticsView] = useState<'pencapaian' | 'peserta' | 'status' | 'tren'>('pencapaian');
-  // Tampilan HP: diagram & filter lanjutan dilipat agar ringkas
-  const [showCharts, setShowCharts] = useState(false);
+  // Section Statistika & Analitik: opsi buka/tutup agar tampilan tidak terlalu penuh
+  const [showCharts, setShowCharts] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('preplab_training_show_charts') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const toggleCharts = useCallback(() => {
+    setShowCharts(prev => {
+      const next = !prev;
+      try { localStorage.setItem('preplab_training_show_charts', String(next)); } catch {}
+      return next;
+    });
+  }, []);
   const [showFilters, setShowFilters] = useState(false);
 
   // Status UI mapping untuk sertifikasi
@@ -1452,7 +2511,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const switchProgram = (p: TrainingProgram) => {
     if (!scopePrograms.includes(p)) return;
     setProgram(p);
-    if (p !== 'pop') setActiveInternalTab(p);
+    if (p === 'sap' || p === 'k3') setActiveInternalTab(p);
+    else if (p === 'pra_pop') {
+      setActiveInternalTab('k3');
+      setK3SubView('pra_pop');
+    }
     setStatusFilter('ALL');
     setMissingFilter(null);
     if (!isExternal) try { localStorage.setItem(TAB_STORAGE_KEY, p); } catch {}
@@ -1464,7 +2527,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const programRecords = useMemo(
     () => records.filter(r => {
       if (isExternal) return r.inPop || getPersonCerts(r).length > 0;
-      if (program === 'pra_pop') return r.popData?.praPop || (r.inPop && popAttendedPra(r.popData));
+      if (program === 'k3') return !!r.inK3 || !!r.popData?.praPop || (!!r.inPop && popAttendedPra(r.popData));
+        if (program === 'pra_pop') return r.popData?.praPop || (r.inPop && popAttendedPra(r.popData));
       return !!r[PROGRAM_FLAG_KEY[program]];
     }),
     [records, program, isExternal, getPersonCerts]
@@ -1663,8 +2727,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         ],
       programs: [
         { key: 'sap' as const, label: 'Training SAP', sub: '6 jenis training · berlaku 2 th', count: sapPeople.length, metric: `${sapComplete} lengkap`, spark: spark(sapDates), latest: latestOf(sapDates) },
-        { key: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · CS · Fire Fighting · per section', count: k3People.length, metric: `${k3Complete}/${k3Wajib.length} lengkap`, spark: spark(k3Dates), latest: latestOf(k3Dates) },
-        { key: 'pra_pop' as const, label: 'Training Pra POP', sub: 'Persiapan Pengawas Operasional', count: records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).length, metric: `${records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).length} terlaksana`, spark: spark(records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).map(r => r.popData?.praPop)), latest: latestOf(records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).map(r => r.popData?.praPop)) },
+        { key: 'k3' as const, label: 'Training K3', sub: 'WAH · LOTO · CS · Fire Fighting · Pra POP', count: records.filter(r => r.inK3 || r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).length, metric: `${k3Complete}/${k3Wajib.length} lengkap · ${records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).length} Pra POP`, spark: spark([...k3Dates, ...records.map(r => r.popData?.praPop).filter(Boolean)]), latest: latestOf([...k3Dates, ...records.map(r => r.popData?.praPop).filter(Boolean)]) },
       ],
       // Training External: satu kartu per tahap sertifikasi
       stageCards: POP_STAGES.map(s => ({
@@ -2632,7 +3695,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const overviewPrograms = ([
     { id: 'sap' as const, icon: <ClipboardCheck className="w-4 h-4" />, title: 'Training SAP' },
     { id: 'k3' as const, icon: <HardHat className="w-4 h-4" />, title: 'Training K3' },
-    { id: 'pra_pop' as const, icon: <GraduationCap className="w-4 h-4" />, title: 'Training Pra POP' },
+    
     { id: 'pop' as const, icon: <Award className="w-4 h-4" />, title: 'Sertifikasi POP' },
   ]).filter(p => scopePrograms.includes(p.id));
   const summaryPieRows = isExternal ? dashboard.popPie : pieRows;
@@ -2707,7 +3770,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     onClick={() => navigate('/training-external')}
                     className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${isExternal ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
                   >
-                    Sertifikasi
+                    Training External
                   </button>
                 </div>
                 <h1 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">{SCOPE_META[scope].title}</h1>
@@ -2790,7 +3853,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 {[
                   { id: 'sap', label: 'Database Training SAP' },
                   { id: 'k3', label: 'Database Training K3' },
-                  { id: 'pra_pop', label: 'Database Pra POP' },
+                  { id: 'statistik', label: '📊 Statistik & Analisis' },
                   { id: 'form_permintaan', label: 'Form Permintaan Training' },
                 ].map(s => {
                   const active = activeInternalTab === s.id;
@@ -2828,7 +3891,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <div className="flex items-center gap-2 shrink-0">
                 <SlidersHorizontal className="w-4 h-4" style={{ color: DASH.brand }} />
                 <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
-                  Jenis Sertifikasi:
+                  Jenis Training External:
                 </span>
               </div>
               <div className="relative flex-1 max-w-md">
@@ -2856,7 +3919,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <option value="proteksi_radiasi">Petugas Proteksi Radiasi ({radiasiCount} Peserta)</option>
                   <option value="juru_las_3">Juru Las Kelas III ({juruLasCount} Peserta)</option>
                   <option value="dll">Dll (Sertifikasi Lainnya)</option>
-                  <option value="__ADD_TRAINING__">+ Tambahkan Sertifikasi...</option>
+                  <option value="__ADD_TRAINING__">+ Tambahkan Training External...</option>
                 </select>
                 <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
@@ -2871,14 +3934,33 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   style={{ backgroundColor: DASH.brand }}
                 >
                   <Plus className="w-4 h-4" />
-                  Tambahkan Sertifikasi
+                  Tambahkan Training External
                 </button>
               )}
             </div>
           </div>
         )}
 
-        {/* ===== Pencarian Nama Karyawan (Tersedia di Training Internal & Sertifikasi) ===== */}
+        {/* ===== Routing Sub Menu: Form Permintaan & Statistik Dedicated View ===== */}
+        {!isExternal && activeInternalTab === 'form_permintaan' ? (
+          <TrainingRequestFormSheet employees={allMasterEmployees} canManage={canManage} />
+        ) : !isExternal && activeInternalTab === 'statistik' ? (
+          <TrainingStatisticsView
+            records={records}
+            stats={stats}
+            dashboard={dashboard}
+            summaryPieRows={summaryPieRows}
+            summaryPieTotal={summaryPieTotal}
+            combinedTrainingCertData={combinedTrainingCertData}
+            onOpenDatabaseWithFilter={(tab, filterModule) => {
+              setActiveInternalTab(tab);
+              switchProgram(tab);
+              if (filterModule) setMissingFilter(filterModule);
+            }}
+          />
+        ) : (
+          <>
+        {/* ===== Pencarian Nama Karyawan (Tersedia di Training Internal & Training External) ===== */}
         <div className="rounded-[24px] bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-sm border border-slate-200/90 dark:border-slate-800">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
             <div className="flex items-center gap-2">
@@ -2999,7 +4081,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                   <Users className="w-7 h-7" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-teal-600 mb-0.5">{isExternal ? "Profil Sertifikasi Karyawan" : "Profil Training Internal Karyawan"}</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-teal-600 mb-0.5">{isExternal ? "Profil Training External Karyawan" : "Profil Training Internal Karyawan"}</p>
                   <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight break-words">{globalPersonProfile.record.nama}</h2>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs font-semibold text-slate-600">
                     <span>NIK: <span className="font-mono font-bold text-slate-900">{globalPersonProfile.record.nik || '-'}</span></span>
@@ -3166,11 +4248,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </DashCard>
             )}
 
-            {/* ===== MODUL SERTIFIKASI (EXTERNAL): Tabel Sertifikasi POP, POM & Sertifikasi Kompetensi (10 Kolom) ===== */}
+            {/* ===== MODUL TRAINING EXTERNAL: Tabel Training External (POP, POM & Sertifikasi Kompetensi) ===== */}
             {isExternal && globalPersonProfile.certItems.length > 0 && (
               <DashCard>
                 <DashTitle
-                  title="Sertifikasi POP, POM & Sertifikasi Kompetensi"
+                  title="Training External (POP, POM & Sertifikasi Kompetensi)"
                   sub="Mencakup POP, POM, ISO 17025, Ahli K3 Kimia, PPR, K3 Listrik, Juru Las · Warning otomatis muncul 1 tahun (<= 365 hari) sebelum expired"
                 />
 
@@ -3417,7 +4499,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </div>
             </DashCard>
 
-            <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+            <DashCard className={`lg:col-span-4 ${showCharts ? 'block' : 'hidden'}`}>
               <DashTitle title="Status Kelulusan POM" sub="Personel yang telah tersertifikasi POM" />
               <div className="flex items-center gap-4">
                 <div className="w-[120px] h-[120px] shrink-0">
@@ -3460,7 +4542,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               </div>
             </DashCard>
 
-            <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+            <DashCard className={`lg:col-span-4 ${showCharts ? 'block' : 'hidden'}`}>
               <DashTitle title="Efektivitas POM" sub="Persentase kelulusan terhadap kandidat POP" />
               <div className="flex items-center justify-center pt-2">
                 <ProgressRing value={pomStats.pctPassed} color="#10b981" label="Lulus POM" />
@@ -3468,601 +4550,137 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </DashCard>
           </div>
         ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4">
-          <DashCard className="lg:col-span-3">
-            <DashTitle title="Training Overview" />
-            <div className="flex items-end justify-between gap-3">
-              <div className="flex items-end gap-2">
-                <span className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{records.length}</span>
-                <span className="text-xs font-medium text-slate-500 leading-tight pb-1">Personel<br />Terdata</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {overviewPrograms.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => switchProgram(p.id)}
-                    title={`${p.title} · ${programCounts[p.id]} personel`}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all cursor-pointer ${program === p.id ? 'text-white border-transparent' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-                    style={program === p.id ? { backgroundColor: DASH.brand } : undefined}
-                  >
-                    {p.icon}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {!selectedPerson && (
-              <p className="mt-3 text-xs font-semibold flex flex-wrap gap-x-3 gap-y-1">
-                {isExternal ? (<>
-                  {dashboard.pop.stages.map((s, i) => (
-                    <span key={s.key} style={{ color: [DASH.brand, '#b7791f', '#0f8f80'][i] }}>{s.count} {s.label}</span>
-                  ))}
-                  <span className="text-slate-500">{dashboard.pop.pct}% POP wajib terpenuhi</span>
-                </>) : (<>
-                <span style={{ color: DASH.brand }}>{dashboard.sap.complete} Lengkap</span>
-                <span className="text-yellow-600">{dashboard.sap.warning} Warning</span>
-                <span style={{ color: DASH.coral }}>{dashboard.sap.expired} Expired</span>
-                <span className="text-slate-500">{dashboard.sap.pct}% SAP terpenuhi</span>
-                </>)}
-              </p>
-            )}
-            {selectedPerson && (() => {
-              const a = personAchievement(selectedPerson, scope);
-              return (
-                <div className="mt-3 rounded-2xl p-3.5" style={{ backgroundColor: DASH.brandSoft }}>
-                  <div className="flex items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: DASH.brand }}>Karyawan Terpilih</p>
-                      <p className="text-sm font-bold text-slate-900 leading-snug break-words">{selectedPerson.nama}</p>
-                      <p className="text-[11px] font-medium text-slate-600 break-words">
-                        {selectedPerson.nik} · {selectedPerson.jabatan || '-'} · GOL {selectedPerson.gol || '-'} · Shift {selectedPerson.shift || '-'}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-2xl font-semibold leading-none" style={{ color: pctColor(a.pct) }}>{a.pct}%</p>
-                      <p className="text-[10px] text-slate-500 mt-1">{a.done}/{a.total} training</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPersonDetail(selectedPerson)}
-                      className="flex-1 px-3 py-2 rounded-full text-[11px] font-semibold text-white cursor-pointer hover:opacity-90"
-                      style={{ backgroundColor: DASH.brand }}
-                    >
-                      Lihat Detail
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearPerson}
-                      className="flex-1 px-3 py-2 rounded-full text-[11px] font-semibold bg-white text-slate-700 border border-slate-200 cursor-pointer hover:bg-slate-50"
-                    >
-                      Kembali ke Semua Data
-                    </button>
+          /* ===== 4 Kartu Metrik KPI Eksekutif (Ringkas, Rapi & Efisien) ===== */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {/* Card 1: Total Personel */}
+            <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 sm:p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-teal-600" />
+                    TOTAL PERSONEL
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {overviewPrograms.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => switchProgram(p.id)}
+                        title={`${p.title} • ${programCounts[p.id]} personel`}
+                        className={`w-7 h-7 rounded-full flex items-center justify-center border transition-all cursor-pointer ${program === p.id ? 'text-white border-transparent' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                        style={program === p.id ? { backgroundColor: DASH.brand } : undefined}
+                      >
+                        <span className="scale-75">{p.icon}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-              );
-            })()}
-            {personDetail && createPortal(
-              <PersonAchievementModal record={personDetail} onClose={closePersonDetail} scope={scope} />,
-              document.body,
-            )}
-          </DashCard>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">
+                    {records.length}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">Personel Terdata</span>
+                </div>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[11px] font-medium text-slate-500 flex items-center justify-between">
+                <span>Program Aktif:</span>
+                <span className="font-bold text-teal-700 dark:text-teal-300 uppercase">{program.replace('_', ' ')}</span>
+              </div>
+            </div>
 
-          {selectedPerson ? (
-            <>
-              {isExternal
-                ? <PersonPopCard record={selectedPerson} className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`} />
-                : <PersonSapCard record={selectedPerson} className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`} />}
-              <PersonRingsCard record={selectedPerson} scope={scope} className={`lg:col-span-6 ${showCharts ? '' : 'hidden'} md:block`} />
-            </>
-          ) : (<>
-          {/* Kolom Baru: Diagram Gabungan Training & Sertifikasi */}
-          <DashCard className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`}>
-            <DashTitle
-              title="Training & Sertifikasi"
-              sub="Diagram gabungan sebaran kualifikasi"
-            />
-            <div className="flex items-center gap-3 pt-1">
-              <div className="w-[100px] h-[100px] shrink-0">
-                {combinedTrainingCertData.grandTotal > 0 ? (
-                  <Doughnut
-                    data={{
-                      labels: combinedTrainingCertData.rows.map(r => r.label),
-                      datasets: [{
-                        data: combinedTrainingCertData.rows.map(r => r.value),
-                        backgroundColor: combinedTrainingCertData.rows.map(r => r.color),
-                        borderColor: '#ffffff',
-                        borderWidth: 2.5,
-                        hoverOffset: 4,
-                      }],
-                    }}
-                    options={{
-                      cutout: '55%',
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                          callbacks: {
-                            label: ctx => ` ${ctx.label}: ${ctx.parsed} orang (${Math.round((Number(ctx.parsed) / combinedTrainingCertData.grandTotal) * 100)}%)`,
-                          },
-                        },
-                      },
+            {/* Card 2: Kepatuhan Program */}
+            <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-4 sm:p-5 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-teal-600 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+                  {isExternal ? 'KEPATUHAN POP' : 'KEPATUHAN PROGRAM'}
+                </span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-teal-600 tabular-nums">
+                    {isExternal ? dashboard.pop.pct : dashboard.sap.pct}%
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">Terpenuhi</span>
+                </div>
+                <div className="mt-2.5 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${isExternal ? dashboard.pop.pct : dashboard.sap.pct}%`,
+                      backgroundColor: DASH.brand
                     }}
                   />
-                ) : (
-                  <div className="w-full h-full rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400">Kosong</div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between text-[11px] font-bold pb-1 mb-1 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-600 dark:text-slate-400">Total Perolehan</span>
-                  <span className="tabular-nums font-black text-teal-600 dark:text-teal-400">{combinedTrainingCertData.grandTotal}</span>
-                </div>
-                <div className="max-h-[110px] overflow-y-auto space-y-1 custom-scrollbar pr-1">
-                  {combinedTrainingCertData.rows.map(r => (
-                    <div key={r.label} className="flex items-center justify-between text-[10px]">
-                      <span className="flex items-center gap-1.5 truncate">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
-                        <span className="truncate text-slate-700 dark:text-slate-300 font-medium">{r.label}</span>
-                      </span>
-                      <span className="font-bold tabular-nums text-slate-900 dark:text-slate-100 shrink-0 ml-1">{r.value}</span>
-                    </div>
-                  ))}
                 </div>
               </div>
-            </div>
-          </DashCard>
-
-          <DashCard className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`}>
-            <DashTitle title={isExternal ? 'Kualifikasi POP' : 'Status Training SAP'} sub={isExternal ? 'Komposisi keterangan kualifikasi' : 'Seluruh training wajib (per GOL)'} />
-            <div className="flex items-center gap-3 pt-1">
-              <div className="w-[100px] h-[100px] shrink-0">
-                {summaryPieTotal > 0 && (
-                  <Doughnut
-                    data={{
-                      labels: summaryPieRows.map(r => r.label),
-                      datasets: [{ data: summaryPieRows.map(r => r.value), backgroundColor: summaryPieRows.map(r => r.color), borderColor: '#ffffff', borderWidth: 2.5, hoverOffset: 4 }],
-                    }}
-                    options={{
-                      cutout: '0%',
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} (${Math.round((Number(ctx.parsed) / summaryPieTotal) * 100)}%)` } },
-                      },
-                    }}
-                  />
-                )}
-              </div>
-              <ul className="space-y-1.5 min-w-0 flex-1 max-h-[110px] overflow-y-auto custom-scrollbar pr-1">
-                {summaryPieRows.map(r => (
-                  <li key={r.label} className="flex items-start gap-1.5">
-                    <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ backgroundColor: r.color }} />
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 leading-tight truncate">{r.label}</p>
-                      <p className="text-[10px] text-slate-500">{r.value} {isExternal ? 'orang' : 'training'} · {summaryPieTotal ? Math.round((r.value / summaryPieTotal) * 100) : 0}%</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </DashCard>
-
-          <DashCard className={`lg:col-span-3 ${showCharts ? '' : 'hidden'} md:block`}>
-            <DashTitle
-              title={isExternal ? 'Efektivitas Sertifikasi' : 'Efektivitas Program'}
-              right={
-                <div className="flex flex-wrap justify-end gap-x-2 gap-y-1 text-[9px] font-semibold text-slate-500">
-                  {dashboard.rings.map(r => (
-                    <span key={r.key} className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: r.color }} />{r.label.replace(' Diikuti', '').replace(' Lengkap', '')}</span>
-                  ))}
-                </div>
-              }
-            />
-            <div className={`grid ${dashboard.rings.length === 2 ? 'grid-cols-2' : 'grid-cols-3'} gap-2 pt-1`}>
-              {dashboard.rings.map(r => <ProgressRing key={r.key} value={r.value} color={r.color} label={r.label} />)}
-            </div>
-          </DashCard>
-          </>)}
-        </div>
-        )}
-
-        {/* HP: tombol buka/tutup diagram */}
-        <button
-          type="button"
-          onClick={() => setShowCharts(v => !v)}
-          className="md:hidden w-full flex items-center justify-between px-4 py-3 rounded-full bg-white text-xs font-semibold text-slate-800 cursor-pointer active:scale-[0.99] shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-          aria-expanded={showCharts}
-        >
-          <span className="flex items-center gap-2"><BarChart3 className="w-4 h-4" style={{ color: DASH.brand }} />{showCharts ? 'Sembunyikan Diagram & Analitik' : 'Tampilkan Diagram & Analitik'}</span>
-          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showCharts ? 'rotate-180' : ''}`} />
-        </button>
-
-        {/* ===== Baris 2: Kartu program · Analitik ===== */}
-        {isExternal && externalSheet !== 'pop' && externalSheet !== 'pom' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
-            <DashCard className={`lg:col-span-4 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
-              <DashTitle title="Status Masa Berlaku" sub="Komposisi masa aktif sertifikat" />
-              <div className="flex items-center gap-4 pt-2">
-                <div className="w-[120px] h-[120px] shrink-0">
-                  {certKPI.total > 0 ? (
-                    <Doughnut
-                      data={{
-                        labels: ['Aktif', 'Segera Expired', 'Expired'],
-                        datasets: [{
-                          data: [certKPI.active, certKPI.soon, certKPI.expired],
-                          backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
-                          borderWidth: 2,
-                          borderColor: '#ffffff',
-                        }],
-                      }}
-                      options={{
-                        cutout: '60%',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full rounded-full border-4 border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400">Kosong</div>
-                  )}
-                </div>
-                <ul className="space-y-2 min-w-0 flex-1 text-xs">
-                  <li className="flex items-center justify-between">
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Aktif</span>
-                    <span className="font-bold text-slate-900">{certKPI.active} ({certKPI.total ? Math.round((certKPI.active / certKPI.total) * 100) : 0}%)</span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />Segera Expired</span>
-                    <span className="font-bold text-amber-700">{certKPI.soon} ({certKPI.total ? Math.round((certKPI.soon / certKPI.total) * 100) : 0}%)</span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" />Expired</span>
-                    <span className="font-bold text-rose-600">{certKPI.expired} ({certKPI.total ? Math.round((certKPI.expired / certKPI.total) * 100) : 0}%)</span>
-                  </li>
-                </ul>
-              </div>
-            </DashCard>
-
-            <DashCard className={`lg:col-span-8 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
-              <DashTitle title="Distribusi Peserta per Perusahaan" sub="Jumlah pemegang sertifikasi di PT TBP vs PT GPS" />
-              <div className="relative flex-1 min-h-[160px] pt-1">
-                {certPtChartData ? (
-                  <Bar
-                    data={certPtChartData}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
-                      scales: {
-                        x: { grid: { display: false } },
-                        y: { beginAtZero: true, ticks: { precision: 0 } },
-                      },
-                    }}
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-slate-400">Belum ada data</div>
-                )}
-              </div>
-            </DashCard>
-          </div>
-        ) : isExternal && externalSheet === 'pom' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
-            <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
-              <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 p-4 border border-slate-200/80">
-                <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Lulus POM</p>
-                <p className="text-3xl font-black text-slate-900 mt-1">{pomStats.passed} <span className="text-xs font-semibold text-slate-500">orang</span></p>
-                <p className="text-[11px] text-slate-500 mt-0.5">{pomStats.pctPassed}% dari seluruh kandidat</p>
-              </div>
-              <div className="rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 p-4 border border-slate-200/80">
-                <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Karakter Sertifikasi</p>
-                <p className="text-xl sm:text-2xl font-black text-slate-800 mt-1">Bersifat Fleksibel</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Pengembangan kompetensi madya opsional</p>
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[11px] font-medium text-slate-500 flex items-center justify-between">
+                <span>Status Lengkap:</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">
+                  {isExternal ? (dashboard.pop.stages[0]?.count ?? 0) : dashboard.sap.complete} Orang
+                </span>
               </div>
             </div>
 
-            <DashCard className={`lg:col-span-8 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
-              <DashTitle title="Distribusi POM per Perusahaan" sub="Distribusi pemegang sertifikasi POM per PT" />
-              <div className="relative flex-1 min-h-[220px]">
-                <Bar
-                  data={pomPtChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11, weight: 'bold' } } },
-                    },
-                    scales: {
-                      x: { grid: { display: false } },
-                      y: { beginAtZero: true, ticks: { precision: 0 } },
-                    },
-                  }}
-                />
-              </div>
-            </DashCard>
-          </div>
-        ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
-          {selectedPerson ? (
-            <>
-              <PersonProgramCards record={selectedPerson} scope={scope} />
-              <PersonTrainingTableCard record={selectedPerson} scope={scope} className={`lg:col-span-8 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`} />
-            </>
-          ) : (<>
-          {isExternal ? (
-          <div className="lg:col-span-3 grid grid-cols-3 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
-            {dashboard.stageCards.map(s => {
-              const active = missingFilter === s.key;
-              const pct = s.total ? Math.round((s.count / s.total) * 100) : 0;
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => setMissingFilter(active ? null : s.key)}
-                  title={`Tampilkan yang telah mengikuti ${s.label}`}
-                  className={`text-left rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 p-3 lg:p-5 transition-all cursor-pointer border-2 ${active ? '' : 'border-white dark:border-slate-800 hover:border-slate-200'}`}
-                  style={active ? { borderColor: DASH.brand } : undefined}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center shrink-0" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>
-                        <Award className="w-4 h-4" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[11px] lg:text-[13px] font-semibold text-slate-900 dark:text-slate-100 leading-tight truncate">{s.label}</p>
-                        <p className="hidden lg:block text-[11px] text-slate-500 truncate">{s.sub}</p>
-                      </div>
-                    </div>
-                    {active && (
-                      <span className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: DASH.brand }} />Filter
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2 lg:mt-4 flex items-end justify-between gap-2">
-                    <div>
-                      <p className="text-2xl lg:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{s.count}</p>
-                      <p className="text-[10px] lg:text-xs text-slate-500">telah ikut · {pct}%</p>
-                    </div>
-                    <div className="hidden lg:flex flex-col items-end gap-1">
-                      {s.spark ? <SparkBars values={s.spark} color={DASH.brand} /> : <span className="text-[10px] text-slate-500">dari {s.total} personel</span>}
-                      {s.spark && <span className="text-[10px] text-slate-500">{s.latest ? formatTrainingDate(s.latest) : '-'}</span>}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          ) : (
-          <div className="lg:col-span-3 grid grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-3 lg:gap-4">
-            {dashboard.programs.map(p => {
-              const active = program === p.key;
-              return (
-                <button
-                  key={p.key}
-                  type="button"
-                  onClick={() => switchProgram(p.key)}
-                  className={`text-left rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 p-3 lg:p-5 transition-all cursor-pointer border-2 ${active ? '' : 'border-white dark:border-slate-800 hover:border-slate-200'}`}
-                  style={active ? { borderColor: DASH.brand } : undefined}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="hidden sm:flex w-8 h-8 rounded-full items-center justify-center shrink-0" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>
-                        {p.key === 'sap' ? <ClipboardCheck className="w-4 h-4" /> : p.key === 'k3' ? <HardHat className="w-4 h-4" /> : <Award className="w-4 h-4" />}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[11px] lg:text-[13px] font-semibold text-slate-900 dark:text-slate-100 leading-tight truncate">{p.label}</p>
-                        <p className="hidden lg:block text-[11px] text-slate-500 truncate">{p.sub}</p>
-                      </div>
-                    </div>
-                    {active && (
-                      <span className="hidden lg:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ backgroundColor: DASH.brandSoft, color: DASH.brand }}>
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: DASH.brand }} />Aktif
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2 lg:mt-4 flex items-end justify-between gap-2">
-                    <div>
-                      <p className="text-2xl lg:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{p.count}</p>
-                      <p className="text-[10px] lg:text-xs text-slate-500">{p.metric}</p>
-                    </div>
-                    <div className="hidden lg:flex flex-col items-end gap-1">
-                      <SparkBars values={p.spark} color={DASH.brand} />
-                      <span className="text-[10px] text-slate-500">{p.latest ? formatTrainingDate(p.latest) : '-'}</span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          )}
-
-          <DashCard className={`lg:col-span-5 ${showCharts ? 'flex' : 'hidden'} md:flex flex-col`}>
-            <DashTitle
-              title="Analitik Training"
-              sub={
-                viewMode === 'pencapaian' && achievement ? `${achievement.totalPct}% total pencapaian Training SAP`
-                : viewMode === 'peserta' ? 'Jumlah karyawan yang telah mengikuti — tanpa masa berlaku'
-                : viewMode === 'status' ? (countOnly ? 'Jumlah peserta per training' : 'Komposisi status per training (persentase)')
-                : `Jumlah training per bulan${monthlyChartData?.truncated ? ` (${MONTHLY_CHART_MAX_MONTHS} bulan terakhir)` : ''}`
-              }
-              right={
-                <div className="relative">
-                  <select
-                    value={viewMode}
-                    onChange={e => setAnalyticsView(e.target.value as typeof analyticsView)}
-                    className="appearance-none pl-3 pr-8 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-200 cursor-pointer focus:outline-none"
-                  >
-                    {analyticsOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            {/* Card 3: Warning Expired */}
+            <button
+              type="button"
+              onClick={() => setStatusFilter(statusFilter === 'warning' ? 'ALL' : 'warning')}
+              className={`rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 border transition-all text-left p-4 sm:p-5 flex flex-col justify-between cursor-pointer ${
+                statusFilter === 'warning'
+                  ? 'border-amber-500 ring-2 ring-amber-500/20'
+                  : 'border-slate-200/80 dark:border-slate-800 hover:border-amber-300'
+              }`}
+            >
+              <div>
+                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  WARNING EXPIRED
+                </span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-amber-600 tabular-nums">
+                    {isExternal ? 0 : dashboard.sap.warning}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">Personel</span>
                 </div>
-              }
-            />
-            {/* Tinggi diagram mengikuti kolom kartu program di sebelahnya (min. 300px) */}
-            <div className="relative flex-1 min-h-[300px]">
-              <div className="absolute inset-0">
-              {viewMode === 'pencapaian' && achievement && (
-                <Bar
-                  data={{
-                    ...achievement.chart,
-                    datasets: [
-                      { ...achievement.chart.datasets[0], backgroundColor: achievement.rows.map(r => (r.pct >= 90 ? DASH.brand : r.pct >= 70 ? DASH.yellow : DASH.coral)), borderRadius: 999, barThickness: 14 },
-                      { ...achievement.chart.datasets[1], backgroundColor: '#eef1f0', borderRadius: 999, barThickness: 14 },
-                    ],
-                  }}
-                  plugins={[achievementLabels]}
-                  options={{
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: { display: false },
-                      tooltip: {
-                        filter: item => item.datasetIndex === 0,
-                        callbacks: { label: ctx => { const row = achievement.rows[ctx.dataIndex]; return ` ${row.pct}% — ${row.done} dari ${row.target} personel`; } },
-                      },
-                    },
-                    scales: {
-                      x: { stacked: true, min: 0, max: 100, ticks: { callback: v => `${v}%`, font: { size: 10 }, stepSize: 25 }, grid: { color: '#f1f5f9' }, border: { display: false } },
-                      y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: ctx => ({ size: 11, weight: ctx.index === achievement.rows.length - 1 ? 'bold' : 'normal' }) } },
-                    },
-                  }}
-                />
-              )}
-              {viewMode === 'peserta' && participation && (
-                <Bar
-                  data={{
-                    ...participation.chart,
-                    datasets: [{ ...participation.chart.datasets[0], backgroundColor: participation.rows.map(r => (r.group === 'Training K3' ? DASH.brand : DASH.mint)), borderRadius: 999, barThickness: 14 }],
-                  }}
-                  plugins={[countEndLabels]}
-                  options={{
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: { display: false },
-                      tooltip: { callbacks: { label: ctx => { const row = participation.rows[ctx.dataIndex]; return ` ${row.count} orang telah mengikuti${row.pending ? ` · ${row.pending} pending` : ''}`; } } },
-                    },
-                    scales: {
-                      x: { beginAtZero: true, grace: '12%', ticks: { precision: 0, font: { size: 10 } }, grid: { color: '#f1f5f9' }, border: { display: false } },
-                      y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11 } } },
-                    },
-                  }}
-                />
-              )}
-              {(viewMode === 'status' || viewMode === 'tren') && (viewMode === 'status' ? statusChartData : monthlyChartData) && (
-                <Bar
-                  data={(viewMode === 'status' ? statusChartData : monthlyChartData)!}
-                  plugins={[barPercentLabels]}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                      barPercentLabels: { mode: countOnly && viewMode === 'status' ? 'count' : 'percent' },
-                      legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } } },
-                      tooltip: {
-                        callbacks: {
-                          label: ctx => {
-                            const total = ctx.chart.data.datasets.reduce((s, ds, i) => s + (ctx.chart.isDatasetVisible(i) ? Number(ds.data[ctx.dataIndex]) || 0 : 0), 0);
-                            return ` ${ctx.dataset.label}: ${ctx.parsed.y} orang (${total ? Math.round((ctx.parsed.y / total) * 100) : 0}%)`;
-                          },
-                        },
-                      },
-                    },
-                    scales: {
-                      x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true } },
-                      y: { stacked: true, beginAtZero: true, border: { display: false }, grid: { color: '#f1f5f9' }, ticks: { precision: 0, font: { size: 10 } } },
-                    },
-                  }}
-                />
-              )}
-              {((viewMode === 'pencapaian' && !achievement) || (viewMode === 'peserta' && !participation)
-                || (viewMode === 'status' && !statusChartData) || (viewMode === 'tren' && !monthlyChartData)) && (
-                <div className="h-full flex items-center justify-center text-xs font-medium text-slate-500">Belum ada data untuk ditampilkan</div>
-              )}
+                <p className="text-[11px] font-medium text-slate-500 mt-2">
+                  Mendekati habis (1-3 bulan lagi)
+                </p>
               </div>
-            </div>
-          </DashCard>
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[11px] font-bold text-amber-700 flex items-center justify-between">
+                <span>{statusFilter === 'warning' ? 'Filter Aktif' : 'Klik untuk filter'}</span>
+                <span>→</span>
+              </div>
+            </button>
 
-          <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
-            <DashTitle
-              title={countOnly ? 'Jumlah Peserta per Training' : 'Cakupan per Training'}
-              sub={countOnly ? 'Klik untuk melihat pesertanya' : program === 'k3' ? 'Wajib per section & GOL I–III · klik untuk melihat yang belum ikut' : 'Klik untuk melihat yang belum berlaku'}
-            />
-            <div className="space-y-2">
-              {stats.coverage.map(c => {
-                const active = missingFilter === c.key;
-                const pct = c.target ? Math.round((c.done / c.target) * 100) : 0;
-                return (
-                  <button
-                    key={c.key}
-                    type="button"
-                    onClick={() => setMissingFilter(active ? null : c.key)}
-                    title={c.desc}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-2xl transition-all cursor-pointer border ${active ? 'border-transparent' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100 dark:bg-slate-800/60 dark:border-slate-700'}`}
-                    style={active ? { backgroundColor: DASH.brandSoft, borderColor: DASH.brand } : undefined}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">{c.label}</span>
-                      <span className="text-[11px] font-semibold text-slate-600">
-                        {countOnly ? `${c.done} orang` : `${c.done}/${c.target} · ${pct}%`}
-                      </span>
-                    </div>
-                    {!countOnly && (
-                      <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: pct >= 90 ? DASH.brand : pct >= 70 ? DASH.yellow : DASH.coral }} />
-                      </div>
-                    )}
-                    <div className="mt-1 flex flex-wrap gap-x-2.5 text-[10px] font-semibold text-slate-500">
-                      {!countOnly && c.target - c.done > 0 && <span className="text-rose-600">{c.target - c.done} {program === 'k3' ? 'belum ikut' : 'belum berlaku'}</span>}
-                      {c.warning > 0 && <span className="text-yellow-600">{c.warning} warning</span>}
-                      {!countOnly && c.expired > 0 && <span className="text-red-600">{c.expired} expired/fail</span>}
-                      {c.pending > 0 && <span className="text-sky-600">{c.pending} pending</span>}
-                      {countOnly && c.expired > 0 && <span className="text-red-600">{c.expired} fail</span>}
-                      {c.exempt > 0 && <span>{c.exempt} tidak wajib</span>}
-                    </div>
-                  </button>
-                );
-              })}
-
-              {program === 'pop' && (
-                <div className="pt-2">
-                  <p className="text-[11px] font-semibold text-slate-600 mb-1.5">Kualifikasi POP</p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {(Object.keys(POP_KETERANGAN) as PopKeterangan[]).map(k => {
-                      const n = programRecords.filter(r => r.popData?.popKeterangan === k).length;
-                      const active = statusFilter === k;
-                      return (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => setStatusFilter(active ? 'ALL' : k)}
-                          title={POP_KETERANGAN[k].desc}
-                          className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl border text-left cursor-pointer ${active ? 'border-transparent' : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100'}`}
-                          style={active ? { backgroundColor: DASH.brandSoft, borderColor: DASH.brand } : undefined}
-                        >
-                          <span className="flex items-center gap-1.5 min-w-0">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: POP_KETERANGAN_COLOR[k] }} />
-                            <span className="text-[10px] font-semibold text-slate-800 truncate">{POP_KETERANGAN[k].label}</span>
-                          </span>
-                          <span className="text-xs font-bold text-slate-900">{n}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+            {/* Card 4: Expired */}
+            <button
+              type="button"
+              onClick={() => setStatusFilter(statusFilter === 'expired' ? 'ALL' : 'expired')}
+              className={`rounded-[22px] lg:rounded-[26px] bg-white dark:bg-slate-900 border transition-all text-left p-4 sm:p-5 flex flex-col justify-between cursor-pointer ${
+                statusFilter === 'expired'
+                  ? 'border-rose-500 ring-2 ring-rose-500/20'
+                  : 'border-slate-200/80 dark:border-slate-800 hover:border-rose-300'
+              }`}
+            >
+              <div>
+                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-rose-600 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                  EXPIRED / BELUM
+                </span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-rose-600 tabular-nums">
+                    {isExternal ? 0 : dashboard.sap.expired}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">Personel</span>
                 </div>
-              )}
-            </div>
-          </DashCard>
-          </>)}
-        </div>
-        )}
+                <p className="text-[11px] font-medium text-slate-500 mt-2">
+                  Perlu pembaruan / penjadwalan
+                </p>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[11px] font-bold text-rose-700 flex items-center justify-between">
+                <span>{statusFilter === 'expired' ? 'Filter Aktif' : 'Klik untuk filter'}</span>
+                <span>→</span>
+              </div>
+            </button>
+          </div>)}
 
         {/* ===== Baris 3: Cakupan · Daftar Karyawan ===== */}
         {isExternal && externalSheet !== 'pop' && externalSheet !== 'pom' ? (
@@ -4268,7 +4886,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
           </div>
         ) : isExternal && externalSheet === 'pom' ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 items-start">
-            <DashCard className={`lg:col-span-4 ${showCharts ? '' : 'hidden'} md:block`}>
+            <DashCard className={`lg:col-span-4 ${showCharts ? 'block' : 'hidden'}`}>
               <DashTitle title="Filter Status POM" sub="Klik untuk memfilter kandidat POM" />
               <div className="space-y-2">
                 <button
@@ -4429,8 +5047,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 {([
                   { id: 'sap' as const, label: 'Training SAP', short: 'SAP' },
                   { id: 'k3' as const, label: 'Training K3', short: 'K3' },
-                  { id: 'pra_pop' as const, label: 'Training Pra POP', short: 'Pra POP' },
-                  { id: 'form_permintaan' as const, label: 'Form Permintaan Training', short: 'Permintaan Training' },
+                  { id: 'statistik' as const, label: 'Statistik & Analisis', short: 'Statistik' },
+                  { id: 'form_permintaan' as const, label: 'Form Permintaan Training', short: 'Permintaan' },
                 ]).map(tab => {
                   const active = activeInternalTab === tab.id;
                   return (
@@ -4537,9 +5155,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
 
         {/* Data */}
-        {!isExternal && activeInternalTab === 'form_permintaan' ? (
-          <TrainingRequestFormSheet employees={allMasterEmployees} canManage={canManage} />
-        ) : isLoading ? (
+        {isLoading ? (
           <div className="space-y-2" aria-busy="true" aria-label="Memuat Database Training">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-9 rounded-lg bg-slate-100 animate-pulse" style={{ opacity: 1 - i * 0.09 }} />
@@ -4739,6 +5355,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         </div>
         )}
         </>)}
+        </>
+        )}
       </div>
 
       {/* Modal Tambah / Edit */}
