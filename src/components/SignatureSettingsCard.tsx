@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { Card, Button, Input } from './ui';
 import { getSafeSignatureDataUrl } from '../utils/signatureUtils';
 import { SignatureUploadOcr } from './SignatureUploadOcr';
+import { stampWatermarkOnDataUrl } from '../utils/signatureProcessing';
 
 interface SignatureSettingsCardProps {
   inspectorNik: string | null;
@@ -47,6 +48,19 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
   const [setupMode, setSetupMode] = useState<'draw' | 'upload'>('draw');
   const [uploadedSignatureData, setUploadedSignatureData] = useState<string | null>(null);
   const sigCanvasRef = useRef<SignatureCanvas | null>(null);
+
+  // Draw Mode Watermark Controls
+  const [drawWatermarkEnabled, setDrawWatermarkEnabled] = useState<boolean>(false);
+  const [drawWatermarkText, setDrawWatermarkText] = useState<string>('HANYA UNTUK PREPLAB PORTAL');
+  const [drawWatermarkSubText, setDrawWatermarkSubText] = useState<string>(
+    inspectorNik && inspectorName ? `${inspectorName} • ${inspectorNik}` : 'DOKUMEN RESMI TBP'
+  );
+  const [drawWatermarkOpacity, setDrawWatermarkOpacity] = useState<number>(0.18);
+  const [drawWatermarkStyle, setDrawWatermarkStyle] = useState<'diagonal' | 'corner' | 'pattern'>('diagonal');
+  const [drawWatermarkSize, setDrawWatermarkSize] = useState<'sm' | 'md' | 'lg' | 'xl'>('md');
+  const [drawWatermarkScale, setDrawWatermarkScale] = useState<number>(1.0);
+  const [drawWatermarkColor, setDrawWatermarkColor] = useState<string>('#000000');
+
   const [setupPin, setSetupPin] = useState('');
   const [setupPinConfirm, setSetupPinConfirm] = useState('');
   const [setupOldPin, setSetupOldPin] = useState('');
@@ -119,9 +133,24 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
     let sigData: string | null = null;
     if (setupMode === 'draw') {
       if (!sigCanvasRef.current) return;
-      sigData = getSafeSignatureDataUrl(sigCanvasRef.current);
-      if (!sigData) {
+      const rawSig = getSafeSignatureDataUrl(sigCanvasRef.current);
+      if (!rawSig) {
         return toast.error('Silakan goreskan tanda tangan Anda di canvas terlebih dahulu');
+      }
+      if (drawWatermarkEnabled) {
+        sigData = await stampWatermarkOnDataUrl(rawSig, {
+          enabled: true,
+          text: drawWatermarkText,
+          subText: drawWatermarkSubText,
+          opacity: drawWatermarkOpacity,
+          style: drawWatermarkStyle,
+          size: drawWatermarkSize,
+          scale: drawWatermarkScale,
+          color: drawWatermarkColor,
+          layer: 'behind'
+        });
+      } else {
+        sigData = rawSig;
       }
     } else {
       if (!uploadedSignatureData) {
@@ -498,9 +527,277 @@ export function SignatureSettingsCard({ inspectorNik, inspectorName }: Signature
                         className: 'w-full h-44 cursor-crosshair'
                       }}
                     />
-                    <div className="absolute bottom-2 left-3 pointer-events-none text-[10px] text-slate-400 select-none">
-                      Tanda tangan resmi • Prep &amp; Lab Portal
+                    {drawWatermarkEnabled ? (
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center select-none overflow-hidden">
+                        <div 
+                          className="font-bold text-center uppercase tracking-wider transform -rotate-12 transition-all"
+                          style={{
+                            color: drawWatermarkColor,
+                            opacity: drawWatermarkOpacity,
+                            fontSize: `${Math.max(11, Math.round(18 * drawWatermarkScale))}px`
+                          }}
+                        >
+                          <div>{drawWatermarkText}</div>
+                          {drawWatermarkSubText && (
+                            <div className="text-[10px] tracking-normal font-mono mt-0.5 opacity-80">
+                              {drawWatermarkSubText}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="absolute bottom-2 left-3 pointer-events-none text-[10px] text-slate-400 select-none">
+                        Tanda tangan resmi • Prep &amp; Lab Portal
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Watermark Configuration for Canvas Drawing */}
+                  <div className="mt-3 p-3.5 rounded-2xl bg-[var(--input-bg)]/60 border border-[var(--border-main)] space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                        <div>
+                          <span className="font-bold text-xs text-[var(--text-main)] block">
+                            Pengaturan Watermark Cap TTD
+                          </span>
+                          <span className="text-[10px] text-[var(--text-muted)]">
+                            Pilih tanda tangan polos atau sematkan cap pengaman resmi
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Mode Switcher: Polos vs Watermark */}
+                      <div className="grid grid-cols-2 p-0.5 bg-[var(--card-bg)] rounded-lg border border-[var(--border-main)]">
+                        <button
+                          type="button"
+                          onClick={() => setDrawWatermarkEnabled(false)}
+                          className={`py-1 px-3 rounded-md text-xs font-semibold text-center transition-all cursor-pointer ${
+                            !drawWatermarkEnabled
+                              ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                              : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                          }`}
+                        >
+                          Polos (Standar)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDrawWatermarkEnabled(true)}
+                          className={`py-1 px-3 rounded-md text-xs font-semibold text-center transition-all cursor-pointer ${
+                            drawWatermarkEnabled
+                              ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                              : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                          }`}
+                        >
+                          Cap Watermark
+                        </button>
+                      </div>
                     </div>
+
+                    {!drawWatermarkEnabled ? (
+                      <div className="p-2.5 rounded-xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/60 dark:border-teal-800/50 text-[11px] text-teal-900 dark:text-teal-200 flex items-start gap-2">
+                        <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-teal-950 dark:text-teal-100">Mode Polos Aktif (Rekomendasi)</p>
+                          <p className="leading-relaxed opacity-90 text-[10.5px]">
+                            Tanda tangan disimpan bersih tanpa teks cap tambahan di dalam gambar. Cocok untuk dokumen yang membutuhkan tanda tangan polos dan profesional.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 pt-1 text-xs">
+                        {/* Preset Chips */}
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-semibold text-[var(--text-muted)]">Pilihan Cepat Teks:</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDrawWatermarkText('HANYA UNTUK PREPLAB PORTAL');
+                                setDrawWatermarkSubText(inspectorNik && inspectorName ? `${inspectorName} • ${inspectorNik}` : 'DOKUMEN RESMI TBP');
+                              }}
+                              className={`py-1.5 px-2 rounded-lg text-[11px] font-medium border text-center transition-colors cursor-pointer truncate ${
+                                drawWatermarkText === 'HANYA UNTUK PREPLAB PORTAL'
+                                  ? 'bg-teal-50 dark:bg-teal-950/80 border-teal-400 text-teal-700 dark:text-teal-300 font-bold shadow-2xs'
+                                  : 'bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                              }`}
+                            >
+                              PrepLab Portal
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDrawWatermarkText(inspectorName ? inspectorName.toUpperCase() : 'TANDA TANGAN RESMI');
+                                setDrawWatermarkSubText(inspectorNik ? `NIK: ${inspectorNik}` : 'INTERNAL TBP');
+                              }}
+                              className={`py-1.5 px-2 rounded-lg text-[11px] font-medium border text-center transition-colors cursor-pointer truncate ${
+                                drawWatermarkText === (inspectorName ? inspectorName.toUpperCase() : 'TANDA TANGAN RESMI')
+                                  ? 'bg-teal-50 dark:bg-teal-950/80 border-teal-400 text-teal-700 dark:text-teal-300 font-bold shadow-2xs'
+                                  : 'bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                              }`}
+                            >
+                              Nama &amp; NIK Personil
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDrawWatermarkText('DOKUMEN RESMI TBP');
+                                setDrawWatermarkSubText('PREP & LAB PORTAL');
+                              }}
+                              className={`py-1.5 px-2 rounded-lg text-[11px] font-medium border text-center transition-colors cursor-pointer truncate ${
+                                drawWatermarkText === 'DOKUMEN RESMI TBP'
+                                  ? 'bg-teal-50 dark:bg-teal-950/80 border-teal-400 text-teal-700 dark:text-teal-300 font-bold shadow-2xs'
+                                  : 'bg-[var(--card-bg)] border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                              }`}
+                            >
+                              Dokumen Resmi TBP
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[var(--text-muted)] mb-1">
+                              Teks Watermark Utama
+                            </label>
+                            <input
+                              type="text"
+                              value={drawWatermarkText}
+                              onChange={(e) => setDrawWatermarkText(e.target.value)}
+                              placeholder="Contoh: HANYA UNTUK PREPLAB"
+                              className="w-full bg-[var(--card-bg)] border border-[var(--border-main)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-main)] focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[var(--text-muted)] mb-1">
+                              Keterangan Tambahan
+                            </label>
+                            <input
+                              type="text"
+                              value={drawWatermarkSubText}
+                              onChange={(e) => setDrawWatermarkSubText(e.target.value)}
+                              placeholder="Contoh: NIK / Tanggal"
+                              className="w-full bg-[var(--card-bg)] border border-[var(--border-main)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-main)] focus:outline-none focus:ring-1 focus:ring-teal-500"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Gaya, Ukuran & Warna Watermark */}
+                        <div className="space-y-2 pt-1 border-t border-[var(--border-main)]/60">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                            <span className="text-[11px] font-semibold text-[var(--text-muted)]">Gaya Watermark:</span>
+                            <div className="grid grid-cols-3 gap-1 w-full sm:w-auto">
+                              {(['diagonal', 'corner', 'pattern'] as const).map((st) => (
+                                <button
+                                  key={st}
+                                  type="button"
+                                  onClick={() => setDrawWatermarkStyle(st)}
+                                  className={`py-1 px-2.5 rounded-lg text-[11px] font-semibold text-center transition-all cursor-pointer ${
+                                    drawWatermarkStyle === st
+                                      ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                                      : 'bg-[var(--card-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                                  }`}
+                                >
+                                  {st === 'diagonal' ? 'Miring' : st === 'corner' ? 'Pojok' : 'Pola'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                            <span className="text-[11px] font-semibold text-[var(--text-muted)]">Ukuran Watermark:</span>
+                            <div className="grid grid-cols-4 gap-1 w-full sm:w-auto">
+                              {[
+                                { id: 'sm' as const, label: 'Kecil', scale: 0.6 },
+                                { id: 'md' as const, label: 'Sedang', scale: 1.0 },
+                                { id: 'lg' as const, label: 'Besar', scale: 1.6 },
+                                { id: 'xl' as const, label: 'Ekstra', scale: 2.2 },
+                              ].map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setDrawWatermarkSize(item.id);
+                                    setDrawWatermarkScale(item.scale);
+                                  }}
+                                  className={`py-1 px-2 rounded-lg text-[11px] font-semibold text-center transition-all cursor-pointer ${
+                                    drawWatermarkSize === item.id
+                                      ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                                      : 'bg-[var(--card-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                                  }`}
+                                >
+                                  {item.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                            <span className="text-[11px] font-semibold text-[var(--text-muted)]">Warna Watermark:</span>
+                            <div className="grid grid-cols-3 gap-1 w-full sm:w-auto">
+                              {[
+                                { id: '#000000', label: 'Hitam' },
+                                { id: '#475569', label: 'Abu-abu' },
+                                { id: '#0f766e', label: 'Teal' },
+                              ].map((c) => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => setDrawWatermarkColor(c.id)}
+                                  className={`py-1 px-2.5 rounded-lg text-[11px] font-semibold text-center transition-all cursor-pointer ${
+                                    drawWatermarkColor === c.id
+                                      ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                                      : 'bg-[var(--card-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-main)]'
+                                  }`}
+                                >
+                                  {c.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Opacity Slider */}
+                          <div className="space-y-1 pt-1.5">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-semibold text-[var(--text-muted)]">Transparansi Watermark:</span>
+                              <span className="font-mono text-teal-600 dark:text-teal-400 font-bold">
+                                {Math.round(drawWatermarkOpacity * 100)}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.06"
+                              max="0.45"
+                              step="0.02"
+                              value={drawWatermarkOpacity}
+                              onChange={(e) => setDrawWatermarkOpacity(Number(e.target.value))}
+                              className="w-full accent-teal-600 cursor-pointer"
+                            />
+                          </div>
+
+                          {/* Scale Slider */}
+                          <div className="space-y-1 pt-1.5">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-semibold text-[var(--text-muted)]">Presisi Ukuran / Skala:</span>
+                              <span className="font-mono text-teal-600 dark:text-teal-400 font-bold">
+                                {Math.round(drawWatermarkScale * 100)}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.5"
+                              max="2.5"
+                              step="0.05"
+                              value={drawWatermarkScale}
+                              onChange={(e) => setDrawWatermarkScale(Number(e.target.value))}
+                              className="w-full accent-teal-600 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (

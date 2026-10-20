@@ -394,7 +394,7 @@ export async function processSignatureImage(
 /**
  * Draws a clean, proportional security watermark on the signature canvas.
  */
-function applyWatermarkToCanvas(
+export function applyWatermarkToCanvas(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
@@ -511,4 +511,23 @@ function applyWatermarkToCanvas(
   }
 
   ctx.restore();
+}
+
+/**
+ * Stamps a security watermark onto a signature Data URL.
+ */
+export async function stampWatermarkOnDataUrl(
+  dataUrl: string,
+  watermark: WatermarkOptions,
+  aspectRatio: SignatureAspectRatio = 'standard'
+): Promise<string> {
+  if (!watermark.enabled) return dataUrl;
+  const result = await processSignatureImage(dataUrl, {
+    ...DEFAULT_SIGNATURE_OPTIONS,
+    colorMode: 'black',
+    trim: true,
+    aspectRatio,
+    watermark
+  });
+  return result.dataUrl;
 }
