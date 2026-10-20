@@ -124,9 +124,10 @@ export function SectionHubDashboard({
     for (const kw of expandedList) {
       const q = kw.toLowerCase().trim();
       
-      // Look for candidates that match by numeric ID strictly in the same PT universe
+      // Look for candidates that match by numeric ID strictly in the same PT universe, then fallback to all posts
       if (/^\d+$/.test(q)) {
-        const idMatch = eligiblePosts.find((p) => p.id === parseInt(q, 10));
+        const idNum = parseInt(q, 10);
+        const idMatch = eligiblePosts.find((p) => p.id === idNum) || posts.find((p) => p.id === idNum);
         if (idMatch) return idMatch;
       }
 
@@ -160,7 +161,20 @@ export function SectionHubDashboard({
         return tableMatch || bothMatches[0];
       }
 
-      // 4. General match within same PT
+      // 4. Slug match (e.g. "daily-laboratory" matching "Daily Laboratory")
+      const qSlug = q.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      if (qSlug.length > 2) {
+        const slugMatch = eligiblePosts.find((p) => {
+          const pSlug = (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          return pSlug === qSlug;
+        }) || posts.find((p) => {
+          const pSlug = (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          return pSlug === qSlug;
+        });
+        if (slugMatch) return slugMatch;
+      }
+
+      // 5. General match within same PT
       const generalMatches = eligiblePosts.filter((p) => (p.title || '').replace(/^[#\s\-*]+/, '').toLowerCase().trim().includes(q));
       if (generalMatches.length > 0) {
         const tableMatch = generalMatches.find((p) => p.content && p.content.includes('|'));
@@ -173,6 +187,10 @@ export function SectionHubDashboard({
   const handleItemClick = (item: HubItem) => {
     if (item.linkUrl) {
       window.open(item.linkUrl, '_blank');
+      return;
+    }
+    if (posts.length === 0) {
+      toast.info('Sedang memuat data dokumen, mohon tunggu sebentar...');
       return;
     }
     if (item.isLogbook || item.title.toLowerCase().includes('logbook')) {
