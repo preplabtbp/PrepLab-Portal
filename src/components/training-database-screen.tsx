@@ -84,6 +84,7 @@ import {
   type K3DateKey,
   type K3StatusKey,
 } from '../utils/training-import';
+import { TrainingRequestFormSheet } from './training-request-form-sheet';
 import type { Plugin } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
@@ -1237,6 +1238,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     XLSX.writeFile(wb, `Sertifikasi_${sheetType}_${todayYmdStr}.xlsx`);
   }, [certRows, todayYmdStr]);
 
+  const [activeInternalTab, setActiveInternalTab] = useState<'sap' | 'k3' | 'pra_pop' | 'form_permintaan'>(() => {
+    try {
+      const s = localStorage.getItem(TAB_STORAGE_KEY);
+      if (s === 'form_permintaan' || s === 'pra_pop' || s === 'k3') return s as any;
+    } catch {}
+    return 'sap';
+  });
   const [program, setProgram] = useState<TrainingProgram>(() => {
     if (scope === 'external') return 'pop';
     try {
@@ -1398,13 +1406,48 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    enabled: isModalOpen || !!certModalForm,
+    enabled: true,
     staleTime: 10 * 60 * 1000,
   });
+
+  const allMasterEmployees = useMemo(() => {
+    const map = new Map<string, any>();
+    records.forEach(r => {
+      if (r.nik) {
+        map.set(r.nik.trim().toUpperCase(), {
+          nik: r.nik.trim().toUpperCase(),
+          name: r.nama,
+          jabatan: r.jabatan || 'Crew, Preparation & Laboratory',
+          section: r.bagian || 'Prep & Lab',
+          dept: r.bagian || 'Prep & Lab',
+          pt: r.pt || 'TBP',
+          gol: r.gol || 'I',
+        });
+      }
+    });
+    employees.forEach(e => {
+      if (e.nik) {
+        const k = e.nik.trim().toUpperCase();
+        if (!map.has(k)) {
+          map.set(k, {
+            nik: k,
+            name: e.name,
+            jabatan: e.jabatan || 'Crew, Preparation & Laboratory',
+            section: e.section || 'Prep & Lab',
+            dept: e.section || 'Prep & Lab',
+            pt: e.pt || 'TBP',
+            gol: 'I',
+          });
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [records, employees]);
 
   const switchProgram = (p: TrainingProgram) => {
     if (!scopePrograms.includes(p)) return;
     setProgram(p);
+    if (p !== 'pop') setActiveInternalTab(p);
     setStatusFilter('ALL');
     setMissingFilter(null);
     if (!isExternal) try { localStorage.setItem(TAB_STORAGE_KEY, p); } catch {}
@@ -2727,6 +2770,51 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             )}
           </div>
         </div>
+
+        {/* ===== Sheet Selector Training Internal ===== */}
+        {!isExternal && (
+          <div className="rounded-[24px] bg-white dark:bg-slate-900 p-3.5 shadow-sm border border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+              <div className="flex items-center gap-2 shrink-0">
+                <FileSpreadsheet className="w-4 h-4" style={{ color: DASH.brand }} />
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                  Pilih Sheet / Menu:
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1">
+                {[
+                  { id: 'sap', label: 'Database Training SAP' },
+                  { id: 'k3', label: 'Database Training K3' },
+                  { id: 'pra_pop', label: 'Database Pra POP' },
+                  { id: 'form_permintaan', label: 'Form Permintaan Training' },
+                ].map(s => {
+                  const active = activeInternalTab === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveInternalTab(s.id as any);
+                        if (s.id !== 'form_permintaan') {
+                          switchProgram(s.id as any);
+                        } else {
+                          try { localStorage.setItem(TAB_STORAGE_KEY, 'form_permintaan'); } catch {}
+                        }
+                      }}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-center truncate ${
+                        active
+                          ? 'bg-teal-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ===== Dropdown List Jenis Training External (Requirement 2) ===== */}
         {isExternal && (
@@ -4330,27 +4418,41 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </div>
               </div>
 
-              {/* Tab program (Training Internal: SAP, K3, Pra POP) */}
+              {/* Tab program (Training Internal: SAP, K3, Pra POP, Form Permintaan Training) */}
               {!isExternal && (
-              <div className="grid grid-cols-3 gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700">
                 {([
                   { id: 'sap' as const, label: 'Training SAP', short: 'SAP' },
                   { id: 'k3' as const, label: 'Training K3', short: 'K3' },
                   { id: 'pra_pop' as const, label: 'Training Pra POP', short: 'Pra POP' },
+                  { id: 'form_permintaan' as const, label: 'Form Permintaan Training', short: 'Permintaan Training' },
                 ]).map(tab => {
-                  const active = program === tab.id;
+                  const active = activeInternalTab === tab.id;
                   return (
                     <button
                       key={tab.id}
                       type="button"
-                      onClick={() => switchProgram(tab.id)}
+                      onClick={() => {
+                        setActiveInternalTab(tab.id as any);
+                        if (tab.id !== 'form_permintaan') {
+                          switchProgram(tab.id as any);
+                        } else {
+                          try { localStorage.setItem(TAB_STORAGE_KEY, 'form_permintaan'); } catch {}
+                        }
+                      }}
                       className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${active ? 'bg-white dark:bg-slate-900 shadow-xs text-slate-950 dark:text-slate-100' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
                     >
                       <span className="sm:hidden">{tab.short}</span>
                       <span className="hidden sm:inline">{tab.label}</span>
-                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={active ? { backgroundColor: DASH.brandSoft, color: DASH.brand } : { backgroundColor: 'rgba(0,0,0,0.06)', color: '#64748b' }}>
-                        {programCounts[tab.id]}
-                      </span>
+                      {tab.id !== 'form_permintaan' ? (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={active ? { backgroundColor: DASH.brandSoft, color: DASH.brand } : { backgroundColor: 'rgba(0,0,0,0.06)', color: '#64748b' }}>
+                          {programCounts[tab.id]}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-400">
+                          Form
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -4430,7 +4532,9 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
 
         {/* Data */}
-        {isLoading ? (
+        {!isExternal && activeInternalTab === 'form_permintaan' ? (
+          <TrainingRequestFormSheet employees={allMasterEmployees} canManage={canManage} />
+        ) : isLoading ? (
           <div className="space-y-2" aria-busy="true" aria-label="Memuat Database Training">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-9 rounded-lg bg-slate-100 animate-pulse" style={{ opacity: 1 - i * 0.09 }} />

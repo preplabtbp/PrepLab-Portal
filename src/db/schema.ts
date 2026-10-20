@@ -1152,3 +1152,37 @@ export const inspectionSchedulePlans = pgTable('inspection_schedule_plans', {
   uniqueIndex('idx_inspection_schedule_plans_week').on(t.year, t.week),
   index('idx_inspection_schedule_plans_iso').on(t.isoYear, t.isoWeek),
 ]);
+
+
+// Define 'employee_leave_requests' table (Pelaporan & Rekapan Izin Karyawan)
+export const employeeLeaveRequests = pgTable('employee_leave_requests', {
+  id: serial('id').primaryKey(),
+  nik: text('nik').notNull(),
+  name: text('name').notNull(),
+  jabatan: text('jabatan'),
+  section: text('section'),
+  shift: text('shift'),
+  jamShift: text('jam_shift'),
+  penempatan: text('penempatan'),
+  tempatTinggal: text('tempat_tinggal'),
+  awalAbsensi: text('awal_absensi').notNull(), // 'YYYY-MM-DD'
+  akhirAbsensi: text('akhir_absensi').notNull(), // 'YYYY-MM-DD'
+  jumlah: integer('jumlah').default(1),
+  lamanyaIzin: text('lamanya_izin'),
+  alasanAbsensi: text('alasan_absensi').notNull(),
+  pengawasMengetahui: text('pengawas_mengetahui'),
+  lampiran: text('lampiran'),
+  acc: text('acc').default('Pending'), // 'Pending' | 'Disetujui' | 'Ditolak'
+  accBy: text('acc_by'),
+  accAt: text('acc_at'),
+  catatan: text('catatan'),
+  source: text('source').default('web'),
+  sheetRowId: text('sheet_row_id'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  index('idx_leave_requests_nik').on(t.nik),
+  index('idx_leave_requests_dates').on(t.awalAbsensi, t.akhirAbsensi),
+  index('idx_leave_requests_section').on(t.section),
+  index('idx_leave_requests_acc').on(t.acc),
+]);

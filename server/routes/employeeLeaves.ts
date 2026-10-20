@@ -1,0 +1,959 @@
+import { Router } from "express";
+import { db } from "../../src/db/index.js";
+import { eq, desc, and, or, gte, lte, ilike, sql } from "drizzle-orm";
+import { employeeLeaveRequests, employees } from "../../src/db/schema.js";
+import { drive } from "../../google-services.js";
+import * as XLSX from "xlsx";
+
+export const employeeLeavesRouter = Router();
+
+// ID Google Sheet Rekapan Izin Karyawan di Google Drive PrepLab Cloud
+export const REKAPAN_IZIN_SPREADSHEET_ID =
+  process.env.GDRIVE_REKAPAN_IZIN_SPREADSHEET_ID || "1yeRjyHjsWlEmy37xj4qnysMWUuzDIBUP0gg3nVR1Rys";
+
+let leavesTableEnsured = false;
+export async function ensureEmployeeLeavesTable() {
+  if (leavesTableEnsured) return;
+  try {
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS employee_leave_requests (
+      id SERIAL PRIMARY KEY,
+      nik TEXT NOT NULL,
+      name TEXT NOT NULL,
+      jabatan TEXT,
+      section TEXT,
+      shift TEXT,
+      jam_shift TEXT,
+      penempatan TEXT,
+      tempat_tinggal TEXT,
+      awal_absensi TEXT NOT NULL,
+      akhir_absensi TEXT NOT NULL,
+      jumlah INTEGER DEFAULT 1,
+      lamanya_izin TEXT,
+      alasan_absensi TEXT NOT NULL,
+      pengawas_mengetahui TEXT,
+      lampiran TEXT,
+      acc TEXT DEFAULT 'Pending',
+      acc_by TEXT,
+      acc_at TEXT,
+      catatan TEXT,
+      source TEXT DEFAULT 'web',
+      sheet_row_id TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`
+      ALTER TABLE employee_leave_requests 
+      ADD COLUMN IF NOT EXISTS tempat_tinggal TEXT,
+      ADD COLUMN IF NOT EXISTS pengawas_mengetahui TEXT,
+      ADD COLUMN IF NOT EXISTS lamanya_izin TEXT,
+      ADD COLUMN IF NOT EXISTS jam_shift TEXT,
+      ADD COLUMN IF NOT EXISTS penempatan TEXT,
+      ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'web',
+      ADD COLUMN IF NOT EXISTS sheet_row_id TEXT;
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_leave_requests_nik ON employee_leave_requests(nik);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_leave_requests_dates ON employee_leave_requests(awal_absensi, akhir_absensi);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_leave_requests_section ON employee_leave_requests(section);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_leave_requests_acc ON employee_leave_requests(acc);`);
+    leavesTableEnsured = true;
+  } catch (e: any) {
+    console.warn("[Employee Leaves] Ensure table warning:", e.message);
+  }
+}
+
+// In-Memory Cache untuk Rekapan Google Sheet
+interface SheetLeaveItem {
+  id: string | number;
+  sheetRowId?: string;
+  source: 'google_sheet' | 'web';
+  timestamp?: string;
+  nik: string;
+  name: string;
+  jabatan: string;
+  section: string;
+  penempatan: string;
+  tempatTinggal?: string;
+  gol?: string;
+  shift: string;
+  jamShift: string;
+  awalAbsensi: string;
+  akhirAbsensi: string;
+  lamanyaIzin: string;
+  jumlah: number;
+  alasanAbsensi: string;
+  pengawasMengetahui: string;
+  lampiran: string;
+  acc: string;
+  accBy?: string;
+  accAt?: string;
+  catatan?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+let sheetCache: {
+  data: SheetLeaveItem[];
+  lastFetchedAt: number;
+  totalRows: number;
+  spreadsheetId: string;
+} = {
+  data: [],
+  lastFetchedAt: 0,
+  totalRows: 0,
+  spreadsheetId: REKAPAN_IZIN_SPREADSHEET_ID
+};
+
+// Helper: Format tanggal excel / serial / string ke 'YYYY-MM-DD'
+function formatExcelDate(val: any): string {
+  if (!val) return '';
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    // Spreadsheet di Halmahera/Site Kawasi menggunakan WIT (UTC+9).
+    // Nilai date dari Google Sheets via XLSX di-parse sebagai midnight UTC+9 (yaitu 15:00 UTC kemarin).
+    // Tambahkan 9 jam (32.400.000 ms) agar tanggal konsisten dengan kalender lokal Site Kawasi (WIT).
+    const localMs = val.getTime() + (9 * 60 * 60 * 1000);
+    const d = new Date(localMs);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  if (typeof val === 'number') {
+    // Excel serial number (approximate conversion) + offset WIT (+9 jam)
+    const utcMs = Math.round((val - 25569) * 86400 * 1000);
+    const date = new Date(utcMs + (9 * 60 * 60 * 1000));
+    if (!isNaN(date.getTime())) {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  }
+  const s = String(val).trim();
+  // Jika format ISO seperti '2026-10-19T15:00:00.000Z'
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      const localMs = parsed.getTime() + (9 * 60 * 60 * 1000);
+      const d = new Date(localMs);
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    return s.slice(0, 10);
+  }
+  // If format is like '18/10/2026' or '18-10-2026'
+  const dmyMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+  return s;
+}
+
+function parseDurationDays(val: any): number {
+  if (!val) return 1;
+  if (typeof val === 'number') return Math.max(1, Math.round(val));
+  const numMatch = String(val).match(/\d+/);
+  return numMatch ? Math.max(1, parseInt(numMatch[0], 10)) : 1;
+}
+
+// Fetch dan parse Google Sheet Rekapan Izin Karyawan
+export async function fetchGoogleSheetLeaves(force = false): Promise<SheetLeaveItem[]> {
+  const now = Date.now();
+  const CACHE_TTL = 30 * 1000; // 30 detik
+
+  if (!force && sheetCache.data.length > 0 && (now - sheetCache.lastFetchedAt < CACHE_TTL)) {
+    return sheetCache.data;
+  }
+
+  try {
+    console.log(`[Employee Leaves] Fetching Google Sheet via Drive export (ID: ${REKAPAN_IZIN_SPREADSHEET_ID})...`);
+    const res = await drive.files.export(
+      {
+        fileId: REKAPAN_IZIN_SPREADSHEET_ID,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      },
+      { responseType: 'arraybuffer' }
+    );
+
+    const buffer = Buffer.from(res.data as ArrayBuffer);
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    const sheetName = workbook.SheetNames[0] || 'Form Responses 1';
+    const sheet = workbook.Sheets[sheetName];
+    const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+    if (!rawRows || rawRows.length <= 1) {
+      console.warn('[Employee Leaves] Sheet is empty or contains only header.');
+      return sheetCache.data;
+    }
+
+    // Header baris ke-0:
+    // [0] Timestamp
+    // [1] Nama Karyawan
+    // [2] Tanggal izin Karyawan
+    // [3] Lamanya Izin Karyawan
+    // [4] Shift Karyawan
+    // [5] Alasan Izin Karyawan
+    // [6] Nama dari pengawas yang mengetahui Izin Karyawan
+    // [7] NIK ID Card Karyawan
+    // [8] Jabatan
+    // [9] Jam / Shift Masuk Bekerja
+    // [10] Penempatan pekerjaan
+    // [11] Foto Lampiran Izin
+
+    const parsedItems: SheetLeaveItem[] = [];
+
+    // Iterasi baris data (mulai index 1)
+    for (let i = 1; i < rawRows.length; i++) {
+      const row = rawRows[i];
+      if (!row || row.length === 0) continue;
+
+      const rawNama = row[1];
+      const rawNik = row[7] || row[0]; // fallback
+      if (!rawNama && !rawNik) continue;
+
+      const name = String(rawNama || '').trim();
+      const nik = String(rawNik || '').trim().toUpperCase();
+      const rawTimestamp = row[0];
+      const rawTglIzin = row[2];
+      const rawDurasi = row[3];
+      const rawShift = row[4];
+      const rawAlasan = row[5];
+      const rawPengawas = row[6];
+      const rawJabatan = row[8];
+      const rawJamShift = row[9];
+      const rawPenempatan = row[10];
+      const rawLampiran = row[11];
+
+      const tglAwal = formatExcelDate(rawTglIzin) || (rawTimestamp ? formatExcelDate(rawTimestamp) : '');
+      const jumlahHari = parseDurationDays(rawDurasi);
+
+      // Hitung akhir absensi berdasarkan tglAwal + (jumlahHari - 1)
+      let tglAkhir = tglAwal;
+      if (tglAwal && jumlahHari > 1) {
+        try {
+          const d = new Date(tglAwal);
+          d.setDate(d.getDate() + (jumlahHari - 1));
+          tglAkhir = d.toISOString().slice(0, 10);
+        } catch {}
+      }
+
+      // Normalisasi section / penempatan
+      let section = 'Preparation';
+      const penempatanStr = String(rawPenempatan || '').toLowerCase();
+      if (penempatanStr.includes('lab')) section = 'Laboratory';
+      else if (penempatanStr.includes('admin')) section = 'Administration';
+      else if (penempatanStr.includes('maint')) section = 'Maintenance';
+      else if (penempatanStr.includes('qa') || penempatanStr.includes('mutu')) section = 'Quality Assurance';
+      else if (penempatanStr.includes('prep')) section = 'Preparation';
+      else if (rawPenempatan) section = String(rawPenempatan).trim();
+
+      // Normalisasi shift
+      let shift = 'Nonshift';
+      const shiftStr = String(rawShift || '').trim().toUpperCase();
+      if (shiftStr === 'A' || shiftStr.includes('SHIFT A')) shift = 'Shift A';
+      else if (shiftStr === 'B' || shiftStr.includes('SHIFT B')) shift = 'Shift B';
+      else if (shiftStr.includes('NON')) shift = 'Nonshift';
+      else if (shiftStr) shift = shiftStr;
+
+      // Timestamp created
+      let createdAtIso = new Date().toISOString();
+      if (rawTimestamp instanceof Date && !isNaN(rawTimestamp.getTime())) {
+        createdAtIso = rawTimestamp.toISOString();
+      } else if (rawTimestamp) {
+        try {
+          const parsed = new Date(rawTimestamp);
+          if (!isNaN(parsed.getTime())) createdAtIso = parsed.toISOString();
+        } catch {}
+      }
+
+      parsedItems.push({
+        id: `sheet-${i}`,
+        sheetRowId: `row-${i}`,
+        source: 'google_sheet',
+        nik: nik || 'N/A',
+        name: name || 'Tanpa Nama',
+        jabatan: rawJabatan ? String(rawJabatan).trim() : 'Crew, Preparation & Laboratory',
+        section,
+        penempatan: rawPenempatan ? String(rawPenempatan).trim() : section,
+        tempatTinggal: '-',
+        shift,
+        jamShift: rawJamShift ? String(rawJamShift).trim() : '',
+        awalAbsensi: tglAwal,
+        akhirAbsensi: tglAkhir,
+        lamanyaIzin: rawDurasi ? String(rawDurasi).trim() : `${jumlahHari} Hari`,
+        jumlah: jumlahHari,
+        alasanAbsensi: rawAlasan ? String(rawAlasan).trim() : 'Izin Ketidakhadiran',
+        pengawasMengetahui: rawPengawas ? String(rawPengawas).trim() : '-',
+        lampiran: rawLampiran ? String(rawLampiran).trim() : '',
+        acc: 'Disetujui', // Data Google Form yang sudah masuk pengawas umumnya terverifikasi
+        accBy: rawPengawas ? String(rawPengawas).trim() : 'Pengawas Terkait',
+        accAt: tglAwal,
+        createdAt: createdAtIso,
+        updatedAt: createdAtIso
+      });
+    }
+
+    // Urutkan dari data terbaru ke terlama
+    parsedItems.reverse();
+
+    sheetCache = {
+      data: parsedItems,
+      lastFetchedAt: now,
+      totalRows: parsedItems.length,
+      spreadsheetId: REKAPAN_IZIN_SPREADSHEET_ID
+    };
+
+    console.log(`[Employee Leaves] Successfully parsed ${parsedItems.length} records from Google Sheet.`);
+    return parsedItems;
+  } catch (error: any) {
+    console.error('[Employee Leaves] Error fetching Google Sheet:', error.message);
+    return sheetCache.data;
+  }
+}
+
+// 1. GET /api/employee-leaves - Ambil seluruh rekapan perizinan karyawan (Google Sheet + Database)
+employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
+  try {
+    ensureEmployeeLeavesTable().catch(() => {});
+
+    const {
+      section,
+      shift,
+      acc,
+      search,
+      startDate,
+      endDate,
+      year,
+      source,
+      pengawas
+    } = req.query as {
+      section?: string;
+      shift?: string;
+      acc?: string;
+      search?: string;
+      startDate?: string;
+      endDate?: string;
+      year?: string;
+      source?: string;
+      pengawas?: string;
+    };
+
+    // 1. Ambil data dari Google Sheet (di-cache)
+    const forceRefresh = req.query.force === "true" || req.query.refresh === "true";
+    const sheetData = await fetchGoogleSheetLeaves(forceRefresh);
+
+    // 2. Ambil data dari Database Postgres & Master Employees untuk penentuan Golongan
+    let dbLeaves: any[] = [];
+    let empGolMap = new Map<string, { gol?: string; section?: string; jabatan?: string }>();
+    try {
+      const [leavesRes, empsRes] = await Promise.all([
+        db.select().from(employeeLeaveRequests).orderBy(desc(employeeLeaveRequests.id)),
+        db.select({
+          nik: employees.nik,
+          gol: employees.gol,
+          jobGrade: employees.jobGrade,
+          section: employees.section,
+          jabatan: employees.jabatan
+        }).from(employees)
+      ]);
+      dbLeaves = leavesRes;
+      empsRes.forEach(e => {
+        if (e.nik) {
+          empGolMap.set(String(e.nik).trim().toUpperCase(), {
+            gol: e.gol || e.jobGrade || undefined,
+            section: e.section || undefined,
+            jabatan: e.jabatan || undefined
+          });
+        }
+      });
+    } catch (e: any) {
+      console.warn('[Employee Leaves] DB select notice:', e.message);
+    }
+
+    // Format dbLeaves agar selaras dengan interface
+    const formattedDbLeaves: SheetLeaveItem[] = dbLeaves.map(d => ({
+      id: d.id,
+      sheetRowId: d.sheetRowId,
+      source: 'web',
+      nik: d.nik,
+      name: d.name,
+      jabatan: d.jabatan || '',
+      section: d.section || 'Preparation',
+      penempatan: d.penempatan || d.section || 'Preparation',
+      tempatTinggal: d.tempatTinggal || '-',
+      shift: d.shift || 'Nonshift',
+      jamShift: d.jamShift || '',
+      awalAbsensi: d.awalAbsensi,
+      akhirAbsensi: d.akhirAbsensi,
+      lamanyaIzin: d.lamanyaIzin || `${d.jumlah || 1} Hari`,
+      jumlah: d.jumlah || 1,
+      alasanAbsensi: d.alasanAbsensi,
+      pengawasMengetahui: d.pengawasMengetahui || '-',
+      lampiran: d.lampiran || '',
+      acc: d.acc || 'Pending',
+      accBy: d.accBy || '',
+      accAt: d.accAt || '',
+      catatan: d.catatan || '',
+      createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : new Date().toISOString(),
+      updatedAt: d.updatedAt ? new Date(d.updatedAt).toISOString() : new Date().toISOString()
+    }));
+
+    // Pisahkan override sheet dari pure web records
+    const sheetOverrides = new Map<string, SheetLeaveItem>();
+    const pureWebLeaves: SheetLeaveItem[] = [];
+
+    formattedDbLeaves.forEach(d => {
+      if (d.sheetRowId) {
+        sheetOverrides.set(d.sheetRowId, d);
+      } else {
+        pureWebLeaves.push(d);
+      }
+    });
+
+    // Terapkan override dari DB ke data Google Sheet jika diedit oleh Administrasi
+    const mergedSheetData: SheetLeaveItem[] = sheetData.map(s => {
+      const override = sheetOverrides.get(String(s.id));
+      if (override) {
+        return {
+          ...s,
+          nik: override.nik || s.nik,
+          name: override.name || s.name,
+          jabatan: override.jabatan || s.jabatan,
+          section: override.section || s.section,
+          penempatan: override.penempatan || s.penempatan,
+          tempatTinggal: override.tempatTinggal || s.tempatTinggal || '-',
+          shift: override.shift || s.shift,
+          jamShift: override.jamShift || s.jamShift,
+          awalAbsensi: override.awalAbsensi || s.awalAbsensi,
+          akhirAbsensi: override.akhirAbsensi || s.akhirAbsensi,
+          lamanyaIzin: override.lamanyaIzin || s.lamanyaIzin,
+          jumlah: override.jumlah || s.jumlah,
+          alasanAbsensi: override.alasanAbsensi || s.alasanAbsensi,
+          pengawasMengetahui: override.pengawasMengetahui || s.pengawasMengetahui,
+          acc: override.acc || s.acc,
+          accBy: override.accBy || s.accBy,
+          accAt: override.accAt || s.accAt,
+          catatan: override.catatan || s.catatan,
+          updatedAt: override.updatedAt || s.updatedAt,
+          isEdited: true
+        } as any;
+      }
+      return s;
+    });
+
+    // Gabungkan: Catatan lokal web berada paling atas, diikuti catatan Google Sheet
+    let allLeaves: SheetLeaveItem[] = [...pureWebLeaves, ...mergedSheetData];
+
+    // Filter berdasarkan parameter jika ada
+    if (source && source !== 'ALL') {
+      allLeaves = allLeaves.filter(item => item.source === source);
+    }
+
+    if (section && section !== 'ALL' && section.trim()) {
+      const secTerm = section.trim().toLowerCase();
+      allLeaves = allLeaves.filter(item => 
+        (item.section && item.section.toLowerCase().includes(secTerm)) ||
+        (item.penempatan && item.penempatan.toLowerCase().includes(secTerm))
+      );
+    }
+
+    if (shift && shift !== 'ALL' && shift.trim()) {
+      const shiftTerm = shift.trim().toLowerCase();
+      allLeaves = allLeaves.filter(item => 
+        item.shift && item.shift.toLowerCase().includes(shiftTerm)
+      );
+    }
+
+    if (acc && acc !== 'ALL' && acc.trim()) {
+      const accTerm = acc.trim().toLowerCase();
+      allLeaves = allLeaves.filter(item => 
+        item.acc && item.acc.toLowerCase().includes(accTerm)
+      );
+    }
+
+    if (pengawas && pengawas.trim()) {
+      const pTerm = pengawas.trim().toLowerCase();
+      allLeaves = allLeaves.filter(item => 
+        item.pengawasMengetahui && item.pengawasMengetahui.toLowerCase().includes(pTerm)
+      );
+    }
+
+    if (startDate && startDate.trim() && endDate && endDate.trim()) {
+      const sDate = startDate.trim();
+      const eDate = endDate.trim();
+      allLeaves = allLeaves.filter(item => {
+        const start = item.awalAbsensi || item.createdAt.slice(0, 10);
+        const end = item.akhirAbsensi || start;
+        return start <= eDate && end >= sDate;
+      });
+    } else if (startDate && startDate.trim()) {
+      const sDate = startDate.trim();
+      allLeaves = allLeaves.filter(item => {
+        const end = item.akhirAbsensi || item.awalAbsensi || item.createdAt.slice(0, 10);
+        return end >= sDate;
+      });
+    } else if (endDate && endDate.trim()) {
+      const eDate = endDate.trim();
+      allLeaves = allLeaves.filter(item => {
+        const start = item.awalAbsensi || item.createdAt.slice(0, 10);
+        return start <= eDate;
+      });
+    }
+
+    if (year && year.trim()) {
+      const yTerm = year.trim();
+      allLeaves = allLeaves.filter(item => 
+        (item.awalAbsensi && item.awalAbsensi.startsWith(yTerm)) ||
+        (item.createdAt && item.createdAt.startsWith(yTerm))
+      );
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      allLeaves = allLeaves.filter(item => 
+        (item.name && item.name.toLowerCase().includes(q)) ||
+        (item.nik && item.nik.toLowerCase().includes(q)) ||
+        (item.jabatan && item.jabatan.toLowerCase().includes(q)) ||
+        (item.alasanAbsensi && item.alasanAbsensi.toLowerCase().includes(q)) ||
+        (item.pengawasMengetahui && item.pengawasMengetahui.toLowerCase().includes(q))
+      );
+    }
+
+    // Sematkan informasi Golongan ke setiap item izin
+    allLeaves = allLeaves.map(item => {
+      const cleanNik = String(item.nik || '').trim().toUpperCase();
+      const matched = empGolMap.get(cleanNik);
+      return {
+        ...item,
+        gol: item.gol || matched?.gol || 'I'
+      };
+    });
+
+    // Summary metrics
+    let pendingCount = 0;
+    let approvedCount = 0;
+    let rejectedCount = 0;
+    let sakitCount = 0;
+    let keluargaCount = 0;
+
+    allLeaves.forEach((l) => {
+      const st = (l.acc || '').toLowerCase();
+      if (st.includes('setuju') || st === 'acc') approvedCount++;
+      else if (st.includes('tolak')) rejectedCount++;
+      else pendingCount++;
+
+      const alasan = (l.alasanAbsensi || '').toLowerCase();
+      if (alasan.includes('sakit') || alasan.includes('demam') || alasan.includes('klinik') || alasan.includes('badan')) {
+        sakitCount++;
+      }
+      if (alasan.includes('keluarga') || alasan.includes('anak') || alasan.includes('istri') || alasan.includes('orang tua')) {
+        keluargaCount++;
+      }
+    });
+
+    res.json({
+      status: "success",
+      data: allLeaves,
+      summary: {
+        total: allLeaves.length,
+        sheetTotalRows: sheetCache.totalRows,
+        webTotalRows: formattedDbLeaves.length,
+        pendingCount,
+        approvedCount,
+        rejectedCount,
+        sakitCount,
+        keluargaCount,
+        lastSyncAt: sheetCache.lastFetchedAt ? new Date(sheetCache.lastFetchedAt).toISOString() : null,
+        spreadsheetId: REKAPAN_IZIN_SPREADSHEET_ID
+      }
+    });
+  } catch (error: any) {
+    console.error("[Employee Leaves GET] Error:", error);
+    res.status(500).json({
+      status: "error",
+      message: error?.message || "Gagal memuat rekapan perizinan karyawan."
+    });
+  }
+});
+
+// 2. POST /api/employee-leaves/sync-sheet - Paksa sinkronisasi ulang data langsung dari Google Sheet PrepLab Cloud
+employeeLeavesRouter.post("/api/employee-leaves/sync-sheet", async (req, res) => {
+  try {
+    const data = await fetchGoogleSheetLeaves(true);
+    res.json({
+      status: "success",
+      message: `Berhasil menyinkronkan ${data.length} data rekapan izin langsung dari Google Sheet PrepLab Cloud.`,
+      totalRows: data.length,
+      lastSyncAt: new Date(sheetCache.lastFetchedAt).toISOString(),
+      spreadsheetId: REKAPAN_IZIN_SPREADSHEET_ID
+    });
+  } catch (error: any) {
+    console.error("[Employee Leaves Sync Sheet] Error:", error);
+    res.status(500).json({
+      status: "error",
+      message: error?.message || "Gagal menyinkronkan data dari Google Sheet."
+    });
+  }
+});
+
+// 3. GET /api/employee-leaves/supervisors - Daftar Pengawas Gol II - V untuk Autosearch Form Izin
+employeeLeavesRouter.get("/api/employee-leaves/supervisors", async (req, res) => {
+  try {
+    const supervisorRows = await db
+      .select({
+        nik: employees.nik,
+        name: employees.name,
+        jabatan: employees.jabatan,
+        gol: employees.gol,
+        jobGrade: employees.jobGrade,
+        section: employees.section,
+        shift: employees.shift
+      })
+      .from(employees)
+      .where(
+        or(
+          sql`${employees.gol} IN ('2', '3', '4', '5', 'II', 'III', 'IV', 'V')`,
+          ilike(employees.gol, '%II%'),
+          ilike(employees.gol, '%III%'),
+          ilike(employees.gol, '%IV%'),
+          ilike(employees.gol, '%V%'),
+          ilike(employees.jabatan, '%supervisor%'),
+          ilike(employees.jabatan, '%foreman%'),
+          ilike(employees.jabatan, '%superintendent%'),
+          ilike(employees.jabatan, '%manager%'),
+          ilike(employees.jabatan, '%spv%')
+        )
+      )
+      .orderBy(employees.name);
+
+    res.json({
+      status: "success",
+      data: supervisorRows
+    });
+  } catch (error: any) {
+    console.error("[Employee Leaves Supervisors] Error:", error);
+    res.status(500).json({
+      status: "error",
+      message: error?.message || "Gagal memuat daftar pengawas."
+    });
+  }
+});
+
+// 4. POST /api/employee-leaves - Simpan pelaporan izin baru bergaya Google Form
+employeeLeavesRouter.post("/api/employee-leaves", async (req, res) => {
+  try {
+    ensureEmployeeLeavesTable().catch(() => {});
+
+    const {
+      nik,
+      name,
+      jabatan,
+      section,
+      penempatan,
+      shift,
+      jamShift,
+      tempatTinggal,
+      awalAbsensi,
+      akhirAbsensi,
+      jumlah,
+      lamanyaIzin,
+      alasanAbsensi,
+      pengawasMengetahui,
+      lampiran,
+      acc,
+      catatan
+    } = req.body;
+
+    if (!nik || !name || !awalAbsensi || !akhirAbsensi || !alasanAbsensi) {
+      return res.status(400).json({
+        status: "error",
+        message: "Kolom NIK, Nama, Tanggal Awal, Tanggal Akhir, dan Alasan Absensi wajib diisi."
+      });
+    }
+
+    // Hitung jumlah hari otomatis jika tidak dikirim
+    let jmlHari = Number(jumlah) || 1;
+    if (!jumlah && awalAbsensi && akhirAbsensi) {
+      try {
+        const d1 = new Date(awalAbsensi).getTime();
+        const d2 = new Date(akhirAbsensi).getTime();
+        const diffDays = Math.round((d2 - d1) / (1000 * 3600 * 24)) + 1;
+        jmlHari = Math.max(1, diffDays);
+      } catch {}
+    }
+
+    const durasiText = lamanyaIzin ? String(lamanyaIzin).trim() : `${jmlHari} Hari`;
+
+    const inserted = await db
+      .insert(employeeLeaveRequests)
+      .values({
+        nik: String(nik).trim().toUpperCase(),
+        name: String(name).trim(),
+        jabatan: jabatan ? String(jabatan).trim() : null,
+        section: section ? String(section).trim() : 'Preparation',
+        penempatan: penempatan ? String(penempatan).trim() : (section ? String(section).trim() : 'Preparation'),
+        shift: shift ? String(shift).trim() : 'Nonshift',
+        jamShift: jamShift ? String(jamShift).trim() : null,
+        tempatTinggal: tempatTinggal ? String(tempatTinggal).trim() : null,
+        awalAbsensi: String(awalAbsensi).trim(),
+        akhirAbsensi: String(akhirAbsensi).trim(),
+        jumlah: jmlHari,
+        lamanyaIzin: durasiText,
+        alasanAbsensi: String(alasanAbsensi).trim(),
+        pengawasMengetahui: pengawasMengetahui ? String(pengawasMengetahui).trim() : '-',
+        lampiran: lampiran ? String(lampiran).trim() : null,
+        acc: acc ? String(acc).trim() : 'Pending',
+        catatan: catatan ? String(catatan).trim() : null,
+        source: 'web'
+      })
+      .returning();
+
+    const newRecord = inserted.length > 0 ? inserted[0] : {
+      id: Date.now(),
+      nik,
+      name,
+      jabatan,
+      section,
+      penempatan,
+      shift,
+      jamShift,
+      awalAbsensi,
+      akhirAbsensi,
+      jumlah: jmlHari,
+      lamanyaIzin: durasiText,
+      alasanAbsensi,
+      pengawasMengetahui,
+      lampiran,
+      acc: acc || 'Pending',
+      source: 'web',
+      createdAt: new Date().toISOString()
+    };
+
+    res.json({
+      status: "success",
+      message: "Formulir Pelaporan Izin Karyawan berhasil dikirim dan tersimpan ke dalam rekapan portal.",
+      data: newRecord
+    });
+  } catch (error: any) {
+    console.error("[Employee Leaves POST] Error:", error);
+    res.status(500).json({
+      status: "error",
+      message: error?.message || "Gagal menyimpan formulir pelaporan izin karyawan."
+    });
+  }
+});
+
+// 5. PUT /api/employee-leaves/:id/acc - ACC / Approval status oleh HR / Atasan
+employeeLeavesRouter.put("/api/employee-leaves/:id/acc", async (req, res) => {
+  try {
+    ensureEmployeeLeavesTable().catch(() => {});
+    const id = Number(req.params.id);
+    const { acc, accBy, catatan } = req.body;
+
+    if (!acc) {
+      return res.status(400).json({ status: "error", message: "Status ACC wajib ditentukan" });
+    }
+
+    const accAtStr = new Date().toLocaleString('id-ID', {
+      timeZone: 'Asia/Jayapura',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const updated = await db
+      .update(employeeLeaveRequests)
+      .set({
+        acc: String(acc).trim(),
+        accBy: accBy ? String(accBy).trim() : null,
+        accAt: accAtStr,
+        catatan: catatan !== undefined ? String(catatan).trim() : undefined,
+        updatedAt: new Date()
+      })
+      .where(eq(employeeLeaveRequests.id, id))
+      .returning();
+
+    res.json({
+      status: "success",
+      message: `Status izin berhasil diperbarui menjadi ${acc}`,
+      data: updated.length > 0 ? updated[0] : null
+    });
+  } catch (error: any) {
+    console.error("[Employee Leaves ACC PUT] Error:", error);
+    res.status(500).json({ status: "error", message: error?.message || "Gagal memperbarui ACC" });
+  }
+});
+
+
+// 5b. PUT /api/employee-leaves/:id - Edit perorangan oleh Section Administrasi
+employeeLeavesRouter.put("/api/employee-leaves/:id", async (req, res) => {
+  try {
+    await ensureEmployeeLeavesTable();
+    const rawId = req.params.id;
+    const {
+      nik,
+      name,
+      jabatan,
+      section,
+      penempatan,
+      shift,
+      jamShift,
+      tempatTinggal,
+      awalAbsensi,
+      akhirAbsensi,
+      jumlah,
+      lamanyaIzin,
+      alasanAbsensi,
+      pengawasMengetahui,
+      acc,
+      accBy,
+      catatan
+    } = req.body;
+
+    let jmlHari = Number(jumlah) || 1;
+    if (!jumlah && awalAbsensi && akhirAbsensi) {
+      try {
+        const d1 = new Date(awalAbsensi).getTime();
+        const d2 = new Date(akhirAbsensi).getTime();
+        const diffDays = Math.round((d2 - d1) / (1000 * 3600 * 24)) + 1;
+        jmlHari = Math.max(1, diffDays);
+      } catch {}
+    }
+    const durasiText = lamanyaIzin ? String(lamanyaIzin).trim() : `${jmlHari} Hari`;
+
+    if (rawId.startsWith('sheet-')) {
+      // Cek apakah sudah ada override untuk sheetRowId ini di database
+      const existing = await db
+        .select()
+        .from(employeeLeaveRequests)
+        .where(eq(employeeLeaveRequests.sheetRowId, rawId))
+        .limit(1);
+
+      let savedRecord: any;
+      if (existing.length > 0) {
+        const updated = await db
+          .update(employeeLeaveRequests)
+          .set({
+            nik: nik ? String(nik).trim().toUpperCase() : existing[0].nik,
+            name: name ? String(name).trim() : existing[0].name,
+            jabatan: jabatan !== undefined ? String(jabatan).trim() : existing[0].jabatan,
+            section: section !== undefined ? String(section).trim() : existing[0].section,
+            penempatan: penempatan !== undefined ? String(penempatan).trim() : existing[0].penempatan,
+            shift: shift !== undefined ? String(shift).trim() : existing[0].shift,
+            jamShift: jamShift !== undefined ? String(jamShift).trim() : existing[0].jamShift,
+            tempatTinggal: tempatTinggal !== undefined ? String(tempatTinggal).trim() : existing[0].tempatTinggal,
+            awalAbsensi: awalAbsensi ? String(awalAbsensi).trim() : existing[0].awalAbsensi,
+            akhirAbsensi: akhirAbsensi ? String(akhirAbsensi).trim() : existing[0].akhirAbsensi,
+            jumlah: jmlHari,
+            lamanyaIzin: durasiText,
+            alasanAbsensi: alasanAbsensi !== undefined ? String(alasanAbsensi).trim() : existing[0].alasanAbsensi,
+            pengawasMengetahui: pengawasMengetahui !== undefined ? String(pengawasMengetahui).trim() : existing[0].pengawasMengetahui,
+            acc: acc !== undefined ? String(acc).trim() : existing[0].acc,
+            accBy: accBy !== undefined ? String(accBy).trim() : existing[0].accBy,
+            catatan: catatan !== undefined ? String(catatan).trim() : existing[0].catatan,
+            updatedAt: new Date()
+          })
+          .where(eq(employeeLeaveRequests.sheetRowId, rawId))
+          .returning();
+        savedRecord = updated[0];
+      } else {
+        const inserted = await db
+          .insert(employeeLeaveRequests)
+          .values({
+            sheetRowId: rawId,
+            nik: String(nik || '').trim().toUpperCase(),
+            name: String(name || '').trim(),
+            jabatan: jabatan ? String(jabatan).trim() : null,
+            section: section ? String(section).trim() : 'Preparation',
+            penempatan: penempatan ? String(penempatan).trim() : (section ? String(section).trim() : 'Preparation'),
+            shift: shift ? String(shift).trim() : 'Nonshift',
+            jamShift: jamShift ? String(jamShift).trim() : null,
+            awalAbsensi: String(awalAbsensi || '').trim(),
+            akhirAbsensi: String(akhirAbsensi || '').trim(),
+            jumlah: jmlHari,
+            lamanyaIzin: durasiText,
+            alasanAbsensi: String(alasanAbsensi || '').trim(),
+            pengawasMengetahui: pengawasMengetahui ? String(pengawasMengetahui).trim() : '-',
+            acc: acc ? String(acc).trim() : 'Disetujui',
+            accBy: accBy ? String(accBy).trim() : null,
+            catatan: catatan ? String(catatan).trim() : null,
+            source: 'web'
+          })
+          .returning();
+        savedRecord = inserted[0];
+      }
+
+      return res.json({
+        status: 'success',
+        message: 'Data izin perorangan berhasil diperbarui dan tersimpan permanen.',
+        data: {
+          ...savedRecord,
+          id: rawId,
+          source: 'google_sheet',
+          isEdited: true
+        }
+      });
+    } else {
+      const numId = Number(rawId);
+      if (isNaN(numId)) {
+        return res.status(400).json({ status: 'error', message: 'ID tidak valid' });
+      }
+
+      const updated = await db
+        .update(employeeLeaveRequests)
+        .set({
+          nik: nik ? String(nik).trim().toUpperCase() : undefined,
+          name: name ? String(name).trim() : undefined,
+          jabatan: jabatan !== undefined ? String(jabatan).trim() : undefined,
+          section: section !== undefined ? String(section).trim() : undefined,
+          penempatan: penempatan !== undefined ? String(penempatan).trim() : undefined,
+          shift: shift !== undefined ? String(shift).trim() : undefined,
+          jamShift: jamShift !== undefined ? String(jamShift).trim() : undefined,
+          tempatTinggal: tempatTinggal !== undefined ? String(tempatTinggal).trim() : undefined,
+          awalAbsensi: awalAbsensi ? String(awalAbsensi).trim() : undefined,
+          akhirAbsensi: akhirAbsensi ? String(akhirAbsensi).trim() : undefined,
+          jumlah: jmlHari,
+          lamanyaIzin: durasiText,
+          alasanAbsensi: alasanAbsensi !== undefined ? String(alasanAbsensi).trim() : undefined,
+          pengawasMengetahui: pengawasMengetahui !== undefined ? String(pengawasMengetahui).trim() : undefined,
+          acc: acc !== undefined ? String(acc).trim() : undefined,
+          accBy: accBy !== undefined ? String(accBy).trim() : undefined,
+          catatan: catatan !== undefined ? String(catatan).trim() : undefined,
+          updatedAt: new Date()
+        })
+        .where(eq(employeeLeaveRequests.id, numId))
+        .returning();
+
+      return res.json({
+        status: 'success',
+        message: 'Data izin perorangan berhasil diperbarui.',
+        data: updated.length > 0 ? updated[0] : null
+      });
+    }
+  } catch (error: any) {
+    console.error('[Employee Leaves Edit PUT] Error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: error?.message || 'Gagal memperbarui data izin karyawan.'
+    });
+  }
+});
+
+// 6. DELETE /api/employee-leaves/:id - Hapus catatan izin
+employeeLeavesRouter.delete("/api/employee-leaves/:id", async (req, res) => {
+  try {
+    ensureEmployeeLeavesTable().catch(() => {});
+    const id = Number(req.params.id);
+    await db.delete(employeeLeaveRequests).where(eq(employeeLeaveRequests.id, id));
+    res.json({ status: "success", message: "Catatan perizinan berhasil dihapus." });
+  } catch (error: any) {
+    console.error("[Employee Leaves DELETE] Error:", error);
+    res.status(500).json({ status: "error", message: error?.message || "Gagal menghapus catatan perizinan" });
+  }
+});
