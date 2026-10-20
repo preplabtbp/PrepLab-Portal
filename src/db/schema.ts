@@ -23,6 +23,7 @@ export const employees = pgTable('employees', {
   poh: text('poh'),
   pt: text('pt'),
   statusMess: text('status_mess'),
+  residence: text('residence'),
   rotation: text('rotation'),
   tanggalAwalBergabung: text('tanggal_awal_bergabung'),
   tanggalBergabungTerbaru: text('tanggal_bergabung_terbaru'),

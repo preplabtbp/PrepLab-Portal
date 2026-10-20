@@ -216,6 +216,8 @@ export const MASTER_EMPLOYEE_COLUMNS = [
   "No.Telephone darurat Orang Terdekat",
   "Alamat Sesuai KTP",
   "Alamat Domisili",
+  "Status Mess",
+  "Residence",
 ];
 
 export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
