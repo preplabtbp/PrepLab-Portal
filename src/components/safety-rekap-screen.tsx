@@ -1309,27 +1309,31 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     ktaData.rekapList.filter(isValidEmployee).forEach(emp => {
       Object.assign(ensure(emp, null).auto, buildKtaCells(emp, weekRange));
     });
-    // Nama/NIK personil yang aktif bertugas di Jadwal Inspeksi (tidak boleh ditimpa cuti oleh roster)
-    const activeScheduledNiks = new Set<string>();
-    [...inspeksiData.rekapList, ...ktaData.rekapList].filter(isValidEmployee).forEach(emp => {
-      if (emp.nik) activeScheduledNiks.add(emp.nik.toString().trim().toUpperCase());
-    });
-
-    if (leaveList) {
-      // Sumber status cuti: Kontrol Cuti Karyawan (Jadwal Inspeksi) — Izin → IZIN, Dinas Luar → DINAS, lainnya → CUTI
-      // Proteksi: Personil yang memiliki jadwal tugas inspeksi aktif TIDAK boleh ditimpa menjadi CUTI
+    // ATURAN RESMI: Daftar karyawan cuti SELALU mengikuti tabel "Kontrol Cuti Karyawan" di Modul Jadwal Inspeksi
+    if (leaveList && leaveList.length > 0) {
+      const leaveMap = new Map<string, any>();
       leaveList.filter(isValidEmployee).forEach(emp => {
-        const k = (emp.nik || '').toString().trim().toUpperCase();
-        if (!activeScheduledNiks.has(k)) {
-          ensure(emp, emp.category === 'IZIN' ? 'IZIN' : emp.category === 'DINAS' ? 'DINAS' : 'CUTI', true);
-        }
+        if (emp.nik) leaveMap.set(emp.nik.toString().trim().toUpperCase(), emp);
+        if (emp.name) leaveMap.set(emp.name.toString().trim().toLowerCase(), emp);
       });
-      // Pastikan personil cuti dari jadwal inspeksi juga dimasukkan
-      [...inspeksiData.cutiList, ...ktaData.cutiList].filter(isValidEmployee).forEach(emp => {
-        const k = (emp.nik || '').toString().trim().toUpperCase();
-        if (!activeScheduledNiks.has(k)) {
-          ensure(emp, 'CUTI');
+
+      // Update status seluruh personil yang ada di map:
+      // Hanya yang ada di Kontrol Cuti Karyawan yang berstatus CUTI / IZIN / DINAS
+      for (const [key, entry] of map.entries()) {
+        const matched = leaveMap.get(key) || leaveMap.get((entry.name || '').trim().toLowerCase());
+        if (matched) {
+          entry.auto.isCuti = true;
+          entry.auto.absence = matched.category === 'IZIN' ? 'IZIN' : matched.category === 'DINAS' ? 'DINAS' : 'CUTI';
+        } else {
+          // Tidak ada di Kontrol Cuti Karyawan -> Tetap Aktif / Target Wajib
+          entry.auto.isCuti = false;
+          entry.auto.absence = null;
         }
+      }
+
+      // Pastikan personil di Kontrol Cuti yang belum ada di map juga masuk ke daftar
+      leaveList.filter(isValidEmployee).forEach(emp => {
+        ensure(emp, emp.category === 'IZIN' ? 'IZIN' : emp.category === 'DINAS' ? 'DINAS' : 'CUTI', true);
       });
     } else {
       [...inspeksiData.cutiList, ...ktaData.cutiList].filter(isValidEmployee).forEach(emp => ensure(emp, 'CUTI'));
