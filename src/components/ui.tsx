@@ -124,3 +124,6 @@ export const Button = ({ children, variant = 'primary', size, className = '', ..
     </button>
   );
 };
+
+export { TimeInput24 } from './ui/TimeInput24';
+export type { TimeInput24Props } from './ui/TimeInput24';

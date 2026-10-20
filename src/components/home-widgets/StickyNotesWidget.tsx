@@ -267,7 +267,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
             isPinned: true,
             reminder: { label: 'Shift Handover', time: '18:00 WIT' },
             collaborator: 'Lab Prep Team',
-            updatedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+            updatedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
           }
         ];
       }
@@ -283,7 +283,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
           isPinned: true,
           reminder: { label: 'Handover Shift', time: '18:00 WIT' },
           collaborator: 'Foreman Lab',
-          updatedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+          updatedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
         }
       ];
     } catch {
@@ -296,7 +296,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
           mode: 'checklist',
           color: 'sand',
           isPinned: true,
-          updatedAt: '10:37 AM'
+          updatedAt: '10:37'
         }
       ];
     }
@@ -430,7 +430,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
     const updated = notes.map((n) => {
       if (n.id === activeNote.id) {
         const modified = updater({ ...n });
-        modified.updatedAt = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        modified.updatedAt = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
         return modified;
       }
       return n;
@@ -593,7 +593,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
       mode: 'checklist',
       color: 'default',
       isPinned: false,
-      updatedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+      updatedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
     };
     const updated = [newNote, ...notes];
     saveNotes(updated, true);

@@ -3,7 +3,7 @@ import {
   AlertTriangle, AlertCircle, CheckCircle2, ChevronDown, 
   Layers, Sliders, Activity, Info, ShieldAlert, Check, 
   X, Sparkles, ExternalLink, Pin, User, Search, Edit3, 
-  Trash2, MessageSquare, Maximize2, Lock, Calendar 
+  Trash2, MessageSquare, Maximize2, Lock, Calendar, RefreshCw 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -299,18 +299,26 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
     const str = lastActivePoint.analyzedAt || lastActivePoint.date;
     if (!str) return null;
     try {
-      const cleanStr = str.replace('T', ' ');
+      const cleanStr = str.replace('T', ' ').trim();
       const [datePart, timePart] = cleanStr.split(' ');
-      const dateSegments = datePart.split('-');
-      if (dateSegments.length === 3) {
-        const [y, m, d] = dateSegments;
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-        const mIdx = parseInt(m, 10) - 1;
-        const mStr = monthNames[mIdx] || m;
-        const timeClean = timePart ? timePart.slice(0, 5) : '';
-        return timeClean ? `${d} ${mStr} ${y} ${timeClean}` : `${d} ${mStr} ${y}`;
+      const delimiter = datePart.includes('-') ? '-' : (datePart.includes('/') ? '/' : null);
+      if (delimiter) {
+        const segments = datePart.split(delimiter);
+        if (segments.length === 3) {
+          let y = '', m = '', d = '';
+          if (segments[0].length === 4) {
+            [y, m, d] = segments;
+          } else {
+            [d, m, y] = segments;
+          }
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+          const mIdx = parseInt(m, 10) - 1;
+          const mStr = monthNames[mIdx] || m;
+          const timeClean = timePart ? timePart.slice(0, 5) : '';
+          return timeClean ? `${d} ${mStr} ${timeClean}` : `${d} ${mStr}`;
+        }
       }
-      return str;
+      return cleanStr;
     } catch {
       return str;
     }
@@ -348,8 +356,8 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
       {/* ------------------------------------------------------------- */}
       <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 flex items-center justify-between gap-2 flex-wrap">
         {/* Left: Sample Count Indicator & Isolated Badge */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] font-mono font-bold px-2 py-0.8 rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10.5px] font-mono font-medium px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-slate-700 whitespace-nowrap shrink-0">
             N = {activePoints.length} Data
           </span>
 
@@ -357,38 +365,38 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
           {isolatedPointsInCard.length > 0 && (
             <button
               onClick={() => setShowIsolatedGhost(!showIsolatedGhost)}
-              className={`px-2 py-0.8 rounded-md text-[10.5px] font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-2 py-1 rounded-lg text-[10px] font-bold border flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 showIsolatedGhost
-                  ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 shadow-2xs'
+                  ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 shadow-2xs'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400'
               }`}
               title={showIsolatedGhost ? "Sembunyikan posisi titik terisolasi dari grafik" : "Tampilkan posisi titik terisolasi (Ghost)"}
             >
-              <ShieldAlert className="w-3 h-3 text-rose-500" />
+              <ShieldAlert className="w-3 h-3 text-rose-500 shrink-0" />
               <span>{isolatedPointsInCard.length} Diisolasi</span>
               <span className="text-[9px] opacity-75">{showIsolatedGhost ? '(Ghost)' : '(Disembunyikan)'}</span>
             </button>
           )}
         </div>
 
-        {/* Center / Right: ELEMENT DROPDOWN & LATEST CONTROL STATUS */}
-        <div className="flex items-center gap-2">
-          {/* Green Element Dropdown */}
+        {/* Center / Right: ELEMENT DROPDOWN, COMPACT UPDATE DATE & FULLSCREEN */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Sleek Neutral Element Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setShowElementDropdown(!showElementDropdown)}
-              className="px-2.5 py-1 rounded-lg text-xs font-black bg-[#16a34a] hover:bg-[#15803d] text-white flex items-center gap-1.5 shadow-xs transition-all cursor-pointer ring-1 ring-emerald-600/50"
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap shrink-0"
               title="Pilih Unsur Analisis (Semua grafik akan mengikuti unsur terpilih)"
             >
-              <span className="text-[10px] uppercase opacity-90 font-medium">Unsur:</span>
-              <span className="text-sm font-black tracking-wide">{currentElement}</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showElementDropdown ? 'rotate-180' : ''}`} />
+              <span className="text-[10px] uppercase font-semibold text-slate-500 dark:text-slate-400">Unsur:</span>
+              <span className="text-xs font-black tracking-wide text-teal-600 dark:text-teal-400">{currentElement}</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${showElementDropdown ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Dropdown Menu Modal in Green Theme */}
+            {/* Dropdown Menu Modal */}
             {showElementDropdown && (
-              <div className="absolute right-0 top-full mt-1.5 z-40 w-28 bg-[#16a34a] border-2 border-emerald-700 rounded-xl shadow-2xl overflow-hidden py-1 animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-100/90 border-b border-emerald-600 mb-1">
+              <div className="absolute right-0 top-full mt-1.5 z-40 w-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800 mb-1">
                   Pilih Unsur
                 </div>
                 {QC_ELEMENTS_LIST.map((el) => {
@@ -400,14 +408,14 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
                         if (onSelectElement) onSelectElement(el);
                         setShowElementDropdown(false);
                       }}
-                      className={`w-full px-3 py-1.5 text-left text-xs font-black transition-all flex items-center justify-between cursor-pointer ${
+                      className={`w-full px-3 py-1.5 text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
                         isSelected
-                          ? 'bg-[#0284c7] text-white shadow-xs font-black'
-                          : 'text-white hover:bg-emerald-700'
+                          ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 font-black'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
                       }`}
                     >
                       <span>{el}</span>
-                      {isSelected && <span className="text-[10px] opacity-80">✓</span>}
+                      {isSelected && <span className="text-[10px] text-teal-600 dark:text-teal-400 font-black">✓</span>}
                     </button>
                   );
                 })}
@@ -415,22 +423,22 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
             )}
           </div>
 
-          {/* Latest Data Update Indicator */}
+          {/* Compact Latest Data Synchronization Indicator */}
           {activePoints.length === 0 ? (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 border border-stone-200 dark:border-stone-700">
+            <span className="px-2 py-1 rounded-lg text-[10.5px] font-medium bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 whitespace-nowrap shrink-0">
               No Data
             </span>
           ) : (
             <span 
-              className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800/90 dark:text-slate-200 border border-slate-300 dark:border-slate-700 flex items-center gap-1.5 shadow-2xs"
-              title={`Last Data Update: ${lastActivePoint?.analyzedAt || lastActivePoint?.date || '-'}`}
+              className="px-2 py-1 rounded-lg text-[10.5px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300 border border-slate-200/90 dark:border-slate-700 flex items-center gap-1.5 shadow-2xs whitespace-nowrap shrink-0"
+              title={`Data Sinkronisasi Terakhir: ${lastActivePoint?.analyzedAt || lastActivePoint?.date || '-'}`}
             >
-              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span>Update: <span className="font-mono text-slate-900 dark:text-white font-black">{formattedLastUpdate}</span></span>
+              <RefreshCw className="w-3 h-3 text-slate-400 shrink-0" />
+              <span className="font-mono text-slate-700 dark:text-slate-300 font-bold">{formattedLastUpdate}</span>
             </span>
           )}
 
-          {/* Fullscreen Modal Trigger Button */}
+          {/* Fullscreen Modal Trigger Button (Icon Only) */}
           {onOpenFullscreen && (
             <button
               type="button"
@@ -438,11 +446,11 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
                 e.stopPropagation();
                 onOpenFullscreen();
               }}
-              className="p-1 px-1.5 rounded-lg text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 border border-slate-200 dark:border-slate-700 hover:border-teal-400 transition-all cursor-pointer shadow-2xs flex items-center gap-1 group/fs ml-0.5"
-              title="Perbesar Grafik Layar Penuh (Fullscreen) & Analisis Lengkap"
+              className="p-1 px-1.5 rounded-lg text-slate-600 hover:text-teal-600 dark:text-slate-300 dark:hover:text-teal-400 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200/90 dark:border-slate-700 hover:border-slate-300 transition-all cursor-pointer shadow-2xs flex items-center justify-center group/fs shrink-0"
+              title="Perbesar Grafik Layar Penuh (Fullscreen)"
+              aria-label="Fullscreen"
             >
-              <Maximize2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 group-hover/fs:scale-110 transition-transform" />
-              <span className="hidden sm:inline text-[10.5px] font-bold">Fullscreen</span>
+              <Maximize2 className="w-3.5 h-3.5 text-slate-400 group-hover/fs:text-teal-600 transition-colors shrink-0" />
             </button>
           )}
         </div>
@@ -1269,27 +1277,27 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
             : 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2'
         }`}>
           {/* KPI 1: Target Nominal */}
-          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Target (CL)</div>
-            <div className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Target (CL)</div>
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-100 font-mono mt-0.5">
               {limits.nominalValue.toFixed(3)}
             </div>
             <div className="text-[9px] text-slate-400 font-mono mt-0.5">σ Acuan = {limits.stdevFixed.toFixed(3)}</div>
           </div>
 
           {/* KPI 2: Mean Rata-rata */}
-          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Mean (x̄)</div>
-            <div className="text-sm font-black text-slate-900 dark:text-slate-100 font-mono mt-0.5">
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Mean (x̄)</div>
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-100 font-mono mt-0.5">
               {displayedStats.mean.toFixed(3)}
             </div>
             <div className="text-[9px] text-slate-400 font-mono mt-0.5">Median = {displayedStats.median.toFixed(3)}</div>
           </div>
 
           {/* KPI 3: Actual Stdev */}
-          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Actual Std (s)</div>
-            <div className="text-sm font-black text-blue-600 dark:text-blue-400 font-mono mt-0.5">
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actual Std (s)</div>
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-100 font-mono mt-0.5">
               {displayedStats.actualStdev.toFixed(3)}
             </div>
             <div className="text-[9px] text-slate-400 font-mono mt-0.5">
@@ -1298,8 +1306,8 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
           </div>
 
           {/* KPI 4: Min - Max */}
-          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Rentang (Min-Max)</div>
+          <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Rentang (Min-Max)</div>
             <div className="text-xs font-bold text-slate-800 dark:text-slate-200 font-mono mt-1">
               {displayedStats.min.toFixed(2)} - {displayedStats.max.toFixed(2)}
             </div>

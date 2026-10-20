@@ -737,7 +737,7 @@ export default function ChatScreen({
           messages.map((msg, idx) => {
             const isMe = msg.senderNik === inspectorNik;
             const timeStr = msg.timestamp
-              ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              ? new Date(msg.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })
               : '';
 
             const isAnnouncement = Boolean(

@@ -3,7 +3,7 @@ import {
   LineChart, Sliders, RefreshCw, Calendar, ArrowLeftRight, 
   HelpCircle, Sparkles, Filter, Check, Eye, EyeOff, 
   LayoutGrid, Columns, Layers, CheckSquare, Square, Info, ShieldCheck,
-  CheckCircle2, Database, ChevronDown, Activity, Building2, Cpu, ShieldAlert,
+  CheckCircle2, Database, ChevronDown, ChevronUp, RotateCcw, Activity, Building2, Cpu, ShieldAlert,
   Plus, X, Archive, Lock, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -146,140 +146,142 @@ export const INSTRUMENT_THEMES: Record<string, InstrumentTheme> = {
   EPSILON_A: {
     code: 'EPSILON_A',
     name: 'EPSILON A',
-    headerBg: 'bg-cyan-500 text-slate-950 font-black',
-    headerBorder: 'border-cyan-600',
-    pillActive: 'bg-cyan-500 text-slate-950 border-cyan-600 shadow-sm font-black',
-    dotColor: '#06B6D4',
-    badgeBg: 'bg-cyan-100 text-cyan-900 dark:bg-cyan-950/80 dark:text-cyan-200 border-cyan-300 dark:border-cyan-800',
-    textColor: 'text-cyan-700 dark:text-cyan-400',
+    headerBg: 'bg-[#e7f3f8] dark:bg-sky-950/60 text-[#1e4e69] dark:text-sky-200 font-bold',
+    headerBorder: 'border-[#bcdbec] dark:border-sky-800/70',
+    pillActive: 'bg-[#e7f3f8] dark:bg-sky-950/70 text-[#1e4e69] dark:text-sky-200 border-[#bcdbec] dark:border-sky-800 shadow-2xs font-bold',
+    dotColor: '#337ea9',
+    badgeBg: 'bg-[#e7f3f8] text-[#1e4e69] dark:bg-sky-950/80 dark:text-sky-200 border-[#bcdbec] dark:border-sky-800',
+    textColor: 'text-[#337ea9] dark:text-sky-400',
   },
   EPSILON_B: {
     code: 'EPSILON_B',
     name: 'EPSILON B',
-    headerBg: 'bg-purple-600 text-white font-black',
-    headerBorder: 'border-purple-700',
-    pillActive: 'bg-purple-600 text-white border-purple-700 shadow-sm font-black',
-    dotColor: '#9333EA',
-    badgeBg: 'bg-purple-100 text-purple-900 dark:bg-purple-950/80 dark:text-purple-200 border-purple-300 dark:border-purple-800',
-    textColor: 'text-purple-700 dark:text-purple-400',
+    headerBg: 'bg-[#f4f0f7] dark:bg-purple-950/60 text-[#543b66] dark:text-purple-200 font-bold',
+    headerBorder: 'border-[#dcd2e6] dark:border-purple-800/70',
+    pillActive: 'bg-[#f4f0f7] dark:bg-purple-950/70 text-[#543b66] dark:text-purple-200 border-[#dcd2e6] dark:border-purple-800 shadow-2xs font-bold',
+    dotColor: '#9065b0',
+    badgeBg: 'bg-[#f4f0f7] text-[#543b66] dark:bg-purple-950/80 dark:text-purple-200 border-[#dcd2e6] dark:border-purple-800',
+    textColor: 'text-[#9065b0] dark:text-purple-400',
   },
   EPSILON_C: {
     code: 'EPSILON_C',
     name: 'EPSILON C',
-    headerBg: 'bg-teal-500 text-slate-950 font-black',
-    headerBorder: 'border-teal-600',
-    pillActive: 'bg-teal-500 text-slate-950 border-teal-600 shadow-sm font-black',
-    dotColor: '#14B8A6',
-    badgeBg: 'bg-teal-100 text-teal-900 dark:bg-teal-950/80 dark:text-teal-200 border-teal-300 dark:border-teal-800',
-    textColor: 'text-teal-700 dark:text-teal-400',
+    headerBg: 'bg-[#e6f4f1] dark:bg-teal-950/60 text-[#1d5249] dark:text-teal-200 font-bold',
+    headerBorder: 'border-[#bfe3dc] dark:border-teal-800/70',
+    pillActive: 'bg-[#e6f4f1] dark:bg-teal-950/70 text-[#1d5249] dark:text-teal-200 border-[#bfe3dc] dark:border-teal-800 shadow-2xs font-bold',
+    dotColor: '#2e8b7d',
+    badgeBg: 'bg-[#e6f4f1] text-[#1d5249] dark:bg-teal-950/80 dark:text-teal-200 border-[#bfe3dc] dark:border-teal-800',
+    textColor: 'text-[#2e8b7d] dark:text-teal-400',
   },
   EPSILON_D: {
     code: 'EPSILON_D',
     name: 'EPSILON D',
-    headerBg: 'bg-amber-400 text-slate-950 font-black',
-    headerBorder: 'border-amber-500',
-    pillActive: 'bg-amber-400 text-slate-950 border-amber-500 shadow-sm font-black',
-    dotColor: '#F59E0B',
-    badgeBg: 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border-amber-300 dark:border-amber-800',
-    textColor: 'text-amber-700 dark:text-amber-400',
+    headerBg: 'bg-[#fbf3db] dark:bg-amber-950/60 text-[#6e4e1f] dark:text-amber-200 font-bold',
+    headerBorder: 'border-[#f2dfaa] dark:border-amber-800/70',
+    pillActive: 'bg-[#fbf3db] dark:bg-amber-950/70 text-[#6e4e1f] dark:text-amber-200 border-[#f2dfaa] dark:border-amber-800 shadow-2xs font-bold',
+    dotColor: '#cb912f',
+    badgeBg: 'bg-[#fbf3db] text-[#6e4e1f] dark:bg-amber-950/80 dark:text-amber-200 border-[#f2dfaa] dark:border-amber-800',
+    textColor: 'text-[#cb912f] dark:text-amber-400',
   },
   EPSILON_E: {
     code: 'EPSILON_E',
     name: 'EPSILON E',
-    headerBg: 'bg-orange-500 text-white font-black',
-    headerBorder: 'border-orange-600',
-    pillActive: 'bg-orange-500 text-white border-orange-600 shadow-sm font-black',
-    dotColor: '#F97316',
-    badgeBg: 'bg-orange-100 text-orange-900 dark:bg-orange-950/80 dark:text-orange-200 border-orange-300 dark:border-orange-800',
-    textColor: 'text-orange-700 dark:text-orange-400',
+    headerBg: 'bg-[#faebdd] dark:bg-orange-950/60 text-[#733d0e] dark:text-orange-200 font-bold',
+    headerBorder: 'border-[#f4ccaa] dark:border-orange-800/70',
+    pillActive: 'bg-[#faebdd] dark:bg-orange-950/70 text-[#733d0e] dark:text-orange-200 border-[#f4ccaa] dark:border-orange-800 shadow-2xs font-bold',
+    dotColor: '#d9730d',
+    badgeBg: 'bg-[#faebdd] text-[#733d0e] dark:bg-orange-950/80 dark:text-orange-200 border-[#f4ccaa] dark:border-orange-800',
+    textColor: 'text-[#d9730d] dark:text-orange-400',
   },
   EPSILON_F: {
     code: 'EPSILON_F',
     name: 'EPSILON F',
-    headerBg: 'bg-rose-500 text-white font-black',
-    headerBorder: 'border-rose-600',
-    pillActive: 'bg-rose-500 text-white border-rose-600 shadow-sm font-black',
-    dotColor: '#F43F5E',
-    badgeBg: 'bg-rose-100 text-rose-900 dark:bg-rose-950/80 dark:text-rose-200 border-rose-300 dark:border-rose-800',
-    textColor: 'text-rose-700 dark:text-rose-400',
+    headerBg: 'bg-[#fdebec] dark:bg-rose-950/60 text-[#692429] dark:text-rose-200 font-bold',
+    headerBorder: 'border-[#f7c8cc] dark:border-rose-800/70',
+    pillActive: 'bg-[#fdebec] dark:bg-rose-950/70 text-[#692429] dark:text-rose-200 border-[#f7c8cc] dark:border-rose-800 shadow-2xs font-bold',
+    dotColor: '#d44c47',
+    badgeBg: 'bg-[#fdebec] text-[#692429] dark:bg-rose-950/80 dark:text-rose-200 border-[#f7c8cc] dark:border-rose-800',
+    textColor: 'text-[#d44c47] dark:text-rose-400',
   },
   EPSILON_G: {
     code: 'EPSILON_G',
     name: 'EPSILON G',
-    headerBg: 'bg-emerald-600 text-white font-black',
-    headerBorder: 'border-emerald-700',
-    pillActive: 'bg-emerald-600 text-white border-emerald-700 shadow-sm font-black',
-    dotColor: '#10B981',
-    badgeBg: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/80 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800',
-    textColor: 'text-emerald-700 dark:text-emerald-400',
+    headerBg: 'bg-[#edf3ec] dark:bg-emerald-950/60 text-[#254d38] dark:text-emerald-200 font-bold',
+    headerBorder: 'border-[#cce1cc] dark:border-emerald-800/70',
+    pillActive: 'bg-[#edf3ec] dark:bg-emerald-950/70 text-[#254d38] dark:text-emerald-200 border-[#cce1cc] dark:border-emerald-800 shadow-2xs font-bold',
+    dotColor: '#448361',
+    badgeBg: 'bg-[#edf3ec] text-[#254d38] dark:bg-emerald-950/80 dark:text-emerald-200 border-[#cce1cc] dark:border-emerald-800',
+    textColor: 'text-[#448361] dark:text-emerald-400',
   },
   EPSILON_H: {
     code: 'EPSILON_H',
     name: 'EPSILON H',
-    headerBg: 'bg-indigo-600 text-white font-black',
-    headerBorder: 'border-indigo-700',
-    pillActive: 'bg-indigo-600 text-white border-indigo-700 shadow-sm font-black',
-    dotColor: '#6366F1',
-    badgeBg: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-950/80 dark:text-indigo-200 border-indigo-300 dark:border-indigo-800',
-    textColor: 'text-indigo-700 dark:text-indigo-400',
+    headerBg: 'bg-[#eef0f8] dark:bg-indigo-950/60 text-[#2f3d6b] dark:text-indigo-200 font-bold',
+    headerBorder: 'border-[#cdd4eb] dark:border-indigo-800/70',
+    pillActive: 'bg-[#eef0f8] dark:bg-indigo-950/70 text-[#2f3d6b] dark:text-indigo-200 border-[#cdd4eb] dark:border-indigo-800 shadow-2xs font-bold',
+    dotColor: '#5c6fb1',
+    badgeBg: 'bg-[#eef0f8] text-[#2f3d6b] dark:bg-indigo-950/80 dark:text-indigo-200 border-[#cdd4eb] dark:border-indigo-800',
+    textColor: 'text-[#5c6fb1] dark:text-indigo-400',
   },
   S2_PUMA: {
     code: 'S2_PUMA',
     name: 'S2 PUMA',
-    headerBg: 'bg-violet-600 text-white font-black',
-    headerBorder: 'border-violet-700',
-    pillActive: 'bg-violet-600 text-white border-violet-700 shadow-sm font-black',
-    dotColor: '#8B5CF6',
-    badgeBg: 'bg-violet-100 text-violet-900 dark:bg-violet-950/80 dark:text-violet-200 border-violet-300 dark:border-violet-800',
-    textColor: 'text-violet-700 dark:text-violet-400',
+    headerBg: 'bg-[#f4f0f7] dark:bg-purple-950/60 text-[#543b66] dark:text-purple-200 font-bold',
+    headerBorder: 'border-[#dcd2e6] dark:border-purple-800/70',
+    pillActive: 'bg-[#f4f0f7] dark:bg-purple-950/70 text-[#543b66] dark:text-purple-200 border-[#dcd2e6] dark:border-purple-800 shadow-2xs font-bold',
+    dotColor: '#8a62a6',
+    badgeBg: 'bg-[#f4f0f7] text-[#543b66] dark:bg-purple-950/80 dark:text-purple-200 border-[#dcd2e6] dark:border-purple-800',
+    textColor: 'text-[#8a62a6] dark:text-purple-400',
   },
   SUPERMINI: {
     code: 'SUPERMINI',
     name: 'Supermini',
-    headerBg: 'bg-blue-600 text-white font-black',
-    headerBorder: 'border-blue-700',
-    pillActive: 'bg-blue-600 text-white border-blue-700 shadow-sm font-black',
-    dotColor: '#2563EB',
-    badgeBg: 'bg-blue-100 text-blue-900 dark:bg-blue-950/80 dark:text-blue-200 border-blue-300 dark:border-blue-800',
-    textColor: 'text-blue-700 dark:text-blue-400',
+    headerBg: 'bg-[#e7f3f8] dark:bg-sky-950/60 text-[#1e4e69] dark:text-sky-200 font-bold',
+    headerBorder: 'border-[#bcdbec] dark:border-sky-800/70',
+    pillActive: 'bg-[#e7f3f8] dark:bg-sky-950/70 text-[#1e4e69] dark:text-sky-200 border-[#bcdbec] dark:border-sky-800 shadow-2xs font-bold',
+    dotColor: '#337ea9',
+    badgeBg: 'bg-[#e7f3f8] text-[#1e4e69] dark:bg-sky-950/80 dark:text-sky-200 border-[#bcdbec] dark:border-sky-800',
+    textColor: 'text-[#337ea9] dark:text-sky-400',
   },
   ZETIUM_A: {
     code: 'ZETIUM_A',
     name: 'Zetium A',
-    headerBg: 'bg-fuchsia-600 text-white font-black',
-    headerBorder: 'border-fuchsia-700',
-    pillActive: 'bg-fuchsia-600 text-white border-fuchsia-700 shadow-sm font-black',
-    dotColor: '#D946EF',
-    badgeBg: 'bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950/80 dark:text-fuchsia-200 border-fuchsia-300 dark:border-fuchsia-800',
-    textColor: 'text-fuchsia-700 dark:text-fuchsia-400',
+    headerBg: 'bg-[#faf1f5] dark:bg-pink-950/60 text-[#692945] dark:text-pink-200 font-bold',
+    headerBorder: 'border-[#eed3e0] dark:border-pink-800/70',
+    pillActive: 'bg-[#faf1f5] dark:bg-pink-950/70 text-[#692945] dark:text-pink-200 border-[#eed3e0] dark:border-pink-800 shadow-2xs font-bold',
+    dotColor: '#c14c8a',
+    badgeBg: 'bg-[#faf1f5] text-[#692945] dark:bg-pink-950/80 dark:text-pink-200 border-[#eed3e0] dark:border-pink-800',
+    textColor: 'text-[#c14c8a] dark:text-pink-400',
   },
   ZETIUM_B: {
     code: 'ZETIUM_B',
     name: 'Zetium B',
-    headerBg: 'bg-pink-600 text-white font-black',
-    headerBorder: 'border-pink-700',
-    pillActive: 'bg-pink-600 text-white border-pink-700 shadow-sm font-black',
-    dotColor: '#EC4899',
-    badgeBg: 'bg-pink-100 text-pink-900 dark:bg-pink-950/80 dark:text-pink-200 border-pink-300 dark:border-pink-800',
-    textColor: 'text-pink-700 dark:text-pink-400',
+    headerBg: 'bg-[#f4eeee] dark:bg-stone-900 text-[#5e4336] dark:text-stone-200 font-bold',
+    headerBorder: 'border-[#dfd3ce] dark:border-stone-700',
+    pillActive: 'bg-[#f4eeee] dark:bg-stone-900 text-[#5e4336] dark:text-stone-200 border-[#dfd3ce] dark:border-stone-700 shadow-2xs font-bold',
+    dotColor: '#9f6b53',
+    badgeBg: 'bg-[#f4eeee] text-[#5e4336] dark:bg-stone-900 dark:text-stone-200 border-[#dfd3ce] dark:border-stone-700',
+    textColor: 'text-[#9f6b53] dark:text-stone-400',
   },
 };
 
 function getInstrumentTheme(code: string, fallbackName?: string, index: number = 0): InstrumentTheme {
   if (INSTRUMENT_THEMES[code]) return INSTRUMENT_THEMES[code];
   const colorRotation = [
-    { bg: 'bg-blue-600 text-white', border: 'border-blue-700', dot: '#2563EB', text: 'text-blue-700' },
-    { bg: 'bg-emerald-600 text-white', border: 'border-emerald-700', dot: '#059669', text: 'text-emerald-700' },
-    { bg: 'bg-fuchsia-600 text-white', border: 'border-fuchsia-700', dot: '#C026D3', text: 'text-fuchsia-700' },
-    { bg: 'bg-indigo-600 text-white', border: 'border-indigo-700', dot: '#4F46E5', text: 'text-indigo-700' },
+    { bg: 'bg-[#e7f3f8] dark:bg-sky-950/60 text-[#1e4e69] dark:text-sky-200', border: 'border-[#bcdbec] dark:border-sky-800/70', dot: '#337ea9', text: 'text-[#337ea9]' },
+    { bg: 'bg-[#edf3ec] dark:bg-emerald-950/60 text-[#254d38] dark:text-emerald-200', border: 'border-[#cce1cc] dark:border-emerald-800/70', dot: '#448361', text: 'text-[#448361]' },
+    { bg: 'bg-[#faebdd] dark:bg-orange-950/60 text-[#733d0e] dark:text-orange-200', border: 'border-[#f4ccaa] dark:border-orange-800/70', dot: '#d9730d', text: 'text-[#d9730d]' },
+    { bg: 'bg-[#f4f0f7] dark:bg-purple-950/60 text-[#543b66] dark:text-purple-200', border: 'border-[#dcd2e6] dark:border-purple-800/70', dot: '#9065b0', text: 'text-[#9065b0]' },
+    { bg: 'bg-[#fdebec] dark:bg-rose-950/60 text-[#692429] dark:text-rose-200', border: 'border-[#f7c8cc] dark:border-rose-800/70', dot: '#d44c47', text: 'text-[#d44c47]' },
+    { bg: 'bg-[#e6f4f1] dark:bg-teal-950/60 text-[#1d5249] dark:text-teal-200', border: 'border-[#bfe3dc] dark:border-teal-800/70', dot: '#2e8b7d', text: 'text-[#2e8b7d]' },
   ];
   const c = colorRotation[index % colorRotation.length];
   return {
     code,
     name: fallbackName || code.replace('_', ' '),
-    headerBg: `${c.bg} font-black`,
+    headerBg: `${c.bg} font-bold`,
     headerBorder: c.border,
-    pillActive: `${c.bg} ${c.border} shadow-sm font-black`,
+    pillActive: `${c.bg} ${c.border} shadow-2xs font-bold`,
     dotColor: c.dot,
     badgeBg: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200',
     textColor: c.text,
@@ -331,14 +333,33 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   // -----------------------------------------------------------------
   // 1. SIMPLIFIED ENTERPRISE HIERARCHY (SITE -> METHOD -> MATRIX)
   // -----------------------------------------------------------------
-  // A. Site / Organization: GTS vs TBP/GPS (Locked for non-dev / non-manager)
-  const [selectedSite, setSelectedSite] = useState<'GTS' | 'TBP'>(() => assignedSite);
+  // A. Site / Organization: Terikat secara universal ke profile/assignedSite user
+  const [selectedSite, setSelectedSite] = useState<'GTS' | 'TBP'>(() => assignedSite || 'TBP');
 
   useEffect(() => {
     if (assignedSite) {
       setSelectedSite(assignedSite);
     }
   }, [assignedSite]);
+
+  // Accordion drawer state for secondary settings (Instruments & Layout)
+  const [isAccordionOpen, setIsAccordionOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('xrf_header_accordion_open') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleAccordion = () => {
+    setIsAccordionOpen(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('xrf_header_accordion_open', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // B. Method / Technology: EDXRF vs WDXRF
   const [selectedMethod, setSelectedMethod] = useState<'EDXRF' | 'WDXRF'>('EDXRF');
@@ -819,6 +840,21 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     }
   }, [selectedSite, selectedMethod, currentCategoryInstruments]);
 
+  const handleSelectAllInstruments = () => {
+    setSelectedInstruments(currentCategoryInstruments.map(i => i.code));
+    toast.success(`Semua alat ${selectedMethod} (${currentCategoryInstruments.length} alat) dipilih`);
+  };
+
+  const handleResetDefaultInstruments = () => {
+    const withData = currentCategoryInstruments.filter(i => (i.measurementCount || 0) > 0).map(i => i.code);
+    if (withData.length > 0) {
+      setSelectedInstruments(withData.slice(0, 6));
+    } else {
+      setSelectedInstruments(currentCategoryInstruments.slice(0, 6).map(i => i.code));
+    }
+    toast.info("Pilihan alat dikembalikan ke default");
+  };
+
 
   const [latestBatchStandards, setLatestBatchStandards] = useState<string[]>([]);
   const [showHistoricalStandards, setShowHistoricalStandards] = useState(false);
@@ -897,22 +933,27 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     loadLatestBatchStandards();
   }, [selectedInstruments, dateRange]);
 
-  // Auto-sync selected standards: selalu prioritaskan standar dari dataset batch terakhir yang diinput untuk tiap alatnya
+  // Auto-sync selected standards: selalu hormati matriks yang dipilih (SAPROLITE vs LIMONITE untuk EDXRF, atau WDXRF)
   useEffect(() => {
-    if (latestBatchStandards.length > 0) {
-      setSelectedStandards(latestBatchStandards);
-    } else if (selectedMethod === 'WDXRF') {
+    if (selectedMethod === 'WDXRF') {
       const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
-      setSelectedStandards(hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER);
-    } else if (selectedMatrix === 'SAPROLITE') {
-      const sapCodes = [
+      if (latestBatchStandards.length > 0) {
+        setSelectedStandards(latestBatchStandards);
+      } else {
+        setSelectedStandards(hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER);
+      }
+    } else if (selectedMatrix === 'LIMONITE') {
+      const limFromBatch = latestBatchStandards.filter(s => s.toUpperCase().startsWith('LIM'));
+      const defaultLimCodes = ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
+      setSelectedStandards(limFromBatch.length > 0 ? limFromBatch : defaultLimCodes);
+    } else {
+      // SAPROLITE
+      const sapFromBatch = latestBatchStandards.filter(s => !s.toUpperCase().startsWith('LIM'));
+      const defaultSapCodes = [
         'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 
         'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195'
       ];
-      setSelectedStandards(sapCodes);
-    } else {
-      const limCodes = ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
-      setSelectedStandards(limCodes);
+      setSelectedStandards(sapFromBatch.length > 0 ? sapFromBatch : defaultSapCodes);
     }
   }, [selectedMethod, selectedMatrix, latestBatchStandards, selectedInstruments]);
 
@@ -1092,27 +1133,32 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   };
 
   // Visible standards list:
-  // - Selalu prioritaskan urutan standar dari batch pengukuran terakhir yang diinput untuk alat terkait (EDXRF maupun WDXRF)
-  // - Fallback ke urutan default matriks jika belum ada batch pengukuran
+  // - Menghormati matriks yang aktif (SAPROLITE vs LIMONITE untuk EDXRF, atau WDXRF)
+  // - Menjaga konsistensi data saat berpindah matriks
   const visibleStandards = useMemo(() => {
     let candidateCodes: string[] = [];
     let matrixType = 'SAPROLITE';
 
-    if (latestBatchStandards.length > 0) {
-      candidateCodes = [...latestBatchStandards];
+    if (selectedMethod === 'WDXRF') {
       const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
-      const hasSupermini = selectedInstruments.some(c => c === 'SUPERMINI');
-      matrixType = hasZetium ? 'ZETIUM' : hasSupermini ? 'SUPERMINI' : (selectedMatrix || 'SAPROLITE');
-    } else if (selectedMethod === 'WDXRF') {
-      const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
-      candidateCodes = hasZetium ? [...WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER] : [...WDXRF_SUPERMINI_STANDARDS_ORDER];
+      candidateCodes = latestBatchStandards.length > 0
+        ? [...latestBatchStandards]
+        : (hasZetium ? [...WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER] : [...WDXRF_SUPERMINI_STANDARDS_ORDER]);
       matrixType = hasZetium ? 'ZETIUM' : 'SUPERMINI';
-    } else {
-      const isSaprolite = selectedMatrix === 'SAPROLITE';
-      candidateCodes = isSaprolite
-        ? ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']
+    } else if (selectedMatrix === 'LIMONITE') {
+      const limFromBatch = latestBatchStandards.filter(s => s.toUpperCase().startsWith('LIM'));
+      candidateCodes = limFromBatch.length > 0
+        ? [...limFromBatch]
         : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
-      matrixType = isSaprolite ? 'SAPROLITE' : 'LIMONITE';
+      matrixType = 'LIMONITE';
+    } else {
+      const sapFromBatch = latestBatchStandards.filter(s => !s.toUpperCase().startsWith('LIM'));
+      const defaultSapCodes = [
+        'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 
+        'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195'
+      ];
+      candidateCodes = sapFromBatch.length > 0 ? [...sapFromBatch] : defaultSapCodes;
+      matrixType = 'SAPROLITE';
     }
 
     const isCodeMatch = (code1: string, code2: string) => {
@@ -1124,9 +1170,17 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       return false;
     };
 
-    // Identifikasi standar historis yang memiliki data pengukuran tapi tidak ada di set batch terakhir
+    // Identifikasi standar historis yang memiliki data pengukuran tapi tidak ada di set aktif
+    // Filter sesuai matriks yang aktif agar arsip limonite tidak muncul di saprolite dan sebaliknya
     const historicalCodes = availableStandardsData
-      .filter(s => s.count > 0 && !candidateCodes.some(c => isCodeMatch(c, s.standardCode)))
+      .filter(s => {
+        if (s.count <= 0) return false;
+        if (candidateCodes.some(c => isCodeMatch(c, s.standardCode))) return false;
+        const isLim = s.standardCode.toUpperCase().startsWith('LIM');
+        if (selectedMatrix === 'LIMONITE') return isLim;
+        if (selectedMatrix === 'SAPROLITE' && selectedMethod === 'EDXRF') return !isLim;
+        return true;
+      })
       .map(s => s.standardCode);
 
     if (showHistoricalStandards && historicalCodes.length > 0) {
@@ -1152,15 +1206,21 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
 
   const historicalStandardsCount = useMemo(() => {
     let candidateCodes: string[] = [];
-    if (latestBatchStandards.length > 0) {
-      candidateCodes = latestBatchStandards;
-    } else if (selectedMethod === 'WDXRF') {
+    if (selectedMethod === 'WDXRF') {
       const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
-      candidateCodes = hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER;
+      candidateCodes = latestBatchStandards.length > 0
+        ? latestBatchStandards
+        : (hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER);
+    } else if (selectedMatrix === 'LIMONITE') {
+      const limFromBatch = latestBatchStandards.filter(s => s.toUpperCase().startsWith('LIM'));
+      candidateCodes = limFromBatch.length > 0 ? limFromBatch : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
     } else {
-      candidateCodes = selectedMatrix === 'SAPROLITE'
-        ? ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']
-        : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
+      const sapFromBatch = latestBatchStandards.filter(s => !s.toUpperCase().startsWith('LIM'));
+      const defaultSapCodes = [
+        'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 
+        'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195'
+      ];
+      candidateCodes = sapFromBatch.length > 0 ? sapFromBatch : defaultSapCodes;
     }
 
     const isCodeMatch = (code1: string, code2: string) => {
@@ -1172,9 +1232,14 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       return false;
     };
 
-    return availableStandardsData.filter(s => 
-      s.count > 0 && !candidateCodes.some(c => isCodeMatch(c, s.standardCode))
-    ).length;
+    return availableStandardsData.filter(s => {
+      if (s.count <= 0) return false;
+      if (candidateCodes.some(c => isCodeMatch(c, s.standardCode))) return false;
+      const isLim = s.standardCode.toUpperCase().startsWith('LIM');
+      if (selectedMatrix === 'LIMONITE') return isLim;
+      if (selectedMatrix === 'SAPROLITE' && selectedMethod === 'EDXRF') return !isLim;
+      return true;
+    }).length;
   }, [availableStandardsData, latestBatchStandards, selectedMethod, selectedMatrix, selectedInstruments]);
 
   // Standards rendered on the chart canvas:
@@ -1214,57 +1279,23 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* ------------------------------------------------------------- */}
-      {/* ENTERPRISE STREAMLINED INSPECTION COMMAND BAR                 */}
+      {/* ENTERPRISE STREAMLINED COMMAND BAR                            */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3">
         
-        {/* ROW 1: CORE SELECTION HIERARCHY (SITE -> METHOD -> MATRIX) */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+        {/* ROW 1: PRIMARY ESSENTIAL COMMANDS (CLEAN & UNCLUTTERED) */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           
-          <div className="flex flex-wrap items-center gap-3">
-            {/* 1. UNIVERSE ENTITY BADGE (STRICTLY DRIVEN BY PORTAL UNIVERSE) */}
-            {isDevOrManager ? (
-              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
-                <button
-                  type="button"
-                  onClick={() => setSelectedSite('TBP')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                    selectedSite === 'TBP'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  PT. TBP / GPS
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSite('GTS')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                    selectedSite === 'GTS'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  PT. GTS
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-black shadow-xs">
-                <Building2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span>{selectedSite === 'GTS' ? 'UNIVERSE: PT. GANE TAMBANG SENTOSA (GTS)' : 'UNIVERSE: PT. TRIMEGAH BANGUN PERSADA (TBP / GPS)'}</span>
-              </div>
-            )}
-
-            {/* 2. METHOD SELECTOR (EDXRF vs WDXRF) */}
-            <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
+          {/* LEFT: METHOD & MATRIX HIERARCHY */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* 1. Method Selector: EDXRF vs WDXRF */}
+            <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/80">
               <button
                 onClick={() => setSelectedMethod('EDXRF')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   selectedMethod === 'EDXRF'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 <Cpu className="w-3.5 h-3.5" />
@@ -1272,10 +1303,10 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
               </button>
               <button
                 onClick={() => setSelectedMethod('WDXRF')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   selectedMethod === 'WDXRF'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 <Cpu className="w-3.5 h-3.5" />
@@ -1283,132 +1314,83 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
               </button>
             </div>
 
-            {/* 3. PRIMARY MATRIX (SAPROLITE vs LIMONITE) - HANYA UNTUK EDXRF */}
+            {/* 2. Primary Matrix: SAPROLITE vs LIMONITE (Hanya untuk EDXRF) */}
             {selectedMethod === 'EDXRF' ? (
-              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
+              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/80">
                 <button
                   onClick={() => {
                     setSelectedMatrix('SAPROLITE');
-                    setSelectedStandards(['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']);
+                    const sapFromBatch = latestBatchStandards.filter(s => !s.toUpperCase().startsWith('LIM'));
+                    setSelectedStandards(sapFromBatch.length > 0 ? sapFromBatch : ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']);
                   }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     selectedMatrix === 'SAPROLITE'
-                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-black'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
-                  SAPROLITE (10 CRM)
+                  <span>Saprolite</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">10 CRM</span>
                 </button>
                 <button
                   onClick={() => {
                     setSelectedMatrix('LIMONITE');
-                    setSelectedStandards(['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05']);
+                    const limFromBatch = latestBatchStandards.filter(s => s.toUpperCase().startsWith('LIM'));
+                    setSelectedStandards(limFromBatch.length > 0 ? limFromBatch : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05']);
                   }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     selectedMatrix === 'LIMONITE'
-                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-black'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
-                  LIMONITE (LIM 01-05)
+                  <span>Limonite</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">LIM 01–05</span>
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 text-xs font-black shadow-xs">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 text-xs font-bold shadow-2xs">
                 <Layers className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
                 <span>
                   {selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B')
-                    ? `WDXRF ZETIUM TBP (${latestBatchStandards.length > 0 ? latestBatchStandards.length : 17} STANDAR BASELINE)`
-                    : `WDXRF SUPERMINI GTS (${latestBatchStandards.length > 0 ? latestBatchStandards.length : 17} STANDAR BASELINE)`}
+                    ? `WDXRF Zetium (${latestBatchStandards.length > 0 ? latestBatchStandards.length : 17} Standar)`
+                    : `WDXRF Supermini (${latestBatchStandards.length > 0 ? latestBatchStandards.length : 17} Standar)`}
                 </span>
               </div>
             )}
-
-            {historicalStandardsCount > 0 && (
-              <button
-                onClick={() => setShowHistoricalStandards(!showHistoricalStandards)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                  showHistoricalStandards
-                    ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 shadow-xs'
-                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-900'
-                }`}
-                title="Tampilkan data standar lama yang pernah diukur namun tidak masuk dalam batch verifikasi terakhir"
-              >
-                <Archive className="w-3.5 h-3.5 text-amber-500" />
-                <span>{showHistoricalStandards ? 'Tutup' : 'Buka'} Standar Arsip ({historicalStandardsCount})</span>
-              </button>
-            )}
           </div>
 
-          {/* Action & Layout Controls */}
+          {/* RIGHT: CONTROLS, ACTIONS, & ACCORDION DRAWER TOGGLE */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Filter Periode Tahun / All-Time */}
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
-              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tahun:</span>
+            {/* Filter Periode Tahun */}
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-0.5 text-xs font-black text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+                className="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
               >
                 <option value={currentYearStr}>{currentYearStr} (Tahun Berjalan)</option>
                 <option value={String(Number(currentYearStr) - 1)}>{Number(currentYearStr) - 1}</option>
                 <option value={String(Number(currentYearStr) - 2)}>{Number(currentYearStr) - 2}</option>
-                <option value="ALL">Semua Waktu (All-Time)</option>
+                <option value="ALL">Semua Waktu</option>
               </select>
             </div>
-
-            <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-0.5 bg-slate-100 dark:bg-slate-800 text-xs">
-              <button
-                onClick={() => setViewMode('side-by-side')}
-                className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                  viewMode === 'side-by-side'
-                    ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400'
-                }`}
-                title="Tampilan Strip Horizontal Berdampingan"
-              >
-                Berdampingan
-              </button>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400'
-                }`}
-                title="Tampilan Grid Auto"
-              >
-                Grid
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowStats(!showStats)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1 transition-all cursor-pointer ${
-                showStats
-                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent font-bold'
-                  : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-slate-700'
-              }`}
-            >
-              {showStats ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              KPI Stats
-            </button>
 
             {/* Dedicated Off-Spec Isolation Modal Launcher */}
             <button
               onClick={() => setShowOffspecModal(true)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black border flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
                 isolatedPoints.length > 0
-                  ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 shadow-rose-500/20'
-                  : 'bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                  : 'bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
               }`}
               title="Buka Chart Isolasi Data Off-Spec & Rekap Per Instrumen"
             >
-              <ShieldAlert className={`w-3.5 h-3.5 ${isolatedPoints.length > 0 ? 'text-amber-200 animate-pulse' : 'text-rose-500'}`} />
-              <span>Chart Isolasi Off-Spec</span>
+              <ShieldAlert className={`w-3.5 h-3.5 ${isolatedPoints.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500'}`} />
+              <span className="hidden sm:inline">Isolasi Off-Spec</span>
               {isolatedPoints.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white text-rose-700 font-black">
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-600 text-white font-black">
                   {isolatedPoints.length}
                 </span>
               )}
@@ -1417,113 +1399,230 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             {/* Dedicated Audit Trail Take Out Logs Button */}
             <button
               onClick={() => setShowTakeoutAuditModal(true)}
-              className="px-3 py-1.5 rounded-lg text-xs font-black border flex items-center gap-1.5 transition-all cursor-pointer shadow-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
               title="Buka Log Riwayat Take Out Data Off-Spec (ISO 17025 Audit Trail)"
             >
-              <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span>Audit Log Take Out</span>
+              <FileText className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span className="hidden sm:inline">Audit Log</span>
             </button>
 
+            {/* ACCORDION DRAWER TOGGLE (PENGATURAN ALAT & TAMPILAN) */}
+            <button
+              onClick={toggleAccordion}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-2 transition-all cursor-pointer shadow-2xs ${
+                isAccordionOpen
+                  ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-200 border-teal-300 dark:border-teal-700 ring-1 ring-teal-400/30'
+                  : 'bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+              }`}
+              title="Buka/Tutup Pengaturan Alat XRF & Tampilan"
+            >
+              <Sliders className={`w-3.5 h-3.5 ${isAccordionOpen ? 'text-teal-600 dark:text-teal-400' : 'text-slate-500'}`} />
+              <span>Opsi & Alat ({selectedInstruments.length})</span>
+              {isAccordionOpen ? (
+                <ChevronUp className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+              )}
+            </button>
+
+            {/* Refresh Button */}
             <button
               onClick={fetchChartData}
               disabled={loading}
-              className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl transition-all cursor-pointer shadow-xs"
+              className="p-2 bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-all cursor-pointer shadow-2xs border border-slate-200 dark:border-slate-700"
               title="Refresh Data Grafik"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-teal-600' : ''}`} />
             </button>
           </div>
         </div>
 
-        {/* ROW 2: REAL-TIME AVAILABILITY MESIN XRF (MEMBACA LANGSUNG DARI DB) */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                Availability Alat {selectedSite} • {selectedMethod}:
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-bold text-slate-500">
-                {selectedInstruments.length} Alat Terpilih
-              </span>
-              <button
-                onClick={() => {
-                  setNewInstSite(selectedSite);
-                  setNewInstMethod(selectedMethod);
-                  setShowAddInstrumentModal(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                title="Daftarkan Alat XRF Baru Langsung ke Portal"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Tambah Alat</span>
-              </button>
-            </div>
-          </div>
+        {/* COLLAPSIBLE ACCORDION PANEL: TAMPILAN, STATS, & KARTU AVAILABILITY ALAT */}
+        {isAccordionOpen && (
+          <div className="pt-3 border-t border-slate-200/80 dark:border-slate-800/80 space-y-4 animate-in fade-in-50 duration-200">
+            
+            {/* SUB-ROW 1: DISPLAY LAYOUT OPTIONS, KPI STATS, & ARSIP */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/60">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tampilan Grafik:</span>
+                <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-white dark:bg-slate-900 text-xs">
+                  <button
+                    onClick={() => setViewMode('side-by-side')}
+                    className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                      viewMode === 'side-by-side'
+                        ? 'bg-teal-50 dark:bg-teal-950/70 text-teal-700 dark:text-teal-300 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                    title="Tampilan Strip Horizontal Berdampingan"
+                  >
+                    Berdampingan
+                  </button>
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                      viewMode === 'grid'
+                        ? 'bg-teal-50 dark:bg-teal-950/70 text-teal-700 dark:text-teal-300 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                    title="Tampilan Grid Responsif"
+                  >
+                    Grid
+                  </button>
+                </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
-            {currentCategoryInstruments.map((inst, idx) => {
-              const active = selectedInstruments.includes(inst.code);
-              const theme = getInstrumentTheme(inst.code, inst.name, idx);
-              const hasData = (inst.measurementCount || 0) > 0;
+                {viewMode === 'grid' && (
+                  <div className="flex items-center gap-1 ml-2 text-xs">
+                    <span className="text-[11px] text-slate-500">Kolom:</span>
+                    {(['auto', '2', '3', '4', '6'] as const).map(col => (
+                      <button
+                        key={`col-${col}`}
+                        onClick={() => setColumnCount(col)}
+                        className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer border ${
+                          columnCount === col
+                            ? 'bg-teal-600 text-white border-teal-600'
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {col === 'auto' ? 'Auto' : `${col} Kol`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-              return (
+              <div className="flex items-center gap-2">
+                {/* KPI Stats Toggle */}
                 <button
-                  key={`inst-btn-${inst.code}`}
-                  onClick={() => toggleInstrument(inst.code)}
-                  className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                    active 
-                      ? `${theme.pillActive} shadow-xs scale-[1.02]`
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 hover:border-slate-400 opacity-70'
+                  onClick={() => setShowStats(!showStats)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                    showStats
+                      ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 border-transparent font-bold'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                   }`}
                 >
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      <span 
-                        className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
-                        style={{ backgroundColor: theme.dotColor }} 
-                      />
-                      <span className="text-xs font-black truncate">{inst.name}</span>
-                    </div>
-                    {active ? (
-                      <CheckSquare className="w-3.5 h-3.5 flex-shrink-0 ml-1" />
-                    ) : (
-                      <Square className="w-3.5 h-3.5 flex-shrink-0 ml-1 opacity-40" />
-                    )}
-                  </div>
-
-                  {/* Real-time Availability Badge */}
-                  <div className="mt-2 pt-1 border-t border-black/10 dark:border-white/10 flex items-center justify-between text-[10px]">
-                    <span className="truncate opacity-75">{inst.brandModel}</span>
-                    {hasData ? (
-                      <span className="font-extrabold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 text-[9.5px]">
-                        {inst.measurementCount} Batch
-                      </span>
-                    ) : (
-                      <span className="opacity-50 text-[9.5px]">No Data</span>
-                    )}
-                  </div>
+                  {showStats ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  <span>KPI Stats</span>
                 </button>
-              );
-            })}
 
-            {/* Quick Add Tool Card in Grid */}
-            <button
-              onClick={() => {
-                setNewInstSite(selectedSite);
-                setNewInstMethod(selectedMethod);
-                setShowAddInstrumentModal(true);
-              }}
-              className="p-2.5 rounded-xl border-2 border-dashed border-slate-300 hover:border-teal-500 dark:border-slate-700 dark:hover:border-teal-400 text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-teal-50/50 dark:hover:bg-teal-950/20 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer min-h-[70px]"
-              title="Daftarkan Alat Baru"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="text-[11px] font-bold">+ Alat Baru</span>
-            </button>
+                {/* Standar Arsip Toggle */}
+                {historicalStandardsCount > 0 && (
+                  <button
+                    onClick={() => setShowHistoricalStandards(!showHistoricalStandards)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                      showHistoricalStandards
+                        ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 shadow-xs'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-900'
+                    }`}
+                    title="Tampilkan data standar lama yang pernah diukur namun tidak masuk dalam batch verifikasi aktif"
+                  >
+                    <Archive className="w-3.5 h-3.5 text-amber-500" />
+                    <span>{showHistoricalStandards ? 'Tutup' : 'Buka'} Arsip ({historicalStandardsCount})</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* SUB-ROW 2: INSTRUMENT SELECTION & AVAILABILITY GRID */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Instrumen XRF {selectedSite} • {selectedMethod} ({selectedInstruments.length} dari {currentCategoryInstruments.length} Aktif):
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSelectAllInstruments}
+                    className="px-2 py-0.5 rounded text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                  >
+                    Pilih Semua
+                  </button>
+                  <button
+                    onClick={handleResetDefaultInstruments}
+                    className="px-2 py-0.5 rounded text-[11px] font-medium text-slate-600 dark:text-slate-300 hover:text-teal-600 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => {
+                      setNewInstSite(selectedSite);
+                      setNewInstMethod(selectedMethod);
+                      setShowAddInstrumentModal(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer ml-1"
+                    title="Daftarkan Alat XRF Baru Langsung ke Portal"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Tambah Alat</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Real-time Instrument Cards Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                {currentCategoryInstruments.map((inst, idx) => {
+                  const active = selectedInstruments.includes(inst.code);
+                  const theme = getInstrumentTheme(inst.code, inst.name, idx);
+                  const hasData = (inst.measurementCount || 0) > 0;
+
+                  return (
+                    <button
+                      key={`inst-btn-${inst.code}`}
+                      onClick={() => toggleInstrument(inst.code)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                        active 
+                          ? `${theme.pillActive} shadow-xs scale-[1.01]`
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 hover:border-slate-400 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                          <span 
+                            className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                            style={{ backgroundColor: theme.dotColor }} 
+                          />
+                          <span className="text-xs font-black truncate">{inst.name}</span>
+                        </div>
+                        {active ? (
+                          <CheckSquare className="w-3.5 h-3.5 flex-shrink-0 ml-1" />
+                        ) : (
+                          <Square className="w-3.5 h-3.5 flex-shrink-0 ml-1 opacity-40" />
+                        )}
+                      </div>
+
+                      {/* Real-time Availability Badge */}
+                      <div className="mt-2 pt-1 border-t border-black/10 dark:border-white/10 flex items-center justify-between text-[10px]">
+                        <span className="truncate opacity-75">{inst.brandModel}</span>
+                        {hasData ? (
+                          <span className="font-extrabold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 text-[9.5px]">
+                            {inst.measurementCount} Batch
+                          </span>
+                        ) : (
+                          <span className="opacity-50 text-[9.5px]">No Data</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {/* Quick Add Tool Card in Grid */}
+                <button
+                  onClick={() => {
+                    setNewInstSite(selectedSite);
+                    setNewInstMethod(selectedMethod);
+                    setShowAddInstrumentModal(true);
+                  }}
+                  className="p-2.5 rounded-xl border-2 border-dashed border-slate-300 hover:border-teal-500 dark:border-slate-700 dark:hover:border-teal-400 text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-teal-50/50 dark:hover:bg-teal-950/20 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer min-h-[70px]"
+                  title="Daftarkan Alat Baru"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="text-[11px] font-bold">+ Alat Baru</span>
+                </button>
+              </div>
+            </div>
+
           </div>
-        </div>
+        )}
 
       </div>
 
@@ -1543,7 +1642,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                 return (
                   <div
                     key={`strip-hdr-${instCode}`}
-                    className={`w-[380px] md:w-[440px] flex-shrink-0 text-center py-2 px-3 rounded-xl shadow-xs uppercase tracking-widest text-xs border-2 ${theme.headerBg} ${theme.headerBorder}`}
+                    className={`w-[380px] md:w-[440px] flex-shrink-0 text-center py-2 px-3 rounded-xl shadow-xs uppercase tracking-widest text-xs border ${theme.headerBg} ${theme.headerBorder}`}
                   >
                     {theme.name}
                   </div>
@@ -1558,7 +1657,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
               return (
                 <div
                   key={`grid-hdr-${instCode}`}
-                  className={`text-center py-2 px-3 rounded-xl shadow-xs uppercase tracking-widest text-xs border-2 ${theme.headerBg} ${theme.headerBorder}`}
+                  className={`text-center py-2 px-3 rounded-xl shadow-xs uppercase tracking-widest text-xs border ${theme.headerBg} ${theme.headerBorder}`}
                 >
                   {theme.name}
                 </div>

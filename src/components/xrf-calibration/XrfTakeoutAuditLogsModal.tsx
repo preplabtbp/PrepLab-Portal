@@ -357,7 +357,7 @@ export const XrfTakeoutAuditLogsModal: React.FC<XrfTakeoutAuditLogsModalProps> =
                             {log.createdAt ? new Date(log.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                           </div>
                           <div className="text-[10.5px] font-mono text-slate-400">
-                            {log.createdAt ? new Date(log.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                            {log.createdAt ? new Date(log.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
                           </div>
                         </td>
 

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { extractSmartStandardCode, isWdxrfInstrument, getWdxrfProfile } from '../../utils/xrfStandardDetector';
+import { TimeInput24 } from '../ui/TimeInput24';
 
 interface XrfDailyInputTabProps {
   instruments: Array<{ code: string; name: string; site?: string; methodType?: string }>;
@@ -879,11 +880,9 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
 
           <div>
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Jam Analisa</label>
-            <input
-              type="time"
+            <TimeInput24
               value={verificationTime}
-              onChange={e => setVerificationTime(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-500 outline-none"
+              onChange={val => setVerificationTime(val)}
             />
           </div>
 

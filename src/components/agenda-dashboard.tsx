@@ -7,7 +7,7 @@ import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import multiMonthPlugin from '@fullcalendar/multimonth';
 import { Calendar, Plus, FolderOpen, StickyNote, X, Search, Filter, Loader2, Edit, Trash2, CalendarDays, Palette, CloudUpload, Clock, FileText, CheckCircle2, Lock, Users } from 'lucide-react';
-import { Card, Button, Input, Select, Textarea } from './ui';
+import { Card, Button, Input, Select, Textarea, TimeInput24 } from './ui';
 import { toast } from 'sonner';
 
 export function AgendaDashboard({ 
@@ -546,6 +546,17 @@ export function AgendaDashboard({
                themeSystem="standard"
                buttonText={{ today: 'Hari Ini', month: 'Bulan', week: 'Minggu', list: 'Daftar' }}
                locale="id"
+               slotLabelFormat={{
+                 hour: '2-digit',
+                 minute: '2-digit',
+                 hour12: false
+               }}
+               eventTimeFormat={{
+                 hour: '2-digit',
+                 minute: '2-digit',
+                 hour12: false,
+                 meridiem: false
+               }}
                dayCellContent={(arg) => {
                  const cellDateStr = arg.date.toLocaleDateString('en-CA');
                  const dayEvts = filteredEvents.filter(e => {
@@ -617,8 +628,8 @@ export function AgendaDashboard({
                                             <p className="text-sm font-bold leading-tight mb-1.5" style={{ color: 'var(--text-main)' }}>{evt.title}</p>
                                             <p className="text-[11px] flex items-center gap-1 opacity-70" style={{ color: 'var(--text-muted)' }}>
                                                 <Clock className="w-3 h-3"/> 
-                                                {new Date(evt.start).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})} 
-                                                {evt.end && ` - ${new Date(evt.end).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}`}
+                                                {new Date(evt.start).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit', hour12: false})} 
+                                                {evt.end && ` - ${new Date(evt.end).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit', hour12: false})}`}
                                                 {evt.extendedProps?.kategori && <span className="ml-2 px-1.5 py-0.5 rounded-md border" style={{ borderColor: 'var(--border-main)' }}>{evt.extendedProps.kategori}</span>}
                                             </p>
                                         </div>
@@ -639,7 +650,7 @@ export function AgendaDashboard({
              {filteredEvents.filter(e => new Date(e.start) >= new Date()).slice(0, 5).map(e => (
                <div key={e.id} onClick={() => handleEventClick({event: e})} className="p-3 rounded-lg border cursor-pointer hover:bg-slate-50/5 transition-colors" style={{ borderColor: 'var(--border-main)' }}>
                  <p className="text-xs font-bold truncate mb-1" style={{ color: 'var(--text-main)' }}>{e.title}</p>
-                 <p className="text-[10px] flex items-center gap-1" style={{ color: 'var(--text-muted)' }}><Clock className="w-3 h-3"/> {new Date(e.start).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit'})}</p>
+                 <p className="text-[10px] flex items-center gap-1" style={{ color: 'var(--text-muted)' }}><Clock className="w-3 h-3"/> {new Date(e.start).toLocaleDateString('id-ID', {day: 'numeric', month: 'short'})}, {new Date(e.start).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit', hour12: false})}</p>
                </div>
              ))}
              {filteredEvents.filter(e => new Date(e.start) >= new Date()).length === 0 && <p className="text-xs italic" style={{ color: 'var(--text-muted)' }}>Tidak ada agenda mendatang</p>}
@@ -837,14 +848,10 @@ export function AgendaDashboard({
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60 space-y-2">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 mb-1">
-                          Jam Mulai
-                        </label>
-                        <input
-                          type="time"
+                        <TimeInput24
+                          label="Jam Mulai"
                           value={agendaForm.startTime}
-                          onChange={(e) => {
-                            const newStart = e.target.value;
+                          onChange={(newStart) => {
                             const [h, m] = newStart.split(':').map(Number);
                             const endH = String((h + 1) % 24).padStart(2, '0');
                             const endM = String(m || 0).padStart(2, '0');
@@ -854,18 +861,13 @@ export function AgendaDashboard({
                               endTime: `${endH}:${endM}`
                             }));
                           }}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-hidden focus:ring-2 focus:ring-teal-500 shadow-2xs"
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-extrabold text-slate-600 dark:text-slate-400 mb-1">
-                          Jam Selesai
-                        </label>
-                        <input
-                          type="time"
+                        <TimeInput24
+                          label="Jam Selesai"
                           value={agendaForm.endTime}
-                          onChange={(e) => setAgendaForm(prev => ({ ...prev, endTime: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold focus:outline-hidden focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                          onChange={(newEnd) => setAgendaForm(prev => ({ ...prev, endTime: newEnd }))}
                         />
                       </div>
                     </div>
@@ -1007,8 +1009,8 @@ export function AgendaDashboard({
                  <h3 className="text-lg font-bold" style={{ color: 'var(--text-main)' }}>{currentAgenda.title}</h3>
                  <p className="text-sm mt-1 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                    <Clock className="w-4 h-4"/>
-                   {new Date(currentAgenda.start).toLocaleString('id-ID')}
-                   {currentAgenda.end && ` - ${new Date(currentAgenda.end).toLocaleString('id-ID')}`}
+                   {new Date(currentAgenda.start).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, {new Date(currentAgenda.start).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })} WIT
+                   {currentAgenda.end && ` - ${new Date(currentAgenda.end).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })} WIT`}
                  </p>
                </div>
                <div className="p-3 rounded-lg text-sm space-y-2 border" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-main)' }}>
@@ -1108,8 +1110,8 @@ export function AgendaDashboard({
                     </div>
                     <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      {new Date(evt.start).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                      {evt.end && ` - ${new Date(evt.end).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`}
+                      {new Date(evt.start).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                      {evt.end && ` - ${new Date(evt.end).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })}`}
                       {evt.extendedProps?.pic && (
                         <span className="ml-2 truncate">• PIC: {evt.extendedProps.pic}</span>
                       )}

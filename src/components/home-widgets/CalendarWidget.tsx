@@ -408,8 +408,8 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({
                   {selectedDayAgendas.length > 0 ? (
                     selectedDayAgendas.map((evt, idx) => {
                       const isPriv = ['private', 'personal', 'pribadi'].includes(String(evt.kategori || '').toLowerCase());
-                      const startTimeStr = evt.startDate ? new Date(evt.startDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
-                      const endTimeStr = evt.endDate ? new Date(evt.endDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+                      const startTimeStr = evt.startDate ? new Date(evt.startDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                      const endTimeStr = evt.endDate ? new Date(evt.endDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
 
                       return (
                         <div

@@ -34,7 +34,7 @@ export function AiStudioPlaygroundScreen() {
       id: Date.now().toString(),
       role: 'user',
       text: textToSend,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }),
     };
 
     setMessages(prev => [...prev, userMsg]);
@@ -70,7 +70,7 @@ export function AiStudioPlaygroundScreen() {
         id: (Date.now() + 1).toString(),
         role: 'model',
         text: data.text || 'Tidak ada teks yang dihasilkan.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }),
       };
 
       setMessages(prev => [...prev, botMsg]);
@@ -80,7 +80,7 @@ export function AiStudioPlaygroundScreen() {
         id: (Date.now() + 1).toString(),
         role: 'model',
         text: `⚠️ Error: ${err.message || 'Gagal terhubung ke Vertex AI.'}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }),
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {

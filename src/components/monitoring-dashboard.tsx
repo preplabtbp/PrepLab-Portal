@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
-import { Card, Button, Input, Select } from './ui';
+import { Card, Button, Input, Select, TimeInput24 } from './ui';
 import { VerifiedSignaturePad } from './VerifiedSignaturePad';
 import { 
   getRekapanPemantauan, 
@@ -2194,12 +2194,10 @@ export function MonitoringDashboard({
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1">
                     Jam Input <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="time"
+                  <TimeInput24
                     required
                     value={modalJam}
-                    onChange={e => setModalJam(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-2xs"
+                    onChange={val => setModalJam(val)}
                   />
                 </div>
                 <div>
