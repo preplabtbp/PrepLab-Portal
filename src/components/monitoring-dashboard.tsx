@@ -2,6 +2,7 @@ import { toast } from 'sonner';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { Card, Button, Input, Select } from './ui';
+import { VerifiedSignaturePad } from './VerifiedSignaturePad';
 import { 
   getRekapanPemantauan, 
   buatPdfRekapan, 
@@ -165,8 +166,9 @@ export function MonitoringDashboard({
   const [modalSuhuData, setModalSuhuData] = useState<Record<string, { suhu: string; kel: string }>>({});
   const [modalGasData, setModalGasData] = useState<Record<string, { flow: string; pressure: string; leak: 'Y' | 'N'; catatan: string }>>({});
 
-  // Signature Pad Ref for manual input modal
+  // Signature Pad Ref & state for manual input modal
   const manualSigPadRef = useRef<SignatureCanvas>(null);
+  const [modalSignatureUrl, setModalSignatureUrl] = useState('');
 
   // Dedicated Backfill Signature Modal state
   const [sigModalOpen, setSigModalOpen] = useState(false);
@@ -175,6 +177,7 @@ export function MonitoringDashboard({
   const [sigModalApplyAll, setSigModalApplyAll] = useState(true);
   const [sigModalSubmitting, setSigModalSubmitting] = useState(false);
   const dedicatedSigPadRef = useRef<SignatureCanvas>(null);
+  const [sigModalSignatureUrl, setSigModalSignatureUrl] = useState('');
 
   const defaultPetugasName = useMemo(() => {
     return inspectorName || localStorage.getItem('inspectorName') || 'Personil Lab';
@@ -1040,14 +1043,14 @@ export function MonitoringDashboard({
     if (modalMode === 'BOTH' && !hasSuhuEntries && !hasGasEntries) {
       return toast.error('Mohon isi minimal satu data suhu ruangan atau tekanan gas');
     }
-    if (manualSigPadRef.current?.isEmpty()) {
+    if (!modalSignatureUrl && manualSigPadRef.current?.isEmpty()) {
       return toast.error('Tanda tangan petugas wajib dibubuhkan');
     }
 
     setModalSubmitting(true);
     try {
-      let sigUrl = '';
-      if (manualSigPadRef.current && !manualSigPadRef.current.isEmpty()) {
+      let sigUrl = modalSignatureUrl || '';
+      if (!sigUrl && manualSigPadRef.current && !manualSigPadRef.current.isEmpty()) {
         const sigBase64 = manualSigPadRef.current.getCanvas().toDataURL('image/png').split(',')[1];
         if (sigBase64) {
           sigUrl = await uploadPhotoToDrive(
@@ -1057,6 +1060,14 @@ export function MonitoringDashboard({
             'Pemantauan'
           );
         }
+      } else if (sigUrl && sigUrl.startsWith('data:image')) {
+        const sigBase64 = sigUrl.split(',')[1];
+        sigUrl = await uploadPhotoToDrive(
+          sigBase64,
+          'image/png',
+          `Sig_Manual_${modalPetugas.trim().replace(/\s+/g, '_')}_${Date.now()}.png`,
+          'Pemantauan'
+        );
       }
 
       await submitPemantauanBatch({
@@ -1088,26 +1099,37 @@ export function MonitoringDashboard({
     setSigModalDate(dateStr || '');
     setSigModalPetugas(defaultPetugas || defaultPetugasName);
     setSigModalApplyAll(true);
+    setSigModalSignatureUrl('');
     setSigModalOpen(true);
     setTimeout(() => dedicatedSigPadRef.current?.clear(), 100);
   };
 
   const handleSubmitSigModal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (dedicatedSigPadRef.current?.isEmpty()) {
+    if (!sigModalSignatureUrl && dedicatedSigPadRef.current?.isEmpty()) {
       return toast.error('Silakan bubuhkan tanda tangan terlebih dahulu');
     }
     setSigModalSubmitting(true);
     try {
-      const sigBase64 = dedicatedSigPadRef.current?.getCanvas().toDataURL('image/png').split(',')[1];
-      if (!sigBase64) throw new Error('Gagal mengambil data tanda tangan');
-
-      const sigUrl = await uploadPhotoToDrive(
-        sigBase64,
-        'image/png',
-        `Sig_Backfill_${sigModalPetugas.trim().replace(/\s+/g, '_')}_${Date.now()}.png`,
-        'Pemantauan'
-      );
+      let sigUrl = sigModalSignatureUrl || '';
+      if (!sigUrl) {
+        const sigBase64 = dedicatedSigPadRef.current?.getCanvas().toDataURL('image/png').split(',')[1];
+        if (!sigBase64) throw new Error('Gagal mengambil data tanda tangan');
+        sigUrl = await uploadPhotoToDrive(
+          sigBase64,
+          'image/png',
+          `Sig_Backfill_${sigModalPetugas.trim().replace(/\s+/g, '_')}_${Date.now()}.png`,
+          'Pemantauan'
+        );
+      } else if (sigUrl.startsWith('data:image')) {
+        const sigBase64 = sigUrl.split(',')[1];
+        sigUrl = await uploadPhotoToDrive(
+          sigBase64,
+          'image/png',
+          `Sig_Backfill_${sigModalPetugas.trim().replace(/\s+/g, '_')}_${Date.now()}.png`,
+          'Pemantauan'
+        );
+      }
 
       await updatePemantauanSignature({
         tanggal: sigModalApplyAll ? undefined : (sigModalDate || undefined),
@@ -2551,33 +2573,15 @@ export function MonitoringDashboard({
               )}
 
               {/* Tanda Tangan Petugas */}
-              <div className="border border-slate-200 bg-slate-50/70 rounded-2xl p-4 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <PenTool className="w-4 h-4 text-amber-600" />
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                      Tanda Tangan Petugas <span className="text-rose-500">*</span>
-                    </label>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => manualSigPadRef.current?.clear()}
-                    className="px-2.5 py-1 text-[11px] font-bold text-rose-600 bg-white border border-rose-200 rounded-lg hover:bg-rose-50 flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
-                  >
-                    <Trash2 className="w-3 h-3" /> Ulangi / Hapus
-                  </button>
-                </div>
-                <div className="border-2 border-dashed border-amber-300 rounded-xl bg-white overflow-hidden shadow-inner">
-                  <SignatureCanvas
-                    ref={manualSigPadRef}
-                    penColor="#000000"
-                    canvasProps={{ className: 'w-full h-36 block touch-none cursor-crosshair' }}
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 text-center font-medium">
-                  Bubuhkan tanda tangan di dalam area garis putus-putus. Tanda tangan ini otomatis tersimpan dan terverifikasi pada dokumen PDF (✓ TTD).
-                </p>
-              </div>
+              <VerifiedSignaturePad
+                signerName={modalPetugas}
+                signerNik={inspectorNik}
+                value={modalSignatureUrl}
+                onChange={setModalSignatureUrl}
+                label="Tanda Tangan Petugas"
+                theme="amber"
+                required
+              />
 
               {/* Overwrite option */}
               <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
@@ -2670,30 +2674,15 @@ export function MonitoringDashboard({
               </div>
 
               {/* Signature Pad */}
-              <div className="border border-slate-200 bg-slate-50/70 rounded-2xl p-4 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Bubuhkan Tanda Tangan <span className="text-rose-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => dedicatedSigPadRef.current?.clear()}
-                    className="px-2.5 py-1 text-[11px] font-bold text-rose-600 bg-white border border-rose-200 rounded-lg hover:bg-rose-50 flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
-                  >
-                    <Trash2 className="w-3 h-3" /> Ulangi / Hapus
-                  </button>
-                </div>
-                <div className="border-2 border-dashed border-indigo-300 rounded-xl bg-white overflow-hidden shadow-inner">
-                  <SignatureCanvas
-                    ref={dedicatedSigPadRef}
-                    penColor="#000000"
-                    canvasProps={{ className: 'w-full h-40 block touch-none cursor-crosshair' }}
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 text-center font-medium">
-                  Tanda tangani di area di atas dengan jari atau stylus
-                </p>
-              </div>
+              <VerifiedSignaturePad
+                signerName={sigModalPetugas}
+                signerNik={inspectorNik}
+                value={sigModalSignatureUrl}
+                onChange={setSigModalSignatureUrl}
+                label="Tanda Tangan Petugas"
+                theme="purple"
+                required
+              />
 
               {/* Batch Apply Checkbox */}
               <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-3 flex items-start gap-2.5 cursor-pointer" onClick={() => setSigModalApplyAll(!sigModalApplyAll)}>

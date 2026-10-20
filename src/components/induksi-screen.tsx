@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
-import SignatureCanvas from 'react-signature-canvas';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Card, Input, Select } from './ui';
+import { VerifiedSignaturePad } from './VerifiedSignaturePad';
 import { ChevronLeft, Loader2, Save, UploadCloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { WhatsAppModal } from './whatsapp-modal';
@@ -29,8 +29,8 @@ export function InduksiScreen() {
   const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
   const [waMessageText, setWaMessageText] = useState('');
 
-  const padPeserta = useRef<any>(null);
-  const padInduktor = useRef<any>(null);
+  const [ttdPeserta, setTtdPeserta] = useState('');
+  const [ttdInduktor, setTtdInduktor] = useState('');
 
   // Fetch employees for autocomplete
   const { data: employees = [] } = useQuery({
@@ -128,13 +128,11 @@ export function InduksiScreen() {
     if (!perusahaan) return toast.error('Pilih Perusahaan terlebih dahulu.');
     if (!namaPeserta || !namaInduktor) return toast.error('Pastikan Nama Peserta dan Induktor diisi.');
     
-    if (padPeserta.current?.isEmpty()) return toast.error('Tanda Tangan Peserta wajib diisi.');
-    if (padInduktor.current?.isEmpty()) return toast.error('Tanda Tangan Induktor wajib diisi.');
+    if (!ttdPeserta) return toast.error('Tanda Tangan Peserta wajib diisi.');
+    if (!ttdInduktor) return toast.error('Tanda Tangan Induktor wajib diisi.');
 
     setIsSubmitting(true);
     try {
-      const ttdPeserta = padPeserta.current.getCanvas().toDataURL('image/png');
-      const ttdInduktor = padInduktor.current.getCanvas().toDataURL('image/png');
 
       const payload: any = {
         tipe_A: tipeInduksi === 'lengkap' ? '✔' : '',
@@ -192,8 +190,8 @@ export function InduksiScreen() {
       setNamaInduktor(''); setNikInduktor(''); setJabatanInduktor('');
       setMateri({});
       setFotoDokumentasi(null);
-      padPeserta.current?.clear();
-      padInduktor.current?.clear();
+      setTtdPeserta('');
+      setTtdInduktor('');
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -318,15 +316,15 @@ export function InduksiScreen() {
             </div>
             
             <div className="mt-4">
-              <label className="block text-sm font-medium mb-1">Tanda Tangan Peserta <span className="text-red-500">*</span></label>
-              <div className="border rounded-md bg-gray-50 mb-2">
-                <SignatureCanvas 
-                  ref={padPeserta} 
-                  penColor="black" 
-                  canvasProps={{ className: 'w-full h-40' }} 
-                />
-              </div>
-              <Button variant="secondary" onClick={() => padPeserta.current?.clear()}>Hapus TTD Peserta</Button>
+              <VerifiedSignaturePad
+                signerName={namaPeserta}
+                signerNik={nikPeserta}
+                value={ttdPeserta}
+                onChange={setTtdPeserta}
+                label="Tanda Tangan Peserta"
+                theme="blue"
+                required
+              />
             </div>
           </div>
         )}
@@ -359,15 +357,15 @@ export function InduksiScreen() {
           </div>
 
           <div className="mt-4">
-            <label className="block text-sm font-medium mb-1">Tanda Tangan Induktor <span className="text-red-500">*</span></label>
-            <div className="border rounded-md bg-gray-50 mb-2">
-              <SignatureCanvas 
-                ref={padInduktor} 
-                penColor="black" 
-                canvasProps={{ className: 'w-full h-40' }} 
-              />
-            </div>
-            <Button variant="secondary" onClick={() => padInduktor.current?.clear()}>Hapus TTD Induktor</Button>
+            <VerifiedSignaturePad
+              signerName={namaInduktor}
+              signerNik={nikInduktor}
+              value={ttdInduktor}
+              onChange={setTtdInduktor}
+              label="Tanda Tangan Induktor"
+              theme="teal"
+              required
+            />
           </div>
         </div>
 

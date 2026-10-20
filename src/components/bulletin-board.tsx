@@ -141,6 +141,10 @@ export function BulletinBoard({
       if (cached && targetId) {
         const parsed = JSON.parse(cached);
         if (parsed && String(parsed.id) === String(targetId)) {
+          // If cached post is a dummy doc-* fallback, do not restore it; let posts load the real database table
+          if (String(parsed.id).startsWith('doc-')) {
+            return null;
+          }
           if (!canAccessAllSections && isLogbookPost(parsed)) {
             const sec = getSectionFromPost(parsed);
             if (!isUserAllowedToAccessSection(sec, userProfile, canAccessAllSections)) {
@@ -721,8 +725,61 @@ export function BulletinBoard({
         openSectionLogbook(secPart);
         return;
       }
-      if (targetId && !selectedPost) {
-        const target = posts.find((p) => String(p.id) === String(targetId));
+      // Check if current selectedPost is a dummy fallback (e.g. doc-* or section-*) or not set
+      const isDummySelectedPost = selectedPost && (String(selectedPost.id).startsWith('doc-') || String(selectedPost.id).startsWith('section-'));
+      if (targetId && (!selectedPost || isDummySelectedPost)) {
+        let target = posts.find((p) => String(p.id) === String(targetId));
+
+        // If not found by direct ID and targetId is a doc-* slug (e.g. doc-daily-laboratory)
+        if (!target && String(targetId).startsWith('doc-')) {
+          const cleanSlug = String(targetId).replace(/^doc-/, '').toLowerCase();
+          
+          // 1. Match by slugified title (e.g. "Daily Laboratory" -> "daily-laboratory")
+          target = posts.find((p) => {
+            const pSlug = (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            return pSlug === cleanSlug;
+          });
+
+          // 2. Match by normalized spaces
+          if (!target) {
+            const cleanTitle = cleanSlug.replace(/-/g, ' ');
+            target = posts.find((p) => {
+              const pTitle = (p.title || '').replace(/^[#\s\-*]+/, '').trim().toLowerCase();
+              return pTitle === cleanTitle;
+            });
+          }
+
+          // 3. Match known section routine/daily IDs
+          if (!target) {
+            if (cleanSlug.includes('daily-lab') || cleanSlug === 'daily-laboratory') {
+              target = posts.find((p) => p.id === 541) || posts.find((p) => p.id === 450);
+            } else if (cleanSlug.includes('non-routine-lab') || cleanSlug === 'non-routine-laboratory') {
+              target = posts.find((p) => p.id === 535) || posts.find((p) => p.id === 414);
+            } else if (cleanSlug.includes('weekly-lab') || cleanSlug === 'weekly-laboratory') {
+              target = posts.find((p) => p.id === 542) || posts.find((p) => p.id === 418);
+            } else if (cleanSlug.includes('monthly-lab') || cleanSlug === 'monthly-laboratory') {
+              target = posts.find((p) => p.id === 543) || posts.find((p) => p.id === 413);
+            } else if (cleanSlug.includes('daily-prep') || cleanSlug === 'daily-preparation') {
+              target = posts.find((p) => p.id === 637) || posts.find((p) => p.id === 447);
+            } else if (cleanSlug.includes('daily-maint') || cleanSlug === 'daily-maintenance') {
+              target = posts.find((p) => p.id === 427);
+            } else if (cleanSlug.includes('daily-inven') || cleanSlug === 'daily-inventory') {
+              target = posts.find((p) => p.id === 669) || posts.find((p) => p.id === 463);
+            } else if (cleanSlug.includes('daily-qa') || cleanSlug === 'daily-quality-assurance') {
+              target = posts.find((p) => p.id === 586) || posts.find((p) => p.id === 448);
+            }
+          }
+        }
+
+        // If targetId is a section-* (e.g. section-laboratorium)
+        if (!target && String(targetId).startsWith('section-')) {
+          const cleanSec = String(targetId).replace(/^section-/, '').toLowerCase();
+          target = posts.find((p) => {
+            const pTitle = (p.title || '').trim().toLowerCase();
+            return pTitle === cleanSec || (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-') === cleanSec;
+          });
+        }
+
         if (target) {
           if (!canAccessAllSections && isLogbookPost(target)) {
             const sec = getSectionFromPost(target);
@@ -734,6 +791,17 @@ export function BulletinBoard({
           }
           setSelectedPost(target);
           addRecentPost(target.id);
+
+          // Update URL if resolved from a doc-* or section-* slug to real numeric ID
+          if ((String(targetId).startsWith('doc-') || String(targetId).startsWith('section-')) && target.id) {
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.set("page", String(target.id));
+              localStorage.setItem("preplab_active_bulletin_page", String(target.id));
+              sessionStorage.setItem("preplab_cached_selected_post", JSON.stringify(target));
+              window.history.replaceState({}, "", url.toString());
+            } catch {}
+          }
         }
       }
     } catch (e) {}
