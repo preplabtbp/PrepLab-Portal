@@ -2925,7 +2925,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-700 border-slate-200'
                                   }`}
                                 >
-                                  <span className="text-[10px] font-bold block opacity-90">a. Kampung Baru</span>
+                                  <span className="text-[10px] font-bold block opacity-90">Kampung Baru</span>
                                   <span className="text-base font-black block mt-0.5">{messResidenceStats.nrKampungBaru}</span>
                                   <span className="text-[9px] opacity-80 font-semibold">Orang</span>
                                 </button>
@@ -2940,7 +2940,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-700 border-slate-200'
                                   }`}
                                 >
-                                  <span className="text-[10px] font-bold block opacity-90">b. Kampung Lama</span>
+                                  <span className="text-[10px] font-bold block opacity-90">Kampung Lama</span>
                                   <span className="text-base font-black block mt-0.5">{messResidenceStats.nrKampungLama}</span>
                                   <span className="text-[9px] opacity-80 font-semibold">Orang</span>
                                 </button>
@@ -2955,7 +2955,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       : 'bg-slate-50 hover:bg-emerald-50/60 text-slate-700 border-slate-200'
                                   }`}
                                 >
-                                  <span className="text-[10px] font-bold block opacity-90">c. Lainnya</span>
+                                  <span className="text-[10px] font-bold block opacity-90">Lainnya</span>
                                   <span className="text-base font-black block mt-0.5">{messResidenceStats.nrLainnya}</span>
                                   <span className="text-[9px] opacity-80 font-semibold">Soligi dll</span>
                                 </button>
