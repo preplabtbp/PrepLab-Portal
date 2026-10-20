@@ -1100,6 +1100,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
   }, [selectedEmployee?.nik]);
 
     // State & Perhitungan Kotak Status Mess & Residence Karyawan
+  const [isMessBoxOpen, setIsMessBoxOpen] = useState(false);
   const [activeMessCategory, setActiveMessCategory] = useState<'cr_mess' | 'nr_mess' | 'nr' | null>(null);
   const [nrSubFilter, setNrSubFilter] = useState<'all' | 'kampung_baru' | 'kampung_lama' | 'lainnya'>('all');
   const [messSearch, setMessSearch] = useState('');
@@ -2708,26 +2709,61 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
 
 
-                {/* KOTAK: STATUS MESS & RESIDENCE KARYAWAN */}
-                <div className="w-full bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-xs mt-3.5 space-y-3.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-700 flex items-center justify-center font-bold">
+                {/* KOTAK: STATUS MESS & RESIDENCE KARYAWAN (DROPDOWN COLLAPSIBLE) */}
+                <div className="w-full bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-xs mt-3.5 transition-all overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsMessBoxOpen(prev => !prev)}
+                    className="w-full p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left hover:bg-slate-50/70 transition-colors cursor-pointer group select-none"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-700 flex items-center justify-center font-bold group-hover:scale-105 transition-transform shadow-2xs">
                         <Home className="w-4 h-4" />
                       </div>
                       <div>
-                        <h3 className="font-extrabold text-sm sm:text-base text-slate-800 tracking-tight flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm sm:text-base text-slate-800 tracking-tight flex items-center gap-2 flex-wrap">
                           <span>Status Mess &amp; Residence Karyawan</span>
                           <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-teal-50 text-teal-800 border border-teal-200">
                             {messResidenceStats.totalWithData} Terdata
                           </span>
                         </h3>
-                        <p className="text-[11px] text-slate-500 font-medium">
+                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                           Klasifikasi akomodasi resmi (Mess Perusahaan CR/NR &amp; Domisili Residence Luar Mess)
                         </p>
                       </div>
                     </div>
-                  </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                      <span className="text-xs font-bold text-teal-700 group-hover:text-teal-800 transition-colors hidden sm:inline-block">
+                        {isMessBoxOpen ? 'Tutup Rincian' : 'Buka Dropdown'}
+                      </span>
+                      <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${
+                        isMessBoxOpen 
+                          ? 'bg-teal-500 text-white border-teal-600 shadow-xs' 
+                          : 'bg-slate-100 text-slate-600 border-slate-200 group-hover:bg-teal-50 group-hover:text-teal-700 group-hover:border-teal-200'
+                      }`}>
+                        <motion.div
+                          animate={{ rotate: isMessBoxOpen ? 180 : 0 }}
+                          transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </motion.div>
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* SMOOTH COLLAPSIBLE ACCORDION BODY */}
+                  <AnimatePresence initial={false}>
+                    {isMessBoxOpen && (
+                      <motion.div
+                        key="mess-collapsible-content"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
+                        className="overflow-hidden border-t border-slate-100"
+                      >
+                        <div className="p-4 sm:p-5 pt-3 sm:pt-4 space-y-3.5 bg-slate-50/30">
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                     {/* 1. CR Mess */}
@@ -3041,6 +3077,10 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               </tbody>
                             </table>
                           </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                         </div>
                       </motion.div>
                     )}
@@ -3847,7 +3887,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                               width = 'w-64',
                               cardTheme: 'teal' | 'amber' | 'slate' | 'red-dashed' = 'slate'
                             ) => {
-                              const isHeadOfSite = cardTheme === 'red-dashed' || roleTitle.toLowerCase().includes('head of site');
+                              const isHeadOfSite = cardTheme === 'red-dashed' || roleTitle.toLowerCase().includes('head of site') || roleTitle.toLowerCase().includes('deputy');
                               const resolvedEmp = emp || findEmp(defaultName, defaultNik);
                               const name = resolvedEmp?.name || defaultName;
                               const role = resolvedEmp?.jabatan || roleTitle;
@@ -4404,6 +4444,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
 
                             // Ambil personil dari activeEmployeesList berdasarkan seksi / jabatan
                             const headOfSiteEmp = findEmp('Younsel Evand Roos');
+                            const deputyHeadEmp = findEmp('Primus Priyanto');
                             const managerEmp = findEmp('Deni Nugraha Perdiana', '04D20020842');
                             const prepSptEmp = findEmp('Arif Maulana Lessy', '02D24000009');
                             const labSptEmp = findEmp('Tigwa Anggawikara', '04D23000004');
@@ -4796,7 +4837,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                 {/* ================= DIAGRAM STRUKTUR UTAMA (FULL VIEW - STRUKTUR RESMI HIERARKIS) ================= */}
                                 <div className="w-full max-w-full mx-auto">
 
-                                  {/* LEVEL 0: SITE MANAGEMENT (HEAD OF SITE) */}
+                                  {/* LEVEL 0: SITE MANAGEMENT (HEAD OF SITE & DEPUTY HEAD OF SITE) */}
                                   <div className="flex flex-col items-center">
                                     {renderAniExecutiveCard(
                                       headOfSiteEmp,
@@ -4807,8 +4848,21 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                                       'red-dashed'
                                     )}
 
+                                    {/* Garis Vertikal ke Deputy Head of Site */}
+                                    <div className="w-0 h-6 border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
+
+                                    {/* LEVEL 0.5: DEPUTY HEAD OF SITE, TECHNICAL */}
+                                    {renderAniExecutiveCard(
+                                      deputyHeadEmp,
+                                      'Deputy Head of Site, Technical',
+                                      'Primus Priyanto',
+                                      undefined,
+                                      'w-64',
+                                      'red-dashed'
+                                    )}
+
                                     {/* Garis Vertikal ke Manager */}
-                                    <div className="w-0 h-7 border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
+                                    <div className="w-0 h-6 border-l-2 border-solid border-slate-900 relative flex items-center justify-center" />
 
                                     {/* LEVEL 1: PREPARATION & LABORATORY MANAGER */}
                                     <div className="relative">
