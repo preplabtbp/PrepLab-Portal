@@ -78,6 +78,7 @@ import { kbbiRouter } from "./server/routes/kbbi.js";
 import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
+import { employeeLeavesRouter } from "./server/routes/employeeLeaves.js";
 import { safetyRekapRouter } from "./server/routes/safetyRekap.js";
 import { inspectionPlannerRouter } from "./server/routes/inspectionPlanner.js";
 import { trainingRouter, ensureTrainingRecordsTable, initTrainingNotificationCron } from "./server/routes/training.js";
@@ -1970,6 +1971,7 @@ const app = express();
       url.startsWith('/api/apd') ||
       url.startsWith('/api/logbook') ||
       url.startsWith('/api/clinic') ||
+      url.startsWith('/api/employee-leaves') ||
       url.startsWith('/api/xrf')
     )) {
       return next();
@@ -2006,6 +2008,7 @@ const app = express();
   app.use("/api/gamification", gamificationRouter);
   app.use(logbookRouter);
   app.use(clinicRouter);
+  app.use(employeeLeavesRouter);
   app.use(safetyRekapRouter);
   app.use(inspectionPlannerRouter);
   app.use(trainingRouter);

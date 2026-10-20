@@ -8,7 +8,7 @@ let activeLoungePayload: any = null;
 const getSocketServerUrl = (): string => {
   if (typeof window === 'undefined') return '';
   // Always use the official host/origin (portal.preplabtbp.com or localhost in dev)
-  // Connecting to the same origin ensures valid enterprise SSL and avoids antivirus blocks on raw cloud domains (*.run.app)
+  // to avoid corporate firewall / ESET Endpoint Security blocks on raw *.run.app URLs
   return window.location.origin;
 };
 
