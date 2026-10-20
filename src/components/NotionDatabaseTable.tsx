@@ -8675,12 +8675,40 @@ export function NotionDatabaseTable({
                                               </button>
                                             )}
 
+                                            {/* Quick Open Form Permintaan Training button */}
+                                            {(String(displayTitle || val || '').toLowerCase().includes('sap') ||
+                                              String(displayTitle || val || '').toLowerCase().includes('training') ||
+                                              String(displayTitle || val || '').toLowerCase().includes('permintaan training')) && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                  window.location.href = '/training-database?tab=form_permintaan&returnTo=' + returnUrl;
+                                                }}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                title="Klik untuk membuka Form Permintaan Training"
+                                              >
+                                                <FileSpreadsheet className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                                                <span>Buka Form Training</span>
+                                              </button>
+                                            )}
+
                                             {/* Open Badge / Button */}
                                             <button
                                               type="button"
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 const taskTitle = String(displayTitle || val || '').toLowerCase();
+                                                if (
+                                                  taskTitle.includes('sap') ||
+                                                  taskTitle.includes('training') ||
+                                                  taskTitle.includes('permintaan training')
+                                                ) {
+                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                  window.location.href = '/training-database?tab=form_permintaan&returnTo=' + returnUrl;
+                                                  return;
+                                                }
                                                 if (taskTitle.includes('jadwal cuti')) {
                                                   const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
                                                   window.location.href = `/roster-admin?view=leave_schedule&returnTo=${returnUrl}`;
