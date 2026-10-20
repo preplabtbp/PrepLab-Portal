@@ -21,6 +21,7 @@ interface GroupReportProps {
   isDeveloper?: boolean;
   // 'feed' = modul SAP (laporan & feed), 'rekap' = detail rekap di menu Safety
   mode?: 'feed' | 'rekap';
+  initialWeek?: string;
 }
 
 function getCurrentISOWeekTag(d: Date = new Date()): string {
@@ -170,7 +171,7 @@ export function formatReportDateTime(timestamp?: string | number | Date | null):
   }
 }
 
-export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false, mode = 'rekap' }: GroupReportProps) {
+export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, inspectorSection, onClose, isFloating = false, isDeveloper = false, mode = 'rekap', initialWeek }: GroupReportProps) {
   // Main view: 'rekap' (detail status kepatuhan personil) atau 'feed' (linimasa & bukti laporan SAP)
   const [activeTab, setActiveTab] = useState<'rekap' | 'feed'>(mode || 'rekap');
 
@@ -193,7 +194,14 @@ export function GroupReportScreen({ inspectorName, inspectorNik, inspectorRole, 
 
   // Rekap Inspeksi State & Week Filter
   const currentActiveWeek = useMemo(() => getCurrentISOWeekTag(new Date()), []);
-  const [selectedWeek, setSelectedWeek] = useState<string>(currentActiveWeek);
+  const [selectedWeek, setSelectedWeek] = useState<string>(initialWeek || currentActiveWeek);
+
+  // Sync selectedWeek if initialWeek changes from parent
+  useEffect(() => {
+    if (initialWeek && initialWeek !== selectedWeek) {
+      setSelectedWeek(initialWeek);
+    }
+  }, [initialWeek]);
   const weekOptions = useMemo(() => generateWeekOptions(currentActiveWeek), [currentActiveWeek]);
   const [rekapSummary, setRekapSummary] = useState<{ total: number; sudah: number; belum: number; percentage: number; cutiCount?: number; selectedWeek?: string }>({ total: 0, sudah: 0, belum: 0, percentage: 0, cutiCount: 0 });
   const [rekapList, setRekapList] = useState<any[]>([]);

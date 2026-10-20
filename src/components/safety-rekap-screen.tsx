@@ -782,6 +782,306 @@ function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSave
   );
 }
 
+
+// ─── Direct Inline Popover/Editor Components ─────────────────────────────────
+
+function InlineDatePopover({
+  value,
+  period,
+  onSave,
+  disabled
+}: {
+  value: DateVal;
+  period: Period;
+  onSave: (val: string | null) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const minDate = toIsoDate(period.start);
+  const maxDate = toIsoDate(period.end);
+  const form = dateToForm(value);
+  const [dateVal, setDateVal] = useState(form.date || minDate);
+
+  if (disabled) {
+    if (value === null) return <span className="opacity-40">N/A</span>;
+    if (value === '') return <span className="text-rose-400 font-bold">—</span>;
+    return <span>{value === '√' ? '✓' : formatShortDate(value)}</span>;
+  }
+
+  return (
+    <div className="relative inline-block" onClick={e => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors font-semibold flex items-center justify-center gap-1 mx-auto cursor-pointer group"
+        title="Klik untuk langsung ubah tanggal / status"
+      >
+        {value === null ? (
+          <span className="text-[10px] opacity-40 font-mono">Tdk Wajib</span>
+        ) : value === '' ? (
+          <span className="text-rose-500 font-bold text-xs">—</span>
+        ) : isLateDate(value) ? (
+          <span className="px-1.5 py-0.5 rounded bg-red-600 text-white font-bold text-[11px] shadow-2xs">
+            {formatShortDate(value)}
+          </span>
+        ) : (
+          <span className="text-emerald-700 dark:text-emerald-400 font-bold text-[11.5px]">
+            {value === '√' ? '✓ Selesai' : formatShortDate(value)}
+          </span>
+        )}
+        <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60 text-slate-400 ml-0.5 transition-opacity" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-1.5 w-52 p-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-xl space-y-2 text-left">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500">Ubah Tanggal</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-xs text-slate-400 hover:text-slate-700 dark:hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase">Pilih Tanggal Periode:</label>
+            <input
+              type="date"
+              min={minDate}
+              max={maxDate}
+              value={dateVal}
+              onChange={e => setDateVal(e.target.value)}
+              className="w-full h-8 px-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-teal-500"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                onSave(dateVal);
+                setOpen(false);
+              }}
+              className="w-full py-1 mt-1 rounded bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] shadow-xs cursor-pointer transition-colors"
+            >
+              Simpan Tanggal
+            </button>
+          </div>
+
+          <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                onSave('√');
+                setOpen(false);
+              }}
+              className="py-1 px-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200 text-center"
+              title="Tandai Selesai (√)"
+            >
+              ✓ Selesai
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onSave('');
+                setOpen(false);
+              }}
+              className="py-1 px-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-800 text-[10px] font-bold border border-rose-200 text-center"
+              title="Kosongkan (Belum)"
+            >
+              Belum
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onSave('-');
+                setOpen(false);
+              }}
+              className="py-1 px-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold border border-slate-300 text-center"
+              title="Tidak Wajib (-)"
+            >
+              Tdk Wajib
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InlineTextPopover({
+  value,
+  onSave,
+  disabled
+}: {
+  value: string;
+  onSave: (val: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [textVal, setTextVal] = useState(value || '');
+
+  useEffect(() => {
+    setTextVal(value || '');
+  }, [value]);
+
+  if (disabled) {
+    return <span>{value || <span className="text-[var(--text-muted)] italic">Belum ada laporan</span>}</span>;
+  }
+
+  return (
+    <div className="relative w-full" onClick={e => e.stopPropagation()}>
+      <div
+        onClick={() => setOpen(!open)}
+        className="cursor-pointer group flex items-center justify-between gap-1 p-1 -m-1 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+        title="Klik untuk langsung edit keterangan inspeksi"
+      >
+        <span className="truncate max-w-[280px]">
+          {value || <span className="text-[var(--text-muted)] italic">Belum ada laporan</span>}
+        </span>
+        <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-60 text-slate-400 shrink-0 transition-opacity" />
+      </div>
+
+      {open && (
+        <div className="absolute z-50 left-0 top-full mt-1.5 w-72 p-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-xl space-y-2 text-left">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500">Edit Keterangan Inspeksi</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-xs text-slate-400 hover:text-slate-700 dark:hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+
+          <textarea
+            value={textVal}
+            onChange={e => setTextVal(e.target.value)}
+            placeholder="Contoh: Inspeksi Preparasi Wet Shift A"
+            rows={2}
+            className="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-teal-500 resize-none"
+          />
+
+          <div className="flex items-center justify-end gap-1.5 pt-1">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onSave(textVal.trim());
+                setOpen(false);
+              }}
+              className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-lg shadow-xs"
+            >
+              Simpan
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InlineAbsencePopover({
+  row,
+  onSave,
+  disabled
+}: {
+  row: RekapRow;
+  onSave: (absenceStatus: string | null) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (disabled) {
+    return (
+      <div className="flex items-center justify-center gap-2 text-xs font-bold tracking-wide">
+        <Palmtree className="w-4 h-4" /> {row.absence ? ABSENCE_OPTIONS[row.absence].excel : 'CUTI'}
+        <span className="font-medium opacity-70">— tidak termasuk target minggu ini</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative inline-block" onClick={e => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-center gap-2 text-xs font-bold tracking-wide py-1 px-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer group"
+        title="Klik untuk langsung ubah status cuti / kehadiran"
+      >
+        <Palmtree className="w-4 h-4" />
+        <span>{row.absence ? ABSENCE_OPTIONS[row.absence].excel : 'CUTI'}</span>
+        <span className="font-medium opacity-70">— tidak termasuk target minggu ini</span>
+        <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-70 ml-1 transition-opacity" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-1.5 w-60 p-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-xl space-y-2 text-left">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500">Ubah Status Kehadiran</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-xs text-slate-400 hover:text-slate-700 dark:hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => {
+                onSave(''); // Hadir / Wajib
+                setOpen(false);
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200"
+            >
+              ✓ Hadir (Wajib Lapor)
+            </button>
+
+            {ABSENCE_KEYS.map(k => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => {
+                  onSave(k);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                  row.absence === k 
+                    ? 'bg-purple-100 text-purple-900 font-bold border border-purple-300' 
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                }`}
+              >
+                {ABSENCE_OPTIONS[k].excel}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => {
+                onSave(null); // Otomatis
+                setOpen(false);
+              }}
+              className="w-full text-center py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 pt-1 border-t border-slate-100"
+            >
+              Reset ke Otomatis
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ─── Layar utama ─────────────────────────────────────────────────────────────
 
 export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, inspectorSection, onBack }: SafetyRekapScreenProps) {
@@ -846,6 +1146,68 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     const startPart = s.getMonth() === e.getMonth() ? `${s.getDate()}` : `${s.getDate()} ${MONTHS_FULL[s.getMonth()]}`;
     return `${startPart} - ${e.getDate()} ${MONTHS_FULL[e.getMonth()]} ${e.getFullYear()}`;
   }, [weekRange]);
+
+    const [savingNik, setSavingNik] = useState<string | null>(null);
+
+  const handleInlineSave = async (row: RekapRow, fieldUpdates: Partial<{
+    absenceStatus: string | null;
+    ktaDone: boolean | null;
+    tglKta: string | null;
+    tglTta1: string | null;
+    tglTta2: string | null;
+    inspeksiDone: boolean | null;
+    keteranganInspeksi: string | null;
+    tglInspeksi: string | null;
+  }>) => {
+    setSavingNik(row.nik);
+    try {
+      const a = row.auto;
+      const currentEdit = row.edit || {};
+
+      // Helper diffing
+      const resolveDate = (newVal: string | null | undefined, curVal: DateVal, autoVal: DateVal) => {
+        if (newVal !== undefined) return newVal;
+        if (curVal === autoVal) return null;
+        if (curVal === null) return '-';
+        if (curVal === '') return '';
+        return curVal;
+      };
+
+      const payload = {
+        week: selectedWeek,
+        year: currentYear,
+        nik: row.nik,
+        name: row.name,
+        absenceStatus: fieldUpdates.absenceStatus !== undefined 
+          ? fieldUpdates.absenceStatus 
+          : (row.absence === a.absence ? null : (row.absence ?? '')),
+        ktaDone: fieldUpdates.ktaDone !== undefined ? fieldUpdates.ktaDone : (row.ktaDone === a.ktaDone ? null : row.ktaDone),
+        tglKta: resolveDate(fieldUpdates.tglKta, row.tglKta, a.tglKta),
+        tglTta1: resolveDate(fieldUpdates.tglTta1, row.tglTta1, a.tglTta1),
+        tglTta2: resolveDate(fieldUpdates.tglTta2, row.tglTta2, a.tglTta2),
+        inspeksiDone: fieldUpdates.inspeksiDone !== undefined ? fieldUpdates.inspeksiDone : (row.inspeksiDone === a.inspeksiDone ? null : row.inspeksiDone),
+        keteranganInspeksi: fieldUpdates.keteranganInspeksi !== undefined 
+          ? fieldUpdates.keteranganInspeksi 
+          : (row.keteranganInspeksi?.trim() === a.keteranganInspeksi?.trim() ? null : row.keteranganInspeksi?.trim()),
+        tglInspeksi: resolveDate(fieldUpdates.tglInspeksi, row.tglInspeksi, a.tglInspeksi),
+        editorNik: inspectorNik,
+        editorName: inspectorName
+      };
+
+      const res = await fetch('/api/safety-rekap/edits', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Gagal menyimpan');
+      await fetchEdits(selectedWeek);
+      toast.success(`Rekap ${row.name} berhasil diperbarui`);
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal menyimpan');
+    } finally {
+      setSavingNik(null);
+    }
+  };
 
   const fetchEdits = useCallback(async (week: string) => {
     try {
@@ -947,10 +1309,27 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     ktaData.rekapList.filter(isValidEmployee).forEach(emp => {
       Object.assign(ensure(emp, null).auto, buildKtaCells(emp, weekRange));
     });
+    // Nama/NIK personil yang aktif bertugas di Jadwal Inspeksi (tidak boleh ditimpa cuti oleh roster)
+    const activeScheduledNiks = new Set<string>();
+    [...inspeksiData.rekapList, ...ktaData.rekapList].filter(isValidEmployee).forEach(emp => {
+      if (emp.nik) activeScheduledNiks.add(emp.nik.toString().trim().toUpperCase());
+    });
+
     if (leaveList) {
       // Sumber status cuti: Kontrol Cuti Karyawan (Jadwal Inspeksi) — Izin → IZIN, Dinas Luar → DINAS, lainnya → CUTI
+      // Proteksi: Personil yang memiliki jadwal tugas inspeksi aktif TIDAK boleh ditimpa menjadi CUTI
       leaveList.filter(isValidEmployee).forEach(emp => {
-        ensure(emp, emp.category === 'IZIN' ? 'IZIN' : emp.category === 'DINAS' ? 'DINAS' : 'CUTI', true);
+        const k = (emp.nik || '').toString().trim().toUpperCase();
+        if (!activeScheduledNiks.has(k)) {
+          ensure(emp, emp.category === 'IZIN' ? 'IZIN' : emp.category === 'DINAS' ? 'DINAS' : 'CUTI', true);
+        }
+      });
+      // Pastikan personil cuti dari jadwal inspeksi juga dimasukkan
+      [...inspeksiData.cutiList, ...ktaData.cutiList].filter(isValidEmployee).forEach(emp => {
+        const k = (emp.nik || '').toString().trim().toUpperCase();
+        if (!activeScheduledNiks.has(k)) {
+          ensure(emp, 'CUTI');
+        }
       });
     } else {
       [...inspeksiData.cutiList, ...ktaData.cutiList].filter(isValidEmployee).forEach(emp => ensure(emp, 'CUTI'));
@@ -1190,6 +1569,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
           inspectorNik={inspectorNik}
           inspectorRole={inspectorRole}
           inspectorSection={inspectorSection}
+          initialWeek={selectedWeek}
         />
       ) : (
         <>
@@ -1365,22 +1745,94 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
 
                       {r.absence ? (
                         <td colSpan={7} className={`${td} border-l border-l-[var(--border-main)] ${ABSENCE_OPTIONS[r.absence].screen}`}>
-                          <div className="flex items-center justify-center gap-2 text-xs font-bold tracking-wide">
-                            <Palmtree className="w-4 h-4" /> {ABSENCE_OPTIONS[r.absence].excel}
-                            <span className="font-medium opacity-70">— tidak termasuk target minggu ini</span>
-                          </div>
+                          <InlineAbsencePopover
+                            row={r}
+                            disabled={!canEdit}
+                            onSave={(absenceStatus) => handleInlineSave(r, { absenceStatus })}
+                          />
                         </td>
                       ) : (
                         <>
-                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>{statusBadge(r.ktaDone, r.ktaLate)}</td>
-                          {dateCell(r.tglKta, 'kta')}
-                          {dateCell(r.tglTta1, 'tta1')}
-                          {dateCell(r.tglTta2, 'tta2')}
-                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>{statusBadge(r.inspeksiDone, r.inspeksiLate)}</td>
-                          <td className={`${td} border-l border-l-[var(--border-main)] min-w-[260px]`}>
-                            {r.keteranganInspeksi || <span className="text-[var(--text-muted)] italic">Belum ada laporan</span>}
+                          {/* STATUS KTA/TTA: Klik langsung untuk toggle status selesai */}
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                            {canEdit ? (
+                              <button
+                                type="button"
+                                onClick={() => handleInlineSave(r, { ktaDone: !r.ktaDone })}
+                                className="cursor-pointer hover:opacity-80 active:scale-95 transition-transform"
+                                title="Klik langsung untuk toggle Status KTA/TTA"
+                              >
+                                {statusBadge(r.ktaDone, r.ktaLate)}
+                              </button>
+                            ) : (
+                              statusBadge(r.ktaDone, r.ktaLate)
+                            )}
                           </td>
-                          {dateCell(r.tglInspeksi, 'insp')}
+
+                          {/* TGL KTA: Klik langsung untuk ubah tanggal */}
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                            <InlineDatePopover
+                              value={r.tglKta}
+                              period={weekRange}
+                              disabled={!canEdit}
+                              onSave={(tglKta) => handleInlineSave(r, { tglKta })}
+                            />
+                          </td>
+
+                          {/* TGL TTA 1: Klik langsung untuk ubah tanggal */}
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                            <InlineDatePopover
+                              value={r.tglTta1}
+                              period={weekRange}
+                              disabled={!canEdit}
+                              onSave={(tglTta1) => handleInlineSave(r, { tglTta1 })}
+                            />
+                          </td>
+
+                          {/* TGL TTA 2: Klik langsung untuk ubah tanggal */}
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                            <InlineDatePopover
+                              value={r.tglTta2}
+                              period={weekRange}
+                              disabled={!canEdit}
+                              onSave={(tglTta2) => handleInlineSave(r, { tglTta2 })}
+                            />
+                          </td>
+
+                          {/* STATUS INSPEKSI: Klik langsung untuk toggle status selesai */}
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                            {canEdit ? (
+                              <button
+                                type="button"
+                                onClick={() => handleInlineSave(r, { inspeksiDone: !r.inspeksiDone })}
+                                className="cursor-pointer hover:opacity-80 active:scale-95 transition-transform"
+                                title="Klik langsung untuk toggle Status Inspeksi"
+                              >
+                                {statusBadge(r.inspeksiDone, r.inspeksiLate)}
+                              </button>
+                            ) : (
+                              statusBadge(r.inspeksiDone, r.inspeksiLate)
+                            )}
+                          </td>
+
+                          {/* KETERANGAN INSPEKSI: Klik langsung untuk edit teks */}
+                          <td className={`${td} border-l border-l-[var(--border-main)] min-w-[260px]`}>
+                            <InlineTextPopover
+                              value={r.keteranganInspeksi}
+                              disabled={!canEdit}
+                              onSave={(keteranganInspeksi) => handleInlineSave(r, { keteranganInspeksi })}
+                            />
+                          </td>
+
+                          {/* TGL INSPEKSI: Klik langsung untuk ubah tanggal */}
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                            <InlineDatePopover
+                              value={r.tglInspeksi}
+                              period={weekRange}
+                              disabled={!canEdit}
+                              onSave={(tglInspeksi) => handleInlineSave(r, { tglInspeksi })}
+                            />
+                          </td>
                         </>
                       )}
 
