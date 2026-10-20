@@ -65,7 +65,7 @@ import {
   Lock,
   Target,
   ClipboardCheck,
-  Link2,
+Link2,
   PlaneTakeoff,
   Coffee
 } from 'lucide-react';
