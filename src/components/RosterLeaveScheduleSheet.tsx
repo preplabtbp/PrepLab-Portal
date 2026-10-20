@@ -404,6 +404,7 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
 const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
   no: true,
   nama: true,
+  section: true,
   poh: true,
   jabatan: true,
   tanggalCuti: true,
@@ -422,12 +423,13 @@ const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
 
 const COLUMN_DEFS = [
   { id: 'no', label: 'NO' },
-  { id: 'nama', label: 'NAMA & NIK' },
+  { id: 'nama', label: 'NAMA KARYAWAN' },
+  { id: 'section', label: 'SECTION' },
   { id: 'poh', label: 'POH' },
-  { id: 'jabatan', label: 'JABATAN & GOL' },
+  { id: 'jabatan', label: 'JABATAN' },
   { id: 'tanggalCuti', label: 'TANGGAL CUTI' },
   { id: 'tanggalOnsite', label: 'TANGGAL ON SITE' },
-  { id: 'ket', label: 'KET' },
+  { id: 'ket', label: 'KETERANGAN' },
   { id: 'perubahanJadwalOnsite', label: 'PERUBAHAN JADWAL ONSITE' },
   { id: 'travel', label: 'Travel (TRV)', group: 'duration' as const },
   { id: 'tahunanIstimewa', label: 'Tahunan / Istimewa', group: 'duration' as const },
@@ -524,6 +526,7 @@ export function RosterLeaveScheduleSheet({
     if (isRestrictedPerSection) return userUnifiedSection;
     return 'ALL';
   });
+  const [selectedKet, setSelectedKet] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Lock section to userUnifiedSection for restricted users
@@ -790,6 +793,25 @@ export function RosterLeaveScheduleSheet({
     return Array.from(set).sort();
   }, [isRestrictedPerSection, userUnifiedSection, accessibleRecords, activeTab]);
 
+  // Available Keterangan options for filtering
+  const availableKets = useMemo(() => {
+    const set = new Set<string>();
+    accessibleRecords.forEach(e => {
+      if (activeTab === 'staff' && e.isGol1) return;
+      if (activeTab === 'crew' && !e.isGol1) return;
+      if (e.ket) set.add(e.ket);
+    });
+    const list = Array.from(set);
+    list.sort((a, b) => {
+      if (a === 'Cuti Selesai') return -1;
+      if (b === 'Cuti Selesai') return 1;
+      if (a === 'Sesuai Roster') return -1;
+      if (b === 'Sesuai Roster') return 1;
+      return a.localeCompare(b);
+    });
+    return list;
+  }, [accessibleRecords, activeTab]);
+
   // Visible duration columns count & layout helpers
   const visibleDurationColsCount = useMemo(() => {
     return ['travel', 'tahunanIstimewa', 'extra', 'izinKhusus', 'izin', 'tambahanTravel']
@@ -797,7 +819,7 @@ export function RosterLeaveScheduleSheet({
   }, [visibleColumns]);
 
   const visibleBeforeDurationCount = useMemo(() => {
-    return ['no', 'nama', 'poh', 'jabatan', 'tanggalCuti', 'tanggalOnsite', 'ket', 'perubahanJadwalOnsite']
+    return ['no', 'nama', 'section', 'poh', 'jabatan', 'tanggalCuti', 'tanggalOnsite', 'ket', 'perubahanJadwalOnsite']
       .filter(c => visibleColumns[c]).length;
   }, [visibleColumns]);
 
@@ -816,7 +838,7 @@ export function RosterLeaveScheduleSheet({
     return activeColumnDefs.length - totalVisibleCols;
   }, [activeColumnDefs, totalVisibleCols]);
 
-  // Filtered records based on tab, month, section, and search
+  // Filtered records based on tab, month, section, keterangan, and search
   const filteredRecords = useMemo(() => {
     return accessibleRecords.filter(rec => {
       // 1. Tab Golongan
@@ -842,7 +864,16 @@ export function RosterLeaveScheduleSheet({
         return false;
       }
 
-      // 4. Search Query
+      // 4. Keterangan Filter
+      if (selectedKet !== 'ALL') {
+        if (selectedKet === 'Cuti Selesai') {
+          if (!rec.isCutiSelesai && rec.ket !== 'Cuti Selesai') return false;
+        } else {
+          if (rec.ket !== selectedKet) return false;
+        }
+      }
+
+      // 5. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = rec.nama.toLowerCase().includes(q);
@@ -854,7 +885,7 @@ export function RosterLeaveScheduleSheet({
 
       return true;
     });
-  }, [accessibleRecords, activeTab, selectedMonth, selectedSection, searchQuery]);
+  }, [accessibleRecords, activeTab, selectedMonth, selectedSection, selectedKet, searchQuery]);
 
   // Statistics KPI
   const stats = useMemo(() => {
@@ -905,13 +936,14 @@ export function RosterLeaveScheduleSheet({
       [], // blank line
       [
         'NO',
-        'NAMA & NIK',
+        'NAMA KARYAWAN',
+        'SECTION',
         'PERUSAHAAN (PT)',
         'POH',
         'JABATAN',
         'TANGGAL CUTI',
         'TANGGAL ON SITE',
-        'KET',
+        'KETERANGAN',
         'PERUBAHAN JADWAL ONSITE',
         'Travel',
         'TAHUNAN / ISTIMEWA',
@@ -926,13 +958,14 @@ export function RosterLeaveScheduleSheet({
     filteredRecords.forEach((rec, idx) => {
       wsData.push([
         idx + 1,
-        `${rec.nama} (${rec.nik})`,
+        rec.nama,
+        rec.subSection && rec.subSection !== rec.section ? `${rec.section} (${rec.subSection})` : rec.section,
         rec.pt,
         rec.poh,
         rec.jabatan,
         rec.tanggalCuti,
         rec.tanggalOnsite,
-        rec.ket,
+        rec.isCutiSelesai ? 'Cuti Selesai' : rec.ket,
         rec.perubahanJadwalOnsite,
         rec.travel,
         rec.tahunanIstimewa,
@@ -955,6 +988,7 @@ export function RosterLeaveScheduleSheet({
       '',
       '',
       '',
+      '',
       stats.traveling,
       stats.sumTahunan,
       stats.sumExtra,
@@ -969,13 +1003,14 @@ export function RosterLeaveScheduleSheet({
     // Set column widths
     ws['!cols'] = [
       { wch: 5 },   // NO
-      { wch: 32 },  // NAMA & NIK
+      { wch: 28 },  // NAMA KARYAWAN
+      { wch: 18 },  // SECTION
       { wch: 18 },  // PERUSAHAAN (PT)
       { wch: 16 },  // POH
       { wch: 24 },  // JABATAN
       { wch: 16 },  // TANGGAL CUTI
       { wch: 16 },  // TANGGAL ON SITE
-      { wch: 26 },  // KET
+      { wch: 24 },  // KETERANGAN
       { wch: 24 },  // PERUBAHAN JADWAL ONSITE
       { wch: 8 },   // Travel
       { wch: 20 },  // TAHUNAN / ISTIMEWA
@@ -1625,6 +1660,29 @@ export function RosterLeaveScheduleSheet({
               )}
             </div>
 
+            {/* Keterangan Filter */}
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                Keterangan:
+              </span>
+              <select
+                value={selectedKet}
+                onChange={(e) => setSelectedKet(e.target.value)}
+                className="text-xs font-bold py-1.5 px-3 rounded-xl border outline-none cursor-pointer shadow-2xs"
+                style={{
+                  backgroundColor: 'var(--input-bg, #FFFFFF)',
+                  borderColor: 'var(--border-main, #E2E8F0)',
+                  color: 'var(--text-main, #1E293B)'
+                }}
+              >
+                <option value="ALL">Semua Keterangan</option>
+                {availableKets.map(k => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Column Visibility Dropdown Toggle */}
             <div className="relative">
               <button
@@ -1743,81 +1801,84 @@ export function RosterLeaveScheduleSheet({
           borderColor: 'var(--border-main, #E2E8F0)'
         }}
       >
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[72vh] overflow-y-auto relative custom-scrollbar">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              {/* Header Title Bar */}
-              <tr className="bg-slate-900 text-white border-b border-slate-800">
+              {/* Header Title Bar - Sticky Top 0 */}
+              <tr className="sticky top-0 z-30 bg-slate-900 text-white border-b border-slate-800">
                 <th colSpan={totalVisibleCols} className="py-3 px-4 font-black tracking-wide uppercase text-xs sm:text-sm text-center bg-slate-900 text-white">
                   {activeTab === 'staff' ? 'PREP & LAB - STAFF LAB' : 'PREP & LAB - CREW PREPARASI & LAB'}
                 </th>
               </tr>
-              {/* Main Column Headers */}
+              {/* Main Column Headers - Sticky Top 41px */}
               <tr 
-                className="border-b text-[11px] font-bold uppercase tracking-wider select-none bg-slate-50 dark:bg-slate-900/60"
+                className="sticky top-[41px] z-20 border-b text-[11px] font-bold uppercase tracking-wider select-none bg-slate-100 dark:bg-slate-900 shadow-2xs"
                 style={{
-                  borderColor: 'var(--border-main, #E2E8F0)',
-                  color: 'var(--text-muted, #64748B)'
+                  borderColor: 'var(--border-main, #CBD5E1)',
+                  color: 'var(--text-muted, #475569)'
                 }}
               >
                 {visibleColumns.no && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center w-12 border-r border-slate-200 dark:border-slate-800">NO</th>
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center w-12 border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">NO</th>
                 )}
                 {visibleColumns.nama && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-4 min-w-[180px] border-r border-slate-200 dark:border-slate-800">NAMA & NIK</th>
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-4 min-w-[190px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">NAMA KARYAWAN</th>
+                )}
+                {visibleColumns.section && (
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[130px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">SECTION</th>
                 )}
                 {visibleColumns.poh && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[110px] border-r border-slate-200 dark:border-slate-800">POH</th>
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">POH</th>
                 )}
                 {visibleColumns.jabatan && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[140px] border-r border-slate-200 dark:border-slate-800">JABATAN</th>
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[150px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">JABATAN</th>
                 )}
                 {visibleColumns.tanggalCuti && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-emerald-500/5 text-emerald-800 dark:text-emerald-300">
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
                     TANGGAL CUTI
                   </th>
                 )}
                 {visibleColumns.tanggalOnsite && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-teal-500/5 text-teal-800 dark:text-teal-300">
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[110px] border-r border-slate-200 dark:border-slate-800 bg-teal-500/10 text-teal-800 dark:text-teal-300">
                     TANGGAL ON SITE
                   </th>
                 )}
                 {visibleColumns.ket && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[130px] border-r border-slate-200 dark:border-slate-800">KET</th>
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[140px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900">KETERANGAN</th>
                 )}
                 {visibleColumns.perubahanJadwalOnsite && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[120px] border-r border-slate-200 dark:border-slate-800 bg-amber-500/5 text-amber-800 dark:text-amber-300">
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[120px] border-r border-slate-200 dark:border-slate-800 bg-amber-500/10 text-amber-800 dark:text-amber-300">
                     PERUBAHAN JADWAL ONSITE
                   </th>
                 )}
 
                 {/* Duration Group Header */}
                 {visibleDurationColsCount > 0 && (
-                  <th colSpan={visibleDurationColsCount} className="py-1.5 px-2 text-center border-b border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 font-extrabold">
+                  <th colSpan={visibleDurationColsCount} className="py-1.5 px-2 text-center border-b border-r border-slate-200 dark:border-slate-800 bg-slate-200/90 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-extrabold">
                     RINCIAN DURASI / JENIS CUTI (HARI)
                   </th>
                 )}
 
                 {visibleColumns.totalHari && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[70px] border-r border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[70px] border-r border-slate-200 dark:border-slate-800 bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
                     TOTAL HARI
                   </th>
                 )}
 
                 {canEditLeave && visibleColumns.aksi && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[70px] bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
+                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[70px] bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
                     AKSI
                   </th>
                 )}
               </tr>
 
-              {/* Sub-headers for duration columns */}
+              {/* Sub-headers for duration columns - Sticky Top 77px */}
               {visibleDurationColsCount > 0 && (
                 <tr 
-                  className="border-b text-[10px] font-bold uppercase tracking-wider bg-slate-100/70 dark:bg-slate-800/50"
+                  className="sticky top-[77px] z-20 border-b text-[10px] font-bold uppercase tracking-wider bg-slate-200/95 dark:bg-slate-800 shadow-2xs"
                   style={{
-                    borderColor: 'var(--border-main, #E2E8F0)',
-                    color: 'var(--text-muted, #64748B)'
+                    borderColor: 'var(--border-main, #CBD5E1)',
+                    color: 'var(--text-muted, #475569)'
                   }}
                 >
                   {visibleColumns.travel && (
@@ -1850,23 +1911,20 @@ export function RosterLeaveScheduleSheet({
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Plane className="w-8 h-8 opacity-30 text-teal-500 animate-pulse" />
                       <span className="font-semibold text-sm">Tidak ada jadwal cuti yang sesuai filter.</span>
-                      <span className="text-xs text-slate-400">Silakan ubah pilihan Periode Bulan, Section, atau kata kunci pencarian.</span>
+                      <span className="text-xs text-slate-400">Silakan ubah pilihan Periode Bulan, Section, Keterangan, atau kata kunci pencarian.</span>
                     </div>
                   </td>
                 </tr>
               ) : (
                 filteredRecords.map((rec, index) => {
                   const isEven = index % 2 === 0;
-                  const isSelesai = rec.isCutiSelesai;
                   return (
                     <tr 
                       key={rec.id}
-                      className={`transition-colors ${
-                        isSelesai
-                          ? 'bg-rose-100/75 dark:bg-rose-950/40 hover:bg-rose-200/70 dark:hover:bg-rose-950/60 text-rose-950 dark:text-rose-100 border-b border-rose-300/80 dark:border-rose-900/60'
-                          : isEven 
-                            ? 'bg-white dark:bg-slate-900/40 hover:bg-teal-50/40 dark:hover:bg-teal-950/20' 
-                            : 'bg-slate-50/50 dark:bg-slate-800/20 hover:bg-teal-50/40 dark:hover:bg-teal-950/20'
+                      className={`transition-colors border-b border-slate-100 dark:border-slate-800/60 ${
+                        isEven 
+                          ? 'bg-white dark:bg-slate-900/40 hover:bg-slate-100/70 dark:hover:bg-slate-800/40' 
+                          : 'bg-slate-50/60 dark:bg-slate-800/20 hover:bg-slate-100/70 dark:hover:bg-slate-800/40'
                       }`}
                     >
                       {/* NO */}
@@ -1876,7 +1934,7 @@ export function RosterLeaveScheduleSheet({
                         </td>
                       )}
 
-                      {/* NAMA & NIK */}
+                      {/* NAMA KARYAWAN */}
                       {visibleColumns.nama && (
                         <td className="py-2.5 px-4 border-r border-slate-100 dark:border-slate-800">
                           <div className="flex items-center gap-1.5">
@@ -1890,8 +1948,6 @@ export function RosterLeaveScheduleSheet({
                             )}
                           </div>
                           <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                            <span>{rec.nik}</span>
-                            <span>•</span>
                             <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
                               rec.pt === 'GPS' 
                                 ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30' 
@@ -1899,12 +1955,21 @@ export function RosterLeaveScheduleSheet({
                             }`}>
                               PT {rec.pt}
                             </span>
-                            <span>•</span>
-                            <span className="text-teal-600 dark:text-teal-400 font-semibold">{rec.section}</span>
-                            {rec.subSection && rec.subSection !== rec.section && (
-                              <span className="text-slate-400 font-normal">({rec.subSection})</span>
-                            )}
                           </div>
+                        </td>
+                      )}
+
+                      {/* SECTION */}
+                      {visibleColumns.section && (
+                        <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
+                          <div className="font-bold text-teal-700 dark:text-teal-300 text-xs">
+                            {rec.section}
+                          </div>
+                          {rec.subSection && rec.subSection !== rec.section && (
+                            <div className="text-[10px] text-slate-400">
+                              {rec.subSection}
+                            </div>
+                          )}
                         </td>
                       )}
 
@@ -1924,11 +1989,6 @@ export function RosterLeaveScheduleSheet({
                           <div className="text-slate-800 dark:text-slate-200 font-semibold leading-tight">
                             {rec.jabatan}
                           </div>
-                          <div className="mt-0.5">
-                            <span className="inline-block text-[9px] px-1.5 py-0.2 rounded font-black uppercase bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                              Gol {rec.gol}
-                            </span>
-                          </div>
                         </td>
                       )}
 
@@ -1946,12 +2006,12 @@ export function RosterLeaveScheduleSheet({
                         </td>
                       )}
 
-                      {/* KET */}
+                      {/* KETERANGAN */}
                       {visibleColumns.ket && (
                         <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
                           {rec.isCutiSelesai ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs">
-                              <CheckCircle2 className="w-2.5 h-2.5" />
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                               Cuti Selesai
                             </span>
                           ) : rec.hasChange ? (
