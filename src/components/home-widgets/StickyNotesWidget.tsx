@@ -24,6 +24,7 @@ import {
   CheckCheck
 } from 'lucide-react';
 import { StickyNotesSettings, WidgetSize } from './types';
+import { getGlobalSocket } from '../../lib/socketClient';
 
 // ==========================================
 // GOOGLE KEEP AUTHENTIC COLOR PALETTE
@@ -210,25 +211,30 @@ export interface GoogleKeepNote {
 
 interface StickyNotesWidgetProps {
   size: WidgetSize;
+  userNik?: string;
   settings?: StickyNotesSettings;
   onUpdateSettings?: (settings: StickyNotesSettings) => void;
 }
 
-const STORAGE_KEY = 'preplab_keep_notes_v2';
 const TIP_KEY = 'preplab_keep_pin_tip_dismissed';
 const LEGACY_STORAGE_KEY = 'preplab_home_sticky_note';
 
 export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
   size,
+  userNik = 'default',
   settings,
   onUpdateSettings
 }) => {
-  // 1. Initial State & Data Migration from previous versions
+  const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const effectiveNik = userNik && userNik !== 'default' ? userNik : (localStorage.getItem('p2h_inspector_nik') || 'default');
+  const userStorageKey = `preplab_keep_notes_v3_${effectiveNik}`;
+
+  // 1. Initial State & Data Migration per-user
   const [notes, setNotes] = useState<GoogleKeepNote[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      const savedUserNotes = localStorage.getItem(userStorageKey);
+      if (savedUserNotes) {
+        const parsed = JSON.parse(savedUserNotes);
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed;
         }
@@ -338,15 +344,77 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
   const resolvedColorKey = LEGACY_COLOR_ALIAS[rawColor] || rawColor;
   const currentTheme = KEEP_COLORS[resolvedColorKey] || KEEP_COLORS.sand;
 
-  // Save to localStorage
-  const saveNotes = (updated: GoogleKeepNote[]) => {
+  // Sync notes from server per-user
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchRemoteNotes = async () => {
+      try {
+        const res = await fetch(`/api/widgets/notes?nik=${encodeURIComponent(effectiveNik)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+
+        if (data.success && Array.isArray(data.notes) && data.notes.length > 0) {
+          setNotes(data.notes);
+          try {
+            localStorage.setItem(userStorageKey, JSON.stringify(data.notes));
+          } catch {}
+          // Keep active note ID valid
+          setActiveNoteId((currentId) => {
+            if (data.notes.some((n: any) => n.id === currentId)) return currentId;
+            return data.notes[0].id;
+          });
+        } else {
+          // If server has no notes yet for this user, push current local notes to server
+          const currentNotes = notes.length > 0 ? notes : [];
+          if (currentNotes.length > 0 && effectiveNik !== 'default') {
+            fetch('/api/widgets/notes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ notes: currentNotes, nik: effectiveNik })
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch remote sticky notes:', err);
+      }
+    };
+
+    fetchRemoteNotes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [effectiveNik, userStorageKey]);
+
+  // Save to localStorage & synchronize with backend privately
+  const saveNotes = (updated: GoogleKeepNote[], immediate = false) => {
     setNotes(updated);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem(userStorageKey, JSON.stringify(updated));
       setSavedStatus(true);
       setTimeout(() => setSavedStatus(false), 1400);
     } catch (e) {
       console.warn('Failed saving keep notes to localStorage', e);
+    }
+
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+    }
+
+    const doSync = () => {
+      fetch('/api/widgets/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: updated, nik: effectiveNik })
+      }).catch((err) => console.warn('Failed syncing notes to server:', err));
+    };
+
+    if (immediate) {
+      doSync();
+    } else {
+      syncTimerRef.current = setTimeout(doSync, 500);
     }
   };
 
@@ -358,7 +426,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
     setHistoryIndex(nextHistory.length - 1);
   };
 
-  const updateActiveNote = (updater: (prev: GoogleKeepNote) => GoogleKeepNote) => {
+  const updateActiveNote = (updater: (prev: GoogleKeepNote) => GoogleKeepNote, immediate = false) => {
     const updated = notes.map((n) => {
       if (n.id === activeNote.id) {
         const modified = updater({ ...n });
@@ -368,7 +436,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
       return n;
     });
     pushHistory(updated);
-    saveNotes(updated);
+    saveNotes(updated, immediate);
   };
 
   // Dismiss blue banner
@@ -384,7 +452,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
     updateActiveNote((prev) => ({
       ...prev,
       isPinned: !prev.isPinned
-    }));
+    }), true);
   };
 
   // Checklist Item Actions
@@ -394,21 +462,21 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
       items: prev.items.map((item) =>
         item.id === itemId ? { ...item, completed: !item.completed } : item
       )
-    }));
+    }), true);
   };
 
   const handleUpdateItemText = (itemId: string, text: string) => {
     updateActiveNote((prev) => ({
       ...prev,
       items: prev.items.map((item) => (item.id === itemId ? { ...item, text } : item))
-    }));
+    }), false);
   };
 
   const handleDeleteItem = (itemId: string) => {
     updateActiveNote((prev) => ({
       ...prev,
       items: prev.items.filter((item) => item.id !== itemId)
-    }));
+    }), true);
   };
 
   const handleAddNewItem = () => {
@@ -421,7 +489,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
     updateActiveNote((prev) => ({
       ...prev,
       items: [...prev.items, newItem]
-    }));
+    }), true);
     setNewChecklistText('');
     setTimeout(() => newItemInputRef.current?.focus(), 50);
   };
@@ -447,7 +515,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
       updateActiveNote((prev) => ({
         ...prev,
         items: newItems
-      }));
+      }), false);
     } else if (e.key === 'Backspace' && (e.target as HTMLInputElement).value === '') {
       e.preventDefault();
       const list = isCompletedList ? completedItems : uncompletedItems;
@@ -463,11 +531,8 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
     if (historyIndex > 0) {
       const prevIndex = historyIndex - 1;
       const prevState = history[prevIndex];
-      setNotes(prevState);
       setHistoryIndex(prevIndex);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(prevState));
-      } catch {}
+      saveNotes(prevState, true);
     }
   };
 
@@ -475,11 +540,8 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
     if (historyIndex < history.length - 1) {
       const nextIndex = historyIndex + 1;
       const nextState = history[nextIndex];
-      setNotes(nextState);
       setHistoryIndex(nextIndex);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
-      } catch {}
+      saveNotes(nextState, true);
     }
   };
 
@@ -510,13 +572,13 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
           items: newItems.length > 0 ? newItems : [{ id: '1', text: '', completed: false }]
         };
       }
-    });
+    }, true);
     setShowMoreMenu(false);
   };
 
   // Color change
   const handleSelectColor = (colorKey: string) => {
-    updateActiveNote((prev) => ({ ...prev, color: colorKey }));
+    updateActiveNote((prev) => ({ ...prev, color: colorKey }), true);
     onUpdateSettings?.({ color: colorKey });
     setShowColorPicker(false);
   };
@@ -534,7 +596,7 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
       updatedAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
     };
     const updated = [newNote, ...notes];
-    saveNotes(updated);
+    saveNotes(updated, true);
     setActiveNoteId(newNote.id);
   };
 
@@ -550,10 +612,10 @@ export const StickyNotesWidget: React.FC<StickyNotesWidgetProps> = ({
         reminder: null,
         collaborator: null,
         imageUrl: null
-      }));
+      }), true);
     } else {
       const remaining = notes.filter((n) => n.id !== activeNote.id);
-      saveNotes(remaining);
+      saveNotes(remaining, true);
       setActiveNoteId(remaining[0].id);
     }
     setShowMoreMenu(false);

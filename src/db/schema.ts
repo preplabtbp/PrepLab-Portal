@@ -995,7 +995,8 @@ export const xrfStandardReferences = pgTable('xrf_standard_references', {
   standardCode: text('standard_code').notNull(), // 'LIM01', 'LIM02', dst.
   elementName: text('element_name').notNull(),   // 'Ni', 'Co', 'Fe', 'CaO', 'SiO2', 'Al2O3', 'MgO', 'Cr2O3', 'MnO', 'P', 'S', etc.
   nominalValue: doublePrecision('nominal_value').notNull(), // Expected/Certified Value (Garis Tengah)
-  stdevFixed: doublePrecision('stdev_fixed').notNull(),     // Fixed STDEV
+  stdevFixed: doublePrecision('stdev_fixed').notNull(),     // Fixed STDEV (EDXRF / General)
+  stdevWdxrf: doublePrecision('stdev_wdxrf'),               // Fixed STDEV khusus WDXRF
   lowerWarning: doublePrecision('lower_warning'),           // -2σ dari CSV
   upperWarning: doublePrecision('upper_warning'),           // +2σ dari CSV
   lowerAction: doublePrecision('lower_action'),             // -3σ dari CSV
@@ -1070,3 +1071,84 @@ export const xrfVerificationItems = pgTable('xrf_verification_items', {
   index('idx_xrf_ver_items_std_code').on(t.standardCode),
 ]);
 
+// 6. Audit Trail Log Take Out Data Off-Spec (Hanya SPV, SPT Lab, Dev, dan Manager)
+export const xrfOffspecTakeoutLogs = pgTable('xrf_offspec_takeout_logs', {
+  id: serial('id').primaryKey(),
+  action: text('action').notNull(), // 'ISOLATE' | 'RESTORE' | 'CLEAR_ALL' | 'BULK_ISOLATE'
+  userNik: text('user_nik').notNull(),
+  userName: text('user_name').notNull(),
+  userJabatan: text('user_jabatan'),
+  userRole: text('user_role'), // 'SPV' | 'SPT' | 'DEV' | 'MANAGER'
+  instrumentCode: text('instrument_code'),
+  instrumentName: text('instrument_name'),
+  standardCode: text('standard_code'),
+  element: text('element'),
+  pointIndex: integer('point_index'),
+  measuredValue: doublePrecision('measured_value'),
+  nominalValue: doublePrecision('nominal_value'),
+  sigmaDist: doublePrecision('sigma_dist'),
+  diff: doublePrecision('diff'),
+  statusLabel: text('status_label'),
+  reason: text('reason'),
+  sampleDate: text('sample_date'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => [
+  index('idx_xrf_takeout_user').on(t.userNik),
+  index('idx_xrf_takeout_inst').on(t.instrumentCode),
+  index('idx_xrf_takeout_created').on(t.createdAt),
+]);
+
+
+
+// Edit manual baris Rekap KTA/TTA & Inspeksi (menu Safety), per minggu ISO & NIK.
+// Kolom bernilai NULL = ikut data otomatis; terisi = override manual.
+export const safetyRekapEdits = pgTable('safety_rekap_edits', {
+  id: serial('id').primaryKey(),
+  week: text('week').notNull(), // contoh: 'W42'
+  year: integer('year').notNull(),
+  nik: text('nik').notNull(),
+  name: text('name'),
+  isCuti: boolean('is_cuti'), // lama; digantikan absenceStatus
+  absenceStatus: text('absence_status'), // NULL = otomatis, '' = hadir/wajib, 'CUTI' | 'IZIN' | 'DINAS' | 'RESIGN' | 'NEW_HIRE'
+  ktaDone: boolean('kta_done'),
+  tglKta: text('tgl_kta'), // '' = kosongkan, '-' = tidak wajib (sel hitam)
+  tglTta1: text('tgl_tta1'),
+  tglTta2: text('tgl_tta2'),
+  inspeksiDone: boolean('inspeksi_done'),
+  keteranganInspeksi: text('keterangan_inspeksi'),
+  tglInspeksi: text('tgl_inspeksi'),
+  catatan: text('catatan'),
+  updatedByNik: text('updated_by_nik'),
+  updatedByName: text('updated_by_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_safety_rekap_edits_week_nik').on(t.year, t.week, t.nik),
+]);
+
+// Jadwal Inspeksi mingguan yang dibuat di portal (acak per shift / edit manual), per week rekap (Sabtu – Jumat).
+// Bila ada, menggantikan jadwal Google Sheet "CurrentWeek" untuk minggu ISO `isoWeek` (Senin – Jumat periode).
+export const inspectionSchedulePlans = pgTable('inspection_schedule_plans', {
+  id: serial('id').primaryKey(),
+  year: integer('year').notNull(), // tahun week rekap
+  week: integer('week').notNull(), // nomor week rekap
+  isoYear: integer('iso_year').notNull(),
+  isoWeek: text('iso_week').notNull(), // contoh: 'W43'
+  periodStart: text('period_start').notNull(), // 'YYYY-MM-DD' (Sabtu)
+  periodEnd: text('period_end').notNull(), // 'YYYY-MM-DD' (Jumat)
+  members: json('members').notNull(), // PlanMember[]: { nik, name, jabatan, section, gol, team, shiftGroup, agendaId, roleIndex, isCuti, codes }
+  agendaShifts: json('agenda_shifts'), // { [agendaId]: 'Malam' | 'Siang' }
+  // Versi terpublikasi (dilihat karyawan & dipakai /api/inspection-schedule). `members` = draft penyusun.
+  publishedMembers: json('published_members'),
+  publishedAgendaShifts: json('published_agenda_shifts'),
+  publishedAt: timestamp('published_at'),
+  publishedByName: text('published_by_name'),
+  source: text('source').default('random'), // 'random' | 'manual'
+  updatedByNik: text('updated_by_nik'),
+  updatedByName: text('updated_by_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (t) => [
+  uniqueIndex('idx_inspection_schedule_plans_week').on(t.year, t.week),
+  index('idx_inspection_schedule_plans_iso').on(t.isoYear, t.isoWeek),
+]);

@@ -115,7 +115,6 @@ function buildDefaultConfig() {
     },
     malam: {
       gabungan: [
-        slot('All', 'Foreman/Officer', 'Teknis', { isLogbook: true, materiTetap: 'Briefing Evaluasi Logbook Shift & Operasional Mingguan' }),
         slot('Preparation', 'Foreman/Officer', 'Non-Teknis'),
         slot('Laboratory', 'Foreman/Officer', 'Non-Teknis')
       ]

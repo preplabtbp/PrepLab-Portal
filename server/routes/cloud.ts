@@ -92,8 +92,8 @@ router.post("/api/upload", async (req, res) => {
           supportsAllDrives: true
         });
 
-        // Direct link format for image tags
-        const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+        // Direct link format for image tags (menggunakan proxy internal portal untuk mencegah 403 Forbidden dari Google Drive)
+        const directUrl = `/api/drive/view/${fileId}`;
         
         res.json({ url: directUrl, fileId: fileId });
       } catch (driveErr) {

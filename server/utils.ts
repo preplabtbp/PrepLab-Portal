@@ -22,7 +22,7 @@ export function getIoInstance() {
 
 export async function sendWebPush(
   notifs: any | any[],
-  options?: { targetNiks?: string[]; skipWebPush?: boolean }
+  options?: { targetNiks?: string[]; skipWebPush?: boolean; senderNik?: string }
 ) {
   try {
     if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
@@ -36,15 +36,27 @@ export async function sendWebPush(
     }
 
     const notificationsArray = Array.isArray(notifs) ? notifs : [notifs];
+    const emittedSocketKeys = new Set<string>();
+
     for (const notif of notificationsArray) {
       if (!notif) continue;
 
       // Real-time socket delivery to all connected clients
+      // Deduplicate per batch by title + message + link so multiple DB rows (e.g. broadcast + personal)
+      // for the exact same event only fire ONE socket emission.
       if (_io) {
-        try {
-          _io.emit('notification:new', notif);
-        } catch (ioErr) {
-          console.error('[Socket Notification Emit Error]:', ioErr);
+        const socketDedupKey = `${(notif.title || '').trim()}|${(notif.message || '').trim()}|${(notif.link || '').trim()}`;
+        if (!emittedSocketKeys.has(socketDedupKey)) {
+          emittedSocketKeys.add(socketDedupKey);
+          try {
+            const socketPayload = {
+              ...notif,
+              senderNik: notif.senderNik || options?.senderNik || null
+            };
+            _io.emit('notification:new', socketPayload);
+          } catch (ioErr) {
+            console.error('[Socket Notification Emit Error]:', ioErr);
+          }
         }
       }
 
@@ -80,8 +92,12 @@ export async function sendWebPush(
                      d.includes('qa') || s.includes('qa') || j.includes('supervisor') ||
                      j.includes('manager') || j.includes('superintendent') || j.includes('admin') ||
                      d.includes('admin') || s.includes('admin');
+            } else if (roleLower.includes('prep') || roleLower.includes('lab')) {
+              return d.includes('prep') || d.includes('lab') || s.includes('prep') || s.includes('lab') ||
+                     j.includes('prep') || j.includes('lab') || j.includes('manager') || j.includes('superintendent');
             }
-            return d.includes(roleLower) || s.includes(roleLower) || j.includes(roleLower);
+            return d.includes(roleLower) || s.includes(roleLower) || j.includes(roleLower) ||
+                   roleLower.includes(d) || roleLower.includes(s);
           }).map((e: any) => e.nik);
         }
 
@@ -173,9 +189,22 @@ export async function uploadFileToDrive(token: string, base64Data: string, mimeT
 
 export async function syncBulletinToAgenda(post: any) {
   try {
+    if (!post || !post.id) return;
+
+    let contentData: any = {};
+    try {
+      contentData = typeof post.content === 'string' ? JSON.parse(post.content) : (post.content || {});
+    } catch {
+      contentData = {};
+    }
+
     const titleLower = (post.title || "").toLowerCase();
-    const contentLower = typeof post.content === 'string' ? post.content.toLowerCase() : "";
+    const contentStr = typeof post.content === 'string' ? post.content : "";
+    const contentLower = contentStr.toLowerCase();
+    const hasAgendaDate = Boolean(contentData && contentData.agendaDate);
+
     const isMeeting = 
+      hasAgendaDate ||
       post.category === 'MEETING' ||
       post.category === 'WEEKLY' ||
       titleLower.includes('meeting') ||
@@ -186,21 +215,80 @@ export async function syncBulletinToAgenda(post: any) {
       contentLower.includes('notulensi') ||
       contentLower.includes('agenda');
 
+    const agendaId = `ag-bulletin-${post.id}`;
+
     if (isMeeting) {
-      const eventId = `ag-bulletin-${post.id}-${Date.now()}`;
-      await db.insert(agendaEvents).values({
-        id: eventId,
-        title: post.title.startsWith('[') ? post.title : `[Meeting] ${post.title}`,
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 60 * 60 * 1000),
-        kategori: 'General',
-        pic: post.authorName || 'PIC Prep & Lab',
-        deskripsi: typeof post.content === 'string' ? post.content.substring(0, 500) : '',
+      // Find existing agenda event linked to this bulletin post
+      const existing = await db
+        .select()
+        .from(agendaEvents)
+        .where(
+          or(
+            eq(agendaEvents.id, agendaId),
+            eq(agendaEvents.bulletinPostId, post.id)
+          )
+        );
+
+      let startD: Date;
+      if (contentData.agendaDate && !isNaN(new Date(contentData.agendaDate).getTime())) {
+        startD = new Date(contentData.agendaDate);
+      } else if (existing.length > 0 && existing[0].startDate) {
+        startD = new Date(existing[0].startDate);
+      } else if (post.createdAt && !isNaN(new Date(post.createdAt).getTime())) {
+        startD = new Date(post.createdAt);
+      } else {
+        startD = new Date();
+      }
+
+      let endD: Date;
+      if (contentData.endDate && !isNaN(new Date(contentData.endDate).getTime())) {
+        endD = new Date(contentData.endDate);
+      } else if (existing.length > 0 && existing[0].endDate) {
+        endD = new Date(existing[0].endDate);
+      } else {
+        endD = new Date(startD.getTime() + 60 * 60 * 1000);
+      }
+
+      const rawTitle = contentData.jenisKegiatan || post.title || "Meeting";
+      const title = rawTitle.startsWith('[') ? rawTitle : `[Meeting] ${rawTitle}`;
+      const deskripsi = contentData.keterangan || (typeof post.content === 'string' ? post.content.substring(0, 500) : '');
+      const pic = contentData.pic || post.authorName || 'PIC Prep & Lab';
+      const kategori = hasAgendaDate ? 'SPV UP' : 'General';
+
+      const agendaData = {
+        id: agendaId,
+        title,
+        startDate: startD,
+        endDate: endD,
+        kategori,
+        pic,
+        deskripsi,
         creatorNik: post.authorNik || null,
         department: post.department || 'ALL',
         bulletinPostId: post.id,
-      });
-      console.log(`[Sync] Successfully synced bulletin meeting "${post.title}" to agenda_events (ID: ${eventId})`);
+      };
+
+      if (existing.length > 0) {
+        const primaryId = existing[0].id;
+        await db.update(agendaEvents).set(agendaData).where(eq(agendaEvents.id, primaryId));
+        // Remove any stale duplicate entries for this post if they exist
+        if (existing.length > 1) {
+          const extraIds = existing.slice(1).map(e => e.id);
+          await db.delete(agendaEvents).where(inArray(agendaEvents.id, extraIds));
+        }
+        console.log(`[Sync] Updated existing agenda event for bulletin post #${post.id} (ID: ${primaryId})`);
+      } else {
+        await db.insert(agendaEvents).values(agendaData);
+        console.log(`[Sync] Created canonical agenda event for bulletin post #${post.id} (ID: ${agendaId})`);
+      }
+    } else {
+      // If no longer a meeting, remove any existing agenda event for this post
+      await db.delete(agendaEvents).where(
+        or(
+          eq(agendaEvents.id, agendaId),
+          eq(agendaEvents.bulletinPostId, post.id)
+        )
+      );
     }
   } catch (err) {
     console.error("Failed to sync bulletin to agenda:", err);
@@ -266,7 +354,6 @@ export const getTableObj = (name: string) => {
     case "pemantauan": return pemantauan;
     case "questions": return questions;
     case "agendaEvents": return agendaEvents;
-    case "privateNotes": return privateNotes;
     case "userThemes": return userThemes;
     case "bulletinPosts": return bulletinPosts;
     case "notifications": return notifications;

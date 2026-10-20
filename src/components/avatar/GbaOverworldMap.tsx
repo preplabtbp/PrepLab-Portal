@@ -18,7 +18,7 @@ import {
 } from './GbaSectionRooms';
 import { GbaCharacterSprite } from './GbaCharacterSprite';
 import { 
-  GbaLoungeGhostNpc, 
+  GbaMineFloorTrapdoor, 
   GbaUndergroundDominoTable, 
   GbaUndergroundChessTable, 
   GbaUndergroundLadder, 
@@ -68,10 +68,12 @@ export interface GbaOverworldMapProps {
   onPlayerAction?: (action: { actionState: string; facing?: 'down' | 'up' | 'left' | 'right'; speechText?: string; x: number; y: number }) => void;
   onPlayGhostRps?: () => void;
   isSecretHoleUnlocked?: boolean;
+  isSecretCutsceneActive?: boolean;
   onEnterSecretDomino?: () => void;
   onAscendToGazebo?: () => void;
   onOpenDominoGame?: (seat?: 'top' | 'bottom' | 'left' | 'right') => void;
   onOpenChessGame?: (seat?: 'left' | 'right') => void;
+  onSelectPlayer?: (player: GbaInteractivePlayer) => void;
   className?: string;
   isCompactDiorama?: boolean;
 }
@@ -272,10 +274,12 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
   onPlayerAction,
   onPlayGhostRps,
   isSecretHoleUnlocked = false,
+  isSecretCutsceneActive = false,
   onEnterSecretDomino,
   onAscendToGazebo,
   onOpenDominoGame,
   onOpenChessGame,
+  onSelectPlayer,
   className = '',
   isCompactDiorama = false
 }) => {
@@ -1390,82 +1394,41 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
               <GbaWaterCooler x={10.4} y={4.2} />
               <GbaNickelAshtray x={10.4} y={5.8} />
 
-              {/* 8. Bottom-Left Corner: Mysterious Gazebo Ghost NPC (Pure Easter Egg, No Floating Labels) */}
+              {/* 8. Pintu Rahasia Lantai (Tangga Menuju Bunker Terbengkalai) */}
               <g 
-                transform="translate(18, 98)" 
-                className="cursor-pointer"
+                transform="translate(36, 102)" 
+                className="cursor-pointer group"
                 onClick={(e) => {
                   e.stopPropagation();
                   playSfx('confirm');
 
-                  // Player approaches ghost (tile x: 2.1, y: 6.2) and faces left towards ghost
-                  const distToGhost = Math.hypot(posX - 2.1, posY - 6.2);
-                  if (distToGhost < 0.7) {
-                    setFacing('left');
-                    movementRef.current.facing = 'left';
+                  if (!isSecretHoleUnlocked) {
+                    playSfx('beep');
                     onPlayerActionRef.current?.({
                       actionState: 'idle',
-                      facing: 'left',
+                      facing: 'down',
+                      speechText: '🔒 Pintu besi di lantai terkunci rapat... Menangkan 5x Suwit PvP untuk membuka!',
                       x: Number(posX.toFixed(2)),
                       y: Number(posY.toFixed(2))
                     });
-                    if (onPlayGhostRps) onPlayGhostRps();
-                  } else {
-                    startMoveTo(2.1, 6.2, {
-                      facing: 'left',
-                      action: 'idle',
-                      callback: () => {
-                        if (onPlayGhostRps) onPlayGhostRps();
-                      }
-                    });
+                    return;
                   }
+
+                  // Player walks onto the trapdoor then climbs down into the underground bunker
+                  startMoveTo(2.35, 6.35, {
+                    facing: 'down',
+                    action: 'idle',
+                    callback: () => {
+                      if (onEnterSecretDomino) onEnterSecretDomino();
+                    }
+                  });
                 }}
               >
-                {/* Pure pixel art ghost sprite without labels/nametag */}
-                <GbaLoungeGhostNpc 
-                  width={14}
-                  height={18}
-                  className="hover:scale-115 transition-transform duration-200" 
+                <GbaMineFloorTrapdoor 
+                  isUnlocked={isSecretHoleUnlocked}
+                  isCutsceneActive={isSecretCutsceneActive}
                 />
               </g>
-
-              {/* 9. Secret Underground Domino Hole (Appears after 5 wins vs Ghost) */}
-              {isSecretHoleUnlocked && (
-                <g 
-                  transform="translate(36, 102)" 
-                  className="cursor-pointer group"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    playSfx('confirm');
-                    // Player walks onto the secret hole then enters
-                    startMoveTo(2.35, 6.35, {
-                      facing: 'down',
-                      action: 'idle',
-                      callback: () => {
-                        if (onEnterSecretDomino) onEnterSecretDomino();
-                      }
-                    });
-                  }}
-                >
-                  <title>🕳️ Lubang Rahasia (Klik untuk masuk ke Bunker Bawah Tanah)</title>
-                  {/* Outer Pit Rim */}
-                  <ellipse cx="8" cy="6" rx="8" ry="4.5" fill="#090518" stroke="#6B21A8" strokeWidth="0.8" />
-                  <ellipse cx="8" cy="6" rx="6.5" ry="3.5" fill="#1E0E45" />
-                  {/* Swirling Deep Void */}
-                  <ellipse cx="8" cy="6" rx="4.5" ry="2.2" fill="#3B0764" />
-                  <ellipse cx="8" cy="6" rx="3" ry="1.4" fill="#A855F7" opacity="0.85">
-                    <animate attributeName="rx" values="3;4.2;3" dur="1.8s" repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="0.85;0.35;0.85" dur="1.8s" repeatCount="indefinite" />
-                  </ellipse>
-                  {/* Floating Mystical Glow Sparks */}
-                  <circle cx="5" cy="4" r="0.6" fill="#F3E8FF" opacity="0.8">
-                    <animate attributeName="cy" values="4;1.5;4" dur="2s" repeatCount="indefinite" />
-                  </circle>
-                  <circle cx="11" cy="5" r="0.6" fill="#C084FC" opacity="0.8">
-                    <animate attributeName="cy" values="5;2.5;5" dur="2.2s" repeatCount="indefinite" />
-                  </circle>
-                </g>
-              )}
             </g>
           )}
 
@@ -1590,6 +1553,14 @@ export const GbaOverworldMap: React.FC<GbaOverworldMapProps> = ({
             <g
               key={other.id}
               transform={`translate(${other.x * 16}, ${other.y * 16 - 5})`}
+              className="cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                playSfx('confirm');
+                if (onSelectPlayer) {
+                  onSelectPlayer(other);
+                }
+              }}
               style={{
                 transition: 'transform 0.16s linear',
                 willChange: 'transform'

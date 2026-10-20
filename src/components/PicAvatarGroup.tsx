@@ -100,18 +100,18 @@ export function PicAvatarGroup({
       if (!trimmed || trimmed === '-' || trimmed === '•') return [];
       return smartSplitPicString(trimmed)
         .map(raw => {
-          // Check if string contains NIK in parenthesis e.g. "Name (12345)"
-          const parenMatch = raw.match(/^(.*?)\s*\((\d+)\)$/);
+          // Check if string contains NIK in parenthesis e.g. "Name (04D21001047)"
+          const parenMatch = raw.match(/^(.*?)\s*\(([A-Za-z0-9_.-]+)\)$/);
           if (parenMatch) {
             return { name: parenMatch[1].trim(), nik: parenMatch[2].trim() };
           }
-          // Check if string is "12345 - Name"
-          const dashMatch = raw.match(/^(\d+)\s*[-–]\s*(.*)$/);
-          if (dashMatch) {
+          // Check if string is "04D21001047 - Name"
+          const dashMatch = raw.match(/^([A-Za-z0-9_.-]+)\s*[-–]\s*(.*)$/);
+          if (dashMatch && (dashMatch[1].length >= 5 || /^\d+$/.test(dashMatch[1]))) {
             return { name: dashMatch[2].trim(), nik: dashMatch[1].trim() };
           }
-          // Check if string is purely numeric (NIK)
-          if (/^\d+$/.test(raw)) {
+          // Check if string is purely NIK
+          if (/^[A-Za-z0-9_.-]+$/.test(raw) && (raw.length >= 7 || /^\d+$/.test(raw))) {
             return { name: raw, nik: raw };
           }
           return { name: raw };

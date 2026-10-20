@@ -8,8 +8,10 @@ import {
 import { toast } from 'sonner';
 
 interface XrfDirectPasteTabProps {
-  instruments: Array<{ code: string; name: string }>;
+  instruments: Array<{ code: string; name: string; site?: string }>;
   standards: Array<{ code: string; name: string }>;
+  assignedSite?: 'GTS' | 'TBP';
+  isDevOrManager?: boolean;
   onSuccessSave?: () => void;
 }
 
@@ -73,73 +75,63 @@ function getIsoWeek(dateStr: string): number {
   return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
 }
 
-// Regex Standard Extractor for Saprolite, Limonite & Supermini 200
+import { extractSmartStandardCode } from '../../utils/xrfStandardDetector';
+
+// Regex Standard Extractor Pintar untuk Saprolite, Limonite, Supermini 200, dan Zetium A/B
 function extractStandardName(rawLabel: string, _matrixHint?: 'SAPROLITE' | 'LIMONITE' | 'SUPERMINI' | 'AUTO'): { standardCode: string; displayName: string } {
-  const clean = String(rawLabel || '').trim();
-
-  // 1. Cek Blanks (BLANK A, VER-BLANK B, BLANK B)
-  if (/BLANK\s*A\b/i.test(clean)) {
-    return {
-      standardCode: 'BLANK_A',
-      displayName: 'BLANK A',
-    };
-  }
-  if (/(VER-)?BLANK\s*B\b/i.test(clean)) {
-    return {
-      standardCode: 'BLANK_B',
-      displayName: 'VER-BLANK B',
-    };
-  }
-  if (/\bBLANK\b/i.test(clean)) {
-    return {
-      standardCode: 'BLANK_A',
-      displayName: clean || 'BLANK',
-    };
-  }
-
-  // 2. Cek Limonite (LIM 01 s/d LIM 05 & LIM 13)
-  const limMatch = clean.match(/LIM\s*0?([1-5]|13)/i);
-  if (limMatch) {
-    const num = limMatch[1];
-    return {
-      standardCode: num.length === 1 ? `LIM0${num}` : `LIM${num}`,
-      displayName: num.length === 1 ? `LIM 0${num}` : `LIM ${num}`,
-    };
-  }
-
-  // 3. Cek Saprolite & CRM (OREAS 182 s/d 195 & SAP 16, 19)
-  const oMatch = clean.match(/OREAS\s*(182|184|187|189|190|191|192|193|194|195)/i);
-  if (oMatch) {
-    const num = oMatch[1];
-    return {
-      standardCode: `OREAS${num}`,
-      displayName: `OREAS ${num}`,
-    };
-  }
-  const sapMatch = clean.match(/SAP\s*(16|19)/i);
-  if (sapMatch) {
-    const num = sapMatch[1];
-    return {
-      standardCode: `SAP${num}`,
-      displayName: `SAP ${num}`,
-    };
-  }
-
-  // Fallback jika format tidak standar
-  const sanitized = clean.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  const res = extractSmartStandardCode(rawLabel);
   return {
-    standardCode: sanitized || 'UNKNOWN',
-    displayName: clean || 'UNKNOWN',
+    standardCode: res.standardCode,
+    displayName: res.displayName,
   };
 }
 
 export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
   instruments,
   standards,
+  assignedSite = 'GTS',
+  isDevOrManager = false,
   onSuccessSave,
 }) => {
+  // Active site for instrument filtering (Default: assignedSite)
+  const [activeSite, setActiveSite] = useState<'GTS' | 'TBP'>(() => assignedSite);
+
+  useEffect(() => {
+    if (assignedSite) {
+      setActiveSite(assignedSite);
+    }
+  }, [assignedSite]);
+
+  // Strictly filter instruments to the active site (prevent GTS instruments on TBP or vice-versa)
+  const siteInstruments = useMemo(() => {
+    return instruments.filter(inst => {
+      const isKnownGts = ['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(inst.code);
+      const isKnownTbp = ['EPSILON_C', 'EPSILON_E', 'EPSILON_F', 'EPSILON_G', 'EPSILON_H', 'S2_PUMA', 'ZETIUM_A', 'ZETIUM_B'].includes(inst.code);
+      const site = isKnownGts ? 'GTS' : (isKnownTbp ? 'TBP' : (inst.site || 'TBP'));
+      return site === activeSite;
+    });
+  }, [instruments, activeSite]);
+
+  // Determine default instrument based on activeSite
+  const defaultInst = useMemo(() => {
+    if (activeSite === 'TBP') {
+      const found = siteInstruments.find(i => i.code === 'EPSILON_G' || i.code === 'EPSILON_H' || i.code === 'EPSILON_C');
+      return found ? found.code : (siteInstruments[0]?.code || 'EPSILON_G');
+    }
+    const found = siteInstruments.find(i => i.code === 'SUPERMINI' || i.code === 'EPSILON_D' || i.code === 'EPSILON_A');
+    return found ? found.code : (siteInstruments[0]?.code || 'EPSILON_D');
+  }, [activeSite, siteInstruments]);
+
   // Configuration State
-  const [selectedInstrument, setSelectedInstrument] = useState<string>('EPSILON_D');
+  const [selectedInstrument, setSelectedInstrument] = useState<string>(defaultInst);
+
+  useEffect(() => {
+    const isCurrentValid = siteInstruments.some(i => i.code === selectedInstrument);
+    if (!isCurrentValid && siteInstruments.length > 0) {
+      setSelectedInstrument(defaultInst);
+    }
+  }, [siteInstruments, defaultInst, selectedInstrument]);
+
   const [autoDetectInstrument, setAutoDetectInstrument] = useState<boolean>(true);
   const [matrixMode, setMatrixMode] = useState<'AUTO' | 'SUPERMINI' | 'SAPROLITE' | 'LIMONITE'>('AUTO');
   const [rawText, setRawText] = useState<string>('');
@@ -159,8 +151,8 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
   const [refMap, setRefMap] = useState<Record<string, Record<string, any>>>({});
 
   // Operator
-  const operatorNik = localStorage.getItem('p2h_inspector_nik') || 'GTS-OPERATOR';
-  const operatorName = localStorage.getItem('p2h_inspector_name') || 'Analis GTS Lab';
+  const operatorNik = localStorage.getItem('p2h_inspector_nik') || (assignedSite === 'TBP' ? 'TBP-OPERATOR' : 'GTS-OPERATOR');
+  const operatorName = localStorage.getItem('p2h_inspector_name') || (assignedSite === 'TBP' ? 'Analis TBP Lab' : 'Analis GTS Lab');
 
   // Load standard references from backend
   useEffect(() => {
@@ -192,8 +184,18 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
     setIsInspecting(true);
 
     try {
-      const parsedData = Papa.parse<string[]>(textToParse, {
-        delimiter: textToParse.includes('\t') ? '\t' : undefined,
+      // 1. Bersihkan baris kosong berlebih di ujung bawah (menghindari 1 juta trailing rows Excel)
+      const rawLines = textToParse.split(/\r?\n/);
+      let lastNonEmpty = rawLines.length - 1;
+      while (lastNonEmpty >= 0) {
+        const line = rawLines[lastNonEmpty].trim().replace(/,/g, '').replace(/\t/g, '');
+        if (line.length > 0) break;
+        lastNonEmpty--;
+      }
+      const cleanedText = lastNonEmpty >= 0 ? rawLines.slice(0, lastNonEmpty + 1).join('\n') : '';
+
+      const parsedData = Papa.parse<string[]>(cleanedText, {
+        delimiter: cleanedText.includes('\t') ? '\t' : undefined,
         skipEmptyLines: false,
       }).data || [];
 
@@ -205,7 +207,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
       let currentTime = '08:00';
       let detectedMatrix: 'SAPROLITE' | 'LIMONITE' | 'SUPERMINI' = 
         matrixMode === 'AUTO' 
-          ? (selectedInstrument === 'SUPERMINI' ? 'SUPERMINI' : 'SAPROLITE') 
+          ? (selectedInstrument === 'SUPERMINI' ? 'SUPERMINI' : assignedSite === 'TBP' ? 'LIMONITE' : 'SAPROLITE') 
           : matrixMode;
 
       const finishCurrentSet = () => {
@@ -305,39 +307,35 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
           }
         }
 
-        // Skip calibration blanks (seperti VER-BLANK WAX) KECUALI Supermini BLANK A / VER-BLANK B
-        if (/BLANK\s*WAX/i.test(sampleLabel)) {
-          continue;
-        }
-        if (/BLANK/i.test(sampleLabel) && !/BLANK\s*[AB]/i.test(sampleLabel) && detectedMatrix !== 'SUPERMINI') {
-          continue;
+        // 1. Pembatas Set Baru jika seqNo === 1
+        if (seqNo === 1) {
+          finishCurrentSet();
         }
 
-        // Auto-detect Instrument dari teks
+        // 2. Auto-detect Instrument dari teks Kolom B (atau kolom alat)
         if (xrfCol && autoDetectInstrument) {
-          if (xrfCol.includes('SUPERMINI') || xrfCol.includes('SUPER MINI')) {
+          const matchEpsilon = xrfCol.match(/EPSILON[\s_]*4?[\s_]*([A-H])/i);
+          if (matchEpsilon) {
+            const letter = matchEpsilon[1].toUpperCase();
+            currentInstCode = `EPSILON_${letter}`;
+            currentInstName = `EPSILON ${letter}`;
+          } else if (xrfCol.includes('SUPERMINI') || xrfCol.includes('SUPER MINI') || xrfCol.includes('RIGAKU')) {
             currentInstCode = 'SUPERMINI';
             currentInstName = 'Supermini 200';
             detectedMatrix = 'SUPERMINI';
-          } else if (xrfCol.includes('EPSILON A') || xrfCol.includes('EPSILON_A')) {
-            currentInstCode = 'EPSILON_A';
-            currentInstName = 'EPSILON A';
-          } else if (xrfCol.includes('EPSILON B') || xrfCol.includes('EPSILON_B')) {
-            currentInstCode = 'EPSILON_B';
-            currentInstName = 'EPSILON B';
-          } else if (xrfCol.includes('EPSILON C') || xrfCol.includes('EPSILON_C')) {
-            currentInstCode = 'EPSILON_C';
-            currentInstName = 'EPSILON C';
-          } else if (xrfCol.includes('EPSILON D') || xrfCol.includes('EPSILON_D')) {
-            currentInstCode = 'EPSILON_D';
-            currentInstName = 'EPSILON D';
-          } else if (xrfCol.includes('EPSILON E') || xrfCol.includes('EPSILON_E')) {
-            currentInstCode = 'EPSILON_E';
-            currentInstName = 'EPSILON E';
+          } else if (xrfCol.includes('PUMA') || xrfCol.includes('S2')) {
+            currentInstCode = 'S2_PUMA';
+            currentInstName = 'S2 PUMA';
+          } else if (xrfCol.includes('ZETIUM A') || xrfCol.includes('ZETIUM_A')) {
+            currentInstCode = 'ZETIUM_A';
+            currentInstName = 'Zetium A';
+          } else if (xrfCol.includes('ZETIUM B') || xrfCol.includes('ZETIUM_B')) {
+            currentInstCode = 'ZETIUM_B';
+            currentInstName = 'Zetium B';
           }
         }
 
-        // Parse Date & Time
+        // 3. Parse Date & Time
         let parsedIsoDate = currentDate || new Date().toISOString().slice(0, 10);
         let parsedTime = currentTime || '08:00';
 
@@ -349,24 +347,34 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
               let [day, month, year] = dateParts;
               if (year < 100) year = 2000 + year;
               parsedIsoDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              currentDate = parsedIsoDate;
             }
           }
           if (tPart) {
             parsedTime = tPart.slice(0, 5);
+            currentTime = parsedTime;
           }
         }
 
-        // Deteksi Matriks jika mode AUTO
+        // 4. Deteksi Matriks jika mode AUTO
         if (matrixMode === 'AUTO') {
           if (currentInstCode === 'SUPERMINI' || xrfCol.includes('SUPERMINI') || /BLANK\s*[AB]/i.test(sampleLabel)) {
             detectedMatrix = 'SUPERMINI';
-          } else if (/OREAS|SAP/i.test(sampleLabel) || xrfCol.includes('SAP')) {
-            if (detectedMatrix !== 'SUPERMINI') detectedMatrix = 'SAPROLITE';
-          } else if (/LIM/i.test(sampleLabel) || xrfCol.includes('LIM')) {
+          } else if (xrfCol.includes('LIMONITE') || /LIM/i.test(sampleLabel) || xrfCol.includes('LIM')) {
             if (detectedMatrix !== 'SUPERMINI') detectedMatrix = 'LIMONITE';
+          } else if (xrfCol.includes('SAPROLITE') || /OREAS|SAP/i.test(sampleLabel) || xrfCol.includes('SAP')) {
+            if (detectedMatrix !== 'SUPERMINI') detectedMatrix = 'SAPROLITE';
           }
         } else {
           detectedMatrix = matrixMode;
+        }
+
+        // 5. Skip calibration blanks (seperti VER-BLANK WAX & LICOWAX) KECUALI Supermini BLANK A / VER-BLANK B
+        if (/BLANK\s*(WAX|LICO)/i.test(sampleLabel)) {
+          continue;
+        }
+        if (/BLANK/i.test(sampleLabel) && !/BLANK\s*[AB]/i.test(sampleLabel) && detectedMatrix !== 'SUPERMINI') {
+          continue;
         }
 
         // Normalisasi nama standar (misal BLANK A -> BLANK_A, LIM01 -> LIM01, OREAS184 -> OREAS184)
@@ -392,6 +400,11 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
         const s = parseNum(cols[valOffset + 8]);
         const cr2o3 = parseNum(cols[valOffset + 9]);
         const mno = parseNum(cols[valOffset + 10]);
+
+        // Abaikan baris kosong template tanpa hasil analisa
+        if (standardCode === 'UNKNOWN' && ni === 0 && fe === 0 && sio2 === 0) {
+          continue;
+        }
 
         // BC dan FeNi
         let bc = parseNum(cols[valOffset + 11]);
@@ -461,7 +474,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
         }
 
         const item: ParsedItem = {
-          sequenceNo: seqNo,
+          sequenceNo: currentItems.length + 1,
           sampleLabel,
           standardCode,
           displayName,
@@ -484,15 +497,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
           itemStatus,
         };
 
-        // Jika nomor urut = 1, inisialisasi set baru
-        if (seqNo === 1) {
-          finishCurrentSet();
-          currentItems = [item];
-          currentDate = parsedIsoDate;
-          currentTime = parsedTime;
-        } else {
-          currentItems.push(item);
-        }
+        currentItems.push(item);
       }
 
       // Flush sisa set terakhir jika ada
@@ -777,9 +782,37 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* 1. Target Instrument */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-              Instrumen Target
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Instrumen Target ({activeSite})
+              </label>
+              {isDevOrManager && (
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSite('TBP')}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                      activeSite === 'TBP'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    TBP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSite('GTS')}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                      activeSite === 'GTS'
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    GTS
+                  </button>
+                </div>
+              )}
+            </div>
             <select
               value={selectedInstrument}
               onChange={e => {
@@ -791,7 +824,7 @@ export const XrfDirectPasteTab: React.FC<XrfDirectPasteTabProps> = ({
               }}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-teal-500 outline-none"
             >
-              {instruments.map(inst => (
+              {siteInstruments.map(inst => (
                 <option key={inst.code} value={inst.code}>
                   {inst.name} ({inst.code})
                 </option>

@@ -3,29 +3,43 @@ import {
   LineChart, Sliders, RefreshCw, Calendar, ArrowLeftRight, 
   HelpCircle, Sparkles, Filter, Check, Eye, EyeOff, 
   LayoutGrid, Columns, Layers, CheckSquare, Square, Info, ShieldCheck,
-  CheckCircle2, Database, ChevronDown, Activity, Building2, Cpu, ShieldAlert
+  CheckCircle2, Database, ChevronDown, Activity, Building2, Cpu, ShieldAlert,
+  Plus, X, Archive, Lock, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { XrfQcChartCard, QC_ELEMENTS_LIST, XrfPointData, XrfChartLimitData, XrfPointAnnotation } from './XrfQcChartCard';
 import { XrfOffspecIsolationModal, IsolatedOffspecPoint } from './XrfOffspecIsolationModal';
+import { formatStandardDisplayName, isWdxrfInstrument } from '../../utils/xrfStandardDetector';
+import { XrfChartFullscreenModal } from './XrfChartFullscreenModal';
+import { 
+  getTakeoutUserAuth, 
+  recordTakeoutAuditLogs, 
+  XrfOffspecAuditLog 
+} from '../../utils/xrfTakeoutAuth';
+import { XrfTakeoutReasonModal } from './XrfTakeoutReasonModal';
+import { XrfTakeoutAuditLogsModal } from './XrfTakeoutAuditLogsModal';
 
 interface XrfControlChartsTabProps {
   instruments: Array<{ code: string; name: string }>;
   standards: Array<{ code: string; name: string }>;
   assignedSite?: 'GTS' | 'TBP';
   isDevOrManager?: boolean;
+  currentUserNik?: string;
+  currentUserName?: string;
+  currentUserJabatan?: string;
+  onInstrumentsChanged?: () => Promise<void> | void;
 }
 
 // Urutan standar resmi sesuai urutan input data kalibrasi (Limonite & Saprolite)
 export const OFFICIAL_INPUT_STANDARDS_ORDER = [
   // 1. Limonite Sequence (Gambar 4)
   'LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05',
-  // 2. Saprolite Sequence (Gambar 3)
-  'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'LIM', 'SAP16',
-  'OREAS193', 'SAP19', 'OREAS194', 'SAP', 'OREAS191', 'OREAS192', 'OREAS195',
+  // 2. Saprolite Sequence (SOP Lab Aktual)
+  'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192',
+  'OREAS193', 'SAP19', 'OREAS194', 'OREAS195',
 ];
 
-// Urutan standar resmi skema WDXRF Supermini 200 (17 Standar kontinu tanpa dipisah saprolite/limonite)
+// Urutan standar resmi skema WDXRF Supermini 200 (17 Standar GTS)
 export const WDXRF_SUPERMINI_STANDARDS_ORDER = [
   'BLANK_A',
   'BLANK_B',
@@ -46,17 +60,56 @@ export const WDXRF_SUPERMINI_STANDARDS_ORDER = [
   'OREAS195',
 ];
 
+// Urutan standar default skema WDXRF Zetium PANalytical (22 Standar TBP Aktual)
+export const WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER = [
+  'OREAS70B',
+  'BRK03',
+  'OREAS182',
+  'NILTRT11',
+  'OREAS184',
+  'LIM13',
+  'OB',
+  'OREAS187',
+  'NILTRT45',
+  'OREAS189',
+  'OREAS190',
+  'LIM',
+  'OREAS191',
+  'OREAS192',
+  'SAP16',
+  'OREAS193',
+  'SAP19',
+  'OREAS194',
+  'SAP',
+  'OREAS72B',
+  'OREAS185',
+  'ZBK411',
+];
+
 export const STANDARD_DISPLAY_NAMES: Record<string, string> = {
   'BLANK_A': 'BLANK A',
   'BLANK_B': 'VER-BLANK B',
   'BLANK A': 'BLANK A',
   'BLANK B': 'VER-BLANK B',
   'VER-BLANK B': 'VER-BLANK B',
+  'OREAS70B': 'OREAS 70B',
+  'OREAS 70B': 'OREAS 70B',
+  'BRK03': 'BRK 03',
+  'BRK 03': 'BRK 03',
+  'BRK': 'BRK 03',
+  'OREAS182': 'OREAS 182',
+  'OREAS 182': 'OREAS 182',
+  'NILTRT11': 'NILTRT 11',
+  'NILTRT 11': 'NILTRT 11',
   'LIM01': 'LIM 01',
   'LIM02': 'LIM 02',
   'LIM03': 'LIM 03',
   'LIM04': 'LIM 04',
   'LIM05': 'LIM 05',
+  'LIM13': 'LIM 13',
+  'OB': 'OB',
+  'NILTRT45': 'NILTRT 45',
+  'NILTRT 45': 'NILTRT 45',
   'OREAS184': 'OREAS 184',
   'OREAS187': 'OREAS 187',
   'OREAS189': 'OREAS 189',
@@ -70,6 +123,12 @@ export const STANDARD_DISPLAY_NAMES: Record<string, string> = {
   'OREAS194': 'OREAS 194',
   'SAP': 'SAP',
   'OREAS195': 'OREAS 195',
+  'OREAS72B': 'OREAS 72B',
+  'OREAS 72B': 'OREAS 72B',
+  'OREAS185': 'OREAS 185',
+  'OREAS 185': 'OREAS 185',
+  'ZBK411': 'ZBK 411',
+  'ZBK 411': 'ZBK 411',
 };
 
 export interface InstrumentTheme {
@@ -232,7 +291,43 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   standards,
   assignedSite = 'GTS',
   isDevOrManager = false,
+  currentUserNik,
+  currentUserName,
+  currentUserJabatan,
+  onInstrumentsChanged,
 }) => {
+  // Otorisasi Take Out Data Off-Spec (Hanya SPV, SPT Lab, Dev, dan Manager)
+  const auth = useMemo(() => {
+    return getTakeoutUserAuth({
+      nik: currentUserNik,
+      name: currentUserName,
+      jabatan: currentUserJabatan,
+    });
+  }, [currentUserNik, currentUserName, currentUserJabatan]);
+
+  const checkTakeoutPermissionOrWarn = useCallback(() => {
+    if (!auth.allowed) {
+      toast.error("Akses Ditolak: Fitur Take Out data off-spec hanya diizinkan untuk SPV & SPT Lab, Developer, dan Manager.", {
+        duration: 5000,
+      });
+      return false;
+    }
+    return true;
+  }, [auth.allowed]);
+
+  // Modal State: Konfirmasi Take Out dengan Alasan
+  const [takeoutPendingPoint, setTakeoutPendingPoint] = useState<{
+    point: XrfPointData;
+    element: string;
+    limits: XrfChartLimitData;
+    instrumentCode: string;
+    instrumentName: string;
+    standardCode: string;
+  } | null>(null);
+
+  // Modal State: Riwayat Audit Trail Log Take Out
+  const [showTakeoutAuditModal, setShowTakeoutAuditModal] = useState<boolean>(false);
+
   // -----------------------------------------------------------------
   // 1. SIMPLIFIED ENTERPRISE HIERARCHY (SITE -> METHOD -> MATRIX)
   // -----------------------------------------------------------------
@@ -254,11 +349,37 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   // D. Parameter / Element Analisis (Global & Synchronized across all charts)
   const [selectedElement, setSelectedElement] = useState<string>('Ni');
 
+  // E. Filter Periode Waktu / Tahun (Default: Tahun Berjalan)
+  const currentYearStr = new Date().getFullYear().toString();
+  const [selectedYear, setSelectedYear] = useState<string>(currentYearStr);
+
+  const dateRange = useMemo(() => {
+    if (selectedYear === 'ALL') {
+      return { startDate: '', endDate: '' };
+    }
+    return {
+      startDate: `${selectedYear}-01-01`,
+      endDate: `${selectedYear}-12-31`,
+    };
+  }, [selectedYear]);
+
+  // Modal State: Tambah Alat Baru Langsung dari UI
+  const [showAddInstrumentModal, setShowAddInstrumentModal] = useState<boolean>(false);
+  const [newInstName, setNewInstName] = useState<string>('');
+  const [newInstCode, setNewInstCode] = useState<string>('');
+  const [newInstBrand, setNewInstBrand] = useState<string>('PANalytical Epsilon 4');
+  const [newInstSite, setNewInstSite] = useState<'GTS' | 'TBP'>(selectedSite);
+  const [newInstMethod, setNewInstMethod] = useState<'EDXRF' | 'WDXRF'>(selectedMethod);
+  const [newInstColorTag, setNewInstColorTag] = useState<string>('teal');
+  const [isSubmittingInst, setIsSubmittingInst] = useState<boolean>(false);
+
   // -----------------------------------------------------------------
   // 2. INSTRUMENT AVAILABILITY (DIBACA LANGSUNG DARI DATABASE)
   // -----------------------------------------------------------------
   const [allMasterInstruments, setAllMasterInstruments] = useState<Array<any>>([]);
-  const [selectedInstruments, setSelectedInstruments] = useState<string[]>(['EPSILON_A', 'EPSILON_B', 'EPSILON_D']);
+  const [selectedInstruments, setSelectedInstruments] = useState<string[]>(() => 
+    assignedSite === 'TBP' ? ['EPSILON_C', 'EPSILON_E', 'EPSILON_F'] : ['EPSILON_A', 'EPSILON_B', 'EPSILON_D']
+  );
   const [instrumentsInitialized, setInstrumentsInitialized] = useState<boolean>(false);
 
   // -----------------------------------------------------------------
@@ -266,8 +387,8 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   // -----------------------------------------------------------------
   const [availableStandardsData, setAvailableStandardsData] = useState<Array<{ standardCode: string; count: number; lastAnalyzed?: string }>>([]);
   const [selectedStandards, setSelectedStandards] = useState<string[]>([
-    'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'LIM', 'SAP16', 
-    'OREAS193', 'SAP19', 'OREAS194', 'SAP'
+    'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 
+    'OREAS193', 'SAP19', 'OREAS194', 'OREAS195'
   ]);
 
   // -----------------------------------------------------------------
@@ -292,6 +413,14 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     }
   });
   const [showOffspecModal, setShowOffspecModal] = useState<boolean>(false);
+  const [fullscreenModalState, setFullscreenModalState] = useState<{
+    isOpen: boolean;
+    standardCode: string;
+    standardRawCode?: string;
+    instrumentName: string;
+    instrumentCode: string;
+    headerColorClass?: string;
+  } | null>(null);
 
   // Anomaly point annotations: Issue, Solution, PIC (persistent in localStorage)
   const [pointAnnotations, setPointAnnotations] = useState<Record<string, XrfPointAnnotation>>(() => {
@@ -371,59 +500,149 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     instName: string, 
     stdCode: string
   ) => {
+    if (!checkTakeoutPermissionOrWarn()) return;
     const pointId = `${instCode}-${stdCode}-${element}-${point.index}`;
-    setIsolatedPoints(prev => {
-      const exists = prev.some(p => p.id === pointId);
-      if (exists) {
-        toast.info(`Titik #${point.index} (${element}) dikeluarkan dari isolasi data off-spec`);
-        return prev.filter(p => p.id !== pointId);
-      } else {
-        const pointSigma = limits.stdevFixed > 0 
-          ? ((point.value - limits.nominalValue) / limits.stdevFixed) 
-          : 0;
-        const absSigma = Math.abs(pointSigma);
-        const status = absSigma > 3.0 ? 'action' : absSigma > 2.0 ? 'warning' : 'normal';
-        const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : status === 'warning' ? 'Off-Spec Warning (2-3σ)' : 'In-Control (≤2σ)';
-        const ann = pointAnnotations[pointId];
+    const exists = isolatedPoints.some(p => p.id === pointId);
 
-        const newPoint: IsolatedOffspecPoint = {
-          id: pointId,
-          pointId: point.id,
-          index: point.index,
-          date: point.date || new Date().toISOString().split('T')[0],
-          analyzedAt: point.analyzedAt,
-          instrumentCode: instCode,
-          instrumentName: instName,
-          standardCode: stdCode,
-          element,
-          value: point.value,
-          nominalValue: limits.nominalValue,
-          stdevFixed: limits.stdevFixed,
-          diff: point.value - limits.nominalValue,
-          sigmaDist: pointSigma,
-          status,
-          statusLabel,
-          isolatedAt: new Date().toISOString(),
-          issue: ann?.issue,
-          solution: ann?.solution,
-          picNik: ann?.picNik,
-          picName: ann?.picName,
-        };
-        toast.success(`Titik #${point.index} (${element}) berhasil diisolasi ke chart off-spec`);
-        return [...prev, newPoint];
-      }
+    if (exists) {
+      // Pulihkan kembali ke grafik kontrol utama
+      setIsolatedPoints(prev => prev.filter(p => p.id !== pointId));
+      recordTakeoutAuditLogs({
+        action: 'RESTORE',
+        userNik: auth.userInfo.nik,
+        userName: auth.userInfo.name,
+        userJabatan: auth.userInfo.jabatan,
+        userRole: auth.userInfo.role,
+        instrumentCode: instCode,
+        instrumentName: instName,
+        standardCode: stdCode,
+        element,
+        pointIndex: point.index,
+        measuredValue: point.value,
+        nominalValue: limits.nominalValue,
+        sigmaDist: limits.stdevFixed > 0 ? ((point.value - limits.nominalValue) / limits.stdevFixed) : 0,
+        diff: point.value - limits.nominalValue,
+        sampleDate: point.date,
+        reason: 'Titik dipulihkan kembali ke grafik kendali utama',
+      });
+      toast.info(`Titik #${point.index} (${element}) dikeluarkan dari isolasi data off-spec`);
+    } else {
+      // Buka modal konfirmasi dengan alasan/justifikasi teknis yang wajib
+      setTakeoutPendingPoint({
+        point,
+        element,
+        limits,
+        instrumentCode: instCode,
+        instrumentName: instName,
+        standardCode: stdCode,
+      });
+    }
+  }, [isolatedPoints, checkTakeoutPermissionOrWarn, auth.userInfo]);
+
+  const handleConfirmTakeout = useCallback((reason: string) => {
+    if (!takeoutPendingPoint) return;
+    const { point, element, limits, instrumentCode: instCode, instrumentName: instName, standardCode: stdCode } = takeoutPendingPoint;
+    const pointId = `${instCode}-${stdCode}-${element}-${point.index}`;
+    const pointSigma = limits.stdevFixed > 0 
+      ? ((point.value - limits.nominalValue) / limits.stdevFixed) 
+      : 0;
+    const absSigma = Math.abs(pointSigma);
+    const status = absSigma > 3.0 ? 'action' : absSigma > 2.0 ? 'warning' : 'normal';
+    const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : status === 'warning' ? 'Off-Spec Warning (2-3σ)' : 'In-Control (≤2σ)';
+    const ann = pointAnnotations[pointId];
+
+    const newPoint: IsolatedOffspecPoint = {
+      id: pointId,
+      pointId: point.id,
+      index: point.index,
+      date: point.date || new Date().toISOString().split('T')[0],
+      analyzedAt: point.analyzedAt,
+      instrumentCode: instCode,
+      instrumentName: instName,
+      standardCode: stdCode,
+      element,
+      value: point.value,
+      nominalValue: limits.nominalValue,
+      stdevFixed: limits.stdevFixed,
+      diff: point.value - limits.nominalValue,
+      sigmaDist: pointSigma,
+      status,
+      statusLabel,
+      isolatedAt: new Date().toISOString(),
+      note: reason,
+      issue: ann?.issue || reason,
+      solution: ann?.solution,
+      picNik: ann?.picNik || auth.userInfo.nik,
+      picName: ann?.picName || auth.userInfo.name,
+    };
+
+    setIsolatedPoints(prev => [...prev.filter(p => p.id !== pointId), newPoint]);
+
+    recordTakeoutAuditLogs({
+      action: 'ISOLATE',
+      userNik: auth.userInfo.nik,
+      userName: auth.userInfo.name,
+      userJabatan: auth.userInfo.jabatan,
+      userRole: auth.userInfo.role,
+      instrumentCode: instCode,
+      instrumentName: instName,
+      standardCode: stdCode,
+      element,
+      pointIndex: point.index,
+      measuredValue: point.value,
+      nominalValue: limits.nominalValue,
+      sigmaDist: pointSigma,
+      diff: point.value - limits.nominalValue,
+      statusLabel,
+      reason,
+      sampleDate: point.date,
     });
-  }, [pointAnnotations]);
+
+    toast.success(`Titik #${point.index} (${element}) berhasil di-take out & dicatat dalam audit trail.`);
+    setTakeoutPendingPoint(null);
+  }, [takeoutPendingPoint, pointAnnotations, auth.userInfo]);
 
   const handleRemovePoint = useCallback((id: string) => {
+    if (!checkTakeoutPermissionOrWarn()) return;
+    const target = isolatedPoints.find(p => p.id === id);
     setIsolatedPoints(prev => prev.filter(p => p.id !== id));
+    if (target) {
+      recordTakeoutAuditLogs({
+        action: 'RESTORE',
+        userNik: auth.userInfo.nik,
+        userName: auth.userInfo.name,
+        userJabatan: auth.userInfo.jabatan,
+        userRole: auth.userInfo.role,
+        instrumentCode: target.instrumentCode,
+        instrumentName: target.instrumentName,
+        standardCode: target.standardCode,
+        element: target.element,
+        pointIndex: target.index,
+        measuredValue: target.value,
+        nominalValue: target.nominalValue,
+        sigmaDist: target.sigmaDist,
+        diff: target.diff,
+        sampleDate: target.date,
+        reason: 'Titik dipulihkan kembali ke grafik kontrol utama',
+      });
+    }
     toast.info('Titik off-spec dihapus dari rekap isolasi');
-  }, []);
+  }, [isolatedPoints, checkTakeoutPermissionOrWarn, auth.userInfo]);
 
   const handleClearAll = useCallback(() => {
+    if (!checkTakeoutPermissionOrWarn()) return;
+    const count = isolatedPoints.length;
     setIsolatedPoints([]);
+    recordTakeoutAuditLogs({
+      action: 'CLEAR_ALL',
+      userNik: auth.userInfo.nik,
+      userName: auth.userInfo.name,
+      userJabatan: auth.userInfo.jabatan,
+      userRole: auth.userInfo.role,
+      reason: `Reset seluruh data isolasi off-spec (${count} titik dipulihkan)`,
+    });
     toast.info('Semua data isolasi off-spec telah dibersihkan');
-  }, []);
+  }, [isolatedPoints.length, checkTakeoutPermissionOrWarn, auth.userInfo]);
 
   const isPointIsolated = useCallback((
     point: XrfPointData, 
@@ -443,6 +662,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     instName: string, 
     stdCode: string
   ) => {
+    if (!checkTakeoutPermissionOrWarn()) return;
     const offspecPoints = cardPoints.filter(p => {
       const dist = limits.stdevFixed > 0 ? Math.abs((p.value - limits.nominalValue) / limits.stdevFixed) : 0;
       return dist > 2.0;
@@ -453,6 +673,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       return;
     }
 
+    const logsToRecord: XrfOffspecAuditLog[] = [];
     setIsolatedPoints(prev => {
       const existingIds = new Set(prev.map(p => p.id));
       const newlyAdded: IsolatedOffspecPoint[] = [];
@@ -484,23 +705,45 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             status,
             statusLabel,
             isolatedAt: new Date().toISOString(),
+            note: 'Bulk take-out titik off-spec pada standar ini',
             issue: ann?.issue,
             solution: ann?.solution,
-            picNik: ann?.picNik,
-            picName: ann?.picName,
+            picNik: ann?.picNik || auth.userInfo.nik,
+            picName: ann?.picName || auth.userInfo.name,
+          });
+
+          logsToRecord.push({
+            action: 'BULK_ISOLATE',
+            userNik: auth.userInfo.nik,
+            userName: auth.userInfo.name,
+            userJabatan: auth.userInfo.jabatan,
+            userRole: auth.userInfo.role,
+            instrumentCode: instCode,
+            instrumentName: instName,
+            standardCode: stdCode,
+            element,
+            pointIndex: p.index,
+            measuredValue: p.value,
+            nominalValue: limits.nominalValue,
+            sigmaDist: pointSigma,
+            diff: p.value - limits.nominalValue,
+            statusLabel,
+            reason: 'Bulk take-out titik off-spec (>2σ) pada standar ini',
+            sampleDate: p.date,
           });
         }
       });
 
       if (newlyAdded.length > 0) {
-        toast.success(`${newlyAdded.length} titik off-spec di ${stdCode} (${element}) berhasil diisolasi!`);
+        toast.success(`${newlyAdded.length} titik off-spec di ${stdCode} (${element}) berhasil di-take out & direkam!`);
+        recordTakeoutAuditLogs(logsToRecord);
       } else {
         toast.info(`Semua titik off-spec di ${stdCode} sudah terisolasi sebelumnya.`);
       }
 
       return [...prev, ...newlyAdded];
     });
-  }, []);
+  }, [pointAnnotations, checkTakeoutPermissionOrWarn, auth.userInfo]);
 
   // Horizontal scroll synchronization for side-by-side mode
   const headerScrollRef = useRef<HTMLDivElement>(null);
@@ -552,8 +795,11 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   // Filtered available instruments for current Site and Method
   const currentCategoryInstruments = useMemo(() => {
     return allMasterInstruments.filter(inst => {
-      const instSite = inst.site || (['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(inst.code) ? 'GTS' : 'TBP');
-      const instMethod = inst.methodType || (['SUPERMINI', 'ZETIUM_A', 'ZETIUM_B'].includes(inst.code) ? 'WDXRF' : 'EDXRF');
+      const isKnownGts = ['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(inst.code);
+      const isKnownTbp = ['EPSILON_C', 'EPSILON_E', 'EPSILON_F', 'EPSILON_G', 'EPSILON_H', 'S2_PUMA', 'ZETIUM_A', 'ZETIUM_B'].includes(inst.code);
+      const instSite = isKnownGts ? 'GTS' : (isKnownTbp ? 'TBP' : (inst.site || 'TBP'));
+      const isKnownWdxrf = ['SUPERMINI', 'ZETIUM_A', 'ZETIUM_B'].includes(inst.code);
+      const instMethod = isKnownWdxrf ? 'WDXRF' : (inst.methodType || 'EDXRF');
       return instSite === selectedSite && instMethod === selectedMethod;
     });
   }, [allMasterInstruments, selectedSite, selectedMethod]);
@@ -573,11 +819,28 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     }
   }, [selectedSite, selectedMethod, currentCategoryInstruments]);
 
-  // Map standard code to measurement count
+
+  const [latestBatchStandards, setLatestBatchStandards] = useState<string[]>([]);
+  const [showHistoricalStandards, setShowHistoricalStandards] = useState(false);
+
+  // Map of standardCode -> count for quick lookup with aliases
   const standardCountMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const item of availableStandardsData) {
-      map[item.standardCode] = item.count;
+      const c = item.standardCode;
+      const cnt = item.count;
+      map[c] = (map[c] || 0) + cnt;
+      const clean = c.toUpperCase().replace(/[\s_-]+/g, '');
+      const space = c.replace(/_/g, ' ');
+      const under = c.replace(/\s+/g, '_');
+      map[clean] = (map[clean] || 0) + cnt;
+      map[space] = (map[space] || 0) + cnt;
+      map[under] = (map[under] || 0) + cnt;
+      if (clean === 'BRK03' || clean === 'BRK') {
+        map['BRK'] = (map['BRK'] || 0) + cnt;
+        map['BRK03'] = (map['BRK03'] || 0) + cnt;
+        map['BRK 03'] = (map['BRK 03'] || 0) + cnt;
+      }
     }
     return map;
   }, [availableStandardsData]);
@@ -587,7 +850,12 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     if (selectedInstruments.length === 0) return;
     try {
       const instParam = selectedInstruments.join(',');
-      const res = await fetch(`/api/xrf/available-standards?instrumentCode=${instParam}`);
+      const params = new URLSearchParams();
+      params.set('instrumentCode', instParam);
+      if (dateRange.startDate) params.set('startDate', dateRange.startDate);
+      if (dateRange.endDate) params.set('endDate', dateRange.endDate);
+
+      const res = await fetch(`/api/xrf/available-standards?${params.toString()}`);
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         const parsed = json.data.map((d: any) => ({
@@ -602,14 +870,40 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
     }
   };
 
+  // Load baseline standards from the latest verification batch for selected instruments
+  const loadLatestBatchStandards = async () => {
+    if (selectedInstruments.length === 0) return;
+    try {
+      const instParam = selectedInstruments.join(',');
+      const params = new URLSearchParams();
+      params.set('instrumentCode', instParam);
+      if (dateRange.startDate) params.set('startDate', dateRange.startDate);
+      if (dateRange.endDate) params.set('endDate', dateRange.endDate);
+
+      const res = await fetch(`/api/xrf/latest-batch-standards?${params.toString()}`);
+      const json = await res.json();
+      if (json.success && json.hasData && Array.isArray(json.standards) && json.standards.length > 0) {
+        setLatestBatchStandards(json.standards);
+      } else {
+        setLatestBatchStandards([]);
+      }
+    } catch (err) {
+      console.warn("Gagal memuat standar batch terakhir:", err);
+    }
+  };
+
   useEffect(() => {
     loadAvailableStandards();
-  }, [selectedInstruments]);
+    loadLatestBatchStandards();
+  }, [selectedInstruments, dateRange]);
 
-  // Auto-sync selected standards when primary matrix or method changes
+  // Auto-sync selected standards: selalu prioritaskan standar dari dataset batch terakhir yang diinput untuk tiap alatnya
   useEffect(() => {
-    if (selectedMethod === 'WDXRF') {
-      setSelectedStandards(WDXRF_SUPERMINI_STANDARDS_ORDER);
+    if (latestBatchStandards.length > 0) {
+      setSelectedStandards(latestBatchStandards);
+    } else if (selectedMethod === 'WDXRF') {
+      const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
+      setSelectedStandards(hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER);
     } else if (selectedMatrix === 'SAPROLITE') {
       const sapCodes = [
         'OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 
@@ -620,11 +914,21 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       const limCodes = ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
       setSelectedStandards(limCodes);
     }
-  }, [selectedMethod, selectedMatrix]);
+  }, [selectedMethod, selectedMatrix, latestBatchStandards, selectedInstruments]);
+
+  const chartAbortControllerRef = useRef<AbortController | null>(null);
 
   // Fetch chart data from backend for all selected instruments
   const fetchChartData = async () => {
     if (selectedInstruments.length === 0) return;
+
+    // Abort previous in-flight chart data request
+    if (chartAbortControllerRef.current) {
+      chartAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    chartAbortControllerRef.current = controller;
+
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -636,7 +940,12 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         : (selectedStandards.length > 0 ? selectedStandards.join(',') : 'ALL');
       params.set('standards', standardsToQuery);
 
-      const res = await fetch(`/api/xrf/qc-chart-data?${params.toString()}`);
+      if (dateRange.startDate) params.set('startDate', dateRange.startDate);
+      if (dateRange.endDate) params.set('endDate', dateRange.endDate);
+
+      const res = await fetch(`/api/xrf/qc-chart-data?${params.toString()}`, {
+        signal: controller.signal
+      });
       const json = await res.json();
       if (json.success) {
         if (json.allElementsData) {
@@ -647,21 +956,29 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         }
       }
     } catch (err: any) {
+      if (err.name === 'AbortError') return;
       toast.error('Gagal mengambil data grafik: ' + err.message);
     } finally {
-      setLoading(false);
+      if (chartAbortControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchChartData();
-  }, [selectedInstruments, selectedStandards]);
+    const timer = setTimeout(() => {
+      fetchChartData();
+    }, 70);
+    return () => clearTimeout(timer);
+  }, [selectedInstruments, selectedStandards, dateRange, selectedElement]);
 
   // Handle Synchronized Element Selection from ANY chart card dropdown
   const handleSelectElement = (el: string) => {
     setSelectedElement(el);
     if (allElementsData[el]) {
       setGridData(allElementsData[el]);
+    } else {
+      setTimeout(() => fetchChartData(), 10);
     }
     toast.success(`Parameter diubah ke ${el} untuk semua grafik.`);
   };
@@ -670,9 +987,12 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   const currentGridData = allElementsData[selectedElement] || gridData;
 
   const handleAutoIsolateAllOffspec = useCallback(() => {
+    if (!checkTakeoutPermissionOrWarn()) return;
+
     setIsolatedPoints(prev => {
       const existingIds = new Set(prev.map(p => p.id));
       const newlyAdded: IsolatedOffspecPoint[] = [];
+      const logsToRecord: XrfOffspecAuditLog[] = [];
 
       Object.entries(currentGridData).forEach(([stdCode, instObj]) => {
         const stdName = STANDARD_DISPLAY_NAMES[stdCode] || stdCode;
@@ -691,6 +1011,7 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                   const status = absSigma > 3.0 ? 'action' : 'warning';
                   const statusLabel = status === 'action' ? 'Off-Spec Action (>3σ)' : 'Off-Spec Warning (2-3σ)';
                   const ann = pointAnnotations[pointId];
+
                   newlyAdded.push({
                     id: pointId,
                     pointId: p.id,
@@ -709,10 +1030,31 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                     status,
                     statusLabel,
                     isolatedAt: new Date().toISOString(),
+                    note: 'Auto-deteksi take-out titik off-spec lintas instrumen',
                     issue: ann?.issue,
                     solution: ann?.solution,
-                    picNik: ann?.picNik,
-                    picName: ann?.picName,
+                    picNik: ann?.picNik || auth.userInfo.nik,
+                    picName: ann?.picName || auth.userInfo.name,
+                  });
+
+                  logsToRecord.push({
+                    action: 'BULK_ISOLATE',
+                    userNik: auth.userInfo.nik,
+                    userName: auth.userInfo.name,
+                    userJabatan: auth.userInfo.jabatan,
+                    userRole: auth.userInfo.role,
+                    instrumentCode: instCode,
+                    instrumentName: theme.name,
+                    standardCode: stdName,
+                    element: selectedElement,
+                    pointIndex: p.index,
+                    measuredValue: p.value,
+                    nominalValue: limits.nominalValue,
+                    sigmaDist,
+                    diff: p.value - limits.nominalValue,
+                    statusLabel,
+                    reason: `Auto-deteksi take out titik off-spec (${absSigma.toFixed(2)}σ) pada unsur ${selectedElement}`,
+                    sampleDate: p.date,
                   });
                 }
               }
@@ -722,14 +1064,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       });
 
       if (newlyAdded.length > 0) {
-        toast.success(`${newlyAdded.length} titik off-spec di seluruh instrumen berhasil diisolasi!`);
+        toast.success(`${newlyAdded.length} titik off-spec di seluruh instrumen berhasil di-take out & direkam!`);
+        recordTakeoutAuditLogs(logsToRecord);
       } else {
         toast.info('Semua titik off-spec yang aktif telah diisolasi.');
       }
 
       return [...prev, ...newlyAdded];
     });
-  }, [currentGridData, selectedElement]);
+  }, [currentGridData, selectedElement, checkTakeoutPermissionOrWarn, auth.userInfo, pointAnnotations]);
 
   // Toggle instrument selection (up to 6 instruments side-by-side)
   const toggleInstrument = (code: string) => {
@@ -749,45 +1092,114 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
   };
 
   // Visible standards list:
-  // - If WDXRF: follow official WDXRF 17 standards schema (unified, NOT separated by saprolite/limonite)
-  // - If EDXRF: strictly constrained to selected Primary Matrix (Saprolite vs Limonite)
+  // - Selalu prioritaskan urutan standar dari batch pengukuran terakhir yang diinput untuk alat terkait (EDXRF maupun WDXRF)
+  // - Fallback ke urutan default matriks jika belum ada batch pengukuran
   const visibleStandards = useMemo(() => {
     let candidateCodes: string[] = [];
     let matrixType = 'SAPROLITE';
 
-    if (selectedMethod === 'WDXRF') {
-      candidateCodes = WDXRF_SUPERMINI_STANDARDS_ORDER;
-      matrixType = 'SUPERMINI';
+    if (latestBatchStandards.length > 0) {
+      candidateCodes = [...latestBatchStandards];
+      const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
+      const hasSupermini = selectedInstruments.some(c => c === 'SUPERMINI');
+      matrixType = hasZetium ? 'ZETIUM' : hasSupermini ? 'SUPERMINI' : (selectedMatrix || 'SAPROLITE');
+    } else if (selectedMethod === 'WDXRF') {
+      const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
+      candidateCodes = hasZetium ? [...WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER] : [...WDXRF_SUPERMINI_STANDARDS_ORDER];
+      matrixType = hasZetium ? 'ZETIUM' : 'SUPERMINI';
     } else {
       const isSaprolite = selectedMatrix === 'SAPROLITE';
       candidateCodes = isSaprolite
-        ? ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'LIM', 'SAP16', 'OREAS193', 'SAP19', 'OREAS194', 'SAP', 'OREAS191', 'OREAS192', 'OREAS195']
+        ? ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']
         : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
       matrixType = isSaprolite ? 'SAPROLITE' : 'LIMONITE';
     }
 
+    const isCodeMatch = (code1: string, code2: string) => {
+      if (code1 === code2) return true;
+      const c1 = code1.toUpperCase().replace(/[\s_-]+/g, '');
+      const c2 = code2.toUpperCase().replace(/[\s_-]+/g, '');
+      if (c1 === c2) return true;
+      if ((c1 === 'BRK' || c1 === 'BRK03') && (c2 === 'BRK' || c2 === 'BRK03')) return true;
+      return false;
+    };
+
+    // Identifikasi standar historis yang memiliki data pengukuran tapi tidak ada di set batch terakhir
+    const historicalCodes = availableStandardsData
+      .filter(s => s.count > 0 && !candidateCodes.some(c => isCodeMatch(c, s.standardCode)))
+      .map(s => s.standardCode);
+
+    if (showHistoricalStandards && historicalCodes.length > 0) {
+      candidateCodes = [...candidateCodes, ...historicalCodes];
+    }
+
     const list = candidateCodes.map(code => {
       const existing = standards.find(s => s.code === code || s.code === code.replace('_', ' ') || s.name === code);
+      const isHist = historicalCodes.includes(code);
+      const baseDisp = existing?.name || STANDARD_DISPLAY_NAMES[code] || formatStandardDisplayName(code);
+      const clean = code.toUpperCase().replace(/[\s_-]+/g, '');
       return {
         code,
-        name: existing?.name || STANDARD_DISPLAY_NAMES[code] || code,
+        name: isHist ? `${baseDisp} (Arsip/Historis)` : baseDisp,
         matrix: matrixType,
-        count: standardCountMap[code] || standardCountMap[code.replace('_', ' ')] || 0,
+        count: standardCountMap[code] || standardCountMap[clean] || standardCountMap[code.replace('_', ' ')] || 0,
+        isHistorical: isHist,
       };
     });
 
-    if (selectedMethod === 'WDXRF') {
-      // Untuk WDXRF: tampilkan urutan skema 17 standar secara utuh dan kontinu,
-      // tidak dipisahkan saprolite/limonite dan tidak dieliminasi
-      return list;
+    return list;
+  }, [standards, standardCountMap, selectedMatrix, selectedMethod, selectedInstruments, latestBatchStandards, availableStandardsData, showHistoricalStandards]);
+
+  const historicalStandardsCount = useMemo(() => {
+    let candidateCodes: string[] = [];
+    if (latestBatchStandards.length > 0) {
+      candidateCodes = latestBatchStandards;
+    } else if (selectedMethod === 'WDXRF') {
+      const hasZetium = selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B');
+      candidateCodes = hasZetium ? WDXRF_ZETIUM_DEFAULT_STANDARDS_ORDER : WDXRF_SUPERMINI_STANDARDS_ORDER;
+    } else {
+      candidateCodes = selectedMatrix === 'SAPROLITE'
+        ? ['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']
+        : ['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05'];
     }
 
-    const withData = list.filter(s => s.count > 0);
-    return withData.length > 0 ? withData : list;
-  }, [standards, standardCountMap, selectedMatrix, selectedMethod]);
+    const isCodeMatch = (code1: string, code2: string) => {
+      if (code1 === code2) return true;
+      const c1 = code1.toUpperCase().replace(/[\s_-]+/g, '');
+      const c2 = code2.toUpperCase().replace(/[\s_-]+/g, '');
+      if (c1 === c2) return true;
+      if ((c1 === 'BRK' || c1 === 'BRK03') && (c2 === 'BRK' || c2 === 'BRK03')) return true;
+      return false;
+    };
 
-  // Standards rendered on the chart canvas (rendered directly)
-  const renderedStandards = visibleStandards;
+    return availableStandardsData.filter(s => 
+      s.count > 0 && !candidateCodes.some(c => isCodeMatch(c, s.standardCode))
+    ).length;
+  }, [availableStandardsData, latestBatchStandards, selectedMethod, selectedMatrix, selectedInstruments]);
+
+  // Standards rendered on the chart canvas:
+  // Disesuaikan dengan data set terakhir untuk tiap alatnya & hilangkan chart yang kosong
+  const renderedStandards = useMemo(() => {
+    if (showHistoricalStandards) return visibleStandards;
+
+    const listWithData = visibleStandards.filter(std => {
+      const stdCode = std.code;
+      const clean = stdCode.toUpperCase().replace(/[\s_-]+/g, '');
+      const stdData = currentGridData[stdCode] 
+        || currentGridData[clean] 
+        || currentGridData[stdCode.replace('_', ' ')] 
+        || currentGridData[stdCode.replace(' ', '_')] 
+        || currentGridData[std.name] 
+        || (clean === 'BRK03' || clean === 'BRK' ? (currentGridData['BRK03'] || currentGridData['BRK 03'] || currentGridData['BRK']) : null)
+        || {};
+      const hasPoints = selectedInstruments.some(instCode => (stdData[instCode]?.points?.length || 0) > 0);
+      const hasCount = (std.count || 0) > 0 || (standardCountMap[stdCode] || 0) > 0 || (standardCountMap[clean] || 0) > 0;
+      return hasPoints || hasCount;
+    });
+
+    if (loading && listWithData.length === 0) return [];
+    return listWithData.length > 0 ? listWithData : visibleStandards;
+  }, [visibleStandards, currentGridData, selectedInstruments, showHistoricalStandards, loading, standardCountMap]);
 
   // Calculate Grid Columns Class for responsive layout
   const getGridColsClass = () => {
@@ -811,10 +1223,39 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
           
           <div className="flex flex-wrap items-center gap-3">
             {/* 1. UNIVERSE ENTITY BADGE (STRICTLY DRIVEN BY PORTAL UNIVERSE) */}
-            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-black shadow-xs">
-              <Building2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-              <span>{selectedSite === 'GTS' ? 'UNIVERSE: PT. GANE TAMBANG SENTOSA (GTS)' : 'UNIVERSE: PT. TRIMEGAH BANGUN PERSADA (TBP / GPS)'}</span>
-            </div>
+            {isDevOrManager ? (
+              <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSite('TBP')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    selectedSite === 'TBP'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  PT. TBP / GPS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSite('GTS')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    selectedSite === 'GTS'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  PT. GTS
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-black shadow-xs">
+                <Building2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <span>{selectedSite === 'GTS' ? 'UNIVERSE: PT. GANE TAMBANG SENTOSA (GTS)' : 'UNIVERSE: PT. TRIMEGAH BANGUN PERSADA (TBP / GPS)'}</span>
+              </div>
+            )}
 
             {/* 2. METHOD SELECTOR (EDXRF vs WDXRF) */}
             <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
@@ -846,17 +1287,23 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             {selectedMethod === 'EDXRF' ? (
               <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800/80 p-1 border border-slate-200 dark:border-slate-700/80">
                 <button
-                  onClick={() => setSelectedMatrix('SAPROLITE')}
+                  onClick={() => {
+                    setSelectedMatrix('SAPROLITE');
+                    setSelectedStandards(['OREAS184', 'OREAS187', 'OREAS189', 'OREAS190', 'OREAS191', 'OREAS192', 'OREAS193', 'SAP19', 'OREAS194', 'OREAS195']);
+                  }}
                   className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
                     selectedMatrix === 'SAPROLITE'
                       ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                   }`}
                 >
-                  SAPROLITE (OREAS & SAP)
+                  SAPROLITE (10 CRM)
                 </button>
                 <button
-                  onClick={() => setSelectedMatrix('LIMONITE')}
+                  onClick={() => {
+                    setSelectedMatrix('LIMONITE');
+                    setSelectedStandards(['LIM01', 'LIM02', 'LIM03', 'LIM04', 'LIM05']);
+                  }}
                   className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
                     selectedMatrix === 'LIMONITE'
                       ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
@@ -869,13 +1316,48 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
             ) : (
               <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 text-xs font-black shadow-xs">
                 <Layers className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span>SKEMA STANDAR WDXRF (17 STANDAR KONTINU)</span>
+                <span>
+                  {selectedInstruments.some(c => c === 'ZETIUM_A' || c === 'ZETIUM_B')
+                    ? `WDXRF ZETIUM TBP (${latestBatchStandards.length > 0 ? latestBatchStandards.length : 17} STANDAR BASELINE)`
+                    : `WDXRF SUPERMINI GTS (${latestBatchStandards.length > 0 ? latestBatchStandards.length : 17} STANDAR BASELINE)`}
+                </span>
               </div>
+            )}
+
+            {historicalStandardsCount > 0 && (
+              <button
+                onClick={() => setShowHistoricalStandards(!showHistoricalStandards)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                  showHistoricalStandards
+                    ? 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border-amber-500/40 shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-900'
+                }`}
+                title="Tampilkan data standar lama yang pernah diukur namun tidak masuk dalam batch verifikasi terakhir"
+              >
+                <Archive className="w-3.5 h-3.5 text-amber-500" />
+                <span>{showHistoricalStandards ? 'Tutup' : 'Buka'} Standar Arsip ({historicalStandardsCount})</span>
+              </button>
             )}
           </div>
 
           {/* Action & Layout Controls */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Filter Periode Tahun / All-Time */}
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tahun:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-0.5 text-xs font-black text-slate-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+              >
+                <option value={currentYearStr}>{currentYearStr} (Tahun Berjalan)</option>
+                <option value={String(Number(currentYearStr) - 1)}>{Number(currentYearStr) - 1}</option>
+                <option value={String(Number(currentYearStr) - 2)}>{Number(currentYearStr) - 2}</option>
+                <option value="ALL">Semua Waktu (All-Time)</option>
+              </select>
+            </div>
+
             <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-0.5 bg-slate-100 dark:bg-slate-800 text-xs">
               <button
                 onClick={() => setViewMode('side-by-side')}
@@ -932,6 +1414,16 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
               )}
             </button>
 
+            {/* Dedicated Audit Trail Take Out Logs Button */}
+            <button
+              onClick={() => setShowTakeoutAuditModal(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-black border flex items-center gap-1.5 transition-all cursor-pointer shadow-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
+              title="Buka Log Riwayat Take Out Data Off-Spec (ISO 17025 Audit Trail)"
+            >
+              <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Audit Log Take Out</span>
+            </button>
+
             <button
               onClick={fetchChartData}
               disabled={loading}
@@ -952,9 +1444,23 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                 Availability Alat {selectedSite} • {selectedMethod}:
               </span>
             </div>
-            <span className="text-[11px] font-bold text-slate-500">
-              {selectedInstruments.length} Alat Terpilih
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-bold text-slate-500">
+                {selectedInstruments.length} Alat Terpilih
+              </span>
+              <button
+                onClick={() => {
+                  setNewInstSite(selectedSite);
+                  setNewInstMethod(selectedMethod);
+                  setShowAddInstrumentModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                title="Daftarkan Alat XRF Baru Langsung ke Portal"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Tambah Alat</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
@@ -1002,6 +1508,20 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                 </button>
               );
             })}
+
+            {/* Quick Add Tool Card in Grid */}
+            <button
+              onClick={() => {
+                setNewInstSite(selectedSite);
+                setNewInstMethod(selectedMethod);
+                setShowAddInstrumentModal(true);
+              }}
+              className="p-2.5 rounded-xl border-2 border-dashed border-slate-300 hover:border-teal-500 dark:border-slate-700 dark:hover:border-teal-400 text-slate-500 hover:text-teal-600 dark:hover:text-teal-400 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-teal-50/50 dark:hover:bg-teal-950/20 flex flex-col items-center justify-center gap-1 transition-all cursor-pointer min-h-[70px]"
+              title="Daftarkan Alat Baru"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-[11px] font-bold">+ Alat Baru</span>
+            </button>
           </div>
         </div>
 
@@ -1052,7 +1572,21 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
       {/* 3. DYNAMIC CHARTS PER SELECTED CRM STANDARD                   */}
       {/* ------------------------------------------------------------- */}
       <div className="space-y-8">
-        {renderedStandards.length === 0 ? (
+        {loading && renderedStandards.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center space-y-4 shadow-xs">
+            <div className="w-12 h-12 mx-auto rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 flex items-center justify-center text-teal-600 dark:text-teal-400 animate-spin">
+              <RefreshCw className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Menyiapkan Grafik Kontrol Mutu ({selectedSite} • {selectedMethod})...
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Memuat titik data pengukuran dan batas kendali statistik.
+              </p>
+            </div>
+          </div>
+        ) : renderedStandards.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-12 text-center space-y-4">
             <div className="w-12 h-12 mx-auto rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 flex items-center justify-center text-teal-600 dark:text-teal-400">
               <Database className="w-6 h-6" />
@@ -1092,8 +1626,15 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         ) : (
           renderedStandards.map(std => {
             const stdCode = std.code;
-            const stdData = currentGridData[stdCode] || currentGridData[stdCode.replace('_', ' ')] || currentGridData[std.name] || {};
-            const stdCount = std.count || standardCountMap[stdCode] || standardCountMap[stdCode.replace('_', ' ')] || 0;
+            const cleanCode = stdCode.toUpperCase().replace(/[\s_-]+/g, '');
+            const stdData = currentGridData[stdCode] 
+              || currentGridData[cleanCode] 
+              || currentGridData[stdCode.replace('_', ' ')] 
+              || currentGridData[stdCode.replace(' ', '_')] 
+              || currentGridData[std.name] 
+              || (cleanCode === 'BRK03' || cleanCode === 'BRK' ? (currentGridData['BRK03'] || currentGridData['BRK 03'] || currentGridData['BRK']) : null)
+              || {};
+            const stdCount = std.count || standardCountMap[stdCode] || standardCountMap[cleanCode] || standardCountMap[stdCode.replace('_', ' ')] || 0;
 
             return (
               <div 
@@ -1148,6 +1689,16 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                               points={instData.points}
                               showStats={showStats}
                               compactStats={compactStats}
+                              canTakeOutOffspec={auth.allowed}
+                              userRoleTitle={auth.userInfo.role}
+                              onOpenFullscreen={() => setFullscreenModalState({
+                                isOpen: true,
+                                standardCode: std.name,
+                                standardRawCode: std.code,
+                                instrumentName: theme.name,
+                                instrumentCode: instCode,
+                                headerColorClass: theme.headerBg
+                              })}
                               onToggleIsolatePoint={(pt, el, lim) => handleToggleIsolatePoint(pt, el, lim, instCode, theme.name, std.name)}
                               onOpenOffspecModal={() => setShowOffspecModal(true)}
                               onIsolateAllOffspecInCard={(pts, el, lim) => handleIsolateAllOffspecInCard(pts, el, lim, instCode, theme.name, std.name)}
@@ -1194,6 +1745,16 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
                             points={instData.points}
                             showStats={showStats}
                             compactStats={compactStats}
+                            canTakeOutOffspec={auth.allowed}
+                            userRoleTitle={auth.userInfo.role}
+                            onOpenFullscreen={() => setFullscreenModalState({
+                              isOpen: true,
+                              standardCode: std.name,
+                              standardRawCode: std.code,
+                              instrumentName: theme.name,
+                              instrumentCode: instCode,
+                              headerColorClass: theme.headerBg
+                            })}
                             onToggleIsolatePoint={(pt, el, lim) => handleToggleIsolatePoint(pt, el, lim, instCode, theme.name, std.name)}
                             onOpenOffspecModal={() => setShowOffspecModal(true)}
                             onIsolateAllOffspecInCard={(pts, el, lim) => handleIsolateAllOffspecInCard(pts, el, lim, instCode, theme.name, std.name)}
@@ -1222,6 +1783,392 @@ export const XrfControlChartsTab: React.FC<XrfControlChartsTabProps> = ({
         onClearAll={handleClearAll}
         onAutoIsolateAllOffspec={handleAutoIsolateAllOffspec}
         instrumentThemes={INSTRUMENT_THEMES}
+        canTakeOutOffspec={auth.allowed}
+        userRoleTitle={auth.userInfo.role}
+        onOpenAuditLogs={() => setShowTakeoutAuditModal(true)}
+      />
+
+      {/* Modal Tambah Alat XRF Baru Langsung di Portal */}
+      {showAddInstrumentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Tambah Instrumen XRF Baru
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Daftarkan alat analisa baru ke portal tanpa perlu ubah coding
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddInstrumentModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!newInstName.trim()) {
+                  toast.error("Nama alat wajib diisi.");
+                  return;
+                }
+                const cleanCode = (newInstCode || newInstName).trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_');
+                if (!cleanCode) {
+                  toast.error("Kode alat tidak valid.");
+                  return;
+                }
+
+                setIsSubmittingInst(true);
+                try {
+                  const res = await fetch('/api/xrf/instruments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: newInstName.trim(),
+                      code: cleanCode,
+                      brandModel: newInstBrand.trim() || (newInstMethod === 'WDXRF' ? 'Rigaku Supermini200' : 'PANalytical Epsilon 4'),
+                      site: newInstSite,
+                      methodType: newInstMethod,
+                      colorTag: newInstColorTag,
+                    })
+                  });
+                  const json = await res.json();
+                  if (!json.success) {
+                    toast.error(json.error || "Gagal menambahkan alat baru.");
+                    return;
+                  }
+
+                  toast.success(json.message || "Alat baru berhasil ditambahkan!");
+                  await loadMasterInstruments();
+                  await onInstrumentsChanged?.();
+                  
+                  // Auto-select newly created instrument
+                  setSelectedInstruments(prev => Array.from(new Set([...prev, cleanCode])).slice(0, 6));
+
+                  // Reset & close modal
+                  setNewInstName('');
+                  setNewInstCode('');
+                  setShowAddInstrumentModal(false);
+                } catch (err: any) {
+                  toast.error("Terjadi kesalahan jaringan saat menyimpan alat.");
+                } finally {
+                  setIsSubmittingInst(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Nama Alat <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="cth: EPSILON G atau S2 PUMA 02"
+                    value={newInstName}
+                    onChange={(e) => {
+                      setNewInstName(e.target.value);
+                      setNewInstCode(e.target.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_'));
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Kode Unik (ID Sistem) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="cth: EPSILON_G"
+                    value={newInstCode}
+                    onChange={(e) => setNewInstCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+                    className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-teal-600 dark:text-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              {/* Site & Method Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Entitas / Site Lab
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewInstSite('TBP')}
+                      className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                        newInstSite === 'TBP'
+                          ? 'bg-teal-600 text-white border-teal-700 shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      TBP / GPS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewInstSite('GTS')}
+                      className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                        newInstSite === 'GTS'
+                          ? 'bg-teal-600 text-white border-teal-700 shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      GTS
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Metode Spektrometri
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewInstMethod('EDXRF')}
+                      className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                        newInstMethod === 'EDXRF'
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      EDXRF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewInstMethod('WDXRF')}
+                      className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                        newInstMethod === 'WDXRF'
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      WDXRF
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Brand & Model */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Brand & Model Mesin
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    'PANalytical Epsilon 4',
+                    'Bruker S2 PUMA',
+                    'Rigaku Supermini200',
+                    'PANalytical Zetium',
+                  ].map((brand) => (
+                    <button
+                      key={brand}
+                      type="button"
+                      onClick={() => setNewInstBrand(brand)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                        newInstBrand === brand
+                          ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200 border border-teal-300 dark:border-teal-700'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                      }`}
+                    >
+                      {brand}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Ketik model custom..."
+                  value={newInstBrand}
+                  onChange={(e) => setNewInstBrand(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              {/* Color Tag Selector */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Tema Warna Pill & Tag
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    { tag: 'teal', color: '#14B8A6' },
+                    { tag: 'cyan', color: '#06B6D4' },
+                    { tag: 'blue', color: '#2563EB' },
+                    { tag: 'indigo', color: '#6366F1' },
+                    { tag: 'purple', color: '#9333EA' },
+                    { tag: 'violet', color: '#8B5CF6' },
+                    { tag: 'fuchsia', color: '#D946EF' },
+                    { tag: 'rose', color: '#F43F5E' },
+                    { tag: 'orange', color: '#F97316' },
+                    { tag: 'amber', color: '#F59E0B' },
+                    { tag: 'emerald', color: '#10B981' },
+                  ].map((c) => (
+                    <button
+                      key={c.tag}
+                      type="button"
+                      onClick={() => setNewInstColorTag(c.tag)}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                        newInstColorTag === c.tag ? 'ring-3 ring-offset-2 ring-slate-900 dark:ring-white scale-110' : 'opacity-70 hover:opacity-100'
+                      }`}
+                      style={{ backgroundColor: c.color }}
+                    >
+                      {newInstColorTag === c.tag && <Check className="w-3.5 h-3.5 text-white" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddInstrumentModal(false)}
+                  disabled={isSubmittingInst}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingInst}
+                  className="px-5 py-2 rounded-xl text-xs font-black bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSubmittingInst ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Simpan & Daftarkan Alat</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Shewhart QC Control Chart Modal */}
+      {fullscreenModalState && fullscreenModalState.isOpen && (() => {
+        const fsStdCode = fullscreenModalState.standardCode;
+        const fsRawCode = fullscreenModalState.standardRawCode;
+
+        // Cari data standar di currentGridData dengan berbagai variasi (OREAS 184, OREAS184, OREAS_184, case-insensitive)
+        const findStdData = () => {
+          if (fsRawCode && currentGridData[fsRawCode]) return currentGridData[fsRawCode];
+          if (currentGridData[fsStdCode]) return currentGridData[fsStdCode];
+          if (currentGridData[fsStdCode.replace('_', ' ')]) return currentGridData[fsStdCode.replace('_', ' ')];
+          if (currentGridData[fsStdCode.replace(' ', '_')]) return currentGridData[fsStdCode.replace(' ', '_')];
+          const noSpace = fsStdCode.replace(/[\s_-]+/g, '');
+          if (currentGridData[noSpace]) return currentGridData[noSpace];
+
+          const normTarget = fsStdCode.toLowerCase().replace(/[\s_-]+/g, '');
+          const foundKey = Object.keys(currentGridData).find(
+            k => k.toLowerCase().replace(/[\s_-]+/g, '') === normTarget
+          );
+          if (foundKey && currentGridData[foundKey]) return currentGridData[foundKey];
+
+          if (fsRawCode) {
+            const normRaw = fsRawCode.toLowerCase().replace(/[\s_-]+/g, '');
+            const foundRawKey = Object.keys(currentGridData).find(
+              k => k.toLowerCase().replace(/[\s_-]+/g, '') === normRaw
+            );
+            if (foundRawKey && currentGridData[foundRawKey]) return currentGridData[foundRawKey];
+          }
+
+          return {};
+        };
+
+        const fsStdData = findStdData();
+
+        // Cari data instrumen dengan toleransi nama/kode (EPSILON_F, EPSILON F, case-insensitive)
+        const findInstData = () => {
+          const targetInst = fullscreenModalState.instrumentCode;
+          if (fsStdData[targetInst]) return fsStdData[targetInst];
+          if (fsStdData[targetInst.replace('_', ' ')]) return fsStdData[targetInst.replace('_', ' ')];
+          if (fsStdData[targetInst.replace(' ', '_')]) return fsStdData[targetInst.replace(' ', '_')];
+
+          const normInst = targetInst.toLowerCase().replace(/[\s_-]+/g, '');
+          const foundInstKey = Object.keys(fsStdData).find(
+            k => k.toLowerCase().replace(/[\s_-]+/g, '') === normInst
+          );
+          if (foundInstKey && fsStdData[foundInstKey]) return fsStdData[foundInstKey];
+
+          return {
+            limits: { nominalValue: 0, stdevFixed: 0.05, upperAction: 0, upperWarning: 0, lowerWarning: 0, lowerAction: 0 },
+            statistics: { count: 0, mean: 0, median: 0, min: 0, max: 0, actualStdev: 0 },
+            points: [],
+          };
+        };
+
+        const fsInstData = findInstData();
+
+        const fsCardKey = `${fullscreenModalState.instrumentCode}-${fsStdCode}-${selectedElement}`;
+        const fsCardAnnotations: Record<number, XrfPointAnnotation> = {};
+        Object.entries(pointAnnotations).forEach(([k, ann]) => {
+          if (k.startsWith(`${fsCardKey}-`)) {
+            const pIdx = parseInt(k.replace(`${fsCardKey}-`, ''), 10);
+            if (!isNaN(pIdx)) fsCardAnnotations[pIdx] = ann;
+          }
+        });
+
+        return (
+          <XrfChartFullscreenModal
+            isOpen={fullscreenModalState.isOpen}
+            onClose={() => setFullscreenModalState(null)}
+            standardCode={fsStdCode}
+            instrumentName={fullscreenModalState.instrumentName}
+            instrumentCode={fullscreenModalState.instrumentCode}
+            headerColorClass={fullscreenModalState.headerColorClass}
+            currentElement={selectedElement}
+            onSelectElement={handleSelectElement}
+            limits={fsInstData.limits}
+            statistics={fsInstData.statistics}
+            points={fsInstData.points}
+            canTakeOutOffspec={auth.allowed}
+            userRoleTitle={auth.userInfo.role}
+            onToggleIsolatePoint={(pt, el, lim) => handleToggleIsolatePoint(pt, el, lim, fullscreenModalState.instrumentCode, fullscreenModalState.instrumentName, fsStdCode)}
+            isPointIsolated={(pt, el) => isPointIsolated(pt, el, fullscreenModalState.instrumentCode, fsStdCode)}
+            annotations={fsCardAnnotations}
+            onSaveAnnotation={(pIdx, ann) => handleSaveAnnotation(fsCardKey, pIdx, ann)}
+            onDeleteAnnotation={(pIdx) => handleDeleteAnnotation(fsCardKey, pIdx)}
+          />
+        );
+      })()}
+
+      {/* Modal Konfirmasi Take Out dengan Justifikasi/Alasan Wajib */}
+      {takeoutPendingPoint && (
+        <XrfTakeoutReasonModal
+          isOpen={Boolean(takeoutPendingPoint)}
+          onClose={() => setTakeoutPendingPoint(null)}
+          userInfo={auth.userInfo}
+          targetPoint={takeoutPendingPoint}
+          onConfirm={handleConfirmTakeout}
+        />
+      )}
+
+      {/* Modal Riwayat Audit Trail Log Take Out Data Off-Spec */}
+      <XrfTakeoutAuditLogsModal
+        isOpen={showTakeoutAuditModal}
+        onClose={() => setShowTakeoutAuditModal(false)}
       />
     </div>
   );

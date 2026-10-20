@@ -7,8 +7,10 @@ import {
   xrfStandards,
   xrfStandardReferences,
   xrfVerifications,
-  xrfVerificationItems
+  xrfVerificationItems,
+  xrfOffspecTakeoutLogs
 } from "../../src/db/schema.js";
+import { extractSmartStandardCode, isWdxrfInstrument } from "../../src/utils/xrfStandardDetector.js";
 
 export const xrfRouter = Router();
 
@@ -69,7 +71,8 @@ export async function ensureXrfTables() {
       ADD COLUMN IF NOT EXISTS lower_warning DOUBLE PRECISION,
       ADD COLUMN IF NOT EXISTS upper_warning DOUBLE PRECISION,
       ADD COLUMN IF NOT EXISTS lower_action DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS upper_action DOUBLE PRECISION;
+      ADD COLUMN IF NOT EXISTS upper_action DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS stdev_wdxrf DOUBLE PRECISION;
     `);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_xrf_std_ref_code_elem ON xrf_standard_references(standard_code, element_name);`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_std_ref_std ON xrf_standard_references(standard_code);`);
@@ -126,6 +129,32 @@ export async function ensureXrfTables() {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_ver_items_ver_id ON xrf_verification_items(verification_id);`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_ver_items_std_code ON xrf_verification_items(standard_code);`);
 
+    // 6. Table Audit Trail Log Take Out Data Off-Spec
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS xrf_offspec_takeout_logs (
+      id SERIAL PRIMARY KEY,
+      action TEXT NOT NULL,
+      user_nik TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      user_jabatan TEXT,
+      user_role TEXT,
+      instrument_code TEXT,
+      instrument_name TEXT,
+      standard_code TEXT,
+      element TEXT,
+      point_index INTEGER,
+      measured_value DOUBLE PRECISION,
+      nominal_value DOUBLE PRECISION,
+      sigma_dist DOUBLE PRECISION,
+      diff DOUBLE PRECISION,
+      status_label TEXT,
+      reason TEXT,
+      sample_date TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_takeout_user ON xrf_offspec_takeout_logs(user_nik);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_takeout_inst ON xrf_offspec_takeout_logs(instrument_code);`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_xrf_takeout_created ON xrf_offspec_takeout_logs(created_at);`);
+
     // Auto Seed Initial Master Data jika masih kosong
     await seedInitialXrfData();
 
@@ -168,6 +197,48 @@ async function seedInitialXrfData() {
           colorTag: inst.colorTag,
         }
       });
+    }
+
+    // Pastikan data instrumen TBP dan GTS memiliki site & methodType yang benar
+    try {
+      await db.execute(sql`UPDATE xrf_instruments SET site = 'TBP' WHERE code IN ('EPSILON_C', 'EPSILON_E', 'EPSILON_F', 'EPSILON_G', 'EPSILON_H', 'S2_PUMA', 'ZETIUM_A', 'ZETIUM_B');`);
+      await db.execute(sql`UPDATE xrf_instruments SET site = 'GTS' WHERE code IN ('EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI');`);
+      await db.execute(sql`UPDATE xrf_instruments SET method_type = 'WDXRF' WHERE code IN ('SUPERMINI', 'ZETIUM_A', 'ZETIUM_B');`);
+      await db.execute(sql`UPDATE xrf_instruments SET method_type = 'EDXRF' WHERE code NOT IN ('SUPERMINI', 'ZETIUM_A', 'ZETIUM_B');`);
+
+      // Remediasi historical data: Perbaiki urutan 5 (LIM -> OREAS191), 6 (SAP16 -> OREAS192), 10 (SAP -> OREAS195) pada batch Saprolite
+      await db.execute(sql`
+        UPDATE xrf_verification_items
+        SET standard_code = 'OREAS191',
+            sample_label = REPLACE(sample_label, 'VER-LIM', 'VER-OREAS191')
+        WHERE (standard_code = 'LIM' OR standard_code = 'VER-LIM')
+          AND sequence_no = 5
+          AND verification_id IN (
+            SELECT DISTINCT verification_id FROM xrf_verification_items WHERE standard_code IN ('OREAS184', 'OREAS187')
+          );
+      `);
+      await db.execute(sql`
+        UPDATE xrf_verification_items
+        SET standard_code = 'OREAS192',
+            sample_label = REPLACE(sample_label, 'VER-SAP16', 'VER-OREAS192')
+        WHERE (standard_code = 'SAP16' OR standard_code = 'VER-SAP16')
+          AND sequence_no = 6
+          AND verification_id IN (
+            SELECT DISTINCT verification_id FROM xrf_verification_items WHERE standard_code IN ('OREAS184', 'OREAS187')
+          );
+      `);
+      await db.execute(sql`
+        UPDATE xrf_verification_items
+        SET standard_code = 'OREAS195',
+            sample_label = REPLACE(sample_label, 'VER-SAP', 'VER-OREAS195')
+        WHERE (standard_code = 'SAP' OR standard_code = 'VER-SAP')
+          AND sequence_no = 10
+          AND verification_id IN (
+            SELECT DISTINCT verification_id FROM xrf_verification_items WHERE standard_code IN ('OREAS184', 'OREAS187')
+          );
+      `);
+    } catch (migErr: any) {
+      console.warn("[XRF Migration] Note:", migErr.message);
     }
 
     // 2. Seed Standards
@@ -511,15 +582,150 @@ xrfRouter.get("/instruments", async (_req, res) => {
     }
 
     const rows = await db.select().from(xrfInstruments).orderBy(asc(xrfInstruments.id));
-    const enriched = rows.map(r => ({
-      ...r,
-      site: r.site || (['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(r.code) ? 'GTS' : 'TBP'),
-      methodType: r.methodType || (['SUPERMINI', 'ZETIUM_A', 'ZETIUM_B'].includes(r.code) ? 'WDXRF' : 'EDXRF'),
-      measurementCount: countsMap[r.code] || 0,
-      hasData: (countsMap[r.code] || 0) > 0,
-    }));
+    const enriched = rows.map(r => {
+      const isKnownGts = ['EPSILON_A', 'EPSILON_B', 'EPSILON_D', 'SUPERMINI'].includes(r.code);
+      const isKnownTbp = ['EPSILON_C', 'EPSILON_E', 'EPSILON_F', 'EPSILON_G', 'EPSILON_H', 'S2_PUMA', 'ZETIUM_A', 'ZETIUM_B'].includes(r.code);
+      const site = isKnownGts ? 'GTS' : (isKnownTbp ? 'TBP' : (r.site || 'TBP'));
+      const isKnownWdxrf = ['SUPERMINI', 'ZETIUM_A', 'ZETIUM_B'].includes(r.code);
+      const methodType = isKnownWdxrf ? 'WDXRF' : (r.methodType || 'EDXRF');
+
+      return {
+        ...r,
+        site,
+        methodType,
+        measurementCount: countsMap[r.code] || 0,
+        hasData: (countsMap[r.code] || 0) > 0,
+      };
+    });
 
     return res.json({ success: true, data: enriched });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 1b. POST Tambah Alat XRF Baru Langsung dari Portal UI
+xrfRouter.post("/instruments", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const { code, name, brandModel, channelType, colorTag, site, methodType } = req.body;
+    
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ success: false, error: "Nama alat wajib diisi." });
+    }
+
+    const cleanCode = (code || name)
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '_')
+      .replace(/_+/g, '_');
+
+    if (!cleanCode) {
+      return res.status(400).json({ success: false, error: "Kode alat tidak valid." });
+    }
+
+    const existing = await db.select().from(xrfInstruments).where(eq(xrfInstruments.code, cleanCode)).limit(1);
+    if (existing.length > 0) {
+      return res.status(400).json({ success: false, error: `Alat dengan kode '${cleanCode}' sudah terdaftar di database.` });
+    }
+
+    const inserted = await db.insert(xrfInstruments).values({
+      code: cleanCode,
+      name: name.trim(),
+      brandModel: brandModel?.trim() || 'PANalytical Epsilon 4',
+      channelType: channelType?.trim() || 'ALL',
+      colorTag: colorTag?.trim() || 'teal',
+      site: (site === 'GTS' || site === 'TBP') ? site : 'TBP',
+      methodType: (methodType === 'WDXRF' || methodType === 'EDXRF') ? methodType : 'EDXRF',
+      isActive: true,
+    }).returning();
+
+    invalidateXrfChartCache();
+
+    return res.json({
+      success: true,
+      message: `Instrumen ${name} (${cleanCode}) berhasil ditambahkan ke ${site}.`,
+      data: inserted[0],
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 1c. PUT Update Detail Alat XRF
+xrfRouter.put("/instruments/:id", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ success: false, error: "ID alat tidak valid." });
+    }
+
+    const { name, brandModel, channelType, colorTag, site, methodType, isActive } = req.body;
+
+    const updated = await db.update(xrfInstruments)
+      .set({
+        ...(name ? { name: name.trim() } : {}),
+        ...(brandModel ? { brandModel: brandModel.trim() } : {}),
+        ...(channelType ? { channelType: channelType.trim() } : {}),
+        ...(colorTag ? { colorTag: colorTag.trim() } : {}),
+        ...(site ? { site: site === 'GTS' ? 'GTS' : 'TBP' } : {}),
+        ...(methodType ? { methodType: methodType === 'WDXRF' ? 'WDXRF' : 'EDXRF' } : {}),
+        ...(typeof isActive === 'boolean' ? { isActive } : {}),
+      })
+      .where(eq(xrfInstruments.id, id))
+      .returning();
+
+    invalidateXrfChartCache();
+
+    return res.json({
+      success: true,
+      message: "Instrumen berhasil diperbarui.",
+      data: updated[0],
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 1d. DELETE Hapus atau Nonaktifkan Alat XRF
+xrfRouter.delete("/instruments/:id", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ success: false, error: "ID alat tidak valid." });
+    }
+
+    const inst = await db.select().from(xrfInstruments).where(eq(xrfInstruments.id, id)).limit(1);
+    if (inst.length === 0) {
+      return res.status(404).json({ success: false, error: "Instrumen tidak ditemukan." });
+    }
+
+    // Periksa apakah alat memiliki riwayat verifikasi
+    const verCount = await db.select({ count: sql<number>`count(*)` })
+      .from(xrfVerifications)
+      .where(eq(xrfVerifications.instrumentCode, inst[0].code));
+    
+    const count = Number(verCount[0]?.count) || 0;
+    if (count > 0) {
+      // Soft-delete (nonaktifkan) jika sudah ada data verifikasi agar riwayat tidak rusak
+      await db.update(xrfInstruments).set({ isActive: false }).where(eq(xrfInstruments.id, id));
+      invalidateXrfChartCache();
+      return res.json({
+        success: true,
+        message: `Instrumen ${inst[0].name} dinonaktifkan (memiliki ${count} batch verifikasi).`,
+      });
+    }
+
+    // Hard delete jika belum pernah ada data pengukuran
+    await db.delete(xrfInstruments).where(eq(xrfInstruments.id, id));
+    invalidateXrfChartCache();
+
+    return res.json({
+      success: true,
+      message: `Instrumen ${inst[0].name} berhasil dihapus dari sistem.`,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -743,6 +949,8 @@ xrfRouter.post("/verifications", async (req, res) => {
     }));
     await db.insert(xrfVerificationItems).values(itemsToInsert);
 
+    invalidateXrfChartCache();
+
     return res.json({
       success: true,
       message: "Data verifikasi harian berhasil disimpan.",
@@ -872,8 +1080,9 @@ xrfRouter.post("/verifications/bulk-reassign", async (req, res) => {
 // 7c. GET Available Standards with Data Count
 xrfRouter.get("/available-standards", async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     await ensureXrfTables();
-    const { instrumentCode } = req.query;
+    const { instrumentCode, startDate, endDate } = req.query;
 
     let conditions: any[] = [];
     if (instrumentCode && instrumentCode !== 'ALL') {
@@ -881,6 +1090,13 @@ xrfRouter.get("/available-standards", async (req, res) => {
       if (instList.length > 0) {
         conditions.push(sql`${xrfVerifications.instrumentCode} IN (${sql.join(instList.map(c => sql`${c}`), sql`, `)})`);
       }
+    }
+
+    if (startDate) {
+      conditions.push(gte(xrfVerifications.verificationDate, String(startDate)));
+    }
+    if (endDate) {
+      conditions.push(lte(xrfVerifications.verificationDate, String(endDate)));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -897,6 +1113,112 @@ xrfRouter.get("/available-standards", async (req, res) => {
     .orderBy(desc(sql`count(${xrfVerificationItems.id})`));
 
     return res.json({ success: true, data: rows });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7d. GET Latest Verification Batch Standards (Baseline Aktif untuk Control Chart & Form Input Dinamis)
+xrfRouter.get("/latest-batch-standards", async (req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    await ensureXrfTables();
+    const { instrumentCode, startDate, endDate } = req.query;
+    if (!instrumentCode) {
+      return res.status(400).json({ success: false, error: "instrumentCode diperlukan." });
+    }
+
+    const instList = String(instrumentCode).split(',').map(s => s.trim()).filter(Boolean);
+    if (instList.length === 0) {
+      return res.status(400).json({ success: false, error: "Daftar instrumentCode kosong." });
+    }
+
+    // Ambil batch terbaru untuk masing-masing instrumen di instList
+    const latestBatches: any[] = [];
+    for (const inst of instList) {
+      const conditions = [eq(xrfVerifications.instrumentCode, inst)];
+      if (startDate) conditions.push(gte(xrfVerifications.verificationDate, String(startDate)));
+      if (endDate) conditions.push(lte(xrfVerifications.verificationDate, String(endDate)));
+
+      let batches = await db.select()
+        .from(xrfVerifications)
+        .where(and(...conditions))
+        .orderBy(desc(xrfVerifications.verificationDate), desc(xrfVerifications.id))
+        .limit(1);
+
+      // Fallback ke batch terbaru keseluruhan jika di rentang tanggal belum ada
+      if (batches.length === 0 && (startDate || endDate)) {
+        batches = await db.select()
+          .from(xrfVerifications)
+          .where(eq(xrfVerifications.instrumentCode, inst))
+          .orderBy(desc(xrfVerifications.verificationDate), desc(xrfVerifications.id))
+          .limit(1);
+      }
+
+      if (batches.length > 0) {
+        latestBatches.push(batches[0]);
+      }
+    }
+
+    if (latestBatches.length === 0) {
+      return res.json({
+        success: true,
+        hasData: false,
+        instrumentCode: instList[0],
+        standards: [],
+        items: [],
+      });
+    }
+
+    // Ambil item dari semua batch terbaru tersebut
+    const batchIds = latestBatches.map(b => b.id);
+    const items = await db.select()
+      .from(xrfVerificationItems)
+      .where(sql`${xrfVerificationItems.verificationId} IN (${sql.join(batchIds.map(id => sql`${id}`), sql`, `)})`)
+      .orderBy(asc(xrfVerificationItems.sequenceNo), asc(xrfVerificationItems.id));
+
+    // Standar unik sesuai urutan kemunculan di batch
+    const standardsOrder: string[] = [];
+    for (const it of items) {
+      if (it.standardCode && !standardsOrder.includes(it.standardCode)) {
+        standardsOrder.push(it.standardCode);
+      }
+    }
+
+    const primaryBatch = latestBatches[0];
+
+    return res.json({
+      success: true,
+      hasData: true,
+      instrumentCode: instList.join(','),
+      batch: {
+        id: primaryBatch.id,
+        batchCode: primaryBatch.batchCode,
+        verificationDate: primaryBatch.verificationDate,
+        verificationTime: primaryBatch.verificationTime,
+        instrumentCode: primaryBatch.instrumentCode,
+        instrumentName: primaryBatch.instrumentName,
+      },
+      standards: standardsOrder,
+      items: items.map(it => ({
+        id: it.id,
+        standardCode: it.standardCode,
+        sampleLabel: it.sampleLabel,
+        sequenceNo: it.sequenceNo,
+        analyzedAt: it.analyzedAt,
+        ni: it.ni,
+        co: it.co,
+        fe: it.fe,
+        cao: it.cao,
+        sio2: it.sio2,
+        al2o3: it.al2o3,
+        mgo: it.mgo,
+        p: it.p,
+        s: it.s,
+        cr2o3: it.cr2o3,
+        mno: it.mno,
+      })),
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -921,6 +1243,7 @@ export function invalidateXrfChartCache() {
 // High-performance with in-memory cache and precomputed all-elements data
 xrfRouter.get("/qc-chart-data", async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     if (!xrfTablesEnsured) {
       await ensureXrfTables();
     }
@@ -967,12 +1290,28 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
       endDate ? lte(xrfVerifications.verificationDate, endDate) : sql`1=1`,
     ];
     if (standardsParam.length > 0) {
-      const expandedStandards = Array.from(new Set([
-        ...standardsParam,
-        ...standardsParam.map(s => s.replace('_', ' ')),
-        ...standardsParam.map(s => s.replace(' ', '_')),
-      ]));
-      whereConditions.push(sql`${xrfVerificationItems.standardCode} IN (${sql.join(expandedStandards.map(s => sql`${s}`), sql`, `)})`);
+      const expandedStandards = new Set<string>();
+      for (const s of standardsParam) {
+        if (!s) continue;
+        const trimmed = s.trim();
+        const compact = trimmed.toUpperCase().replace(/[\s_-]+/g, '');
+        const withSpace = trimmed.replace(/_/g, ' ');
+        const withUnderscore = trimmed.replace(/\s+/g, '_');
+        expandedStandards.add(trimmed);
+        expandedStandards.add(compact);
+        expandedStandards.add(withSpace);
+        expandedStandards.add(withUnderscore);
+        expandedStandards.add(trimmed.toUpperCase());
+        expandedStandards.add(withSpace.toUpperCase());
+        expandedStandards.add(withUnderscore.toUpperCase());
+        if (compact === 'BRK03' || compact === 'BRK') {
+          expandedStandards.add('BRK');
+          expandedStandards.add('BRK03');
+          expandedStandards.add('BRK 03');
+          expandedStandards.add('BRK_03');
+        }
+      }
+      whereConditions.push(sql`${xrfVerificationItems.standardCode} IN (${sql.join(Array.from(expandedStandards).map(s => sql`${s}`), sql`, `)})`);
     }
 
     const rawData = await db.select({
@@ -1023,6 +1362,38 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
       'MnO': (d) => d.mno,
     };
 
+    // Pre-group rawData in O(N) by standard and instrument for instant O(1) lookup
+    const groupedData = new Map<string, typeof rawData>();
+    for (const d of rawData) {
+      const stdCode = (d.standardCode || '').trim();
+      const normStd = stdCode.replace(/\s+/g, '_');
+      const cleanStd = stdCode.toUpperCase().replace(/[\s_-]+/g, '');
+      const spaceStd = stdCode.replace(/_/g, ' ');
+
+      const keys = new Set([
+        `${stdCode}::${d.instrumentCode}`,
+        `${normStd}::${d.instrumentCode}`,
+        `${cleanStd}::${d.instrumentCode}`,
+        `${spaceStd}::${d.instrumentCode}`,
+      ]);
+
+      if (cleanStd === 'BRK03' || cleanStd === 'BRK') {
+        keys.add(`BRK::${d.instrumentCode}`);
+        keys.add(`BRK03::${d.instrumentCode}`);
+        keys.add(`BRK 03::${d.instrumentCode}`);
+        keys.add(`BRK_03::${d.instrumentCode}`);
+      }
+
+      for (const k of keys) {
+        let list = groupedData.get(k);
+        if (!list) {
+          list = [];
+          groupedData.set(k, list);
+        }
+        list.push(d);
+      }
+    }
+
     // Precalculate allElementsData for all 11 elements in-memory (< 2ms)
     const computedAllElements: Record<string, Record<string, Record<string, any>>> = {};
 
@@ -1032,38 +1403,64 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
 
       for (const std of standardsParam) {
         currentGrid[std] = {};
+        const cleanStd = std.toUpperCase().replace(/[\s_-]+/g, '');
+        const normStd = std.trim().replace(/\s+/g, '_');
+        const spaceStd = std.trim().replace(/_/g, ' ');
         const isBlank = std.toUpperCase().includes('BLANK');
         const defaultNominal = isBlank ? 0.000 : 2.0;
         const defaultSigma = isBlank ? 0.010 : 0.08;
-        const ref = refMap[std]?.[elKey] || refMap[std.replace('_', ' ')]?.[elKey] || refMap[std.replace(' ', '_')]?.[elKey] || {
-          nominalValue: defaultNominal,
-          stdevFixed: defaultSigma,
-          warningSigma: 2.0,
-          actionSigma: 3.0,
-        };
+        const ref = refMap[std]?.[elKey] 
+          || refMap[cleanStd]?.[elKey] 
+          || refMap[spaceStd]?.[elKey] 
+          || refMap[normStd]?.[elKey] 
+          || (cleanStd === 'BRK03' || cleanStd === 'BRK' ? (refMap['BRK 03']?.[elKey] || refMap['BRK03']?.[elKey] || refMap['BRK']?.[elKey]) : null)
+          || {
+            nominalValue: defaultNominal,
+            stdevFixed: defaultSigma,
+            warningSigma: 2.0,
+            actionSigma: 3.0,
+          };
 
-        const nominal = ref.nominalValue;
-        const sigma = ref.stdevFixed;
-        const upperAction = ref.upperAction !== null && ref.upperAction !== undefined ? Number(ref.upperAction) : Number((nominal + 3 * sigma).toFixed(3));
-        const upperWarning = ref.upperWarning !== null && ref.upperWarning !== undefined ? Number(ref.upperWarning) : Number((nominal + 2 * sigma).toFixed(3));
-        const lowerWarning = ref.lowerWarning !== null && ref.lowerWarning !== undefined ? Number(ref.lowerWarning) : Number((nominal - 2 * sigma).toFixed(3));
-        const lowerAction = ref.lowerAction !== null && ref.lowerAction !== undefined ? Number(ref.lowerAction) : Number((nominal - 3 * sigma).toFixed(3));
+        const nominal = Number(ref.nominalValue !== undefined && ref.nominalValue !== null ? ref.nominalValue : defaultNominal);
 
         for (const inst of instrumentsParam) {
-          const pointsForGrid = rawData
-            .filter(d => (d.standardCode === std || d.standardCode === std.replace('_', ' ') || d.standardCode === std.replace(' ', '_')) && d.instrumentCode === inst)
-            .map((d, idx) => {
-              const val = getter(d);
-              return {
-                index: idx + 1,
-                id: d.id,
-                date: d.verificationDate,
-                week: d.weekNo,
-                analyzedAt: d.analyzedAt,
-                value: val !== null && val !== undefined ? Number(val) : 0,
-                status: d.itemStatus,
-              };
-            });
+          const isWdxrf = isWdxrfInstrument(inst);
+          const hasWdxrfSigma = isWdxrf && ref.stdevWdxrf !== null && ref.stdevWdxrf !== undefined && Number(ref.stdevWdxrf) > 0;
+          const sigma = hasWdxrfSigma 
+            ? Number(ref.stdevWdxrf) 
+            : Number(ref.stdevFixed !== undefined && ref.stdevFixed !== null ? ref.stdevFixed : defaultSigma);
+
+          const upperAction = hasWdxrfSigma
+            ? Number((nominal + 3 * sigma).toFixed(3))
+            : (ref.upperAction !== null && ref.upperAction !== undefined ? Number(ref.upperAction) : Number((nominal + 3 * sigma).toFixed(3)));
+          const upperWarning = hasWdxrfSigma
+            ? Number((nominal + 2 * sigma).toFixed(3))
+            : (ref.upperWarning !== null && ref.upperWarning !== undefined ? Number(ref.upperWarning) : Number((nominal + 2 * sigma).toFixed(3)));
+          const lowerWarning = hasWdxrfSigma
+            ? Number((nominal - 2 * sigma).toFixed(3))
+            : (ref.lowerWarning !== null && ref.lowerWarning !== undefined ? Number(ref.lowerWarning) : Number((nominal - 2 * sigma).toFixed(3)));
+          const lowerAction = hasWdxrfSigma
+            ? Number((nominal - 3 * sigma).toFixed(3))
+            : (ref.lowerAction !== null && ref.lowerAction !== undefined ? Number(ref.lowerAction) : Number((nominal - 3 * sigma).toFixed(3)));
+
+          const matchingRows = groupedData.get(`${cleanStd}::${inst}`)
+            || groupedData.get(`${std}::${inst}`)
+            || groupedData.get(`${normStd}::${inst}`)
+            || groupedData.get(`${spaceStd}::${inst}`)
+            || [];
+
+          const pointsForGrid = matchingRows.map((d, idx) => {
+            const val = getter(d);
+            return {
+              index: idx + 1,
+              id: d.id,
+              date: d.verificationDate,
+              week: d.weekNo,
+              analyzedAt: d.analyzedAt,
+              value: val !== null && val !== undefined ? Number(val) : 0,
+              status: d.itemStatus,
+            };
+          });
 
           // Kalkulasi Statistik Aktual
           const values = pointsForGrid.map(p => p.value).filter(v => !isNaN(v) && v > 0);
@@ -1109,6 +1506,16 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
             },
             points: pointsForGrid,
           };
+        }
+
+        // Aliases so whether frontend looks up by code, cleanCode, normCode, or spaceCode, data is resolved
+        if (!currentGrid[cleanStd]) currentGrid[cleanStd] = currentGrid[std];
+        if (!currentGrid[normStd]) currentGrid[normStd] = currentGrid[std];
+        if (!currentGrid[spaceStd]) currentGrid[spaceStd] = currentGrid[std];
+        if (cleanStd === 'BRK03' || cleanStd === 'BRK') {
+          currentGrid['BRK'] = currentGrid[std];
+          currentGrid['BRK03'] = currentGrid[std];
+          currentGrid['BRK 03'] = currentGrid[std];
         }
       }
 
@@ -1270,7 +1677,17 @@ xrfRouter.post("/import-recap-csv", async (req, res) => {
       return res.status(400).json({ success: false, error: "Isi CSV wajib diisi." });
     }
 
-    const parsed = Papa.parse<string[]>(csvContent, { skipEmptyLines: false });
+    // 1. Bersihkan baris kosong berlebih di ujung bawah (menghindari 1 juta trailing rows Excel)
+    const rawLines = csvContent.split(/\r?\n/);
+    let lastNonEmpty = rawLines.length - 1;
+    while (lastNonEmpty >= 0) {
+      const line = rawLines[lastNonEmpty].trim().replace(/,/g, '').replace(/\t/g, '');
+      if (line.length > 0) break;
+      lastNonEmpty--;
+    }
+    const cleanCsv = lastNonEmpty >= 0 ? rawLines.slice(0, lastNonEmpty + 1).join('\n') : '';
+
+    const parsed = Papa.parse<string[]>(cleanCsv, { skipEmptyLines: false });
     const rows = parsed.data;
 
     let defaultInst = targetInstrumentCode || 'EPSILON_A';
@@ -1321,43 +1738,25 @@ xrfRouter.post("/import-recap-csv", async (req, res) => {
         currentInstrument = targetInstrumentCode;
       } else {
         const xrfText = String(cols[1] || '').toUpperCase();
-        if (xrfText.includes('SUPERMINI') || xrfText.includes('RIGAKU') || xrfText.includes('WDXRF')) {
+        const matchEpsilon = xrfText.match(/EPSILON[\s_]*4?[\s_]*([A-H])/i);
+        if (matchEpsilon) {
+          currentInstrument = `EPSILON_${matchEpsilon[1].toUpperCase()}`;
+        } else if (xrfText.includes('SUPERMINI') || xrfText.includes('RIGAKU') || xrfText.includes('WDXRF')) {
           currentInstrument = 'SUPERMINI';
-        } else if (xrfText.includes('EPSILON A') || xrfText.includes('EPSILON_A')) {
-          currentInstrument = 'EPSILON_A';
-        } else if (xrfText.includes('EPSILON B') || xrfText.includes('EPSILON_B')) {
-          currentInstrument = 'EPSILON_B';
-        } else if (xrfText.includes('EPSILON D') || xrfText.includes('EPSILON_D')) {
-          currentInstrument = 'EPSILON_D';
+        } else if (xrfText.includes('PUMA') || xrfText.includes('S2')) {
+          currentInstrument = 'S2_PUMA';
+        } else if (xrfText.includes('ZETIUM A') || xrfText.includes('ZETIUM_A')) {
+          currentInstrument = 'ZETIUM_A';
+        } else if (xrfText.includes('ZETIUM B') || xrfText.includes('ZETIUM_B')) {
+          currentInstrument = 'ZETIUM_B';
         }
       }
 
       const dateStr = String(cols[2] || '').trim();
       const rawLabel = String(cols[3] || '').trim().toUpperCase();
 
-      let stdCode = 'UNKNOWN';
-      if (rawLabel.includes('BLANK A') || rawLabel === 'BLANK A') stdCode = 'BLANK_A';
-      else if (rawLabel.includes('BLANK B') || rawLabel.includes('BLANK_B')) stdCode = 'BLANK_B';
-      else if (rawLabel.includes('LIM01') || rawLabel.includes('LIM 01')) stdCode = 'LIM01';
-      else if (rawLabel.includes('LIM02') || rawLabel.includes('LIM 02')) stdCode = 'LIM02';
-      else if (rawLabel.includes('LIM03') || rawLabel.includes('LIM 03')) stdCode = 'LIM03';
-      else if (rawLabel.includes('LIM04') || rawLabel.includes('LIM 04')) stdCode = 'LIM04';
-      else if (rawLabel.includes('LIM05') || rawLabel.includes('LIM 05')) stdCode = 'LIM05';
-      else if (rawLabel.includes('OREAS184') || rawLabel.includes('OREAS 184')) stdCode = 'OREAS184';
-      else if (rawLabel.includes('OREAS187') || rawLabel.includes('OREAS 187')) stdCode = 'OREAS187';
-      else if (rawLabel.includes('OREAS189') || rawLabel.includes('OREAS 189')) stdCode = 'OREAS189';
-      else if (rawLabel.includes('OREAS190') || rawLabel.includes('OREAS 190')) stdCode = 'OREAS190';
-      else if (rawLabel.includes('OREAS191') || rawLabel.includes('OREAS 191')) stdCode = 'OREAS191';
-      else if (rawLabel.includes('OREAS192') || rawLabel.includes('OREAS 192')) stdCode = 'OREAS192';
-      else if (rawLabel.includes('OREAS193') || rawLabel.includes('OREAS 193')) stdCode = 'OREAS193';
-      else if (rawLabel.includes('SAP19') || rawLabel.includes('SAP 19')) stdCode = 'SAP19';
-      else if (rawLabel.includes('OREAS194') || rawLabel.includes('OREAS 194')) stdCode = 'OREAS194';
-      else if (rawLabel.includes('OREAS195') || rawLabel.includes('OREAS 195')) stdCode = 'OREAS195';
-      else if (rawLabel.includes('SAP16') || rawLabel.includes('SAP 16')) stdCode = 'SAP16';
-      else if (rawLabel.includes('OREAS182') || rawLabel.includes('OREAS 182')) stdCode = 'OREAS182';
-      else if (rawLabel.includes('LIM13') || rawLabel.includes('LIM 13')) stdCode = 'LIM13';
-      else if (rawLabel.includes('LIM')) stdCode = 'LIM01';
-      else if (rawLabel.includes('OREAS')) stdCode = 'OREAS184';
+      const { standardCode: detectedStdCode } = extractSmartStandardCode(rawLabel);
+      let stdCode = detectedStdCode !== 'UNKNOWN' ? detectedStdCode : (rawLabel.includes('LIM') ? 'LIM01' : (rawLabel.includes('OREAS') ? 'OREAS184' : 'UNKNOWN'));
 
       const [dPart, tPart] = dateStr.split(' ');
       if (!dPart) continue;
@@ -1409,13 +1808,24 @@ xrfRouter.post("/import-recap-csv", async (req, res) => {
             weekNo: getIsoWeek(dObj),
             items: [...currentBatchItems],
           });
+          currentBatchItems = [];
         }
-        currentBatchItems = [itemObj];
         currentDate = isoDate;
         currentTime = time;
-      } else {
-        currentBatchItems.push(itemObj);
       }
+
+      // Skip calibration blanks (seperti VER-BLANK WAX & LICOWAX) KECUALI Supermini BLANK A / VER-BLANK B
+      if (/BLANK\s*(WAX|LICO)/i.test(rawLabel)) {
+        continue;
+      }
+      if (/BLANK/i.test(rawLabel) && !/BLANK\s*[AB]/i.test(rawLabel) && currentInstrument !== 'SUPERMINI') {
+        continue;
+      }
+
+      currentBatchItems.push({
+        ...itemObj,
+        seqNo: currentBatchItems.length + 1,
+      });
     }
 
     if (currentBatchItems.length > 0 && currentDate) {
@@ -1703,5 +2113,109 @@ xrfRouter.post("/bulk-import-paste", async (req, res) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ===================================================================
+// 8. AUDIT TRAIL LOG TAKE OUT DATA OFFSPEC (RESTRICTED PERMISSIONS)
+// ===================================================================
+
+function isAuthorizedTakeoutUser(nik?: string, jabatan?: string, role?: string): { allowed: boolean; roleCategory: string } {
+  const superAdminNiks = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177'];
+  const cleanNik = String(nik || '').trim();
+  if (superAdminNiks.includes(cleanNik) || cleanNik === 'preplabadmin' || cleanNik.startsWith('02D24')) {
+    return { allowed: true, roleCategory: 'DEV' };
+  }
+  const jab = `${jabatan || ''} ${role || ''}`.toLowerCase();
+  if (jab.includes('manager')) return { allowed: true, roleCategory: 'MANAGER' };
+  if (jab.includes('superintendent') || jab.includes('spt')) return { allowed: true, roleCategory: 'SPT' };
+  if (jab.includes('supervisor') || jab.includes('spv')) return { allowed: true, roleCategory: 'SPV' };
+  return { allowed: false, roleCategory: 'UNAUTHORIZED' };
+}
+
+// GET /api/xrf/takeout-logs - Ambil riwayat audit log take out data off-spec
+xrfRouter.get("/takeout-logs", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const { instrumentCode, standardCode, element, limit } = req.query;
+    const maxLimit = Math.min(parseInt(String(limit || '200'), 10) || 200, 500);
+
+    const conditions: any[] = [];
+    if (instrumentCode && instrumentCode !== 'ALL') {
+      conditions.push(eq(xrfOffspecTakeoutLogs.instrumentCode, String(instrumentCode)));
+    }
+    if (standardCode && standardCode !== 'ALL') {
+      conditions.push(eq(xrfOffspecTakeoutLogs.standardCode, String(standardCode)));
+    }
+    if (element && element !== 'ALL') {
+      conditions.push(eq(xrfOffspecTakeoutLogs.element, String(element)));
+    }
+
+    const query = conditions.length > 0
+      ? db.select().from(xrfOffspecTakeoutLogs).where(and(...conditions)).orderBy(desc(xrfOffspecTakeoutLogs.createdAt)).limit(maxLimit)
+      : db.select().from(xrfOffspecTakeoutLogs).orderBy(desc(xrfOffspecTakeoutLogs.createdAt)).limit(maxLimit);
+
+    const logs = await query;
+    return res.json({ success: true, data: logs });
+  } catch (err: any) {
+    console.error("[XRF Takeout Logs GET] Error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/xrf/takeout-logs - Rekam log take out data off-spec baru (Hanya SPV, SPT, Dev, Manager)
+xrfRouter.post("/takeout-logs", async (req, res) => {
+  try {
+    await ensureXrfTables();
+    const payload = req.body;
+    const rawLogs: any[] = Array.isArray(payload.logs) ? payload.logs : [payload];
+
+    if (rawLogs.length === 0) {
+      return res.status(400).json({ success: false, error: "Data log tidak boleh kosong." });
+    }
+
+    // Role check: All submitted logs must be from an authorized user
+    for (const log of rawLogs) {
+      const auth = isAuthorizedTakeoutUser(log.userNik, log.userJabatan, log.userRole);
+      if (!auth.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: "Akses Ditolak: Fitur Take Out data off-spec dibatasi secara ketat hanya untuk SPV & SPT Lab, Developer, dan Manager."
+        });
+      }
+    }
+
+    const rowsToInsert = rawLogs.map(log => ({
+      action: String(log.action || 'ISOLATE'),
+      userNik: String(log.userNik || 'UNKNOWN'),
+      userName: String(log.userName || 'Anonymous'),
+      userJabatan: log.userJabatan ? String(log.userJabatan) : null,
+      userRole: log.userRole ? String(log.userRole) : null,
+      instrumentCode: log.instrumentCode ? String(log.instrumentCode) : null,
+      instrumentName: log.instrumentName ? String(log.instrumentName) : null,
+      standardCode: log.standardCode ? String(log.standardCode) : null,
+      element: log.element ? String(log.element) : null,
+      pointIndex: typeof log.pointIndex === 'number' ? log.pointIndex : null,
+      measuredValue: typeof log.measuredValue === 'number' ? log.measuredValue : null,
+      nominalValue: typeof log.nominalValue === 'number' ? log.nominalValue : null,
+      sigmaDist: typeof log.sigmaDist === 'number' ? log.sigmaDist : null,
+      diff: typeof log.diff === 'number' ? log.diff : null,
+      statusLabel: log.statusLabel ? String(log.statusLabel) : null,
+      reason: log.reason ? String(log.reason) : null,
+      sampleDate: log.sampleDate ? String(log.sampleDate) : null,
+      createdAt: log.timestamp ? new Date(log.timestamp) : new Date(),
+    }));
+
+    await db.insert(xrfOffspecTakeoutLogs).values(rowsToInsert);
+
+    return res.json({
+      success: true,
+      message: `Audit log take out (${rowsToInsert.length} data) berhasil direkam.`,
+      insertedCount: rowsToInsert.length
+    });
+  } catch (err: any) {
+    console.error("[XRF Takeout Logs POST] Error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 

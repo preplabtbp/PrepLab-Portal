@@ -1013,8 +1013,8 @@ export function SimplifiedInspectionModal({
                         onError={(e) => {
                           const raw = latestWeeklyProof.imageUrl;
                           const driveMatch = raw?.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || raw?.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-                          if (driveMatch && !e.currentTarget.src.includes('uc?export=view')) {
-                            e.currentTarget.src = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                          if (driveMatch && !e.currentTarget.src.includes('googleusercontent.com')) {
+                            e.currentTarget.src = `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
                           }
                         }}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -1259,8 +1259,8 @@ export function SimplifiedInspectionModal({
                               onError={(e) => {
                                 const raw = report.imageUrl;
                                 const driveMatch = raw?.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || raw?.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-                                if (driveMatch && !e.currentTarget.src.includes('uc?export=view')) {
-                                  e.currentTarget.src = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                                if (driveMatch && !e.currentTarget.src.includes('googleusercontent.com')) {
+                                  e.currentTarget.src = `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
                                 }
                               }}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -1809,8 +1809,8 @@ export function SimplifiedInspectionModal({
                   onError={(e) => {
                     const raw = lightboxImage.url;
                     const driveMatch = raw?.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || raw?.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-                    if (driveMatch && !e.currentTarget.src.includes('uc?export=view')) {
-                      e.currentTarget.src = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+                    if (driveMatch && !e.currentTarget.src.includes('googleusercontent.com')) {
+                      e.currentTarget.src = `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
                     }
                   }}
                   className="max-w-full max-h-[66vh] object-contain rounded-xl shadow-lg"

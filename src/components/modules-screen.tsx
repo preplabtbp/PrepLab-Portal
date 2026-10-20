@@ -55,7 +55,12 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
     inspectorNik === 'M0403240177';   // Aldy Aldersun Puluh
   const isDeveloper = isSuperAdmin || inspectorNik === 'preplabadmin' || developerList.includes(inspectorNik);
   const isLab = isMeetingRoom || userSection.toLowerCase().includes('laboratory') || isDeveloper;
-  const isMaintenance = isMeetingRoom || userSection.toLowerCase().includes('maintenance') || isDeveloper;
+  const isMaintenance = 
+    isMeetingRoom || 
+    userSection.toLowerCase().includes('maintenance') || 
+    isDeveloper || 
+    inspectorNik === 'M0401260003' || 
+    inspectorName?.toLowerCase().includes('sarjon');
   const hasInventoryAccess = true;
   const isQA = isMeetingRoom || userSection.toLowerCase().includes('qa') || userSection.toLowerCase().includes('quality assurance') || isDeveloper;
   const isCrew = isMeetingRoom ? false : userJabatan.toLowerCase().includes('crew');
@@ -89,6 +94,8 @@ export function ModulesScreen({ onNav, inspectorNik = '', inspectorName = '', us
         { id: 'clinic', group: 'Observasi & Pelaporan', title: "Kunjungan Klinik", desc: "Pelaporan & Rekap Kunjungan Klinik", icon: <BriefcaseMedical className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('clinic') },
         { id: 'ticket', group: 'Observasi & Pelaporan', title: "Rekapan Temuan Inspeksi", desc: "Laporan temuan unsafe", icon: <Eye className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('ticket') },
         { id: 'kta', group: 'Observasi & Pelaporan', title: "KTA / TTA", desc: "Laporan Observasi KTA & TTA", icon: <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => setShowKtaConfirmation(true) },
+        { id: 'safety-rekap', group: 'Observasi & Pelaporan', title: "Rekap KTA/TTA & Inspeksi", desc: "Rekap mingguan KTA/TTA & inspeksi", icon: <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('safety-rekap') },
+        { id: 'inspection-schedule', group: 'Observasi & Pelaporan', title: "Jadwal Inspeksi", desc: "Jadwal inspeksi mingguan Prep & Lab", icon: <Calendar className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('inspection-schedule') },
         { id: 'general-inspection', group: 'Observasi & Pelaporan', title: "Submit General Inspection", desc: "Form inspeksi tim safety", icon: <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => window.open('https://docs.google.com/forms/d/e/1FAIpQLScOJSC6wcLsJ26YcmwWndj0Hb9x5V48XHTdHWkPzbH2XwN8ww/viewform', '_blank', 'noopener,noreferrer') },
         { id: 'training-database', group: 'Training', title: "Training Internal", desc: "SAP (HAZID, JSA, IUT OTT, IAI, BFA, BS) & K3", icon: <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('training-database') },
         { id: 'training-external', group: 'Training', title: "Sertifikasi", desc: "Sertifikasi POP, POM & Eksternal", icon: <Award className="w-5 h-5 sm:w-6 sm:h-6" />, color: 'amber', action: () => onNav('training-external') },

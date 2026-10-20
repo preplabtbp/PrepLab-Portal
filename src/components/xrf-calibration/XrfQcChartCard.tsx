@@ -3,7 +3,7 @@ import {
   AlertTriangle, AlertCircle, CheckCircle2, ChevronDown, 
   Layers, Sliders, Activity, Info, ShieldAlert, Check, 
   X, Sparkles, ExternalLink, Pin, User, Search, Edit3, 
-  Trash2, MessageSquare 
+  Trash2, MessageSquare, Maximize2, Lock, Calendar 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -69,6 +69,9 @@ interface XrfQcChartCardProps {
   points: XrfPointData[];
   showStats?: boolean;
   compactStats?: boolean;
+  onOpenFullscreen?: () => void;
+  canTakeOutOffspec?: boolean;
+  userRoleTitle?: string;
   // Off-spec isolation callbacks
   onToggleIsolatePoint?: (point: XrfPointData, element: string, limits: XrfChartLimitData) => void;
   onOpenOffspecModal?: () => void;
@@ -80,7 +83,34 @@ interface XrfQcChartCardProps {
   onDeleteAnnotation?: (pointIndex: number) => void;
 }
 
-export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
+// Singleton in-memory cache for employee list (prevents N+1 requests from 50+ cards)
+let sharedEmployeesCache: Array<{ nik: string; nama: string; jabatan?: string }> | null = null;
+let sharedEmployeesPromise: Promise<Array<{ nik: string; nama: string; jabatan?: string }>> | null = null;
+
+async function getSharedEmployees(): Promise<Array<{ nik: string; nama: string; jabatan?: string }>> {
+  if (sharedEmployeesCache) return sharedEmployeesCache;
+  if (!sharedEmployeesPromise) {
+    sharedEmployeesPromise = fetch('/api/employees')
+      .then(res => res.json())
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data?.employees || []);
+        const mapped = list.map((e: any) => ({
+          nik: String(e.nik || ''),
+          nama: String(e.nama || e.name || 'Personil'),
+          jabatan: String(e.jabatan || e.position || '')
+        }));
+        sharedEmployeesCache = mapped;
+        return mapped;
+      })
+      .catch(() => {
+        sharedEmployeesPromise = null;
+        return [];
+      });
+  }
+  return sharedEmployeesPromise;
+}
+
+export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
   standardCode,
   instrumentName,
   instrumentCode,
@@ -92,6 +122,9 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
   points,
   showStats = true,
   compactStats = false,
+  onOpenFullscreen,
+  canTakeOutOffspec = true,
+  userRoleTitle,
   onToggleIsolatePoint,
   onOpenOffspecModal,
   onIsolateAllOffspecInCard,
@@ -118,20 +151,12 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Fetch employees list for NIK lookup
+  // Fetch employees list ONLY when annotation form is actually open (lazy loaded & cached)
   useEffect(() => {
-    fetch('/api/employees')
-      .then(res => res.json())
-      .then(data => {
-        const list = Array.isArray(data) ? data : (data?.employees || []);
-        setEmployeesList(list.map((e: any) => ({
-          nik: String(e.nik || ''),
-          nama: String(e.nama || e.name || 'Personil'),
-          jabatan: String(e.jabatan || e.position || '')
-        })));
-      })
-      .catch(() => {});
-  }, []);
+    if (editingAnnotation || showPicDropdown) {
+      getSharedEmployees().then(setEmployeesList);
+    }
+  }, [editingAnnotation, showPicDropdown]);
 
   // Filter employees for auto-complete dropdown
   const filteredEmployees = useMemo(() => {
@@ -269,6 +294,28 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
   const isLatestNeedRecalibration = lastActivePoint && lastPointSigma > 3.0;
   const isLatestWarning = lastActivePoint && lastPointSigma > 2.0 && lastPointSigma <= 3.0;
 
+  const formattedLastUpdate = useMemo(() => {
+    if (!lastActivePoint) return null;
+    const str = lastActivePoint.analyzedAt || lastActivePoint.date;
+    if (!str) return null;
+    try {
+      const cleanStr = str.replace('T', ' ');
+      const [datePart, timePart] = cleanStr.split(' ');
+      const dateSegments = datePart.split('-');
+      if (dateSegments.length === 3) {
+        const [y, m, d] = dateSegments;
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const mIdx = parseInt(m, 10) - 1;
+        const mStr = monthNames[mIdx] || m;
+        const timeClean = timePart ? timePart.slice(0, 5) : '';
+        return timeClean ? `${d} ${mStr} ${y} ${timeClean}` : `${d} ${mStr} ${y}`;
+      }
+      return str;
+    } catch {
+      return str;
+    }
+  }, [lastActivePoint]);
+
   // Recalculated dynamic KPI statistics based on active non-isolated points
   const displayedStats = useMemo(() => {
     if (isolatedPointsInCard.length === 0 || activePoints.length === 0) {
@@ -368,26 +415,35 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
             )}
           </div>
 
-          {/* Latest Data Point Status: In-Control vs Need Re-calibration */}
+          {/* Latest Data Update Indicator */}
           {activePoints.length === 0 ? (
             <span className="px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 border border-stone-200 dark:border-stone-700">
               No Data
             </span>
-          ) : isLatestNeedRecalibration ? (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEE2E2] text-[#991B1B] dark:bg-rose-950/70 dark:text-rose-200 border border-[#FCA5A5] dark:border-rose-800 flex items-center gap-1 shadow-2xs">
-              <AlertCircle className="w-3.5 h-3.5 text-[#DC2626]" />
-              Need Re-cal
-            </span>
-          ) : isLatestWarning ? (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEF3C7] text-[#92400E] dark:bg-amber-950/70 dark:text-amber-200 border border-[#FCD34D] dark:border-amber-800 flex items-center gap-1 shadow-2xs">
-              <AlertTriangle className="w-3.5 h-3.5 text-[#D97706]" />
-              Warning (2-3σ)
-            </span>
           ) : (
-            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#DCFCE7] text-[#166534] dark:bg-emerald-950/70 dark:text-emerald-200 border border-[#86EFAC] dark:border-emerald-800 flex items-center gap-1 shadow-2xs">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#16A34A]" />
-              In-Control
+            <span 
+              className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800/90 dark:text-slate-200 border border-slate-300 dark:border-slate-700 flex items-center gap-1.5 shadow-2xs"
+              title={`Last Data Update: ${lastActivePoint?.analyzedAt || lastActivePoint?.date || '-'}`}
+            >
+              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <span>Update: <span className="font-mono text-slate-900 dark:text-white font-black">{formattedLastUpdate}</span></span>
             </span>
+          )}
+
+          {/* Fullscreen Modal Trigger Button */}
+          {onOpenFullscreen && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenFullscreen();
+              }}
+              className="p-1 px-1.5 rounded-lg text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 border border-slate-200 dark:border-slate-700 hover:border-teal-400 transition-all cursor-pointer shadow-2xs flex items-center gap-1 group/fs ml-0.5"
+              title="Perbesar Grafik Layar Penuh (Fullscreen) & Analisis Lengkap"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 group-hover/fs:scale-110 transition-transform" />
+              <span className="hidden sm:inline text-[10.5px] font-bold">Fullscreen</span>
+            </button>
           )}
         </div>
       </div>
@@ -395,7 +451,21 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
       {/* ------------------------------------------------------------- */}
       {/* 2. ENTERPRISE SHEWHART QC CONTROL CHART CANVAS               */}
       {/* ------------------------------------------------------------- */}
-      <div className="p-3 relative bg-slate-50/40 dark:bg-slate-950/30 border-b border-slate-200 dark:border-slate-800">
+      <div 
+        onClick={() => {
+          if (onOpenFullscreen) onOpenFullscreen();
+        }}
+        className={`p-3 relative bg-slate-50/40 dark:bg-slate-950/30 border-b border-slate-200 dark:border-slate-800 group/chart-canvas ${
+          onOpenFullscreen ? 'cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-950/50 transition-colors' : ''
+        }`}
+        title={onOpenFullscreen ? "Klik untuk melihat grafik dalam tampilan Full Screen dengan analisis detail" : undefined}
+      >
+        {onOpenFullscreen && (
+          <div className="absolute top-4 right-4 z-10 opacity-0 group-hover/chart-canvas:opacity-100 transition-opacity bg-slate-900/80 text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-1 pointer-events-none shadow-md backdrop-blur-xs">
+            <Maximize2 className="w-3 h-3 text-teal-400" />
+            <span>Klik untuk Layar Penuh</span>
+          </div>
+        )}
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
           className="w-full h-auto select-none overflow-visible"
@@ -654,24 +724,34 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
                   setSelectedPoint(isSelected ? null : p);
                 }}
               >
-                {/* Visual Pin / Flag indicator for points with Annotation */}
+                {/* Visual Exclamation Bubble Indicator for points with Annotation */}
                 {hasAnnotation && (
                   <g className="pointer-events-none">
+                    <polygon
+                      points={`${cx - 2.5},${cy - 7.5} ${cx + 2.5},${cy - 7.5} ${cx},${cy - 3}`}
+                      fill="#F59E0B"
+                    />
+                    <circle
+                      cx={cx}
+                      cy={cy - 12}
+                      r={6}
+                      fill="#F59E0B"
+                      stroke="#FFFFFF"
+                      strokeWidth={1.2}
+                    />
+                    <rect
+                      x={cx - 0.75}
+                      y={cy - 14.8}
+                      width={1.5}
+                      height={3.2}
+                      rx={0.75}
+                      fill="#FFFFFF"
+                    />
                     <circle
                       cx={cx}
                       cy={cy - 10}
-                      r={3}
-                      fill="#F59E0B"
-                      stroke="#FFFFFF"
-                      strokeWidth={1}
-                    />
-                    <line
-                      x1={cx}
-                      y1={cy - 7}
-                      x2={cx}
-                      y2={cy - 3}
-                      stroke="#F59E0B"
-                      strokeWidth={1.5}
+                      r={0.85}
+                      fill="#FFFFFF"
                     />
                   </g>
                 )}
@@ -1015,17 +1095,29 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!canTakeOutOffspec) {
+                      toast.error("Akses Ditolak: Fitur Take Out data off-spec hanya diizinkan untuk SPV & SPT Lab, Developer, dan Manager.");
+                      return;
+                    }
                     if (onToggleIsolatePoint) {
                       onToggleIsolatePoint(selectedPoint, currentElement, limits);
                     }
                   }}
                   className={`w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs ${
-                    isIsolated
+                    !canTakeOutOffspec
+                      ? 'bg-slate-100 dark:bg-neutral-800 text-slate-500 border border-slate-300 dark:border-neutral-700 opacity-80'
+                      : isIsolated
                       ? 'bg-slate-100 hover:bg-slate-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-slate-800 dark:text-neutral-100 border border-slate-300 dark:border-neutral-600'
                       : 'bg-rose-600 hover:bg-rose-700 text-white border border-rose-700'
                   }`}
+                  title={!canTakeOutOffspec ? "Hanya SPV & SPT Lab, Developer, dan Manager yang memiliki izin Take Out data" : undefined}
                 >
-                  {isIsolated ? (
+                  {!canTakeOutOffspec ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Take Out (Khusus SPV/SPT/Dev/Mgr)</span>
+                    </>
+                  ) : isIsolated ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Kembalikan Titik ke Chart Utama</span>
@@ -1055,6 +1147,10 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (!canTakeOutOffspec) {
+                        toast.error("Akses Ditolak: Fitur Take Out data off-spec hanya diizinkan untuk SPV & SPT Lab, Developer, dan Manager.");
+                        return;
+                      }
                       onIsolateAllOffspecInCard(validPoints, currentElement, limits);
                     }}
                     className="w-full py-1 px-2 rounded-lg text-[10.5px] font-bold text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center justify-center gap-1 transition-all cursor-pointer"
@@ -1237,4 +1333,6 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = ({
       )}
     </div>
   );
-};
+});
+
+XrfQcChartCard.displayName = 'XrfQcChartCard';

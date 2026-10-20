@@ -424,53 +424,60 @@ router.post("/api/bulletin/:id/comments", async (req, res) => {
           });
         }
       } else {
-        // Komentar Utama Baru: Masuk ke pembuat artikel DAN personil di section yang relevan
-        const allEmployees = await db.select().from(employees);
-        const targetEmployees = allEmployees.filter((e) => {
-          if (!e.nik || e.nik === authorNik) return false;
-          
-          // Jika author artikel bukan pengirim komentar, selalu sertakan
-          if (post?.authorNik && e.nik === post.authorNik) return true;
-
-          // Jika PIC ditentukan, selalu sertakan
-          if (picNik && e.nik === picNik) return true;
-
-          // Section match (case-insensitive fuzzy match)
-          const empSect = (e.section || '').toLowerCase();
-          const empDept = (e.department || '').toLowerCase();
-          const targetSect = postSection.toLowerCase();
-
-          return (
-            empSect.includes(targetSect) ||
-            targetSect.includes(empSect) ||
-            empDept.includes(targetSect) ||
-            targetSect.includes(empDept)
-          );
-        });
-
+        // Komentar Utama Baru: Notifikasi seksi (broadcast) dan notifikasi personal ke PIC / Pembuat Topik
         const notifTitle = statusUpdate
           ? `⚡ Update Status [${postSection}]: ${statusUpdate}`
           : `💬 Komentar Baru [${postSection}]`;
+
+        const cleanSnippet = (content || '').replace(/\n+/g, ' ').trim();
+        const displayContent = cleanSnippet.length > 70 ? cleanSnippet.substring(0, 70) + '...' : cleanSnippet;
         const notifMessage = statusUpdate
           ? `${authorName || 'Personil'} mengupdate status topik ${topicLabel} ke "${statusUpdate}".`
-          : `${authorName || 'Personil'} berkomentar di topik ${topicLabel}: "${content.length > 60 ? content.substring(0, 60) + '...' : content}"`;
+          : `${authorName || 'Personil'} berkomentar di topik ${topicLabel}: "${displayContent}"`;
 
-        targetEmployees.forEach((t) => {
+        // 1. Notifikasi Broadcast Seksi (userId = null, role = postSection)
+        // Native didukung oleh GET /api/notifications & WebPush tanpa perlu menduplikasi ratusan baris di database
+        notificationsData.push({
+          userId: null,
+          role: postSection,
+          title: notifTitle,
+          message: notifMessage,
+          type: statusUpdate ? 'success' : 'info',
+          link: notifLink,
+          isRead: false,
+        });
+
+        // 2. Jika pembuat artikel bukan pengirim komentar, kirimkan notifikasi personal
+        if (post?.authorNik && post.authorNik !== authorNik) {
           notificationsData.push({
-            userId: t.nik,
-            role: postSection,
+            userId: post.authorNik,
+            role: null,
             title: notifTitle,
             message: notifMessage,
             type: statusUpdate ? 'success' : 'info',
             link: notifLink,
             isRead: false,
           });
-        });
+        }
+
+        // 3. Jika PIC ditentukan dan bukan pengirim komentar / author artikel, kirimkan notifikasi personal
+        if (picNik && picNik !== authorNik && picNik !== post?.authorNik) {
+          notificationsData.push({
+            userId: picNik,
+            role: null,
+            title: notifTitle,
+            message: notifMessage,
+            type: statusUpdate ? 'success' : 'info',
+            link: notifLink,
+            isRead: false,
+          });
+        }
       }
 
       if (notificationsData.length > 0) {
         const insertedNotifs = await db.insert(notifications).values(notificationsData).returning();
-        sendWebPush(insertedNotifs);
+        const notifsWithSender = insertedNotifs.map((n: any) => ({ ...n, senderNik: authorNik }));
+        sendWebPush(notifsWithSender, { senderNik: authorNik });
       }
 
       res.json({ status: "success", data: comment });

@@ -38,10 +38,10 @@ router.get("/api/agenda", async (req, res) => {
         const isPrivate = kat === 'private' || kat === 'personal' || kat === 'pribadi';
         if (isPrivate) {
           if (!requesterNik) return false;
-          const creatorNik = String(evt.creatorNik || '').trim();
-          const pic = String(evt.pic || '').trim();
-          return creatorNik.toUpperCase() === requesterNik.toUpperCase() ||
-                 pic.toUpperCase() === requesterNik.toUpperCase();
+          const creatorNik = String(evt.creatorNik || '').trim().toUpperCase();
+          const pic = String(evt.pic || '').trim().toUpperCase();
+          const reqUpper = requesterNik.toUpperCase();
+          return creatorNik === reqUpper || (pic && pic === reqUpper);
         }
         return true;
       });
@@ -89,7 +89,7 @@ router.get("/api/agenda", async (req, res) => {
                kategori: 'Birthday',
                pic: emp.name,
                deskripsi: `Hari Ulang Tahun ${emp.name} (${emp.jabatan || 'Karyawan'})`,
-               department: 'ALL',
+               department: 'ALL', 
                isRoutine: false,
                isBirthday: true,
              });
@@ -98,7 +98,7 @@ router.get("/api/agenda", async (req, res) => {
       });
       
       res.json({ status: "success", data });
-    } catch (error) {
+    } catch (error: any) {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
@@ -109,6 +109,8 @@ router.post("/api/agenda", async (req, res) => {
       const eventId = body.id || `ag-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
       const startDate = body.startDate ? new Date(body.startDate) : (body.date ? new Date(body.date) : new Date());
       const endDate = body.endDate ? new Date(body.endDate) : new Date(startDate.getTime() + 60 * 60 * 1000);
+      const isRoutine = Boolean(body.isRoutine);
+      const routineId = isRoutine ? (body.routineId || `routine-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`) : null;
       
       const payload: any = {
         id: eventId,
@@ -118,15 +120,50 @@ router.post("/api/agenda", async (req, res) => {
         kategori: body.kategori || "General",
         pic: body.pic || "-",
         deskripsi: body.deskripsi || "",
-        routineId: body.routineId || null,
+        routineId: routineId,
         creatorNik: body.creatorNik || null,
-        isRoutine: Boolean(body.isRoutine),
+        isRoutine: isRoutine,
         frekuensi: body.frekuensi || null,
         department: body.department || "ALL",
         bulletinPostId: body.bulletinPostId ? Number(body.bulletinPostId) : null,
       };
 
       const result = await db.insert(agendaEvents).values(payload).returning();
+
+      // Jika agenda rutin, buat jadwal berulang ke depan secara otomatis
+      if (isRoutine && body.frekuensi && routineId) {
+        try {
+          const count = body.frekuensi === 'harian' ? 14 : (body.frekuensi === 'mingguan' ? 8 : 4);
+          const durationMs = endDate.getTime() - startDate.getTime();
+          const extraEvents = [];
+
+          for (let i = 1; i <= count; i++) {
+            const nextStart = new Date(startDate);
+            if (body.frekuensi === 'harian') {
+              nextStart.setDate(nextStart.getDate() + i);
+            } else if (body.frekuensi === 'mingguan') {
+              nextStart.setDate(nextStart.getDate() + (i * 7));
+            } else if (body.frekuensi === 'bulanan') {
+              nextStart.setMonth(nextStart.getMonth() + i);
+            }
+            const nextEnd = new Date(nextStart.getTime() + durationMs);
+            extraEvents.push({
+              ...payload,
+              id: `ag-rt-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
+              startDate: nextStart,
+              endDate: nextEnd,
+              routineId
+            });
+          }
+
+          if (extraEvents.length > 0) {
+            await db.insert(agendaEvents).values(extraEvents);
+          }
+        } catch (rtErr) {
+          console.warn('[Agenda Routine Creation Warning]:', rtErr);
+        }
+      }
+
       try {
         const _n = await db.insert(notifications).values({
           userId: null,
@@ -173,3 +210,92 @@ router.delete("/api/agenda/routine/:routineId", async (req, res) => {
       res.status(500).json({ status: "error", message: error.message });
     }
   });
+
+router.all("/api/agenda/cleanup-duplicates", async (req, res) => {
+    try {
+      const allEvents = await db.select().from(agendaEvents);
+      const groups: Record<string, typeof allEvents> = {};
+
+      for (const ev of allEvents) {
+        let key = '';
+        if (ev.bulletinPostId) {
+          key = `bulletin-post-${ev.bulletinPostId}`;
+        } else if (ev.id.startsWith('ag-bulletin-')) {
+          const parts = ev.id.split('-');
+          const postId = parts[2] || 'unknown';
+          key = `bulletin-post-${postId}`;
+        } else if (ev.title && (ev.title.includes('Weekly') || ev.title.includes('weekly'))) {
+          const dStr = ev.startDate ? new Date(ev.startDate).toISOString().slice(0, 10) : 'nodate';
+          key = `weekly-title-${ev.title}-${dStr}`;
+        } else {
+          key = `single-${ev.id}`;
+        }
+
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(ev);
+      }
+
+      const idsToDelete: string[] = [];
+      const recordsToKeep: Array<{ key: string; keptId: string; title: string; duplicateCount: number }> = [];
+
+      for (const [key, evList] of Object.entries(groups)) {
+        if (evList.length > 1) {
+          evList.sort((a, b) => {
+            const tA = (a.createdAt ? new Date(a.createdAt).getTime() : 0) || (a.startDate ? new Date(a.startDate).getTime() : 0);
+            const tB = (b.createdAt ? new Date(b.createdAt).getTime() : 0) || (b.startDate ? new Date(b.startDate).getTime() : 0);
+            return tA - tB;
+          });
+
+          const canonical = evList[0];
+          recordsToKeep.push({ key, keptId: canonical.id, title: canonical.title, duplicateCount: evList.length - 1 });
+
+          for (let i = 1; i < evList.length; i++) {
+            idsToDelete.push(evList[i].id);
+          }
+        }
+      }
+
+      let deletedCount = 0;
+      if (idsToDelete.length > 0) {
+        const chunkSize = 50;
+        for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+          const chunk = idsToDelete.slice(i, i + chunkSize);
+          await db.delete(agendaEvents).where(inArray(agendaEvents.id, chunk));
+          deletedCount += chunk.length;
+        }
+      }
+
+      // Rename kept bulletin event ID to canonical format if needed
+      for (const r of recordsToKeep) {
+        if (r.key.startsWith('bulletin-post-')) {
+          const postId = r.key.replace('bulletin-post-', '');
+          const canonicalId = `ag-bulletin-${postId}`;
+          if (r.keptId !== canonicalId) {
+            try {
+              const existing = await db.select().from(agendaEvents).where(eq(agendaEvents.id, canonicalId)).limit(1);
+              if (existing.length === 0) {
+                await db.update(agendaEvents).set({ id: canonicalId, bulletinPostId: Number(postId) }).where(eq(agendaEvents.id, r.keptId));
+              }
+            } catch (e) {
+              // Ignore rename collision
+            }
+          }
+        }
+      }
+
+      const remainingEvents = await db.select().from(agendaEvents);
+      console.log(`[Agenda Cleanup] Deleted ${deletedCount} duplicate events. Remaining: ${remainingEvents.length}`);
+
+      res.json({
+        status: "success",
+        totalBefore: allEvents.length,
+        totalAfter: remainingEvents.length,
+        deletedCount,
+        deduplicatedGroupsCount: recordsToKeep.length
+      });
+    } catch (error: any) {
+      console.error("Cleanup duplicates error:", error);
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+

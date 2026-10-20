@@ -25,14 +25,22 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
   inspectorName,
 }) => {
   const [activeTab, setActiveTab] = useState<'daily-input' | 'direct-paste' | 'history-logs' | 'control-charts' | 'master-references'>('control-charts');
-  const [instruments, setInstruments] = useState<Array<{ code: string; name: string }>>([
-    { code: 'SUPERMINI', name: 'Supermini 200 (GTS)' },
-    { code: 'EPSILON_A', name: 'EPSILON A' },
-    { code: 'EPSILON_B', name: 'EPSILON B' },
-    { code: 'EPSILON_C', name: 'EPSILON C' },
-    { code: 'EPSILON_D', name: 'EPSILON D' },
-    { code: 'EPSILON_E', name: 'EPSILON E' },
-    { code: 'EPSILON_F', name: 'EPSILON F' },
+  const [instruments, setInstruments] = useState<Array<{ code: string; name: string; brandModel?: string; site?: string; methodType?: string }>>([
+    // GTS Instruments
+    { code: 'EPSILON_A', name: 'EPSILON A', brandModel: 'PANalytical Epsilon 4', site: 'GTS', methodType: 'EDXRF' },
+    { code: 'EPSILON_B', name: 'EPSILON B', brandModel: 'PANalytical Epsilon 4', site: 'GTS', methodType: 'EDXRF' },
+    { code: 'EPSILON_D', name: 'EPSILON D', brandModel: 'PANalytical Epsilon 4', site: 'GTS', methodType: 'EDXRF' },
+    { code: 'SUPERMINI', name: 'Supermini 200 (GTS)', brandModel: 'Rigaku Supermini200', site: 'GTS', methodType: 'WDXRF' },
+
+    // TBP Instruments
+    { code: 'EPSILON_C', name: 'EPSILON C', brandModel: 'PANalytical Epsilon 4', site: 'TBP', methodType: 'EDXRF' },
+    { code: 'EPSILON_E', name: 'EPSILON E', brandModel: 'PANalytical Epsilon 4', site: 'TBP', methodType: 'EDXRF' },
+    { code: 'EPSILON_F', name: 'EPSILON F', brandModel: 'PANalytical Epsilon 4', site: 'TBP', methodType: 'EDXRF' },
+    { code: 'EPSILON_G', name: 'EPSILON G', brandModel: 'PANalytical Epsilon 4', site: 'TBP', methodType: 'EDXRF' },
+    { code: 'EPSILON_H', name: 'EPSILON H', brandModel: 'PANalytical Epsilon 4', site: 'TBP', methodType: 'EDXRF' },
+    { code: 'S2_PUMA',   name: 'S2 PUMA',    brandModel: 'Bruker S2 PUMA', site: 'TBP', methodType: 'EDXRF' },
+    { code: 'ZETIUM_A',  name: 'Zetium A',   brandModel: 'PANalytical Zetium', site: 'TBP', methodType: 'WDXRF' },
+    { code: 'ZETIUM_B',  name: 'Zetium B',   brandModel: 'PANalytical Zetium', site: 'TBP', methodType: 'WDXRF' },
   ]);
   const [standards, setStandards] = useState<Array<{ code: string; name: string }>>([
     { code: 'BLANK_A', name: 'BLANK A' },
@@ -54,16 +62,19 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
     { code: 'OREAS195', name: 'OREAS 195' },
   ]);
 
+  const refreshInstruments = async () => {
+    try {
+      const res = await fetch('/api/xrf/instruments');
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+        setInstruments(json.data);
+      }
+    } catch {}
+  };
+
   // Load master data
   useEffect(() => {
-    fetch('/api/xrf/instruments')
-      .then(res => res.json())
-      .then(json => {
-        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          setInstruments(json.data);
-        }
-      })
-      .catch(() => {});
+    refreshInstruments();
 
     fetch('/api/xrf/standards')
       .then(res => res.json())
@@ -242,6 +253,10 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
             standards={standards}
             assignedSite={assignedSite}
             isDevOrManager={isDevOrManager}
+            currentUserNik={inspectorNik}
+            currentUserName={inspectorName}
+            currentUserJabatan={profileJabatan || userJabatan}
+            onInstrumentsChanged={refreshInstruments}
           />
         </div>
 
@@ -259,6 +274,8 @@ export const XrfCalibrationScreen: React.FC<XrfCalibrationScreenProps> = ({
           <XrfDirectPasteTab
             instruments={instruments}
             standards={standards}
+            assignedSite={assignedSite}
+            isDevOrManager={isDevOrManager}
             onSuccessSave={() => setActiveTab('control-charts')}
           />
         )}

@@ -78,6 +78,8 @@ import { kbbiRouter } from "./server/routes/kbbi.js";
 import { gamificationRouter } from "./server/routes/gamification.js";
 import { logbookRouter } from "./server/routes/logbook.js";
 import { clinicRouter } from "./server/routes/clinic.js";
+import { safetyRekapRouter } from "./server/routes/safetyRekap.js";
+import { inspectionPlannerRouter } from "./server/routes/inspectionPlanner.js";
 import { trainingRouter, ensureTrainingRecordsTable, initTrainingNotificationCron } from "./server/routes/training.js";
 import { mealOrdersRouter, ensureMealOrdersTable } from "./server/routes/mealOrders.js";
 import { trainingCertificationsRouter } from "./server/routes/trainingCertifications.js";
@@ -676,6 +678,54 @@ const app = express();
     gameAnnouncement: 'Menunggu pemain mengambil posisi Putih & Hitam...'
   };
 
+  const resetDominoGame = () => {
+    dominoLoungeState.seats = [null, null, null, null];
+    dominoLoungeState.boardChain = [];
+    dominoLoungeState.currentTurnIndex = 0;
+    dominoLoungeState.isPlaying = false;
+    dominoLoungeState.roundWinner = null;
+    dominoLoungeState.consecutivePasses = 0;
+    dominoLoungeState.gameAnnouncement = 'Meja Gaple kosong. Permainan direset dan siap untuk putaran baru!';
+    dominoLoungeState.hands.clear();
+  };
+
+  const resetChessGame = () => {
+    chessLoungeState.board = JSON.parse(JSON.stringify(INITIAL_SERVER_CHESS_BOARD));
+    chessLoungeState.currentTurn = 'w';
+    chessLoungeState.isCheck = null;
+    chessLoungeState.winner = null;
+    chessLoungeState.lastMove = null;
+    chessLoungeState.whiteTime = 600;
+    chessLoungeState.blackTime = 600;
+    chessLoungeState.halfMoveClock = 0;
+    chessLoungeState.positionHistory = [];
+    chessLoungeState.capturedByWhite = [];
+    chessLoungeState.capturedByBlack = [];
+    chessLoungeState.gameAnnouncement = 'Meja catur kosong. Papan dan waktu otomatis direset!';
+  };
+
+  // --- REAL-TIME MULTIPLAYER SUWIT (RPS) 1V1 PVP STATE ---
+  interface RpsPlayer {
+    nik: string;
+    name: string;
+    avatar?: string;
+    pangkat?: string;
+    socketId: string;
+    choice: 'rock' | 'paper' | 'scissors' | null;
+    score: number;
+  }
+
+  interface RpsMatch {
+    id: string;
+    player1: RpsPlayer;
+    player2: RpsPlayer;
+    status: 'INVITING' | 'PLAYING' | 'REVEALED';
+    round: number;
+  }
+
+  const rpsMatches = new Map<string, RpsMatch>();
+
+
   const cleanupStaleLoungeAvatars = () => {
     const activeSocketIds = new Set(onlineSockets.keys());
     for (const [nik, avatar] of loungeAvatars.entries()) {
@@ -973,8 +1023,14 @@ const app = express();
 
     socket.on('domino:stand', (data: { seatIdx: number }) => {
       if (typeof data.seatIdx === 'number' && data.seatIdx >= 0 && data.seatIdx < 4) {
-        // If active game is in progress, replace with bot so table does not freeze
-        if (dominoLoungeState.isPlaying && !dominoLoungeState.roundWinner) {
+        // Check if other real human players remain at the table
+        const hasOtherHuman = dominoLoungeState.seats.some((s, idx) => idx !== data.seatIdx && s && !s.isBot);
+
+        if (!hasOtherHuman) {
+          // If no other human players remain at the table, reset immediately
+          resetDominoGame();
+        } else if (dominoLoungeState.isPlaying && !dominoLoungeState.roundWinner) {
+          // If active game is in progress and other humans are still playing, replace with bot so table does not freeze
           const botNames = [
             { nik: 'bot_budi', name: 'Budi (Bot)', avatar: '🤖' },
             { nik: 'bot_siti', name: 'Siti (Bot)', avatar: '👾' },
@@ -1070,8 +1126,14 @@ const app = express();
         const curRight = dominoLoungeState.boardChain[dominoLoungeState.boardChain.length - 1].val2;
 
         if (side === 'left') {
+          // Strictly validate that tile has curLeft
+          if (tile.left !== curLeft && tile.right !== curLeft) {
+            console.warn(`[Domino] Invalid move for left end (${curLeft}): tile is [${tile.left}|${tile.right}]`);
+            return;
+          }
           let val1 = tile.left;
           let val2 = tile.right;
+          // For prepending on the left: val2 connects to curLeft, val1 becomes new openLeft
           if (tile.right === curLeft) {
             val1 = tile.left;
             val2 = tile.right;
@@ -1088,8 +1150,14 @@ const app = express();
           };
           dominoLoungeState.boardChain.unshift(newTile);
         } else {
+          // Strictly validate that tile has curRight
+          if (tile.left !== curRight && tile.right !== curRight) {
+            console.warn(`[Domino] Invalid move for right end (${curRight}): tile is [${tile.left}|${tile.right}]`);
+            return;
+          }
           let val1 = tile.left;
           let val2 = tile.right;
+          // For appending on the right: val1 connects to curRight, val2 becomes new openRight
           if (tile.left === curRight) {
             val1 = tile.left;
             val2 = tile.right;
@@ -1289,8 +1357,16 @@ const app = express();
       const playerName = socket.data.name || data.name || playerNik;
 
       if (data.side === 'w') {
+        // Clear black seat if player was sitting there
+        if (chessLoungeState.blackSeat && (chessLoungeState.blackSeat.nik === playerNik || chessLoungeState.blackSeat.socketId === socket.id)) {
+          chessLoungeState.blackSeat = null;
+        }
         chessLoungeState.whiteSeat = { nik: playerNik, name: playerName, avatar: data.avatar, socketId: socket.id };
       } else {
+        // Clear white seat if player was sitting there
+        if (chessLoungeState.whiteSeat && (chessLoungeState.whiteSeat.nik === playerNik || chessLoungeState.whiteSeat.socketId === socket.id)) {
+          chessLoungeState.whiteSeat = null;
+        }
         chessLoungeState.blackSeat = { nik: playerNik, name: playerName, avatar: data.avatar, socketId: socket.id };
       }
 
@@ -1303,6 +1379,9 @@ const app = express();
       socket.join('lounge');
       if (data.side === 'w') chessLoungeState.whiteSeat = null;
       if (data.side === 'b') chessLoungeState.blackSeat = null;
+      if (!chessLoungeState.whiteSeat && !chessLoungeState.blackSeat) {
+        resetChessGame();
+      }
       io.to('lounge').emit('chess:sync', chessLoungeState);
       socket.emit('chess:sync', chessLoungeState);
     });
@@ -1362,6 +1441,183 @@ const app = express();
       io.to('lounge').emit('chess:sync', chessLoungeState);
       socket.emit('chess:sync', chessLoungeState);
     });
+
+    // ==========================================
+    // MULTIPLAYER SUWIT (RPS) 1V1 PVP SOCKET EVENTS
+    // ==========================================
+    socket.on('rps:challenge', (data: {
+      toNik: string;
+      fromNik: string;
+      fromName: string;
+      fromAvatar?: string;
+      fromPangkat?: string;
+    }) => {
+      // Find target socket
+      let targetSocketId: string | null = null;
+      let targetUser: any = null;
+      for (const [sId, sUser] of onlineSockets.entries()) {
+        if (sUser.nik === data.toNik) {
+          targetSocketId = sId;
+          targetUser = sUser;
+          break;
+        }
+      }
+
+      if (!targetSocketId) {
+        socket.emit('rps:challenge_failed', { message: 'Rekan tidak sedang online.' });
+        return;
+      }
+
+      const matchId = `rps-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const match: RpsMatch = {
+        id: matchId,
+        player1: {
+          nik: data.fromNik,
+          name: data.fromName,
+          avatar: data.fromAvatar,
+          pangkat: data.fromPangkat,
+          socketId: socket.id,
+          choice: null,
+          score: 0
+        },
+        player2: {
+          nik: data.toNik,
+          name: targetUser.name || targetUser.username || data.toNik,
+          avatar: targetUser.avatar,
+          pangkat: targetUser.pangkat,
+          socketId: targetSocketId,
+          choice: null,
+          score: 0
+        },
+        status: 'INVITING',
+        round: 1
+      };
+
+      rpsMatches.set(matchId, match);
+
+      // Notify target player of the challenge
+      io.to(targetSocketId).emit('rps:invite_received', {
+        matchId,
+        fromNik: data.fromNik,
+        fromName: data.fromName,
+        fromAvatar: data.fromAvatar,
+        fromPangkat: data.fromPangkat
+      });
+
+      socket.emit('rps:challenge_sent', { matchId, toNik: data.toNik });
+    });
+
+    socket.on('rps:accept', (data: { matchId: string }) => {
+      const match = rpsMatches.get(data.matchId);
+      if (!match) {
+        socket.emit('rps:error', { message: 'Tantangan sudah kadaluarsa.' });
+        return;
+      }
+
+      match.status = 'PLAYING';
+      const p1Socket = io.sockets.sockets.get(match.player1.socketId);
+      const p2Socket = io.sockets.sockets.get(match.player2.socketId);
+
+      if (p1Socket) p1Socket.join(`rps:${match.id}`);
+      if (p2Socket) p2Socket.join(`rps:${match.id}`);
+
+      io.to(`rps:${match.id}`).emit('rps:game_start', {
+        matchId: match.id,
+        player1: match.player1,
+        player2: match.player2,
+        round: match.round,
+        p1Score: match.player1.score,
+        p2Score: match.player2.score
+      });
+    });
+
+    socket.on('rps:decline', (data: { matchId: string }) => {
+      const match = rpsMatches.get(data.matchId);
+      if (match) {
+        io.to(match.player1.socketId).emit('rps:challenge_declined', {
+          matchId: match.id,
+          fromName: match.player2.name
+        });
+        rpsMatches.delete(match.id);
+      }
+    });
+
+    socket.on('rps:make_choice', (data: { matchId: string; nik: string; choice: 'rock' | 'paper' | 'scissors' }) => {
+      const match = rpsMatches.get(data.matchId);
+      if (!match || match.status !== 'PLAYING') return;
+
+      const isP1 = match.player1.nik === data.nik || match.player1.socketId === socket.id;
+      const isP2 = match.player2.nik === data.nik || match.player2.socketId === socket.id;
+
+      if (isP1) {
+        match.player1.choice = data.choice;
+        io.to(match.player2.socketId).emit('rps:opponent_chose', { matchId: match.id });
+      } else if (isP2) {
+        match.player2.choice = data.choice;
+        io.to(match.player1.socketId).emit('rps:opponent_chose', { matchId: match.id });
+      }
+
+      // Check if both players have chosen
+      if (match.player1.choice && match.player2.choice) {
+        const c1 = match.player1.choice;
+        const c2 = match.player2.choice;
+        let winner: 'player1' | 'player2' | 'draw' = 'draw';
+
+        if (c1 === c2) {
+          winner = 'draw';
+        } else if (
+          (c1 === 'rock' && c2 === 'scissors') ||
+          (c1 === 'paper' && c2 === 'rock') ||
+          (c1 === 'scissors' && c2 === 'paper')
+        ) {
+          winner = 'player1';
+          match.player1.score++;
+        } else {
+          winner = 'player2';
+          match.player2.score++;
+        }
+
+        match.status = 'REVEALED';
+
+        io.to(`rps:${match.id}`).emit('rps:round_result', {
+          matchId: match.id,
+          player1Choice: c1,
+          player2Choice: c2,
+          winner,
+          p1Score: match.player1.score,
+          p2Score: match.player2.score,
+          round: match.round
+        });
+      }
+    });
+
+    socket.on('rps:next_round', (data: { matchId: string }) => {
+      const match = rpsMatches.get(data.matchId);
+      if (!match) return;
+
+      match.round++;
+      match.player1.choice = null;
+      match.player2.choice = null;
+      match.status = 'PLAYING';
+
+      io.to(`rps:${match.id}`).emit('rps:round_started', {
+        matchId: match.id,
+        round: match.round,
+        p1Score: match.player1.score,
+        p2Score: match.player2.score
+      });
+    });
+
+    socket.on('rps:leave', (data: { matchId: string }) => {
+      const match = rpsMatches.get(data?.matchId);
+      if (match) {
+        io.to(`rps:${match.id}`).emit('rps:match_ended', {
+          reason: 'Pertandingan telah diakhiri.'
+        });
+        rpsMatches.delete(match.id);
+      }
+    });
+
 
     socket.on('chat:clear', async (data) => {
       try {
@@ -1595,6 +1851,9 @@ const app = express();
         }
       }
       if (dominoSeatChanged) {
+        if (dominoLoungeState.seats.every(s => !s || s.isBot)) {
+          resetDominoGame();
+        }
         io.to('lounge').emit('domino:sync', getPublicDominoState());
       }
 
@@ -1609,8 +1868,20 @@ const app = express();
         chessSeatChanged = true;
       }
       if (chessSeatChanged) {
+        if (!chessLoungeState.whiteSeat && !chessLoungeState.blackSeat) {
+          resetChessGame();
+        }
         io.to('lounge').emit('chess:sync', chessLoungeState);
       }
+
+      // Clean up RPS matches if player disconnects
+      for (const [mId, match] of rpsMatches.entries()) {
+        if (match.player1.socketId === socket.id || match.player2.socketId === socket.id || (user?.nik && (match.player1.nik === user.nik || match.player2.nik === user.nik))) {
+          io.to(`rps:${mId}`).emit('rps:match_ended', { reason: 'Lawan terputus dari jaringan.' });
+          rpsMatches.delete(mId);
+        }
+      }
+
     });
   });
 
@@ -1735,6 +2006,8 @@ const app = express();
   app.use("/api/gamification", gamificationRouter);
   app.use(logbookRouter);
   app.use(clinicRouter);
+  app.use(safetyRekapRouter);
+  app.use(inspectionPlannerRouter);
   app.use(trainingRouter);
   app.use(trainingCertificationsRouter);
   app.use(mealOrdersRouter);
@@ -1921,54 +2194,8 @@ async function getNotificationTargets(dept) {
   });
 }
 
-async function syncBulletinToAgenda(post: any) {
-  try {
-    let contentData: any = {};
-    try {
-      contentData = JSON.parse(post.content);
-    } catch (e) {
-      console.error("Failed to parse content for agenda sync", e);
-      return;
-    }
+// Note: Canonical syncBulletinToAgenda is exported from ./server/utils.ts and used across bulletin routes.
 
-    const agendaId = `bulletin_${post.id}`;
-
-    if (contentData.agendaDate) {
-      const startD = new Date(contentData.agendaDate);
-      if (isNaN(startD.getTime())) {
-        console.error("Invalid agendaDate", contentData.agendaDate);
-        return;
-      }
-
-      // Check if agenda item already exists
-      const existing = await db.select().from(agendaEvents).where(eq(agendaEvents.id, agendaId)).limit(1);
-
-      const agendaData = {
-        id: agendaId,
-        title: (contentData as any).jenisKegiatan || "Bulletin Event",
-        startDate: startD,
-        endDate: (contentData as any).endDate ? new Date((contentData as any).endDate) : null,
-        kategori: "SPV UP", // Maps to 'Section' in frontend
-        pic: (contentData as any).pic || post.authorName || "",
-        deskripsi: (contentData as any).keterangan || "",
-        creatorNik: post.authorNik,
-        department: post.department,
-        bulletinPostId: post.id,
-      };
-
-      if (existing.length > 0) {
-        await db.update(agendaEvents).set(agendaData).where(eq(agendaEvents.id, agendaId));
-      } else {
-        await db.insert(agendaEvents).values(agendaData);
-      }
-    } else {
-      // If no agendaDate is provided (or if it was deleted), make sure we delete the corresponding agenda event if it existed!
-      await db.delete(agendaEvents).where(eq(agendaEvents.id, agendaId));
-    }
-  } catch (error) {
-    console.error("Failed in syncBulletinToAgenda:", error);
-  }
-}
 
 
   

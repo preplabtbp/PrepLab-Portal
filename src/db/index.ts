@@ -56,10 +56,10 @@ export async function withDbFallback<T>(
 
 export const createPool = () => {
   const isProd = process.env.NODE_ENV === 'production';
-  const defaultMax = isProd ? 10 : 3;
+  const defaultMax = 10;
   const poolConfig: any = {
-    connectionTimeoutMillis: isProd ? 30000 : 15000,
-    idleTimeoutMillis: isProd ? 30000 : 10000,
+    connectionTimeoutMillis: 30000,
+    idleTimeoutMillis: isProd ? 30000 : 15000,
     max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : defaultMax,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,

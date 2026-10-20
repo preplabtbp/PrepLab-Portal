@@ -180,61 +180,40 @@ function normalizeUserSection(raw?: string): 'preparation' | 'laboratory' | 'mai
  * - QA / Admin: Ruang kerja ber-komputer LIMS & akreditasi
  */
 export function resolveUserRoomType(rawSection?: string, rawRole?: string): 'laboratory' | 'preparation' | 'maintenance' | 'warehouse' | 'qa' {
-  const s = `${rawSection || ''} ${rawRole || ''}`.toLowerCase();
+  const sec = (rawSection || '').toLowerCase().trim();
   
-  // 1. TOP PRIORITY: Quality Assurance / QA / QC / Assurance
-  if (
-    s.includes('quality') || 
-    s.includes('assurance') || 
-    s.includes('qa') || 
-    s.includes('qc')
-  ) {
+  // 1. Penentuan titik awal personil langsung dari kolom section di roster
+  if (sec.includes('maintenance')) {
+    return 'maintenance';
+  }
+  if (sec.includes('laboratory') || sec.includes('laboratorium') || sec.includes('lab')) {
+    return 'laboratory';
+  }
+  if (sec.includes('preparation') || sec.includes('preparasi')) {
+    return 'preparation';
+  }
+  if (sec.includes('inventory') || sec.includes('gudang') || sec.includes('warehouse')) {
+    return 'warehouse';
+  }
+  if (sec.includes('quality') || sec.includes('assurance') || sec.includes('qa') || sec.includes('qc') || sec.includes('admin') || sec.includes('administrasi')) {
     return 'qa';
   }
 
-  // 2. Ruang Kerja Laboratorium Kimia & XRF
-  if (
-    s.includes('laboratorium') || 
-    s.includes('kimia') || 
-    s.includes('xrf') || 
-    s.includes('analis') || 
-    s.includes('wet') ||
-    /\blab\b/.test(s)
-  ) {
-    return 'laboratory';
-  }
-
-  // 3. Workshop & Bengkel Pemeliharaan (Maintenance)
-  if (
-    s.includes('maint') || 
-    s.includes('mekanik') || 
-    s.includes('workshop') || 
-    s.includes('bengkel') || 
-    s.includes('pemeliharaan') || 
-    s.includes('teknisi')
-  ) {
+  // 2. Fallback jika data section di roster bernilai umum (seperti 'CREW' atau kosong)
+  const role = (rawRole || '').toLowerCase().trim();
+  if (role.includes('maintenance') || role.includes('mekanik') || role.includes('listrik')) {
     return 'maintenance';
   }
-
-  // 4. Gudang IC & Logistik Bahan (Gunakan boundary agar 'ic' tidak menangkap sembarang kata)
-  if (
-    s.includes('gudang') || 
-    s.includes('warehouse') || 
-    s.includes('logistik') || 
-    s.includes('logistic') || 
-    s.includes('inventory') || 
-    /\bic\b/.test(s)
-  ) {
+  if (role.includes('lab') || role.includes('analis') || role.includes('kimia') || role.includes('xrf')) {
+    return 'laboratory';
+  }
+  if (role.includes('prep') || role.includes('crush') || role.includes('sample')) {
+    return 'preparation';
+  }
+  if (role.includes('inventory') || role.includes('gudang')) {
     return 'warehouse';
   }
-
-  // 5. Admin / Office / Finance / HR
-  if (
-    s.includes('admin') || 
-    s.includes('adm') || 
-    s.includes('finance') || 
-    s.includes('hr')
-  ) {
+  if (role.includes('qa') || role.includes('admin') || role.includes('hr')) {
     return 'qa';
   }
 

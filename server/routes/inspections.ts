@@ -7,8 +7,9 @@ import {
   pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, 
   notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, 
   mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
-  inspectionProofs
+  inspectionProofs, inspectionSchedulePlans
 } from "../../src/db/schema.js";
+import { agendaName } from "../../src/utils/inspection-schedule-rules.js";
 import { generatePdfFromTemplate, drive } from '../../google-services.js';
 import { 
   sendWebPush, getUniverse, uploadFileToDrive, syncBulletinToAgenda, 
@@ -1956,6 +1957,8 @@ export function invalidateScheduleCache() {
   rekapInspeksiCache.clear();
 }
 
+const agendaShiftsBySheet = new Map<string, { no: number; agenda: string; shift: string }[]>();
+
 export async function fetchInspectionScheduleFromSheet(forceRefresh = false, sheetName = 'CurrentWeek') {
   const targetSheet = (sheetName || 'CurrentWeek').trim();
   const cacheKey = targetSheet.toLowerCase();
@@ -2015,6 +2018,17 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
 
   const scheduleList: any[] = [];
   let currentShiftGroup = 'Nonshift';
+
+  // Kolom J–L: daftar resmi agenda inspeksi beserta shift per agenda ("Jadwal Inspeksi (Baru)")
+  const agendaShifts: { no: number; agenda: string; shift: string }[] = [];
+  for (const r of rows) {
+    const agendaNo = parseInt((r[9] || '').trim(), 10);
+    const agendaName = (r[10] || '').trim();
+    if (!isNaN(agendaNo) && agendaName) {
+      agendaShifts.push({ no: agendaNo, agenda: agendaName, shift: (r[11] || '').trim() });
+    }
+  }
+  agendaShiftsBySheet.set(cacheKey, agendaShifts);
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
@@ -2109,6 +2123,52 @@ export async function fetchInspectionScheduleFromSheet(forceRefresh = false, she
 
   scheduleCacheMap.set(cacheKey, { data: scheduleList, timestamp: Date.now() });
   return scheduleList;
+}
+
+// Jadwal yang disusun di portal (menu Jadwal Inspeksi) untuk minggu ISO tsb, bila ada
+async function findPortalPlan(isoWeekTag: string, isoYear?: number) {
+  try {
+    const rows = await db.select().from(inspectionSchedulePlans)
+      .where(isoYear
+        ? and(eq(inspectionSchedulePlans.isoWeek, isoWeekTag), eq(inspectionSchedulePlans.isoYear, isoYear))
+        : eq(inspectionSchedulePlans.isoWeek, isoWeekTag))
+      .orderBy(desc(inspectionSchedulePlans.periodEnd)).limit(1);
+    // Hanya jadwal yang sudah dipublikasikan; draft penyusun tidak menggantikan Google Sheet
+    return rows[0]?.publishedMembers ? rows[0] : null;
+  } catch {
+    return null; // tabel belum dibuat
+  }
+}
+
+// Ubah jadwal portal ke bentuk baris yang sama dengan hasil parse Google Sheet
+function portalPlanToSchedules(plan: any): { schedules: any[]; agendaShifts: { no: number; agenda: string; shift: string }[] } {
+  const members: any[] = Array.isArray(plan.publishedMembers) ? plan.publishedMembers : [];
+  const shiftLabel = (m: any) => {
+    const group = m.shiftGroup === 'Malam' ? 'Malam' : m.shiftGroup === 'Siang' ? 'Siang' : 'Nonshift';
+    return m.team === 'A' || m.team === 'B' ? `Shift ${m.team} (${group})` : group;
+  };
+  const schedules: any[] = members
+    .filter(m => m.isCuti || m.agendaId)
+    .map((m, i) => {
+      const inspeksi = m.isCuti ? 'Cuti' : agendaName(m.agendaId);
+      return {
+        no: i + 1, name: m.name, jabatan: m.jabatan || '', shift: m.isCuti ? 'Cuti' : shiftLabel(m),
+        roleIndex: m.roleIndex || 1, inspeksi, isCuti: !!m.isCuti,
+        formInfo: m.isCuti ? null : mapInspectionToFormInfo(inspeksi)
+      };
+    });
+  for (const item of schedules) {
+    item.partners = item.isCuti ? [] : schedules
+      .filter(o => !o.isCuti && o.inspeksi === item.inspeksi && o.name !== item.name)
+      .sort((a, b) => a.roleIndex - b.roleIndex)
+      .map(o => ({
+        no: o.no, name: o.name, jabatan: o.jabatan, shift: o.shift, roleIndex: o.roleIndex,
+        roleLabel: o.roleIndex === 1 ? 'Inspektor 1 (Utama)' : `Inspektor ${o.roleIndex} (Pendamping)`
+      }));
+  }
+  const shifts = plan.publishedAgendaShifts || {};
+  const agendaShifts = Object.keys(shifts).map(id => ({ no: Number(id), agenda: agendaName(Number(id)), shift: shifts[id] }));
+  return { schedules, agendaShifts };
 }
 
 function getISOWeekTagForSchedule(d: Date = new Date()): string {
@@ -2216,9 +2276,12 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
           s.shift = grp ? `${grp} (Long Shift)` : 'Long Shift';
           s.shiftType = 'longshift';
         } else if (rosterCode === 'C' || rosterCode.startsWith('CT') || rosterCode.startsWith('CR') || rosterCode === 'TRV') {
-          s.isCuti = true;
-          s.shift = 'Cuti';
-          s.shiftType = 'cuti';
+          // Jangan timpa personil yang memiliki agenda inspeksi terjadwal aktif menjadi cuti hanya karena status roster harian (mis. travel/TRV akhir pekan)
+          if (!s.inspeksi || s.inspeksi.toLowerCase().trim() === 'cuti') {
+            s.isCuti = true;
+            s.shift = 'Cuti';
+            s.shiftType = 'cuti';
+          }
         }
       }
 
@@ -2521,7 +2584,12 @@ router.get("/api/inspection-schedule", async (req, res) => {
       targetWeekTag = targetWeekTag.toUpperCase();
     }
 
-    const cacheKey = `${targetSheet.toLowerCase()}_${targetWeekTag.toLowerCase()}`;
+    // Jadwal portal (acak / edit manual di menu Jadwal Inspeksi) menggantikan sheet "CurrentWeek" untuk minggu tsb
+    const isoYear = parseInt(String(req.query.year || ''), 10) || undefined;
+    const portalPlan = targetSheet.toLowerCase() === 'currentweek' ? await findPortalPlan(targetWeekTag, isoYear) : null;
+    const portal = portalPlan ? portalPlanToSchedules(portalPlan) : null;
+
+    const cacheKey = `${targetSheet.toLowerCase()}_${targetWeekTag.toLowerCase()}${portalPlan ? `_plan${portalPlan.id}_${new Date(portalPlan.publishedAt || 0).getTime()}` : ''}`;
     const now = Date.now();
     let allSchedules: any[];
     const cachedEnriched = enrichedScheduleCacheMap.get(cacheKey);
@@ -2529,7 +2597,7 @@ router.get("/api/inspection-schedule", async (req, res) => {
     if (!forceRefresh && cachedEnriched && (now - cachedEnriched.timestamp < ENRICHED_CACHE_TTL)) {
       allSchedules = cachedEnriched.data;
     } else {
-      const rawSchedules = await fetchInspectionScheduleFromSheet(forceRefresh, targetSheet);
+      const rawSchedules = portal ? portal.schedules : await fetchInspectionScheduleFromSheet(forceRefresh, targetSheet);
       const cloned = JSON.parse(JSON.stringify(rawSchedules));
       allSchedules = await enrichSchedulesWithCompletion(cloned, targetWeekTag);
       enrichedScheduleCacheMap.set(cacheKey, { data: allSchedules, timestamp: now });
@@ -2565,6 +2633,7 @@ router.get("/api/inspection-schedule", async (req, res) => {
         schedule: matched || null,
         rosterToday,
         sheet: targetSheet,
+        source: portal ? 'portal' : 'sheet',
         week: targetWeekTag,
         totalScheduled: allSchedules.length
       });
@@ -2573,9 +2642,11 @@ router.get("/api/inspection-schedule", async (req, res) => {
     res.json({
       success: true,
       sheet: targetSheet,
+      source: portal ? 'portal' : 'sheet',
       week: targetWeekTag,
       total: allSchedules.length,
-      data: allSchedules
+      data: allSchedules,
+      agendaShifts: portal ? portal.agendaShifts : (agendaShiftsBySheet.get(targetSheet.toLowerCase()) || [])
     });
   } catch (error: any) {
     console.error("Error fetching inspection schedule:", error);

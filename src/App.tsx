@@ -23,6 +23,7 @@ import { GamificationAlertCenter } from './components/GamificationAlertCenter';
 import { MeetingRoomDevModal } from './components/MeetingRoomDevModal';
 import { FloatingFeedbackButton } from './components/FloatingFeedbackButton';
 import { initFontSize } from './utils/fontSize';
+import { withReadableThemeColors } from './utils/contrast';
 import { formatAvatarUrl } from './lib/avatarUtils';
 import { setupGlobalAttachmentPaste } from './utils/attachmentPasteHelper';
 import { getUserAllowedSections } from './components/notion/logbook-section-utils';
@@ -77,6 +78,8 @@ const PemantauanScreen = lazyWithRetry(() => import('./components/pemantauan-scr
 const ProfileScreen = lazyWithRetry(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
 const RosterAdminScreen = lazyWithRetry(() => import('./components/roster-admin-screen').then(m => ({ default: m.RosterAdminScreen })));
 const TrainingDatabaseScreen = lazyWithRetry(() => import('./components/training-database-screen').then(m => ({ default: m.TrainingDatabaseScreen })));
+const SafetyRekapScreen = lazyWithRetry(() => import('./components/safety-rekap-screen').then(m => ({ default: m.SafetyRekapScreen })));
+const InspectionScheduleScreen = lazyWithRetry(() => import('./components/inspection-schedule-screen').then(m => ({ default: m.InspectionScheduleScreen })));
 const MealOrdersScreen = lazyWithRetry(() => import('./components/meal-orders-screen').then(m => ({ default: m.MealOrdersScreen })));
 const MonitoringDashboard = lazyWithRetry(() => import('./components/monitoring-dashboard').then(m => ({ default: m.MonitoringDashboard })));
 const WeeklyInspectionScreen = lazyWithRetry(() => import('./components/weekly-inspection-screen').then(m => ({ default: m.WeeklyInspectionScreen })));
@@ -519,18 +522,13 @@ export default function App() {
   const [showModulesDrawer, setShowModulesDrawer] = useState(false);
   const [showBulletinMenu, setShowBulletinMenu] = useState(false);
   const [showHazardReportModal, setShowHazardReportModal] = useState(false);
-  const [showSapDrawer, setShowSapDrawer] = useState(false);
   const [showChatDrawer, setShowChatDrawer] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Listen for global open sap drawer and chat drawer requests
   useEffect(() => {
     const handleOpenSap = () => {
-      if (isAdminOrDeveloper) {
-        setShowSapDrawer(true);
-      } else {
-        toast.error('Akses SAP Management hanya untuk Tim Administrasi dan Developer.');
-      }
+      handleNav('safety-rekap');
     };
     const handleOpenChat = () => setShowChatDrawer(true);
     window.addEventListener('open-sap-drawer', handleOpenSap);
@@ -539,20 +537,16 @@ export default function App() {
       window.removeEventListener('open-sap-drawer', handleOpenSap);
       window.removeEventListener('open-chat-drawer', handleOpenChat);
     };
-  }, [isAdminOrDeveloper]);
+  }, []);
 
   // Listen for global open hazard report modal requests
   useEffect(() => {
     const handleOpenHazard = () => {
-      if (isAdminOrDeveloper) {
-        setShowSapDrawer(true);
-      } else {
-        toast.error('Akses SAP Management hanya untuk Tim Administrasi dan Developer.');
-      }
+      handleNav('safety-rekap');
     };
     window.addEventListener('open-hazard-report-modal', handleOpenHazard);
     return () => window.removeEventListener('open-hazard-report-modal', handleOpenHazard);
-  }, [isAdminOrDeveloper]);
+  }, []);
 
   // Listen for global open modules drawer requests and Alt+M shortcut (blocked for Crew)
   useEffect(() => {
@@ -586,11 +580,12 @@ export default function App() {
   useEffect(() => {
     if (!isCrewRole) return;
     const path = location.pathname.replace(/^\//, '');
-    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+    const allowedCrewPaths = ['', 'home', 'quiz', 'clinic', 'kunjungan-klinik', 'settings', 'logbook'];
     if (isMaintenanceCrew) {
-      allowedCrewPaths.push('wo-list');
+      allowedCrewPaths.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
     }
-    if (path && !allowedCrewPaths.includes(path)) {
+    const isAllowed = allowedCrewPaths.includes(path) || path.startsWith('bulletin');
+    if (path && !isAllowed) {
       navigate('/', { replace: true });
     }
   }, [isCrewRole, isMaintenanceCrew, location.pathname, navigate]);
@@ -654,7 +649,8 @@ export default function App() {
     }
     if (!actualColors || typeof actualColors !== 'object') return;
     const root = document.documentElement;
-    Object.entries(actualColors).forEach(([key, value]) => {
+    // Dynamic text contrast: warna teks tema dikoreksi otomatis terhadap kecerahan background tema
+    Object.entries(withReadableThemeColors(actualColors)).forEach(([key, value]) => {
       if (typeof key === 'string' && key.startsWith('--') && value) {
         root.style.setProperty(key, value as string);
       }
@@ -799,11 +795,11 @@ export default function App() {
 
     // Role guard for Crew: restrict navigation to allowed modules only
     if (isCrewRole) {
-      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'settings'];
+      const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'settings', 'logbook'];
       if (isMaintenanceCrew) {
-        allowedCrewTabs.push('wo-list');
+        allowedCrewTabs.push('wo-list', 'wo-maintenance-dashboard', 'wo-dashboard');
       }
-      if (!allowedCrewTabs.includes(cleanTab)) {
+      if (!allowedCrewTabs.includes(cleanTab) && !cleanTab.startsWith('bulletin')) {
         toast.error('Akses modul ini tidak tersedia untuk akun Crew.');
         navigate('/');
         return;
@@ -1630,13 +1626,6 @@ export default function App() {
                 onClick: () => setShowChatDrawer(true),
                 title: 'Buka Portal Chat (Global & Section)',
               },
-              ...(isAdminOrDeveloper ? [{
-                id: 'sap',
-                label: 'SAP',
-                icon: ShieldAlert,
-                onClick: () => setShowSapDrawer(true),
-                title: 'SAP Management (Safety & Rekap Laporan)',
-              }] : []),
               {
                 id: 'leaderboard',
                 label: 'Rank',
@@ -1944,11 +1933,13 @@ export default function App() {
   <Route path="/apd-settings" element={<ApdSettingsScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/apd-monitoring" element={<ApdMonitoringScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/induksi" element={<InduksiScreen />} />
-  <Route path="/preplab-cloud" element={<PreplabCloudScreen onBack={() => handleNav('home')} userProfile={userProfile} inspectorNik={inspectorNik!} inspectorName={inspectorName!} />} />
+  <Route path="/preplab-cloud" element={<PreplabCloudScreen onBack={() => handleNav('home')} userProfile={userProfile} inspectorNik={inspectorNik!} inspectorName={inspectorName!} isDeveloper={isDeveloper} isManager={isManager} />} />
   <Route path="/manual" element={<UserManualScreen onBack={() => handleNav('home')} onNav={handleNav} />} />
   <Route path="/employee-database" element={<EmployeeDatabaseScreen inspectorNik={inspectorNik!} onBack={() => handleNav('home')} />} />
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
   <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
+  <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleNav('home')} />} />
+  <Route path="/inspection-schedule" element={<InspectionScheduleScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/training-external" element={<TrainingDatabaseScreen key="external" scope="external" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/meal-orders" element={<MealOrdersScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />
@@ -2170,48 +2161,6 @@ export default function App() {
           userPt={userProfile?.pt}
         />
       )}
-
-      {/* SAP Management Drawer (Slides in from RIGHT, wider than profile view) */}
-      <AnimatePresence>
-        {showSapDrawer && (
-          <div className="fixed inset-0 z-[70] overflow-hidden">
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              onClick={() => setShowSapDrawer(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[75]"
-            />
-
-            {/* Drawer Panel - Slides in from the RIGHT */}
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="fixed inset-y-0 right-0 z-[80] w-full sm:w-[650px] md:w-[780px] lg:w-[940px] xl:w-[1080px] h-[100dvh] shadow-2xl border-l flex flex-col overflow-hidden transition-colors"
-              style={{
-                backgroundColor: 'var(--bg-main, #F8FAFC)',
-                borderColor: 'var(--border-main, #E2E8F0)',
-                color: 'var(--text-main, #1E293B)'
-              }}
-              onClick={e => e.stopPropagation()}
-            >
-              <GroupReportScreen
-                inspectorName={inspectorName || 'Inspector'}
-                inspectorNik={inspectorNik!}
-                inspectorRole={userProfile?.jabatan}
-                inspectorSection={userProfile?.section}
-                onClose={() => setShowSapDrawer(false)}
-                isFloating={true}
-                isDeveloper={isDeveloper}
-              />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Chat Drawer (Slides in from RIGHT, wider than profile view) */}
       <AnimatePresence>

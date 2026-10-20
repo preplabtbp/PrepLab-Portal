@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Settings2, RotateCcw, ChevronLeft, ChevronRight, 
   Maximize2, Minimize2, X, SlidersHorizontal, Check, Sparkles, GripVertical, Move 
@@ -16,6 +16,7 @@ import { SudutSantaiWidget } from './SudutSantaiWidget';
 import { KantinMenuWidget } from './KantinMenuWidget';
 import { Avatar3DWidget } from './Avatar3DWidget';
 import { WidgetCatalogModal } from './WidgetCatalogModal';
+import { getGlobalSocket } from '../../lib/socketClient';
 
 interface HomeWidgetDashboardProps {
   userNik?: string;
@@ -24,23 +25,39 @@ interface HomeWidgetDashboardProps {
   userRole?: string;
 }
 
+const SHARED_STORAGE_KEY = 'preplab_shared_home_widgets_v3';
+
 export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({ 
   userNik = 'default',
   userName,
   userSection,
   userRole
 }) => {
-  const storageKey = `preplab_home_widgets_v2_${userNik}`;
+  const legacyStorageKey = `preplab_home_widgets_v2_${userNik}`;
+  const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [configs, setConfigs] = useState<WidgetItemConfig[]>(() => {
     try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Merge with defaults in case new widgets were added
-        const existingIds = new Set(parsed.map((p: any) => p.id));
-        const missing = DEFAULT_WIDGET_CONFIGS.filter(d => !existingIds.has(d.id));
-        return [...parsed, ...missing];
+      // 1. Shared configs across all users & devices
+      const savedShared = localStorage.getItem(SHARED_STORAGE_KEY);
+      if (savedShared) {
+        const parsed = JSON.parse(savedShared);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((p: any) => p.id));
+          const missing = DEFAULT_WIDGET_CONFIGS.filter(d => !existingIds.has(d.id));
+          return [...parsed, ...missing];
+        }
+      }
+
+      // 2. Fallback to previous local storage per user if shared not yet populated
+      const savedLegacy = localStorage.getItem(legacyStorageKey);
+      if (savedLegacy) {
+        const parsed = JSON.parse(savedLegacy);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((p: any) => p.id));
+          const missing = DEFAULT_WIDGET_CONFIGS.filter(d => !existingIds.has(d.id));
+          return [...parsed, ...missing];
+        }
       }
     } catch {}
     return DEFAULT_WIDGET_CONFIGS;
@@ -60,12 +77,94 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
     }
   }, [enabledWidgets.length, isEditMode]);
 
-  // Save to localStorage whenever configs change
-  const saveConfigs = (newConfigs: WidgetItemConfig[]) => {
+  // Sync with backend across devices and listen to realtime socket events
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchRemoteConfigs = async () => {
+      try {
+        const res = await fetch('/api/widgets/configs');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted) return;
+
+        if (data.success && Array.isArray(data.configs) && data.configs.length > 0) {
+          const existingIds = new Set(data.configs.map((p: any) => p.id));
+          const missing = DEFAULT_WIDGET_CONFIGS.filter(d => !existingIds.has(d.id));
+          const merged = [...data.configs, ...missing];
+          setConfigs(merged);
+          try {
+            localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(merged));
+          } catch {}
+        } else {
+          // If server has no records yet, seed server with our current configs
+          const currentConfigs = configs.length > 0 ? configs : DEFAULT_WIDGET_CONFIGS;
+          fetch('/api/widgets/configs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ configs: currentConfigs })
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('Could not fetch remote widget configs:', err);
+      }
+    };
+
+    fetchRemoteConfigs();
+
+    // Socket realtime listener
+    const socket = getGlobalSocket();
+    const handleRemoteConfigUpdate = (remoteConfigs: WidgetItemConfig[]) => {
+      if (!isMounted) return;
+      if (Array.isArray(remoteConfigs) && remoteConfigs.length > 0) {
+        setConfigs((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(remoteConfigs)) {
+            return prev;
+          }
+          const existingIds = new Set(remoteConfigs.map((p: any) => p.id));
+          const missing = DEFAULT_WIDGET_CONFIGS.filter(d => !existingIds.has(d.id));
+          const merged = [...remoteConfigs, ...missing];
+          try {
+            localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
+    };
+
+    socket.on('widgets:config_updated', handleRemoteConfigUpdate);
+
+    return () => {
+      isMounted = false;
+      socket.off('widgets:config_updated', handleRemoteConfigUpdate);
+    };
+  }, []);
+
+  // Save to localStorage & synchronize with server
+  const saveConfigs = (newConfigs: WidgetItemConfig[], immediate = false) => {
     setConfigs(newConfigs);
     try {
-      localStorage.setItem(storageKey, JSON.stringify(newConfigs));
+      localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(newConfigs));
+      localStorage.setItem(legacyStorageKey, JSON.stringify(newConfigs));
     } catch {}
+
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+    }
+
+    const doSync = () => {
+      fetch('/api/widgets/configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ configs: newConfigs })
+      }).catch((err) => console.warn('Failed to sync widget configs to server:', err));
+    };
+
+    if (immediate) {
+      doSync();
+    } else {
+      syncTimerRef.current = setTimeout(doSync, 350);
+    }
   };
 
   const handleToggleWidget = (id: WidgetId, enabled: boolean) => {
@@ -75,7 +174,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
       }
       return c;
     });
-    saveConfigs(updated);
+    saveConfigs(updated, true);
   };
 
   const handleChangeSize = (id: WidgetId, size: WidgetSize) => {
@@ -85,7 +184,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
       }
       return c;
     });
-    saveConfigs(updated);
+    saveConfigs(updated, true);
   };
 
   const handleUpdateWidgetSettings = (id: WidgetId, newSettings: any) => {
@@ -95,7 +194,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
       }
       return c;
     });
-    saveConfigs(updated);
+    saveConfigs(updated, false);
   };
 
   const handleMoveWidget = (index: number, direction: 'left' | 'right') => {
@@ -111,7 +210,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
     // Reconstruct full list with preserved disabled widgets
     const disabledWidgets = configs.filter((c) => !c.enabled);
     const reordered = newEnabled.map((item, idx) => ({ ...item, order: idx }));
-    saveConfigs([...reordered, ...disabledWidgets]);
+    saveConfigs([...reordered, ...disabledWidgets], true);
   };
 
   // Drag and drop state
@@ -152,7 +251,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
 
     const disabledWidgets = configs.filter((c) => !c.enabled);
     const reordered = newEnabled.map((item, idx) => ({ ...item, order: idx }));
-    saveConfigs([...reordered, ...disabledWidgets]);
+    saveConfigs([...reordered, ...disabledWidgets], true);
 
     setDraggedIndex(null);
     setDragOverIndex(null);
@@ -165,7 +264,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
 
   const handleResetLayout = () => {
     if (confirm('Kembalikan susunan widget ke tampilan awal rekomendasi?')) {
-      saveConfigs(DEFAULT_WIDGET_CONFIGS);
+      saveConfigs(DEFAULT_WIDGET_CONFIGS, true);
       setIsEditMode(false);
     }
   };
@@ -202,6 +301,8 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
           <CalendarWidget
             size={item.size}
             isEditMode={isEditMode}
+            userNik={userNik}
+            userName={userName}
           />
         );
       case 'weather':
@@ -210,6 +311,7 @@ export const HomeWidgetDashboard: React.FC<HomeWidgetDashboardProps> = ({
         return (
           <StickyNotesWidget
             size={item.size}
+            userNik={userNik}
             settings={item.settings as any}
             onUpdateSettings={(s) => handleUpdateWidgetSettings('notes', s)}
           />

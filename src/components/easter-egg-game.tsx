@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Trophy, MapPin, CheckCircle2, ShieldAlert, ArrowRight, Loader2, Shield } from 'lucide-react';
 import { Button } from './ui';
-import { io, Socket } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
+import { getGlobalSocket } from '../lib/socketClient';
 
 interface EasterEggGameProps {
   onClose: () => void;
@@ -61,20 +62,21 @@ export const EasterEggGame: React.FC<EasterEggGameProps> = ({ onClose }) => {
       setGameState('LOGIN');
     });
 
-    // Initialize socket connection
-    const token = typeof window !== 'undefined' ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '') : '';
-    const newSocket = io({ auth: { token } }); 
+    // Initialize socket connection using singleton socket
+    const newSocket = getGlobalSocket(); 
     setSocket(newSocket);
 
-    newSocket.on('quiz:state', (updatedPlayers: PlayerState[]) => {
+    const handleQuizState = (updatedPlayers: PlayerState[]) => {
       setPlayers(updatedPlayers);
       // Also refresh leaderboard quietly
       fetch('/api/quiz/quest-leaderboard').then(r => r.json()).then(setLeaderboard).catch(console.error);
-    });
+    };
+
+    newSocket.on('quiz:state', handleQuizState);
 
     return () => {
       newSocket.emit('quiz:leave');
-      newSocket.disconnect();
+      newSocket.off('quiz:state', handleQuizState);
     };
   }, []);
 
