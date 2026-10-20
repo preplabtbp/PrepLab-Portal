@@ -1240,6 +1240,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   const [activeInternalTab, setActiveInternalTab] = useState<'sap' | 'k3' | 'pra_pop' | 'form_permintaan'>(() => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab') || params.get('sheet');
+      if (tabParam === 'form_permintaan' || tabParam === 'pra_pop' || tabParam === 'k3' || tabParam === 'sap') {
+        return tabParam as any;
+      }
       const s = localStorage.getItem(TAB_STORAGE_KEY);
       if (s === 'form_permintaan' || s === 'pra_pop' || s === 'k3') return s as any;
     } catch {}

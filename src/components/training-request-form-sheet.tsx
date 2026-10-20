@@ -1,6 +1,7 @@
 ﻿import React, { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
+  ArrowLeft,
   FileSpreadsheet,
   Plus,
   Trash2,
@@ -253,6 +254,17 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
   const [tempWeek, setTempWeek] = useState(sheetData.week);
   const [tempDocNumber, setTempDocNumber] = useState(sheetData.docNumber);
   const [tempRequestDate, setTempRequestDate] = useState(sheetData.requestDate);
+
+  // Return to Labnote URL detection
+  const returnToUrl = useMemo(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const r = searchParams.get('returnTo');
+      return r ? decodeURIComponent(r) : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   // Compute total participants across all sessions
   const totalParticipants = useMemo(() => {
@@ -937,6 +949,19 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
       {/* TOP CONTROL BAR (NO-PRINT) */}
       <div className="no-print bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3 w-full lg:w-auto">
+          {returnToUrl && (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = returnToUrl;
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer mr-1 animate-pulse"
+              title="Kembali ke Modul Labnote"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Kembali ke Labnote</span>
+            </button>
+          )}
           <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-sky-600 to-teal-500 flex items-center justify-center text-white shadow-md shadow-sky-500/20">
             <FileSpreadsheet className="w-6 h-6" />
           </div>
