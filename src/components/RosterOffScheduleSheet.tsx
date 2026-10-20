@@ -1219,12 +1219,12 @@ export function RosterOffScheduleSheet({
               {colVisibility.offSchedule && (
                 <th
                   onClick={() => handleToggleSort('offDate')}
-                  className={`py-3 px-3 min-w-[220px] border-r border-slate-200 cursor-pointer select-none transition-colors ${
+                  className={`py-3 px-3 min-w-[220px] border-r border-slate-200 cursor-pointer select-none transition-colors text-center ${
                     sortField === 'offDate' ? 'bg-amber-100/70 text-amber-950 font-black' : 'hover:bg-slate-200/60'
                   }`}
                   title="Klik untuk mengurutkan berdasarkan Tanggal Off (Senin -> Minggu / Sebaliknya)"
                 >
-                  <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center justify-center gap-2">
                     <div className="flex items-center gap-1.5">
                       <Coffee className="w-3.5 h-3.5 text-amber-600" />
                       <span>Jadwal Hari & Tanggal Off</span>
@@ -1369,12 +1369,12 @@ export function RosterOffScheduleSheet({
 
                     {/* Jadwal Hari & Tanggal Off */}
                     {colVisibility.offSchedule && (
-                      <td className="py-2.5 px-3 border-r border-slate-200">
-                        <div className="flex flex-wrap gap-1.5">
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-center">
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
                           {record.offDates.map((off, oIdx) => (
                             <span
                               key={oIdx}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/15 text-amber-900 border border-amber-400/40 shadow-2xs"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-500/15 text-amber-900 border border-amber-400/40 shadow-2xs"
                             >
                               <Coffee className="w-3 h-3 text-amber-600" />
                               <span>{off.formatted}</span>
