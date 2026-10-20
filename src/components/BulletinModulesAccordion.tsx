@@ -20,7 +20,7 @@ import {
   AlertTriangle, 
   ClipboardCheck, 
   Box, 
-  FileText, 
+  FileText, FileSpreadsheet, 
   Settings, 
   Info, 
   Users, 
@@ -138,6 +138,8 @@ export function BulletinModulesAccordion({ onNav }: BulletinModulesAccordionProp
         { id: 'employee-database', title: "Database Karyawan", desc: "Data karyawan & struktur", icon: <Users className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('employee-database') },
         { id: 'p5m', title: "P5M Schedule", desc: "Jadwal & materi briefing", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('p5m') },
         { id: 'agenda', title: "Agenda Personal", desc: "Jadwal & kegiatan", icon: <Calendar className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('agenda?tab=Private') },
+        { id: 'pelaporan-izin', title: "Form Pelaporan Izin", desc: "Formulir izin karyawan (Google Form)", icon: <FileText className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('pelaporan-izin') },
+        { id: 'employee-leaves', title: "Rekapan Izin Karyawan", desc: "Rekapan data izin (Google Sheet)", icon: <FileSpreadsheet className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('employee-leaves') },
         { id: 'roster-admin', title: "Roster & Cuti", desc: "Informasi kehadiran", icon: <Clock className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('roster-admin') },
         { id: 'meal-orders', title: "Orderan Makanan", desc: "Order harian Kantin & Lapangan", icon: <Utensils className="w-5 h-5" />, color: 'indigo', action: () => handleNavigate('meal-orders') },
       ]
