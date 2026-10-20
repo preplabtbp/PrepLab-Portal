@@ -65,7 +65,8 @@ import {
   Lock,
   Target,
   ClipboardCheck,
-  PlaneTakeoff
+  PlaneTakeoff,
+  Coffee
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui';
@@ -7898,6 +7899,13 @@ export function NotionDatabaseTable({
                                         fitPageMode ? 'px-2.5 py-2.5 overflow-hidden' : 'px-4 py-3'
                                       } ${!isEditingThis && onToggleExpand ? 'cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/20' : ''}`}
                                       onClick={(e) => {
+                                        const tLower = String(displayTitle || val || '').toLowerCase();
+                                        if (tLower.includes('jadwal off')) {
+                                          e.stopPropagation();
+                                          const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                          window.location.href = `/roster-admin?view=off_schedule&returnTo=${returnUrl}`;
+                                          return;
+                                        }
                                         if (!isEditingThis && onToggleExpand) {
                                           onToggleExpand(e);
                                         }
@@ -8010,6 +8018,42 @@ export function NotionDatabaseTable({
                                               </button>
                                             )}
 
+                                            {/* Quick Open Jadwal Off Sheet button */}
+                                            {String(displayTitle || val || '').toLowerCase().includes('jadwal off') && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                  window.location.href = `/roster-admin?view=off_schedule&returnTo=${returnUrl}`;
+                                                }}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                title="Klik untuk membuka Modul Jadwal Off Karyawan di Roster"
+                                              >
+                                                <Coffee className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                                <span>Buka Jadwal Off</span>
+                                              </button>
+                                            )}
+
+                                            {/* Quick Open Rekapan Izin Karyawan button */}
+                                            {(String(displayTitle || val || '').toLowerCase().includes('tidak masuk') ||
+                                              String(displayTitle || val || '').toLowerCase().includes('izin karyawan') ||
+                                              String(displayTitle || val || '').toLowerCase().includes('rekap izin')) && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                  window.location.href = `/employee-leaves?returnTo=${returnUrl}`;
+                                                }}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                title="Klik untuk membuka Modul Rekapan Izin Karyawan"
+                                              >
+                                                <FileSpreadsheet className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
+                                                <span>Buka Rekapan Izin</span>
+                                              </button>
+                                            )}
+
                                             {/* Open Badge / Button */}
                                             <button
                                               type="button"
@@ -8019,6 +8063,21 @@ export function NotionDatabaseTable({
                                                 if (taskTitle.includes('jadwal cuti')) {
                                                   const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
                                                   window.location.href = `/roster-admin?view=leave_schedule&returnTo=${returnUrl}`;
+                                                  return;
+                                                }
+                                                if (taskTitle.includes('jadwal off')) {
+                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                  window.location.href = `/roster-admin?view=off_schedule&returnTo=${returnUrl}`;
+                                                  return;
+                                                }
+                                                if (
+                                                  taskTitle.includes('tidak masuk') ||
+                                                  taskTitle.includes('izin karyawan') ||
+                                                  taskTitle.includes('karyawan tidak masuk') ||
+                                                  taskTitle.includes('rekap izin')
+                                                ) {
+                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                  window.location.href = `/employee-leaves?returnTo=${returnUrl}`;
                                                   return;
                                                 }
                                                 setSelectedRow(row);
@@ -10619,6 +10678,70 @@ export function NotionDatabaseTable({
                         }}
                       />
                     </div>
+
+                    {/* Integrated Rekapan Izin Karyawan Banner */}
+                    {selectedRow && (
+                      String(baseTopicTitle || '').toLowerCase().includes('tidak masuk') ||
+                      String(baseTopicTitle || '').toLowerCase().includes('izin karyawan') ||
+                      String(baseTopicTitle || '').toLowerCase().includes('rekap izin')
+                    ) && (
+                      <div className="p-3.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 rounded-lg bg-indigo-600 text-white shrink-0">
+                            <FileSpreadsheet className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                              Modul Terhubung: Rekapan Izin Karyawan
+                            </div>
+                            <div className="text-[11px] text-indigo-700 dark:text-indigo-300">
+                              Lihat, verifikasi absensi, kelola izin, serta pantau diagram ketidakhadiran karyawan langsung di portal.
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                            window.location.href = `/employee-leaves?returnTo=${returnUrl}`;
+                          }}
+                          className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+                        >
+                          <span>Buka Rekapan Izin</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Integrated Roster Off Banner */}
+                    {selectedRow && String(baseTopicTitle || '').toLowerCase().includes('jadwal off') && (
+                      <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs mb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 rounded-lg bg-amber-600 text-white shrink-0">
+                            <Coffee className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                              Modul Terhubung: Jadwal Off Karyawan (Nonshift)
+                            </div>
+                            <div className="text-[11px] text-amber-700 dark:text-amber-300">
+                              Akses langsung rekapitulasi jadwal off personil Nonshift PT TBP & GPS pada minggu berjalan.
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                            window.location.href = `/roster-admin?view=off_schedule&returnTo=${returnUrl}`;
+                          }}
+                          className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+                        >
+                          <span>Buka Jadwal Off</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
 
                     {/* Integrated Roster Leave Banner */}
                     {selectedRow && String(baseTopicTitle || '').toLowerCase().includes('jadwal cuti') && (

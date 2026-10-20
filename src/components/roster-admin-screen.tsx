@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  ChevronLeft, Loader2, Calendar, MapPin, Briefcase, Clock, 
-  Plane, PlaneTakeoff, Info, Search, RefreshCw, CheckCircle2, 
+import {
+  ChevronLeft, Loader2, Calendar, MapPin, Briefcase, Clock,
+  Plane, PlaneTakeoff, Info, Search, RefreshCw, CheckCircle2,
   AlertCircle, Edit2, Check, X, Filter, Users, ChevronRight, Layers, Sparkles,
   FileSpreadsheet
 } from 'lucide-react';
@@ -12,6 +12,8 @@ import { RosterExcelImportModal } from './RosterExcelImportModal';
 import { toast } from 'sonner';
 import { calculateRosterLeave } from '../lib/rosterLeave';
 import { RosterLeaveScheduleSheet } from './RosterLeaveScheduleSheet';
+import { RosterOffScheduleSheet } from './RosterOffScheduleSheet';
+import { Coffee } from 'lucide-react';
 
 function safeFormatDate(date: any, options: any) {
   if (!date) return '-';
@@ -43,14 +45,14 @@ export function RosterAdminScreen() {
     try {
       const cached = sessionStorage.getItem('preplab_roster_cache');
       if (cached) return JSON.parse(cached);
-    } catch(e) {}
+    } catch (e) { }
     return [];
   });
   const [isLoading, setIsLoading] = useState(() => {
     try {
       const cached = sessionStorage.getItem('preplab_roster_cache');
       if (cached) return false;
-    } catch(e) {}
+    } catch (e) { }
     return true;
   });
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -59,12 +61,13 @@ export function RosterAdminScreen() {
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  
-  // View mode: 'matrix' (Matriks Roster Harian) or 'leave_schedule' (Jadwal Cuti Karyawan)
-  const [activeView, setActiveView] = useState<'matrix' | 'leave_schedule'>(() => {
+
+  // View mode: 'matrix' (Matriks Roster Harian), 'leave_schedule' (Jadwal Cuti Karyawan), or 'off_schedule' (Jadwal Off Karyawan)
+  const [activeView, setActiveView] = useState<'matrix' | 'leave_schedule' | 'off_schedule'>(() => {
     if (typeof window !== 'undefined') {
       const p = new URLSearchParams(window.location.search);
       if (p.get('view') === 'leave_schedule') return 'leave_schedule';
+      if (p.get('view') === 'off_schedule') return 'off_schedule';
     }
     return 'matrix';
   });
@@ -75,7 +78,7 @@ export function RosterAdminScreen() {
     }
     return null;
   }, []);
-  
+
   // Date Range (default: Today to +14 days for optimal matrix view)
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -107,7 +110,7 @@ export function RosterAdminScreen() {
           setDeveloperList(data.map((d: any) => d.nik));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const getHierarchyLevel = (jabatan: string) => {
@@ -129,14 +132,14 @@ export function RosterAdminScreen() {
   const isSuperAdmin = requestorNik === '02D25000055' || requestorNik === '02D24000043' || requestorNik === 'M0403240177' || requestorNik === 'preplabadmin';
   const isDeveloper = isSuperAdmin || requestorNik === 'preplabadmin' || developerList.includes(requestorNik);
 
-  const isAdministration = 
-    requestorSection.toLowerCase() === 'administration' || 
-    requestorSection.toLowerCase() === 'administrasi' || 
-    requestorRole.toLowerCase().includes('admin') || 
+  const isAdministration =
+    requestorSection.toLowerCase() === 'administration' ||
+    requestorSection.toLowerCase() === 'administrasi' ||
+    requestorRole.toLowerCase().includes('admin') ||
     requestorRole.toLowerCase().includes('administrasi');
 
-  const isAdminOrQA = isDeveloper || isAdministration || 
-    requestorSection.toLowerCase() === 'qa' || 
+  const isAdminOrQA = isDeveloper || isAdministration ||
+    requestorSection.toLowerCase() === 'qa' ||
     requestorSection.toLowerCase().includes('quality assurance') ||
     requestorRole.toLowerCase().includes('quality assurance') ||
     requestorRole.toLowerCase().includes('qa');
@@ -154,7 +157,7 @@ export function RosterAdminScreen() {
     setIsSyncing(true);
     setSyncFeedback(null);
     try {
-      const res = await fetch('/api/roster/sync', { 
+      const res = await fetch('/api/roster/sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -186,18 +189,18 @@ export function RosterAdminScreen() {
         try {
           const prof = JSON.parse(savedProfileStr);
           setCurrentUser(prof);
-        } catch(e) {}
+        } catch (e) { }
       }
-      
+
       const res: any = await getRosterData({ requestorNik, requestorRole, requestorSection });
       const list = Array.isArray(res) ? res : (res?.roster || []);
       if (list.length > 0) {
         setRoster(list);
         try {
           sessionStorage.setItem('preplab_roster_cache', JSON.stringify(list));
-        } catch(e) {}
+        } catch (e) { }
       }
-      
+
       if (requestorNik && list.length > 0) {
         const me = list.find((e: any) => e.nik === requestorNik);
         if (me) setCurrentUser(me);
@@ -216,7 +219,7 @@ export function RosterAdminScreen() {
   // Filter & Hierarchy Sorting
   const filteredRoster = useMemo(() => {
     let list = roster;
-    
+
     // Filter by PT
     if (requestorPt === 'GTS') {
       list = list.filter(emp => emp.pt === 'GTS');
@@ -242,7 +245,7 @@ export function RosterAdminScreen() {
         if (sectionFilter !== 'ALL') return emp.section === sectionFilter;
         return true;
       }
-      
+
       const levelE = getHierarchyLevel(emp.jabatan);
 
       // Hierarchical Subordinate Filtering for Leaders:
@@ -270,7 +273,7 @@ export function RosterAdminScreen() {
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      list = list.filter(emp => 
+      list = list.filter(emp =>
         (emp.name && emp.name.toLowerCase().includes(q)) ||
         (emp.nama && emp.nama.toLowerCase().includes(q)) ||
         (emp.nik && emp.nik.toLowerCase().includes(q)) ||
@@ -370,7 +373,7 @@ export function RosterAdminScreen() {
     try {
       const res = await fetch('/api/roster/cell', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-user-nik': requestorNik
         },
@@ -425,10 +428,10 @@ export function RosterAdminScreen() {
 
   return (
     <div className="space-y-3 sm:space-y-6 animate-in fade-in duration-500 pb-24">
-      <PageHeader 
+      <PageHeader
         title="Tabel Roster & Jadwal Kerja"
         description={
-          isAdminOrQA 
+          isAdminOrQA
             ? "Pusat Roster Seluruh Departemen (Urutan Hierarki & Sinkronisasi Spreadsheet tiap 17:00 WIT)"
             : "Matriks Roster Jadwal Kerja Tim & Bawahannya"
         }
@@ -436,13 +439,13 @@ export function RosterAdminScreen() {
       >
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {canEditRoster ? (
-            <span 
+            <span
               className="text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border flex items-center gap-1.5 shadow-2xs bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
             >
               <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Editor Roster
             </span>
           ) : (
-            <span 
+            <span
               className="text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl border flex items-center gap-1.5 shadow-2xs opacity-80"
               style={{
                 backgroundColor: 'var(--input-bg)',
@@ -479,7 +482,7 @@ export function RosterAdminScreen() {
       </PageHeader>
 
       {syncFeedback && (
-        <div 
+        <div
           className="p-3.5 rounded-xl text-xs flex items-center justify-between gap-2 border shadow-xs animate-in fade-in"
           style={{
             backgroundColor: syncFeedback.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(244, 63, 94, 0.1)',
@@ -495,8 +498,8 @@ export function RosterAdminScreen() {
             )}
             <span>{syncFeedback.message}</span>
           </div>
-          <button 
-            onClick={() => setSyncFeedback(null)} 
+          <button
+            onClick={() => setSyncFeedback(null)}
             className="opacity-70 hover:opacity-100 text-xs px-2 py-0.5 rounded cursor-pointer"
           >
             ✕
@@ -505,7 +508,7 @@ export function RosterAdminScreen() {
       )}
 
       {/* Top View Selector Tabs: Matriks Roster Harian vs Jadwal Cuti Karyawan */}
-      <div 
+      <div
         className="p-1.5 rounded-2xl border shadow-xs flex flex-wrap items-center gap-2"
         style={{
           backgroundColor: 'var(--card-bg, #FFFFFF)',
@@ -515,11 +518,10 @@ export function RosterAdminScreen() {
         <button
           type="button"
           onClick={() => setActiveView('matrix')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-            activeView === 'matrix'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${activeView === 'matrix'
               ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
+            }`}
         >
           <Calendar className="w-4 h-4" />
           <span>Matriks Roster Harian</span>
@@ -528,11 +530,10 @@ export function RosterAdminScreen() {
         <button
           type="button"
           onClick={() => setActiveView('leave_schedule')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-            activeView === 'leave_schedule'
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${activeView === 'leave_schedule'
               ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
+            }`}
         >
           <PlaneTakeoff className="w-4 h-4" />
           <span>Jadwal Cuti Karyawan</span>
@@ -540,11 +541,33 @@ export function RosterAdminScreen() {
             Baru
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveView('off_schedule')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${activeView === 'off_schedule'
+              ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+        >
+          <Coffee className="w-4 h-4" />
+          <span>Jadwal Off Karyawan</span>
+          <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-white/20 text-white font-black">
+            Baru
+          </span>
+        </button>
       </div>
 
       {activeView === 'leave_schedule' ? (
-        <RosterLeaveScheduleSheet 
-          roster={roster} 
+        <RosterLeaveScheduleSheet
+          roster={roster}
+          returnTo={returnTo}
+          currentUser={currentUser}
+          developerList={developerList}
+        />
+      ) : activeView === 'off_schedule' ? (
+        <RosterOffScheduleSheet
+          roster={roster}
           returnTo={returnTo}
           currentUser={currentUser}
           developerList={developerList}
@@ -552,7 +575,7 @@ export function RosterAdminScreen() {
       ) : (
         <>
           {/* Control Bar (Filter, Search, Date Range) */}
-          <div 
+          <div
             className="p-3 sm:p-4 rounded-xl sm:rounded-2xl border shadow-xs space-y-2.5 sm:space-y-3.5"
             style={{
               backgroundColor: 'var(--card-bg, #FFFFFF)',
@@ -560,373 +583,371 @@ export function RosterAdminScreen() {
               color: 'var(--text-main, #1E293B)'
             }}
           >
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-          {/* Section & Department Filter */}
-          <div className="flex items-center gap-2 flex-1">
-            <div className="flex items-center gap-1 shrink-0">
-              <Filter className="w-3.5 h-3.5" style={{ color: 'var(--primary)' }} />
-              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider opacity-75" style={{ color: 'var(--text-muted)' }}>
-                Section:
-              </span>
-            </div>
-            <select 
-              value={sectionFilter} 
-              onChange={(e) => setSectionFilter(e.target.value)}
-              className="text-xs font-bold py-1.5 px-2.5 rounded-xl border outline-none cursor-pointer shadow-2xs flex-1 sm:flex-none sm:max-w-xs"
-              style={{
-                backgroundColor: 'var(--input-bg, #FFFFFF)',
-                borderColor: 'var(--border-main, #E2E8F0)',
-                color: 'var(--text-main, #1E293B)'
-              }}
-            >
-              <option value="ALL">Semua Section ({filteredRoster.length} Personil)</option>
-              <option value="Preparation">Preparation</option>
-              <option value="Dry, Preparation">Dry, Preparation</option>
-              <option value="Wet, Preparation">Wet, Preparation</option>
-              <option value="Laboratory">Laboratory</option>
-              <option value="QA">QA / Quality Assurance</option>
-              <option value="Maintenance">Maintenance</option>
-              <option value="Inventory Control">Inventory Control</option>
-              <option value="Administration">Administration</option>
-            </select>
-          </div>
-
-          {/* Search Input */}
-          <div className="relative flex-1 sm:max-w-xs">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 opacity-50" style={{ color: 'var(--text-muted)' }} />
-            <input 
-              type="text" 
-              placeholder="Cari nama, NIK, jabatan..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs border outline-none font-medium transition-all shadow-2xs"
-              style={{
-                backgroundColor: 'var(--input-bg, #FFFFFF)',
-                borderColor: 'var(--border-main, #E2E8F0)',
-                color: 'var(--text-main, #1E293B)'
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Date Presets & Custom Picker */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-main)' }}>
-          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-            <span className="text-[11px] sm:text-xs font-bold opacity-75 shrink-0" style={{ color: 'var(--text-muted)' }}>Rentang:</span>
-            <button 
-              onClick={() => setQuickRange(7)}
-              className={`px-2 py-1 text-[11px] sm:text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs shrink-0 ${dateColumns.length === 7 ? 'ring-2 ring-teal-500 font-black' : ''}`}
-              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
-            >
-              7 Hari
-            </button>
-            <button 
-              onClick={() => setQuickRange(14)}
-              className={`px-2 py-1 text-[11px] sm:text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs shrink-0 ${dateColumns.length === 14 ? 'ring-2 ring-teal-500 font-black' : ''}`}
-              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
-            >
-              14 Hari
-            </button>
-            <button 
-              onClick={() => setQuickRange(30)}
-              className={`px-2 py-1 text-[11px] sm:text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs shrink-0 ${dateColumns.length === 30 ? 'ring-2 ring-teal-500 font-black' : ''}`}
-              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
-            >
-              30 Hari
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-xs overflow-x-auto py-0.5">
-            <span className="font-bold opacity-75 text-[11px] shrink-0" style={{ color: 'var(--text-muted)' }}>Tanggal:</span>
-            <input 
-              type="date" 
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-2 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs flex-1 sm:flex-none"
-              style={{
-                backgroundColor: 'var(--input-bg)',
-                borderColor: 'var(--border-main)',
-                color: 'var(--text-main)'
-              }}
-            />
-            <span className="opacity-60 font-medium text-[11px] shrink-0">s/d</span>
-            <input 
-              type="date" 
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              max={new Date(new Date(startDate).getTime() + 31 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-              className="px-2 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs flex-1 sm:flex-none"
-              style={{
-                backgroundColor: 'var(--input-bg)',
-                borderColor: 'var(--border-main)',
-                color: 'var(--text-main)'
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Roster Table Matrix */}
-      {isLoading ? (
-        <div className="py-24 flex flex-col items-center justify-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--primary)' }} />
-          <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-            Menyusun tabel roster bawahan & personil...
-          </p>
-        </div>
-      ) : filteredRoster.length === 0 ? (
-        <div 
-          className="p-12 rounded-2xl border text-center space-y-2 shadow-xs"
-          style={{
-            backgroundColor: 'var(--card-bg)',
-            borderColor: 'var(--border-main)'
-          }}
-        >
-          <Users className="w-10 h-10 mx-auto opacity-40" style={{ color: 'var(--text-muted)' }} />
-          <h4 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>
-            Tidak Ada Personil yang Ditampilkan
-          </h4>
-          <p className="text-xs max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
-            {isAdminOrQA 
-              ? "Tidak ada data karyawan yang cocok dengan filter atau kata kunci pencarian."
-              : "Hanya personil bawahan langsung dalam hierarki yang ditampilkan pada modul ini."}
-          </p>
-        </div>
-      ) : (
-        <div 
-          className="rounded-2xl border shadow-lg overflow-hidden flex flex-col"
-          style={{
-            backgroundColor: 'var(--card-bg, #FFFFFF)',
-            borderColor: 'var(--border-main, #E2E8F0)'
-          }}
-        >
-          {/* Table Container with Horizontal Scroll */}
-          <div className="overflow-x-auto overflow-y-auto max-h-[72vh] relative">
-            <table className="w-full text-left border-collapse min-w-max">
-              {/* Table Header */}
-              <thead>
-                <tr 
-                  className="sticky top-0 z-30 border-b select-none"
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+              {/* Section & Department Filter */}
+              <div className="flex items-center gap-2 flex-1">
+                <div className="flex items-center gap-1 shrink-0">
+                  <Filter className="w-3.5 h-3.5" style={{ color: 'var(--primary)' }} />
+                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider opacity-75" style={{ color: 'var(--text-muted)' }}>
+                    Section:
+                  </span>
+                </div>
+                <select
+                  value={sectionFilter}
+                  onChange={(e) => setSectionFilter(e.target.value)}
+                  className="text-xs font-bold py-1.5 px-2.5 rounded-xl border outline-none cursor-pointer shadow-2xs flex-1 sm:flex-none sm:max-w-xs"
                   style={{
-                    backgroundColor: 'var(--bg-main, #F8FAFC)',
-                    borderColor: 'var(--border-main, #E2E8F0)'
+                    backgroundColor: 'var(--input-bg, #FFFFFF)',
+                    borderColor: 'var(--border-main, #E2E8F0)',
+                    color: 'var(--text-main, #1E293B)'
                   }}
                 >
-                  {/* Sticky Column: Nama Personil */}
-                  <th 
-                    className="sticky left-0 z-40 p-2 sm:p-3.5 text-[11px] sm:text-xs font-bold uppercase tracking-wider w-[125px] sm:w-[260px] min-w-[125px] sm:min-w-[260px] max-w-[130px] sm:max-w-none border-r shadow-xs backdrop-blur-md"
-                    style={{
-                      backgroundColor: 'var(--bg-main, #F8FAFC)',
-                      borderColor: 'var(--border-main, #E2E8F0)',
-                      color: 'var(--text-main, #1E293B)'
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="truncate">Personil</span>
-                      <span className="text-[10px] opacity-60 font-mono">({filteredRoster.length})</span>
-                    </div>
-                  </th>
+                  <option value="ALL">Semua Section ({filteredRoster.length} Personil)</option>
+                  <option value="Preparation">Preparation</option>
+                  <option value="Dry, Preparation">Dry, Preparation</option>
+                  <option value="Wet, Preparation">Wet, Preparation</option>
+                  <option value="Laboratory">Laboratory</option>
+                  <option value="QA">QA / Quality Assurance</option>
+                  <option value="Maintenance">Maintenance</option>
+                  <option value="Inventory Control">Inventory Control</option>
+                  <option value="Administration">Administration</option>
+                </select>
+              </div>
 
-                  {/* Date Columns */}
-                  {dateColumns.map((col, idx) => (
-                    <th 
-                      key={idx}
-                      className={`p-1 sm:p-2 text-center text-xs font-bold border-r min-w-[44px] sm:min-w-[58px] max-w-[48px] sm:max-w-[68px] ${
-                        col.isToday ? 'ring-2 ring-inset ring-teal-500' : ''
-                      }`}
-                      style={{
-                        backgroundColor: col.isToday 
-                          ? 'rgba(42, 157, 143, 0.12)' 
-                          : col.isWeekend 
-                          ? 'rgba(0,0,0,0.02)' 
-                          : 'transparent',
-                        borderColor: 'var(--border-main, #E2E8F0)',
-                        color: col.isToday ? 'var(--primary)' : 'var(--text-main)'
-                      }}
-                    >
-                      <div className="text-[9px] sm:text-[10px] uppercase font-bold tracking-tight opacity-75">
-                        {col.dayName}
-                      </div>
-                      <div className="text-[10px] sm:text-xs font-black">
-                        {col.dateNumber}
-                      </div>
-                      {col.isToday && (
-                        <span className="inline-block text-[7px] sm:text-[8px] font-black uppercase px-0.5 sm:px-1 rounded bg-teal-500 text-white mt-0.5">
-                          Hari Ini
-                        </span>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              {/* Table Body */}
-              <tbody className="divide-y text-xs" style={{ borderColor: 'var(--border-main)' }}>
-                {filteredRoster.map((emp, rowIdx) => {
-                  const leave = calculateLeave(emp);
-                  const isSelf = emp.nik === requestorNik;
-
-                  return (
-                    <tr 
-                      key={emp.nik || rowIdx}
-                      className="hover:opacity-95 transition-colors group"
-                      style={{
-                        backgroundColor: isSelf ? 'rgba(42, 157, 143, 0.05)' : 'transparent'
-                      }}
-                    >
-                      {/* Sticky Person Info Cell */}
-                      <td 
-                        className="sticky left-0 z-20 p-2 sm:p-3.5 border-r shadow-xs backdrop-blur-md w-[125px] sm:w-[260px] min-w-[125px] sm:min-w-[260px] max-w-[130px] sm:max-w-none"
-                        style={{
-                          backgroundColor: isSelf ? 'var(--input-bg)' : 'var(--card-bg)',
-                          borderColor: 'var(--border-main)'
-                        }}
-                      >
-                        <div className="space-y-0.5 sm:space-y-1">
-                          <div className="flex items-center gap-1">
-                            <span className="font-bold text-xs sm:text-sm truncate block" style={{ color: 'var(--text-main)' }} title={emp.name || emp.nama}>
-                              {emp.name || emp.nama}
-                            </span>
-                            {isSelf && (
-                              <span className="shrink-0 text-[8px] sm:text-[9px] font-bold px-1 py-0.2 rounded text-white bg-teal-600">
-                                Anda
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1 text-[9px] sm:text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                            <span className="font-mono">{emp.nik}</span>
-                            <span className="hidden sm:inline">•</span>
-                            <span className="hidden sm:inline font-semibold truncate max-w-[140px]">{emp.jabatan}</span>
-                          </div>
-
-                          <div className="sm:hidden text-[9px] font-semibold text-slate-500 truncate max-w-[115px]" title={emp.jabatan}>
-                            {emp.jabatan}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                            {emp.section && (
-                              <span 
-                                className="hidden sm:inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border"
-                                style={{
-                                  backgroundColor: 'var(--input-bg)',
-                                  borderColor: 'var(--border-main)',
-                                  color: 'var(--primary)'
-                                }}
-                              >
-                                {emp.section}
-                              </span>
-                            )}
-                            {emp.gol && (
-                              <span 
-                                className="text-[8px] sm:text-[9px] font-bold px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded border opacity-75"
-                                style={{
-                                  backgroundColor: 'var(--input-bg)',
-                                  borderColor: 'var(--border-main)'
-                                }}
-                              >
-                                {emp.gol}
-                              </span>
-                            )}
-                            {leave?.actualCuti && (
-                              <span 
-                                className="text-[8px] sm:text-[9px] font-semibold px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded border text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
-                                style={{
-                                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                                  borderColor: 'rgba(16, 185, 129, 0.2)'
-                                }}
-                                title={`Estimasi Cuti: ${safeFormatDate(leave.actualCuti, { day: 'numeric', month: 'short', year: 'numeric' })}`}
-                              >
-                                ✈️ {safeFormatDate(leave.actualCuti, { day: 'numeric', month: 'short' })}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Date Shift Code Cells */}
-                      {dateColumns.map((col, cIdx) => {
-                        const shiftCode = emp.fullSchedule?.[col.keyDateStr] || '-';
-                        const badgeStyle = getShiftBadgeStyle(shiftCode);
-
-                        return (
-                          <td 
-                            key={cIdx}
-                            onClick={() => {
-                              if (canEditRoster) {
-                                setEditingCell({
-                                  empNik: emp.nik,
-                                  empName: emp.name || emp.nama,
-                                  keyDateStr: col.keyDateStr,
-                                  dateStr: col.keyDateStr,
-                                  displayDate: `${col.dayName}, ${col.dateNumber}`,
-                                  currentShift: shiftCode === '-' ? '' : shiftCode
-                                } as any);
-                              } else {
-                                toast.info("Akses Khusus Administrasi & Developer", {
-                                  description: "Fitur pengeditan jadwal roster hanya dapat diakses oleh Tim Administrasi dan Developer."
-                                });
-                              }
-                            }}
-                            className={`p-1 sm:p-1.5 text-center border-r transition-all select-none ${
-                              canEditRoster ? 'cursor-pointer hover:scale-105 hover:z-10' : 'cursor-default'
-                            } ${col.isToday ? 'bg-teal-500/5' : ''}`}
-                            style={{
-                              borderColor: 'var(--border-main)'
-                            }}
-                            title={canEditRoster ? `Klik untuk mengedit roster ${emp.name || emp.nama} pada ${col.dateNumber}` : `Roster ${emp.name || emp.nama} (${shiftCode})`}
-                          >
-                            <div 
-                              className={`w-full py-1 sm:py-1.5 px-0.5 sm:px-1 rounded sm:rounded-lg border text-center text-[10px] sm:text-xs transition-transform ${badgeStyle}`}
-                            >
-                              {shiftCode}
-                            </div>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Table Legend Footer */}
-          <div 
-            className="p-2.5 sm:p-3.5 border-t flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 select-none"
-            style={{
-              backgroundColor: 'var(--bg-main, #F8FAFC)',
-              borderColor: 'var(--border-main, #E2E8F0)'
-            }}
-          >
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className="font-bold opacity-75 mr-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>Keterangan:</span>
-              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-blue-500/15 text-blue-600 border-blue-500/30">D = Day</span>
-              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-blue-900 text-white border-blue-800">N = Night</span>
-              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-slate-500/15 text-slate-600 border-slate-500/30">OFF = Libur</span>
-              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-amber-500/15 text-amber-600 border-amber-500/30">TRV/TV = Travel</span>
-              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/35 ring-1 ring-cyan-500/20">XP = Speedboat</span>
-              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-purple-500/20 text-purple-600 border-purple-500/30">C/CT = Cuti</span>
-              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S = Sakit</span>
-              <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-teal-500/15 text-teal-600 border-teal-500/30">LS = Longshift</span>
+              {/* Search Input */}
+              <div className="relative flex-1 sm:max-w-xs">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 opacity-50" style={{ color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  placeholder="Cari nama, NIK, jabatan..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs border outline-none font-medium transition-all shadow-2xs"
+                  style={{
+                    backgroundColor: 'var(--input-bg, #FFFFFF)',
+                    borderColor: 'var(--border-main, #E2E8F0)',
+                    color: 'var(--text-main, #1E293B)'
+                  }}
+                />
+              </div>
             </div>
 
-            <span className="text-[10px] sm:text-[11px] font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>
-              {canEditRoster ? '💡 Klik sel untuk ubah shift.' : 'Mode baca.'}
-            </span>
+            {/* Date Presets & Custom Picker */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-main)' }}>
+              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                <span className="text-[11px] sm:text-xs font-bold opacity-75 shrink-0" style={{ color: 'var(--text-muted)' }}>Rentang:</span>
+                <button
+                  onClick={() => setQuickRange(7)}
+                  className={`px-2 py-1 text-[11px] sm:text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs shrink-0 ${dateColumns.length === 7 ? 'ring-2 ring-teal-500 font-black' : ''}`}
+                  style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
+                >
+                  7 Hari
+                </button>
+                <button
+                  onClick={() => setQuickRange(14)}
+                  className={`px-2 py-1 text-[11px] sm:text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs shrink-0 ${dateColumns.length === 14 ? 'ring-2 ring-teal-500 font-black' : ''}`}
+                  style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
+                >
+                  14 Hari
+                </button>
+                <button
+                  onClick={() => setQuickRange(30)}
+                  className={`px-2 py-1 text-[11px] sm:text-xs font-bold rounded-lg border hover:opacity-80 transition-opacity cursor-pointer shadow-2xs shrink-0 ${dateColumns.length === 30 ? 'ring-2 ring-teal-500 font-black' : ''}`}
+                  style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)', color: 'var(--text-main)' }}
+                >
+                  30 Hari
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs overflow-x-auto py-0.5">
+                <span className="font-bold opacity-75 text-[11px] shrink-0" style={{ color: 'var(--text-muted)' }}>Tanggal:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-2 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs flex-1 sm:flex-none"
+                  style={{
+                    backgroundColor: 'var(--input-bg)',
+                    borderColor: 'var(--border-main)',
+                    color: 'var(--text-main)'
+                  }}
+                />
+                <span className="opacity-60 font-medium text-[11px] shrink-0">s/d</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  max={new Date(new Date(startDate).getTime() + 31 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                  className="px-2 py-1 rounded-lg border text-xs font-bold outline-none shadow-2xs flex-1 sm:flex-none"
+                  style={{
+                    backgroundColor: 'var(--input-bg)',
+                    borderColor: 'var(--border-main)',
+                    color: 'var(--text-main)'
+                  }}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+
+          {/* Roster Table Matrix */}
+          {isLoading ? (
+            <div className="py-24 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--primary)' }} />
+              <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Menyusun tabel roster bawahan & personil...
+              </p>
+            </div>
+          ) : filteredRoster.length === 0 ? (
+            <div
+              className="p-12 rounded-2xl border text-center space-y-2 shadow-xs"
+              style={{
+                backgroundColor: 'var(--card-bg)',
+                borderColor: 'var(--border-main)'
+              }}
+            >
+              <Users className="w-10 h-10 mx-auto opacity-40" style={{ color: 'var(--text-muted)' }} />
+              <h4 className="font-bold text-sm" style={{ color: 'var(--text-main)' }}>
+                Tidak Ada Personil yang Ditampilkan
+              </h4>
+              <p className="text-xs max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
+                {isAdminOrQA
+                  ? "Tidak ada data karyawan yang cocok dengan filter atau kata kunci pencarian."
+                  : "Hanya personil bawahan langsung dalam hierarki yang ditampilkan pada modul ini."}
+              </p>
+            </div>
+          ) : (
+            <div
+              className="rounded-2xl border shadow-lg overflow-hidden flex flex-col"
+              style={{
+                backgroundColor: 'var(--card-bg, #FFFFFF)',
+                borderColor: 'var(--border-main, #E2E8F0)'
+              }}
+            >
+              {/* Table Container with Horizontal Scroll */}
+              <div className="overflow-x-auto overflow-y-auto max-h-[72vh] relative">
+                <table className="w-full text-left border-collapse min-w-max">
+                  {/* Table Header */}
+                  <thead>
+                    <tr
+                      className="sticky top-0 z-30 border-b select-none"
+                      style={{
+                        backgroundColor: 'var(--bg-main, #F8FAFC)',
+                        borderColor: 'var(--border-main, #E2E8F0)'
+                      }}
+                    >
+                      {/* Sticky Column: Nama Personil */}
+                      <th
+                        className="sticky left-0 z-40 p-2 sm:p-3.5 text-[11px] sm:text-xs font-bold uppercase tracking-wider w-[125px] sm:w-[260px] min-w-[125px] sm:min-w-[260px] max-w-[130px] sm:max-w-none border-r shadow-xs backdrop-blur-md"
+                        style={{
+                          backgroundColor: 'var(--bg-main, #F8FAFC)',
+                          borderColor: 'var(--border-main, #E2E8F0)',
+                          color: 'var(--text-main, #1E293B)'
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="truncate">Personil</span>
+                          <span className="text-[10px] opacity-60 font-mono">({filteredRoster.length})</span>
+                        </div>
+                      </th>
+
+                      {/* Date Columns */}
+                      {dateColumns.map((col, idx) => (
+                        <th
+                          key={idx}
+                          className={`p-1 sm:p-2 text-center text-xs font-bold border-r min-w-[44px] sm:min-w-[58px] max-w-[48px] sm:max-w-[68px] ${col.isToday ? 'ring-2 ring-inset ring-teal-500' : ''
+                            }`}
+                          style={{
+                            backgroundColor: col.isToday
+                              ? 'rgba(42, 157, 143, 0.12)'
+                              : col.isWeekend
+                                ? 'rgba(0,0,0,0.02)'
+                                : 'transparent',
+                            borderColor: 'var(--border-main, #E2E8F0)',
+                            color: col.isToday ? 'var(--primary)' : 'var(--text-main)'
+                          }}
+                        >
+                          <div className="text-[9px] sm:text-[10px] uppercase font-bold tracking-tight opacity-75">
+                            {col.dayName}
+                          </div>
+                          <div className="text-[10px] sm:text-xs font-black">
+                            {col.dateNumber}
+                          </div>
+                          {col.isToday && (
+                            <span className="inline-block text-[7px] sm:text-[8px] font-black uppercase px-0.5 sm:px-1 rounded bg-teal-500 text-white mt-0.5">
+                              Hari Ini
+                            </span>
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  {/* Table Body */}
+                  <tbody className="divide-y text-xs" style={{ borderColor: 'var(--border-main)' }}>
+                    {filteredRoster.map((emp, rowIdx) => {
+                      const leave = calculateLeave(emp);
+                      const isSelf = emp.nik === requestorNik;
+
+                      return (
+                        <tr
+                          key={emp.nik || rowIdx}
+                          className="hover:opacity-95 transition-colors group"
+                          style={{
+                            backgroundColor: isSelf ? 'rgba(42, 157, 143, 0.05)' : 'transparent'
+                          }}
+                        >
+                          {/* Sticky Person Info Cell */}
+                          <td
+                            className="sticky left-0 z-20 p-2 sm:p-3.5 border-r shadow-xs backdrop-blur-md w-[125px] sm:w-[260px] min-w-[125px] sm:min-w-[260px] max-w-[130px] sm:max-w-none"
+                            style={{
+                              backgroundColor: isSelf ? 'var(--input-bg)' : 'var(--card-bg)',
+                              borderColor: 'var(--border-main)'
+                            }}
+                          >
+                            <div className="space-y-0.5 sm:space-y-1">
+                              <div className="flex items-center gap-1">
+                                <span className="font-bold text-xs sm:text-sm truncate block" style={{ color: 'var(--text-main)' }} title={emp.name || emp.nama}>
+                                  {emp.name || emp.nama}
+                                </span>
+                                {isSelf && (
+                                  <span className="shrink-0 text-[8px] sm:text-[9px] font-bold px-1 py-0.2 rounded text-white bg-teal-600">
+                                    Anda
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1 text-[9px] sm:text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                <span className="font-mono">{emp.nik}</span>
+                                <span className="hidden sm:inline">•</span>
+                                <span className="hidden sm:inline font-semibold truncate max-w-[140px]">{emp.jabatan}</span>
+                              </div>
+
+                              <div className="sm:hidden text-[9px] font-semibold text-slate-500 truncate max-w-[115px]" title={emp.jabatan}>
+                                {emp.jabatan}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                                {emp.section && (
+                                  <span
+                                    className="hidden sm:inline-block text-[9px] font-bold px-1.5 py-0.5 rounded border"
+                                    style={{
+                                      backgroundColor: 'var(--input-bg)',
+                                      borderColor: 'var(--border-main)',
+                                      color: 'var(--primary)'
+                                    }}
+                                  >
+                                    {emp.section}
+                                  </span>
+                                )}
+                                {emp.gol && (
+                                  <span
+                                    className="text-[8px] sm:text-[9px] font-bold px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded border opacity-75"
+                                    style={{
+                                      backgroundColor: 'var(--input-bg)',
+                                      borderColor: 'var(--border-main)'
+                                    }}
+                                  >
+                                    {emp.gol}
+                                  </span>
+                                )}
+                                {leave?.actualCuti && (
+                                  <span
+                                    className="text-[8px] sm:text-[9px] font-semibold px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded border text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
+                                    style={{
+                                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                                      borderColor: 'rgba(16, 185, 129, 0.2)'
+                                    }}
+                                    title={`Estimasi Cuti: ${safeFormatDate(leave.actualCuti, { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                                  >
+                                    ✈️ {safeFormatDate(leave.actualCuti, { day: 'numeric', month: 'short' })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Date Shift Code Cells */}
+                          {dateColumns.map((col, cIdx) => {
+                            const shiftCode = emp.fullSchedule?.[col.keyDateStr] || '-';
+                            const badgeStyle = getShiftBadgeStyle(shiftCode);
+
+                            return (
+                              <td
+                                key={cIdx}
+                                onClick={() => {
+                                  if (canEditRoster) {
+                                    setEditingCell({
+                                      empNik: emp.nik,
+                                      empName: emp.name || emp.nama,
+                                      keyDateStr: col.keyDateStr,
+                                      dateStr: col.keyDateStr,
+                                      displayDate: `${col.dayName}, ${col.dateNumber}`,
+                                      currentShift: shiftCode === '-' ? '' : shiftCode
+                                    } as any);
+                                  } else {
+                                    toast.info("Akses Khusus Administrasi & Developer", {
+                                      description: "Fitur pengeditan jadwal roster hanya dapat diakses oleh Tim Administrasi dan Developer."
+                                    });
+                                  }
+                                }}
+                                className={`p-1 sm:p-1.5 text-center border-r transition-all select-none ${canEditRoster ? 'cursor-pointer hover:scale-105 hover:z-10' : 'cursor-default'
+                                  } ${col.isToday ? 'bg-teal-500/5' : ''}`}
+                                style={{
+                                  borderColor: 'var(--border-main)'
+                                }}
+                                title={canEditRoster ? `Klik untuk mengedit roster ${emp.name || emp.nama} pada ${col.dateNumber}` : `Roster ${emp.name || emp.nama} (${shiftCode})`}
+                              >
+                                <div
+                                  className={`w-full py-1 sm:py-1.5 px-0.5 sm:px-1 rounded sm:rounded-lg border text-center text-[10px] sm:text-xs transition-transform ${badgeStyle}`}
+                                >
+                                  {shiftCode}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Table Legend Footer */}
+              <div
+                className="p-2.5 sm:p-3.5 border-t flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 select-none"
+                style={{
+                  backgroundColor: 'var(--bg-main, #F8FAFC)',
+                  borderColor: 'var(--border-main, #E2E8F0)'
+                }}
+              >
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="font-bold opacity-75 mr-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>Keterangan:</span>
+                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-blue-500/15 text-blue-600 border-blue-500/30">D = Day</span>
+                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-blue-900 text-white border-blue-800">N = Night</span>
+                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-slate-500/15 text-slate-600 border-slate-500/30">OFF = Libur</span>
+                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-amber-500/15 text-amber-600 border-amber-500/30">TRV/TV = Travel</span>
+                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/35 ring-1 ring-cyan-500/20">XP = Speedboat</span>
+                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-purple-500/20 text-purple-600 border-purple-500/30">C/CT = Cuti</span>
+                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-emerald-500/15 text-emerald-600 border-emerald-500/30">S = Sakit</span>
+                  <span className="px-1.5 py-0.5 rounded border text-[9px] sm:text-[10px] font-bold bg-teal-500/15 text-teal-600 border-teal-500/30">LS = Longshift</span>
+                </div>
+
+                <span className="text-[10px] sm:text-[11px] font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>
+                  {canEditRoster ? '💡 Klik sel untuk ubah shift.' : 'Mode baca.'}
+                </span>
+              </div>
+            </div>
+          )}
         </>
       )}
 
       {/* Inline Cell Editor Popover Modal (For Admin & QA) */}
       {editingCell && (
-        <div 
+        <div
           className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
           onClick={() => setEditingCell(null)}
         >
-          <div 
+          <div
             className="w-full max-w-sm rounded-2xl shadow-2xl border p-5 space-y-4 animate-in zoom-in-95 duration-150"
             style={{
               backgroundColor: 'var(--card-bg, #FFFFFF)',
@@ -944,7 +965,7 @@ export function RosterAdminScreen() {
                   {editingCell.empName} ({editingCell.displayDate})
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => setEditingCell(null)}
                 className="p-1.5 rounded-full border opacity-70 hover:opacity-100 cursor-pointer"
                 style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)' }}
@@ -963,9 +984,8 @@ export function RosterAdminScreen() {
                     key={opt.code}
                     type="button"
                     onClick={() => handleSaveCell(opt.code)}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      editingCell.currentShift === opt.code ? 'ring-2 ring-teal-500 font-black' : 'hover:opacity-85'
-                    } ${opt.bg}`}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${editingCell.currentShift === opt.code ? 'ring-2 ring-teal-500 font-black' : 'hover:opacity-85'
+                      } ${opt.bg}`}
                   >
                     <span className="font-black text-xs">{opt.label}</span>
                     <span className="text-[10px] opacity-75">{opt.desc}</span>
@@ -975,7 +995,7 @@ export function RosterAdminScreen() {
             </div>
 
             {/* Custom Code Input */}
-            <form 
+            <form
               onSubmit={e => {
                 e.preventDefault();
                 const form = e.target as any;
@@ -985,7 +1005,7 @@ export function RosterAdminScreen() {
               className="pt-2 border-t flex gap-2"
               style={{ borderColor: 'var(--border-main)' }}
             >
-              <input 
+              <input
                 name="customShift"
                 type="text"
                 placeholder="Kode kustom (contoh: D2, OFF2...)"
