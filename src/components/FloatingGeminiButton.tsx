@@ -47,15 +47,23 @@ export function FloatingGeminiButton({
 }: FloatingGeminiButtonProps) {
   const [showTooltip, setShowTooltip] = useState(false);
 
-  // Hide on inspection form or distraction-free reader mode
-  if (currentPath.startsWith('/inspect') || currentPath.startsWith('/weekly-inspection') || (isBulletin && isBulletinFocusMode)) {
-    return null;
-  }
-
   const hasMobileBottomNav = !isCrewRole && !(isBulletin && isBulletinFocusMode);
+  const hasFeedbackButton = currentPath !== '/feedback-support' && !isCrewRole && !currentPath.startsWith('/inspect') && !currentPath.startsWith('/weekly-inspection');
+
+  // Posisi floating di kanan bawah seluruh portal:
+  // - Desktop: Sits at bottom-6. Jika tombol feedback ada, berada di sebelahnya (right-20). Jika feedback tidak ada, ambil posisi sudut (right-6).
+  // - Mobile: Jika feedback ada, ditumpuk di atasnya (bottom-[8.5rem] jika ada mobile nav, bottom-18 jika tidak ada). Jika feedback tidak ada, ambil posisi bawah.
+  const positionClasses = hasFeedbackButton
+    ? hasMobileBottomNav
+      ? 'bottom-[8.5rem] right-3.5 sm:right-4 md:bottom-6 md:right-20'
+      : 'bottom-18 right-3.5 sm:right-4 md:bottom-6 md:right-20'
+    : hasMobileBottomNav
+      ? 'bottom-[5.25rem] right-3.5 sm:right-4 md:bottom-6 md:right-6'
+      : 'bottom-4 right-3.5 sm:right-4 md:bottom-6 md:right-6';
 
   const handleClick = () => {
     toast.info('Membuka Google Gemini AI... ✨', {
+      description: 'Membuka gemini.google.com di tab baru.',
       duration: 2500,
     });
   };
@@ -63,32 +71,31 @@ export function FloatingGeminiButton({
   return (
     <aside
       aria-label="Google Gemini AI"
-      className={`fixed z-40 transition-all duration-300 pointer-events-auto ${
-        hasMobileBottomNav 
-          ? 'bottom-[5.25rem] left-3.5 sm:left-4' 
-          : 'bottom-4 left-3.5 sm:left-4'
-      } md:bottom-6 md:left-6`}
+      className={`fixed z-40 transition-all duration-300 pointer-events-auto ${positionClasses}`}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
       <div className="relative group">
         {/* Hover Tooltip - Desktop & Tablet */}
         {showTooltip && (
-          <div className="hidden sm:flex absolute bottom-full left-0 mb-2.5 flex-col items-start pointer-events-none animate-in fade-in zoom-in-95 duration-150 z-50">
-            <div className="bg-slate-900/95 dark:bg-slate-950/95 text-white backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-2xl border border-slate-700/80 text-left space-y-0.5 whitespace-nowrap">
-              <div className="flex items-center gap-1.5 justify-start">
+          <div className="hidden sm:flex absolute bottom-full right-1/2 translate-x-1/2 mb-2.5 flex-col items-center pointer-events-none animate-in fade-in zoom-in-95 duration-150 z-50">
+            <div className="bg-slate-900/95 dark:bg-slate-950/95 text-white backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-2xl border border-slate-700/80 text-center space-y-0.5 whitespace-nowrap">
+              <div className="flex items-center gap-1.5 justify-center">
                 <span className="font-bold text-xs text-white flex items-center gap-1">
                   Google Gemini AI
                 </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               </div>
-              <div className="text-[10px] font-mono text-purple-400 font-semibold pt-0.5 flex items-center justify-start gap-1">
+              <p className="text-[10px] text-slate-300">
+                Asisten AI PrepLab • Tab Baru
+              </p>
+              <div className="text-[10px] font-mono text-purple-400 font-semibold pt-0.5 flex items-center justify-center gap-1">
                 <span>gemini.google.com</span>
                 <ExternalLink className="w-2.5 h-2.5" />
               </div>
             </div>
             {/* Tooltip Arrow pointing to button */}
-            <div className="w-2.5 h-2.5 bg-slate-900/95 dark:bg-slate-950/95 border-r border-b border-slate-700/80 rotate-45 ml-4.5 -mt-1.5" />
+            <div className="w-2.5 h-2.5 bg-slate-900/95 dark:bg-slate-950/95 border-r border-b border-slate-700/80 rotate-45 -mt-1.5" />
           </div>
         )}
 
@@ -99,7 +106,7 @@ export function FloatingGeminiButton({
           rel="noopener noreferrer"
           onClick={handleClick}
           className="group relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-slate-100 border border-slate-200/90 dark:border-slate-700/90 shadow-xl shadow-purple-500/10 hover:shadow-2xl hover:shadow-purple-500/25 hover:border-purple-400 dark:hover:border-purple-400 backdrop-blur-md hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer select-none ring-1 ring-black/5 dark:ring-white/5"
-          title="Google Gemini AI"
+          title="Buka Google Gemini AI di tab baru (gemini.google.com)"
         >
           {/* Subtle cosmic aura glow behind */}
           <span className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-20 blur-xs group-hover:opacity-40 transition-opacity animate-pulse" />
