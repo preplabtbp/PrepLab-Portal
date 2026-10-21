@@ -907,7 +907,12 @@ xrfRouter.post("/verifications", async (req, res) => {
         standardCode: stdCode,
         sampleLabel: rawItem.sampleLabel || `${stdCode} ${verificationDate}`,
         sequenceNo: rawItem.sequenceNo || (idx + 1),
-        analyzedAt: rawItem.analyzedAt || `${verificationDate} ${verificationTime || ''}`.trim(),
+        analyzedAt: (() => {
+          const raw = (rawItem.analyzedAt || '').trim();
+          if (!raw) return `${verificationDate} ${verificationTime || ''}`.trim();
+          if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)) return `${verificationDate} ${raw}`.trim();
+          return raw;
+        })(),
         ni: rawItem.ni !== undefined ? Number(rawItem.ni) : null,
         co: rawItem.co !== undefined ? Number(rawItem.co) : null,
         fe: rawItem.fe !== undefined ? Number(rawItem.fe) : null,
@@ -1451,12 +1456,19 @@ xrfRouter.get("/qc-chart-data", async (req, res) => {
 
           const pointsForGrid = matchingRows.map((d, idx) => {
             const val = getter(d);
+            const rawAnalyzed = (d.analyzedAt || '').trim();
+            let combinedAnalyzed = rawAnalyzed;
+            if (!rawAnalyzed) {
+              combinedAnalyzed = d.verificationDate || '';
+            } else if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(rawAnalyzed) && d.verificationDate) {
+              combinedAnalyzed = `${d.verificationDate} ${rawAnalyzed}`.trim();
+            }
             return {
               index: idx + 1,
               id: d.id,
               date: d.verificationDate,
               week: d.weekNo,
-              analyzedAt: d.analyzedAt,
+              analyzedAt: combinedAnalyzed,
               value: val !== null && val !== undefined ? Number(val) : 0,
               status: d.itemStatus,
             };
@@ -2033,7 +2045,12 @@ xrfRouter.post("/bulk-import-paste", async (req, res) => {
           standardCode: it.standardCode,
           sampleLabel: it.sampleLabel || it.displayName || it.standardCode,
           sequenceNo: Number(it.sequenceNo) || (itemIdx + 1),
-          analyzedAt: it.analyzedAt || `${vDate} ${vTime}`,
+          analyzedAt: (() => {
+            const raw = (it.analyzedAt || '').trim();
+            if (!raw) return `${vDate} ${vTime}`.trim();
+            if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)) return `${vDate} ${raw}`.trim();
+            return raw;
+          })(),
           ni: Number(it.ni) || 0,
           co: Number(it.co) || 0,
           fe: Number(it.fe) || 0,

@@ -81,7 +81,6 @@ export function UsernamePromptModal({
         localStorage.setItem('p2h_inspector_username', cleanUsername);
         
         onUsernameUpdated(cleanUsername);
-        window.dispatchEvent(new CustomEvent('preplab:show_daily_splash', { detail: { username: cleanUsername } }));
         onClose();
       } else {
         setErrorMsg(data.message || 'Gagal menyimpan username');

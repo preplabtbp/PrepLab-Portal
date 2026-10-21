@@ -11,6 +11,7 @@ interface DailySplashScreenProps {
   userSection?: string;
   onClose?: () => void;
   forceShow?: boolean;
+  isHome?: boolean;
 }
 
 export function DailySplashScreen({
@@ -19,7 +20,8 @@ export function DailySplashScreen({
   userJabatan,
   userSection,
   onClose,
-  forceShow = false
+  forceShow = false,
+  isHome
 }: DailySplashScreenProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [quoteIndex, setQuoteIndex] = useState(0);
@@ -125,20 +127,39 @@ export function DailySplashScreen({
     setQuoteIndex(dayOfYear % (activeQuoteList.length || 1));
   }, [activeQuoteList.length]);
 
-  // Daily check logic: Show once per day across ANY device (synced via Server API)
+  // Daily check logic: Show once per day and only once per session strictly on initial startup of home screen
   useEffect(() => {
     if (forceShow) {
       setIsVisible(true);
       return;
     }
 
+    // Hanya izinkan tampil otomatis saat berada di beranda (cegah muncul di sub-modul atau halaman lain)
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+    const onHomeScreen = isHome !== undefined ? isHome : (currentPath === '/' || currentPath === '/home' || currentPath === '');
+    if (!onHomeScreen) return;
+
+    // HANYA muncul 1x per sesi browser / saat aplikasi baru dimulai
+    const sessionKey = 'preplab_daily_greeting_shown_session';
+    if (sessionStorage.getItem(sessionKey) === 'true') {
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
     const nikKey = userNik || localStorage.getItem('p2h_inspector_nik') || '';
     if (!nikKey) return;
+
+    const localDailyKey = `preplab_daily_greeting_date_${todayStr}_${nikKey}`;
+    if (localStorage.getItem(localDailyKey) === 'true') {
+      return;
+    }
 
     fetch(`/api/user/daily-greeting-status?nik=${encodeURIComponent(nikKey)}`)
       .then(res => res.json())
       .then(json => {
         if (json.status === 'success' && json.shouldShow) {
+          sessionStorage.setItem(sessionKey, 'true');
+          localStorage.setItem(localDailyKey, 'true');
           setIsVisible(true);
           // Immediately mark as shown on server so other devices will NOT show it today
           fetch('/api/user/daily-greeting-mark', {
@@ -146,12 +167,14 @@ export function DailySplashScreen({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nik: nikKey })
           }).catch(() => {});
+        } else {
+          sessionStorage.setItem(sessionKey, 'true');
         }
       })
       .catch(err => {
         console.warn('Daily greeting check error:', err);
       });
-  }, [forceShow, userNik]);
+  }, [forceShow, userNik, isHome]);
 
   // Global trigger listener
   useEffect(() => {
@@ -197,6 +220,12 @@ export function DailySplashScreen({
 
   const handleDismiss = () => {
     setIsVisible(false);
+    sessionStorage.setItem('preplab_daily_greeting_shown_session', 'true');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const nikKey = userNik || localStorage.getItem('p2h_inspector_nik') || '';
+    if (nikKey) {
+      localStorage.setItem(`preplab_daily_greeting_date_${todayStr}_${nikKey}`, 'true');
+    }
     if (onClose) onClose();
   };
 

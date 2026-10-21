@@ -161,11 +161,10 @@ export function BulletinBoard({
       const params = new URLSearchParams(window.location.search);
       const urlPostId = params.get("page") || params.get("postId") || params.get("id");
       if (!urlPostId) return null;
-      const targetId = urlPostId;
       const cached = sessionStorage.getItem("preplab_cached_selected_post");
-      if (cached && targetId) {
+      if (cached && urlPostId) {
         const parsed = JSON.parse(cached);
-        if (parsed && String(parsed.id) === String(targetId)) {
+        if (parsed && String(parsed.id) === String(urlPostId)) {
           // If cached post is a dummy doc-* fallback, do not restore it; let posts load the real database table
           if (String(parsed.id).startsWith('doc-')) {
             return null;
@@ -195,7 +194,18 @@ export function BulletinBoard({
     } catch {}
   }, [selectedPost]);
 
-  const [posts, setPosts] = useState<any[]>([]);
+  // Instantly load cached posts from localStorage to eliminate delay when entering section pages
+  const [posts, setPosts] = useState<any[]>(() => {
+    try {
+      const cacheKey = `preplab_cached_bulletin_posts_${userPt || 'TBP'}`;
+      const cached = localStorage.getItem(cacheKey) || localStorage.getItem('preplab_cached_bulletin_posts_TBP');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   // Persistent in-memory cache for virtual logbook content
   const logbookCacheRef = useRef<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -412,13 +422,24 @@ export function BulletinBoard({
         } catch (sortErr) {
           console.error("[Bulletin] Sort error:", sortErr);
         }
-        setPosts(allPosts);
+        if (allPosts.length > 0) {
+          setPosts(allPosts);
+          try {
+            localStorage.setItem(`preplab_cached_bulletin_posts_${targetPt}`, JSON.stringify(allPosts));
+          } catch {}
+        }
       } else {
         console.error("[Bulletin] API error:", data.message);
       }
     } catch (e) {
       console.error("[Bulletin] Fetch error:", e);
-      toast.error("Gagal memuat data");
+      // Hanya tampilkan toast jika belum ada data cached sama sekali
+      setPosts((prev) => {
+        if (!prev || prev.length === 0) {
+          toast.error("Gagal memuat data Labnote");
+        }
+        return prev;
+      });
     }
     setLoading(false);
   };
