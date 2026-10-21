@@ -95,8 +95,9 @@ router.get("/api/bulletin", async (req, res) => {
       const pageNum = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10)) : null;
       const limitNum = req.query.limit ? Math.max(1, parseInt(req.query.limit as string, 10)) : null;
       if (pageNum && limitNum) {
-        return res.json({
-          status: "success",
+        return res.status(503).json({
+          status: "error",
+          message: "Database connection temporarily unavailable: " + (error?.message || ''),
           data: [],
           pagination: {
             page: pageNum,
@@ -107,7 +108,7 @@ router.get("/api/bulletin", async (req, res) => {
           }
         });
       }
-      res.json({ status: "success", data: [] });
+      res.status(503).json({ status: "error", message: "Database connection temporarily unavailable: " + (error?.message || ''), data: [] });
     }
   });
 

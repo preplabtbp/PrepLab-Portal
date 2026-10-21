@@ -388,6 +388,19 @@ export function BulletinBoard({
   const fetchPosts = async () => {
     setLoading(true);
     try {
+      // Load cached posts from localStorage on initial run if state is empty
+      if (posts.length === 0) {
+        try {
+          const cached = localStorage.getItem('preplab_cached_bulletin_posts');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setPosts(parsed);
+            }
+          }
+        } catch {}
+      }
+
       // If user is Developer / SuperAdmin, load ALL bulletin posts across all PTs!
       const targetPt = isDev ? "ALL" : userUniverse;
       const fetchUrl =
@@ -400,8 +413,8 @@ export function BulletinBoard({
         },
       });
       const data = await res.json();
-      if (data.status === "success") {
-        const allPosts: any[] = data.data || [];
+      if (data.status === "success" && Array.isArray(data.data) && data.data.length > 0) {
+        const allPosts: any[] = data.data;
         try {
           allPosts.sort((a: any, b: any) => {
             return (
@@ -413,12 +426,16 @@ export function BulletinBoard({
           console.error("[Bulletin] Sort error:", sortErr);
         }
         setPosts(allPosts);
-      } else {
-        console.error("[Bulletin] API error:", data.message);
+        try {
+          localStorage.setItem('preplab_cached_bulletin_posts', JSON.stringify(allPosts));
+        } catch {}
+      } else if (data.status !== "success" || !data.data || data.data.length === 0) {
+        // If server returned error or empty due to DB connection saturation, retain cached posts!
+        console.warn("[Bulletin] DB notice or empty data received. Retaining active posts.");
       }
     } catch (e) {
       console.error("[Bulletin] Fetch error:", e);
-      toast.error("Gagal memuat data");
+      // Retain existing/cached posts on network or DB connection errors
     }
     setLoading(false);
   };
@@ -863,13 +880,13 @@ export function BulletinBoard({
 
           // 3. Match known section routine/daily IDs
           if (!target) {
-            if (cleanSlug.includes('daily-lab') || cleanSlug === 'daily-laboratory') {
+            if (cleanSlug === 'daily' || cleanSlug === 'doc-daily' || cleanSlug.includes('daily-lab') || cleanSlug === 'daily-laboratory') {
               target = posts.find((p) => p.id === 541) || posts.find((p) => p.id === 450);
-            } else if (cleanSlug.includes('non-routine-lab') || cleanSlug === 'non-routine-laboratory') {
+            } else if (cleanSlug === 'non-routine' || cleanSlug === 'doc-non-routine' || cleanSlug.includes('non-routine-lab') || cleanSlug === 'non-routine-laboratory') {
               target = posts.find((p) => p.id === 535) || posts.find((p) => p.id === 414);
-            } else if (cleanSlug.includes('weekly-lab') || cleanSlug === 'weekly-laboratory') {
+            } else if (cleanSlug === 'weekly' || cleanSlug === 'doc-weekly' || cleanSlug.includes('weekly-lab') || cleanSlug === 'weekly-laboratory') {
               target = posts.find((p) => p.id === 542) || posts.find((p) => p.id === 418);
-            } else if (cleanSlug.includes('monthly-lab') || cleanSlug === 'monthly-laboratory') {
+            } else if (cleanSlug === 'monthly' || cleanSlug === 'doc-monthly' || cleanSlug.includes('monthly-lab') || cleanSlug === 'monthly-laboratory') {
               target = posts.find((p) => p.id === 543) || posts.find((p) => p.id === 413);
             } else if (cleanSlug.includes('daily-prep') || cleanSlug === 'daily-preparation') {
               target = posts.find((p) => p.id === 637) || posts.find((p) => p.id === 447);

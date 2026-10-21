@@ -356,7 +356,7 @@ export function SectionHubDashboard({
   // Section configurations matching exact Notion designs from Screenshots
   const getSectionConfig = () => {
     // 1. PROSEDUR (Image 1) - Single Column INFO with 9 items
-    if (sectionTitle.includes('PROSEDUR') || sectionTitle === 'SOP') {
+    if (sectionTitle.includes('PROSEDUR') || sectionTitle.includes('PROCEDURE') || sectionTitle === 'SOP') {
       return {
         icon: '📙',
         bannerUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=1600&q=80',
@@ -426,7 +426,7 @@ export function SectionHubDashboard({
     }
 
     // 3. LABORATORIUM (Image 3) - 2 Columns: Soft Blue INFO + Soft Cream RULES + Agenda
-    if (sectionTitle.includes('LABORATORIUM')) {
+    if (sectionTitle.includes('LABORATORIUM') || sectionTitle.includes('LABORATORY') || sectionTitle === 'LAB') {
       return {
         icon: '🥼',
         bannerUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80',
@@ -458,7 +458,7 @@ export function SectionHubDashboard({
     }
 
     // 4. ADMINISTRASI
-    if (sectionTitle.includes('ADMINISTRASI')) {
+    if (sectionTitle.includes('ADMINISTRASI') || sectionTitle.includes('ADMINISTRATION') || sectionTitle === 'ADMIN') {
       return {
         icon: '📋',
         bannerUrl: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1600&q=80',
@@ -495,7 +495,7 @@ export function SectionHubDashboard({
     }
 
     // 5. PREPARASI
-    if (sectionTitle.includes('PREPARASI')) {
+    if (sectionTitle.includes('PREPARASI') || sectionTitle.includes('PREPARATION') || sectionTitle === 'PREP') {
       return {
         icon: '🪨',
         bannerUrl: 'https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?auto=format&fit=crop&w=1600&q=80',
