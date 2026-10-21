@@ -2257,6 +2257,23 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
           }
         }
       }
+      if (!selfNik) {
+        const parts = selfName.split(/\s+/).filter(Boolean);
+        for (const [eName, eNik] of empNameToNik.entries()) {
+          const eParts = eName.split(/\s+/).filter(Boolean);
+          if (parts.length >= 2 && parts.every(p => eName.includes(p))) {
+            selfNik = eNik;
+            break;
+          }
+          if (eParts.length >= 2 && eParts.every(p => selfName.includes(p))) {
+            selfNik = eNik;
+            break;
+          }
+        }
+      }
+      if (selfNik) {
+        s.nik = selfNik.toUpperCase();
+      }
 
       // 2. Cross-reference ROSTER to determine real Shift Siang / Shift Malam (D=Siang, N=Malam)
       const rosterCode = selfNik ? rosterStatusByNik.get(selfNik.toUpperCase()) : null;
