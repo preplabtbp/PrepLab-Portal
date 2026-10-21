@@ -569,13 +569,13 @@ const RekapReportSheet = React.forwardRef<HTMLDivElement, {
     ? <td className={`${td} bg-black`} />
     : isLateDate(v)
       ? <td className={`${td} text-center whitespace-nowrap font-bold`} style={{ backgroundColor: '#EF4444', color: '#FFFFFF' }}>{formatShortDate(v)}</td>
-      : <td className={`${td} text-center whitespace-nowrap ${v === '' ? 'bg-rose-50' : ''}`}>{v === '√' ? '√' : formatShortDate(v)}</td>;
+      : <td className={`${td} text-center whitespace-nowrap`} style={v === '' ? { backgroundColor: '#FCA5A5' } : undefined}>{v === '√' ? '√' : formatShortDate(v)}</td>;
   const check = (done: boolean, late: boolean) => done && late ? (
     <td className={`${td} text-center font-bold`} style={{ backgroundColor: '#EF4444', color: '#FFFFFF' }}>
       <span className="text-base">√</span> <span className="text-[10px] uppercase">Terlambat</span>
     </td>
   ) : (
-    <td className={`${td} text-center text-base font-bold ${done ? 'text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>{done ? '√' : '✗'}</td>
+    <td className={`${td} text-center text-base font-bold ${done ? 'text-emerald-700' : ''}`} style={!done ? { backgroundColor: '#FCA5A5', color: '#7F1D1D' } : undefined}>{done ? '√' : '✗'}</td>
   );
   return (
     <div ref={ref} style={{ width: 1700 }} className="bg-white p-8 font-sans">
@@ -1824,7 +1824,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       <CheckCircle2 className="w-3.5 h-3.5" /> Lengkap
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 ring-1 ring-inset ring-rose-500/25 text-[11px] font-bold">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 ring-1 ring-inset ring-red-400/50 text-[11px] font-bold">
       <CircleDashed className="w-3.5 h-3.5" /> Belum
     </span>
   );
@@ -1834,7 +1834,11 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       return <td key={key} className={`${td} bg-slate-900 dark:bg-black border-l border-l-slate-800`} style={naStyle} title="Tidak wajib" />;
     }
     if (v === '') {
-      return <td key={key} className={`${td} text-center border-l border-l-[var(--border-main)]`}><span className="text-rose-400 dark:text-rose-500 font-bold">—</span></td>;
+      return (
+        <td key={key} className={`${td} text-center border-l border-l-[var(--border-main)] bg-red-500/10 dark:bg-red-950/30`} style={{ backgroundColor: 'rgba(252, 165, 165, 0.35)' }}>
+          <span className="text-red-700 dark:text-red-400 font-bold">—</span>
+        </td>
+      );
     }
     if (isLateDate(v)) {
       return (
@@ -2108,7 +2112,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                           </td>
 
                           {/* TGL KTA: Klik langsung untuk ubah tanggal */}
-                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)] ${r.tglKta === '' ? 'bg-red-500/10 dark:bg-red-950/30' : ''}`} style={r.tglKta === '' ? { backgroundColor: 'rgba(252, 165, 165, 0.35)' } : undefined}>
                             <InlineDatePopover
                               value={r.tglKta}
                               period={weekRange}
@@ -2118,7 +2122,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                           </td>
 
                           {/* TGL TTA 1: Klik langsung untuk ubah tanggal */}
-                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)] ${r.tglTta1 === '' ? 'bg-red-500/10 dark:bg-red-950/30' : ''}`} style={r.tglTta1 === '' ? { backgroundColor: 'rgba(252, 165, 165, 0.35)' } : undefined}>
                             <InlineDatePopover
                               value={r.tglTta1}
                               period={weekRange}
@@ -2128,7 +2132,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                           </td>
 
                           {/* TGL TTA 2: Klik langsung untuk ubah tanggal */}
-                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)] ${r.tglTta2 === '' ? 'bg-red-500/10 dark:bg-red-950/30' : ''}`} style={r.tglTta2 === '' ? { backgroundColor: 'rgba(252, 165, 165, 0.35)' } : undefined}>
                             <InlineDatePopover
                               value={r.tglTta2}
                               period={weekRange}
@@ -2163,7 +2167,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                           </td>
 
                           {/* TGL INSPEKSI: Klik langsung untuk ubah tanggal */}
-                          <td className={`${td} text-center border-l border-l-[var(--border-main)]`}>
+                          <td className={`${td} text-center border-l border-l-[var(--border-main)] ${r.tglInspeksi === '' ? 'bg-red-500/10 dark:bg-red-950/30' : ''}`} style={r.tglInspeksi === '' ? { backgroundColor: 'rgba(252, 165, 165, 0.35)' } : undefined}>
                             <InlineDatePopover
                               value={r.tglInspeksi}
                               period={weekRange}
