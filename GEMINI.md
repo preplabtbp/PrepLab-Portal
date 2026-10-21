@@ -36,3 +36,23 @@ Setiap kali menerima permintaan baru, bug report, fitur, atau perbaikan:
 - **Default Region**: Wajib selalu menggunakan `asia-southeast2` (Jakarta). Dilarang keras mengganti ke region US (`us-central1`).
 - **Target Project ID**: `project-054e3351-b8d1-42f7-9c8`
 - **Domain Resmi**: `https://portal.preplabtbp.com`
+
+## ☀️ ATURAN MUTLAK DESAIN UI: WAJIB TEMA TERANG (LIGHT MODE), DILARANG KERAS TEMA GELAP (DARK THEME)
+
+### 1. Dilarang Keras Membuat Tampilan Gelap (Dark Mode / Black UI)
+- **Larangan Mutlak**: DILARANG membuat modul, halaman, modal, widget, atau kartu dengan tampilan dasar gelap/hitam (seperti `bg-slate-900`, `bg-slate-950`, `bg-black`, `bg-neutral-900`, neon cyber/dark dashboard style).
+- **Alasan**: Manajemen perusahaan (stakeholder & pimpinan) **SANGAT MENOLAK tampilan gelap** karena sulit dibaca saat presentasi di proyektor rapat, terkesan suram/tidak formal, dan tidak mencerminkan standar laporan resmi korporat.
+
+### 2. Standar Desain Resmi: Clean Corporate Light Theme
+- **Latar Belakang (Canvas & Layout)**:
+  - Wajib putih bersih (`bg-white`) atau abu-abu terang yang sangat lembut (`bg-slate-50`).
+- **Kartu & Kontainer**:
+  - Wajib berlatar putih (`bg-white`) dengan garis tepi halus (`border border-slate-200` atau `border-slate-100`) dan bayangan lembut (`shadow-xs` atau `shadow-sm`).
+- **Tipografi & Keterbacaan**:
+  - Teks judul & isi wajib gelap dengan kontras tajam (`text-slate-900`, `text-slate-800`), teks sekunder/label menggunakan `text-slate-500` / `text-slate-600`.
+  - Dilarang teks putih/terang di atas background hitam pekat.
+- **Warna Aksen Korporat**:
+  - Gunakan warna profesional bernuansa korporat laboratorium: Teal/Toska (`teal-600`, `teal-700`), Emerald/Hijau K3 (`emerald-600`), Indigo (`indigo-600`), atau Amber (`amber-500` untuk warning).
+- **Default Styling**:
+  - Semua styling default Tailwind WAJIB varian terang (`bg-white text-slate-900 border-slate-200`). Jangan pernah memaksakan tampilan hitam/gelap pada modul apapun.
+

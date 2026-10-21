@@ -690,7 +690,9 @@ export const XrfDailyInputTab: React.FC<XrfDailyInputTabProps> = ({
           standardCode: r.standardCode,
           sampleLabel: r.sampleLabel,
           sequenceNo: r.sequenceNo,
-          analyzedAt: r.analyzedAt,
+          analyzedAt: r.analyzedAt
+            ? (/^\d{1,2}:\d{2}/.test(r.analyzedAt.trim()) ? `${verificationDate} ${r.analyzedAt.trim()}` : r.analyzedAt.trim())
+            : `${verificationDate} ${verificationTime || ''}`.trim(),
           ni: r.ni || null,
           co: r.co || null,
           fe: r.fe || null,

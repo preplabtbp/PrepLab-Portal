@@ -344,12 +344,18 @@ export function DailyGreetingHero({
   useEffect(() => {
     if (!currentUsername) return;
     
+    // Jangan muncul jika sudah pernah tampil di sesi ini
+    if (sessionStorage.getItem('preplab_hero_splash_session') === 'true') {
+      return;
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
     const nikKey = inspectorNik || localStorage.getItem('p2h_inspector_nik') || 'general';
     const storageKey = `preplab_daily_splash_${nikKey}`;
     const lastShown = localStorage.getItem(storageKey);
 
     if (lastShown !== todayStr) {
+      sessionStorage.setItem('preplab_hero_splash_session', 'true');
       startCinematicSplash();
     }
   }, [inspectorNik, currentUsername]);

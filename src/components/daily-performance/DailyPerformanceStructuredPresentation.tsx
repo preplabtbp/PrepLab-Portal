@@ -4,7 +4,8 @@ import {
   CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Minus, Sparkles, BarChart2,
   ChevronRight, Calendar, ShieldCheck, Clock, Gauge, Sun, Moon, Building2, Split,
   Search, Edit3, Save, FileText, Check, Plus, MessageSquare, Info,
-  UserCheck, Coffee, Briefcase, Award, Table as TableIcon, LayoutGrid, ArrowUpDown, Filter
+  UserCheck, Coffee, Briefcase, Award, Table as TableIcon, LayoutGrid, ArrowUpDown, Filter,
+  UserPlus, X, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DailyPerformanceRecord } from './daily-performance-types';
@@ -241,6 +242,95 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
 
   // Section 2 View Mode
   const [sampleViewMode, setSampleViewMode] = useState<'cards' | 'shift_breakdown'>('cards');
+
+  // Perbantuan dari Section Lain (Assistance Personnel)
+  interface AssistancePersonnel {
+    nik: string;
+    name: string;
+    fromSection: string;
+    shift: 'pagi' | 'malam';
+    notes?: string;
+  }
+
+  const [assistanceList, setAssistanceList] = useState<AssistancePersonnel[]>(() => {
+    try {
+      const raw = localStorage.getItem(`daily_perf_assistance_${selectedDate}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [showAssistanceInput, setShowAssistanceInput] = useState<boolean>(false);
+  const [assistanceSearch, setAssistanceSearch] = useState<string>('');
+  const [assistanceShift, setAssistanceShift] = useState<'pagi' | 'malam'>('pagi');
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`daily_perf_assistance_${selectedDate}`);
+      setAssistanceList(raw ? JSON.parse(raw) : []);
+    } catch {
+      setAssistanceList([]);
+    }
+  }, [selectedDate]);
+
+  const handleAddAssistance = (nikOrSearch: string, shift: 'pagi' | 'malam') => {
+    const clean = nikOrSearch.trim().toLowerCase();
+    const found = rosterList.find((e: any) => {
+      const n = (e.nik || '').toLowerCase();
+      const nm = (e.name || e.nama || '').toLowerCase();
+      return n === clean || nm.includes(clean) || `${n} - ${nm}`.includes(clean);
+    });
+
+    if (!found) {
+      toast.error('Personil tidak ditemukan di daftar karyawan.');
+      return;
+    }
+
+    const newItem: AssistancePersonnel = {
+      nik: found.nik,
+      name: found.name || found.nama || found.nik,
+      fromSection: found.section || found.department || 'Section Lain',
+      shift
+    };
+
+    const updated = [...assistanceList.filter(a => a.nik !== found.nik), newItem];
+    setAssistanceList(updated);
+    localStorage.setItem(`daily_perf_assistance_${selectedDate}`, JSON.stringify(updated));
+    setAssistanceSearch('');
+    setShowAssistanceInput(false);
+    toast.success(`Personil perbantuan ${newItem.name} (${newItem.fromSection}) berhasil ditambahkan.`);
+  };
+
+  const handleRemoveAssistance = (nik: string) => {
+    const updated = assistanceList.filter(a => a.nik !== nik);
+    setAssistanceList(updated);
+    localStorage.setItem(`daily_perf_assistance_${selectedDate}`, JSON.stringify(updated));
+    toast.info('Personil perbantuan telah dihapus.');
+  };
+
+  // Personil non-Lab dari Roster untuk Autofill Datalist (Perbantuan Section Lain)
+  const nonLabCandidates = useMemo(() => {
+    const isGtsUniverse = (userPt || '').toUpperCase().trim() === 'GTS';
+    if (!rosterList || rosterList.length === 0) return [];
+    return rosterList.filter((emp: any) => {
+      const empPt = String(emp.pt || '').toUpperCase().trim();
+      const nikUpper = String(emp.nik || '').toUpperCase().trim();
+      const isEmpGts = empPt === 'GTS' || nikUpper.startsWith('03D') || nikUpper.startsWith('M03');
+      if (isGtsUniverse) {
+        if (!isEmpGts) return false;
+      } else {
+        if (isEmpGts) return false;
+      }
+      const sec = (emp.section || emp.department || '').toLowerCase();
+      // Hanya ambil karyawan di luar seksi Laboratory
+      return !sec.includes('lab') && !sec.includes('laboratorium');
+    });
+  }, [rosterList, userPt]);
+
+  const assistancePagiCount = assistanceList.filter(a => a.shift === 'pagi').length;
+  const assistanceMalamCount = assistanceList.filter(a => a.shift === 'malam').length;
+  const totalAssistanceCount = assistanceList.length;
 
   // Load roster data from /api/roster
   useEffect(() => {
@@ -496,6 +586,24 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
   const staffHadirTotal = staffPagi.length + staffMalam.length;
   const staffBreakdownPagi = useMemo(() => getJabatanBreakdown(staffPagi), [staffPagi]);
   const staffBreakdownMalam = useMemo(() => getJabatanBreakdown(staffMalam), [staffMalam]);
+
+  // Klasifikasi Jabatan Staff yang Hadir Hari Ini (Hanya Jabatan dengan Count > 0, jika 0 jangan munculkan)
+  const activeStaffJabatanList = useMemo(() => {
+    const map: Record<string, { jabatan: string; count: number; pagi: number; malam: number; rank: number }> = {};
+    for (const s of [...staffPagi, ...staffMalam]) {
+      const j = (s.jabatan || 'Staff Lab').trim();
+      if (!map[j]) {
+        map[j] = { jabatan: j, count: 0, pagi: 0, malam: 0, rank: getJabatanRank(j) };
+      }
+      map[j].count++;
+      if (s.category === 'pagi') map[j].pagi++;
+      if (s.category === 'malam') map[j].malam++;
+    }
+    return Object.values(map).sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      return a.jabatan.localeCompare(b.jabatan, 'id', { sensitivity: 'base' });
+    });
+  }, [staffPagi, staffMalam]);
 
   // Crew breakdown
   const crewPagi = useMemo(() => crewList.filter(p => p.category === 'pagi'), [crewList]);
@@ -893,33 +1001,145 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
     );
   };
 
-  // 3. Executive At-a-Glance Container Banner
-  const ExecutiveAtAGlanceBanner = ({
+  // 7-Day Chronological History for Mini Trend Charts
+  const history7Days = useMemo(() => {
+    if (!records || records.length === 0) return [];
+
+    const uniqueDates = Array.from(new Set(records.map(r => r.date))).sort((a, b) => {
+      const pA = a.split('/').map(Number);
+      const pB = b.split('/').map(Number);
+      const tA = new Date(pA[2] || 2026, (pA[1] || 10) - 1, pA[0] || 1).getTime();
+      const tB = new Date(pB[2] || 2026, (pB[1] || 10) - 1, pB[0] || 1).getTime();
+      return tA - tB;
+    });
+
+    const currIdx = uniqueDates.indexOf(selectedDate);
+    const targetSlice = currIdx >= 0
+      ? uniqueDates.slice(Math.max(0, currIdx - 6), currIdx + 1)
+      : uniqueDates.slice(-7);
+
+    return targetSlice.map(d => {
+      const dayRecs = records.filter(r => r.date === d);
+      const dayS = dayRecs.find(r => r.shiftType === 'DAY' || r.shiftType === 'LS');
+      const nightS = dayRecs.find(r => r.shiftType === 'NIGHT');
+
+      const mStaff = (dayS?.manpower?.staff?.shift || 0) + (nightS?.manpower?.staff?.shift || 0);
+      const mCrew = (dayS?.manpower?.crew?.shift || 0) + (nightS?.manpower?.crew?.shift || 0);
+      const mTotal = mStaff + mCrew;
+
+      const intakeTotal = dayRecs.reduce((sum, r) => sum + (r.sampleReceived?.gc?.shift || 0) + (r.sampleReceived?.prod?.shift || 0) + (r.sampleReceived?.exp?.shift || 0) + (r.sampleReceived?.smelter?.shift || 0), 0);
+
+      const prepFinished = dayRecs.reduce((sum, r) => sum + (r.pressPowder?.finish?.shift || 0) + (r.fuseBead?.finishShift || 0) + (r.loi?.finLoiShift || 0), 0);
+
+      const xrfOutput = dayRecs.reduce((sum, r) => {
+        const edSum = (r.edxrf?.epsC || 0) + (r.edxrf?.epsD || 0) + (r.edxrf?.epsE || 0) + (r.edxrf?.epsF || 0) + (r.edxrf?.epsG || 0) + (r.edxrf?.epsH || 0);
+        const wdA = r.wdxrf?.zetiumA?.total || 0;
+        const wdB = r.wdxrf?.zetiumB?.total || 0;
+        return sum + edSum + wdA + wdB;
+      }, 0);
+
+      const coaReleased = dayRecs.reduce((sum, r) => sum + (r.report?.finishReportDay || 0), 0);
+
+      const parts = d.split('/');
+      const label = parts.length >= 2 ? `${parts[0]}/${parts[1]}` : d;
+
+      return {
+        date: d,
+        label,
+        manpowerHadir: mTotal || 9,
+        sampleIntake: intakeTotal || 0,
+        prepFinished: prepFinished || 0,
+        xrfOutput: xrfOutput || 0,
+        coaReleased: coaReleased || 0,
+      };
+    });
+  }, [records, selectedDate]);
+
+  // Mini Trend Card for 5-7 days context (Clean Corporate Light Theme)
+  const MiniTrendChartCard = ({
     title,
-    badgeText,
-    children
+    unit = 'sampel',
+    data,
+    onClick,
+    metricToday,
+    deltaVal = 0,
+    unitLabel = 'vs D-1'
   }: {
     title: string;
-    badgeText?: string;
-    children: React.ReactNode;
+    unit?: string;
+    data: { date: string; val: number; label: string }[];
+    onClick: () => void;
+    metricToday: number | string;
+    deltaVal?: number;
+    unitLabel?: string;
   }) => {
+    const maxVal = Math.max(...data.map(d => d.val), 1);
+    const isPositive = deltaVal >= 0;
+
     return (
-      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 text-white border border-slate-800 shadow-md space-y-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-teal-400" /> Executive At-A-Glance
+      <div 
+        onClick={onClick}
+        className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-md hover:border-teal-400 transition-all cursor-pointer group flex flex-col justify-between"
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2 mb-2">
+          <div>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+              {title}
             </span>
-            <h4 className="text-xs sm:text-sm font-bold text-slate-100 tracking-tight">{title}</h4>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-xl font-black font-mono text-slate-900">
+                {metricToday}
+              </span>
+              <span className="text-xs text-slate-500 font-medium">{unit}</span>
+            </div>
           </div>
-          {badgeText && (
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-200 border border-white/20">
-              {badgeText}
+          {deltaVal !== 0 && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-0.5 border ${
+              isPositive
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-rose-50 text-rose-700 border-rose-200'
+            }`}>
+              {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+              {isPositive ? `+${deltaVal}` : deltaVal} {unitLabel}
             </span>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {children}
+
+        {/* 7-Day Mini Sparkline / Bar Chart */}
+        <div className="pt-2">
+          <div className="flex items-end justify-between gap-1.5 h-16 w-full px-1">
+            {data.map((item, idx) => {
+              const isToday = idx === data.length - 1;
+              const heightPct = Math.max(12, Math.round((item.val / maxVal) * 100));
+              return (
+                <div key={item.date} className="flex-1 flex flex-col items-center gap-1 group/bar h-full justify-end">
+                  <div className="relative w-full flex justify-center">
+                    {/* Tooltip on hover */}
+                    <span className="opacity-0 group-hover/bar:opacity-100 transition-opacity absolute -top-6 px-1.5 py-0.5 rounded bg-slate-800 text-white text-[9px] font-mono pointer-events-none whitespace-nowrap z-10 shadow-xs">
+                      {item.val} {unit}
+                    </span>
+                    <div 
+                      className={`w-full max-w-[22px] rounded-t-md transition-all duration-300 ${
+                        isToday 
+                          ? 'bg-teal-500 group-hover:bg-teal-600 shadow-xs ring-1 ring-teal-400' 
+                          : 'bg-slate-200 group-hover:bg-slate-300'
+                      }`}
+                      style={{ height: `${heightPct}%` }}
+                    />
+                  </div>
+                  <span className={`text-[9px] font-mono ${isToday ? 'text-teal-700 font-bold' : 'text-slate-400'}`}>
+                    {item.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Action Trigger */}
+        <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-teal-600 group-hover:text-teal-700 font-bold">
+          <span>Lihat Grafik Detail & Remarks</span>
+          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
         </div>
       </div>
     );
@@ -1180,87 +1400,240 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           {showChart1 && <ManpowerTrendChart records={records} />}
 
           {/* ========================================================================= */}
-          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 1 MANPOWER */}
+          {/* REALITA HARI INI & MINI TREND CHART: BABAK 1 MANPOWER */}
           {/* ========================================================================= */}
-          <ExecutiveAtAGlanceBanner 
-            title="Kesiapan Personil Harian, Distribusi Shift & Tren Kehadiran"
-            badgeText={`${Math.round(((staffHadirTotal + crewHadirTotal) / (parsedLabPersonnel.length || 1)) * 100)}% Attendance Rate`}
-          >
-            {/* 1. Daily Total Hadir */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Total Hadir Hari Ini
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono text-teal-300">
-                  {staffHadirTotal + crewHadirTotal}
-                </span>
-                <span className="text-xs text-slate-400">/ {parsedLabPersonnel.length} personil</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            {/* SISI KIRI: REALITA MANPOWER OPERASIONAL HARI INI */}
+            <div className="lg:col-span-8 p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+              
+              {/* Header Status & Shift Distribution */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <span className="text-[10px] font-bold text-teal-600 uppercase tracking-wider block">
+                    Kondisi Operasional Hari Ini • {selectedDate}
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-2xl font-black font-mono text-slate-900">
+                      {staffHadirTotal + crewHadirTotal + totalAssistanceCount}
+                    </span>
+                    <span className="text-xs text-slate-500 font-medium">
+                      Personil Bertugas di Lab ({userPt || 'TBP'})
+                    </span>
+                    <TrendDeltaBadge current={totalHadirToday} prev={prevTotalHadir} unit="org" />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
+                    <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    Pagi: {staffPagi.length + crewPagi.length + assistancePagiCount}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono flex items-center gap-1">
+                    <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                    Malam: {staffMalam.length + crewMalam.length + assistanceMalamCount}
+                  </span>
+                </div>
               </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={totalHadirToday} prev={prevTotalHadir} unit="org" />
-                <span className="text-[9px] text-slate-400 font-mono">Dinas Lab</span>
+
+              {/* 1. KLASIFIKASI JABATAN STAFF HADIR (HANYA MUNCULKAN JIKA > 0, JIKA 0 SEMBUNYIKAN) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Briefcase className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Klasifikasi Jabatan Staff Hadir ({staffHadirTotal} Org)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    *Jabatan tidak hadir otomatis disembunyikan
+                  </span>
+                </div>
+
+                {activeStaffJabatanList.length === 0 ? (
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-400 italic">
+                    Tidak ada personil staff yang hadir hari ini.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {activeStaffJabatanList.map(j => {
+                      const style = getJabatanBadgeStyle(j.jabatan);
+                      return (
+                        <div 
+                          key={j.jabatan}
+                          className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2 shadow-2xs"
+                        >
+                          <span className={`w-2 h-2 rounded-full ${style.bg.replace('bg-', 'bg-')}`} />
+                          <span className="text-xs font-semibold text-slate-700">{j.jabatan}:</span>
+                          <span className="text-xs font-black font-mono text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                            {j.count}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            ({j.pagi}P / {j.malam}M)
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
+
+              {/* 2. CREW SEKSI LABORATORY (SEMUA CREW JABATAN SAMA, SECTION=LABORATORY) */}
+              <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-xs font-bold text-emerald-950">Crew Seksi Laboratory</h5>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold">
+                        Posisi Setara
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700/80">
+                      Seluruh crew bernaung di bawah seksi Laboratory (preparasi, furnace & analisa rutin)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <span className="text-xl font-black font-mono text-emerald-800">
+                      {crewHadirTotal}
+                    </span>
+                    <span className="text-xs text-emerald-700 font-medium ml-1">
+                      Hadir ({crewPagi.length} Pagi / {crewMalam.length} Malam)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. INPUT MANUAL PERBANTUAN DARI SECTION LAIN DENGAN AUTOFILL DATALIST */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-800">
+                      Perbantuan dari Section Lain ({totalAssistanceCount} Personil)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAssistanceInput(!showAssistanceInput)}
+                    className="px-2.5 py-1 rounded-xl bg-white border border-slate-300 text-blue-600 hover:bg-blue-50 text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1 shadow-2xs"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>{showAssistanceInput ? 'Tutup Form' : 'Tambah Perbantuan'}</span>
+                  </button>
+                </div>
+
+                {/* Form Input Perbantuan dengan Datalist Autofill */}
+                {showAssistanceInput && (
+                  <div className="p-3 rounded-2xl bg-white border border-blue-200 space-y-2 shadow-xs">
+                    <span className="text-[11px] text-slate-500 block">
+                      Pilih nama atau ketik NIK personil non-laboratorium dari roster:
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex-1 min-w-[200px]">
+                        <input
+                          list="perbantuan-candidates-list"
+                          type="text"
+                          value={assistanceSearch}
+                          onChange={e => setAssistanceSearch(e.target.value)}
+                          placeholder="Ketik NIK atau nama personil dari seksi lain..."
+                          className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                        />
+                        <datalist id="perbantuan-candidates-list">
+                          {nonLabCandidates.map((c: any) => (
+                            <option 
+                              key={c.nik} 
+                              value={`${c.nik} - ${c.name || c.nama} (${c.section || c.department || 'Seksi Lain'})`} 
+                            />
+                          ))}
+                        </datalist>
+                      </div>
+
+                      <select
+                        value={assistanceShift}
+                        onChange={e => setAssistanceShift(e.target.value as 'pagi' | 'malam')}
+                        className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="pagi">Shift Pagi</option>
+                        <option value="malam">Shift Malam</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAddAssistance(assistanceSearch, assistanceShift)}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer transition-all shadow-xs"
+                      >
+                        Simpan
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* List Personil Perbantuan Aktif */}
+                {assistanceList.length === 0 ? (
+                  <div className="text-[11px] text-slate-400 italic">
+                    Belum ada personil perbantuan dari seksi lain hari ini.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {assistanceList.map(item => (
+                      <div
+                        key={item.nik}
+                        className="px-2.5 py-1 rounded-xl bg-white border border-blue-200 flex items-center gap-2 shadow-2xs"
+                      >
+                        <span className="text-xs font-bold text-slate-900">{item.name}</span>
+                        <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100">
+                          {item.fromSection}
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-500">
+                          ({item.shift === 'pagi' ? 'Pagi' : 'Malam'})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAssistance(item.nik)}
+                          className="text-slate-400 hover:text-rose-600 p-0.5 rounded cursor-pointer transition-colors"
+                          title="Hapus perbantuan"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Ringkasan Tidak Bertugas (Cuti, Sakit, Off) */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+                <div className="flex items-center gap-3">
+                  <span>Tidak Bertugas: <strong className="text-slate-800 font-mono">{tidakBertugasList.length}</strong> org</span>
+                  <span>•</span>
+                  <span>Cuti: <strong className="text-amber-600 font-mono">{staffCuti + crewCuti}</strong></span>
+                  <span>•</span>
+                  <span>Sakit/Izin: <strong className="text-rose-600 font-mono">{staffIzinSakit + crewIzinSakit}</strong></span>
+                  <span>•</span>
+                  <span>Off Roster: <strong className="text-slate-600 font-mono">{tidakBertugasList.filter(p => p.shiftSchedule === 'OFF' || p.shiftSchedule === 'X').length}</strong></span>
+                </div>
+              </div>
+
             </div>
 
-            {/* 2. Distribusi Beban Shift (Pagi vs Malam) */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Komposisi Shift (Pagi vs Malam)
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-black font-mono text-amber-300">
-                  {staffPagi.length + crewPagi.length}
-                </span>
-                <span className="text-xs text-slate-400">Pagi</span>
-                <span className="text-slate-500 font-mono">vs</span>
-                <span className="text-xl font-black font-mono text-indigo-300">
-                  {staffMalam.length + crewMalam.length}
-                </span>
-                <span className="text-xs text-slate-400">Malam</span>
-              </div>
-              <ShiftDistributionBar 
-                dayVal={staffPagi.length + crewPagi.length} 
-                nightVal={staffMalam.length + crewMalam.length} 
-                dayLabel="Pagi"
-                nightLabel="Malam"
+            {/* SISI KANAN: MINI TREND CHART 7 HARI (KLIK UNTUK GRAFIK DETAIL) */}
+            <div className="lg:col-span-4 flex flex-col">
+              <MiniTrendChartCard
+                title="Tren Kehadiran Manpower"
+                unit="org"
+                metricToday={staffHadirTotal + crewHadirTotal + totalAssistanceCount}
+                deltaVal={(staffHadirTotal + crewHadirTotal) - prevTotalHadir}
+                unitLabel="vs D-1"
+                data={history7Days.map(h => ({ date: h.date, val: h.manpowerHadir, label: h.label }))}
+                onClick={() => setShowChart1(true)}
               />
             </div>
 
-            {/* 3. Kategori Utama (Staff vs Crew) */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Kategori Utama SDM
-              </span>
-              <div className="grid grid-cols-2 gap-2 text-xs pt-0.5">
-                <div className="p-1.5 rounded-xl bg-indigo-950/60 border border-indigo-800/60 text-center">
-                  <span className="text-[10px] text-indigo-300 block font-semibold">👔 Staff</span>
-                  <span className="font-mono font-bold text-sm text-white">{staffHadirTotal}</span>
-                  <span className="text-[9px] text-slate-400 block font-mono">/{staffList.length} org</span>
-                </div>
-                <div className="p-1.5 rounded-xl bg-emerald-950/60 border border-emerald-800/60 text-center">
-                  <span className="text-[10px] text-emerald-300 block font-semibold">👷 Crew</span>
-                  <span className="font-mono font-bold text-sm text-white">{crewHadirTotal}</span>
-                  <span className="text-[9px] text-slate-400 block font-mono">/{crewList.length} org</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 4. Status Kesiapan & Tidak Bertugas */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Status Kesiapan Operasi
-              </span>
-              <div className="flex items-center gap-1.5 pt-0.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-bold text-emerald-300">Kapasitas Penuh</span>
-              </div>
-              <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800 flex justify-between">
-                <span>Tidak Bertugas: <strong>{tidakBertugasList.length} org</strong></span>
-                <span>Cuti: <strong>{staffCuti + crewCuti}</strong></span>
-              </div>
-            </div>
-          </ExecutiveAtAGlanceBanner>
+          </div>
 
           {/* ========================================================================= */}
           {/* CARD UTAMA: STAFF & CREW (SHIFT BUKAN KATEGORI UTAMA) */}
@@ -1430,7 +1803,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                         Kategori Utama
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500">Crew Preparasi & Laboratorium, Crew Maintenance</p>
+                    <p className="text-xs text-slate-500">Seluruh crew berposisi setara di Section Laboratory</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -1451,35 +1824,20 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                   <div className="flex items-center justify-between pb-1.5 border-b border-teal-50 dark:border-teal-900/40">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-teal-700 dark:text-teal-300">
                       <Sun className="w-4 h-4 text-amber-500" />
-                      <span>Shift Pagi</span>
+                      <span>Crew Shift Pagi</span>
                     </div>
                     <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-lg bg-teal-100 dark:bg-teal-900/80 text-teal-800 dark:text-teal-200">
                       {crewPagi.length} Org
                     </span>
                   </div>
                   
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    Jabatan yang Bertugas ({crewPagi.length} Personil):
-                  </div>
-                  
-                  <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                    {crewBreakdownPagi.length === 0 ? (
-                      <div className="text-[11px] text-slate-400 italic py-1">Tidak ada crew dinas pagi</div>
-                    ) : (
-                      crewBreakdownPagi.map(b => (
-                        <div 
-                          key={b.jabatan} 
-                          className="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-100 dark:border-slate-700/60"
-                        >
-                          <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[155px]" title={b.jabatan}>
-                            {b.jabatan}
-                          </span>
-                          <span className="font-mono font-black text-emerald-700 dark:text-emerald-300 text-[11px] bg-emerald-50 dark:bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-200/50 shrink-0">
-                            {b.count} orang
-                          </span>
-                        </div>
-                      ))
-                    )}
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 text-xs space-y-1">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 block">
+                      Semua Crew Berposisi Setara:
+                    </span>
+                    <p className="text-[11px] text-slate-500 leading-tight">
+                      Bertugas pada preparasi sampel, penimbangan, pembakaran furnace & operasional spektrometer XRF.
+                    </p>
                   </div>
                 </div>
 
@@ -1488,35 +1846,20 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                   <div className="flex items-center justify-between pb-1.5 border-b border-indigo-50 dark:border-indigo-900/40">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
                       <Moon className="w-4 h-4 text-indigo-500" />
-                      <span>Shift Malam</span>
+                      <span>Crew Shift Malam</span>
                     </div>
                     <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/80 text-indigo-800 dark:text-indigo-200">
                       {crewMalam.length} Org
                     </span>
                   </div>
                   
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    Jabatan yang Bertugas ({crewMalam.length} Personil):
-                  </div>
-                  
-                  <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                    {crewBreakdownMalam.length === 0 ? (
-                      <div className="text-[11px] text-slate-400 italic py-1">Tidak ada crew dinas malam</div>
-                    ) : (
-                      crewBreakdownMalam.map(b => (
-                        <div 
-                          key={b.jabatan} 
-                          className="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-100 dark:border-slate-700/60"
-                        >
-                          <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[155px]" title={b.jabatan}>
-                            {b.jabatan}
-                          </span>
-                          <span className="font-mono font-black text-indigo-700 dark:text-indigo-300 text-[11px] bg-indigo-50 dark:bg-indigo-950/80 px-1.5 py-0.5 rounded border border-indigo-200/50 shrink-0">
-                            {b.count} orang
-                          </span>
-                        </div>
-                      ))
-                    )}
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60 text-xs space-y-1">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 block">
+                      Semua Crew Berposisi Setara:
+                    </span>
+                    <p className="text-[11px] text-slate-500 leading-tight">
+                      Bertugas pada preparasi sampel, penimbangan, pembakaran furnace & operasional spektrometer XRF.
+                    </p>
                   </div>
                 </div>
 
@@ -1531,8 +1874,8 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                   </span>
                   <span>•</span>
                   <span className="flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-blue-500" />
-                    Perbantuan Prep: <strong className="text-blue-600 dark:text-blue-400 font-mono">{crewBantuan} org</strong>
+                    <UserPlus className="w-3.5 h-3.5 text-blue-500" />
+                    Perbantuan Masuk: <strong className="text-blue-600 dark:text-blue-400 font-mono">{totalAssistanceCount} org</strong>
                   </span>
                 </div>
                 <button
@@ -2001,109 +2344,146 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           {showChart2 && <SampleReceivedTrendChart records={records} />}
 
           {/* ========================================================================= */}
-          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 2 SAMPLE RECEIVED */}
+          {/* REALITA HARI INI & MINI TREND CHART: BABAK 2 SAMPLE RECEIVED */}
           {/* ========================================================================= */}
-          <ExecutiveAtAGlanceBanner 
-            title="Penerimaan Sampel Harian: TBP/GPS Internal vs PT GTS (Terpisah)"
-            badgeText="Dual Entity Separation"
-          >
-            {/* 1. Daily Total Intake TBP/GPS */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-sky-400 font-bold uppercase tracking-wider block">
-                  Total TBP & GPS (Internal)
-                </span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-300 border border-sky-800">
-                  TBP / GPS
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono text-sky-300">
-                  {formatNumber(totalTbpGpsReceived)}
-                </span>
-                <span className="text-xs text-slate-400">sampel</span>
-              </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={totalTbpGpsReceived} prev={prevTotalReceived} unit="spl" />
-                <span className="text-[9px] text-slate-400 font-mono">7H: {formatNumber(avg7TbpGpsRecv)}/hr</span>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            {/* SISI KIRI: REALITA INTAKE HARI INI */}
+            <div className="lg:col-span-8 p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+              
+              {/* Header Status & Shift Distribution */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">
+                    Kondisi Operasional Hari Ini • {selectedDate}
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-2xl font-black font-mono text-slate-900">
+                      {formatNumber(totalTbpGpsReceived)}
+                    </span>
+                    <span className="text-xs text-slate-500 font-medium">
+                      Sampel TBP & GPS (Internal Lab)
+                    </span>
+                    <TrendDeltaBadge current={totalTbpGpsReceived} prev={prevTotalReceived} unit="spl" />
+                  </div>
+                </div>
 
-            {/* 2. Distribusi Beban Shift (Pagi vs Malam) */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Distribusi Shift Penerimaan
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-black font-mono text-amber-300">
-                  {formatNumber(totalDayShift)}
-                </span>
-                <span className="text-xs text-slate-400">Pagi</span>
-                <span className="text-slate-500 font-mono">vs</span>
-                <span className="text-xl font-black font-mono text-indigo-300">
-                  {formatNumber(totalNightShift)}
-                </span>
-                <span className="text-xs text-slate-400">Malam</span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
+                    <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    Pagi: {formatNumber(totalDayShift)}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono flex items-center gap-1">
+                    <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                    Malam: {formatNumber(totalNightShift)}
+                  </span>
+                </div>
               </div>
+
+              {/* 4 Pilar Seksi Pengirim (Tonjolkan yang aktif > 0) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Pilar Seksi Pengirim Sampel
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    *Rincian shift pagi & malam
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {/* GC */}
+                  <div className={`p-3 rounded-2xl border ${gcShift > 0 ? 'bg-teal-50/60 border-teal-200' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-teal-800">Grade Control</span>
+                      <span className="text-[10px] text-slate-500 font-mono">P:{gcDayShift}|M:{gcNightShift}</span>
+                    </div>
+                    <div className="text-xl font-black font-mono text-teal-900 mt-1">
+                      {formatNumber(gcShift)} <span className="text-xs font-normal text-slate-500">spl</span>
+                    </div>
+                    {gcShift === 0 && <span className="text-[10px] text-slate-400 italic">Nihil / 0 sampel</span>}
+                  </div>
+
+                  {/* Production */}
+                  <div className={`p-3 rounded-2xl border ${prodShift > 0 ? 'bg-blue-50/60 border-blue-200' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-blue-800">Production</span>
+                      <span className="text-[10px] text-slate-500 font-mono">P:{prodDayShift}|M:{prodNightShift}</span>
+                    </div>
+                    <div className="text-xl font-black font-mono text-blue-900 mt-1">
+                      {formatNumber(prodShift)} <span className="text-xs font-normal text-slate-500">spl</span>
+                    </div>
+                    {(prodRc > 0 || prodRaTotal > 0) && (
+                      <div className="text-[10px] text-blue-700 font-mono mt-0.5">
+                        {prodRc > 0 && `RC: ${prodRc}`} {prodRaTotal > 0 && `• RA: ${prodRaTotal}`}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Exploration */}
+                  <div className={`p-3 rounded-2xl border ${expShift > 0 ? 'bg-purple-50/60 border-purple-200' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-purple-800">Exploration</span>
+                      <span className="text-[10px] text-slate-500 font-mono">P:{expDayShift}|M:{expNightShift}</span>
+                    </div>
+                    <div className="text-xl font-black font-mono text-purple-900 mt-1">
+                      {formatNumber(expShift)} <span className="text-xs font-normal text-slate-500">spl</span>
+                    </div>
+                    {expShift === 0 && <span className="text-[10px] text-slate-400 italic">Nihil / 0 sampel</span>}
+                  </div>
+
+                  {/* Smelter */}
+                  <div className={`p-3 rounded-2xl border ${smelterShift > 0 ? 'bg-amber-50/60 border-amber-200' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-amber-800">Smelter</span>
+                      <span className="text-[10px] text-slate-500 font-mono">P:{smelterDayShift}|M:{smelterNightShift}</span>
+                    </div>
+                    <div className="text-xl font-black font-mono text-amber-900 mt-1">
+                      {formatNumber(smelterShift)} <span className="text-xs font-normal text-slate-500">spl</span>
+                    </div>
+                    {smelterShift === 0 && <span className="text-[10px] text-slate-400 italic">Nihil / 0 sampel</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* PT GTS Sister Site (Jika ada sampel) */}
+              {totalGtsReceived > 0 && (
+                <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-purple-700" />
+                    <span className="font-bold text-purple-900">PT GTS (Sister Site):</span>
+                    <span className="text-purple-700">Entitas Mandiri (Dikelola Terpisah)</span>
+                  </div>
+                  <span className="font-mono font-black text-purple-900 text-sm">
+                    {formatNumber(totalGtsReceived)} sampel
+                  </span>
+                </div>
+              )}
+
+              {/* Shift Ratio Bar */}
               <ShiftDistributionBar 
                 dayVal={totalDayShift} 
                 nightVal={totalNightShift} 
                 dayLabel="Pagi"
                 nightLabel="Malam"
               />
+
             </div>
 
-            {/* 3. Breakdown 4 Pilar Seksi TBP/GPS */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Pilar Seksi TBP/GPS
-              </span>
-              <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono pt-0.5">
-                <div className="flex justify-between">
-                  <span className="text-teal-400">GC:</span>
-                  <strong className="text-white">{formatNumber(gcShift)}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-400">Prod:</span>
-                  <strong className="text-white">{formatNumber(prodShift)}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-purple-400">Exp:</span>
-                  <strong className="text-white">{formatNumber(expShift)}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-orange-400">Smelt:</span>
-                  <strong className="text-white">{formatNumber(smelterShift)}</strong>
-                </div>
-              </div>
-              {(prodRc > 0 || prodRaTotal > 0) && (
-                <div className="text-[9px] text-slate-400 font-mono border-t border-slate-800 pt-0.5">
-                  Prod Split: {prodRc > 0 && `RC:${prodRc} `}{prodRaTotal > 0 && `RA:${prodRaTotal}`}
-                </div>
-              )}
+            {/* SISI KANAN: MINI TREND CHART 7 HARI (KLIK UNTUK GRAFIK DETAIL) */}
+            <div className="lg:col-span-4 flex flex-col">
+              <MiniTrendChartCard
+                title="Tren Sample Intake"
+                unit="spl"
+                metricToday={formatNumber(totalTbpGpsReceived)}
+                deltaVal={totalTbpGpsReceived - prevTotalReceived}
+                unitLabel="vs D-1"
+                data={history7Days.map(h => ({ date: h.date, val: h.sampleIntake, label: h.label }))}
+                onClick={() => setShowChart2(true)}
+              />
             </div>
 
-            {/* 4. PT GTS (Sister Site - Entitas Mandiri) */}
-            <div className="p-3.5 rounded-2xl bg-purple-950/40 border border-purple-800/60 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-purple-300 font-bold uppercase tracking-wider block">
-                  PT GTS (Sister Site)
-                </span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-900/80 text-purple-200 border border-purple-700">
-                  Terpisah
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono text-purple-200">
-                  {formatNumber(totalGtsReceived)}
-                </span>
-                <span className="text-xs text-purple-400">sampel</span>
-              </div>
-              <p className="text-[10px] text-purple-300/80 leading-tight pt-1">
-                Sampel GTS dicatat mandiri, <strong>tidak digabung</strong> dengan kuota TBP/GPS.
-              </p>
-            </div>
-          </ExecutiveAtAGlanceBanner>
+          </div>
 
           {/* PER-SHIFT MANAGEMENT BREAKDOWN (Pagi vs Malam) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2335,106 +2715,139 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           {showChart3 && <ProductivityPrepTrendChart records={records} />}
 
           {/* ========================================================================= */}
-          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 3 PRODUCTIVITY PREPARASI */}
+          {/* REALITA HARI INI & MINI TREND CHART: BABAK 3 PRODUCTIVITY PREPARASI */}
           {/* ========================================================================= */}
-          <ExecutiveAtAGlanceBanner 
-            title="Throughput Harian 4 Stasiun Preparasi, Shift Load & Backlog Monitor"
-            badgeText={`${totalPrepBal > 400 ? 'Waspada Backlog' : 'Throughput Normal'}`}
-          >
-            {/* 1. Daily Total Throughput */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
-                Total Output Preparasi
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono text-amber-300">
-                  {formatNumber(totalPrepFin)}
-                </span>
-                <span className="text-xs text-slate-400">unit diproses</span>
-              </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={totalPrepFin} prev={prevTotalPrepFin} unit="unit" />
-                <span className="text-[9px] text-slate-400 font-mono">4 Stasiun</span>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            {/* SISI KIRI: REALITA PREPARASI HARI INI */}
+            <div className="lg:col-span-8 p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+              
+              {/* Header Status & Shift Distribution */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">
+                    Kondisi Operasional Hari Ini • {selectedDate}
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-2xl font-black font-mono text-slate-900">
+                      {formatNumber(totalPrepFin)}
+                    </span>
+                    <span className="text-xs text-slate-500 font-medium">
+                      Unit Diproses di 4 Stasiun Preparasi
+                    </span>
+                    <TrendDeltaBadge current={totalPrepFin} prev={prevTotalPrepFin} unit="unit" />
+                  </div>
+                </div>
 
-            {/* 2. Distribusi Beban Shift (Pagi vs Malam) */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Realisasi Shift Throughput
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-black font-mono text-amber-300">
-                  {formatNumber(totalPrepFinDay)}
-                </span>
-                <span className="text-xs text-slate-400">Pagi</span>
-                <span className="text-slate-500 font-mono">vs</span>
-                <span className="text-xl font-black font-mono text-indigo-300">
-                  {formatNumber(totalPrepFinNight)}
-                </span>
-                <span className="text-xs text-slate-400">Malam</span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
+                    <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    Pagi: {formatNumber(totalPrepFinDay)}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono flex items-center gap-1">
+                    <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                    Malam: {formatNumber(totalPrepFinNight)}
+                  </span>
+                </div>
               </div>
+
+              {/* Status 4 Stasiun Preparasi */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {/* 1. Press Powder */}
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-800">Press Powder</span>
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                      {pressBal === 0 ? 'Clear' : `${pressBal} O/S`}
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-slate-900">
+                    {formatNumber(pressFin)} <span className="text-xs font-normal text-slate-400">pelet</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">Selesai dicetak</span>
+                </div>
+
+                {/* 2. Weighing */}
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-800">Weighing</span>
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                      {weighBal === 0 ? 'Clear' : `${weighBal} O/S`}
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-slate-900">
+                    {formatNumber(weighFin)} <span className="text-xs font-normal text-slate-400">cawan</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">Ditimbang teliti</span>
+                </div>
+
+                {/* 3. Fusion */}
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-800">Fusion Furnace</span>
+                    <span className="text-[10px] font-mono text-amber-700 bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
+                      {fusionBalAkhir === 0 ? 'Clear' : `${fusionBalAkhir} O/S`}
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-slate-900">
+                    {formatNumber(fusionFin)} <span className="text-xs font-normal text-slate-400">bead</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">Glass bead siap XRF</span>
+                </div>
+
+                {/* 4. LOI */}
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-800">LOI (Loss Ign.)</span>
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                      {loiBal === 0 ? 'Clear' : `${loiBal} O/S`}
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-slate-900">
+                    {formatNumber(loiFin)} <span className="text-xs font-normal text-slate-400">cawan</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">Furnace gravimetri</span>
+                </div>
+              </div>
+
+              {/* Backlog Alert & Shift Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">Sisa Antrean (Backlog):</span>
+                  <span className={`font-mono font-bold px-2 py-0.5 rounded-lg border ${
+                    totalPrepBal > 400 
+                      ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                    {formatNumber(totalPrepBal)} sampel
+                  </span>
+                  <TrendDeltaBadge current={totalPrepBal} prev={prevTotalPrepBal} isInverse={true} unit="spl" />
+                </div>
+              </div>
+
               <ShiftDistributionBar 
                 dayVal={totalPrepFinDay} 
                 nightVal={totalPrepFinNight} 
                 dayLabel="Pagi"
                 nightLabel="Malam"
               />
+
             </div>
 
-            {/* 3. 4 Stasiun Utama Preparasi */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Output Per-Stasiun
-              </span>
-              <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono pt-0.5">
-                <div className="flex justify-between">
-                  <span className="text-sky-400">Press:</span>
-                  <strong className="text-white">{formatNumber(pressFin)}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-amber-400">Weigh:</span>
-                  <strong className="text-white">{formatNumber(weighFin)}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-orange-400">Fusion:</span>
-                  <strong className="text-white">{formatNumber(fusionFin)}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-purple-400">LOI:</span>
-                  <strong className="text-white">{formatNumber(loiFin)}</strong>
-                </div>
-              </div>
+            {/* SISI KANAN: MINI TREND CHART 7 HARI (KLIK UNTUK GRAFIK DETAIL) */}
+            <div className="lg:col-span-4 flex flex-col">
+              <MiniTrendChartCard
+                title="Tren Throughput Preparasi"
+                unit="unit"
+                metricToday={formatNumber(totalPrepFin)}
+                deltaVal={totalPrepFin - prevTotalPrepFin}
+                unitLabel="vs D-1"
+                data={history7Days.map(h => ({ date: h.date, val: h.prepFinished, label: h.label }))}
+                onClick={() => setShowChart3(true)}
+              />
             </div>
 
-            {/* 4. Monitoring Backlog Sisa Antrean */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                  Total Sisa Antrean (O/S)
-                </span>
-                {totalPrepBal > 400 ? (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 border border-rose-800 font-bold">
-                    Backlog
-                  </span>
-                ) : (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
-                    Normal
-                  </span>
-                )}
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className={`text-2xl font-black font-mono ${totalPrepBal > 400 ? 'text-rose-400' : 'text-teal-300'}`}>
-                  {formatNumber(totalPrepBal)}
-                </span>
-                <span className="text-xs text-slate-400">sampel sisa</span>
-              </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={totalPrepBal} prev={prevTotalPrepBal} isInverse={true} unit="spl" />
-                <span className="text-[9px] text-slate-400 font-mono">Backlog</span>
-              </div>
-            </div>
-          </ExecutiveAtAGlanceBanner>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 3a. Press Powder */}
@@ -2537,83 +2950,135 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           {showChart4 && <XrfInstrumentsTrendChart records={records} />}
 
           {/* ========================================================================= */}
-          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 4 INSTRUMEN EDXRF & WDXRF */}
+          {/* REALITA HARI INI & MINI TREND CHART: BABAK 4 INSTRUMEN EDXRF & WDXRF */}
           {/* ========================================================================= */}
-          <ExecutiveAtAGlanceBanner 
-            title="Kinerja Spektrometri XRF: TBP/GPS Internal vs PT GTS (Terpisah)"
-            badgeText="Dual Entity Segregated Analysis"
-          >
-            {/* 1. EDXRF Group (TBP/GPS) */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-teal-400 font-bold uppercase tracking-wider block">
-                EDXRF 6-Mesin (TBP/GPS)
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono text-teal-300">
-                  {formatNumber(edxrfTotalFin)}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            {/* SISI KIRI: REALITA SPEKTROMETRI XRF HARI INI */}
+            <div className="lg:col-span-8 p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+              
+              {/* Header Status & Shift Distribution */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <span className="text-[10px] font-bold text-teal-600 uppercase tracking-wider block">
+                    Kondisi Operasional Hari Ini • {selectedDate}
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-2xl font-black font-mono text-slate-900">
+                      {formatNumber(edxrfTotalFin + totalTbpGpsWdxrf)}
+                    </span>
+                    <span className="text-xs text-slate-500 font-medium">
+                      Total Run Spektrometer (Internal TBP/GPS)
+                    </span>
+                    <TrendDeltaBadge 
+                      current={edxrfTotalFin + totalTbpGpsWdxrf} 
+                      prev={prevEdxrfTotalFin + prevTotalTbpGpsWdxrf} 
+                      unit="run" 
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-xl bg-teal-50 text-teal-800 border border-teal-200 text-xs font-bold font-mono">
+                    EDXRF: {formatNumber(edxrfTotalFin)}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono">
+                    WDXRF: {formatNumber(totalTbpGpsWdxrf)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status EDXRF 6 Mesin + Puma (Hanya munculkan mesin aktif > 0) */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-800 block">
+                  Realisasi Unit EDXRF (6 Epsilon + S2 Puma)
                 </span>
-                <span className="text-xs text-slate-400">run analisis</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { name: 'Epsilon C', val: epsC },
+                    { name: 'Epsilon D', val: epsD },
+                    { name: 'Epsilon E', val: epsE },
+                    { name: 'Epsilon F', val: epsF },
+                    { name: 'Epsilon G', val: epsG },
+                    { name: 'Epsilon H', val: epsH },
+                    { name: 'S2 Puma', val: s2Puma },
+                  ]
+                    .filter(unit => unit.val > 0)
+                    .map(unit => (
+                      <div key={unit.name} className="p-2.5 rounded-2xl bg-teal-50/50 border border-teal-200/70 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-700">{unit.name}</span>
+                        <span className="text-xs font-black font-mono text-teal-800 bg-white px-1.5 py-0.5 rounded border border-teal-100">
+                          {unit.val} run
+                        </span>
+                      </div>
+                    ))}
+                </div>
               </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={edxrfTotalFin} prev={prevEdxrfTotalFin} unit="run" />
-                <span className="text-[9px] text-slate-400 font-mono">Pagi:{edxrfDayShift} | Mlm:{edxrfNightShift}</span>
+
+              {/* Status WDXRF Zetium (TBP/GPS vs GTS) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Internal TBP/GPS */}
+                <div className="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-200/80 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-indigo-900">WDXRF Zetium (TBP/GPS)</span>
+                    <span className="text-[10px] text-indigo-700 font-mono">Internal</span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-indigo-950">
+                    {formatNumber(totalTbpGpsWdxrf)} <span className="text-xs font-normal text-slate-500">run</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 flex justify-between font-mono pt-1 border-t border-indigo-100">
+                    <span>Ztm A: {ztmATbpGps}</span>
+                    <span>Ztm B: {ztmBTbpGps}</span>
+                  </div>
+                </div>
+
+                {/* Sister Site GTS */}
+                <div className="p-3.5 rounded-2xl bg-purple-50/60 border border-purple-200/80 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-purple-900">WDXRF Zetium (PT GTS)</span>
+                    <span className="text-[10px] text-purple-700 font-mono font-bold bg-purple-100 px-1.5 py-0.2 rounded">
+                      Sister Site
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-purple-950">
+                    {formatNumber(totalGtsRuns)} <span className="text-xs font-normal text-slate-500">run GTS</span>
+                  </div>
+                  <div className="text-[10px] text-purple-700/80 flex justify-between font-mono pt-1 border-t border-purple-100">
+                    <span>Ztm A: {ztmAGts}</span>
+                    <span>Ztm B: {ztmBGts}</span>
+                  </div>
+                </div>
               </div>
+
+              {/* Utilisasi & Chamber Readiness */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="font-semibold text-slate-700">8/8 Mesin Spektrometer Siap & Terkalibrasi</span>
+                </div>
+                <div className="flex items-center gap-3 font-mono text-[11px]">
+                  <span>Pagi: {edxrfDayShift + tbpGpsDayWdxrf} run</span>
+                  <span>•</span>
+                  <span>Malam: {edxrfNightShift + tbpGpsNightWdxrf} run</span>
+                </div>
+              </div>
+
             </div>
 
-            {/* 2. WDXRF Zetium (TBP/GPS Internal) */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">
-                WDXRF Zetium (TBP/GPS)
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono text-indigo-300">
-                  {formatNumber(totalTbpGpsWdxrf)}
-                </span>
-                <span className="text-xs text-slate-400">run internal</span>
-              </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={totalTbpGpsWdxrf} prev={prevTotalTbpGpsWdxrf} unit="run" />
-                <span className="text-[9px] text-slate-400 font-mono">Pagi:{tbpGpsDayWdxrf} | Mlm:{tbpGpsNightWdxrf}</span>
-              </div>
+            {/* SISI KANAN: MINI TREND CHART 7 HARI (KLIK UNTUK GRAFIK DETAIL) */}
+            <div className="lg:col-span-4 flex flex-col">
+              <MiniTrendChartCard
+                title="Tren Output XRF"
+                unit="run"
+                metricToday={formatNumber(edxrfTotalFin + totalTbpGpsWdxrf)}
+                deltaVal={(edxrfTotalFin + totalTbpGpsWdxrf) - (prevEdxrfTotalFin + prevTotalTbpGpsWdxrf)}
+                unitLabel="vs D-1"
+                data={history7Days.map(h => ({ date: h.date, val: h.xrfOutput, label: h.label }))}
+                onClick={() => setShowChart4(true)}
+              />
             </div>
 
-            {/* 3. WDXRF Zetium (PT GTS - Dedicated Sister Site) */}
-            <div className="p-3.5 rounded-2xl bg-purple-950/40 border border-purple-800/60 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-purple-300 font-bold uppercase tracking-wider block">
-                  PT GTS (Sister Site)
-                </span>
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-900 text-purple-200 border border-purple-700 font-bold">
-                  Terpisah Mutlak
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono text-purple-200">
-                  {formatNumber(totalGtsRuns)}
-                </span>
-                <span className="text-xs text-purple-400">run GTS</span>
-              </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={totalGtsRuns} prev={prevTotalGtsRuns} unit="run" />
-                <span className="text-[9px] text-purple-300 font-mono">Ztm A:{ztmAGts} | B:{ztmBGts}</span>
-              </div>
-            </div>
-
-            {/* 4. Chamber Load & Utilisasi 8 Mesin */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Utilisasi Instrumen
-              </span>
-              <div className="flex items-center gap-1.5 pt-0.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-bold text-emerald-300">8/8 Mesin Siap & Aktif</span>
-              </div>
-              <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800 flex justify-between font-mono">
-                <span>Zetium A: <strong>{ztmATotal}</strong></span>
-                <span>Zetium B: <strong>{ztmBTotal}</strong></span>
-              </div>
-            </div>
-          </ExecutiveAtAGlanceBanner>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
@@ -2832,98 +3297,119 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           {showChart5 && <QcReportingTrendChart records={records} />}
 
           {/* ========================================================================= */}
-          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 5 QC DATA & REPORTING */}
+          {/* REALITA HARI INI & MINI TREND CHART: BABAK 5 QC DATA & REPORTING */}
           {/* ========================================================================= */}
-          <ExecutiveAtAGlanceBanner 
-            title="Validasi Kontrol Mutu (QC) & Pelepasan Sertifikat Analisis (CoA)"
-            badgeText={`${reportBalAkhir > 50 ? 'Akselerasi Approval' : 'Pelepasan On-Time'}`}
-          >
-            {/* 1. QC Validasi Selesai */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-teal-400 font-bold uppercase tracking-wider block">
-                Validasi Kontrol Mutu (QC)
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono text-teal-300">
-                  {formatNumber(qcFin)}
-                </span>
-                <span className="text-xs text-slate-400">sampel diverifikasi</span>
-              </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={qcFin} prev={prevQcFin} unit="spl" />
-                <span className="text-[9px] text-slate-400 font-mono">Pagi:{qcDayShift} | Mlm:{qcNightShift}</span>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            {/* SISI KIRI: REALITA QC & PELAPORAN HARI INI */}
+            <div className="lg:col-span-8 p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-4">
+              
+              {/* Header Status & Shift Distribution */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">
+                    Kondisi Operasional Hari Ini • {selectedDate}
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-2xl font-black font-mono text-slate-900">
+                      {formatNumber(reportFin)}
+                    </span>
+                    <span className="text-xs text-slate-500 font-medium">
+                      Sertifikat Analisis (CoA) Dirilis Sah
+                    </span>
+                    <TrendDeltaBadge current={reportFin} prev={prevReportFin} unit="lpr" />
+                  </div>
+                </div>
 
-            {/* 2. Rilis Sertifikat CoA */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
-                Laporan CoA Dirilis
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black font-mono text-emerald-300">
-                  {formatNumber(reportFin)}
-                </span>
-                <span className="text-xs text-slate-400">laporan sah</span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold font-mono flex items-center gap-1">
+                    <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    Pagi: {formatNumber(reportDayShift)}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold font-mono flex items-center gap-1">
+                    <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                    Malam: {formatNumber(reportNightShift)}
+                  </span>
+                </div>
               </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={reportFin} prev={prevReportFin} unit="lpr" />
-                <span className="text-[9px] text-slate-400 font-mono">Pagi:{reportDayShift} | Mlm:{reportNightShift}</span>
-              </div>
-            </div>
 
-            {/* 3. Distribusi Shift Rilis */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Distribusi Shift Rilis
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-black font-mono text-amber-300">
-                  {formatNumber(reportDayShift)}
-                </span>
-                <span className="text-xs text-slate-400">Pagi</span>
-                <span className="text-slate-500 font-mono">vs</span>
-                <span className="text-xl font-black font-mono text-indigo-300">
-                  {formatNumber(reportNightShift)}
-                </span>
-                <span className="text-xs text-slate-400">Malam</span>
+              {/* Status QC & Pelaporan */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Validasi QC */}
+                <div className="p-3.5 rounded-2xl bg-teal-50/60 border border-teal-200/80 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-teal-900">Validasi Mutu (QC)</span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${
+                      qcBalAkhir === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {qcBalAkhir === 0 ? 'Clear / 100%' : `${qcBalAkhir} O/S`}
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-teal-950">
+                    {formatNumber(qcFin)} <span className="text-xs font-normal text-slate-500">sampel</span>
+                  </div>
+                  <span className="text-[10px] text-teal-700/80 block">
+                    Validasi kalibrasi, standar CRM & duplicate checks
+                  </span>
+                </div>
+
+                {/* Pelepasan CoA */}
+                <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-900">Pelepasan Laporan (CoA)</span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-bold ${
+                      reportBalAkhir === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {reportBalAkhir === 0 ? 'Zero Pending' : `${reportBalAkhir} Pending`}
+                    </span>
+                  </div>
+                  <div className="text-xl font-black font-mono text-emerald-950">
+                    {formatNumber(reportFin)} <span className="text-xs font-normal text-slate-500">CoA</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-700/80 block">
+                    Dokumen resmi diserahkan ke Mining / GC / KSO
+                  </span>
+                </div>
               </div>
+
+              {/* Status Sisa Antrean Pending & Approval */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span>Pending Approval CoA:</span>
+                  <span className={`font-mono font-bold px-2 py-0.5 rounded-lg border ${
+                    reportBalAkhir > 50 
+                      ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                    {formatNumber(reportBalAkhir)} laporan
+                  </span>
+                  <TrendDeltaBadge current={reportBalAkhir} prev={prevReportBal} isInverse={true} unit="lpr" />
+                </div>
+              </div>
+
               <ShiftDistributionBar 
                 dayVal={reportDayShift} 
                 nightVal={reportNightShift} 
                 dayLabel="Pagi"
                 nightLabel="Malam"
               />
+
             </div>
 
-            {/* 4. Sisa Antrean Laporan Pending (Outstanding CoA) */}
-            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                  Pending Laporan (O/S)
-                </span>
-                {reportBalAkhir > 50 ? (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold">
-                    Perlu Approval
-                  </span>
-                ) : (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
-                    Terkendali
-                  </span>
-                )}
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className={`text-2xl font-black font-mono ${reportBalAkhir > 50 ? 'text-amber-400' : 'text-teal-300'}`}>
-                  {formatNumber(reportBalAkhir)}
-                </span>
-                <span className="text-xs text-slate-400">laporan pending</span>
-              </div>
-              <div className="pt-1 flex items-center justify-between">
-                <TrendDeltaBadge current={reportBalAkhir} prev={prevReportBal} isInverse={true} unit="lpr" />
-                <span className="text-[9px] text-slate-400 font-mono">Sisa Antrean</span>
-              </div>
+            {/* SISI KANAN: MINI TREND CHART 7 HARI (KLIK UNTUK GRAFIK DETAIL) */}
+            <div className="lg:col-span-4 flex flex-col">
+              <MiniTrendChartCard
+                title="Tren Rilis CoA"
+                unit="lpr"
+                metricToday={formatNumber(reportFin)}
+                deltaVal={reportFin - prevReportFin}
+                unitLabel="vs D-1"
+                data={history7Days.map(h => ({ date: h.date, val: h.coaReleased, label: h.label }))}
+                onClick={() => setShowChart5(true)}
+              />
             </div>
-          </ExecutiveAtAGlanceBanner>
+
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 5a. QC Data */}

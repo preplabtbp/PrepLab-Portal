@@ -1791,11 +1791,14 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Daily Splash Screen (Cross-device synced 1x per day via Server API) */}
-          <DailySplashScreen
-            userName={inspectorName || undefined}
-            userNik={inspectorNik || undefined}
-          />
+          {/* Daily Splash Screen (Cross-device synced 1x per day via Server API, strictly on initial Home startup) */}
+          {activeTab === 'home' && (
+            <DailySplashScreen
+              userName={inspectorName || undefined}
+              userNik={inspectorNik || undefined}
+              isHome={activeTab === 'home'}
+            />
+          )}
           
       <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-slate-200/50 to-transparent pointer-events-none"></div>
       

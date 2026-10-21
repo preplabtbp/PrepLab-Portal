@@ -57,6 +57,48 @@ export const QC_ELEMENTS_LIST = [
   'MnO'
 ];
 
+/**
+ * Helper serbaguna untuk memformat tanggal dan jam titik chart secara konsisten.
+ * Menjamin titik chart selalu menampilkan Tanggal & Jam (baik data GTS yang jam saja,
+ * data lengkap, maupun data lama).
+ */
+export function formatPointDisplayDate(analyzedAt?: string | null, batchDate?: string | null): string {
+  const cleanAnalyzed = (analyzedAt || '').trim();
+  const cleanDate = (batchDate || '').trim();
+
+  if (!cleanAnalyzed && !cleanDate) return '-';
+
+  // 1. Jika analyzedAt HANYA berupa jam (misal: "08:00", "01:05", "00:26", "08:00:15")
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(cleanAnalyzed)) {
+    return cleanDate ? `${cleanDate} ${cleanAnalyzed}` : cleanAnalyzed;
+  }
+
+  // 2. Jika analyzedAt sudah memuat tanggal dan jam
+  if (cleanAnalyzed) {
+    return cleanAnalyzed;
+  }
+
+  // 3. Fallback ke batchDate
+  return cleanDate || '-';
+}
+
+/**
+ * Format aman untuk memecah tanggal dan jam secara terpisah untuk tampilan tabel
+ */
+export function parsePointDateTimeParts(analyzedAt?: string | null, batchDate?: string | null): { dateStr: string; timeStr: string } {
+  const combined = formatPointDisplayDate(analyzedAt, batchDate);
+  if (combined === '-') return { dateStr: '-', timeStr: '' };
+
+  const parts = combined.split(/\s+/);
+  if (parts.length >= 2) {
+    return { dateStr: parts[0], timeStr: parts.slice(1).join(' ') };
+  }
+  if (/^\d{1,2}:\d{2}/.test(parts[0])) {
+    return { dateStr: batchDate || '-', timeStr: parts[0] };
+  }
+  return { dateStr: parts[0], timeStr: '' };
+}
+
 interface XrfQcChartCardProps {
   standardCode: string;
   instrumentName: string;
@@ -819,7 +861,7 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
           const isPointAction = absSigma > 3.0;
           const isPointWarning = absSigma > 2.0 && absSigma <= 3.0;
           const diff = selectedPoint.value - limits.nominalValue;
-          const sampleDate = selectedPoint.analyzedAt || selectedPoint.date || `Pengambilan #${selectedPoint.index}`;
+          const sampleDate = formatPointDisplayDate(selectedPoint.analyzedAt, selectedPoint.date) || `Pengambilan #${selectedPoint.index}`;
           const isIsolated = isPointIsolated ? isPointIsolated(selectedPoint, currentElement) : false;
           const offspecCountInCard = validPoints.filter(p => limits.stdevFixed > 0 && Math.abs((p.value - limits.nominalValue) / limits.stdevFixed) > 2.0).length;
           const pointAnnotation = annotations[selectedPoint.index];
@@ -1183,7 +1225,7 @@ export const XrfQcChartCard: React.FC<XrfQcChartCardProps> = React.memo(({
           const isPointAction = absSigma > 3.0;
           const isPointWarning = absSigma > 2.0 && absSigma <= 3.0;
           const diff = hoveredPoint.value - limits.nominalValue;
-          const sampleDate = hoveredPoint.analyzedAt || hoveredPoint.date || `Pengambilan #${hoveredPoint.index}`;
+          const sampleDate = formatPointDisplayDate(hoveredPoint.analyzedAt, hoveredPoint.date) || `Pengambilan #${hoveredPoint.index}`;
           const pointAnn = annotations[hoveredPoint.index];
 
           return (

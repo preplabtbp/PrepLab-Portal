@@ -46,11 +46,27 @@
             }
           }
         } catch(e) {}
+
+        // Cegah flicker animasi splash: langsung sembunyikan jika bukan buka awal aplikasi atau bukan di beranda
+        try {
+          var p = window.location.pathname;
+          var isHome = (p === '/' || p === '/home' || p === '' || p === '/index.html');
+          var isEmbed = new URLSearchParams(window.location.search).get('embed') === 'true';
+          var alreadyPlayed = sessionStorage.getItem('preplab_app_splash_played') === 'true';
+          if (alreadyPlayed || !isHome || isEmbed) {
+            document.documentElement.classList.add('no-preplab-splash');
+          }
+        } catch(e) {}
       })();
     </script>
+    <style>
+      html.no-preplab-splash #preplab-splash-screen {
+        display: none !important;
+      }
+    </style>
   </head>
   <body>
-    <!-- PREPLAB VIDEO SPLASH SCREEN (Tampil otomatis saat buka aplikasi dari HP / Desktop) -->
+    <!-- PREPLAB VIDEO SPLASH SCREEN (Tampil 1x otomatis HANYA saat buka aplikasi baru dimulai dari beranda) -->
     <div 
       id="preplab-splash-screen" 
       title="Ketuk untuk lewati"
@@ -76,13 +92,25 @@
     <script>
       (function() {
         try {
+          var p = window.location.pathname;
+          var isHome = (p === '/' || p === '/home' || p === '' || p === '/index.html');
           var isEmbed = new URLSearchParams(window.location.search).get('embed') === 'true';
           var splash = document.getElementById('preplab-splash-screen');
           var video = document.getElementById('preplab-splash-video');
-          if (isEmbed) {
-            if (splash) splash.style.display = 'none';
+          var alreadyPlayed = sessionStorage.getItem('preplab_app_splash_played') === 'true';
+
+          // Muncul HANYA 1x saat aplikasi baru dimulai dan HANYA di halaman utama (jangan muncul dimana-mana / saat navigasi / refresh)
+          if (alreadyPlayed || !isHome || isEmbed) {
+            if (splash) {
+              splash.style.display = 'none';
+              try { splash.remove(); } catch(e) {}
+            }
             return;
           }
+
+          // Segera tandai bahwa animasi splash screen pembuka telah tayang untuk sesi ini
+          sessionStorage.setItem('preplab_app_splash_played', 'true');
+
           if (!splash || !video) return;
 
           var isEnded = false;
@@ -102,6 +130,7 @@
             splash.style.pointerEvents = 'none';
             setTimeout(function() {
               splash.style.display = 'none';
+              try { splash.remove(); } catch(e) {}
             }, 350);
           }
 
@@ -127,7 +156,7 @@
             playPromise.then(function() {
               showVideo();
             }).catch(function() {
-              setTimeout(dismissSplash, 4000);
+              setTimeout(dismissSplash, 3000);
             });
           }
         } catch(e) {}

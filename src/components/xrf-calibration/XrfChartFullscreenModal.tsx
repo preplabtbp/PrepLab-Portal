@@ -13,7 +13,9 @@ import {
   XrfChartStatData, 
   XrfPointData, 
   XrfPointAnnotation, 
-  QC_ELEMENTS_LIST 
+  QC_ELEMENTS_LIST,
+  formatPointDisplayDate,
+  parsePointDateTimeParts
 } from './XrfQcChartCard';
 
 export interface XrfChartFullscreenModalProps {
@@ -178,8 +180,8 @@ export function XrfChartFullscreenModal({
 
   const formattedLastUpdate = useMemo(() => {
     if (!lastActivePoint) return null;
-    const str = lastActivePoint.analyzedAt || lastActivePoint.date;
-    if (!str) return null;
+    const str = formatPointDisplayDate(lastActivePoint.analyzedAt, lastActivePoint.date);
+    if (!str || str === '-') return null;
     try {
       const cleanStr = str.replace('T', ' ');
       const [datePart, timePart] = cleanStr.split(' ');
@@ -348,7 +350,7 @@ export function XrfChartFullscreenModal({
         return [
           p.index,
           p.date || '-',
-          p.analyzedAt ? new Date(p.analyzedAt).toLocaleString('id-ID') : '-',
+          formatPointDisplayDate(p.analyzedAt, p.date),
           currentElement,
           p.value.toFixed(4),
           limits.nominalValue.toFixed(4),
@@ -444,7 +446,7 @@ export function XrfChartFullscreenModal({
             ) : (
               <span 
                 className="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 shadow-2xs whitespace-nowrap shrink-0"
-                title={`Data Sinkronisasi Terakhir: ${lastActivePoint?.analyzedAt || lastActivePoint?.date || '-'}`}
+                title={`Data Sinkronisasi Terakhir: ${formatPointDisplayDate(lastActivePoint?.analyzedAt, lastActivePoint?.date)}`}
               >
                 <RefreshCw className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formattedLastUpdate}</span>
@@ -1054,7 +1056,7 @@ export function XrfChartFullscreenModal({
                         <div>
                           <span className="text-slate-400 dark:text-slate-500 block text-[9.5px] font-sans">Tanggal / Waktu</span>
                           <span className="font-semibold text-slate-700 dark:text-slate-300 truncate block">
-                            {point.analyzedAt ? new Date(point.analyzedAt).toLocaleString('id-ID') : (point.date || '-')}
+                            {formatPointDisplayDate(point.analyzedAt, point.date)}
                           </span>
                         </div>
                         <div>
@@ -1115,7 +1117,7 @@ export function XrfChartFullscreenModal({
                       <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1.5">
                         <span className="font-extrabold text-xs">Titik #{point.index}</span>
                         <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
-                          {point.analyzedAt ? new Date(point.analyzedAt).toLocaleDateString('id-ID') : (point.date || '-')}
+                          {formatPointDisplayDate(point.analyzedAt, point.date)}
                         </span>
                       </div>
                       <div className="space-y-1 font-mono text-[11px]">
@@ -1440,10 +1442,10 @@ export function XrfChartFullscreenModal({
                             >
                               <td className="py-2 px-3 font-mono font-bold text-slate-500">#{p.index}</td>
                               <td className="py-2 px-3">
-                                <div>{p.date || '-'}</div>
-                                {p.analyzedAt && (
+                                <div>{parsePointDateTimeParts(p.analyzedAt, p.date).dateStr}</div>
+                                {parsePointDateTimeParts(p.analyzedAt, p.date).timeStr && (
                                   <div className="text-[10px] text-slate-400 font-mono">
-                                    {new Date(p.analyzedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                    {parsePointDateTimeParts(p.analyzedAt, p.date).timeStr}
                                   </div>
                                 )}
                               </td>
@@ -1625,7 +1627,7 @@ export function XrfChartFullscreenModal({
                       <p className="flex justify-between">
                         <span className="text-slate-500">Waktu Analisis:</span>
                         <strong className="font-mono">
-                          {selectedPointObj.analyzedAt ? new Date(selectedPointObj.analyzedAt).toLocaleString('id-ID') : '-'}
+                          {formatPointDisplayDate(selectedPointObj.analyzedAt, selectedPointObj.date)}
                         </strong>
                       </p>
                       <p className="flex justify-between">
