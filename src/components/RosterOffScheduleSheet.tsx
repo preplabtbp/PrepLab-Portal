@@ -369,6 +369,7 @@ export function RosterOffScheduleSheet({
 
   // Column Visibility Popover State & Settings (Persisted in localStorage)
   const [isColMenuOpen, setIsColMenuOpen] = useState(false);
+  const [isOffInfoOpen, setIsOffInfoOpen] = useState(false);
   const colMenuRef = useRef<HTMLDivElement>(null);
 
   const [colVisibility, setColVisibility] = useState<ColumnVisibilityConfig>(() => {
@@ -753,24 +754,6 @@ export function RosterOffScheduleSheet({
       {/* Header Utama & Action Buttons */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
-              <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-              <span>Khusus Golongan II – V</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-              <Coffee className="w-3.5 h-3.5 text-amber-600" />
-              <span>Hanya yang Ada OFF Minggu Ini</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-              <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>PT TBP & PT GPS Saja</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-300">
-              <Users className="w-3.5 h-3.5 text-slate-600" />
-              <span>Semua Section Digabung</span>
-            </span>
-          </div>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
             <span>Jadwal Off Karyawan</span>
             <span className="text-xs sm:text-sm font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-300">
@@ -834,7 +817,7 @@ export function RosterOffScheduleSheet({
                   {[
                     { key: 'no', label: 'Nomor (NO)' },
                     { key: 'pt', label: 'Perusahaan (PT)' },
-                    { key: 'employee', label: 'Nama & NIK Karyawan' },
+                    { key: 'employee', label: 'Nama Karyawan' },
                     { key: 'gol', label: 'Golongan (Gol II - V)' },
                     { key: 'section', label: 'Section' },
                     { key: 'jabatan', label: 'Jabatan' },
@@ -938,65 +921,141 @@ export function RosterOffScheduleSheet({
         </div>
       </div>
 
-      {/* KPI Cards & Daily Quick Bar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 print:hidden">
-        {/* Personil Gol II-V yang OFF Minggu Ini */}
-        <div className="p-3.5 sm:p-4 rounded-xl border border-amber-300 bg-amber-50/60 shadow-2xs">
-          <div className="flex items-center justify-between text-amber-800 mb-1">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Off Minggu Ini (Gol II-V)</span>
-            <Coffee className="w-4 h-4 text-amber-600" />
+      {/* Dropdown Tipis Keterangan & KPI Off */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden transition-all duration-200 print:hidden">
+        <div 
+          onClick={() => setIsOffInfoOpen(prev => !prev)}
+          className="p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/80 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 text-amber-700">
+              <Coffee className="w-4 h-4 text-amber-600" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs sm:text-sm font-black text-slate-900">
+                  Ringkasan & Keterangan Jadwal Off
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                  {stats.totalEmployees} Personil Off
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                  {stats.offTodayCount} Off Hari Ini
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 line-clamp-1">
+                {isOffInfoOpen ? 'Klik untuk menutup ringkasan keterangan & KPI' : 'Klik untuk melihat 4 ketentuan aturan, filter section & 4 kartu statistik'}
+              </p>
+            </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-amber-950">
-            {stats.totalEmployees}
-            <span className="text-xs font-normal text-amber-800 ml-1.5">Personil</span>
-          </div>
-          <div className="text-[11px] text-amber-700 mt-1">
-            PT TBP: <strong className="text-amber-900">{stats.tbpCount}</strong> | PT GPS: <strong className="text-amber-900">{stats.gpsCount}</strong>
-          </div>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOffInfoOpen(prev => !prev);
+            }}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shrink-0 ${
+              isOffInfoOpen 
+                ? 'bg-amber-50 border-amber-200 text-amber-900' 
+                : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+            }`}
+            title={isOffInfoOpen ? "Tutup Keterangan" : "Buka Keterangan & KPI"}
+          >
+            <span className="text-[11px]">{isOffInfoOpen ? 'Tutup' : 'Keterangan & KPI'}</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOffInfoOpen ? 'rotate-180 text-amber-700' : 'text-slate-500'}`} />
+          </button>
         </div>
 
-        {/* Off Hari Ini */}
-        <div className="p-3.5 sm:p-4 rounded-xl border border-rose-200 bg-rose-50/50 shadow-2xs">
-          <div className="flex items-center justify-between text-rose-800 mb-1">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Sedang Off Hari Ini</span>
-            <Clock className="w-4 h-4 text-rose-600" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-rose-950">
-            {stats.offTodayCount}
-            <span className="text-xs font-normal text-rose-800 ml-1.5">Personil</span>
-          </div>
-          <div className="text-[11px] text-rose-700 mt-1">
-            Status OFF pada hari ini ({formatIndonesianDate(new Date(), { withDay: true })})
-          </div>
-        </div>
+        {/* Konten Keterangan & 4 Kartu KPI (Hanya Muncul Ketika Diklik) */}
+        {isOffInfoOpen && (
+          <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-2 border-t border-slate-100 bg-slate-50/40 space-y-4">
+            <div className="space-y-1.5 pt-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Khusus Golongan II – V</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                  <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Hanya yang Ada OFF Minggu Ini</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                  <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>PT TBP & PT GPS Saja</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                  <Users className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Semua Section Digabung</span>
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 font-normal leading-relaxed">
+                Rekapitulasi personil Nonshift Golongan II s.d. V (PT TBP & GPS) yang terdata memiliki jadwal OFF pada minggu berjalan.
+              </p>
+            </div>
 
-        {/* Kriteria Filter Aktif */}
-        <div className="p-3.5 sm:p-4 rounded-xl border border-purple-200 bg-purple-50/50 shadow-2xs">
-          <div className="flex items-center justify-between text-purple-800 mb-1">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Ketentuan Filter</span>
-            <ShieldCheck className="w-4 h-4 text-purple-600" />
-          </div>
-          <div className="text-sm sm:text-base font-extrabold text-purple-950 leading-tight">
-            Golongan II, III, IV, & V
-          </div>
-          <div className="text-[11px] text-purple-700 mt-1">
-            Gol I dikecualikan & hanya yang ada jadwal OFF
-          </div>
-        </div>
+            {/* 4 Kartu KPI */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 pt-2 border-t border-slate-200/80">
+              {/* Personil Gol II-V yang OFF Minggu Ini */}
+              <div className="p-3.5 sm:p-4 rounded-xl border border-amber-300 bg-amber-50/60 shadow-2xs">
+                <div className="flex items-center justify-between text-amber-800 mb-1">
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Off Minggu Ini (Gol II-V)</span>
+                  <Coffee className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-amber-950">
+                  {stats.totalEmployees}
+                  <span className="text-xs font-normal text-amber-800 ml-1.5">Personil</span>
+                </div>
+                <div className="text-[11px] text-amber-700 mt-1">
+                  PT TBP: <strong className="text-amber-900">{stats.tbpCount}</strong> | PT GPS: <strong className="text-amber-900">{stats.gpsCount}</strong>
+                </div>
+              </div>
 
-        {/* Periode Minggu Berjalan */}
-        <div className="p-3.5 sm:p-4 rounded-xl border border-teal-200 bg-teal-50/50 shadow-2xs">
-          <div className="flex items-center justify-between text-teal-800 mb-1">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Rentang Kalender</span>
-            <Calendar className="w-4 h-4 text-teal-600" />
+              {/* Off Hari Ini */}
+              <div className="p-3.5 sm:p-4 rounded-xl border border-rose-200 bg-rose-50/50 shadow-2xs">
+                <div className="flex items-center justify-between text-rose-800 mb-1">
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Sedang Off Hari Ini</span>
+                  <Clock className="w-4 h-4 text-rose-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-rose-950">
+                  {stats.offTodayCount}
+                  <span className="text-xs font-normal text-rose-800 ml-1.5">Personil</span>
+                </div>
+                <div className="text-[11px] text-rose-700 mt-1">
+                  Status OFF pada hari ini ({formatIndonesianDate(new Date(), { withDay: true })})
+                </div>
+              </div>
+
+              {/* Kriteria Filter Aktif */}
+              <div className="p-3.5 sm:p-4 rounded-xl border border-purple-200 bg-purple-50/50 shadow-2xs">
+                <div className="flex items-center justify-between text-purple-800 mb-1">
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Ketentuan Filter</span>
+                  <ShieldCheck className="w-4 h-4 text-purple-600" />
+                </div>
+                <div className="text-sm sm:text-base font-extrabold text-purple-950 leading-tight">
+                  Golongan II, III, IV, & V
+                </div>
+                <div className="text-[11px] text-purple-700 mt-1">
+                  Gol I dikecualikan & hanya yang ada jadwal OFF
+                </div>
+              </div>
+
+              {/* Periode Minggu Berjalan */}
+              <div className="p-3.5 sm:p-4 rounded-xl border border-teal-200 bg-teal-50/50 shadow-2xs">
+                <div className="flex items-center justify-between text-teal-800 mb-1">
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Rentang Kalender</span>
+                  <Calendar className="w-4 h-4 text-teal-600" />
+                </div>
+                <div className="text-sm sm:text-base font-extrabold text-teal-950 leading-tight">
+                  {weekInfo.monday.getDate()} {MONTH_NAMES_ID[weekInfo.monday.getMonth()].slice(0, 3)} – {weekInfo.sunday.getDate()} {MONTH_NAMES_ID[weekInfo.sunday.getMonth()].slice(0, 3)} {weekInfo.sunday.getFullYear()}
+                </div>
+                <div className="text-[11px] text-teal-700 mt-1">
+                  Senin s.d. Minggu (7 Hari Kalender)
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="text-sm sm:text-base font-extrabold text-teal-950 leading-tight">
-            {weekInfo.monday.getDate()} {MONTH_NAMES_ID[weekInfo.monday.getMonth()].slice(0, 3)} – {weekInfo.sunday.getDate()} {MONTH_NAMES_ID[weekInfo.sunday.getMonth()].slice(0, 3)} {weekInfo.sunday.getFullYear()}
-          </div>
-          <div className="text-[11px] text-teal-700 mt-1">
-            Senin s.d. Minggu (7 Hari Kalender)
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Quick Day Selector Strip (Senin - Minggu) */}
@@ -1159,7 +1218,7 @@ export function RosterOffScheduleSheet({
                 </th>
               )}
 
-              {/* Nama & NIK */}
+              {/* Nama Karyawan */}
               {colVisibility.employee && (
                 <th
                   onClick={() => handleToggleSort('nama')}
@@ -1167,7 +1226,7 @@ export function RosterOffScheduleSheet({
                   title="Klik untuk mengurutkan Nama"
                 >
                   <div className="inline-flex items-center gap-1">
-                    <span>Nama & NIK Karyawan</span>
+                    <span>Nama Karyawan</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
@@ -1316,16 +1375,13 @@ export function RosterOffScheduleSheet({
                       </td>
                     )}
 
-                    {/* Nama & NIK */}
+                    {/* Nama Karyawan */}
                     {colVisibility.employee && (
                       <td className="py-2.5 px-3 border-r border-slate-200">
                         <div className="font-bold text-slate-900 text-xs sm:text-[13px] leading-snug">
                           {record.nama}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[11px] font-mono text-slate-500">
-                            {record.nik}
-                          </span>
                           <span className="text-[9.5px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
                             Nonshift
                           </span>

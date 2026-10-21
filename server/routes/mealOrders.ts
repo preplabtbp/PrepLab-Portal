@@ -6,7 +6,7 @@ import { parseMealOrderSheet, type ParsedMealOrderRow } from "../../src/utils/me
 import { MEAL_ORDER_SEED_CSV } from "../data/mealOrderSeed.js";
 import { db, isDbCircuitBroken } from "../../src/db/index.js";
 import { and, asc, eq, sql, desc, inArray, notInArray } from "drizzle-orm";
-import { mealOrders, employees, roster, mealBungkusDaily } from "../../src/db/schema.js";
+import { mealOrders, employees, roster, mealBungkusDaily, employeeLeaveRequests } from "../../src/db/schema.js";
 import { mealCounts, resolveMealCompany, MEAL_SLOTS, type MealCompany, type MealSlot } from "../../src/utils/meal-bungkus-counts.js";
 import { drive } from "../../google-services.js";
 import { getTrainingAccess } from "./training.js";
@@ -97,6 +97,19 @@ export function ensureMealOrdersTable(): Promise<void> {
         ADD COLUMN IF NOT EXISTS pilihan_sore TEXT,
         ADD COLUMN IF NOT EXISTS sahur_kantin TEXT,
         ADD COLUMN IF NOT EXISTS sahur_lapangan TEXT`);
+      // Pastikan seluruh baris yang berstatus Belum Lapor / Wajib Lapor orderan makanannya 100% kosong
+      try {
+        await db.execute(sql`UPDATE meal_orders
+          SET pagi_kantin = NULL, pagi_lapangan = NULL,
+              sahur_kantin = NULL, sahur_lapangan = NULL,
+              siang_kantin = NULL, siang_lapangan = NULL,
+              sore_kantin = NULL, sore_lapangan = NULL,
+              takjil_lapangan = NULL, malam_lapangan = NULL,
+              batch_pagi = NULL, batch_sore = NULL,
+              catatan = NULL
+          WHERE (keterangan_lapor ILIKE '%lapor%' OR keterangan_lapor = 'Belum Lapor' OR keterangan_lapor = 'Wajib Lapor')
+            AND (pagi_kantin IS NOT NULL OR pagi_lapangan IS NOT NULL OR siang_kantin IS NOT NULL OR siang_lapangan IS NOT NULL OR sore_kantin IS NOT NULL OR sore_lapangan IS NOT NULL OR malam_lapangan IS NOT NULL OR batch_pagi IS NOT NULL OR batch_sore IS NOT NULL OR (catatan IS NOT NULL AND catatan <> '-'))`);
+      } catch {}
       // Seed sekali: data Meal_Order.csv (Rabu, 14 Okt 2026). Penanda di app_settings agar data yang sudah diedit tidak tertimpa.
       try {
         await seedMealOrdersOnce();
@@ -668,8 +681,8 @@ async function loadPreviousRosterStatuses(date: string, nik?: string): Promise<M
 
     for (const m of prevOrders) {
       const k = m.nik.toUpperCase().trim();
-      const isBelumLapor = m.keteranganLapor === 'Belum Lapor' || String(m.keteranganLapor || '').toLowerCase().includes('belum lapor');
-      const candidate = isBelumLapor ? 'Belum Lapor' : (m.status || m.statusKerja || m.catatan || '');
+      const isBelumLapor = m.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(m.keteranganLapor));
+      const candidate = isBelumLapor ? 'Wajib Lapor' : (m.status || m.statusKerja || m.catatan || '');
       if (candidate) {
         if (!map.has(k) || map.get(k) === '-' || isBelumLapor) {
           map.set(k, candidate.trim());
@@ -685,7 +698,27 @@ async function loadPreviousRosterStatuses(date: string, nik?: string): Promise<M
     console.warn(`[MealOrders] Gagal load previous meal orders:`, err?.message);
   }
 
-  // 3. Cadangan: jika map masih kosong (misal roster belum di-sync ke DB), coba baca dari sheet
+  // 3. Ambil dari tabel employee_leave_requests (Modul Rekapan Izin Karyawan)
+  //    Jika karyawan izin/cuti kemarin yang disetujui -> otomatis terdaftar sebagai IZIN
+  try {
+    const leaveRows = await db.select({ nik: employeeLeaveRequests.nik })
+      .from(employeeLeaveRequests)
+      .where(and(
+        sql`${employeeLeaveRequests.awalAbsensi} <= ${prevDate}`,
+        sql`${employeeLeaveRequests.akhirAbsensi} >= ${prevDate}`,
+        sql`LOWER(COALESCE(${employeeLeaveRequests.acc}, 'disetujui')) NOT IN ('ditolak', 'rejected')`,
+        nik ? sql`UPPER(${employeeLeaveRequests.nik}) = ${nik.toUpperCase()}` : undefined
+      ));
+    for (const lr of leaveRows) {
+      if (lr.nik) {
+        map.set(lr.nik.toUpperCase().trim(), 'IZIN');
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[MealOrders] Gagal load previous employee leave requests:`, err?.message);
+  }
+
+  // 4. Cadangan: jika map masih kosong (misal roster belum di-sync ke DB), coba baca dari sheet
   if (map.size === 0) {
     try {
       const prevDateFormats = getPossibleRosterDateStrings(prevDate);
@@ -702,6 +735,35 @@ async function loadPreviousRosterStatuses(date: string, nik?: string): Promise<M
     }
   }
 
+  return map;
+}
+
+// Status Keterangan Lapor terakhir per karyawan sebelum tanggal ini:
+// Memastikan status Wajib Lapor bertahan antar tanggal sampai Admin mengubahnya secara manual,
+// dan jika Admin sudah merubahnya (misal ke null/-), status tersebut konsisten dipertahankan ke tanggal berikutnya.
+async function loadPreviousKeteranganLapor(date: string, nik?: string): Promise<Map<string, string | null>> {
+  const map = new Map<string, string | null>();
+  try {
+    const rows = await db.select({
+      nik: mealOrders.nik,
+      orderDate: mealOrders.orderDate,
+      keteranganLapor: mealOrders.keteranganLapor,
+    }).from(mealOrders)
+      .where(and(
+        sql`${mealOrders.orderDate} < ${date}`,
+        nik ? sql`UPPER(${mealOrders.nik}) = ${nik.toUpperCase()}` : undefined
+      ))
+      .orderBy(desc(mealOrders.orderDate));
+
+    for (const r of rows) {
+      const k = r.nik.toUpperCase().trim();
+      if (!map.has(k)) {
+        map.set(k, r.keteranganLapor ? String(r.keteranganLapor).trim() : null);
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[MealOrders] Gagal load previous keterangan lapor:`, err?.message);
+  }
   return map;
 }
 
@@ -1038,6 +1100,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
   const prefs = await loadMealPreferences(date);
   const nonshift = await loadNonshiftNiks(date);
   const prevStatuses = await loadPreviousRosterStatuses(date);
+  const prevKLMap = await loadPreviousKeteranganLapor(date);
   const masterTtByNik = await loadMasterTempatTinggalMap();
   const masterSortMap = await loadMasterSortOrderMap();
   const masterProfiles = await loadMasterEmployeeProfileMap();
@@ -1087,7 +1150,6 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     const master = masterProfiles.get(nik);
     const sortNo = master?.sortNo ?? getSortNo(nik, current?.sortNo);
     // Kolom Profil (Status Mess, PT, Shift, Section, Residence): PT & Residence TIDAK BOLEH diganti saat sinkronisasi roster
-    // Kolom Profil (Status Mess, PT, Shift, Section, Residence):
     // Prioritas penguncian PT:
     // 1. PT pada tanggal yang sedang diedit (current)
     // 2. Master PT resmi Orderan Makanan (masterProfiles acuan 2026-10-14)
@@ -1119,6 +1181,29 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       }
     }
 
+    const prevKL = prevKLMap.get(nik);
+    const prevStatus = prevStatuses.get(nik);
+    const wasLeaveYesterday = isLeaveOrPermissionRosterStatus(prevStatus);
+    const isTodayCuti = isCutiRosterStatus(rosterEmp.status) || String(rosterEmp.status || '').trim().toUpperCase() === 'CUTI';
+    const isTodayWorkOrOff = isWorkOrOffRosterStatus(rosterEmp.status);
+
+    let effectiveKL: string | null | undefined = undefined;
+    if (isTodayCuti) {
+      // Kebijakan: Jika cuti masih berjalan tidak perlu diberikan Wajib Lapor
+      effectiveKL = null;
+    } else if (current && current.keteranganLapor !== undefined) {
+      effectiveKL = current.keteranganLapor;
+    } else if (wasLeaveYesterday && isTodayWorkOrOff) {
+      // Saat berganti ke Masuk seperti D/Off/N/LS barulah Wajib Lapor
+      effectiveKL = 'Wajib Lapor';
+    } else if (prevKL && /wajib\s*lapor|belum\s*lapor/i.test(prevKL) && isTodayWorkOrOff) {
+      // Wajib lapor kemarin bertahan di hari kerja/off dan belum diubah manual oleh Admin
+      effectiveKL = prevKL;
+    } else if (prevKL === null || prevKL === '-' || prevKL === '') {
+      // Kemarin sudah diubah/dibersihkan oleh Admin -> konsisten tetap bersih
+      effectiveKL = null;
+    }
+
     const emp = {
       ...rosterEmp,
       nama: master?.nama || rosterEmp.name,
@@ -1127,9 +1212,8 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       shift: lockedShift,
       section: lockedSection,
       tempatTinggal: lockedTt,
-      keteranganLapor: current ? current.keteranganLapor : undefined,
+      keteranganLapor: effectiveKL,
     };
-    const prevStatus = prevStatuses.get(nik);
 
     // Preferensi makan: sinkronkan dengan Catatan yang terkunci
     const empPref = withCurrentChoice(prefs.get(nik), { ...current, catatan: lockedCatatan });
@@ -1151,7 +1235,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     if (computed.shiftKerja === 'SIANG' && (nonshift.has(nik) || lockedShift === 'Nonshift')) computed.shiftKerja = 'Nonshift';
 
     // Kolom Catatan TIDAK BOLEH diganti menjadi kode cuti atau null bila karyawan punya catatan
-    let finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
+    let finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status, keteranganLapor: computed.keteranganLapor }) || (computed.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(computed.keteranganLapor))))
       ? null
       : (lockedCatatan || computed.catatan || null);
 
@@ -1159,10 +1243,11 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     const isExplicitBungkusSore = finalCatatan === 'Bungkusan Sore' || finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore' || empPref.sore === 'lapangan';
     const isKawasiLS = (lockedTt || '').toLowerCase().includes('kawasi') && computed.shiftKerja === 'Longshift';
     const skCheck = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
+    const isWajibLaporActive = computed.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(computed.keteranganLapor));
     const isNoSoreMeal = isCutiRosterStatus(skCheck)
       || (skCheck.includes('IZIN') && isCutiRosterStatus(prevStatus))
       || (skCheck === 'CS' && (lockedTt || '').toLowerCase().includes('kawasi'))
-      || computed.keteranganLapor === 'Belum Lapor'
+      || isWajibLaporActive
       || ((lockedTt || '').toLowerCase().includes('kawasi') && !isKawasiLS);
 
     if (isNoSoreMeal) {
@@ -1179,7 +1264,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
     if (isCR && isTueWedSat) {
       const sk = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
       const isAbsent = ['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sk);
-      if (!isAbsent && computed.keteranganLapor !== 'Belum Lapor') {
+      if (!isAbsent && !isWajibLaporActive) {
         computed.soreKantin = 'K';
         computed.soreLapangan = null;
         computed.batchSore = null;
@@ -1199,6 +1284,23 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
       computed.siangLapangan = null;
       computed.soreKantin = null;
       computed.soreLapangan = null;
+      computed.malamLapangan = null;
+      computed.batchPagi = null;
+      computed.batchSore = null;
+      finalCatatan = null;
+    }
+
+    // GEMBOK MUTLAK: Jika status Wajib Lapor / Belum Lapor aktif, SELURUH orderan makanan, batch, dan catatan 100% KOSONG!
+    if (isWajibLaporActive) {
+      computed.pagiKantin = null;
+      computed.pagiLapangan = null;
+      computed.sahurKantin = null;
+      computed.sahurLapangan = null;
+      computed.siangKantin = null;
+      computed.siangLapangan = null;
+      computed.soreKantin = null;
+      computed.soreLapangan = null;
+      computed.takjilLapangan = null;
       computed.malamLapangan = null;
       computed.batchPagi = null;
       computed.batchSore = null;
@@ -1255,7 +1357,7 @@ export async function syncMealOrdersFromRoster(date: string, updatedBy = 'system
           'takjilLapangan', 'malamLapangan', 'batchPagi', 'batchSore', 'status', 'keteranganLapor', 'catatan',
           'updatedBy', 'updatedAt'
         ].map(f => [f, f === 'catatan'
-          ? sql.raw(`COALESCE(NULLIF(TRIM(excluded.catatan), ''), meal_orders.catatan)`)
+          ? sql.raw(`CASE WHEN excluded.keterangan_lapor ILIKE '%lapor%' THEN NULL ELSE COALESCE(NULLIF(TRIM(excluded.catatan), ''), meal_orders.catatan) END`)
           : f === 'pt'
           ? sql.raw(`COALESCE(NULLIF(TRIM(meal_orders.pt), ''), excluded.pt)`)
           : f === 'tempatTinggal'
@@ -1333,13 +1435,18 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
       empPref.sore = 'kantin';
     }
 
+    const isTodayCutiSingle = isCutiRosterStatus(rosterStatus) || String(rosterStatus || '').trim().toUpperCase() === 'CUTI';
+    const effectiveKLSingle = isTodayCutiSingle ? null : (current ? current.keteranganLapor : undefined);
+
     const computed = computeMealOrderByRoster(
-      { ...emp, name: master?.nama || emp.name, statusMess: lockedStatusMess, shift: lockedShift, section: lockedSection, tempatTinggal: lockedTt, alamatDomisili: null, keteranganLapor: current ? current.keteranganLapor : undefined },
+      { ...emp, name: master?.nama || emp.name, statusMess: lockedStatusMess, shift: lockedShift, section: lockedSection, tempatTinggal: lockedTt, alamatDomisili: null, keteranganLapor: effectiveKLSingle },
       rosterStatus, ymd, empPref, prevStatus,
     );
     if (computed.shiftKerja === 'SIANG' && (lockedShift === 'Nonshift' || (await loadNonshiftNiks(ymd, cleanNik)).has(cleanNik))) computed.shiftKerja = 'Nonshift';
 
-    let finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status }) || computed.keteranganLapor === 'Belum Lapor')
+    const isWajibLaporSingle = computed.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(computed.keteranganLapor));
+
+    let finalCatatan = (isCatatanDisabledForEmployee({ tempatTinggal: lockedTt, shiftKerja: computed.shiftKerja, statusKerja: computed.statusKerja, status: computed.status, keteranganLapor: computed.keteranganLapor }) || isWajibLaporSingle)
       ? null
       : (lockedCatatan || computed.catatan || null);
 
@@ -1350,7 +1457,7 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     const isNoSoreMealSingle = isCutiRosterStatus(skCheckSingle)
       || (skCheckSingle.includes('IZIN') && isCutiRosterStatus(prevStatus))
       || (skCheckSingle === 'CS' && (lockedTt || '').toLowerCase().includes('kawasi'))
-      || computed.keteranganLapor === 'Belum Lapor'
+      || isWajibLaporSingle
       || ((lockedTt || '').toLowerCase().includes('kawasi') && !isKawasiLSSingle);
 
     if (isNoSoreMealSingle) {
@@ -1367,7 +1474,7 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
     if (isCR && isTueWedSat) {
       const sk = String(computed.shiftKerja || computed.statusKerja || computed.status || '').trim().toUpperCase();
       const isAbsent = ['CUTI', 'CS', 'IZIN', 'OFF', 'SAKIT', 'MALAM'].includes(sk);
-      if (!isAbsent && computed.keteranganLapor !== 'Belum Lapor') {
+      if (!isAbsent && !isWajibLaporSingle) {
         computed.soreKantin = 'K';
         computed.soreLapangan = null;
         computed.batchSore = null;
@@ -1377,6 +1484,37 @@ export async function syncSingleEmployeeMealOrder(nik: string, dateStr: string, 
       } else if (finalCatatan === 'Bungkusan Pagi dan Bungkusan Sore') {
         finalCatatan = 'Bungkusan Pagi';
       }
+    }
+
+    // Proteksi mutlak: Cuti (C/CE/CT/CI/TRV), Izin setelah Cuti, CS Kampung Kawasi TIDAK DIORDERKAN MAKANAN
+    if (isCutiRosterStatus(skCheckSingle) || (skCheckSingle.includes('IZIN') && isCutiRosterStatus(prevStatus)) || (skCheckSingle === 'CS' && (lockedTt || '').toLowerCase().includes('kawasi'))) {
+      computed.pagiKantin = null;
+      computed.pagiLapangan = null;
+      computed.siangKantin = null;
+      computed.siangLapangan = null;
+      computed.soreKantin = null;
+      computed.soreLapangan = null;
+      computed.malamLapangan = null;
+      computed.batchPagi = null;
+      computed.batchSore = null;
+      finalCatatan = null;
+    }
+
+    // GEMBOK MUTLAK: Jika status Wajib Lapor / Belum Lapor aktif, SELURUH orderan makanan, batch, dan catatan 100% KOSONG!
+    if (isWajibLaporSingle) {
+      computed.pagiKantin = null;
+      computed.pagiLapangan = null;
+      computed.sahurKantin = null;
+      computed.sahurLapangan = null;
+      computed.siangKantin = null;
+      computed.siangLapangan = null;
+      computed.soreKantin = null;
+      computed.soreLapangan = null;
+      computed.takjilLapangan = null;
+      computed.malamLapangan = null;
+      computed.batchPagi = null;
+      computed.batchSore = null;
+      finalCatatan = null;
     }
 
     // Proteksi mutlak: Cuti (C/CE/CT/CI/TRV), Izin setelah Cuti, CS Kampung Kawasi TIDAK DIORDERKAN MAKANAN
@@ -1531,6 +1669,8 @@ async function getMealOrderRowsWithLatestProfiles(date: string) {
     }
 
     const masterProfiles = await loadMasterEmployeeProfileMap();
+    const prevKLMap = await loadPreviousKeteranganLapor(date).catch(() => new Map<string, string | null>());
+    const prevStatuses = await loadPreviousRosterStatuses(date).catch(() => new Map<string, string>());
     const dbEmps = await db.select({ nik: employees.nik, name: employees.name, pt: employees.pt, statusMess: employees.statusMess, shift: employees.shift, section: employees.section }).from(employees);
     const empByNik = new Map(dbEmps.map(e => [String(e.nik || '').toUpperCase().trim(), e]));
     const norm = (s: string | null | undefined) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1547,6 +1687,24 @@ async function getMealOrderRowsWithLatestProfiles(date: string) {
       const pt = r.pt || master?.pt || emp?.pt || null;
       const tempatTinggal = (r.tempatTinggal && r.tempatTinggal.length <= 25 ? r.tempatTinggal : null) || master?.tempatTinggal || null;
 
+      const prevKL = prevKLMap.get(canonicalNik);
+      const prevStatus = prevStatuses.get(canonicalNik);
+      const wasLeaveYesterday = isLeaveOrPermissionRosterStatus(prevStatus);
+      const isTodayCuti = isCutiRosterStatus(r.status) || isCutiRosterStatus(r.shiftKerja) || String(r.status || '').toUpperCase() === 'CUTI' || String(r.shiftKerja || '').toUpperCase() === 'CUTI';
+      const isTodayWorkOrOff = isWorkOrOffRosterStatus(r.status) || isWorkOrOffRosterStatus(r.shiftKerja);
+
+      let effectiveKL: string | null = null;
+      if (isTodayCuti) {
+        effectiveKL = null;
+      } else if (wasLeaveYesterday && isTodayWorkOrOff) {
+        effectiveKL = 'Wajib Lapor';
+      } else if (prevKL && /wajib\s*lapor|belum\s*lapor/i.test(prevKL) && isTodayWorkOrOff) {
+        effectiveKL = prevKL;
+      } else {
+        effectiveKL = null;
+      }
+      const isLapor = !!(effectiveKL && /wajib\s*lapor|belum\s*lapor/i.test(effectiveKL));
+
       return {
         ...r,
         id: idx + 1,
@@ -1558,10 +1716,20 @@ async function getMealOrderRowsWithLatestProfiles(date: string) {
         statusMess: r.statusMess || master?.statusMess || emp?.statusMess || null,
         shift: r.shift || master?.shift || emp?.shift || null,
         section: r.section || master?.section || emp?.section || null,
-        // Reset status harian untuk tanggal baru
-        keteranganLapor: null,
-        batchPagi: null,
-        batchSore: null,
+        keteranganLapor: effectiveKL,
+        pagiKantin: isLapor ? null : r.pagiKantin,
+        pagiLapangan: isLapor ? null : r.pagiLapangan,
+        sahurKantin: isLapor ? null : r.sahurKantin,
+        sahurLapangan: isLapor ? null : r.sahurLapangan,
+        siangKantin: isLapor ? null : r.siangKantin,
+        siangLapangan: isLapor ? null : r.siangLapangan,
+        soreKantin: isLapor ? null : r.soreKantin,
+        soreLapangan: isLapor ? null : r.soreLapangan,
+        takjilLapangan: isLapor ? null : r.takjilLapangan,
+        malamLapangan: isLapor ? null : r.malamLapangan,
+        batchPagi: isLapor ? null : r.batchPagi,
+        batchSore: isLapor ? null : r.batchSore,
+        catatan: isLapor ? null : (r.catatan || null),
       };
     });
   } catch (err: any) {
@@ -1593,7 +1761,34 @@ mealOrdersRouter.get("/api/meal-orders", async (req, res) => {
         if (!dbRows || dbRows.length === 0) {
           rows = await getMealOrderRowsWithLatestProfiles(date);
         } else {
-          rows = dbRows;
+          rows = dbRows.map(r => {
+            const isTodayCuti = isCutiRosterStatus(r.status) || isCutiRosterStatus(r.shiftKerja) || String(r.status || '').trim().toUpperCase() === 'CUTI' || String(r.shiftKerja || '').trim().toUpperCase() === 'CUTI';
+            const effectiveKL = isTodayCuti ? null : r.keteranganLapor;
+            const isLapor = effectiveKL && /belum\s*lapor|wajib\s*lapor/i.test(String(effectiveKL));
+            if (isLapor) {
+              return {
+                ...r,
+                keteranganLapor: effectiveKL && /wajib/i.test(effectiveKL) ? 'Wajib Lapor' : effectiveKL,
+                pagiKantin: null,
+                pagiLapangan: null,
+                sahurKantin: null,
+                sahurLapangan: null,
+                siangKantin: null,
+                siangLapangan: null,
+                soreKantin: null,
+                soreLapangan: null,
+                takjilLapangan: null,
+                malamLapangan: null,
+                batchPagi: null,
+                batchSore: null,
+                catatan: null,
+              };
+            }
+            if (isTodayCuti && r.keteranganLapor) {
+              return { ...r, keteranganLapor: null };
+            }
+            return r;
+          });
         }
       } catch (dbErr: any) {
         console.warn("[MealOrders GET DB offline, using seed fallback]:", dbErr?.message);
@@ -1673,8 +1868,8 @@ mealOrdersRouter.post("/api/meal-orders", requireMealManager, async (req, res) =
     const nama = fields.nama || emp?.name;
     if (!nama) return res.status(400).json({ status: "error", message: "Nama karyawan wajib diisi (NIK tidak ditemukan di Database Karyawan)." });
 
-    if (fields.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(fields.keteranganLapor || ''))) {
-      fields.keteranganLapor = 'Belum Lapor';
+    if (fields.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(fields.keteranganLapor || ''))) {
+      fields.keteranganLapor = 'Wajib Lapor';
       fields.pagiKantin = null;
       fields.pagiLapangan = null;
       fields.sahurKantin = null;
@@ -1930,6 +2125,19 @@ mealOrdersRouter.post("/api/meal-orders/:id/clear-belum-lapor", requireMealManag
       catatan: computed.catatan,
       updatedBy: updatedByOf(req), updatedAt: new Date(),
     }).where(eq(mealOrders.id, id)).returning();
+
+    // Propagasikan perubahan manual Admin ke tanggal-tanggal berikutnya
+    // agar status konsisten tidak berubah kembali ke Wajib Lapor di tanggal berikutnya
+    await db.update(mealOrders).set({
+      keteranganLapor: null,
+      updatedBy: updatedByOf(req),
+      updatedAt: new Date(),
+    }).where(and(
+      sql`UPPER(TRIM(${mealOrders.nik})) = ${nik}`,
+      sql`${mealOrders.orderDate} > ${date}`,
+      sql`(${mealOrders.keteranganLapor} ILIKE '%lapor%' OR ${mealOrders.keteranganLapor} = 'Belum Lapor' OR ${mealOrders.keteranganLapor} = 'Wajib Lapor')`
+    ));
+
     scheduleSheetSync();
     res.json({ status: "success", data: updated, rosterCode: rawCode ? code : null, source });
   } catch (error: any) {
@@ -1959,9 +2167,9 @@ mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res
       }
     }
 
-    // Jika Belum Lapor diset aktif, seluruh porsi makanan, batch, dan catatan wajib dikosongkan
-    if (fields.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(fields.keteranganLapor || ''))) {
-      fields.keteranganLapor = 'Belum Lapor';
+    // Jika Belum Lapor / Wajib Lapor diset aktif, seluruh porsi makanan, batch, dan catatan wajib dikosongkan
+    if (fields.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(fields.keteranganLapor || ''))) {
+      fields.keteranganLapor = 'Wajib Lapor';
       fields.pagiKantin = null;
       fields.pagiLapangan = null;
       fields.sahurKantin = null;
@@ -1975,6 +2183,8 @@ mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res
       fields.batchPagi = null;
       fields.batchSore = null;
       fields.catatan = null;
+    } else if (fields.keteranganLapor === '-' || fields.keteranganLapor === '') {
+      fields.keteranganLapor = null;
     } else if ('shiftKerja' in fields && fields.shiftKerja) {
       // Jika shift diubah tanpa mengirim porsi makan manual, hitung otomatis sesuai aturan modul
       const mealKeys = ['pagiKantin', 'pagiLapangan', 'siangKantin', 'siangLapangan', 'soreKantin', 'soreLapangan', 'malamLapangan'];
@@ -2064,6 +2274,35 @@ mealOrdersRouter.put("/api/meal-orders/:id", requireMealManager, async (req, res
       .set({ ...fields, updatedBy: updatedByOf(req), updatedAt: new Date() })
       .where(eq(mealOrders.id, id)).returning();
     if (!row) return res.status(404).json({ status: "error", message: "Data tidak ditemukan." });
+
+    if ('keteranganLapor' in fields) {
+      if (fields.keteranganLapor === null) {
+        // Admin mematikan Wajib Lapor -> konsisten matikan juga di tanggal-tanggal berikutnya
+        await db.update(mealOrders).set({
+          keteranganLapor: null,
+          updatedBy: updatedByOf(req),
+          updatedAt: new Date(),
+        }).where(and(
+          sql`UPPER(TRIM(${mealOrders.nik})) = ${row.nik.toUpperCase().trim()}`,
+          sql`${mealOrders.orderDate} > ${row.orderDate}`,
+          sql`(${mealOrders.keteranganLapor} ILIKE '%lapor%' OR ${mealOrders.keteranganLapor} = 'Belum Lapor' OR ${mealOrders.keteranganLapor} = 'Wajib Lapor')`
+        ));
+      } else if (fields.keteranganLapor === 'Wajib Lapor') {
+        // Admin mengaktifkan Wajib Lapor -> konsisten teruskan ke tanggal berikutnya
+        await db.update(mealOrders).set({
+          keteranganLapor: 'Wajib Lapor',
+          pagiKantin: null, pagiLapangan: null, sahurKantin: null, sahurLapangan: null,
+          siangKantin: null, siangLapangan: null, soreKantin: null, soreLapangan: null,
+          takjilLapangan: null, malamLapangan: null, batchPagi: null, batchSore: null, catatan: null,
+          updatedBy: updatedByOf(req),
+          updatedAt: new Date(),
+        }).where(and(
+          sql`UPPER(TRIM(${mealOrders.nik})) = ${row.nik.toUpperCase().trim()}`,
+          sql`${mealOrders.orderDate} > ${row.orderDate}`
+        ));
+      }
+    }
+
     scheduleSheetSync();
     res.json({ status: "success", data: row });
   } catch (error: any) {

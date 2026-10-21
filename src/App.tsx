@@ -1948,7 +1948,15 @@ export default function App() {
   <Route path="/roster-admin" element={<RosterAdminScreen />} />
   <Route path="/training-database" element={<TrainingDatabaseScreen key="internal" scope="internal" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/safety-rekap" element={<SafetyRekapScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} inspectorRole={userProfile?.jabatan} inspectorSection={userProfile?.section} onBack={() => handleNav('home')} />} />
-  <Route path="/inspection-schedule" element={<InspectionScheduleScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
+  <Route path="/inspection-schedule" element={<InspectionScheduleScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = params.get('returnTo');
+    if (returnTo) {
+      window.location.href = returnTo;
+    } else {
+      handleNav('home');
+    }
+  }} />} />
   <Route path="/training-external" element={<TrainingDatabaseScreen key="external" scope="external" inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/meal-orders" element={<MealOrdersScreen inspectorNik={inspectorNik!} inspectorName={inspectorName!} onBack={() => handleNav('home')} />} />
   <Route path="/settings" element={<SettingsScreen inspectorName={inspectorName} inspectorNik={inspectorNik} onLogoutKaryawan={handleLogoutKaryawan} onOpenThemeModal={() => setShowGlobalThemeModal(true)} onNav={handleNav} />} />

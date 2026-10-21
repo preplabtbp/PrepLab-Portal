@@ -31,7 +31,9 @@ import {
   Database,
   Printer,
   FileDown,
-  Pencil
+  Pencil,
+  BarChart3,
+  AlertTriangle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -91,6 +93,168 @@ export const isLeaveExpired = (item: { awalAbsensi?: string; akhirAbsensi?: stri
   }
   return false;
 };
+
+// Helper: Cek apakah izin telah lewat 2 hari dan keterangan belum "Izin Selesai"
+export const checkLeaveOverdue2Days = (item: { awalAbsensi?: string; createdAt?: string; acc?: string }, todayStr: string): boolean => {
+  const status = String(item.acc || '').trim().toLowerCase();
+  if (status === 'izin selesai' || status.includes('selesai')) {
+    return false;
+  }
+  const dateStr = item.awalAbsensi || (item.createdAt ? String(item.createdAt).slice(0, 10) : '');
+  if (!dateStr) return false;
+  try {
+    const dStart = new Date(dateStr);
+    const dToday = new Date(todayStr);
+    if (isNaN(dStart.getTime()) || isNaN(dToday.getTime())) return false;
+    dStart.setHours(0, 0, 0, 0);
+    dToday.setHours(0, 0, 0, 0);
+    const diffMs = dToday.getTime() - dStart.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    return diffDays >= 2;
+  } catch {
+    return false;
+  }
+};
+
+const INDO_MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+  'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+];
+
+/**
+ * Format tanggal ke standar Indonesia [$-id-id] dd-mmm-yyyy (contoh: 19-Okt-2026)
+ */
+export function formatLeaveDateIndo(val?: any): string {
+  if (!val || val === '-' || val === '#N/A' || val === '0' || String(val).toLowerCase() === 'null') {
+    return '-';
+  }
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '-';
+    return `${pad2(val.getDate())}-${INDO_MONTHS_SHORT[val.getMonth()]}-${val.getFullYear()}`;
+  }
+
+  const clean = String(val).trim();
+  if (!clean) return '-';
+
+  // Excel serial number (e.g. 45000)
+  if (/^\d{5}$/.test(clean)) {
+    const num = Number(clean);
+    if (num >= 25569 && num <= 65000) {
+      const dObj = new Date(Math.round((num - 25569) * 86400 * 1000));
+      if (!isNaN(dObj.getTime())) {
+        return `${pad2(dObj.getDate())}-${INDO_MONTHS_SHORT[dObj.getMonth()]}-${dObj.getFullYear()}`;
+      }
+    }
+  }
+
+  // Format: YYYY-MM-DD or YYYY/MM/DD
+  const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10);
+    const d = parseInt(isoMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${pad2(d)}-${INDO_MONTHS_SHORT[m - 1]}-${y}`;
+    }
+  }
+
+  // Format: DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    const d = parseInt(dmyMatch[1], 10);
+    const m = parseInt(dmyMatch[2], 10);
+    const y = parseInt(dmyMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${pad2(d)}-${INDO_MONTHS_SHORT[m - 1]}-${y}`;
+    }
+  }
+
+  // Format: DD-MMM-YYYY (e.g. 19-Okt-2026 or 19-Oct-2026)
+  const dMmmYMatch = clean.match(/^(\d{1,2})[-/\s]([A-Za-z]{3,})[-/\s](\d{2,4})/);
+  if (dMmmYMatch) {
+    const d = parseInt(dMmmYMatch[1], 10);
+    const mStr = dMmmYMatch[2].toLowerCase().slice(0, 3);
+    let y = parseInt(dMmmYMatch[3], 10);
+    if (y < 100) y = y <= 40 ? 2000 + y : 1900 + y;
+    const monthMap: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, mei: 4, may: 4, jun: 5,
+      jul: 6, agu: 7, ags: 7, aug: 7, sep: 8, okt: 9, oct: 9,
+      nov: 10, des: 11, dec: 11
+    };
+    const mIdx = monthMap[mStr];
+    if (mIdx !== undefined && d >= 1 && d <= 31) {
+      return `${pad2(d)}-${INDO_MONTHS_SHORT[mIdx]}-${y}`;
+    }
+  }
+
+  // Fallback try Date parse
+  const parsed = new Date(clean);
+  if (!isNaN(parsed.getTime())) {
+    return `${pad2(parsed.getDate())}-${INDO_MONTHS_SHORT[parsed.getMonth()]}-${parsed.getFullYear()}`;
+  }
+
+  return clean;
+}
+
+/**
+ * Konversi tanggal ke format ISO YYYY-MM-DD untuk input date HTML5
+ */
+export function toIsoDate(val?: any): string {
+  if (!val) return '';
+  const clean = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(clean)) return clean.slice(0, 10);
+
+  // Excel serial number
+  if (/^\d{5}$/.test(clean)) {
+    const num = Number(clean);
+    if (num >= 25569 && num <= 65000) {
+      const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+      if (!isNaN(d.getTime())) {
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+    }
+  }
+
+  // YYYY/MM/DD
+  const ymd = clean.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+  if (ymd) {
+    return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
+  }
+
+  // DD-MM-YYYY or DD/MM/YYYY
+  const dmy = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (dmy) {
+    return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+  }
+
+  // DD-MMM-YYYY (e.g. 19-Okt-2026)
+  const dMmmY = clean.match(/^(\d{1,2})[-/\s]([A-Za-z]{3,})[-/\s](\d{4})/);
+  if (dMmmY) {
+    const monthMap: Record<string, string> = {
+      jan: '01', feb: '02', mar: '03', apr: '04', mei: '05', may: '05', jun: '06',
+      jul: '07', agu: '08', ags: '08', aug: '08', sep: '09', okt: '10', oct: '10',
+      nov: '11', des: '12', dec: '12'
+    };
+    const mStr = dMmmY[2].toLowerCase().slice(0, 3);
+    const mNum = monthMap[mStr] || '01';
+    return `${dMmmY[3]}-${mNum}-${dMmmY[1].padStart(2, '0')}`;
+  }
+
+  const d = new Date(clean);
+  if (!isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return '';
+}
 
 
 export interface EmployeeLeaveItem {
@@ -267,6 +431,53 @@ export function EmployeeLeavesScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [summary, setSummary] = useState<any>(null);
+  const [isLeaveStatsOpen, setIsLeaveStatsOpen] = useState(false);
+
+  // Sheet Tabs: 'daftar' (Daftar Rekapan Izin) vs 'diagram' (Diagram & Analitik Manpower)
+  const [activeSheet, setActiveSheet] = useState<'daftar' | 'diagram'>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get('tab') || params.get('sheet');
+      if (s === 'diagram' || s === 'analytics') return 'diagram';
+    } catch {}
+    return 'daftar';
+  });
+
+  // Handler Inline Edit langsung pada tabel tanpa bantuan modal
+  const handleInlineUpdate = async (id: string | number, field: string, value: any) => {
+    // Update lokal terlebih dahulu agar UI responsif seketika
+    setLeaves(prev => prev.map(item => {
+      if (String(item.id) === String(id)) {
+        return {
+          ...item,
+          [field]: value,
+          ...(field === 'acc' ? { acc: value, accBy: inspectorName || userProfile?.name || 'Administrasi' } : {})
+        };
+      }
+      return item;
+    }));
+
+    try {
+      const res = await fetch(`/api/employee-leaves/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          [field]: value,
+          accBy: inspectorName || userProfile?.name || 'Administrasi'
+        })
+      });
+
+      const json = await res.json();
+      if (res.ok && json.status === 'success') {
+        toast.success(`Pembaruan tersimpan: ${field === 'acc' ? 'Keterangan ' + value : value}`);
+      } else {
+        toast.error(json.message || 'Gagal menyimpan perubahan ke server.');
+      }
+    } catch (err) {
+      console.error('Error inline update:', err);
+      toast.error('Terjadi kendala koneksi saat menyimpan perubahan.');
+    }
+  };
 
   // Toggle Diagram
   const [showDiagram, setShowDiagram] = useState(true);
@@ -565,8 +776,10 @@ export function EmployeeLeavesScreen({
       'Bagian / Section': item.penempatan || item.section,
       'Shift': item.shift,
       'Jam Kerja': item.jamShift || '-',
-      'Mulai Izin': item.awalAbsensi,
-      'Selesai Izin': item.akhirAbsensi,
+      'Mulai Izin': formatLeaveDateIndo(item.awalAbsensi) || item.awalAbsensi,
+      'Tanggal Izin': formatLeaveDateIndo(item.awalAbsensi) || item.awalAbsensi,
+      'Jumlah Izin': item.lamanyaIzin || `${item.jumlah || 1} Hari`,
+      'Selesai Izin': formatLeaveDateIndo(item.akhirAbsensi) || item.akhirAbsensi,
       'Durasi Izin': item.lamanyaIzin || `${item.jumlah || 1} Hari`,
       'Alasan Izin': item.alasanAbsensi,
       'Pengawas Mengetahui (Gol II-V)': item.pengawasMengetahui || '-',
@@ -649,7 +862,7 @@ export function EmployeeLeavesScreen({
 
     const headers = [
       'No', 'Tanggal Input', 'NIK', 'Nama Karyawan', 'Jabatan', 'Bagian', 
-      'Shift', 'Mulai Izin', 'Selesai Izin', 'Durasi', 'Alasan Izin', 
+      'Shift', 'Tanggal Izin', 'Jumlah Izin', 'Selesai Izin', 'Alasan Izin', 
       'Pengawas Mengetahui', 'Status ACC'
     ];
 
@@ -661,9 +874,9 @@ export function EmployeeLeavesScreen({
       `"${(item.jabatan || '').replace(/"/g, '""')}"`,
       `"${(item.penempatan || item.section || '').replace(/"/g, '""')}"`,
       `"${item.shift || ''}"`,
-      item.awalAbsensi || '',
-      item.akhirAbsensi || '',
+      formatLeaveDateIndo(item.awalAbsensi) || item.awalAbsensi || '',
       `"${item.lamanyaIzin || `${item.jumlah || 1} Hari`}"`,
+      formatLeaveDateIndo(item.akhirAbsensi) || item.akhirAbsensi || '',
       `"${(item.alasanAbsensi || '').replace(/"/g, '""')}"`,
       `"${(item.pengawasMengetahui || '').replace(/"/g, '""')}"`,
       `"${item.acc || 'Pending'}"`
@@ -765,7 +978,7 @@ export function EmployeeLeavesScreen({
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 140px;">Nama Karyawan</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 100px;">Bagian / Shift</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 110px;">Tanggal Izin</th>
-                <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 55px; text-align: center;">Durasi</th>
+                <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 65px; text-align: center;">Jumlah Izin</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1;">Alasan Izin</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 120px;">Pengawas Mengetahui</th>
                 <th style="padding: 8px 6px; border: 1px solid #cbd5e1; width: 65px; text-align: center;">Status</th>
@@ -778,7 +991,7 @@ export function EmployeeLeavesScreen({
                   <td style="padding: 6px; border: 1px solid #cbd5e1; font-family: monospace;">${r.nik}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1; font-weight: bold;">${r.name}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1;">${r.penempatan || r.section}<br/><span style="color:#64748b; font-size: 9.5px;">${r.shift}</span></td>
-                  <td style="padding: 6px; border: 1px solid #cbd5e1; font-family: monospace;">${r.awalAbsensi} s/d ${r.akhirAbsensi}</td>
+                  <td style="padding: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-weight: 600;">${formatLeaveDateIndo(r.awalAbsensi)}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold;">${r.lamanyaIzin || `${r.jumlah || 1} Hr`}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1;">${r.alasanAbsensi}</td>
                   <td style="padding: 6px; border: 1px solid #cbd5e1; font-weight: 600;">${r.pengawasMengetahui || '-'}</td>
@@ -1081,93 +1294,174 @@ export function EmployeeLeavesScreen({
       </div>
 
       {/* ==================================================== */}
-      {/* CLOUD SYNC & STATS BANNER                           */}
+      {/* SHEET TABS: DAFTAR IZIN vs DIAGRAM & ANALITIK        */}
       {/* ==================================================== */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        {/* KPI 1: TOTAL IZIN */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Total Rekap Izin</span>
-            <Database className="w-4 h-4 text-indigo-500" />
-          </div>
-          <p className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-            {summary?.total || leaves.length}
-          </p>
-          <p className="text-[10px] text-slate-400 mt-1">
-            {summary?.sheetTotalRows || 0} dari Sheet &bull; {summary?.webTotalRows || 0} dari Web
-          </p>
-        </div>
+      <div className="p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveSheet('daftar')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSheet === 'daftar'
+              ? 'bg-[#2298A7] text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>Daftar Izin Karyawan</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            activeSheet === 'daftar' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+          }`}>
+            {leaves.length}
+          </span>
+        </button>
 
-        {/* KPI 2: IZIN SAKIT */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Izin Sakit / Medis</span>
-            <AlertCircle className="w-4 h-4 text-amber-500" />
-          </div>
-          <p className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
-            {summary?.sakitCount || 0}
-          </p>
-          <p className="text-[10px] text-slate-400 mt-1">Surat dokter & keluhan fisik</p>
-        </div>
-
-        {/* KPI 3: IZIN KELUARGA */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Izin Keluarga</span>
-            <Users className="w-4 h-4 text-sky-500" />
-          </div>
-          <p className="text-2xl font-black text-sky-600 dark:text-sky-400 font-mono">
-            {summary?.keluargaCount || 0}
-          </p>
-          <p className="text-[10px] text-slate-400 mt-1">Urusan rumah tangga & keluarga</p>
-        </div>
-
-        {/* KPI 4: VERIFIKASI / DISETUJUI */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Diketahui Pengawas</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-          </div>
-          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-            {summary?.approvedCount || 0}
-          </p>
-          <p className="text-[10px] text-slate-400 mt-1">Gol II-V terkonfirmasi</p>
-        </div>
-
-        {/* KPI 5: PENDING ACC */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Status Pending</span>
-            <Clock className="w-4 h-4 text-purple-500" />
-          </div>
-          <p className="text-2xl font-black text-purple-600 dark:text-purple-400 font-mono">
-            {summary?.pendingCount || 0}
-          </p>
-          <p className="text-[10px] text-slate-400 mt-1">Perlu review pengawas</p>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveSheet('diagram')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSheet === 'diagram'
+              ? 'bg-[#2298A7] text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          <span>Diagram & Analitik Manpower</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            activeSheet === 'diagram' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+          }`}>
+            Grafik
+          </span>
+        </button>
       </div>
 
       {/* ==================================================== */}
-      {/* DIAGRAM & MANPOWER ATTENDANCE ANALYTICS SECTION      */}
+      {/* SHEET 2: DIAGRAM & ANALITIK MANPOWER                */}
       {/* ==================================================== */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowDiagram(!showDiagram)}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#2298A7]/10 hover:bg-[#2298A7]/20 text-[#2298A7] dark:text-teal-400 font-bold text-xs border border-[#2298A7]/30 transition-all cursor-pointer"
+      {activeSheet === 'diagram' ? (
+        <EmployeeLeavesAnalyticsChart leaves={leaves} defaultSection={filterSection} />
+      ) : (
+        <>
+          {/* ==================================================== */}
+          {/* CLOUD SYNC & STATS BANNER                           */}
+          {/* ==================================================== */}
+          {/* Dropdown Tipis Ringkasan & Analitik Rekap Izin */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs overflow-hidden transition-all duration-200">
+            <div 
+              onClick={() => setIsLeaveStatsOpen(prev => !prev)}
+              className="p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>{showDiagram ? 'Sembunyikan Diagram' : 'Tampilkan Diagram Manpower'}</span>
-            </button>
-          </div>
-        </div>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center shrink-0 text-indigo-600 dark:text-indigo-400">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                      Ringkasan & Keterangan Rekap Izin
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      {summary?.total || leaves.length} Total Izin
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      {summary?.approvedCount || 0} Terverifikasi
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                      {summary?.sakitCount || 0} Sakit
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">
+                    {isLeaveStatsOpen ? 'Klik untuk menutup ringkasan keterangan & kartu analitik' : 'Klik untuk melihat 5 kartu statistik rekap izin, sakit, keluarga & approval'}
+                  </p>
+                </div>
+              </div>
 
-        {showDiagram && (
-          <EmployeeLeavesAnalyticsChart leaves={leaves} defaultSection={filterSection} />
-        )}
-      </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLeaveStatsOpen(prev => !prev);
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shrink-0 ${
+                  isLeaveStatsOpen 
+                    ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300' 
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+                title={isLeaveStatsOpen ? "Tutup Keterangan" : "Buka Keterangan & KPI"}
+              >
+                <span className="text-[11px]">{isLeaveStatsOpen ? 'Tutup' : 'Keterangan & KPI'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isLeaveStatsOpen ? 'rotate-180 text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`} />
+              </button>
+            </div>
+
+            {/* Konten 5 Kartu KPI (Hanya Muncul Ketika Diklik) */}
+            {isLeaveStatsOpen && (
+              <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {/* KPI 1: TOTAL IZIN */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-500 mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Total Rekap Izin</span>
+                      <Database className="w-4 h-4 text-indigo-500" />
+                    </div>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                      {summary?.total || leaves.length}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {summary?.sheetTotalRows || 0} dari Sheet &bull; {summary?.webTotalRows || 0} dari Web
+                    </p>
+                  </div>
+
+                  {/* KPI 2: IZIN SAKIT */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-500 mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Izin Sakit / Medis</span>
+                      <AlertCircle className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <p className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
+                      {summary?.sakitCount || 0}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">Surat dokter & keluhan fisik</p>
+                  </div>
+
+                  {/* KPI 3: IZIN KELUARGA */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-500 mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Izin Keluarga</span>
+                      <Users className="w-4 h-4 text-sky-500" />
+                    </div>
+                    <p className="text-2xl font-black text-sky-600 dark:text-sky-400 font-mono">
+                      {summary?.keluargaCount || 0}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">Urusan rumah tangga & keluarga</p>
+                  </div>
+
+                  {/* KPI 4: VERIFIKASI / DISETUJUI */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                    <div className="flex items-center justify-between text-slate-500 mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Diketahui Pengawas</span>
+                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                      {summary?.approvedCount || 0}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">Gol II-V terkonfirmasi</p>
+                  </div>
+
+                  {/* KPI 5: PENDING ACC */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-2xs col-span-2 sm:col-span-1">
+                    <div className="flex items-center justify-between text-slate-500 mb-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Status Pending</span>
+                      <Clock className="w-4 h-4 text-purple-500" />
+                    </div>
+                    <p className="text-2xl font-black text-purple-600 dark:text-purple-400 font-mono">
+                      {summary?.pendingCount || 0}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">Perlu review pengawas</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
       {/* ==================================================== */}
       {/* FILTER & SEARCH PANEL                               */}
@@ -1321,18 +1615,20 @@ export function EmployeeLeavesScreen({
                 <th className="py-3 px-3.5">Karyawan</th>
                 <th className="py-3 px-3.5">Tempat Tinggal</th>
                 <th className="py-3 px-3.5">Bagian & Shift</th>
-                <th className="py-3 px-3.5">Tanggal Izin</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">Tanggal Izin</th>
+                <th className="py-3 px-3.5 text-center whitespace-nowrap">Jumlah Izin</th>
                 <th className="py-3 px-3.5">Alasan Izin</th>
                 <th className="py-3 px-3.5">Pengawas Mengetahui</th>
                 <th className="py-3 px-3.5 text-center">Bukti / Lampiran</th>
-                <th className="py-3 px-3.5 text-center">Status / Ket</th>
+                <th className="py-3 px-3.5 text-center">Keterangan</th>
+                <th className="py-3 px-3.5 text-center">Warning</th>
                 <th className="py-3 px-3.5 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
               {isLoading ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <td colSpan={12} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
                       <span className="text-xs font-semibold">Memuat rekapan izin karyawan dari Google Sheet...</span>
@@ -1341,7 +1637,7 @@ export function EmployeeLeavesScreen({
                 </tr>
               ) : paginatedLeaves.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <td colSpan={12} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <FileSpreadsheet className="w-8 h-8 text-slate-300 dark:text-slate-700" />
                       <p className="text-sm font-bold text-slate-600 dark:text-slate-300">Tidak ada catatan izin yang cocok.</p>
@@ -1354,16 +1650,12 @@ export function EmployeeLeavesScreen({
                   const rowNumber = (currentPage - 1) * itemsPerPage + index + 1;
                   const isSheetSource = item.source === 'google_sheet';
                   const todayStr = getTodayWitDate();
-                  const isExpired = isLeaveExpired(item, todayStr);
+                  const isOverdue2Days = checkLeaveOverdue2Days(item, todayStr);
 
                   return (
                     <tr 
                       key={item.id} 
-                      className={`transition-colors cursor-pointer border-b ${
-                        isExpired
-                          ? 'bg-rose-50/90 hover:bg-rose-100/90 dark:bg-rose-950/35 dark:hover:bg-rose-950/50 border-l-4 border-l-rose-500 border-b-rose-100 dark:border-b-rose-900/40 text-rose-950 dark:text-rose-100 shadow-2xs'
-                          : 'border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-800/40'
-                      }`}
+                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
                       onClick={() => setSelectedLeave(item)}
                     >
                       {/* No */}
@@ -1386,54 +1678,148 @@ export function EmployeeLeavesScreen({
                         </div>
                       </td>
 
-                      {/* Tempat Tinggal */}
-                      <td className="py-3 px-3.5">
-                        <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200 font-semibold">
+                      {/* Tempat Tinggal - Inline Editable */}
+                      <td className="py-3 px-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1.5">
                           <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span className="truncate max-w-[150px]">{item.tempatTinggal || '-'}</span>
+                          <input
+                            type="text"
+                            defaultValue={item.tempatTinggal || ''}
+                            key={`${item.id}-tt-${item.tempatTinggal}`}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val !== (item.tempatTinggal || '')) {
+                                handleInlineUpdate(item.id, 'tempatTinggal', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            placeholder="Isi tempat tinggal..."
+                            className="w-full max-w-[140px] px-2 py-1 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all"
+                            title="Edit tempat tinggal langsung di tabel"
+                          />
                         </div>
                       </td>
 
-                      {/* Bagian & Shift */}
-                      <td className="py-3 px-3.5">
+                      {/* Bagian & Shift - Inline Editable */}
+                      <td className="py-3 px-3.5" onClick={(e) => e.stopPropagation()}>
                         <div className="font-semibold text-slate-800 dark:text-slate-200">
                           {item.penempatan || item.section}
                         </div>
-                        <div className="text-[10.5px] text-slate-500 mt-0.5 flex items-center gap-1">
-                          <span className="px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-bold text-[9.5px]">
-                            {item.shift}
-                          </span>
+                        <div className="text-[10.5px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                          <select
+                            value={item.shift || 'Shift A'}
+                            onChange={(e) => handleInlineUpdate(item.id, 'shift', e.target.value)}
+                            className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] border border-indigo-200 dark:border-indigo-800 cursor-pointer focus:ring-1 focus:ring-indigo-500 outline-none"
+                            title="Ubah shift langsung di tabel"
+                          >
+                            <option value="Shift A">Shift A</option>
+                            <option value="Shift B">Shift B</option>
+                            <option value="Nonshift">Nonshift</option>
+                          </select>
                           {item.jamShift && (
                             <span className="text-slate-400 text-[10px]">&bull; {item.jamShift}</span>
                           )}
                         </div>
                       </td>
 
-                      {/* Tanggal Izin & Durasi */}
-                      <td className="py-3 px-3.5">
-                        <div className="font-bold text-slate-900 dark:text-white font-mono text-[11px]">
-                          {item.awalAbsensi || '-'}
-                        </div>
-                        <div className="text-[10.5px] text-purple-600 dark:text-purple-400 font-bold mt-0.5 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          <span>{item.lamanyaIzin || `${item.jumlah || 1} Hari`}</span>
+                      {/* Tanggal Izin - Format [$-id-id] dd-mmm-yyyy & Inline Editable */}
+                      <td className="py-3 px-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative inline-flex items-center group">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold font-mono bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 hover:border-teal-400 dark:hover:border-teal-500 text-slate-800 dark:text-slate-100 shadow-2xs transition-all cursor-pointer">
+                            <Calendar className="w-3.5 h-3.5 text-[#135e69] dark:text-teal-400 shrink-0 group-hover:scale-110 transition-transform" />
+                            <span className="tracking-wide">
+                              {formatLeaveDateIndo(item.awalAbsensi)}
+                            </span>
+                          </div>
+                          <input
+                            type="date"
+                            value={toIsoDate(item.awalAbsensi)}
+                            key={`${item.id}-tgl-${item.awalAbsensi}`}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val && val !== item.awalAbsensi) {
+                                handleInlineUpdate(item.id, 'awalAbsensi', val);
+                              }
+                            }}
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                            title="Klik untuk memilih / mengubah tanggal izin (dd-mmm-yyyy)"
+                          />
                         </div>
                       </td>
 
-                      {/* Alasan Izin */}
-                      <td className="py-3 px-3.5 max-w-xs">
-                        <p className="text-slate-700 dark:text-slate-300 line-clamp-2 leading-relaxed">
-                          {item.alasanAbsensi}
-                        </p>
+                      {/* Jumlah Izin - Kolom Terpisah & Inline Editable */}
+                      <td className="py-3 px-3.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs">
+                          <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                          <input
+                            type="text"
+                            defaultValue={item.lamanyaIzin || `${item.jumlah || 1} Hari`}
+                            key={`${item.id}-dur-${item.lamanyaIzin}`}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val && val !== item.lamanyaIzin) {
+                                handleInlineUpdate(item.id, 'lamanyaIzin', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            className="w-16 px-1 py-0.5 text-xs font-bold text-center text-purple-700 dark:text-purple-300 rounded bg-white dark:bg-slate-800/90 border border-purple-200 dark:border-purple-700 focus:border-purple-500 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
+                            title="Edit jumlah / durasi izin (contoh: 1 Hari, 2 Hari)"
+                          />
+                        </div>
                       </td>
 
-                      {/* Pengawas Mengetahui */}
-                      <td className="py-3 px-3.5">
+                      {/* Alasan Izin - Inline Editable */}
+                      <td className="py-3 px-3.5 max-w-xs" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          defaultValue={item.alasanAbsensi || ''}
+                          key={`${item.id}-alasan-${item.alasanAbsensi}`}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (val !== (item.alasanAbsensi || '')) {
+                              handleInlineUpdate(item.id, 'alasanAbsensi', val);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                          placeholder="Ketik alasan izin..."
+                          className="w-full px-2.5 py-1 text-xs font-medium rounded bg-slate-50/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-indigo-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs"
+                          title="Edit alasan izin langsung di tabel (Excel-style)"
+                        />
+                      </td>
+
+                      {/* Pengawas Mengetahui - Inline Editable */}
+                      <td className="py-3 px-3.5" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5">
                           <ShieldCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                          <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[140px]">
-                            {item.pengawasMengetahui || '-'}
-                          </span>
+                          <input
+                            type="text"
+                            defaultValue={item.pengawasMengetahui || ''}
+                            key={`${item.id}-pm-${item.pengawasMengetahui}`}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val !== (item.pengawasMengetahui || '')) {
+                                handleInlineUpdate(item.id, 'pengawasMengetahui', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            placeholder="Pengawas..."
+                            className="w-full max-w-[130px] px-2 py-1 text-xs font-semibold rounded bg-slate-50/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-teal-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs"
+                            title="Edit pengawas mengetahui langsung di tabel (Excel-style)"
+                          />
                         </div>
                         {isSheetSource && (
                           <span className="text-[9px] text-slate-400 font-medium block mt-0.5">
@@ -1459,62 +1845,64 @@ export function EmployeeLeavesScreen({
                         )}
                       </td>
 
-                      {/* Status / Ket */}
-                      <td className="py-3 px-3.5 text-center">
-                        {isExpired ? (
-                          <div className="flex flex-col items-center justify-center gap-0.5">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-xs border border-rose-700 tracking-tight animate-pulse">
-                              <AlertCircle className="w-3 h-3" />
-                              <span>Izin Selesai</span>
-                            </span>
-                            <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400">
-                              Lewat Hari Ini
-                            </span>
-                          </div>
-                        ) : (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            item.acc === 'Disetujui' || item.acc?.toLowerCase().includes('setuju')
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300/40'
+                      {/* Keterangan - Manual Dropdown Selector */}
+                      <td className="py-3 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={item.acc || 'Pending'}
+                          onChange={(e) => handleInlineUpdate(item.id, 'acc', e.target.value)}
+                          className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold border cursor-pointer outline-none transition-all shadow-2xs ${
+                            item.acc === 'Izin Selesai'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700'
+                              : item.acc === 'Disetujui' || item.acc?.toLowerCase().includes('setuju')
+                              ? 'bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-700'
                               : item.acc === 'Ditolak'
-                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-300/40'
-                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300/40'
-                          }`}>
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span>{item.acc || 'Pending'}</span>
+                              ? 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-700'
+                              : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700'
+                          }`}
+                          title="Ubah Keterangan izin secara manual"
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Disetujui">Disetujui</option>
+                          <option value="Izin Selesai">Izin Selesai</option>
+                          <option value="Ditolak">Ditolak</option>
+                        </select>
+                      </td>
+
+                      {/* Kolom Warning: Muncul jika belum 'Izin Selesai' dalam 2 hari dari tanggal izin */}
+                      <td className="py-3 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        {isOverdue2Days && item.acc !== 'Izin Selesai' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800 shadow-2xs whitespace-nowrap animate-pulse">
+                            <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
+                            <span>Izin telah lewat 2 Hari</span>
                           </span>
+                        ) : item.acc === 'Izin Selesai' ? (
+                          <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Selesai</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">-</span>
                         )}
                       </td>
 
-                      {/* Aksi */}
+                      {/* Aksi - Tanpa tombol Edit (Langsung edit di sel tabel) */}
                       <td className="py-3 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
                           <button
                             type="button"
                             onClick={() => setSelectedLeave(item)}
-                            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
                             title="Lihat Detail Izin"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
-
-                          {/* Tombol Edit Khusus Section Administrasi */}
-                          {isSectionAdmin && (
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(item)}
-                              className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition-colors cursor-pointer"
-                              title="Edit Data Izin Karyawan (Khusus Administrasi)"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                          )}
 
                           {/* Quick ACC if pending */}
                           {(!item.acc || item.acc === 'Pending') && (
                             <button
                               type="button"
                               onClick={() => handleAccStatus(item.id, 'Disetujui')}
-                              className="p-1.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-emerald-600 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-emerald-600 transition-colors cursor-pointer"
                               title="Setujui Izin"
                             >
                               <Check className="w-3.5 h-3.5" />
@@ -1563,6 +1951,8 @@ export function EmployeeLeavesScreen({
           </div>
         </div>
       </div>
+    </>
+  )}
 
 ﻿      {/* ==================================================== */}
       {/* MODAL PUSAT UNDUHAN DAFTAR IZIN (DAFTAR UNDUH)       */}
@@ -2046,12 +2436,12 @@ export function EmployeeLeavesScreen({
                   <span className="font-bold text-slate-900 dark:text-white">{selectedLeave.shift} ({selectedLeave.jamShift || 'Reguler'})</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Mulai Absensi</span>
-                  <span className="font-bold text-slate-900 dark:text-white font-mono">{selectedLeave.awalAbsensi}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Tanggal Izin</span>
+                  <span className="font-bold text-slate-900 dark:text-white font-mono">{formatLeaveDateIndo(selectedLeave.awalAbsensi)}</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Selesai Absensi</span>
-                  <span className="font-bold text-slate-900 dark:text-white font-mono">{selectedLeave.akhirAbsensi}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Jumlah Izin</span>
+                  <span className="font-bold text-purple-600 dark:text-purple-400 font-mono">{selectedLeave.lamanyaIzin || `${selectedLeave.jumlah || 1} Hari`}</span>
                 </div>
               </div>
 

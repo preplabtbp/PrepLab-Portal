@@ -343,6 +343,53 @@ export function RosterAdminScreen() {
     return list;
   }, [startDate, endDate]);
 
+  // Update Roster Cell Langsung di Tabel (Excel-Style)
+  const handleDirectSaveCell = async (empNik: string, empName: string, targetDate: string, newShift: string) => {
+    if (!canEditRoster) {
+      toast.error('Akses ditolak: Hanya Tim Administrasi dan Developer yang dapat mengubah roster.');
+      return;
+    }
+
+    if (!empNik || !targetDate) {
+      toast.error('Gagal update: NIK atau tanggal tidak valid');
+      return;
+    }
+
+    // Optimistic UI update
+    setRoster(prev => prev.map(emp => {
+      if (emp.nik === empNik) {
+        const updatedFull = { ...(emp.fullSchedule || {}), [targetDate]: newShift };
+        return { ...emp, fullSchedule: updatedFull };
+      }
+      return emp;
+    }));
+
+    toast.success(`Roster ${empName || empNik} diubah: ${newShift}`);
+
+    try {
+      const res = await fetch('/api/roster/cell', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-nik': requestorNik
+        },
+        body: JSON.stringify({
+          nik: empNik,
+          date: targetDate,
+          status: newShift,
+          editorNik: requestorNik
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Gagal menyimpan ke server');
+      }
+    } catch (e: any) {
+      toast.error('Gagal update ke server: ' + e.message);
+      fetchRoster(); // Rollback
+    }
+  };
+
   // Update Roster Cell
   const handleSaveCell = async (newShift: string) => {
     if (!canEditRoster) {
@@ -866,7 +913,7 @@ export function RosterAdminScreen() {
                             </div>
                           </td>
 
-                          {/* Date Shift Code Cells */}
+                          {/* Date Shift Code Cells - Excel Style Direct Edit */}
                           {dateColumns.map((col, cIdx) => {
                             const shiftCode = emp.fullSchedule?.[col.keyDateStr] || '-';
                             const badgeStyle = getShiftBadgeStyle(shiftCode);
@@ -874,34 +921,41 @@ export function RosterAdminScreen() {
                             return (
                               <td
                                 key={cIdx}
-                                onClick={() => {
-                                  if (canEditRoster) {
-                                    setEditingCell({
-                                      empNik: emp.nik,
-                                      empName: emp.name || emp.nama,
-                                      keyDateStr: col.keyDateStr,
-                                      dateStr: col.keyDateStr,
-                                      displayDate: `${col.dayName}, ${col.dateNumber}`,
-                                      currentShift: shiftCode === '-' ? '' : shiftCode
-                                    } as any);
-                                  } else {
-                                    toast.info("Akses Khusus Administrasi & Developer", {
-                                      description: "Fitur pengeditan jadwal roster hanya dapat diakses oleh Tim Administrasi dan Developer."
-                                    });
-                                  }
-                                }}
-                                className={`p-1 sm:p-1.5 text-center border-r transition-all select-none ${canEditRoster ? 'cursor-pointer hover:scale-105 hover:z-10' : 'cursor-default'
-                                  } ${col.isToday ? 'bg-teal-500/5' : ''}`}
+                                className={`p-0.5 sm:p-1 text-center border-r transition-all ${
+                                  col.isToday ? 'bg-teal-500/5' : ''
+                                }`}
                                 style={{
                                   borderColor: 'var(--border-main)'
                                 }}
-                                title={canEditRoster ? `Klik untuk mengedit roster ${emp.name || emp.nama} pada ${col.dateNumber}` : `Roster ${emp.name || emp.nama} (${shiftCode})`}
                               >
-                                <div
-                                  className={`w-full py-1 sm:py-1.5 px-0.5 sm:px-1 rounded sm:rounded-lg border text-center text-[10px] sm:text-xs transition-transform ${badgeStyle}`}
-                                >
-                                  {shiftCode}
-                                </div>
+                                {canEditRoster ? (
+                                  <input
+                                    type="text"
+                                    defaultValue={shiftCode === '-' ? '' : shiftCode}
+                                    key={`${emp.nik}-${col.keyDateStr}-${shiftCode}`}
+                                    list="roster-shift-suggestions"
+                                    onBlur={(e) => {
+                                      const val = (e.target.value.trim().toUpperCase() || '-');
+                                      if (val !== shiftCode) {
+                                        handleDirectSaveCell(emp.nik, emp.name || emp.nama, col.keyDateStr, val);
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        (e.target as HTMLInputElement).blur();
+                                      }
+                                    }}
+                                    className={`w-full py-1 sm:py-1.5 px-0.5 text-center text-[10px] sm:text-xs font-black uppercase rounded sm:rounded-lg border outline-none cursor-pointer focus:ring-2 focus:ring-teal-500 transition-all ${badgeStyle}`}
+                                    title={`Ketik kode shift langsung di tabel untuk ${emp.name || emp.nama} (${col.dayName}, ${col.dateNumber})`}
+                                  />
+                                ) : (
+                                  <div
+                                    className={`w-full py-1 sm:py-1.5 px-0.5 sm:px-1 rounded sm:rounded-lg border text-center text-[10px] sm:text-xs select-none ${badgeStyle}`}
+                                    title={`Roster ${emp.name || emp.nama} (${shiftCode})`}
+                                  >
+                                    {shiftCode}
+                                  </div>
+                                )}
                               </td>
                             );
                           })}
@@ -933,7 +987,7 @@ export function RosterAdminScreen() {
                 </div>
 
                 <span className="text-[10px] sm:text-[11px] font-semibold opacity-70" style={{ color: 'var(--text-muted)' }}>
-                  {canEditRoster ? '💡 Klik sel untuk ubah shift.' : 'Mode baca.'}
+                  {canEditRoster ? '💡 Ketik langsung di sel tabel seperti Excel (D, N, OFF, dll.).' : 'Mode baca.'}
                 </span>
               </div>
             </div>
@@ -941,89 +995,19 @@ export function RosterAdminScreen() {
         </>
       )}
 
-      {/* Inline Cell Editor Popover Modal (For Admin & QA) */}
-      {editingCell && (
-        <div
-          className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => setEditingCell(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl shadow-2xl border p-5 space-y-4 animate-in zoom-in-95 duration-150"
-            style={{
-              backgroundColor: 'var(--card-bg, #FFFFFF)',
-              borderColor: 'var(--border-main, #E2E8F0)',
-              color: 'var(--text-main, #1E293B)'
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-main)' }}>
-              <div>
-                <h3 className="font-bold text-sm font-display" style={{ color: 'var(--text-main)' }}>
-                  Edit Roster Harian
-                </h3>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {editingCell.empName} ({editingCell.displayDate})
-                </p>
-              </div>
-              <button
-                onClick={() => setEditingCell(null)}
-                className="p-1.5 rounded-full border opacity-70 hover:opacity-100 cursor-pointer"
-                style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--border-main)' }}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold block" style={{ color: 'var(--text-main)' }}>
-                Pilih Kode Shift / Keterangan:
-              </label>
-              <div className="grid grid-cols-2 gap-1.5 max-h-60 overflow-y-auto pr-1">
-                {SHIFT_OPTIONS.map(opt => (
-                  <button
-                    key={opt.code}
-                    type="button"
-                    onClick={() => handleSaveCell(opt.code)}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${editingCell.currentShift === opt.code ? 'ring-2 ring-teal-500 font-black' : 'hover:opacity-85'
-                      } ${opt.bg}`}
-                  >
-                    <span className="font-black text-xs">{opt.label}</span>
-                    <span className="text-[10px] opacity-75">{opt.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Custom Code Input */}
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                const form = e.target as any;
-                const customVal = form.customShift.value.trim().toUpperCase();
-                if (customVal) handleSaveCell(customVal);
-              }}
-              className="pt-2 border-t flex gap-2"
-              style={{ borderColor: 'var(--border-main)' }}
-            >
-              <input
-                name="customShift"
-                type="text"
-                placeholder="Kode kustom (contoh: D2, OFF2...)"
-                defaultValue={editingCell.currentShift}
-                className="flex-1 px-3 py-1.5 rounded-xl border text-xs outline-none font-bold uppercase shadow-2xs"
-                style={{
-                  backgroundColor: 'var(--input-bg)',
-                  borderColor: 'var(--border-main)',
-                  color: 'var(--text-main)'
-                }}
-              />
-              <Button type="submit" className="text-xs px-3 py-1.5 text-white" style={{ backgroundColor: 'var(--primary)' }}>
-                Simpan
-              </Button>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* HTML5 Datalist for Excel-Style Roster Quick Suggestions */}
+      <datalist id="roster-shift-suggestions">
+        <option value="D">Day (Siang)</option>
+        <option value="N">Night (Malam)</option>
+        <option value="OFF">OFF (Libur)</option>
+        <option value="TRV">Travel</option>
+        <option value="XP">Speedboat</option>
+        <option value="C">Cuti</option>
+        <option value="CT">Cuti Tahunan</option>
+        <option value="S">Sakit</option>
+        <option value="LS">Longshift</option>
+        <option value="I">Izin</option>
+      </datalist>
       {/* Excel Import Modal */}
       <RosterExcelImportModal
         isOpen={isImportModalOpen}

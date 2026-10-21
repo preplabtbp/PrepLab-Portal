@@ -323,10 +323,11 @@ const SANCTION_MONTH_MAP: Record<string, number> = {
 
 export const parseSanctionDate = (val?: any): Date | null => {
   if (!val) return null;
-  const str = String(val).trim().split(/[\r\n,;]+/)[0].trim();
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  const str = String(val).trim();
   if (!str || str === '-' || str === '#N/A' || str === '0' || /^\d{1,2}$/.test(str) || /^(ya|tidak|ok|v|x|true|false)$/i.test(str)) return null;
 
-  const dMmmY = str.match(/^(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})$/);
+  const dMmmY = str.match(/(\d{1,2})[-\s/]([a-zA-Z]+)[-\s/](\d{2,4})/);
   if (dMmmY) {
     const day = parseInt(dMmmY[1], 10);
     const mStr = dMmmY[2].toLowerCase();
@@ -338,7 +339,7 @@ export const parseSanctionDate = (val?: any): Date | null => {
     }
   }
 
-  const ymd = str.match(/^(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})$/);
+  const ymd = str.match(/(\d{4})[-\s/](\d{1,2})[-\s/](\d{1,2})/);
   if (ymd) {
     const year = parseInt(ymd[1], 10);
     const month = parseInt(ymd[2], 10) - 1;
@@ -346,7 +347,7 @@ export const parseSanctionDate = (val?: any): Date | null => {
     return new Date(year, month, day);
   }
 
-  const dmy = str.match(/^(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})$/);
+  const dmy = str.match(/(\d{1,2})[-\s/](\d{1,2})[-\s/](\d{2,4})/);
   if (dmy) {
     const day = parseInt(dmy[1], 10);
     const month = parseInt(dmy[2], 10) - 1;
@@ -355,7 +356,7 @@ export const parseSanctionDate = (val?: any): Date | null => {
     return new Date(year, month, day);
   }
 
-  const mY = str.match(/^([a-zA-Z]+)[-\s/](\d{4})$/);
+  const mY = str.match(/([a-zA-Z]+)[-\s/](\d{4})/);
   if (mY) {
     const month = SANCTION_MONTH_MAP[mY[1].toLowerCase()];
     const year = parseInt(mY[2], 10);

@@ -46,6 +46,7 @@ interface LeaveRecord {
   hasChange: boolean;
   isCutiSelesai: boolean;
   isCustomEdited?: boolean;
+  days?: Array<{ date: Date; dateStr: string; code: string }>;
 }
 
 const MONTH_NAMES_ID = [
@@ -209,12 +210,72 @@ export function isTbpOrGpsEmployee(emp: any): boolean {
   return true;
 }
 
+/**
+ * Menghitung rincian durasi cuti (Travel, Tahunan/Istimewa, Extra, Izin Khusus, Izin, Tambahan Travel)
+ * baik secara keseluruhan blok cuti maupun secara spesifik untuk BULAN yang sedang berjalan/dipilih.
+ */
+export function calculateLeaveDurations(
+  days: Array<{ date: Date; dateStr: string; code: string }> = [],
+  targetYear?: number,
+  targetMonthIndex?: number // 0-indexed (0: Jan, 9: Okt, dst)
+) {
+  let travel = 0;
+  let tahunanIstimewa = 0;
+  let extra = 0;
+  let izinKhusus = 0;
+  let izin = 0;
+  let tambahanTravel = 0;
+
+  const targetDays = (targetYear !== undefined && targetMonthIndex !== undefined)
+    ? days.filter(d => d.date && d.date.getFullYear() === targetYear && d.date.getMonth() === targetMonthIndex)
+    : days;
+
+  targetDays.forEach(b => {
+    const c = String(b.code || '').toUpperCase().trim();
+    // 1. TAMBAHAN TRAVEL (TT): Jumlah "TT" yang Muncul
+    if (c === 'TT' || c.startsWith('TT')) {
+      tambahanTravel++;
+    }
+    // 2. Travel: Jumlah "TRV" yang muncul pada Cuti berjalan
+    else if (c === 'TRV' || c.startsWith('TRV') || c === 'TV') {
+      travel++;
+    }
+    // 3. Izin Khusus: Jumlah "IK" yang muncul pada Cuti berjalan
+    else if (c === 'IK' || c.startsWith('IK')) {
+      izinKhusus++;
+    }
+    // 4. Extra: Jumlah "CE" yang muncul pada Cuti berjalan
+    else if (c === 'CE' || c.startsWith('CE')) {
+      extra++;
+    }
+    // 5. Tahunan/Istimewa: Jumlah "CT" atau "CI" yang muncul pada Cuti berjalan
+    else if (c === 'CT' || c.startsWith('CT') || c === 'CI' || c.startsWith('CI') || c === 'C') {
+      tahunanIstimewa++;
+    }
+    // 6. Izin: Jumlah "I" atau "SL" yang muncul pada Cuti berjalan
+    else if (c === 'I' || c === 'SL' || c.startsWith('SL') || c === 'IZIN' || (c.startsWith('I') && !c.startsWith('IK'))) {
+      izin++;
+    }
+  });
+
+  return {
+    travel,
+    tahunanIstimewa,
+    extra,
+    izinKhusus,
+    izin,
+    tambahanTravel,
+    totalHari: travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel,
+    activeDaysCount: targetDays.length
+  };
+}
+
 export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
   const records: LeaveRecord[] = [];
 
   const isLeaveOrTravel = (c: string) => {
-    return ['TRV', 'TV', 'C', 'CT', 'CI', 'CE', 'CR', 'CS', 'IK', 'I', 'SL', 'S', 'TT', 'XP'].includes(c) ||
-           c.startsWith('CT') || c.startsWith('CE') || c.startsWith('CI') || c.startsWith('IK') || c.startsWith('CR');
+    return ['TRV', 'TV', 'C', 'CT', 'CI', 'CE', 'CR', 'CS', 'IK', 'I', 'SL', 'TT', 'XP'].includes(c) ||
+           c.startsWith('TRV') || c.startsWith('CT') || c.startsWith('CE') || c.startsWith('CI') || c.startsWith('IK') || c.startsWith('CR') || c.startsWith('TT') || c.startsWith('SL');
   };
 
   for (const emp of roster) {
@@ -273,39 +334,30 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
       blockIdx++;
       const hasCoreLeave = block.some(b => 
         ['TRV', 'TV', 'C', 'CT', 'CI', 'CE', 'CR'].includes(b.code) || 
-        b.code.startsWith('CT') || b.code.startsWith('CE')
+        b.code.startsWith('TRV') || b.code.startsWith('CT') || b.code.startsWith('CE') || b.code.startsWith('CI')
       );
       if (!hasCoreLeave) continue;
 
       // 1. Tanggal Cuti: first TRV/TV or C/CT/CE
       const firstCutiItem = block.find(b => 
         ['TRV', 'TV', 'C', 'CT', 'CI', 'CE', 'CR'].includes(b.code) || 
-        b.code.startsWith('CT') || b.code.startsWith('CE')
+        b.code.startsWith('TRV') || b.code.startsWith('CT') || b.code.startsWith('CE') || b.code.startsWith('CI')
       ) || block[0];
 
-      // Counters
-      let travel = 0;
-      let tahunanIstimewa = 0;
-      let extra = 0;
-      let izinKhusus = 0;
-      let izin = 0;
-      let tambahanTravel = 0;
-
-      block.forEach(b => {
-        const c = b.code;
-        if (c === 'TRV' || c === 'TV') travel++;
-        else if (c === 'CT' || c.startsWith('CT') || c === 'CI' || c.startsWith('CI') || c === 'C') tahunanIstimewa++;
-        else if (c === 'CE' || c.startsWith('CE')) extra++;
-        else if (c === 'IK' || c.startsWith('IK')) izinKhusus++;
-        else if (c === 'I' || c === 'SL' || c === 'S' || c.startsWith('IZIN')) izin++;
-        else if (c === 'TT') tambahanTravel++;
-      });
+      // Counters persis sesuai ketentuan kalkulasi cuti berjalan
+      const defaultDurations = calculateLeaveDurations(block);
+      const travel = defaultDurations.travel;
+      const tahunanIstimewa = defaultDurations.tahunanIstimewa;
+      const extra = defaultDurations.extra;
+      const izinKhusus = defaultDurations.izinKhusus;
+      const izin = defaultDurations.izin;
+      const tambahanTravel = defaultDurations.tambahanTravel;
 
       // Find index of last core cuti day
       let lastCoreCutiIdx = -1;
       for (let k = 0; k < block.length; k++) {
         const c = block[k].code;
-        if (['C', 'CT', 'CI', 'CE', 'CR'].includes(c) || c.startsWith('CT') || c.startsWith('CE')) {
+        if (['C', 'CT', 'CI', 'CE', 'CR'].includes(c) || c.startsWith('CT') || c.startsWith('CE') || c.startsWith('CI')) {
           lastCoreCutiIdx = k;
         }
       }
@@ -316,13 +368,13 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
       if (lastCoreCutiIdx !== -1) {
         for (let k = lastCoreCutiIdx + 1; k < block.length; k++) {
           const c = block[k].code;
-          if (['I', 'IK', 'SL', 'S', 'TT', 'XP'].includes(c) || c.startsWith('IK')) {
+          if (['I', 'IK', 'SL', 'TT', 'XP'].includes(c) || c.startsWith('IK') || c.startsWith('TT') || c.startsWith('SL')) {
             hasExtension = true;
-            if (c === 'TT' && !extReasons.includes('TT (Travel Delay)')) extReasons.push('TT (Travel Delay)');
-            if (c === 'XP' && !extReasons.includes('Speedboat (XP)')) extReasons.push('Speedboat (XP)');
-            if ((c === 'I' || c.startsWith('IZIN')) && !extReasons.includes('Izin (I)')) extReasons.push('Izin (I)');
-            if (c.startsWith('IK') && !extReasons.includes('Izin Khusus (IK)')) extReasons.push('Izin Khusus (IK)');
-            if ((c === 'SL' || c === 'S') && !extReasons.includes('Sakit (SL)')) extReasons.push('Sakit (SL)');
+            if ((c === 'TT' || c.startsWith('TT')) && !extReasons.includes('TT (Travel Delay)')) extReasons.push('TT (Travel Delay)');
+            if ((c === 'XP' || c.startsWith('XP')) && !extReasons.includes('Speedboat (XP)')) extReasons.push('Speedboat (XP)');
+            if ((c === 'I' || c.startsWith('IZIN') || (c.startsWith('I') && !c.startsWith('IK'))) && !extReasons.includes('Izin (I)')) extReasons.push('Izin (I)');
+            if ((c === 'IK' || c.startsWith('IK')) && !extReasons.includes('Izin Khusus (IK)')) extReasons.push('Izin Khusus (IK)');
+            if ((c === 'SL' || c.startsWith('SL')) && !extReasons.includes('Sakit (SL)')) extReasons.push('Sakit (SL)');
           }
         }
       }
@@ -392,7 +444,8 @@ export function extractLeaveRecordsFromRoster(roster: any[]): LeaveRecord[] {
         tambahanTravel,
         totalHari: travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel,
         hasChange: hasExtension,
-        isCutiSelesai
+        isCutiSelesai,
+        days: block
       });
     }
   }
@@ -418,7 +471,6 @@ const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
   izin: true,
   tambahanTravel: true,
   totalHari: true,
-  aksi: true,
 };
 
 const COLUMN_DEFS = [
@@ -438,7 +490,6 @@ const COLUMN_DEFS = [
   { id: 'izin', label: 'Izin (I / SL)', group: 'duration' as const },
   { id: 'tambahanTravel', label: 'Tambahan Travel (TT)', group: 'duration' as const },
   { id: 'totalHari', label: 'TOTAL HARI' },
-  { id: 'aksi', label: 'AKSI (Edit)' },
 ];
 
 export function RosterLeaveScheduleSheet({ 
@@ -545,6 +596,7 @@ export function RosterLeaveScheduleSheet({
     return DEFAULT_VISIBLE_COLUMNS;
   });
   const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const [isExecutiveSummaryOpen, setIsExecutiveSummaryOpen] = useState(false);
 
   const toggleColumn = (colKey: string) => {
     setVisibleColumns(prev => {
@@ -580,105 +632,77 @@ export function RosterLeaveScheduleSheet({
     return {};
   });
 
-  // Edit Modal State
-  const [editingRecord, setEditingRecord] = useState<LeaveRecord | null>(null);
-  const [editForm, setEditForm] = useState<{
-    poh: string;
-    tanggalCuti: string;
-    tanggalOnsite: string;
-    perubahanJadwalOnsite: string;
-    ket: string;
-    travel: number;
-    tahunanIstimewa: number;
-    extra: number;
-    izinKhusus: number;
-    izin: number;
-    tambahanTravel: number;
-  }>({
-    poh: '',
-    tanggalCuti: '',
-    tanggalOnsite: '',
-    perubahanJadwalOnsite: '',
-    ket: '',
-    travel: 0,
-    tahunanIstimewa: 0,
-    extra: 0,
-    izinKhusus: 0,
-    izin: 0,
-    tambahanTravel: 0
-  });
-
-  const handleOpenEditModal = (rec: LeaveRecord) => {
+  // Inline Direct Table Update Handler (seperti Modul Rekapan Izin Karyawan)
+  const handleInlineUpdateLeave = (rec: LeaveRecord, field: string, value: any) => {
     if (!canEditLeave) {
-      toast.error('Akses ditolak: Hanya Section Administration, Manager, Developer, dan Meeting Room yang dapat mengedit.');
+      toast.error('Akses ditolak: Hanya Section Administration, Manager, Developer, dan Meeting Room yang dapat mengedit jadwal cuti.');
       return;
     }
-    setEditingRecord(rec);
-    setEditForm({
-      poh: rec.poh || '',
-      tanggalCuti: rec.tanggalCuti || '',
-      tanggalOnsite: rec.tanggalOnsite || '',
-      perubahanJadwalOnsite: rec.perubahanJadwalOnsite === '-' ? '' : rec.perubahanJadwalOnsite,
-      ket: rec.ket || '',
-      travel: rec.travel || 0,
-      tahunanIstimewa: rec.tahunanIstimewa || 0,
-      extra: rec.extra || 0,
-      izinKhusus: rec.izinKhusus || 0,
-      izin: rec.izin || 0,
-      tambahanTravel: rec.tambahanTravel || 0
-    });
-  };
-
-  const handleSaveRecordEdit = () => {
-    if (!editingRecord || !canEditLeave) return;
-    const travel = Math.max(0, Number(editForm.travel) || 0);
-    const tahunanIstimewa = Math.max(0, Number(editForm.tahunanIstimewa) || 0);
-    const extra = Math.max(0, Number(editForm.extra) || 0);
-    const izinKhusus = Math.max(0, Number(editForm.izinKhusus) || 0);
-    const izin = Math.max(0, Number(editForm.izin) || 0);
-    const tambahanTravel = Math.max(0, Number(editForm.tambahanTravel) || 0);
-    const totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
-
-    const overrideData = {
-      poh: editForm.poh.trim() || editingRecord.poh,
-      tanggalCuti: editForm.tanggalCuti.trim() || editingRecord.tanggalCuti,
-      tanggalOnsite: editForm.tanggalOnsite.trim() || editingRecord.tanggalOnsite,
-      perubahanJadwalOnsite: editForm.perubahanJadwalOnsite.trim() || '-',
-      ket: editForm.ket.trim() || editingRecord.ket,
-      travel,
-      tahunanIstimewa,
-      extra,
-      izinKhusus,
-      izin,
-      tambahanTravel,
-      totalHari
-    };
 
     setCustomOverrides(prev => {
-      const next = { ...prev, [editingRecord.id]: overrideData };
+      const current = prev[rec.id] || {};
+      const updated: any = { ...current };
+
+      if (field === 'poh') updated.poh = String(value || '').trim();
+      else if (field === 'ket') updated.ket = String(value || '').trim();
+      else if (field === 'perubahanJadwalOnsite') updated.perubahanJadwalOnsite = String(value || '').trim() || '-';
+      else if (field === 'tanggalCuti') {
+        const d = parseKeyDate(value);
+        if (d) {
+          updated.tanggalCuti = formatIndonesianDate(d, { shortMonth: true });
+          updated.tanggalCutiRaw = d;
+        } else {
+          updated.tanggalCuti = String(value || '').trim();
+        }
+      } else if (field === 'tanggalOnsite') {
+        const d = parseKeyDate(value);
+        if (d) {
+          updated.tanggalOnsite = formatIndonesianDate(d, { shortMonth: true });
+          updated.tanggalOnsiteRaw = d;
+        } else {
+          updated.tanggalOnsite = String(value || '').trim();
+        }
+      } else if (['travel', 'tahunanIstimewa', 'extra', 'izinKhusus', 'izin', 'tambahanTravel'].includes(field)) {
+        const numVal = Math.max(0, parseInt(value, 10) || 0);
+        updated[field] = numVal;
+
+        const travel = updated.travel !== undefined ? updated.travel : rec.travel;
+        const tahunanIstimewa = updated.tahunanIstimewa !== undefined ? updated.tahunanIstimewa : rec.tahunanIstimewa;
+        const extra = updated.extra !== undefined ? updated.extra : rec.extra;
+        const izinKhusus = updated.izinKhusus !== undefined ? updated.izinKhusus : rec.izinKhusus;
+        const izin = updated.izin !== undefined ? updated.izin : rec.izin;
+        const tambahanTravel = updated.tambahanTravel !== undefined ? updated.tambahanTravel : rec.tambahanTravel;
+        updated.totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
+      }
+
+      const overrideKey = (selectedMonth !== 'ALL' && ['travel', 'tahunanIstimewa', 'extra', 'izinKhusus', 'izin', 'tambahanTravel'].includes(field))
+        ? `${rec.id}_${selectedMonth}`
+        : rec.id;
+
+      const next = { ...prev, [overrideKey]: updated, [rec.id]: updated };
       try {
         localStorage.setItem('preplab_leave_custom_overrides', JSON.stringify(next));
-      } catch(e) {}
+      } catch (e) {}
       return next;
     });
 
-    toast.success(`Jadwal cuti ${editingRecord.nama} berhasil diperbarui!`);
-    setEditingRecord(null);
+    toast.success(`Perubahan ${rec.nama} (${field}) tersimpan!`);
   };
 
-  const handleResetRecordToOriginal = () => {
-    if (!editingRecord || !canEditLeave) return;
+  const handleResetInlineRecord = (rec: LeaveRecord) => {
+    if (!canEditLeave) return;
     setCustomOverrides(prev => {
       const next = { ...prev };
-      delete next[editingRecord.id];
+      delete next[rec.id];
+      if (selectedMonth !== 'ALL') {
+        delete next[`${rec.id}_${selectedMonth}`];
+      }
       try {
         localStorage.setItem('preplab_leave_custom_overrides', JSON.stringify(next));
-      } catch(e) {}
+      } catch (e) {}
       return next;
     });
-
-    toast.info(`Jadwal cuti ${editingRecord.nama} dikembalikan ke kalkulasi roster asli.`);
-    setEditingRecord(null);
+    toast.info(`Jadwal cuti ${rec.nama} dikembalikan ke kalkulasi roster asli.`);
   };
 
   // Extract all leave records from raw roster
@@ -701,13 +725,22 @@ export function RosterLeaveScheduleSheet({
       const perubahanJadwalOnsite = ov.perubahanJadwalOnsite !== undefined ? ov.perubahanJadwalOnsite : rec.perubahanJadwalOnsite;
       const hasChange = (perubahanJadwalOnsite && perubahanJadwalOnsite !== '-') || rec.hasChange;
 
+      const finalTanggalCutiRaw = ov.tanggalCutiRaw || (ov.tanggalCuti ? parseKeyDate(ov.tanggalCuti) : null) || rec.tanggalCutiRaw;
+      const finalTanggalOnsiteRaw = ov.tanggalOnsiteRaw || (ov.tanggalOnsite ? parseKeyDate(ov.tanggalOnsite) : null) || rec.tanggalOnsiteRaw;
+      const finalPerubahanRaw = ov.perubahanJadwalOnsite && ov.perubahanJadwalOnsite !== '-' ? parseKeyDate(ov.perubahanJadwalOnsite) : rec.perubahanJadwalOnsiteRaw;
+      const finalKet = ov.ket !== undefined ? ov.ket : rec.ket;
+      const finalIsCutiSelesai = finalKet === 'Cuti Selesai' || rec.isCutiSelesai;
+
       return {
         ...rec,
         poh: ov.poh !== undefined ? ov.poh : rec.poh,
         tanggalCuti: ov.tanggalCuti !== undefined ? ov.tanggalCuti : rec.tanggalCuti,
+        tanggalCutiRaw: finalTanggalCutiRaw,
         tanggalOnsite: ov.tanggalOnsite !== undefined ? ov.tanggalOnsite : rec.tanggalOnsite,
+        tanggalOnsiteRaw: finalTanggalOnsiteRaw,
         perubahanJadwalOnsite,
-        ket: ov.ket !== undefined ? ov.ket : rec.ket,
+        perubahanJadwalOnsiteRaw: finalPerubahanRaw,
+        ket: finalKet,
         travel,
         tahunanIstimewa,
         extra,
@@ -716,6 +749,7 @@ export function RosterLeaveScheduleSheet({
         tambahanTravel,
         totalHari,
         hasChange,
+        isCutiSelesai: finalIsCutiSelesai,
         isCustomEdited: true
       };
     });
@@ -752,9 +786,18 @@ export function RosterLeaveScheduleSheet({
   const availablePeriods = useMemo(() => {
     const periodSet = new Set<string>();
     accessibleRecords.forEach(rec => {
-      const d = rec.tanggalCutiRaw;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      periodSet.add(key);
+      if (rec.days && rec.days.length > 0) {
+        rec.days.forEach(d => {
+          if (d.date) {
+            const key = `${d.date.getFullYear()}-${String(d.date.getMonth() + 1).padStart(2, '0')}`;
+            periodSet.add(key);
+          }
+        });
+      } else if (rec.tanggalCutiRaw) {
+        const d = rec.tanggalCutiRaw;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        periodSet.add(key);
+      }
     });
 
     const sortedKeys = Array.from(periodSet).sort();
@@ -824,15 +867,12 @@ export function RosterLeaveScheduleSheet({
   }, [visibleColumns]);
 
   const totalVisibleCols = useMemo(() => {
-    return Object.keys(visibleColumns).filter(k => {
-      if (k === 'aksi' && !canEditLeave) return false;
-      return visibleColumns[k];
-    }).length;
-  }, [visibleColumns, canEditLeave]);
+    return Object.keys(visibleColumns).filter(k => visibleColumns[k]).length;
+  }, [visibleColumns]);
 
   const activeColumnDefs = useMemo(() => {
-    return COLUMN_DEFS.filter(col => col.id !== 'aksi' || canEditLeave);
-  }, [canEditLeave]);
+    return COLUMN_DEFS;
+  }, []);
 
   const hiddenColsCount = useMemo(() => {
     return activeColumnDefs.length - totalVisibleCols;
@@ -840,36 +880,49 @@ export function RosterLeaveScheduleSheet({
 
   // Filtered records based on tab, month, section, keterangan, and search
   const filteredRecords = useMemo(() => {
-    return accessibleRecords.filter(rec => {
+    let targetYear: number | undefined;
+    let targetMonthIndex: number | undefined;
+
+    if (selectedMonth !== 'ALL') {
+      const [y, m] = selectedMonth.split('-').map(Number);
+      targetYear = y;
+      targetMonthIndex = m - 1;
+    }
+
+    const list: LeaveRecord[] = [];
+
+    for (const rec of accessibleRecords) {
       // 1. Tab Golongan
-      if (activeTab === 'staff' && rec.isGol1) return false;
-      if (activeTab === 'crew' && !rec.isGol1) return false;
+      if (activeTab === 'staff' && rec.isGol1) continue;
+      if (activeTab === 'crew' && !rec.isGol1) continue;
 
-      // 2. Periode Cuti (Bulan)
-      if (selectedMonth !== 'ALL') {
-        const [y, m] = selectedMonth.split('-').map(Number);
-        const cutiMonth = rec.tanggalCutiRaw.getMonth() + 1;
-        const cutiYear = rec.tanggalCutiRaw.getFullYear();
-        const onsiteMonth = rec.tanggalOnsiteRaw.getMonth() + 1;
-        const onsiteYear = rec.tanggalOnsiteRaw.getFullYear();
+      // 2. Periode Cuti (Bulan): Sesuaikan durasi dengan Cuti yang berjalan pada Bulan tersebut
+      let currentMonthDurations: ReturnType<typeof calculateLeaveDurations> | null = null;
+      if (selectedMonth !== 'ALL' && targetYear !== undefined && targetMonthIndex !== undefined) {
+        currentMonthDurations = calculateLeaveDurations(rec.days, targetYear, targetMonthIndex);
 
-        // Matches if leave starts or returns in this month
-        const matchStart = cutiYear === y && cutiMonth === m;
-        const matchEnd = onsiteYear === y && onsiteMonth === m;
-        if (!matchStart && !matchEnd) return false;
+        // Hanya tampilkan jika personil memiliki cuti/travel yang aktif berjalan pada bulan ini
+        if (currentMonthDurations.activeDaysCount === 0) {
+          const cutiMonthIndex = rec.tanggalCutiRaw.getFullYear() * 12 + rec.tanggalCutiRaw.getMonth();
+          const onsiteMonthIndex = rec.tanggalOnsiteRaw.getFullYear() * 12 + rec.tanggalOnsiteRaw.getMonth();
+          const curTargetIndex = targetYear * 12 + targetMonthIndex;
+          if (curTargetIndex < cutiMonthIndex || curTargetIndex > onsiteMonthIndex) {
+            continue;
+          }
+        }
       }
 
       // 3. Section
       if (selectedSection !== 'ALL' && rec.section !== selectedSection) {
-        return false;
+        continue;
       }
 
       // 4. Keterangan Filter
       if (selectedKet !== 'ALL') {
         if (selectedKet === 'Cuti Selesai') {
-          if (!rec.isCutiSelesai && rec.ket !== 'Cuti Selesai') return false;
+          if (!rec.isCutiSelesai && rec.ket !== 'Cuti Selesai') continue;
         } else {
-          if (rec.ket !== selectedKet) return false;
+          if (rec.ket !== selectedKet) continue;
         }
       }
 
@@ -880,12 +933,39 @@ export function RosterLeaveScheduleSheet({
         const matchNik = rec.nik.toLowerCase().includes(q);
         const matchJab = rec.jabatan.toLowerCase().includes(q);
         const matchPoh = rec.poh.toLowerCase().includes(q);
-        if (!matchName && !matchNik && !matchJab && !matchPoh) return false;
+        if (!matchName && !matchNik && !matchJab && !matchPoh) continue;
       }
 
-      return true;
-    });
-  }, [accessibleRecords, activeTab, selectedMonth, selectedSection, selectedKet, searchQuery]);
+      // Custom override check for this row (either month-specific or general)
+      const ov = customOverrides[`${rec.id}_${selectedMonth}`] || customOverrides[rec.id];
+
+      if (currentMonthDurations) {
+        const travel = ov?.travel !== undefined ? ov.travel : currentMonthDurations.travel;
+        const tahunanIstimewa = ov?.tahunanIstimewa !== undefined ? ov.tahunanIstimewa : currentMonthDurations.tahunanIstimewa;
+        const extra = ov?.extra !== undefined ? ov.extra : currentMonthDurations.extra;
+        const izinKhusus = ov?.izinKhusus !== undefined ? ov.izinKhusus : currentMonthDurations.izinKhusus;
+        const izin = ov?.izin !== undefined ? ov.izin : currentMonthDurations.izin;
+        const tambahanTravel = ov?.tambahanTravel !== undefined ? ov.tambahanTravel : currentMonthDurations.tambahanTravel;
+        const totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
+
+        list.push({
+          ...rec,
+          travel,
+          tahunanIstimewa,
+          extra,
+          izinKhusus,
+          izin,
+          tambahanTravel,
+          totalHari,
+          isCustomEdited: !!ov || rec.isCustomEdited
+        });
+      } else {
+        list.push(rec);
+      }
+    }
+
+    return list;
+  }, [accessibleRecords, activeTab, selectedMonth, selectedSection, selectedKet, searchQuery, customOverrides]);
 
   // Statistics KPI
   const stats = useMemo(() => {
@@ -945,12 +1025,12 @@ export function RosterLeaveScheduleSheet({
         'TANGGAL ON SITE',
         'KETERANGAN',
         'PERUBAHAN JADWAL ONSITE',
-        'Travel',
+        'TRAVEL',
         'TAHUNAN / ISTIMEWA',
         'EXTRA',
         'IZIN KHUSUS',
         'IZIN',
-        'Tambahan Travel (Jika tidak ada Transport)',
+        'TAMBAHAN TRAVEL (TT)',
         'TOTAL HARI'
       ]
     ];
@@ -1171,359 +1251,164 @@ export function RosterLeaveScheduleSheet({
         </div>
       )}
 
-      {/* Edit Record Modal */}
-      {editingRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30">
-                  <Edit2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                    Edit Jadwal & Rincian Cuti
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    {editingRecord.nama} ({editingRecord.nik}) • Gol {editingRecord.gol}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingRecord(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar text-xs">
-              {/* Row 1: POH & KET */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    POH (Point of Hire)
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.poh}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, poh: e.target.value }))}
-                    placeholder="Contoh: Ternate, Jakarta, dll."
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Keterangan (KET)
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.ket}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, ket: e.target.value }))}
-                    placeholder="Normal, Cuti Selesai, Extend, dll."
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-
-              {/* Row 2: Tanggal Cuti, Tanggal Onsite, Perubahan Onsite */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-emerald-700 dark:text-emerald-400 mb-1">
-                    Tanggal Cuti
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.tanggalCuti}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, tanggalCuti: e.target.value }))}
-                    placeholder="24 Agu 2026"
-                    className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/20 font-bold text-emerald-800 dark:text-emerald-300 outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-teal-700 dark:text-teal-400 mb-1">
-                    Tanggal On Site
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.tanggalOnsite}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, tanggalOnsite: e.target.value }))}
-                    placeholder="7 Sep 2026"
-                    className="w-full px-3 py-2 rounded-xl border border-teal-300 dark:border-teal-800 bg-teal-50/30 dark:bg-teal-950/20 font-bold text-teal-800 dark:text-teal-300 outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-amber-700 dark:text-amber-400 mb-1">
-                    Perubahan Onsite
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.perubahanJadwalOnsite}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, perubahanJadwalOnsite: e.target.value }))}
-                    placeholder="Kosongkan jika '-' "
-                    className="w-full px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/20 font-bold text-amber-800 dark:text-amber-300 outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-              </div>
-
-              {/* Section: Rincian Durasi / Jenis Cuti (Hari) */}
-              <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-slate-800 dark:text-slate-200 text-xs">
-                    Rincian Durasi & Jenis Cuti (Hari)
-                  </span>
-                  <div className="text-xs font-bold text-slate-500">
-                    Total: <span className="text-teal-600 dark:text-teal-400 font-black text-sm">
-                      {(Number(editForm.travel) || 0) +
-                       (Number(editForm.tahunanIstimewa) || 0) +
-                       (Number(editForm.extra) || 0) +
-                       (Number(editForm.izinKhusus) || 0) +
-                       (Number(editForm.izin) || 0) +
-                       (Number(editForm.tambahanTravel) || 0)} Hari
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  <div>
-                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
-                      Travel (TRV)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editForm.travel}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, travel: Math.max(0, parseInt(e.target.value) || 0) }))}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
-                      Tahunan / Istimewa (CT/CI)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editForm.tahunanIstimewa}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, tahunanIstimewa: Math.max(0, parseInt(e.target.value) || 0) }))}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
-                      Extra (CE)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editForm.extra}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, extra: Math.max(0, parseInt(e.target.value) || 0) }))}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
-                      Izin Khusus (IK)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editForm.izinKhusus}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, izinKhusus: Math.max(0, parseInt(e.target.value) || 0) }))}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-600 dark:text-slate-400 text-[11px] mb-1">
-                      Izin (I / SL)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editForm.izin}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, izin: Math.max(0, parseInt(e.target.value) || 0) }))}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-amber-700 dark:text-amber-400 text-[11px] mb-1">
-                      Tambahan Travel (TT)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editForm.tambahanTravel}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, tambahanTravel: Math.max(0, parseInt(e.target.value) || 0) }))}
-                      className="w-full px-3 py-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 font-bold"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
-              <div>
-                {customOverrides[editingRecord.id] && (
-                  <button
-                    type="button"
-                    onClick={handleResetRecordToOriginal}
-                    className="text-rose-600 hover:text-rose-700 text-xs font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Reset ke Roster Asli</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingRecord(null)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveRecordEdit}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-sm flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Simpan Perubahan</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Top Entrepreneurial Executive Header Card - Crisp Executive White Style */}
+      {/* Dropdown Tipis Keterangan & KPI Cuti */}
       <div 
-        className="p-4 sm:p-6 rounded-2xl border shadow-xs relative overflow-hidden"
+        className="rounded-2xl border shadow-xs overflow-hidden transition-all duration-200"
         style={{
           backgroundColor: '#FFFFFF',
           borderColor: 'var(--border-main, #E2E8F0)',
           color: '#0F172A'
         }}
       >
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Sistem Manajemen Cuti Terintegrasi Roster</span>
-              </div>
-
-              {canEditLeave ? (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
-                  <Shield className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Akses Editor: {isDeveloper ? 'Developer' : isManager ? 'Manager' : isMeetingRoom ? 'Meeting Room' : 'Section Administration'}</span>
-                </div>
-              ) : isRestrictedPerSection ? (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-800 border border-sky-300 shadow-2xs">
-                  <Eye className="w-3.5 h-3.5 text-sky-600" />
-                  <span>Mode Lihat: Gol I – {userGolLevel === 2 ? 'II' : 'III'} ({userUnifiedSection})</span>
-                </div>
-              ) : (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 shadow-2xs">
-                  <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Akses Lihat Lengkap (Gol V)</span>
-                </div>
-              )}
+        {/* Baris Tipis Header (Selalu Terlihat & Bisa Diklik untuk Toggle) */}
+        <div 
+          onClick={() => setIsExecutiveSummaryOpen(prev => !prev)}
+          className="p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/80 transition-colors"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0 text-emerald-700">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
-              <span>Jadwal & Riwayat Cuti Personil</span>
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 max-w-2xl font-normal leading-relaxed">
-              Otomatisasi kalkulasi tanggal cuti, perjalanan (TRV), kuota cuti tahunan/extra/khusus, serta monitoring perubahan jadwal on-site terverifikasi dari Roster Harian.
-            </p>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
+                  Jadwal & Riwayat Cuti Personil
+                </h2>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {stats.totalPersonil} Personil Cuti
+                </span>
+                <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  {stats.traveling} Hari TRV
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 line-clamp-1">
+                {isExecutiveSummaryOpen ? 'Klik untuk menutup ringkasan keterangan & KPI' : 'Klik untuk melihat keterangan sistem, hak akses & 4 kartu analitik cuti'}
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 ml-auto shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={handleExportExcel}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm hover:shadow-emerald-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs transition-all cursor-pointer"
             >
-              <Download className="w-4 h-4" />
-              <span>Ekspor Excel (.xlsx)</span>
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Ekspor Excel</span>
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer"
               title="Cetak Jadwal Cuti"
             >
-              <Printer className="w-4 h-4 text-slate-500" />
-              <span>Cetak</span>
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Cetak</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsExecutiveSummaryOpen(prev => !prev)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                isExecutiveSummaryOpen 
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                  : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+              }`}
+              title={isExecutiveSummaryOpen ? "Tutup Keterangan" : "Buka Keterangan & KPI"}
+            >
+              <span className="text-[11px]">{isExecutiveSummaryOpen ? 'Tutup' : 'Keterangan & KPI'}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExecutiveSummaryOpen ? 'rotate-180 text-emerald-700' : 'text-slate-500'}`} />
             </button>
           </div>
         </div>
 
-        {/* Executive KPI Stats Cards - Clean White Background */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 mt-5 border-t border-slate-200">
-          <div className="bg-slate-50/80 p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
-              <span>Total Personil Cuti</span>
-              <Users className="w-3.5 h-3.5 text-teal-600" />
-            </div>
-            <div className="text-lg sm:text-2xl font-black text-slate-900">
-              {stats.totalPersonil} <span className="text-xs font-normal text-slate-500">Orang</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              Tercatat pada periode terpilih
-            </div>
-          </div>
+        {/* Konten Keterangan & 4 Kartu KPI (Hanya Muncul Ketika Diklik) */}
+        {isExecutiveSummaryOpen && (
+          <div className="px-4 pb-4 sm:px-6 sm:pb-6 pt-2 border-t border-slate-100 bg-slate-50/40">
+            <div className="pt-2">
+              <div className="space-y-1.5 mb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Sistem Manajemen Cuti Terintegrasi Roster</span>
+                  </div>
 
-          <div className="bg-slate-50/80 p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
-              <span>Total Travel (TRV)</span>
-              <Plane className="w-3.5 h-3.5 text-amber-500" />
-            </div>
-            <div className="text-lg sm:text-2xl font-black text-amber-600">
-              {stats.traveling} <span className="text-xs font-normal text-slate-500">Hari</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              Akumulasi hari perjalanan
-            </div>
-          </div>
+                  {canEditLeave ? (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+                      <Shield className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Akses Editor: {isDeveloper ? 'Developer' : isManager ? 'Manager' : isMeetingRoom ? 'Meeting Room' : 'Section Administration'}</span>
+                    </div>
+                  ) : isRestrictedPerSection ? (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-800 border border-sky-300 shadow-2xs">
+                      <Eye className="w-3.5 h-3.5 text-sky-600" />
+                      <span>Mode Lihat: Gol I – {userGolLevel === 2 ? 'II' : 'III'} ({userUnifiedSection})</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-300 shadow-2xs">
+                      <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Akses Lihat Lengkap (Gol V)</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-slate-600 max-w-2xl font-normal leading-relaxed">
+                  Otomatisasi kalkulasi tanggal cuti, perjalanan (TRV), kuota cuti tahunan/extra/khusus, serta monitoring perubahan jadwal on-site terverifikasi dari Roster Harian.
+                </p>
+              </div>
 
-          <div className="bg-slate-50/80 p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
-              <span>Perubahan Onsite</span>
-              <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
-            </div>
-            <div className="text-lg sm:text-2xl font-black text-rose-600">
-              {stats.withChanges} <span className="text-xs font-normal text-slate-500">Orang</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              Extend / Delay transportasi
-            </div>
-          </div>
+              {/* Executive KPI Stats Cards - 4 Kartu */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-200/80">
+                <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                  <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
+                    <span>Total Personil Cuti</span>
+                    <Users className="w-3.5 h-3.5 text-teal-600" />
+                  </div>
+                  <div className="text-lg sm:text-2xl font-black text-slate-900">
+                    {stats.totalPersonil} <span className="text-xs font-normal text-slate-500">Orang</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Tercatat pada periode terpilih
+                  </div>
+                </div>
 
-          <div className="bg-slate-50/80 p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
-            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
-              <span>Rata-rata Durasi</span>
-              <Clock className="w-3.5 h-3.5 text-teal-600" />
-            </div>
-            <div className="text-lg sm:text-2xl font-black text-teal-700">
-              {stats.avgHari} <span className="text-xs font-normal text-slate-500">Hari / Orang</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              Total {stats.totalHari} hari cuti
+                <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                  <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
+                    <span>Total Travel (TRV)</span>
+                    <Plane className="w-3.5 h-3.5 text-amber-500" />
+                  </div>
+                  <div className="text-lg sm:text-2xl font-black text-amber-600">
+                    {stats.traveling} <span className="text-xs font-normal text-slate-500">Hari</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Akumulasi hari perjalanan
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                  <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
+                    <span>Perubahan Onsite</span>
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                  </div>
+                  <div className="text-lg sm:text-2xl font-black text-rose-600">
+                    {stats.withChanges} <span className="text-xs font-normal text-slate-500">Orang</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Extend / Delay transportasi
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                  <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold mb-1">
+                    <span>Rata-rata Durasi</span>
+                    <Clock className="w-3.5 h-3.5 text-teal-600" />
+                  </div>
+                  <div className="text-lg sm:text-2xl font-black text-teal-700">
+                    {stats.avgHari} <span className="text-xs font-normal text-slate-500">Hari / Orang</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Total {stats.totalHari} hari cuti
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Primary Sub-Sheet Tabs (Staff Gol II-V vs Crew Gol I) */}
@@ -1865,11 +1750,7 @@ export function RosterLeaveScheduleSheet({
                   </th>
                 )}
 
-                {canEditLeave && visibleColumns.aksi && (
-                  <th rowSpan={visibleDurationColsCount > 0 ? 2 : 1} className="py-2.5 px-3 text-center min-w-[70px] bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-extrabold">
-                    AKSI
-                  </th>
-                )}
+
               </tr>
 
               {/* Sub-headers for duration columns - Sticky Top 77px */}
@@ -1882,22 +1763,22 @@ export function RosterLeaveScheduleSheet({
                   }}
                 >
                   {visibleColumns.travel && (
-                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Perjalanan Masuk & Pulang (TRV)">Travel</th>
+                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah TRV yang muncul pada Cuti berjalan">Travel</th>
                   )}
                   {visibleColumns.tahunanIstimewa && (
-                    <th className="py-1.5 px-2 text-center w-24 border-r border-slate-200 dark:border-slate-800" title="Cuti Tahunan (CT) & Istimewa (CI)">Tahunan / Istimewa</th>
+                    <th className="py-1.5 px-2 text-center w-24 border-r border-slate-200 dark:border-slate-800" title="Jumlah CT atau CI yang muncul pada Cuti berjalan">Tahunan / Istimewa</th>
                   )}
                   {visibleColumns.extra && (
-                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Cuti Extra (CE)">Extra</th>
+                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah CE yang muncul pada Cuti berjalan">Extra</th>
                   )}
                   {visibleColumns.izinKhusus && (
-                    <th className="py-1.5 px-2 text-center w-20 border-r border-slate-200 dark:border-slate-800" title="Izin Khusus (IK)">Izin Khusus</th>
+                    <th className="py-1.5 px-2 text-center w-20 border-r border-slate-200 dark:border-slate-800" title="Jumlah IK yang muncul pada Cuti berjalan">Izin Khusus</th>
                   )}
                   {visibleColumns.izin && (
-                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Izin Biasa / Sakit (I / SL)">Izin</th>
+                    <th className="py-1.5 px-2 text-center w-14 border-r border-slate-200 dark:border-slate-800" title="Jumlah I atau SL yang muncul pada Cuti berjalan">Izin</th>
                   )}
                   {visibleColumns.tambahanTravel && (
-                    <th className="py-1.5 px-2 text-center min-w-[140px] border-r border-slate-200 dark:border-slate-800 text-amber-700 dark:text-amber-400" title="Tambahan Travel jika tidak ada transportasi (TT)">
+                    <th className="py-1.5 px-2 text-center min-w-[140px] border-r border-slate-200 dark:border-slate-800 text-amber-700 dark:text-amber-400" title="Jumlah TT yang Muncul">
                       Tambahan Travel (TT)
                     </th>
                   )}
@@ -1973,12 +1854,32 @@ export function RosterLeaveScheduleSheet({
                         </td>
                       )}
 
-                      {/* POH */}
+                      {/* POH - Inline Editable */}
                       {visibleColumns.poh && (
-                        <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
                             <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{rec.poh}</span>
+                            {canEditLeave ? (
+                              <input
+                                type="text"
+                                defaultValue={rec.poh}
+                                key={`${rec.id}-poh-${rec.poh}`}
+                                onBlur={(e) => {
+                                  const val = e.target.value.trim();
+                                  if (val !== rec.poh) {
+                                    handleInlineUpdateLeave(rec, 'poh', val);
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                }}
+                                placeholder="POH..."
+                                className="w-full max-w-[110px] px-1.5 py-0.5 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-teal-500 text-slate-800 dark:text-slate-200 outline-none transition-all"
+                                title="Edit POH langsung di tabel"
+                              />
+                            ) : (
+                              <span className="truncate">{rec.poh}</span>
+                            )}
                           </div>
                         </td>
                       )}
@@ -1992,140 +1893,334 @@ export function RosterLeaveScheduleSheet({
                         </td>
                       )}
 
-                      {/* TANGGAL CUTI */}
+                      {/* TANGGAL CUTI - Inline Date Picker */}
                       {visibleColumns.tanggalCuti && (
-                        <td className="py-2.5 px-3 text-center font-bold text-emerald-700 dark:text-emerald-400 border-r border-slate-100 dark:border-slate-800 bg-emerald-500/5">
-                          {rec.tanggalCuti}
+                        <td className="py-2 px-2 text-center font-bold text-emerald-700 dark:text-emerald-400 border-r border-slate-100 dark:border-slate-800 bg-emerald-500/5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="relative inline-flex items-center group">
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-950/40 transition-colors">
+                              <Calendar className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <span>{rec.tanggalCuti}</span>
+                            </div>
+                            {canEditLeave && (
+                              <input
+                                type="date"
+                                defaultValue={rec.tanggalCutiRaw instanceof Date && !isNaN(rec.tanggalCutiRaw.getTime()) ? rec.tanggalCutiRaw.toISOString().split('T')[0] : ''}
+                                key={`${rec.id}-tc-${rec.tanggalCuti}`}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val) {
+                                    handleInlineUpdateLeave(rec, 'tanggalCuti', val);
+                                  }
+                                }}
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                title="Klik untuk mengubah Tanggal Cuti langsung"
+                              />
+                            )}
+                          </div>
                         </td>
                       )}
 
-                      {/* TANGGAL ON SITE */}
+                      {/* TANGGAL ON SITE - Inline Date Picker */}
                       {visibleColumns.tanggalOnsite && (
-                        <td className="py-2.5 px-3 text-center font-bold text-teal-700 dark:text-teal-400 border-r border-slate-100 dark:border-slate-800 bg-teal-500/5">
-                          {rec.tanggalOnsite}
+                        <td className="py-2 px-2 text-center font-bold text-teal-700 dark:text-teal-400 border-r border-slate-100 dark:border-slate-800 bg-teal-500/5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="relative inline-flex items-center group">
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold text-teal-800 dark:text-teal-300 hover:bg-teal-100/60 dark:hover:bg-teal-950/40 transition-colors">
+                              <Calendar className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
+                              <span>{rec.tanggalOnsite}</span>
+                            </div>
+                            {canEditLeave && (
+                              <input
+                                type="date"
+                                defaultValue={rec.tanggalOnsiteRaw instanceof Date && !isNaN(rec.tanggalOnsiteRaw.getTime()) ? rec.tanggalOnsiteRaw.toISOString().split('T')[0] : ''}
+                                key={`${rec.id}-to-${rec.tanggalOnsite}`}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val) {
+                                    handleInlineUpdateLeave(rec, 'tanggalOnsite', val);
+                                  }
+                                }}
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                title="Klik untuk mengubah Tanggal Onsite langsung"
+                              />
+                            )}
+                          </div>
                         </td>
                       )}
 
-                      {/* KETERANGAN */}
+                      {/* KETERANGAN - Manual Dropdown Selector */}
                       {visibleColumns.ket && (
-                        <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
-                          {rec.isCutiSelesai ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                              Cuti Selesai
-                            </span>
-                          ) : rec.hasChange ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
-                              <AlertCircle className="w-2.5 h-2.5" />
-                              {rec.ket}
-                            </span>
+                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          {canEditLeave ? (
+                            <select
+                              value={rec.ket || 'Sesuai Roster'}
+                              onChange={(e) => handleInlineUpdateLeave(rec, 'ket', e.target.value)}
+                              className={`px-2 py-1 rounded-full text-[10px] font-bold border cursor-pointer outline-none transition-all shadow-2xs ${
+                                rec.ket === 'Cuti Selesai'
+                                  ? 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'
+                                  : rec.ket === 'Sesuai Roster'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700'
+                                  : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700'
+                              }`}
+                              title="Pilih keterangan cuti langsung di tabel"
+                            >
+                              <option value="Sesuai Roster">Sesuai Roster</option>
+                              <option value="Cuti Selesai">Cuti Selesai</option>
+                              <option value="Perubahan Jadwal">Perubahan Jadwal</option>
+                              <option value="TT (Travel Delay)">TT (Travel Delay)</option>
+                              <option value="Speedboat (XP)">Speedboat (XP)</option>
+                              <option value="Izin (I)">Izin (I)</option>
+                              <option value="Izin Khusus (IK)">Izin Khusus (IK)</option>
+                              <option value="Sakit (SL)">Sakit (SL)</option>
+                            </select>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                              <Check className="w-2.5 h-2.5 text-emerald-500" />
-                              {rec.ket}
-                            </span>
+                            rec.isCutiSelesai ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                Cuti Selesai
+                              </span>
+                            ) : rec.hasChange ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                                <AlertCircle className="w-2.5 h-2.5" />
+                                {rec.ket}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                <Check className="w-2.5 h-2.5 text-emerald-500" />
+                                {rec.ket}
+                              </span>
+                            )
                           )}
                         </td>
                       )}
 
-                      {/* PERUBAHAN JADWAL ONSITE */}
+                      {/* PERUBAHAN JADWAL ONSITE - Inline Editable */}
                       {visibleColumns.perubahanJadwalOnsite && (
-                        <td className="py-2.5 px-3 text-center font-bold border-r border-slate-100 dark:border-slate-800">
-                          {rec.hasChange ? (
-                            <span className="px-2 py-1 rounded-lg font-black text-rose-600 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30">
-                              {rec.perubahanJadwalOnsite}
-                            </span>
+                        <td className="py-2 px-2 text-center font-bold border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          {canEditLeave ? (
+                            <div className="relative inline-flex items-center group">
+                              <span className={`px-2 py-0.5 rounded font-black text-xs ${
+                                rec.hasChange && rec.perubahanJadwalOnsite !== '-'
+                                  ? 'text-rose-600 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30'
+                                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                              }`}>
+                                {rec.perubahanJadwalOnsite || '-'}
+                              </span>
+                              <input
+                                type="date"
+                                defaultValue={rec.perubahanJadwalOnsiteRaw instanceof Date && !isNaN(rec.perubahanJadwalOnsiteRaw.getTime()) ? rec.perubahanJadwalOnsiteRaw.toISOString().split('T')[0] : ''}
+                                key={`${rec.id}-pjo-${rec.perubahanJadwalOnsite}`}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val) {
+                                    handleInlineUpdateLeave(rec, 'perubahanJadwalOnsite', formatIndonesianDate(new Date(val), { shortMonth: true }));
+                                  }
+                                }}
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                title="Klik untuk menentukan Perubahan Jadwal Onsite"
+                              />
+                            </div>
                           ) : (
-                            <span className="text-slate-400 font-normal">-</span>
+                            rec.hasChange ? (
+                              <span className="px-2 py-1 rounded-lg font-black text-rose-600 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30">
+                                {rec.perubahanJadwalOnsite}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-normal">-</span>
+                            )
                           )}
                         </td>
                       )}
 
-                      {/* Travel (TRV) */}
+                      {/* Travel (TRV) - Inline Editable */}
                       {visibleColumns.travel && (
-                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                          {rec.travel > 0 ? (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold">
-                              {rec.travel}
-                            </span>
-                          ) : '-'}
+                        <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          {canEditLeave ? (
+                            <input
+                              type="number"
+                              min={0}
+                              defaultValue={rec.travel}
+                              key={`${rec.id}-${selectedMonth}-trv-${rec.travel}`}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value, 10) || 0;
+                                if (val !== rec.travel) handleInlineUpdateLeave(rec, 'travel', val);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-amber-700 dark:text-amber-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 focus:border-amber-500 outline-none transition-all shadow-2xs"
+                              title="Travel: Jumlah 'TRV' yang muncul pada Cuti berjalan"
+                            />
+                          ) : (
+                            rec.travel > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold">
+                                {rec.travel}
+                              </span>
+                            ) : '-'
+                          )}
                         </td>
                       )}
 
-                      {/* Tahunan / Istimewa (CT/CI) */}
+                      {/* Tahunan / Istimewa (CT/CI) - Inline Editable */}
                       {visibleColumns.tahunanIstimewa && (
-                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                          {rec.tahunanIstimewa > 0 ? (
-                            <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold">
-                              {rec.tahunanIstimewa}
-                            </span>
-                          ) : '-'}
+                        <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          {canEditLeave ? (
+                            <input
+                              type="number"
+                              min={0}
+                              defaultValue={rec.tahunanIstimewa}
+                              key={`${rec.id}-${selectedMonth}-ct-${rec.tahunanIstimewa}`}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value, 10) || 0;
+                                if (val !== rec.tahunanIstimewa) handleInlineUpdateLeave(rec, 'tahunanIstimewa', val);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-purple-700 dark:text-purple-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-purple-400 focus:border-purple-500 outline-none transition-all shadow-2xs"
+                              title="Tahunan/Istimewa: Jumlah 'CT' atau 'CI' yang muncul pada Cuti berjalan"
+                            />
+                          ) : (
+                            rec.tahunanIstimewa > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold">
+                                {rec.tahunanIstimewa}
+                              </span>
+                            ) : '-'
+                          )}
                         </td>
                       )}
 
-                      {/* Extra (CE) */}
+                      {/* Extra (CE) - Inline Editable */}
                       {visibleColumns.extra && (
-                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                          {rec.extra > 0 ? (
-                            <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold">
-                              {rec.extra}
-                            </span>
-                          ) : '-'}
+                        <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          {canEditLeave ? (
+                            <input
+                              type="number"
+                              min={0}
+                              defaultValue={rec.extra}
+                              key={`${rec.id}-${selectedMonth}-ce-${rec.extra}`}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value, 10) || 0;
+                                if (val !== rec.extra) handleInlineUpdateLeave(rec, 'extra', val);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-blue-700 dark:text-blue-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-400 focus:border-blue-500 outline-none transition-all shadow-2xs"
+                              title="Extra: Jumlah 'CE' yang muncul pada Cuti berjalan"
+                            />
+                          ) : (
+                            rec.extra > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold">
+                                {rec.extra}
+                              </span>
+                            ) : '-'
+                          )}
                         </td>
                       )}
 
-                      {/* Izin Khusus (IK) */}
+                      {/* Izin Khusus (IK) - Inline Editable */}
                       {visibleColumns.izinKhusus && (
-                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                          {rec.izinKhusus > 0 ? (
-                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold">
-                              {rec.izinKhusus}
-                            </span>
-                          ) : '-'}
+                        <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          {canEditLeave ? (
+                            <input
+                              type="number"
+                              min={0}
+                              defaultValue={rec.izinKhusus}
+                              key={`${rec.id}-${selectedMonth}-ik-${rec.izinKhusus}`}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value, 10) || 0;
+                                if (val !== rec.izinKhusus) handleInlineUpdateLeave(rec, 'izinKhusus', val);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-indigo-700 dark:text-indigo-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 focus:border-indigo-500 outline-none transition-all shadow-2xs"
+                              title="Izin Khusus: Jumlah 'IK' yang muncul pada Cuti berjalan"
+                            />
+                          ) : (
+                            rec.izinKhusus > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold">
+                                {rec.izinKhusus}
+                              </span>
+                            ) : '-'
+                          )}
                         </td>
                       )}
 
-                      {/* Izin / Sakit (I/SL) */}
+                      {/* Izin / Sakit (I/SL) - Inline Editable */}
                       {visibleColumns.izin && (
-                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                          {rec.izin > 0 ? (
-                            <span className="px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-800 dark:text-yellow-300 font-bold">
-                              {rec.izin}
-                            </span>
-                          ) : '-'}
+                        <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          {canEditLeave ? (
+                            <input
+                              type="number"
+                              min={0}
+                              defaultValue={rec.izin}
+                              key={`${rec.id}-${selectedMonth}-i-${rec.izin}`}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value, 10) || 0;
+                                if (val !== rec.izin) handleInlineUpdateLeave(rec, 'izin', val);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-yellow-800 dark:text-yellow-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-yellow-400 focus:border-yellow-500 outline-none transition-all shadow-2xs"
+                              title="Izin: Jumlah 'I' atau 'SL' yang muncul pada Cuti berjalan"
+                            />
+                          ) : (
+                            rec.izin > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-800 dark:text-yellow-300 font-bold">
+                                {rec.izin}
+                              </span>
+                            ) : '-'
+                          )}
                         </td>
                       )}
 
-                      {/* Tambahan Travel (TT) */}
+                      {/* Tambahan Travel (TT) - Inline Editable */}
                       {visibleColumns.tambahanTravel && (
-                        <td className="py-2.5 px-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800">
-                          {rec.tambahanTravel > 0 ? (
-                            <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-400 font-black">
-                              {rec.tambahanTravel}
-                            </span>
-                          ) : '-'}
+                        <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          {canEditLeave ? (
+                            <input
+                              type="number"
+                              min={0}
+                              defaultValue={rec.tambahanTravel}
+                              key={`${rec.id}-${selectedMonth}-tt-${rec.tambahanTravel}`}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value, 10) || 0;
+                                if (val !== rec.tambahanTravel) handleInlineUpdateLeave(rec, 'tambahanTravel', val);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                              className="w-11 px-1 py-0.5 text-xs font-black text-center text-rose-700 dark:text-rose-400 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-rose-400 focus:border-rose-500 outline-none transition-all shadow-2xs"
+                              title="TAMBAHAN TRAVEL (TT): Jumlah 'TT' yang Muncul"
+                            />
+                          ) : (
+                            rec.tambahanTravel > 0 ? (
+                              <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-400 font-black">
+                                {rec.tambahanTravel}
+                              </span>
+                            ) : '-'
+                          )}
                         </td>
                       )}
 
                       {/* TOTAL HARI */}
                       {visibleColumns.totalHari && (
                         <td className="py-2.5 px-3 text-center font-black text-slate-900 dark:text-white bg-slate-100/80 dark:bg-slate-800/80 border-r border-slate-200 dark:border-slate-800">
-                          {rec.totalHari}
-                        </td>
-                      )}
-
-                      {/* AKSI (Edit Button) */}
-                      {canEditLeave && visibleColumns.aksi && (
-                        <td className="py-2.5 px-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditModal(rec)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 transition-all cursor-pointer shadow-2xs"
-                            title="Edit data cuti personil ini"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                            <span>Edit</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span>{rec.totalHari}</span>
+                            {rec.isCustomEdited && canEditLeave && (
+                              <button
+                                type="button"
+                                onClick={() => handleResetInlineRecord(rec)}
+                                className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-rose-500 transition-colors"
+                                title="Reset perubahan baris ini ke kalkulasi roster asli"
+                              >
+                                <RotateCcw className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -2177,11 +2272,7 @@ export function RosterLeaveScheduleSheet({
                       {stats.totalHari}
                     </td>
                   )}
-                  {canEditLeave && visibleColumns.aksi && (
-                    <td className="py-3 px-2 text-center text-slate-400">
-                      -
-                    </td>
-                  )}
+
                 </tr>
               </tfoot>
             )}
