@@ -77,7 +77,7 @@ import { ImageModal } from './image-modal';
 import { parseTasklist, toggleTasklistItem, formatColorTagsToHtml, formatTitleToVisualHtml, stripColorTags, NOTION_COLORS, TasklistProgress, markdownToVisualHtml, migrateLegacySubtaskText } from './notion/tasklist-utils';
 import { NotionTasklistView } from './notion/NotionTasklistView';
 import { NotionDropdownCell, STATUS_OPTIONS, PRIORITY_OPTIONS } from './notion/NotionDropdownCell';
-import { NotionDueDateCell, calculateTaskKpiStatus, parseDateToMidnight } from './notion/NotionDueDateCell';
+import { NotionDueDateCell, NotionCompletionDateCell, calculateTaskKpiStatus, parseDateToMidnight } from './notion/NotionDueDateCell';
 import { NotionInlineEditor } from './notion/NotionInlineEditor';
 import { NotionSaveConfirmationModal } from './notion/NotionSaveConfirmationModal';
 import { NotionDeleteConfirmationModal } from './notion/NotionDeleteConfirmationModal';
@@ -3555,6 +3555,21 @@ export function NotionDatabaseTable({
                 rowChanged = true;
               }
 
+              // Preserve and two-way sync PIC: If subRow has PIC and ticket does not, sync to ticket; if ticket has PIC and subRow is empty, backfill subRow
+              const subPic = subRow['PIC'] || '';
+              const ticketPic = t.pic || '';
+              if (ticketPic && (!subPic || subPic === '-')) {
+                subRow['PIC'] = ticketPic;
+                rowChanged = true;
+              } else if (subPic && subPic !== '-' && !ticketPic) {
+                // Ticket in DB hasn't received PIC yet, update it
+                fetch(`/api/tickets/${encodeURIComponent(t.ticketId)}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ pic: subPic })
+                }).catch(() => {});
+              }
+
               if (rowChanged) {
                 nextRows[sIdx] = subRow;
                 hasChanges = true;
@@ -4035,6 +4050,19 @@ export function NotionDatabaseTable({
           }
         } else if (stUpper.includes('OPEN') || stUpper.includes('PROGRESS')) {
           targetRow[compKey] = '-';
+        }
+      }
+
+      // Auto-sync PIC update to backend inspection ticket if this row is a linked finding
+      if (colLower === 'pic' || colLower.includes('assignee')) {
+        targetRow['PIC'] = newValue;
+        const linkedTicketId = extractLinkedTicketId(targetRow);
+        if (linkedTicketId) {
+          fetch(`/api/tickets/${encodeURIComponent(linkedTicketId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pic: newValue === '-' ? '' : newValue })
+          }).catch(err => console.warn('[PIC Sync] Failed to update ticket PIC:', err));
         }
       }
 
@@ -8792,6 +8820,16 @@ export function NotionDatabaseTable({
                                 const val = getRowVal(row, colName);
                                 const colLower = colName.toLowerCase();
                                 const cleanCol = colLower.replace(/^[^a-z0-9]+/i, '').trim();
+                                let isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
+                                let startInlineEdit = (e?: React.MouseEvent) => {
+                                  if (e) e.stopPropagation();
+                                  setActiveInlineEditor({
+                                    rowIndex: actualRowIndex,
+                                    colName,
+                                    initialValue: val && val !== '-' ? val : '',
+                                    multiline: false
+                                  });
+                                };
 
                                 // 1. Number Column
                                 if (colLower === 'number' || colLower === 'no') {
@@ -8819,8 +8857,6 @@ export function NotionDatabaseTable({
 
                                 // 2. Jenis kegiatan Column (Judul / Name / Materi / Activity Name)
                                 if (cleanCol.includes('activity name') || cleanCol.includes('jenis kegiatan') || cleanCol === 'task' || cleanCol === 'judul' || cleanCol === 'name' || cleanCol === 'title' || cleanCol === 'nama' || cleanCol === 'materi') {
-                                  const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
-
                                   return (
                                     <td 
                                       key={colName} 
@@ -9195,7 +9231,7 @@ export function NotionDatabaseTable({
                                   colLower.includes('content') ||
                                   colLower.includes('rincian')
                                 ) {
-                                  const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
+                                  // (isEditingThis already declared above)
                                   const taskProgress = parseTasklist(val);
 
                                   return (
@@ -9274,7 +9310,7 @@ export function NotionDatabaseTable({
 
                                 // 4. Tanggal Selesai Column
                                 if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai') || colLower.includes('tanggal selesai')) {
-                                  const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
+                                  // (isEditingThis already declared above)
 
                                   let displayDate = val && val !== '-' ? val : '';
                                   if (!displayDate) {
@@ -9449,7 +9485,7 @@ export function NotionDatabaseTable({
                                 if (colLower.includes('due') || colLower.includes('deadline') || colLower.includes('target') || colLower.includes('jatuh tempo') || colLower.includes('batas waktu')) {
                                   const compVal = getRowVal(row, 'Tanggal Selesai') || getRowVal(row, 'Completed Time');
                                   const statusVal = getRowVal(row, 'Status');
-                                  const isEditingThis = activeInlineEditor?.rowIndex === actualRowIndex && activeInlineEditor?.colName === colName;
+                                  // (isEditingThis already declared above)
 
                                   // Check fallback from linked ticket if val is empty or '-'
                                   const linkedId = extractLinkedTicketId(row);
@@ -9704,15 +9740,36 @@ export function NotionDatabaseTable({
                                   }
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                    } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
-                                      <NotionDropdownCell
-                                        type="priority"
-                                        value={val}
-                                        compact={fitPageMode}
-                                        onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
-                                      />
+                                    <td 
+                                      key={colName} 
+                                      style={getColStyle(colName)} 
+                                      className={`border-r cursor-pointer ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-3.5 py-2.5 whitespace-nowrap'}`}
+                                      onDoubleClick={startInlineEdit}
+                                      title="Klik untuk memilih opsi prioritas, atau klik 2x (double-click) untuk edit langsung"
+                                    >
+                                      {isEditingThis ? (
+                                        <NotionInlineEditor
+                                          initialValue={val && val !== '-' ? val : ''}
+                                          fieldLabel="Prioritas"
+                                          multiline={false}
+                                          isNotionLight={isNotionLight}
+                                          onSave={(newVal) => {
+                                            handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                            setActiveInlineEditor(null);
+                                          }}
+                                          onCancel={() => setActiveInlineEditor(null)}
+                                        />
+                                      ) : (
+                                        <NotionDropdownCell
+                                          type="priority"
+                                          value={val}
+                                          compact={fitPageMode}
+                                          onDoubleClick={startInlineEdit}
+                                          onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
+                                        />
+                                      )}
                                     </td>
                                   );
                                 }
@@ -9751,16 +9808,36 @@ export function NotionDatabaseTable({
                                   const pctSubs = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 0;
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                    } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}>
-                                      <div className="flex flex-col items-start gap-1">
-                                        <NotionDropdownCell
-                                          type="status"
-                                          value={val}
-                                          compact={fitPageMode}
-                                          onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
+                                    <td 
+                                      key={colName} 
+                                      style={getColStyle(colName)} 
+                                      className={`border-r cursor-pointer ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-2 py-2 overflow-hidden' : 'px-4 py-2.5 whitespace-nowrap'}`}
+                                      onDoubleClick={startInlineEdit}
+                                      title="Klik untuk memilih status, atau klik 2x (double-click) untuk edit langsung"
+                                    >
+                                      {isEditingThis ? (
+                                        <NotionInlineEditor
+                                          initialValue={val && val !== '-' ? val : ''}
+                                          fieldLabel="Status"
+                                          multiline={false}
+                                          isNotionLight={isNotionLight}
+                                          onSave={(newVal) => {
+                                            handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                            setActiveInlineEditor(null);
+                                          }}
+                                          onCancel={() => setActiveInlineEditor(null)}
                                         />
+                                      ) : (
+                                        <div className="flex flex-col items-start gap-1">
+                                          <NotionDropdownCell
+                                            type="status"
+                                            value={val}
+                                            compact={fitPageMode}
+                                            onDoubleClick={startInlineEdit}
+                                            onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
+                                          />
                                         {/* Progress Sub-kegiatan bila ada */}
                                         {hasSubs && (
                                           <div className="w-full min-w-[95px] max-w-[130px] space-y-0.5 pt-0.5" title={`Progres Sub-kegiatan: ${completedSubs} dari ${totalSubs} selesai`}>
@@ -9836,8 +9913,9 @@ export function NotionDatabaseTable({
                                           </div>
                                         ) : null}
                                       </div>
-                                    </td>
-                                  );
+                                    )}
+                                  </td>
+                                );
                                 }
 
                                 // 8. Created Time Column (Tanggal dibuat sesuai tanggal tiket / pembuatan)
@@ -9937,18 +10015,39 @@ export function NotionDatabaseTable({
                                   }
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                    } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
-                                      <NotionDropdownCell
-                                        type="activity"
-                                        value={val}
-                                        compact={fitPageMode}
-                                        onChange={(newVal) => {
-                                          if (newVal === val) return;
-                                          handleUpdateCellDirect(actualRowIndex, colName, newVal);
-                                        }}
-                                      />
+                                    <td 
+                                      key={colName} 
+                                      style={getColStyle(colName)} 
+                                      className={`border-r cursor-pointer ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}
+                                      onDoubleClick={startInlineEdit}
+                                      title="Klik untuk memilih aktivitas, atau klik 2x (double-click) untuk edit langsung"
+                                    >
+                                      {isEditingThis ? (
+                                        <NotionInlineEditor
+                                          initialValue={val && val !== '-' ? val : ''}
+                                          fieldLabel="Aktivitas"
+                                          multiline={false}
+                                          isNotionLight={isNotionLight}
+                                          onSave={(newVal) => {
+                                            handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                            setActiveInlineEditor(null);
+                                          }}
+                                          onCancel={() => setActiveInlineEditor(null)}
+                                        />
+                                      ) : (
+                                        <NotionDropdownCell
+                                          type="activity"
+                                          value={val}
+                                          compact={fitPageMode}
+                                          onDoubleClick={startInlineEdit}
+                                          onChange={(newVal) => {
+                                            if (newVal === val) return;
+                                            handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                          }}
+                                        />
+                                      )}
                                     </td>
                                   );
                                 }
@@ -9966,15 +10065,36 @@ export function NotionDatabaseTable({
                                   }
 
                                   return (
-                                    <td key={colName} style={getColStyle(colName)} className={`border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                    } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}>
-                                      <NotionDropdownCell
-                                        type="period"
-                                        value={val}
-                                        compact={fitPageMode}
-                                        onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
-                                      />
+                                    <td 
+                                      key={colName} 
+                                      style={getColStyle(colName)} 
+                                      className={`border-r cursor-pointer ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${fitPageMode ? 'px-2 py-2 truncate' : 'px-3.5 py-2.5 whitespace-nowrap'}`}
+                                      onDoubleClick={startInlineEdit}
+                                      title="Klik untuk memilih periode, atau klik 2x (double-click) untuk edit langsung"
+                                    >
+                                      {isEditingThis ? (
+                                        <NotionInlineEditor
+                                          initialValue={val && val !== '-' ? val : ''}
+                                          fieldLabel="Periode"
+                                          multiline={false}
+                                          isNotionLight={isNotionLight}
+                                          onSave={(newVal) => {
+                                            handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                            setActiveInlineEditor(null);
+                                          }}
+                                          onCancel={() => setActiveInlineEditor(null)}
+                                        />
+                                      ) : (
+                                        <NotionDropdownCell
+                                          type="period"
+                                          value={val}
+                                          compact={fitPageMode}
+                                          onDoubleClick={startInlineEdit}
+                                          onChange={(newVal) => handleUpdateCellDirect(actualRowIndex, colName, newVal)}
+                                        />
+                                      )}
                                     </td>
                                   );
                                 }
@@ -10002,22 +10122,42 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // Tanggal Selesai Column (Format DD-MM-YYYY seragam)
+                                // Tanggal Selesai Column (Format DD-MM-YYYY seragam, interaktif kalender & double-click edit)
                                 if (colLower.includes('selesai') || colLower.includes('completed')) {
-                                  const displayDate = (val && val !== '-') ? formatToDDMMYYYY(val) : '-';
+                                  const rawCompVal = (val && val !== '-') ? formatToDDMMYYYY(val) : '';
                                   return (
-                                    <td key={colName} style={{ ...getColStyle(colName), color: isNotionLight ? '#047857' : '#34d399' }} className={`font-sans border-r ${
-                                      isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                    } ${
-                                      fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
-                                    }`}>
-                                      {displayDate !== '-' ? (
-                                        <span className="inline-flex items-center gap-1.5 font-sans font-medium text-emerald-600 dark:text-emerald-400">
-                                          <Calendar className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
-                                          <span>{displayDate}</span>
-                                        </span>
+                                    <td 
+                                      key={colName} 
+                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#047857' : '#34d399' }} 
+                                      className={`font-sans border-r cursor-pointer ${
+                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
+                                      } ${
+                                        fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
+                                      }`}
+                                      onDoubleClick={startInlineEdit}
+                                      title="Klik untuk buka kalender, atau klik 2x (double-click) untuk edit langsung"
+                                    >
+                                      {isEditingThis ? (
+                                        <NotionInlineEditor
+                                          initialValue={rawCompVal}
+                                          fieldLabel="Tanggal Selesai (Completion Date)"
+                                          multiline={false}
+                                          isNotionLight={isNotionLight}
+                                          onSave={(newVal) => {
+                                            handleUpdateCellDirect(actualRowIndex, colName, newVal);
+                                            setActiveInlineEditor(null);
+                                          }}
+                                          onCancel={() => setActiveInlineEditor(null)}
+                                        />
                                       ) : (
-                                        <span className="font-mono text-slate-400">-</span>
+                                        <NotionCompletionDateCell
+                                          value={val}
+                                          isNotionLight={isNotionLight}
+                                          onDoubleClick={startInlineEdit}
+                                          onChange={(newDate) => {
+                                            handleUpdateCellDirect(actualRowIndex, colName, newDate);
+                                          }}
+                                        />
                                       )}
                                     </td>
                                   );

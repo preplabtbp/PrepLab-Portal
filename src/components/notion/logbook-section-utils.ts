@@ -885,11 +885,15 @@ export async function syncLogbookRowsGroupToOrigin(
       const titleKey = findColKey(targetSub, 'Activity Name', 'Activity', 'Jenis kegiatan', 'Jenis Kegiatan', 'Name', 'Judul');
       const statusKey = findColKey(targetSub, 'Status');
       const dateKey = findColKey(targetSub, 'Tanggal Selesai', 'Tanggal selesai', 'Completed');
+      const picKey = findColKey(targetSub, 'PIC');
+      const priorityKey = findColKey(targetSub, 'Priority', 'Prioritas');
       const dueKey = findColKey(targetSub, 'Due Date', 'due date', 'Deadline');
 
       targetSub[titleKey] = subTitleWithPrefix;
       targetSub[statusKey] = isSubCompleted ? 'Closed' : 'Open';
       targetSub.isCompleted = isSubCompleted ? 'true' : 'false';
+      if (sub.PIC !== undefined && sub.PIC !== '') targetSub[picKey] = sub.PIC;
+      if (sub.Priority !== undefined && sub.Priority !== '') targetSub[priorityKey] = sub.Priority;
       if (sub['Tanggal Selesai'] && sub['Tanggal Selesai'] !== '-') {
         targetSub[dateKey] = formatToDDMMYYYY(sub['Tanggal Selesai']);
       } else if (isSubCompleted) {

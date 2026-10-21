@@ -714,3 +714,283 @@ export const NotionDueDateCell: React.FC<NotionDueDateCellProps> = ({
     </div>
   );
 };
+
+export interface NotionCompletionDateCellProps {
+  value: string;
+  isNotionLight?: boolean;
+  onChange: (newDateStr: string) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
+  disabled?: boolean;
+}
+
+export const NotionCompletionDateCell: React.FC<NotionCompletionDateCellProps> = ({
+  value,
+  isNotionLight = true,
+  onChange,
+  onDoubleClick,
+  disabled = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number; openUpwards?: boolean } | null>(null);
+
+  const parsedCurrent = parseDateToMidnight(value);
+  const initialDate = parsedCurrent || new Date();
+  const [viewYear, setViewYear] = useState<number>(initialDate.getFullYear());
+  const [viewMonth, setViewMonth] = useState<number>(initialDate.getMonth());
+
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const hasDate = Boolean(value && value !== '-' && value.trim().length > 0 && parsedCurrent);
+  const formattedVal = hasDate ? formatToDDMMYYYY(value) : '-';
+
+  const updatePosition = () => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const popoverHeight = 350;
+    const popoverWidth = 260;
+    const openUpwards = (rect.bottom + popoverHeight > window.innerHeight) && (rect.top > popoverHeight);
+
+    const left = Math.max(10, Math.min(window.innerWidth - popoverWidth - 10, rect.left));
+    const top = openUpwards ? Math.max(10, rect.top - popoverHeight - 4) : (rect.bottom + 4);
+
+    setPosition({ top, left, openUpwards });
+  };
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (disabled) return;
+
+    if (!isOpen) {
+      updatePosition();
+      const current = parseDateToMidnight(value) || new Date();
+      setViewYear(current.getFullYear());
+      setViewMonth(current.getMonth());
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        buttonRef.current && !buttonRef.current.contains(target) &&
+        popoverRef.current && !popoverRef.current.contains(target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      setIsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+    };
+  }, [isOpen]);
+
+  const handlePrevMonth = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (viewMonth === 0) {
+      setViewYear(viewYear - 1);
+      setViewMonth(11);
+    } else {
+      setViewMonth(viewMonth - 1);
+    }
+  };
+
+  const handleNextMonth = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (viewMonth === 11) {
+      setViewYear(viewYear + 1);
+      setViewMonth(0);
+    } else {
+      setViewMonth(viewMonth + 1);
+    }
+  };
+
+  const handleToday = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const today = new Date();
+    setViewYear(today.getFullYear());
+    setViewMonth(today.getMonth());
+    onChange(formatToDDMMYYYY(today));
+    setIsOpen(false);
+  };
+
+  const handleSelectDay = (cell: CalendarDayCell, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(formatToDDMMYYYY(cell.date));
+    setIsOpen(false);
+  };
+
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange('-');
+    setIsOpen(false);
+  };
+
+  const calendarCells = getCalendarGrid(viewYear, viewMonth, parsedCurrent);
+  const displayInputText = parsedCurrent ? formatToNotionDate(parsedCurrent) : formatToNotionDate(new Date(viewYear, viewMonth, 1));
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen(false);
+    if (onDoubleClick) {
+      onDoubleClick(e);
+    }
+  };
+
+  return (
+    <div className="relative w-full h-full" onDoubleClick={handleDoubleClick}>
+      {hasDate ? (
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={handleToggle}
+          onDoubleClick={handleDoubleClick}
+          title={`Tanggal Selesai: ${formattedVal} (Klik untuk pilih kalender, klik 2x untuk edit teks)`}
+          className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer select-none font-sans font-medium"
+        >
+          <Calendar className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+          <span>{formattedVal}</span>
+        </button>
+      ) : (
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={handleToggle}
+          onDoubleClick={handleDoubleClick}
+          className="w-full h-full min-h-[26px] flex items-center bg-transparent border-0 cursor-pointer focus:outline-none p-0 select-none group/date"
+          title="Klik untuk memilih tanggal selesai (atau klik 2x untuk edit langsung)"
+        >
+          <span className="text-slate-400 font-mono text-xs group-hover/date:text-slate-600 dark:group-hover/date:text-slate-300">-</span>
+        </button>
+      )}
+
+      {/* Notion Calendar Popover Modal */}
+      {isOpen && position && createPortal(
+        <div
+          ref={popoverRef}
+          onClick={(e) => e.stopPropagation()}
+          className={`fixed rounded-xl border p-3 font-sans shadow-2xl z-[99999] w-[260px] select-none animate-in fade-in zoom-in-95 duration-100 ${
+            isNotionLight
+              ? 'bg-white border-[#e9e9e7] text-slate-800 shadow-slate-300/80'
+              : 'bg-[#202020] border-[#373737] text-slate-100 shadow-black/90'
+          }`}
+          style={{
+            top: `${position.top}px`,
+            left: `${position.left}px`
+          }}
+        >
+          {/* Top Date Display Box */}
+          <div className="mb-2.5">
+            <input
+              type="text"
+              readOnly
+              value={displayInputText}
+              className={`w-full px-2.5 py-1 text-xs rounded-md border outline-none font-sans ${
+                isNotionLight
+                  ? 'border-[#e9e9e7] bg-[#fbfbfa] text-slate-800'
+                  : 'border-[#373737] bg-[#191919] text-slate-200'
+              }`}
+            />
+          </div>
+
+          {/* Month Navigation Row */}
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-xs font-semibold text-slate-800 dark:text-slate-100">
+              {SHORT_MONTHS[viewMonth]} {viewYear}
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleToday}
+                className="text-[11px] font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 px-1.5 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Hari Ini
+              </button>
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                className="p-1 rounded text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                title="Bulan sebelumnya"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="p-1 rounded text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                title="Bulan berikutnya"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Weekday Headers */}
+          <div className="grid grid-cols-7 text-center mb-1 text-[11px] text-slate-400 dark:text-slate-500 font-normal">
+            {WEEKDAYS.map((wd) => (
+              <div key={wd} className="py-0.5">{wd}</div>
+            ))}
+          </div>
+
+          {/* Days Grid */}
+          <div className="grid grid-cols-7 gap-y-0.5 text-center text-xs font-sans mb-2.5">
+            {calendarCells.map((c, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={(e) => handleSelectDay(c, e)}
+                className={`w-7 h-7 mx-auto flex items-center justify-center rounded-md cursor-pointer transition-colors text-[11px] ${
+                  c.isSelected
+                    ? 'bg-emerald-600 text-white font-semibold shadow-xs hover:bg-emerald-700'
+                    : c.isToday
+                    ? 'text-emerald-600 font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                    : c.isCurrentMonth
+                    ? 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    : 'text-slate-300 dark:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                }`}
+              >
+                {c.dayNumber}
+              </button>
+            ))}
+          </div>
+
+          {/* Action: Clear */}
+          <div className="border-t border-[#f0f0ee] dark:border-[#2e2e2e] pt-1.5 mt-1.5 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handleClear}
+              className="text-left text-xs text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 py-0.5 px-1 rounded cursor-pointer transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/30 font-medium"
+            >
+              Hapus Tanggal
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 py-0.5 px-2 rounded cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
+

@@ -5,6 +5,14 @@ import {
 } from 'lucide-react';
 import { getRosterData } from '../../sheets-api';
 
+// Helper to filter out GTS employees (Global Tekno Samudra) from Daily Performance
+export const isGtsEmployee = (emp: any): boolean => {
+  const ptStr = String(emp.pt || emp.perusahaan || '').trim().toUpperCase();
+  const nikStr = String(emp.nik || '').trim().toUpperCase();
+  const secStr = String(emp.section || emp.department || '').trim().toUpperCase();
+  return ptStr === 'GTS' || ptStr.includes('GTS') || nikStr.startsWith('03') || nikStr.startsWith('M03') || secStr.includes('GTS');
+};
+
 interface DailyPerformanceManpowerRosterModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -113,14 +121,16 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
   { nik: 'LAB-015', name: 'Nurul Huda', jabatan: 'Operator Analisa (Cuti Roster)', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu C', pt: 'TBP', statusShift: 'CR', statusCategory: 'cuti' },
   { nik: 'LAB-016', name: 'Oki Setiawan', jabatan: 'Operator Prep (Izin Sakit)', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu D', pt: 'TBP', statusShift: 'SL', statusCategory: 'izin_sakit' },
 ];
-
-  // Map employees with their shift status on selectedDate
+// Map employees with their shift status on selectedDate, strictly excluding GTS
   const parsedEmployees = useMemo<RosterEmployeeItem[]>(() => {
-    if (!rosterList || rosterList.length === 0) {
-      return FALLBACK_ROSTER_EMPLOYEES;
-    }
+    const sourceList = (!rosterList || rosterList.length === 0)
+      ? FALLBACK_ROSTER_EMPLOYEES
+      : rosterList;
 
-    return rosterList.map(emp => {
+    // Filter out GTS employees so only TBP & GPS are included in Daily Performance
+    const nonGtsEmployees = sourceList.filter(emp => !isGtsEmployee(emp));
+
+    return nonGtsEmployees.map(emp => {
       let shiftCode = '';
 
       // Check fullSchedule object
@@ -246,7 +256,7 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Daftar personil laboratorium aktual berdasarkan master jadwal roster
+                Daftar personil laboratorium aktual berdasarkan master jadwal roster (TBP & GPS)
               </p>
             </div>
           </div>
@@ -407,7 +417,7 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
         {/* Footer */}
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between text-xs">
           <span className="text-slate-400 text-[11px]">
-            *Data sinkron otomatis dengan Google Sheet Roster Laboratorium
+            *Data sinkron otomatis dengan Google Sheet Roster Laboratorium (Eksklusif TBP & GPS)
           </span>
           <button
             onClick={onClose}

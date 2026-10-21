@@ -1371,7 +1371,7 @@ function TrainingStatisticsView({
                 </div>
                 <div className="flex items-baseline gap-2 mt-2">
                   <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                    {dashboard.sap.pct}%
+                    {dashboard.sap?.pct ?? 0}%
                   </span>
                   <span className="text-xs font-semibold text-slate-500">Kepatuhan Keseluruhan</span>
                 </div>
@@ -1382,7 +1382,7 @@ function TrainingStatisticsView({
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
                 <span className="text-slate-500 font-medium">Status Personel:</span>
                 <span className="font-bold text-slate-900 dark:text-slate-100">
-                  <span className="text-emerald-600">{dashboard.sap.complete} Lengkap</span> • <span className="text-rose-600">{dashboard.sap.expired} Expired</span>
+                  <span className="text-emerald-600">{dashboard.sap?.complete ?? 0} Lengkap</span> • <span className="text-rose-600">{dashboard.sap?.expired ?? 0} Expired</span>
                 </span>
               </div>
             </div>
@@ -1401,7 +1401,7 @@ function TrainingStatisticsView({
                 </div>
                 <div className="flex items-baseline gap-2 mt-2">
                   <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                    {dashboard.k3.pct}%
+                    {dashboard.k3?.pct ?? 0}%
                   </span>
                   <span className="text-xs font-semibold text-slate-500">Tingkat Pemenuhan</span>
                 </div>
@@ -1412,7 +1412,7 @@ function TrainingStatisticsView({
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
                 <span className="text-slate-500 font-medium">Kelengkapan:</span>
                 <span className="font-bold text-slate-900 dark:text-slate-100">
-                  {dashboard.k3.complete} Lengkap dari {dashboard.k3.total} Personel
+                  {dashboard.k3?.complete ?? 0} Lengkap dari {dashboard.k3?.total ?? 0} Personel
                 </span>
               </div>
             </div>
@@ -1431,7 +1431,7 @@ function TrainingStatisticsView({
                 </div>
                 <div className="flex items-baseline gap-2 mt-2">
                   <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                    {dashboard.pop.pct}%
+                    {dashboard.pop?.pct ?? 0}%
                   </span>
                   <span className="text-xs font-semibold text-slate-500">Realisasi Kandidat</span>
                 </div>
@@ -1442,7 +1442,7 @@ function TrainingStatisticsView({
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
                 <span className="text-slate-500 font-medium">Total Kandidat:</span>
                 <span className="font-bold text-slate-900 dark:text-slate-100">
-                  {dashboard.pop.stages[0]?.count ?? 0} dari {dashboard.pop.total} Terlaksana
+                  {dashboard.pop?.stages?.[0]?.count ?? 0} dari {dashboard.pop?.total ?? 0} Terlaksana
                 </span>
               </div>
             </div>
@@ -2658,7 +2658,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       .map(i => ({ ...i, pct: Math.round((i.done / i.target) * 100) }));
     return {
       rows,
-      totalPct: rows[rows.length - 1].pct,
+      totalPct: rows.length > 0 ? rows[rows.length - 1].pct : 0,
       chart: {
         labels: rows.map(r => r.label),
         datasets: [
@@ -2672,7 +2672,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   // ===== Data kartu dashboard: komposisi status SAP, ring per program, mini tren per program =====
   const dashboard = useMemo(() => {
     const sapPeople = records.filter(r => r.inSap);
-    const k3People = records.filter(r => r.inK3);
+    const k3People = records.filter(r => r.inK3 || r.popData?.praPop || (r.inPop && popAttendedPra(r.popData)));
     const popPeople = records.filter(r => r.inPop);
 
     // Komposisi status seluruh training SAP yang WAJIB (per item training)
@@ -2688,8 +2688,8 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
     const sapComplete = sapPeople.filter(isSapComplete).length;
     const sapWarningPeople = sapPeople.filter(r => sapHasState(r, ['warning'])).length;
     const sapExpiredPeople = sapPeople.filter(r => sapHasState(r, ['expired', 'failed'])).length;
-    const k3Wajib = k3People.filter(r => k3RequiredFor(r).length > 0);
-    const k3Complete = k3Wajib.filter(isK3Complete).length;
+    const k3Wajib = k3People.filter(r => k3RequiredFor(r).length > 0 || r.popData?.praPop || (r.inPop && popAttendedPra(r.popData)));
+    const k3Complete = k3Wajib.filter(r => isK3Complete(r) || (r.inPop && popAttendedPra(r.popData))).length;
     const popWajib = popPeople.filter(r => r.popData?.popKeterangan !== 'TIDAK_WAJIB');
     const popDone = popWajib.filter(r => popAttendedPop(r.popData)).length;
     const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
@@ -2718,12 +2718,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       pie,
       popPie,
       sap: { total: sapPeople.length, complete: sapComplete, warning: sapWarningPeople, expired: sapExpiredPeople, pct: pct(sapComplete, sapPeople.length) },
+      k3: { total: k3People.length, wajib: k3Wajib.length, complete: k3Complete, pct: pct(k3Complete, k3Wajib.length || k3People.length) },
       pop: { total: popPeople.length, wajib: popWajib.length, done: popDone, pct: pct(popDone, popWajib.length), stages: POP_STAGES.map(s => ({ key: s.key, label: s.label, count: stageCount(s) })) },
       rings: isExternal
         ? POP_STAGES.map(s => ({ key: s.key as string, label: `${s.label} Diikuti`, value: pct(stageCount(s), popPeople.length), color: stageColor[s.key] }))
         : [
           { key: 'sap', label: 'SAP Lengkap', value: pct(sapComplete, sapPeople.length), color: DASH.brand },
-          { key: 'k3', label: 'K3 Lengkap', value: pct(k3Complete, k3Wajib.length), color: DASH.yellow },
+          { key: 'k3', label: 'K3 Lengkap', value: pct(k3Complete, k3Wajib.length || k3People.length), color: DASH.yellow },
         ],
       programs: [
         { key: 'sap' as const, label: 'Training SAP', sub: '6 jenis training · berlaku 2 th', count: sapPeople.length, metric: `${sapComplete} lengkap`, spark: spark(sapDates), latest: latestOf(sapDates) },
@@ -4597,7 +4598,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </span>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-teal-600 tabular-nums">
-                    {isExternal ? dashboard.pop.pct : dashboard.sap.pct}%
+                    {isExternal ? (dashboard.pop?.pct ?? 0) : (dashboard.sap?.pct ?? 0)}%
                   </span>
                   <span className="text-xs font-semibold text-slate-500">Terpenuhi</span>
                 </div>
@@ -4614,7 +4615,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
               <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[11px] font-medium text-slate-500 flex items-center justify-between">
                 <span>Status Lengkap:</span>
                 <span className="font-bold text-slate-900 dark:text-slate-100">
-                  {isExternal ? (dashboard.pop.stages[0]?.count ?? 0) : dashboard.sap.complete} Orang
+                  {isExternal ? (dashboard.pop?.stages?.[0]?.count ?? 0) : (dashboard.sap?.complete ?? 0)} Orang
                 </span>
               </div>
             </div>
@@ -4636,7 +4637,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </span>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-amber-600 tabular-nums">
-                    {isExternal ? 0 : dashboard.sap.warning}
+                    {isExternal ? 0 : (dashboard.sap?.warning ?? 0)}
                   </span>
                   <span className="text-xs font-semibold text-slate-500">Personel</span>
                 </div>
@@ -4667,7 +4668,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 </span>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-rose-600 tabular-nums">
-                    {isExternal ? 0 : dashboard.sap.expired}
+                    {isExternal ? 0 : (dashboard.sap?.expired ?? 0)}
                   </span>
                   <span className="text-xs font-semibold text-slate-500">Personel</span>
                 </div>

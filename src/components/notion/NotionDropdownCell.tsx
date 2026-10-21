@@ -158,6 +158,7 @@ interface NotionDropdownCellProps {
   type: DropdownType;
   value: string;
   onChange: (newValue: string) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
   compact?: boolean;
   optionsOverride?: DropdownOption[];
 }
@@ -166,6 +167,7 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
   type,
   value,
   onChange,
+  onDoubleClick,
   compact = false,
   optionsOverride
 }) => {
@@ -267,13 +269,22 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
     setIsOpen(false);
   };
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen(false);
+    if (onDoubleClick) {
+      onDoubleClick(e);
+    }
+  };
+
   return (
-    <div className="inline-block">
+    <div className="inline-block" onDoubleClick={handleDoubleClick}>
       <button
         ref={buttonRef}
         type="button"
         onClick={handleToggle}
-        title="Klik untuk ubah langsung"
+        onDoubleClick={handleDoubleClick}
+        title="Klik untuk pilih opsi, atau klik 2x (double-click) untuk edit langsung"
         style={{
           backgroundColor: currentOpt.bgColor,
           color: currentOpt.textColor
