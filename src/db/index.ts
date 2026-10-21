@@ -56,6 +56,7 @@ export async function withDbFallback<T>(
 
 export const createPool = () => {
   const isProd = process.env.NODE_ENV === 'production';
+  // Use a lean pool size (max 5) to prevent exhausting PostgreSQL max_connections (Error 53300) across Cloud Run & dev instances
   const defaultMax = isProd ? 5 : 4;
   const poolConfig: any = {
     connectionTimeoutMillis: 15000,

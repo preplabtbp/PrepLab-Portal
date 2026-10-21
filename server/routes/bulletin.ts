@@ -95,8 +95,9 @@ router.get("/api/bulletin", async (req, res) => {
       const pageNum = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10)) : null;
       const limitNum = req.query.limit ? Math.max(1, parseInt(req.query.limit as string, 10)) : null;
       if (pageNum && limitNum) {
-        return res.json({
-          status: "success",
+        return res.status(503).json({
+          status: "error",
+          message: "Database connection temporarily unavailable: " + (error?.message || ''),
           data: [],
           pagination: {
             page: pageNum,
@@ -107,7 +108,7 @@ router.get("/api/bulletin", async (req, res) => {
           }
         });
       }
-      res.json({ status: "success", data: [] });
+      res.status(503).json({ status: "error", message: "Database connection temporarily unavailable: " + (error?.message || ''), data: [] });
     }
   });
 
@@ -193,8 +194,13 @@ router.get("/api/bulletin/search", async (req, res) => {
 // GET Single Post by ID for direct navigation and real-time device sync
 router.get("/api/bulletin/:id", async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const rawId = String(req.params.id || '');
+    const id = parseInt(rawId, 10);
     if (isNaN(id)) {
+      // Graceful handling for non-numeric/virtual IDs (section-*, doc-*, logbook-*)
+      if (rawId.startsWith('section-') || rawId.startsWith('doc-') || rawId.startsWith('logbook-')) {
+        return res.json({ status: "success", data: null, message: "Virtual section post" });
+      }
       return res.status(400).json({ status: "error", message: "Invalid post ID" });
     }
 

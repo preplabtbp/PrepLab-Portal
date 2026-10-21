@@ -13,6 +13,7 @@ import {
   JWT_SECRET
 } from "../middleware/auth.js";
 import { env } from "../config/env.js";
+import { getCsvEmployees } from "./employees.js";
 
 // Helper: Record daily portal visit for login streak tracking
 export async function recordDailyLogin(nik: string) {
@@ -207,6 +208,35 @@ function resolveDevFallbackUser(normalized: string) {
   ) || null;
 }
 
+export function findLocalEmployee(normalized: string) {
+  const devFallback = resolveDevFallbackUser(normalized);
+  if (devFallback) return devFallback;
+
+  try {
+    const csvList = getCsvEmployees();
+    if (csvList && csvList.length > 0) {
+      const match = csvList.find((e: any) => {
+        const eNik = (e.nik || '').toUpperCase().trim();
+        const eUsername = (e.username || '').toUpperCase().trim();
+        return eNik === normalized || (eUsername && eUsername === normalized);
+      });
+      if (match) {
+        return {
+          ...match,
+          firstLoginComplete: true,
+          isDeveloper: false,
+          isAdmin: (match.section || '').toLowerCase().includes('admin') || 
+                   (match.section || '').toLowerCase().includes('qa') ||
+                   (match.jabatan || '').toLowerCase().includes('admin') ||
+                   (match.jabatan || '').toLowerCase().includes('superintendent') ||
+                   (match.jabatan || '').toLowerCase().includes('manager')
+        };
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 // Helper: Retry DB queries on transient connection errors or pool timeouts
 async function queryWithRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 350): Promise<T> {
   try {
@@ -248,25 +278,13 @@ authRouter.post("/check-nik", async (req, res) => {
       });
     }
 
-    // Instant response for core developers without database roundtrip latency
-    const devFallback = resolveDevFallbackUser(normalized);
-    if (devFallback) {
-      return res.json({ 
-        status: "success", 
-        found: true,
-        firstLoginComplete: Boolean(devFallback.firstLoginComplete),
-        name: devFallback.name,
-        avatar: devFallback.avatar || null,
-        username: devFallback.username || null,
-        pt: devFallback.pt || 'TBP',
-        isDeveloper: true
-      });
-    }
+    // 1. Instant check against memory cache (devs & all employees)
+    const localMatch = findLocalEmployee(normalized);
 
     let employee: any = null;
     try {
-      // Race DB query against a reliable 10s timeout with query retry
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 10000));
+      // Fast DB query with tight 1200ms timeout and zero retries for instant speed
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1200));
       const dbPromise = queryWithRetry(() =>
         db.select().from(employees)
           .where(
@@ -276,36 +294,38 @@ authRouter.post("/check-nik", async (req, res) => {
             )
           )
           .limit(1)
-      );
+      , 0);
 
       const employeeMatches: any = await Promise.race([dbPromise, timeoutPromise]);
       employee = employeeMatches?.[0];
     } catch (dbErr) {
-      console.warn("DB query timed out or failed in /check-nik:", dbErr);
+      // DB timed out or offline, smoothly fallback to localMatch
     }
 
     if (!employee) {
-      const devFallback = resolveDevFallbackUser(normalized);
-      if (devFallback) {
-        employee = devFallback;
-      }
+      employee = localMatch;
     }
     
     if (!employee) {
       return res.status(404).json({ status: "error", message: `NIK / Username "${inputVal}" tidak ditemukan dalam database.` });
     }
     
-    const adminInfo = await checkIsAdminOrDeveloper(employee.nik, employee.section || '', employee.jabatan || '');
+    const adminInfo = employee.isDeveloper 
+      ? { isAdmin: true, isDeveloper: true }
+      : await checkIsAdminOrDeveloper(employee.nik, employee.section || '', employee.jabatan || '');
+
+    const rawPt = (employee.pt || '').toUpperCase();
+    const derivedPt = rawPt || (normalized.startsWith('04D') ? 'GTS' : 'TBP');
 
     // Return only safe minimal fields necessary for frontend greeting & login flow
     return res.json({ 
       status: "success", 
       found: true,
-      firstLoginComplete: Boolean(employee.firstLoginComplete),
-      name: employee.name,
+      firstLoginComplete: Boolean(employee.firstLoginComplete ?? true),
+      name: employee.name || employee.nama,
       avatar: employee.avatar || null,
       username: employee.username || null,
-      pt: employee.pt || 'TBP',
+      pt: derivedPt,
       isDeveloper: Boolean(adminInfo.isDeveloper)
     });
   } catch(e: any) {
@@ -366,7 +386,7 @@ authRouter.post("/login", async (req, res) => {
       isDevFallback = true;
     } else {
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 10000));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500));
         const dbPromise = queryWithRetry(() =>
           db.select().from(employees)
             .where(
@@ -376,12 +396,16 @@ authRouter.post("/login", async (req, res) => {
               )
             )
             .limit(1)
-        );
+        , 0);
 
         const employeeMatches: any = await Promise.race([dbPromise, timeoutPromise]);
         user = employeeMatches?.[0];
       } catch (dbErr) {
         console.warn("DB query timed out or failed in /login:", dbErr);
+      }
+
+      if (!user) {
+        user = findLocalEmployee(normalized);
       }
     }
 
@@ -390,8 +414,8 @@ authRouter.post("/login", async (req, res) => {
     }
 
     if (!isDevFallback) {
-      // First time setup check
-      if (!user.firstLoginComplete) {
+      // First time setup check (or missing password hash)
+      if (!user.firstLoginComplete || !user.passwordHash) {
         return res.json({ 
           status: "success", 
           requireSetup: true, 
