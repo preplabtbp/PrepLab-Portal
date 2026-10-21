@@ -1098,7 +1098,7 @@ router.get('/api/rekap-inspeksi', async (req, res) => {
       allRoster = generateFallbackRosterData();
     } else {
       try {
-        const timeoutEmps = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 15000));
+        const timeoutEmps = new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 3500));
         const resEmps = await Promise.race([
           Promise.all([
             db.select().from(employees),
@@ -1787,7 +1787,7 @@ interface RekapKtaCacheEntry {
   timestamp: number;
 }
 const rekapKtaCache = new Map<string, RekapKtaCacheEntry>();
-const REKAP_KTA_CACHE_TTL = 60 * 1000; // 60 seconds
+const REKAP_KTA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export function invalidateRekapKtaCache() {
   rekapKtaCache.clear();
@@ -1816,11 +1816,30 @@ router.get('/api/rekap-kta', async (req, res) => {
         : db.select().from(roster).where(inArray(roster.date, targetWeekDates))
     );
     rosterQueryPromise.catch(() => {});
+    ktaQueryPromise.catch(() => {});
 
-    const [allEmployees, allRoster] = await Promise.all([
-      db.select().from(employees),
-      rosterQueryPromise
-    ]);
+    let allEmployees: any[] = [];
+    let allRoster: any[] = [];
+    if (isDbCircuitBroken()) {
+      allEmployees = getCsvEmployees();
+      allRoster = generateFallbackRosterData();
+    } else {
+      try {
+        const timeoutEmps = new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 3500));
+        const resEmps = await Promise.race([
+          Promise.all([
+            db.select().from(employees),
+            rosterQueryPromise
+          ]),
+          timeoutEmps
+        ]) as [any[], any[]];
+        allEmployees = resEmps[0] || [];
+        allRoster = resEmps[1] || [];
+      } catch {
+        allEmployees = getCsvEmployees();
+        allRoster = generateFallbackRosterData();
+      }
+    }
 
     const {
       onCutiSet,
@@ -1829,8 +1848,14 @@ router.get('/api/rekap-kta', async (req, res) => {
       cutiEmployees
     } = await getRekapPersonnelClassification(selectedWeek, allEmployees, allRoster, forceRefresh);
 
-    // Query KTA reports for selected week
-    const ktaQuery = await ktaQueryPromise;
+    // Query KTA reports for selected week with timeout protection
+    let ktaQuery: any[] = [];
+    try {
+      const ktaTimeout = new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('KTA_TIMEOUT')), 3500));
+      ktaQuery = (await Promise.race([ktaQueryPromise, ktaTimeout])) as any[] || [];
+    } catch {
+      ktaQuery = [];
+    }
 
     // Map completed by NIK & Name - supports multiple reports per person
     const userReportsMap = new Map<string, any[]>();

@@ -15,30 +15,41 @@ safetyRekapRouter.get('/api/safety-access', async (req, res) => {
 let tableEnsured = false;
 async function ensureSafetyRekapEditsTable() {
   if (tableEnsured) return;
-  await db.execute(sql`CREATE TABLE IF NOT EXISTS safety_rekap_edits (
-    id SERIAL PRIMARY KEY,
-    week TEXT NOT NULL,
-    year INTEGER NOT NULL,
-    nik TEXT NOT NULL,
-    name TEXT,
-    is_cuti BOOLEAN,
-    kta_done BOOLEAN,
-    tgl_kta TEXT,
-    tgl_tta1 TEXT,
-    tgl_tta2 TEXT,
-    inspeksi_done BOOLEAN,
-    keterangan_inspeksi TEXT,
-    tgl_inspeksi TEXT,
-    catatan TEXT,
-    updated_by_nik TEXT,
-    updated_by_name TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-  );`);
-  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_safety_rekap_edits_week_nik ON safety_rekap_edits(year, week, nik);`);
-  await db.execute(sql`ALTER TABLE safety_rekap_edits ADD COLUMN IF NOT EXISTS absence_status TEXT;`);
-  tableEnsured = true;
+  try {
+    await Promise.race([
+      db.execute(sql`CREATE TABLE IF NOT EXISTS safety_rekap_edits (
+        id SERIAL PRIMARY KEY,
+        week TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        nik TEXT NOT NULL,
+        name TEXT,
+        is_cuti BOOLEAN,
+        kta_done BOOLEAN,
+        tgl_kta TEXT,
+        tgl_tta1 TEXT,
+        tgl_tta2 TEXT,
+        inspeksi_done BOOLEAN,
+        keterangan_inspeksi TEXT,
+        tgl_inspeksi TEXT,
+        catatan TEXT,
+        updated_by_nik TEXT,
+        updated_by_name TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );`),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 2500))
+    ]);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_safety_rekap_edits_week_nik ON safety_rekap_edits(year, week, nik);`).catch(() => {});
+    await db.execute(sql`ALTER TABLE safety_rekap_edits ADD COLUMN IF NOT EXISTS absence_status TEXT;`).catch(() => {});
+    tableEnsured = true;
+  } catch (err) {
+    // If table already exists or DDL is slow, set true so it doesn't block future calls
+    tableEnsured = true;
+  }
 }
+
+const editsCache = new Map<string, { data: any[]; timestamp: number }>();
+const EDITS_CACHE_TTL = 30 * 1000; // 30s
 
 function normalizeWeek(raw: unknown): string {
   const m = String(raw || '').match(/(\d+)/);
@@ -68,16 +79,32 @@ function cleanBool(v: unknown): boolean | null {
 
 safetyRekapRouter.get('/api/safety-rekap/edits', async (req, res) => {
   try {
-    await ensureSafetyRekapEditsTable();
     const week = normalizeWeek(req.query.week);
     const year = parseInt(String(req.query.year || ''), 10);
     if (!week || !year) return res.status(400).json({ error: 'Parameter week & year wajib diisi' });
-    const rows = await db.select().from(safetyRekapEdits)
+
+    const cacheKey = `${year}_${week}`;
+    const cached = editsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < EDITS_CACHE_TTL)) {
+      return res.json(cached.data);
+    }
+
+    ensureSafetyRekapEditsTable().catch(() => {});
+
+    const queryPromise = db.select().from(safetyRekapEdits)
       .where(and(eq(safetyRekapEdits.week, week), eq(safetyRekapEdits.year, year)));
-    res.json(rows);
+    const timeoutPromise = new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 3000));
+
+    const rows = await Promise.race([queryPromise, timeoutPromise]).catch(err => {
+      console.warn('[SafetyRekap] GET edits slow/failed, returning cached or empty array:', err?.message || err);
+      return cached?.data || [];
+    });
+
+    editsCache.set(cacheKey, { data: rows || [], timestamp: Date.now() });
+    res.json(rows || []);
   } catch (e: any) {
-    console.error('[SafetyRekap] GET edits failed:', e.message);
-    res.status(500).json({ error: 'Gagal memuat data edit rekap' });
+    console.error('[SafetyRekap] GET edits error fallback:', e.message);
+    res.json([]);
   }
 });
 
@@ -116,6 +143,7 @@ safetyRekapRouter.put('/api/safety-rekap/edits', async (req, res) => {
         set: values,
       })
       .returning();
+    editsCache.delete(`${year}_${week}`);
     res.json(row);
   } catch (e: any) {
     console.error('[SafetyRekap] PUT edit failed:', e.message);
@@ -126,7 +154,7 @@ safetyRekapRouter.put('/api/safety-rekap/edits', async (req, res) => {
 // Reset baris ke data otomatis
 safetyRekapRouter.delete('/api/safety-rekap/edits', async (req, res) => {
   try {
-    await ensureSafetyRekapEditsTable();
+    ensureSafetyRekapEditsTable().catch(() => {});
     const week = normalizeWeek(req.query.week);
     const year = parseInt(String(req.query.year || ''), 10);
     const nik = String(req.query.nik || '').trim();
@@ -135,6 +163,7 @@ safetyRekapRouter.delete('/api/safety-rekap/edits', async (req, res) => {
     await db.delete(safetyRekapEdits).where(and(
       eq(safetyRekapEdits.week, week), eq(safetyRekapEdits.year, year), eq(safetyRekapEdits.nik, nik)
     ));
+    editsCache.delete(`${year}_${week}`);
     res.json({ success: true });
   } catch (e: any) {
     console.error('[SafetyRekap] DELETE edit failed:', e.message);

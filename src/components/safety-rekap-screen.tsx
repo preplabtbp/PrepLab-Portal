@@ -1256,6 +1256,15 @@ function InlineAbsencePopover({
 
 // ─── Layar utama ─────────────────────────────────────────────────────────────
 
+const clientRekapCache = new Map<string, {
+  inspeksiData: { rekapList: any[]; cutiList: any[] };
+  ktaData: { rekapList: any[]; cutiList: any[] };
+  leaveList: any[] | null;
+  activeInspectionSchedule: any[] | null;
+  edits: any[];
+  timestamp: number;
+}>();
+
 export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, inspectorSection, onBack }: SafetyRekapScreenProps) {
   const today = useMemo(() => new Date(), []);
   const currentYear = useMemo(() => getRekapWeek(today).year, [today]);
@@ -1392,49 +1401,94 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
   }, [currentYear]);
 
   const fetchData = useCallback(async (week: string, refresh = false) => {
-    setLoading(true);
+    const cached = clientRekapCache.get(week);
+    const now = Date.now();
+    const isFresh = cached && (now - cached.timestamp < 3 * 60 * 1000); // 3 minutes fresh
+
+    if (cached) {
+      setInspeksiData(cached.inspeksiData);
+      setKtaData(cached.ktaData);
+      setLeaveList(cached.leaveList);
+      setActiveInspectionSchedule(cached.activeInspectionSchedule);
+      setEdits(cached.edits);
+      if (isFresh && !refresh) {
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (!cached) {
+      setLoading(true);
+    }
+
     try {
-      // Server mengelompokkan data per minggu ISO (Senin – Minggu). Periode Sabtu – Jumat
-      // beririsan dengan 2 minggu ISO: N (Sabtu–Minggu) dan N+1 (Senin–Jumat).
       const num = parseInt(week.replace(/\D/g, ''), 10);
       const isoWeeks = [`W${num}`, `W${getISOWeek(getRekapWeekRange(currentYear, num).end)}`];
       const suffix = refresh ? '&refresh=true' : '';
-      // Senin, Selasa, Rabu periode Sabtu – Jumat (sama dengan Kontrol Cuti di modul Jadwal Inspeksi)
       const periodStart = getRekapWeekRange(currentYear, num).start;
       const leaveDates = [2, 3, 4].map(offset => {
         const d = new Date(periodStart);
         d.setDate(d.getDate() + offset);
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       });
-      const [responses, , leaveJson, schedJson] = await Promise.all([
-        Promise.all(isoWeeks.flatMap(w => [
-          fetch(`/api/rekap-inspeksi?week=${w}${suffix}`),
-          fetch(`/api/rekap-kta?week=${w}${suffix}`)
-        ])),
-        fetchEdits(week),
-        fetch(`/api/roster/leave-control?dates=${leaveDates.join(',')}${suffix}`)
-          .then(r => (r.ok ? r.json() : null))
-          .catch(() => null),
-        fetch(`/api/inspection-schedule?sheet=CurrentWeek&week=${isoWeeks[1] || isoWeeks[0]}${suffix}`)
-          .then(r => (r.ok ? r.json() : null))
-          .catch(() => null)
+
+      // Quick fetch core rekap endpoints first
+      const coreFetchPromise = Promise.all(isoWeeks.flatMap(w => [
+        fetch(`/api/rekap-inspeksi?week=${w}${suffix}`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+        fetch(`/api/rekap-kta?week=${w}${suffix}`).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+      ]));
+
+      const editsPromise = fetch(`/api/safety-rekap/edits?week=${week}&year=${currentYear}${suffix}`)
+        .then(r => r.ok ? r.json() : []).catch(() => []);
+
+      const leavePromise = fetch(`/api/roster/leave-control?dates=${leaveDates.join(',')}${suffix}`)
+        .then(r => (r.ok ? r.json() : null))
+        .catch(() => null);
+
+      const schedPromise = fetch(`/api/inspection-schedule?sheet=CurrentWeek&week=${isoWeeks[1] || isoWeeks[0]}${suffix}`)
+        .then(r => (r.ok ? r.json() : null))
+        .catch(() => null);
+
+      const [jsons, currentEdits, leaveJson, schedJson] = await Promise.all([
+        coreFetchPromise,
+        editsPromise,
+        leavePromise,
+        schedPromise
       ]);
-      setLeaveList(leaveJson?.success ? (leaveJson.data || []) : null);
-      setActiveInspectionSchedule(schedJson?.data || null);
-      if (!leaveJson?.success) toast.error('Data Kontrol Cuti (roster) gagal dimuat — status cuti memakai data lama');
-      const jsons = await Promise.all(responses.map(r => (r.ok ? r.json() : {})));
+
       const [inspA, ktaA, inspB, ktaB] = jsons as any[];
-      // Status cuti/roster mengikuti minggu ISO N+1 (Senin – Jumat = mayoritas periode)
-      setInspeksiData({ rekapList: mergeRekapLists([inspA.rekapList || [], inspB.rekapList || []]), cutiList: inspB.cutiList || [] });
-      setKtaData({ rekapList: mergeRekapLists([ktaA.rekapList || [], ktaB.rekapList || []]), cutiList: ktaB.cutiList || [] });
-      if (responses.some(r => !r.ok)) toast.error('Sebagian data rekap gagal dimuat');
+      const newInspeksiData = {
+        rekapList: mergeRekapLists([inspA?.rekapList || [], inspB?.rekapList || []]),
+        cutiList: inspB?.cutiList || []
+      };
+      const newKtaData = {
+        rekapList: mergeRekapLists([ktaA?.rekapList || [], ktaB?.rekapList || []]),
+        cutiList: ktaB?.cutiList || []
+      };
+      const newLeaveList = leaveJson?.success ? (leaveJson.data || []) : (cached?.leaveList || null);
+      const newSched = schedJson?.data || (cached?.activeInspectionSchedule || null);
+
+      setInspeksiData(newInspeksiData);
+      setKtaData(newKtaData);
+      setLeaveList(newLeaveList);
+      setActiveInspectionSchedule(newSched);
+      setEdits(currentEdits || []);
+
+      clientRekapCache.set(week, {
+        inspeksiData: newInspeksiData,
+        ktaData: newKtaData,
+        leaveList: newLeaveList,
+        activeInspectionSchedule: newSched,
+        edits: currentEdits || [],
+        timestamp: Date.now()
+      });
     } catch (err) {
       console.error('Error fetching rekap safety:', err);
-      toast.error('Gagal memuat rekap KTA/TTA & Inspeksi');
+      if (!cached) toast.error('Gagal memuat rekap KTA/TTA & Inspeksi');
     } finally {
       setLoading(false);
     }
-  }, [fetchEdits, currentYear]);
+  }, [currentYear]);
 
   useEffect(() => {
     if (view === 'tabel') fetchData(selectedWeek);

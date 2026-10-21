@@ -36,7 +36,7 @@ export function reportDbSuccess() {
 export async function withDbFallback<T>(
   queryFn: () => Promise<T>,
   fallbackFn: () => T | Promise<T>,
-  timeoutMs = 15000
+  timeoutMs = 4000
 ): Promise<T> {
   if (isDbCircuitBroken()) {
     return fallbackFn();
@@ -61,6 +61,8 @@ export const createPool = () => {
     connectionTimeoutMillis: 15000,
     idleTimeoutMillis: 10000,
     max: process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : defaultMax,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
     allowExitOnIdle: true,
   };
 

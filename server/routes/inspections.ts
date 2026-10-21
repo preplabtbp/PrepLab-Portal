@@ -1946,11 +1946,11 @@ const scheduleCacheMap = new Map<string, { data: any[]; timestamp: number }>();
 const SCHEDULE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const enrichedScheduleCacheMap = new Map<string, { data: any[]; timestamp: number }>();
-const ENRICHED_CACHE_TTL = 60 * 1000; // 60 seconds
+const ENRICHED_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Cache hasil /api/rekap-inspeksi per minggu (dibersihkan setiap ada perubahan data inspeksi)
 export const rekapInspeksiCache = new Map<string, { data: any; timestamp: number }>();
-export const REKAP_INSPEKSI_CACHE_TTL = 60 * 1000; // 60 seconds
+export const REKAP_INSPEKSI_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export function invalidateScheduleCache() {
   scheduleCacheMap.clear();
@@ -2218,12 +2218,14 @@ async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: s
     const dayNum = parseInt(parts[2], 10);
     const todayRosterDate = `${dayNum} ${parts[1]} ${parts[3].substring(2)}`; // e.g. "1 Oct 26"
 
-    const [recentInspections, allEmps, allProofs, todayRosterRows] = await Promise.all([
-      db.select().from(inspections).orderBy(desc(inspections.date)).limit(150),
-      getAllEmployeesCached(),
-      db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag)),
-      db.select().from(roster).where(eq(roster.date, todayRosterDate))
+    const dbQueriesPromise = Promise.all([
+      db.select().from(inspections).orderBy(desc(inspections.date)).limit(150).catch(() => []),
+      getAllEmployeesCached().catch(() => []),
+      db.select().from(inspectionProofs).where(eq(inspectionProofs.week, currentWeekTag)).catch(() => []),
+      db.select().from(roster).where(eq(roster.date, todayRosterDate)).catch(() => [])
     ]);
+    const timeoutPromise = new Promise<[any[], any[], any[], any[]]>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 3500));
+    const [recentInspections, allEmps, allProofs, todayRosterRows] = await Promise.race([dbQueriesPromise, timeoutPromise]).catch(() => [[], [], [], []] as [any[], any[], any[], any[]]);
 
     // Build roster lookup by NIK for today to accurately identify Day/Night shift
     const rosterStatusByNik = new Map<string, string>();
