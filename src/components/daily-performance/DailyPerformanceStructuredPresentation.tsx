@@ -150,11 +150,6 @@ const FALLBACK_TBP_LAB_PERSONNEL: LabPersonnelItem[] = [
   { nik: '02D21001045', name: 'Arthur Paul Marnix Souisa', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
   { nik: '02D24000043', name: 'Muhamad Alvin Febriansyah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
   { nik: '04D22000094', name: 'Kemal Maulana', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: '04D21001046', name: 'Moch. Siswanto', jabatan: 'Laboratory Maintenance Supervisor', section: 'Maintenance', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: '02D21001017', name: 'Christian Anggawijaya', jabatan: 'Laboratory Maintenance Supervisor', section: 'Maintenance', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'M0403240177', name: 'Aldy Aldersun Puluh', jabatan: 'Admin, Preparation & Laboratory', section: 'Administration', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'M0411251243', name: 'Agung Adi Putra Prasetyo', jabatan: 'Admin, Preparation & Laboratory', section: 'Administration', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'M0206250732', name: 'Muhammad Iqbal', jabatan: 'Admin, Preparation & Laboratory', section: 'Administration', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
   { nik: 'M0403190701', name: 'Murti Tamisari Harun', jabatan: 'Preparation Foreman, Wet', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
 
   // Shift B (Malam - Pure TBP & GPS)
@@ -322,9 +317,16 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
       } else {
         if (isEmpGts) return false;
       }
-      const sec = (emp.section || emp.department || '').toLowerCase();
-      // Hanya ambil karyawan di luar seksi Laboratory
-      return !sec.includes('lab') && !sec.includes('laboratorium');
+
+      // Klasifikasi murni berdasarkan kolom section roster: personil di luar seksi Laboratory
+      const sec = String(emp.section || '').trim().toLowerCase();
+      const isLabSection = (sec.includes('lab') || sec.includes('laboratorium')) &&
+                           !sec.includes('maintenance') &&
+                           !sec.includes('admin') &&
+                           !sec.includes('prep') &&
+                           !sec.includes('dry') &&
+                           !sec.includes('wet');
+      return !isLabSection;
     });
   }, [rosterList, userPt]);
 
@@ -452,19 +454,17 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
         if (!isTbpOrGps) return false;
       }
 
-      const sec = (emp.section || '').toLowerCase();
-      const dep = (emp.department || '').toLowerCase();
-      const jab = (emp.jabatan || emp.position || '').toLowerCase();
+      // KLASIFIKASI MURNI BERDASARKAN KOLOM SECTION:
+      // Kolom jabatan maupun departemen TIDAK BOLEH mempengaruhi penentuan seksi
+      const sec = String(emp.section || '').trim().toLowerCase();
       return (
-        sec.includes('lab') ||
-        dep.includes('lab') ||
-        sec.includes('laboratorium') ||
-        dep.includes('laboratorium') ||
-        jab.includes('chemist') ||
-        jab.includes('laboratory') ||
-        jab.includes('qa officer') ||
-        jab.includes('qa/qc')
-      ) && !sec.includes('preparation') && !sec.includes('dry') && !sec.includes('wet');
+        (sec.includes('lab') || sec.includes('laboratorium')) &&
+        !sec.includes('maintenance') &&
+        !sec.includes('admin') &&
+        !sec.includes('prep') &&
+        !sec.includes('dry') &&
+        !sec.includes('wet')
+      );
     });
 
     if (labEmps.length === 0) {
