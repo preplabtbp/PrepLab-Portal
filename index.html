@@ -50,8 +50,82 @@
     </script>
   </head>
   <body>
+    <!-- PREPLAB VIDEO SPLASH SCREEN (Tampil otomatis saat buka aplikasi dari HP / Desktop) -->
+    <div 
+      id="preplab-splash-screen" 
+      title="Ketuk untuk lewati"
+      style="position:fixed;inset:0;width:100vw;height:100vh;background-color:#ffffff;display:flex;justify-content:center;align-items:center;z-index:99999999;overflow:hidden;cursor:pointer;transition:opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s cubic-bezier(0.16, 1, 0.3, 1);opacity:1;visibility:visible;user-select:none;-webkit-user-select:none;"
+    >
+      <video
+        id="preplab-splash-video"
+        autoplay
+        muted
+        playsinline
+        preload="auto"
+        style="max-width:720px;max-height:85vh;width:90vw;height:auto;object-fit:contain;display:block;pointer-events:none;filter:brightness(1.025) contrast(1.015);mix-blend-mode:multiply;-webkit-mask-image:linear-gradient(to right,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%),linear-gradient(to bottom,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%);-webkit-mask-composite:destination-in;mask-image:linear-gradient(to right,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%),linear-gradient(to bottom,rgba(0,0,0,0) 0%,rgba(0,0,0,1) 12%,rgba(0,0,0,1) 88%,rgba(0,0,0,0) 100%);mask-composite:intersect;"
+      >
+        <source src="/Animasi_Splash_Screen_PrepLab.mp4" type="video/mp4" />
+      </video>
+      <div 
+        class="preplab-skip-hint"
+        style="position:absolute;bottom:24px;font-size:11px;color:#94a3b8;letter-spacing:0.5px;pointer-events:none;font-family:system-ui,-apple-system,sans-serif;"
+      >
+        Ketuk untuk lewati
+      </div>
+    </div>
+    <script>
+      (function() {
+        try {
+          var isEmbed = new URLSearchParams(window.location.search).get('embed') === 'true';
+          var splash = document.getElementById('preplab-splash-screen');
+          var video = document.getElementById('preplab-splash-video');
+          if (isEmbed) {
+            if (splash) splash.style.display = 'none';
+            return;
+          }
+          if (!splash || !video) return;
+
+          var isEnded = false;
+          var ANIM_SPEED = 1.45;
+          var SHINE_SPEED = 1.05;
+          var SHINE_START = 5.2;
+
+          function dismissSplash() {
+            if (isEnded) return;
+            isEnded = true;
+            splash.style.opacity = '0';
+            splash.style.visibility = 'hidden';
+            splash.style.pointerEvents = 'none';
+            setTimeout(function() {
+              splash.style.display = 'none';
+            }, 350);
+          }
+
+          function onTimeUpdate() {
+            if (video.currentTime < SHINE_START) {
+              if (video.playbackRate !== ANIM_SPEED) video.playbackRate = ANIM_SPEED;
+            } else {
+              if (video.playbackRate !== SHINE_SPEED) video.playbackRate = SHINE_SPEED;
+            }
+          }
+
+          video.playbackRate = ANIM_SPEED;
+          video.addEventListener('timeupdate', onTimeUpdate);
+          video.addEventListener('ended', dismissSplash);
+          splash.addEventListener('click', dismissSplash);
+          video.addEventListener('error', dismissSplash);
+
+          var playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(function() {
+              setTimeout(dismissSplash, 4000);
+            });
+          }
+        } catch(e) {}
+      })();
+    </script>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
