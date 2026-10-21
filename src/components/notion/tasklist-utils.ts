@@ -780,9 +780,19 @@ export function markdownToVisualHtml(text?: string | null): string {
   // 1. Normalize line endings and <br/> tags to newlines
   html = html.replace(/\r\n/g, '\n').replace(/<br\s*\/?>/gi, '\n');
 
+  // Normalize malformed color/bg tags that wrap bullet points: [blue]• text[/blue] -> • [blue]text[/blue]
+  html = html.replace(/\[([#a-zA-Z0-9_-]+)\]\s*([•\-\*])\s*([\s\S]*?)\[\/\1\]/gi, '$2 [$1]$3[/$1]');
+  html = html.replace(/\[color:\s*([#a-zA-Z0-9_-]+)\]\s*([•\-\*])\s*([\s\S]*?)\[\/color\]/gi, '$2 [color:$1]$3[/color]');
+  html = html.replace(/\[(?:bg|highlight):\s*([#a-zA-Z0-9_-]+)\]\s*([•\-\*])\s*([\s\S]*?)\[\/(?:bg|highlight)\]/gi, '$2 [bg:$1]$3[/bg]');
+
+  // Eliminate redundant/extra empty newlines between bullet lines so points are rendered tightly together
+  html = html.replace(/(•[^\n]+)\n\s*\n+(•)/g, '$1\n$2');
+  html = html.replace(/([-•\d]+\.?\s+[^\n]+)\n\s*\n+([-•\d]+\.?\s+)/g, '$1\n$2');
+
   // 2. Separate inline bullet points and numbered points into individual lines
-  html = html.replace(/([^\n])\s*•\s*/g, '$1\n• ');
-  html = html.replace(/([^\n])\s+(\d+\.\s+)/g, '$1\n$2');
+  // CRITICAL: Do NOT split if preceded by opening brackets/tags '[' or '<' to prevent breaking color tags
+  html = html.replace(/([^\n\[<])\s*•\s*/g, '$1\n• ');
+  html = html.replace(/([^\n\[<])\s+(\d+\.\s+)/g, '$1\n$2');
 
   // Normalize bullet prefixes missing spaces (ONLY for explicit bullet symbol •)
   html = html.replace(/^(\s*•)(?=[^\s])/gm, '$1 ');
@@ -1024,17 +1034,53 @@ export function visualHtmlToMarkdown(html?: string | null): string {
           while (/\[(?:bg|highlight):[^\]]+\]([\s\S]*?)\[\/(?:bg|highlight)\]/i.test(outText)) {
             outText = outText.replace(/\[(?:bg|highlight):[^\]]+\]([\s\S]*?)\[\/(?:bg|highlight)\]/gi, '$1');
           }
-          outText = `[bg:${resolvedBgKey}]${outText}[/bg]`;
+          if (outText.includes('\n') || /^\s*[•\-\*]/.test(outText)) {
+            const lines = outText.split('\n');
+            outText = lines.map(line => {
+              const bMatch = line.match(/^(\s*[•\-\*]\s+)(.*)$/);
+              if (bMatch) {
+                const prefix = bMatch[1];
+                const content = bMatch[2].trim();
+                if (!content) return line;
+                return `${prefix}[bg:${resolvedBgKey}]${content}[/bg]`;
+              }
+              const trimmed = line.trim();
+              if (!trimmed) return line;
+              return `[bg:${resolvedBgKey}]${trimmed}[/bg]`;
+            }).join('\n');
+          } else {
+            outText = `[bg:${resolvedBgKey}]${outText}[/bg]`;
+          }
         }
         if (resolvedColorKey && resolvedColorKey !== 'default') {
           // If inner already has color tags, strip them so we don't nest font colors!
           while (/\[(?:color:)?[#a-zA-Z0-9_-]+\]([\s\S]*?)\[\/(?:color:)?[#a-zA-Z0-9_-]+\]/i.test(outText)) {
             outText = outText.replace(/\[(?:color:)?[#a-zA-Z0-9_-]+\]([\s\S]*?)\[\/(?:color:)?[#a-zA-Z0-9_-]+\]/gi, '$1');
           }
-          if (NOTION_COLORS[resolvedColorKey]) {
-            outText = `[${resolvedColorKey}]${outText}[/${resolvedColorKey}]`;
+          if (outText.includes('\n') || /^\s*[•\-\*]/.test(outText)) {
+            const lines = outText.split('\n');
+            outText = lines.map(line => {
+              const bMatch = line.match(/^(\s*[•\-\*]\s+)(.*)$/);
+              if (bMatch) {
+                const prefix = bMatch[1];
+                const content = bMatch[2].trim();
+                if (!content) return line;
+                return NOTION_COLORS[resolvedColorKey]
+                  ? `${prefix}[${resolvedColorKey}]${content}[/${resolvedColorKey}]`
+                  : `${prefix}[color:${resolvedColorKey}]${content}[/color]`;
+              }
+              const trimmed = line.trim();
+              if (!trimmed) return line;
+              return NOTION_COLORS[resolvedColorKey]
+                ? `[${resolvedColorKey}]${trimmed}[/${resolvedColorKey}]`
+                : `[color:${resolvedColorKey}]${trimmed}[/color]`;
+            }).join('\n');
           } else {
-            outText = `[color:${resolvedColorKey}]${outText}[/color]`;
+            if (NOTION_COLORS[resolvedColorKey]) {
+              outText = `[${resolvedColorKey}]${outText}[/${resolvedColorKey}]`;
+            } else {
+              outText = `[color:${resolvedColorKey}]${outText}[/color]`;
+            }
           }
         }
         return outText;
@@ -1047,7 +1093,9 @@ export function visualHtmlToMarkdown(html?: string | null): string {
         return `> ${cleanInner}\n`;
       }
       case 'li': {
-        const cleanInner = inner.replace(/^(\s*[•\-])+\s*/, '').trim();
+        let cleanInner = inner.trim();
+        cleanInner = cleanInner.replace(/^(\s*[•\-])+\s*/, '').trim();
+        cleanInner = cleanInner.replace(/^\[([#a-zA-Z0-9_-]+)\]\s*([•\-\*])\s*/i, '[$1]');
         const strippedTags = stripColorTags(cleanInner).trim();
         if (!strippedTags) return '';
         return `• ${cleanInner}\n`;
@@ -1057,7 +1105,7 @@ export function visualHtmlToMarkdown(html?: string | null): string {
         return `${inner.trimEnd()}\n`;
       case 'p':
       case 'div':
-        return inner ? `${inner}\n` : '\n';
+        return inner ? `${inner.trimEnd()}\n` : '\n';
       case 'br':
         return '\n';
       default:
@@ -1085,6 +1133,10 @@ export function visualHtmlToMarkdown(html?: string | null): string {
     result = result.replace(emptyRegex, '');
   }
   result = result.replace(/\[color:[^\]]+\]\s*\[\/color\]/gi, '');
+
+  // Eliminate redundant/extra empty newlines between bullet items
+  result = result.replace(/(•[^\n]+)\n\s*\n+(•)/g, '$1\n$2');
+  result = result.replace(/([-•\d]+\.?\s+[^\n]+)\n\s*\n+([-•\d]+\.?\s+)/g, '$1\n$2');
 
   return result.replace(/\n{3,}/g, '\n\n').trim();
 }

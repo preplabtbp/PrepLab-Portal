@@ -1835,8 +1835,23 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
               }
             });
           }
-          span.appendChild(contents);
-          range.insertNode(span);
+
+          const lis = contents.querySelectorAll ? contents.querySelectorAll('li') : [];
+          if (lis.length > 0) {
+            lis.forEach((li) => {
+              const innerSpan = document.createElement('span');
+              innerSpan.style.color = hex;
+              innerSpan.setAttribute('data-color', colorKey);
+              while (li.firstChild) {
+                innerSpan.appendChild(li.firstChild);
+              }
+              li.appendChild(innerSpan);
+            });
+            range.insertNode(contents);
+          } else {
+            span.appendChild(contents);
+            range.insertNode(span);
+          }
 
           if (sel) {
             const newRange = document.createRange();
@@ -1947,8 +1962,25 @@ const NotionMultilineBubbleEditor: React.FC<NotionMultilineBubbleEditorProps> = 
               }
             });
           }
-          span.appendChild(contents);
-          range.insertNode(span);
+
+          const lis = contents.querySelectorAll ? contents.querySelectorAll('li') : [];
+          if (lis.length > 0) {
+            lis.forEach((li) => {
+              const innerSpan = document.createElement('span');
+              innerSpan.style.backgroundColor = hex;
+              innerSpan.style.padding = '1px 3px';
+              innerSpan.style.borderRadius = '3px';
+              innerSpan.setAttribute('data-bg', highlightKey);
+              while (li.firstChild) {
+                innerSpan.appendChild(li.firstChild);
+              }
+              li.appendChild(innerSpan);
+            });
+            range.insertNode(contents);
+          } else {
+            span.appendChild(contents);
+            range.insertNode(span);
+          }
 
           if (sel) {
             const newRange = document.createRange();

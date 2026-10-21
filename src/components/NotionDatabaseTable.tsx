@@ -1322,11 +1322,13 @@ export function NotionDatabaseTable({
         selectedText: res.newText.substring(res.newStart, res.newEnd)
       });
     } else if (field === 'keterangan') {
-      const currentVal = rowFormData['Keterangan'] || '';
+      const currentVal = rowFormData['Keterangan'] || rowFormData['Description'] || '';
       const res = formatSelectedText(currentVal, start, end, action);
       setRowFormData(prev => ({
         ...prev,
-        Keterangan: res.newText
+        Keterangan: res.newText,
+        Description: res.newText,
+        Deskripsi: res.newText
       }));
       setActiveModalSelection({
         field,
@@ -3968,15 +3970,11 @@ export function NotionDatabaseTable({
         if (!finalVal.includes('<!--pin-->')) {
           finalVal = `${finalVal} <!--pin-->`.trim();
         }
-        targetRow[keyToSet] = finalVal;
-        if (targetRow['Keterangan'] !== undefined) targetRow['Keterangan'] = finalVal;
-        if (targetRow['Description'] !== undefined) targetRow['Description'] = finalVal;
+        setRowDescription(targetRow, finalVal);
+      } else if (isDescCol) {
+        setRowDescription(targetRow, newValue);
       } else {
         targetRow[keyToSet] = newValue;
-        if (isDescCol) {
-          if (targetRow['Keterangan'] !== undefined) targetRow['Keterangan'] = newValue;
-          if (targetRow['Description'] !== undefined) targetRow['Description'] = newValue;
-        }
       }
 
       if (colLower === 'jenis kegiatan' || colLower === 'judul' || colLower === 'task' || colLower === 'nama kegiatan' || colLower === 'activity name') {
@@ -5129,6 +5127,9 @@ export function NotionDatabaseTable({
     }
     cleanedRow['Last Modified'] = new Date().toISOString();
 
+    const finalDesc = cleanedRow['Keterangan'] || cleanedRow['Description'] || '';
+    setRowDescription(cleanedRow, finalDesc);
+
     // Check if row being edited was pinned
     const wasPinned = (editingRowIndex !== null && localRows[editingRowIndex] && isRowPinned(localRows[editingRowIndex])) || 
                       isRowPinned(cleanedRow) || 
@@ -5140,8 +5141,7 @@ export function NotionDatabaseTable({
       let curKet = cleanedRow['Keterangan'] || cleanedRow['Description'] || '';
       if (!curKet.includes('<!--pin-->')) {
         const pinKet = `${curKet} <!--pin-->`.trim();
-        cleanedRow['Keterangan'] = pinKet;
-        if (cleanedRow['Description'] !== undefined) cleanedRow['Description'] = pinKet;
+        setRowDescription(cleanedRow, pinKet);
       }
       const pKey = cleanedRow.id ? String(cleanedRow.id) : (cleanedRow['Jenis kegiatan'] || '').replace(/^↳\s*/, '').trim();
       if (pKey && !pinnedRowKeys.includes(pKey)) {
@@ -11569,7 +11569,7 @@ export function NotionDatabaseTable({
                             const before = val.substring(0, lineStart);
                             const after = val.substring(selectionStart);
                             const newVal = before + after;
-                            setRowFormData(prev => ({ ...prev, Keterangan: newVal }));
+                            setRowFormData(prev => ({ ...prev, Keterangan: newVal, Description: newVal }));
                             requestAnimationFrame(() => {
                               textarea.setSelectionRange(lineStart, lineStart);
                             });
@@ -11582,7 +11582,7 @@ export function NotionDatabaseTable({
                             const insertText = '\n' + bulletPrefix;
                             const newVal = before + insertText + after;
                             const newCursor = selectionStart + insertText.length;
-                            setRowFormData(prev => ({ ...prev, Keterangan: newVal }));
+                            setRowFormData(prev => ({ ...prev, Keterangan: newVal, Description: newVal }));
                             requestAnimationFrame(() => {
                               textarea.setSelectionRange(newCursor, newCursor);
                             });
@@ -11601,7 +11601,7 @@ export function NotionDatabaseTable({
                           const before = val.substring(0, lineStart);
                           const after = val.substring(selectionStart);
                           const newVal = before + after;
-                          setRowFormData(prev => ({ ...prev, Keterangan: newVal }));
+                          setRowFormData(prev => ({ ...prev, Keterangan: newVal, Description: newVal }));
                           requestAnimationFrame(() => {
                             textarea.setSelectionRange(lineStart, lineStart);
                           });

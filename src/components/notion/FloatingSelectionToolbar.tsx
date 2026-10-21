@@ -111,7 +111,16 @@ export function formatSelectedText(
     if (!hKey || hKey === 'default') {
       formatted = cleanSelected;
     } else {
-      formatted = `[bg:${hKey}]${cleanSelected}[/bg]`;
+      const lines = cleanSelected.split('\n');
+      formatted = lines.map(line => {
+        const bulletMatch = line.match(/^(\s*[•\-\*]\s+)(.*)$/);
+        if (bulletMatch) {
+          const prefix = bulletMatch[1];
+          const text = bulletMatch[2];
+          return text ? `${prefix}[bg:${hKey}]${text}[/bg]` : line;
+        }
+        return line.trim() ? `[bg:${hKey}]${line}[/bg]` : line;
+      }).join('\n');
     }
   } else if (typeof action === 'object' && 'color' in action) {
     const colorOpenMatch = beforeText.match(/\[(?:color:)?([#a-zA-Z0-9_-]+)\]\s*$/i);
@@ -129,7 +138,16 @@ export function formatSelectedText(
     if (!cKey || cKey === 'default') {
       formatted = cleanSelected;
     } else {
-      formatted = `[${cKey}]${cleanSelected}[/${cKey}]`;
+      const lines = cleanSelected.split('\n');
+      formatted = lines.map(line => {
+        const bulletMatch = line.match(/^(\s*[•\-\*]\s+)(.*)$/);
+        if (bulletMatch) {
+          const prefix = bulletMatch[1];
+          const text = bulletMatch[2];
+          return text ? `${prefix}[${cKey}]${text}[/${cKey}]` : line;
+        }
+        return line.trim() ? `[${cKey}]${line}[/${cKey}]` : line;
+      }).join('\n');
     }
   }
 
