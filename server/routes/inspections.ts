@@ -18,6 +18,7 @@ import {
 import webpush from 'web-push';
 import path from "path";
 import sharp from 'sharp';
+import { isResignedOrNonActiveStatus } from "./employees.js";
 
 export async function compressSignatureBase64(dataUri?: string | null, maxDimension = 360, maxBytes = 35000): Promise<string> {
   if (!dataUri || typeof dataUri !== 'string') return '';
@@ -2200,9 +2201,10 @@ export async function getAllEmployeesCached(force = false): Promise<any[]> {
     return cachedAllEmployees;
   }
   const emps = await db.select().from(employees);
-  cachedAllEmployees = emps;
+  const activeEmps = emps.filter(e => !isResignedOrNonActiveStatus(e));
+  cachedAllEmployees = activeEmps;
   lastAllEmployeesTime = now;
-  return emps;
+  return activeEmps;
 }
 
 async function enrichSchedulesWithCompletion(schedules: any[], targetWeekTag?: string): Promise<any[]> {

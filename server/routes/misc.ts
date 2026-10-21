@@ -21,7 +21,7 @@ import { JWT_SECRET } from '../middleware/auth.js';
 import { invalidateScheduleCache, fetchInspectionScheduleFromSheet, findPortalPlan, portalPlanToSchedules, rekapInspeksiCache, REKAP_INSPEKSI_CACHE_TTL } from "./inspections.js";
 import { invalidateGamificationCache } from "./gamification.js";
 import { isDbCircuitBroken } from "../../src/db/index.js";
-import { getCsvEmployees } from "./employees.js";
+import { getCsvEmployees, isResignedOrNonActiveStatus } from "./employees.js";
 import { generateFallbackRosterData } from "./roster.js";
 
 export const router = Router();
@@ -810,15 +810,8 @@ export const isResignedOrInactive = (emp: any): boolean => {
     return true;
   }
 
-  // Known resigned personnel safeguard
-  if (
-    rawNik === '04D24000052' || // Fikri Lisantri Fahmi
-    rawNik === '02D23000050' || // Kevin Gibran Mamoto
-    rawNik === '04D25000062' || // M. Bagus Ihza Ai Rizki
-    rawNik === '04D25000045' || // Kevin Murheza
-    rawNik === 'M0405240291' || // Ade Wijaya
-    rawNik === 'M0210190719'    // La Ode Ali Wara
-  ) {
+  // Known resigned personnel & non-active safeguard
+  if (isResignedOrNonActiveStatus(emp)) {
     return true;
   }
 

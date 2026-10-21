@@ -8,6 +8,7 @@ import { employees, roster, p5mMateri, p5mSchedules, notifications } from "../..
 import { Client } from "@notionhq/client";
 import { drive } from "../../google-services.js";
 import { sendWebPush } from "../utils.js";
+import { isResignedOrNonActiveStatus } from "./employees.js";
 
 export const p5mRouter = Router();
 
@@ -1151,15 +1152,10 @@ p5mRouter.get("/pool", async (req, res) => {
         return null;
       }
 
-      // Strictly exclude resigned employees
-      const stStr = (emp.statusKaryawan || '').toUpperCase().trim();
+      // Strictly exclude resigned / inactive employees
       const secStr = (emp.section || '').toUpperCase().trim();
       const jgStr = (emp.jobGrade || '').toUpperCase().trim();
-      const empNik = (emp.nik || '').toUpperCase().trim();
-      const isResigned = stStr.includes('RESIGN') || stStr.includes('PHK') || stStr.includes('KELUAR') ||
-        secStr.includes('#N/A') || jgStr.includes('#N/A') ||
-        ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719', 'M0506260356'].includes(empNik);
-      if (isResigned) return null;
+      if (secStr.includes('#N/A') || jgStr.includes('#N/A') || isResignedOrNonActiveStatus(emp)) return null;
 
       // 2. STRICT PT FILTERING RULE:
       const empPt = (emp.pt || '').toUpperCase().trim();

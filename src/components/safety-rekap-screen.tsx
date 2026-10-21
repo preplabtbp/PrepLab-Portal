@@ -25,8 +25,54 @@ interface SafetyRekapScreenProps {
 const MONTHS_FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-// Personil yang dikecualikan dari rekap (sama dengan filter di modul SAP)
-const EXCLUDED_NIKS = ['04D24000052', '02D23000050', '04D25000062', '04D25000045', 'M0405240291', 'M0210190719'];
+// Daftar lengkap personil yang telah resign / tidak aktif (disinkronkan dengan Database Karyawan)
+export const KNOWN_RESIGNED_NIKS = new Set([
+  '04D24000052', // Fikri Lisantri Fahmi
+  '02D23000050', // Kevin Gibran Mamoto
+  '04D25000062', // M. Bagus Ihza Ai Rizki
+  '04D25000045', // Kevin Murheza
+  'M0405240291', // Ade Wijaya
+  'M0210190719', // La Ode Ali Wara
+  '04D26000012', // Nurhafiz Syahputra
+  'M0404220419', // M Tarmizi
+  'M0206250798', // Ardi Waiyolu
+  'M0403240137', // Taufik Mulyadi
+  'M0210230886', // Salim Hi. Hasan
+  'M0201250027', // Fasrul La Udi
+  'M0203220110', // Rifa Nuridi
+  'M0403240143', // M. Fiky Aciman
+  'M0402230177', // Faisal Bakri
+  'M0402260053', // Muhammad Irfan Fadli
+  'M0205250595', // Darwan Alimudin
+  'M0506260356', // Karyawan Resign Lainnya
+]);
+
+export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
+  if (!empOrStatus) return false;
+  if (typeof empOrStatus === 'object') {
+    const rawNik = String(empOrStatus.nik || '').trim().toUpperCase();
+    if (rawNik && KNOWN_RESIGNED_NIKS.has(rawNik)) return true;
+    const eff = empOrStatus.tanggalEfektifTidakBekerja || empOrStatus.tanggal_efektif_tidak_bekerja;
+    if (eff && eff !== '-' && eff !== '0' && eff !== '#N/A' && String(eff).trim()) return true;
+    const rawKet = String(empOrStatus.keterangan || empOrStatus.alasan || empOrStatus.catatan || empOrStatus.statusMess || empOrStatus.statusKontrak || '').toUpperCase();
+    if (rawKet.includes('RESIGN') || rawKet.includes('PHK') || rawKet.includes('SPPHK') || rawKet.includes('KELUAR') || rawKet.includes('BERHENTI')) return true;
+    const sec = String(empOrStatus.section || empOrStatus.bagian || '').trim().toUpperCase();
+    if (sec.includes('#N/A')) return true;
+  }
+  const status = typeof empOrStatus === 'string'
+    ? empOrStatus
+    : (empOrStatus.statusKaryawan || empOrStatus.status_karyawan || empOrStatus.status || empOrStatus['Status Karyawan'] || empOrStatus['Status'] || '');
+  const s = String(status).trim().toUpperCase();
+  if (
+    s.includes('RESIGN') || s.includes('PHK') || s.includes('MUTASI') || s.includes('SPPHK') ||
+    s.includes('KELUAR') || s.includes('BERHENTI') || s.includes('INACTIVE') || s.includes('NONAKTIF') ||
+    s.includes('NON AKTIF') || s.includes('HABIS KONTRAK')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 const EDITOR_NIKS = ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'preplabadmin'];
 
 // Nilai sel tanggal: 'YYYY-MM-DD', '√' (sudah tanpa tanggal), '' (wajib tapi belum), null (tidak wajib → sel gelap)
@@ -131,8 +177,7 @@ function isValidEmployee(emp: any): boolean {
 
   if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
   if (rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A') return false;
-  if (rawStatus.includes('RESIGN') || rawStatus.includes('PHK') || rawStatus.includes('KELUAR') || rawStatus.includes('INACTIVE')) return false;
-  if (EXCLUDED_NIKS.includes(rawNik)) return false;
+  if (KNOWN_RESIGNED_NIKS.has(rawNik) || isResignedOrNonActiveStatus(emp)) return false;
   const nikLower = rawNik.toLowerCase();
   const nameLower = rawName.toLowerCase();
   if (
@@ -1343,18 +1388,28 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     const schedActiveNames = new Set<string>();
     const schedCutiKeys = new Set<string>();
     const schedCutiNames = new Set<string>();
+    const schedInspectionMap = new Map<string, string>();
+    const schedInspectionByName = new Map<string, string>();
 
     if (activeInspectionSchedule && Array.isArray(activeInspectionSchedule) && activeInspectionSchedule.length > 0) {
       activeInspectionSchedule.forEach((item: any) => {
+        if (!isValidEmployee(item)) return;
         const k = (item.nik || '').toString().trim().toUpperCase();
         const n = (item.name || '').toString().trim().toLowerCase();
+        const inspTitle = (item.inspeksi || '').toString().trim();
         if (item.isCuti) {
           if (k) schedCutiKeys.add(k);
           if (n) schedCutiNames.add(n);
           ensure(item, 'CUTI', true);
         } else {
-          if (k) schedActiveKeys.add(k);
-          if (n) schedActiveNames.add(n);
+          if (k) {
+            schedActiveKeys.add(k);
+            if (inspTitle && inspTitle.toLowerCase() !== 'cuti') schedInspectionMap.set(k, inspTitle);
+          }
+          if (n) {
+            schedActiveNames.add(n);
+            if (inspTitle && inspTitle.toLowerCase() !== 'cuti') schedInspectionByName.set(n, inspTitle);
+          }
           ensure(item, null, false);
         }
       });
@@ -1394,6 +1449,17 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       return false;
     };
 
+    const getSchedInspection = (nik?: string, name?: string): string => {
+      const k = (nik || '').toString().trim().toUpperCase();
+      const n = (name || '').toString().trim().toLowerCase();
+      if (k && schedInspectionMap.has(k)) return schedInspectionMap.get(k)!;
+      if (n && schedInspectionByName.has(n)) return schedInspectionByName.get(n)!;
+      for (const [sName, title] of schedInspectionByName.entries()) {
+        if (n && (sName === n || n.includes(sName) || sName.includes(n))) return title;
+      }
+      return '';
+    };
+
     // Gabungkan riwayat laporan KTA/TTA yang sudah masuk
     ktaData.rekapList.filter(isValidEmployee).forEach(emp => {
       const entry = ensure(emp, null);
@@ -1420,6 +1486,16 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       }
     }
 
+    // Pastikan kolom keterangan Inspeksi langsung diisi judul Inspeksi perkaryawan sesuai Jadwal Inspeksi
+    for (const [, entry] of map.entries()) {
+      if (!entry.auto.isCuti) {
+        const schedTitle = getSchedInspection(entry.nik, entry.name);
+        if (schedTitle) {
+          entry.auto.keteranganInspeksi = schedTitle;
+        }
+      }
+    }
+
     const editMap = new Map(edits.map(e => [String(e.nik).trim().toUpperCase(), e]));
     const ownKey = (inspectorNik || '').trim().toUpperCase();
     return Array.from(map.entries())
@@ -1428,6 +1504,8 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         const n = (e.nik || key || '').toUpperCase();
         // Eksklusi mutlak Golongan I (Crew / Operator / Non-Staff) dari rekap KTA/TTA & Inspeksi
         if (n === 'M0201250032' || j.includes('crew') || j.includes('operator')) return false;
+        // Eksklusi mutlak karyawan tidak aktif / resign
+        if (KNOWN_RESIGNED_NIKS.has(n) || isResignedOrNonActiveStatus(e)) return false;
         return canEdit || key === ownKey;
       })
       .map(([key, e]) => {
