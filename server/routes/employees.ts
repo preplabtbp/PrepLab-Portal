@@ -111,13 +111,16 @@ let cachedAttendanceMap: { data: Record<string, any>; timestamp: number } | null
 let cachedCounselingMap: { data: Record<string, any>; timestamp: number } | null = null;
 let cachedHierarchy: Map<string, { data: any[]; timestamp: number }> = new Map();
 let cachedAllEmployees: { data: any[]; timestamp: number } | null = null;
+let cachedRawEmployees: { data: any[]; timestamp: number } | null = null;
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+const RAW_CACHE_TTL = 120 * 1000; // 2 minutes TTL
 
 export function clearEmployeeCache() {
   cachedAttendanceMap = null;
   cachedCounselingMap = null;
   cachedHierarchy.clear();
   cachedAllEmployees = null;
+  cachedRawEmployees = null;
 }
 
 async function getAttendanceMap(): Promise<Record<string, any>> {
@@ -571,11 +574,14 @@ employeesRouter.get("/", async (req, res) => {
     }
 
     let data: any[] = [];
-    if (isDbCircuitBroken()) {
+    if (cachedRawEmployees && (Date.now() - cachedRawEmployees.timestamp < RAW_CACHE_TTL)) {
+      data = cachedRawEmployees.data;
+    } else if (isDbCircuitBroken()) {
       data = getCsvEmployees();
+      cachedRawEmployees = { data, timestamp: Date.now() };
     } else {
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('EMP_TIMEOUT')), 15000));
+        const timeoutPromise = new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('EMP_TIMEOUT')), 3500));
         const dbPromise = db.select().from(employees);
         data = (await Promise.race([dbPromise, timeoutPromise])) as any[];
         if (!data || data.length === 0) {
@@ -585,6 +591,7 @@ employeesRouter.get("/", async (req, res) => {
         console.warn("DB query timed out or failed in /api/employees, serving local CSV fallback");
         data = getCsvEmployees();
       }
+      cachedRawEmployees = { data, timestamp: Date.now() };
     }
 
     // Strictly exclude demo, staging, admin and broken spreadsheet accounts
