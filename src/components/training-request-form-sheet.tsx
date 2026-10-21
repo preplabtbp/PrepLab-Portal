@@ -664,16 +664,20 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
     const aoa: any[][] = [];
     const merges: XLSX.Range[] = [];
 
-    // Row 0: Document Title
+    // Row 0: Document Number at Top Right
+    aoa.push(['', '', '', '', '', '', '', `No: ${sheetData.docNumber}`, '']);
+    merges.push({ s: { r: 0, c: 7 }, e: { r: 0, c: 8 } });
+
+    // Row 1: Document Title (Centered)
     aoa.push([sheetData.title, '', '', '', '', '', '', '', '']);
-    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } });
+    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 8 } });
 
-    // Row 1: Subheader Banner (Prep & Lab in A2:G2, Week in H2:I2)
-    aoa.push([sheetData.department, '', '', '', '', '', '', sheetData.week, '']);
-    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 6 } });
-    merges.push({ s: { r: 1, c: 7 }, e: { r: 1, c: 8 } });
+    // Row 2: Subheader Banner (Prep & Lab in A3:F3 [6 cols], Week in G3:I3 [3 cols])
+    aoa.push([sheetData.department, '', '', '', '', '', sheetData.week, '', '']);
+    merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: 5 } });
+    merges.push({ s: { r: 2, c: 6 }, e: { r: 2, c: 8 } });
 
-    // Row 2: Table Header
+    // Row 3: Table Header
     aoa.push([
       'JENIS TRAINING',
       'TANGGAL',
@@ -681,12 +685,12 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
       'NAMA',
       'NIK',
       'PT',
-      'Dept',
+      'DEPT',
       'JABATAN',
       'GOL',
     ]);
 
-    let currentRow = 3;
+    let currentRow = 4;
 
     sheetData.sessions.forEach(session => {
       const pCount = session.participants.length;
@@ -739,7 +743,7 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
       { wch: 28 }, // NAMA
       { wch: 16 }, // NIK
       { wch: 8 },  // PT
-      { wch: 16 }, // Dept
+      { wch: 16 }, // DEPT
       { wch: 34 }, // JABATAN
       { wch: 8 },  // GOL
     ];
@@ -751,127 +755,171 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
   };
 
   // =========================================================================
-  // EXCEL EXPORT 2: EXECUTIVE FORMATTED EXCEL (.xls) WITH EXACT PHOTO STYLING
+  // EXCEL EXPORT 2: EXECUTIVE FORMATTED EXCEL WITH EXACT ON-SCREEN STYLING
   // =========================================================================
   const handleExportStyledExcel = () => {
     let html = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
         <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>List Peserta Training</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                  <x:Print>
+                    <x:ValidPrinterInfo/>
+                    <x:Orientation>Landscape</x:Orientation>
+                  </x:Print>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
         <style>
           body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; }
           table { border-collapse: collapse; width: 100%; }
+          .doc-number {
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 9pt;
+            font-weight: bold;
+            color: #64748B;
+            text-align: right;
+            height: 24px;
+            vertical-align: middle;
+            padding-right: 6px;
+          }
           .main-title {
             font-size: 16pt;
-            font-weight: bold;
-            text-align: center;
-            height: 42px;
+            font-weight: 900;
+            text-align: center !important;
+            vertical-align: middle !important;
+            height: 44px;
             color: #0F172A;
-            vertical-align: middle;
-            border-bottom: 2px solid #334155;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            font-family: Arial, 'Segoe UI', sans-serif;
           }
           .dept-banner {
-            background-color: #005FA3;
-            color: #FFFFFF;
-            font-weight: bold;
+            background-color: #005FA3 !important;
+            color: #FFFFFF !important;
+            font-weight: 900;
             font-size: 12pt;
-            text-align: center;
-            height: 36px;
-            vertical-align: middle;
+            text-align: center !important;
+            vertical-align: middle !important;
+            height: 38px;
             border: 1px solid #004578;
             letter-spacing: 1px;
+            text-transform: uppercase;
           }
           .week-banner {
-            background-color: #CFD5DB;
-            color: #0F172A;
-            font-weight: bold;
+            background-color: #CFD5DB !important;
+            color: #0F172A !important;
+            font-weight: 900;
             font-size: 12pt;
-            text-align: center;
-            height: 36px;
-            vertical-align: middle;
+            text-align: center !important;
+            vertical-align: middle !important;
+            height: 38px;
             border: 1px solid #94A3B8;
             letter-spacing: 1px;
+            text-transform: uppercase;
           }
           .tbl-header {
-            background-color: #A6D785;
-            color: #0F172A;
-            font-weight: bold;
-            font-style: italic;
-            text-align: center;
-            border: 1px solid #65A30D;
-            height: 32px;
-            vertical-align: middle;
+            background-color: #A6D785 !important;
+            color: #0F172A !important;
+            font-weight: 900;
+            text-align: center !important;
+            vertical-align: middle !important;
+            border: 1px solid #475569;
+            border-bottom: 2.5px solid #334155;
+            height: 36px;
             font-size: 10pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
           }
           .training-col {
-            font-weight: bold;
+            font-weight: 900;
             vertical-align: middle;
             text-align: center;
-            background-color: #FAFAFA;
+            background-color: #FFFFFF;
             border: 1px solid #CBD5E1;
-            padding: 8px;
+            padding: 10px 8px;
             font-size: 10pt;
+            color: #0F172A;
           }
           .date-col {
+            font-weight: 700;
             vertical-align: middle;
             text-align: center;
-            background-color: #FAFAFA;
+            background-color: #FFFFFF;
             border: 1px solid #CBD5E1;
-            padding: 8px;
-            font-size: 10pt;
+            padding: 10px 8px;
+            font-size: 9.5pt;
+            color: #1E293B;
           }
           .cell-center {
             text-align: center;
             vertical-align: middle;
             border: 1px solid #CBD5E1;
-            padding: 6px;
-            font-size: 10pt;
+            padding: 7px 4px;
+            font-size: 9.5pt;
+            color: #334155;
           }
           .cell-left {
             text-align: left;
             vertical-align: middle;
             border: 1px solid #CBD5E1;
-            padding: 6px 10px;
-            font-size: 10pt;
+            padding: 7px 10px;
+            font-size: 9.5pt;
+            color: #0F172A;
           }
           .cell-mono {
             font-family: Consolas, monospace;
             text-align: center;
             vertical-align: middle;
             border: 1px solid #CBD5E1;
-            padding: 6px;
+            padding: 7px 4px;
             font-size: 9.5pt;
+            color: #334155;
+            mso-number-format: "\\@";
           }
-          .row-even {
-            background-color: #FFFFFF;
-          }
-          .row-odd {
-            background-color: #F8FAFC;
+          .session-border-bottom {
+            border-bottom: 2.5px solid #475569 !important;
           }
         </style>
       </head>
       <body>
         <table>
+          <!-- ROW 0: DOCUMENT NUMBER -->
+          <tr>
+            <td colspan="7" style="border: none;"></td>
+            <td colspan="2" class="doc-number">No: ${sheetData.docNumber}</td>
+          </tr>
+
           <!-- ROW 1: TITLE BANNER -->
           <tr>
             <td colspan="9" class="main-title">${sheetData.title}</td>
           </tr>
           
-          <!-- ROW 2: DEPT & WEEK BANNER -->
+          <!-- ROW 2: DEPT & WEEK BANNER (6 cols + 3 cols = 9 cols) -->
           <tr>
-            <td colspan="7" class="dept-banner">${sheetData.department}</td>
-            <td colspan="2" class="week-banner">${sheetData.week}</td>
+            <td colspan="6" class="dept-banner">${sheetData.department}</td>
+            <td colspan="3" class="week-banner">${sheetData.week}</td>
           </tr>
 
           <!-- ROW 3: TABLE HEADERS -->
           <tr>
-            <th class="tbl-header" style="width: 180px;">JENIS TRAINING</th>
-            <th class="tbl-header" style="width: 140px;">TANGGAL</th>
+            <th class="tbl-header" style="width: 170px;">JENIS TRAINING</th>
+            <th class="tbl-header" style="width: 145px;">TANGGAL</th>
             <th class="tbl-header" style="width: 45px;">NO</th>
-            <th class="tbl-header" style="width: 220px;">NAMA</th>
-            <th class="tbl-header" style="width: 120px;">NIK</th>
-            <th class="tbl-header" style="width: 65px;">PT</th>
-            <th class="tbl-header" style="width: 120px;">Dept</th>
+            <th class="tbl-header" style="width: 210px;">NAMA</th>
+            <th class="tbl-header" style="width: 115px;">NIK</th>
+            <th class="tbl-header" style="width: 60px;">PT</th>
+            <th class="tbl-header" style="width: 110px;">DEPT</th>
             <th class="tbl-header" style="width: 250px;">JABATAN</th>
             <th class="tbl-header" style="width: 55px;">GOL</th>
           </tr>
@@ -883,33 +931,34 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
 
       if (session.participants.length === 0) {
         html += `
-          <tr class="row-even">
-            <td class="training-col"><b>${session.trainingName}</b></td>
-            <td class="date-col">${formattedDate}</td>
-            <td class="cell-center">-</td>
-            <td class="cell-left" colspan="6" style="color: #64748B; font-style: italic;">Belum ada peserta terdaftar</td>
+          <tr>
+            <td class="training-col session-border-bottom"><b>${session.trainingName}</b></td>
+            <td class="date-col session-border-bottom"><b>${formattedDate}</b></td>
+            <td class="cell-center session-border-bottom">-</td>
+            <td class="cell-left session-border-bottom" colspan="6" style="color: #64748B; font-style: italic;">Belum ada peserta terdaftar</td>
           </tr>
         `;
       } else {
         session.participants.forEach((p, idx) => {
-          const rowClass = idx % 2 === 0 ? 'row-even' : 'row-odd';
-          html += `<tr class="${rowClass}">`;
+          const isLastInSession = idx === session.participants.length - 1;
+          const borderClass = isLastInSession ? 'session-border-bottom' : '';
+          html += `<tr>`;
 
           if (idx === 0) {
             html += `
-              <td rowspan="${rowCount}" class="training-col"><b>${session.trainingName}</b></td>
-              <td rowspan="${rowCount}" class="date-col">${formattedDate}</td>
+              <td rowspan="${rowCount}" class="training-col session-border-bottom"><b>${session.trainingName}</b></td>
+              <td rowspan="${rowCount}" class="date-col session-border-bottom"><b>${formattedDate}</b></td>
             `;
           }
 
           html += `
-            <td class="cell-center"><b>${idx + 1}</b></td>
-            <td class="cell-left"><b>${p.nama}</b></td>
-            <td class="cell-mono">${p.nik}</td>
-            <td class="cell-center"><b>${p.pt}</b></td>
-            <td class="cell-left">${p.dept}</td>
-            <td class="cell-left">${p.jabatan}</td>
-            <td class="cell-center"><b>${p.gol}</b></td>
+            <td class="cell-center ${borderClass}"><b>${idx + 1}</b></td>
+            <td class="cell-left ${borderClass}"><b>${p.nama}</b></td>
+            <td class="cell-mono ${borderClass}">${p.nik}</td>
+            <td class="cell-center ${borderClass}"><b>${p.pt}</b></td>
+            <td class="cell-left ${borderClass}">${p.dept}</td>
+            <td class="cell-left ${borderClass}">${p.jabatan}</td>
+            <td class="cell-center ${borderClass}"><b>${p.gol}</b></td>
           </tr>`;
         });
       }
@@ -926,12 +975,12 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
     const link = document.createElement('a');
     link.href = url;
     const safeName = (sheetData.title || 'List_Peserta_Training').replace(/[^a-zA-Z0-9_-]/g, '_');
-    link.download = `${safeName}_Berwarna_${Date.now()}.xls`;
+    link.download = `${safeName}_${Date.now()}.xls`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast.success('Excel Terformat Warna (.xls) berhasil diunduh!');
+    toast.success('Excel Terformat Resmi (.xls) berhasil diunduh!');
   };
 
 ﻿  return (
@@ -1018,27 +1067,16 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             <span>Print PDF</span>
           </button>
 
-          {/* Export Buttons */}
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={handleExportXLSX}
-              title="Download Excel Standard (.xlsx)"
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Excel (.xlsx)</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleExportStyledExcel}
-              title="Download Excel Berwarna Sesuai Foto (.xls)"
-              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-xl shadow-sm transition-all"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Excel Warna</span>
-            </button>
-          </div>
+          {/* Single Unified Download Excel Button */}
+          <button
+            type="button"
+            onClick={handleExportStyledExcel}
+            title="Download Excel Resmi (Sesuai Tampilan Formulir)"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download Excel</span>
+          </button>
         </div>
       </div>
 
@@ -1062,10 +1100,10 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
         {/* The Two-Tone Banner: Preparation & Laboratory (Deep Blue) + Week (Silver) */}
         <div className="rounded-t-xl overflow-hidden border border-slate-300">
           <div className="grid grid-cols-1 md:grid-cols-12 text-sm font-black uppercase tracking-wider">
-            <div className="md:col-span-8 bg-[#005FA3] text-white py-3 px-5 flex items-center justify-between shadow-inner">
+            <div className="md:col-span-8 bg-[#005FA3] text-white py-3 px-5 flex items-center justify-center text-center shadow-inner">
               <span className="text-sm md:text-base font-black tracking-wide">{sheetData.department}</span>
             </div>
-            <div className="md:col-span-4 bg-[#CFD5DB] text-slate-800 py-3 px-5 flex items-center justify-center border-l md:border-l-2 border-white shadow-inner">
+            <div className="md:col-span-4 bg-[#CFD5DB] text-slate-800 py-3 px-5 flex items-center justify-center text-center border-l md:border-l-2 border-white shadow-inner">
               <span className="text-sm md:text-base font-black tracking-wide">{sheetData.week}</span>
             </div>
           </div>
@@ -1075,16 +1113,16 @@ export function TrainingRequestFormSheet({ employees = [], canManage = true }: T
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-[#A6D785] text-slate-900 font-extrabold uppercase text-[11px] tracking-wide border-b-2 border-slate-400">
-                  <th className="py-3 px-3 text-center border-r border-slate-300 w-44">JENIS TRAINING</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-300 w-44">TANGGAL</th>
-                  <th className="py-3 px-2 text-center border-r border-slate-300 w-12">NO</th>
-                  <th className="py-3 px-4 border-r border-slate-300">NAMA</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-300 font-mono">NIK</th>
-                  <th className="py-3 px-2 text-center border-r border-slate-300 w-14">PT</th>
-                  <th className="py-3 px-3 border-r border-slate-300">Dept</th>
-                  <th className="py-3 px-4 border-r border-slate-300">JABATAN</th>
-                  <th className="py-3 px-2 text-center border-r border-slate-300 w-14">GOL</th>
-                  <th className="no-print py-3 px-2 text-center w-16">AKSI</th>
+                  <th className="py-3 px-3 text-center align-middle border-r border-slate-300 w-44">JENIS TRAINING</th>
+                  <th className="py-3 px-3 text-center align-middle border-r border-slate-300 w-44">TANGGAL</th>
+                  <th className="py-3 px-2 text-center align-middle border-r border-slate-300 w-12">NO</th>
+                  <th className="py-3 px-4 text-center align-middle border-r border-slate-300">NAMA</th>
+                  <th className="py-3 px-3 text-center align-middle border-r border-slate-300 font-mono">NIK</th>
+                  <th className="py-3 px-2 text-center align-middle border-r border-slate-300 w-14">PT</th>
+                  <th className="py-3 px-3 text-center align-middle border-r border-slate-300">DEPT</th>
+                  <th className="py-3 px-4 text-center align-middle border-r border-slate-300">JABATAN</th>
+                  <th className="py-3 px-2 text-center align-middle border-r border-slate-300 w-14">GOL</th>
+                  <th className="no-print py-3 px-2 text-center align-middle w-16">AKSI</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-slate-800 bg-white">
