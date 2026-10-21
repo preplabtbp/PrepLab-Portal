@@ -155,13 +155,13 @@ export function BulletinBoard({
   const userUniverse = userPt === 'GTS' ? 'GTS' : 'TBP';
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // Restore selected post immediately on initial render from sessionStorage to prevent flash of dashboard on refresh
+  // Restore selected post immediately on initial render from sessionStorage ONLY if URL explicitly specifies a post ID (prevents flash on refresh while keeping root URL on dashboard)
   const [selectedPost, setSelectedPost] = useState<any | null>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const urlPostId = params.get("page") || params.get("postId") || params.get("id");
-      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
-      const targetId = urlPostId || savedPageId;
+      if (!urlPostId) return null;
+      const targetId = urlPostId;
       const cached = sessionStorage.getItem("preplab_cached_selected_post");
       if (cached && targetId) {
         const parsed = JSON.parse(cached);
@@ -742,12 +742,27 @@ export function BulletinBoard({
     try {
       const params = new URLSearchParams(location.search || window.location.search);
       const urlPostId = params.get("page") || params.get("postId") || params.get("id");
-      const savedPageId = localStorage.getItem("preplab_active_bulletin_page");
-      const targetId = urlPostId || savedPageId;
+      const urlLogbook = params.get("logbook") || params.get("sectionLogbook");
       const urlTopic = params.get("topic");
       if (urlTopic) {
         setDeepLinkTopic(urlTopic);
       }
+
+      // If user accesses the root Labnote page with no parameters, always show the initial dashboard
+      if (!urlPostId && !urlLogbook) {
+        if (selectedPost !== null) {
+          setSelectedPost(null);
+          setNavHistory([]);
+          setIsLibraryActive(false);
+        }
+        try {
+          localStorage.removeItem("preplab_active_bulletin_page");
+          sessionStorage.removeItem("preplab_cached_selected_post");
+        } catch {}
+        return;
+      }
+
+      const targetId = urlPostId;
 
       // 1. Explicit Post ID from URL (e.g. from notification click ?postId=123&topic=...)
       // Always prioritize urlPostId even if another post was previously active
@@ -770,7 +785,6 @@ export function BulletinBoard({
         }
       }
 
-      const urlLogbook = params.get("logbook") || params.get("sectionLogbook");
       if (urlLogbook && !selectedPost) {
         const rawSec = urlLogbook === 'true' ? (userAllowedSections[0] || 'Preparasi') : urlLogbook;
         if (!canAccessAllSections && !isUserAllowedToAccessSection(rawSec, userProfile, canAccessAllSections)) {
@@ -781,16 +795,7 @@ export function BulletinBoard({
         openSectionLogbook(rawSec);
         return;
       }
-      if (savedPageId && String(savedPageId).startsWith('logbook-') && !selectedPost) {
-        const secPart = String(savedPageId).replace(/^logbook-/, '');
-        if (!canAccessAllSections && !isUserAllowedToAccessSection(secPart, userProfile, canAccessAllSections)) {
-          toast.error(`Akses ditolak: Anda hanya dapat mengakses Labnote seksi ${userAllowedSections.join(', ')}.`);
-          openSectionLogbook(userAllowedSections[0] || 'Preparasi');
-          return;
-        }
-        openSectionLogbook(secPart);
-        return;
-      }
+
       // Check if current selectedPost is a dummy fallback (e.g. doc-* or section-*) or not set
       const isDummySelectedPost = selectedPost && (String(selectedPost.id).startsWith('doc-') || String(selectedPost.id).startsWith('section-'));
       if (targetId && (!selectedPost || isDummySelectedPost)) {
@@ -2282,8 +2287,7 @@ ${aiMeetingNotes
               const params = new URLSearchParams(window.location.search);
               const hasTargetId = Boolean(
                 params.get("page") || params.get("postId") || params.get("id") ||
-                params.get("logbook") || params.get("sectionLogbook") ||
-                localStorage.getItem("preplab_active_bulletin_page")
+                params.get("logbook") || params.get("sectionLogbook")
               );
 
               // Jika sedang memuat data dan URL/localStorage menunjukkan target post tertentu, jangan flash dashboard utama

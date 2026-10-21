@@ -797,6 +797,14 @@ export default function App() {
       return;
     }
 
+    // If navigating directly to root bulletin/labnote, clear remembered page so user always lands on initial dashboard
+    if (cleanTab.startsWith('bulletin') && !cleanTab.includes('?')) {
+      try {
+        localStorage.removeItem("preplab_active_bulletin_page");
+        sessionStorage.removeItem("preplab_cached_selected_post");
+      } catch {}
+    }
+
     // Role guard for Crew: restrict navigation to allowed modules only
     if (isCrewRole) {
       const allowedCrewTabs = ['home', '', 'quiz', 'clinic', 'kunjungan-klinik', 'employee-leaves', 'izin-karyawan', 'pelaporan-izin', 'settings', 'logbook'];
