@@ -187,6 +187,110 @@ function isValidEmployee(emp: any): boolean {
   return true;
 }
 
+// Urutan resmi master daftar rekap KTA/TTA & Inspeksi sesuai spreadsheet master
+export const OFFICIAL_SAFETY_ORDER: string[] = [
+  'Deni Nugraha Perdiana',
+  'Tigwa Anggawikara',
+  'Arif Maulana Lessy',
+  'Arthur Paul Marnix Souisa',
+  'Khaufi Wirawan Aligora',
+  'Muhammad Amran Selang',
+  'Ryan M Rusli',
+  'Janter Jaya Barimbing',
+  'Subrandi',
+  'Christian Anggawijaya',
+  'Moch. Siswanto',
+  'Sukarman A. Akil',
+  'Muhammad Nova Herisandi',
+  'Murti Tamisari Harun',
+  'Muhammad Reza Satria',
+  'Ahmad Jusma Azhari Annur',
+  'Kemal Maulana',
+  'M. Harits Asyardy',
+  'Fachmi Amarullah',
+  'Rizal Zaelani',
+  'Herwin Predianto',
+  'Muhammad Fandy Septiawan',
+  'Ayup Riyan Redondo',
+  'Muhammad Atha Ghali',
+  'Anresansia Winesha Pandit',
+  'Andika Dafa Rusdiarta',
+  'Riyan Panji Putra',
+  'Gusti Nur Firdaus',
+  'Muhammad Furqan',
+  'Rahmad Azizul Khakim',
+  'Mahardian Muhamad Firdaus',
+  'Hariyanto Aludin',
+  'Roy Marten Bobrikit',
+  'Nyong Dokolamo',
+  'Suhardi Hasan',
+  'Rusli Rorano',
+  'Karolus Megawanto Lebang',
+  'Valdi Pratama',
+  'Arsun Lantia',
+  'La Ode Dendi',
+  'La Sapiu',
+  'Haidir Febbyansyah Saputra',
+  'A Muh Ilham Hasmar',
+  'Muhammad Djody Satriani',
+  'Abdul Azis',
+  'Ryan Tiarna',
+  'Taufikir',
+  'Muhammad Ardiyan Syah Darmawan',
+  'Mohamad Noer Syafi\'i',
+  'Ridhan Ahmadurabbi',
+  'Imran S',
+  'Yulianus Tiku Mangando',
+  'Zaenal Abidin',
+  'Burhanudin La Wio',
+  'Junjunan Muhammad Syukur',
+  'Muhamad Anugrah Ramadhan',
+  'Muhamad Alvin Febriansyah',
+  'Aldy Aldersun Puluh',
+  'Muhammad Iqbal',
+  'Agung Adi Putra Prasetyo',
+  'Derald Febri Andriano Tjiwili',
+  'Raldy Chevien Aryando Dareno',
+  'Muh. Yusri Mubarak',
+];
+
+function cleanNameForMatch(name: string): string {
+  return (name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+}
+
+export function getOfficialOrderIndex(name?: string): number {
+  if (!name) return 999;
+  const raw = name.toLowerCase().trim();
+  const clean = cleanNameForMatch(raw);
+
+  // 1. Exact match / exact clean match
+  for (let i = 0; i < OFFICIAL_SAFETY_ORDER.length; i++) {
+    const master = OFFICIAL_SAFETY_ORDER[i].toLowerCase();
+    const cleanMaster = cleanNameForMatch(master);
+    if (clean === cleanMaster || raw === master) return i;
+  }
+
+  // 2. Substring & multi-word parts match
+  for (let i = 0; i < OFFICIAL_SAFETY_ORDER.length; i++) {
+    const master = OFFICIAL_SAFETY_ORDER[i].toLowerCase();
+    const cleanMaster = cleanNameForMatch(master);
+    if (clean.includes(cleanMaster) || cleanMaster.includes(clean)) return i;
+
+    const parts = raw.split(/\s+/).filter(Boolean);
+    const mParts = master.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2 && mParts.length >= 2) {
+      if (mParts.every(p => raw.includes(p)) || parts.every(p => master.includes(p))) {
+        return i;
+      }
+    }
+  }
+
+  return 999;
+}
+
 // Urutan jabatan: Manager → Superintendent → Supervisor → Foreman → lainnya
 function jabatanRank(jabatan: string): number {
   const j = (jabatan || '').toLowerCase();
@@ -1517,7 +1621,12 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
           inspeksiLate: v.inspeksiDone && isLateDate(v.tglInspeksi)
         };
       })
-      .sort((a, b) => jabatanRank(a.jabatan) - jabatanRank(b.jabatan) || a.name.localeCompare(b.name));
+      .sort((a, b) => {
+        const orderA = getOfficialOrderIndex(a.name);
+        const orderB = getOfficialOrderIndex(b.name);
+        if (orderA !== orderB) return orderA - orderB;
+        return jabatanRank(a.jabatan) - jabatanRank(b.jabatan) || a.name.localeCompare(b.name);
+      });
   }, [inspeksiData, ktaData, leaveList, activeInspectionSchedule, edits, weekRange, canEdit, inspectorNik]);
 
   const rows = useMemo(() => {
