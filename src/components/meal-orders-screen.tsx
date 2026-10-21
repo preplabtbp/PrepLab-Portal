@@ -655,7 +655,8 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
       const hasKantin = kantin.some(v => typeof v === 'number' && v > 0);
       const hasBungkus = bungkus.some(v => typeof v === 'number' && v > 0);
-      const jenisMeal = isAbsentWithoutMeal ? '-' : (hasKantin || !hasBungkus ? 'Kantin' : 'Bungkusan');
+      const isCuti = statusExport === 'Cuti';
+      const jenisMeal = isCuti ? 'Bungkusan' : (isAbsentWithoutMeal ? '-' : (hasKantin || !hasBungkus ? 'Kantin' : 'Bungkusan'));
 
       return [
         // Shift hanya Siang / Malam / Longshift: Nonshift, Cuti, Cuti Site, dll. → Siang

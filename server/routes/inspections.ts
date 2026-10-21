@@ -42,6 +42,61 @@ export async function compressSignatureBase64(dataUri?: string | null, maxDimens
   }
 }
 
+export function normalizePhotoUrlForGas(url?: string | null): string {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed === '-' || trimmed === '#' || trimmed.length < 5) return '';
+
+  // Handle /api/drive/view/<id>
+  if (trimmed.includes('/api/drive/view/')) {
+    const driveId = trimmed.split('/api/drive/view/')[1].split(/[?&#/]/)[0];
+    if (driveId) return `https://drive.google.com/uc?export=view&id=${driveId}`;
+  }
+  // Handle drive.google.com/file/d/<id>
+  const fileDMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (fileDMatch && fileDMatch[1]) {
+    return `https://drive.google.com/uc?export=view&id=${fileDMatch[1]}`;
+  }
+  // Handle ?id=<id> or &id=<id>
+  const idParamMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idParamMatch && idParamMatch[1]) {
+    return `https://drive.google.com/uc?export=view&id=${idParamMatch[1]}`;
+  }
+
+  return trimmed;
+}
+
+export function prepareDataFForGas(finalData: any): any {
+  if (!finalData || typeof finalData !== 'object') return finalData;
+  const cloned = JSON.parse(JSON.stringify(finalData));
+
+  // If payload is array (e.g. SARANA with individual unit photos, TANGGA, TABUNG, PERKAKAS)
+  if (Array.isArray(cloned.payload)) {
+    cloned.payload.forEach((item: any) => {
+      if (item && typeof item === 'object') {
+        if (item.foto) item.foto = normalizePhotoUrlForGas(item.foto);
+        if (item.photo) item.photo = normalizePhotoUrlForGas(item.photo);
+        if (item.fotoUrl) item.fotoUrl = normalizePhotoUrlForGas(item.fotoUrl);
+      }
+    });
+  }
+
+  // If temuanUmum has photos
+  if (Array.isArray(cloned.temuanUmum)) {
+    cloned.temuanUmum.forEach((t: any) => {
+      if (t && typeof t === 'object' && t.foto) {
+        t.foto = normalizePhotoUrlForGas(t.foto);
+      }
+    });
+  }
+
+  if (cloned.fotoProses) {
+    cloned.fotoProses = normalizePhotoUrlForGas(cloned.fotoProses);
+  }
+
+  return cloned;
+}
+
 export const router = Router();
 
 // Bersihkan cache rekap inspeksi setiap kali ada perubahan data inspeksi
@@ -96,8 +151,9 @@ router.post("/api/inspections/universal", async (req, res) => {
       let finalTtd1 = await compressSignatureBase64(ttd1);
       let finalTtd2 = await compressSignatureBase64(ttd2);
       let finalTtd3 = await compressSignatureBase64(ttd3);
-      let finalFotoProses = fotoProses;
-      let finalFotoTemuanArray = fotoTemuanArray;
+      let finalFotoProses = normalizePhotoUrlForGas(fotoProses);
+      let finalFotoTemuanArray = (fotoTemuanArray || []).map(normalizePhotoUrlForGas);
+      const gasFinalData = prepareDataFForGas(finalData);
 
       if (gasUrl) {
           try {
@@ -106,10 +162,10 @@ router.post("/api/inspections/universal", async (req, res) => {
               const payloadToGas = {
                   action: "submitInspeksiUniversal",
                   finalData: {
-                      ...finalData,
+                      ...gasFinalData,
                       devOptions: { isDev: true, db: true, pdf: true, verboseLog: true }
                   },
-                  ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3, fotoTemuanArray, fotoProses
+                  ttd1: finalTtd1, ttd2: finalTtd2, ttd3: finalTtd3, fotoTemuanArray: finalFotoTemuanArray, fotoProses: finalFotoProses
               };
 
               const gasRes = await fetch(gasUrl, {
@@ -583,11 +639,14 @@ export async function generateGasPdfForInspection(inspRecord: any) {
     } catch(e) {}
   }
 
+  fotoProses = normalizePhotoUrlForGas(fotoProses);
+  fotoTemuanArray = (fotoTemuanArray || []).map(normalizePhotoUrlForGas);
+
   const isApd = Array.isArray(parsedDataF) || (inspRecord.type && inspRecord.type.includes('APD'));
 
   const cleanDataF = Array.isArray(parsedDataF) ? parsedDataF.map((row: any[]) => {
     return Array.isArray(row) ? row.map((cell: any) => (typeof cell === 'string' && cell.length > 30000 ? '-' : cell)) : row;
-  }) : parsedDataF;
+  }) : prepareDataFForGas(parsedDataF);
 
   let payloadToGas: any = {};
   if (isApd) {
@@ -601,7 +660,7 @@ export async function generateGasPdfForInspection(inspRecord: any) {
     payloadToGas = {
       action: "submitInspeksiUniversal",
       finalData: {
-        ...parsedDataF,
+        ...cleanDataF,
         devOptions: { isDev: true, db: true, pdf: true, verboseLog: true }
       },
       ttd1, ttd2, ttd3, fotoTemuanArray, fotoProses
@@ -1208,24 +1267,27 @@ router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
         }
 
         const isUniversal = Array.isArray(parsedDataF) ? false : true;
+        const cleanDataF = isUniversal ? prepareDataFForGas(parsedDataF) : parsedDataF;
+        const cleanFotoProses = normalizePhotoUrlForGas(parsedPhoto.fotoProses);
+        const cleanFotoTemuanArray = (parsedPhoto.fotoTemuanArray || []).map(normalizePhotoUrlForGas);
         
         const payloadToGas = isUniversal ? {
             action: "submitInspeksiUniversal",
-            finalData: { ...parsedDataF, devOptions: { isDev: true, db: false, pdf: true, verboseLog: true } },
+            finalData: { ...cleanDataF, devOptions: { isDev: true, db: false, pdf: true, verboseLog: true } },
             ttd1: parsedSignature.ttd1 || "",
             ttd2: parsedSignature.ttd2 || "",
             ttd3: parsedSignature.ttd3 || "",
-            fotoProses: parsedPhoto.fotoProses || "",
-            fotoTemuanArray: parsedPhoto.fotoTemuanArray || []
+            fotoProses: cleanFotoProses,
+            fotoTemuanArray: cleanFotoTemuanArray
         } : {
             action: "submitInspeksi",
-            dataF: parsedDataF,
+            dataF: cleanDataF,
             devOptions: { isDev: true, db: false, pdf: true, verboseLog: true },
             ttd1: parsedSignature.ttd1 || "",
             ttd2: parsedSignature.ttd2 || "",
             ttd3: parsedSignature.ttd3 || "",
-            fotoProses: parsedPhoto.fotoProses || "",
-            fotoTemuanArray: parsedPhoto.fotoTemuanArray || []
+            fotoProses: cleanFotoProses,
+            fotoTemuanArray: cleanFotoTemuanArray
         };
 
         const gasRes = await fetch(gasUrl, {
@@ -1236,6 +1298,7 @@ router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
 
         const gasText = await gasRes.text();
         let pdfUrl = '';
+        let linkPdf2 = '';
         try {
             const gasData = JSON.parse(gasText);
             if (gasData.success && gasData.data) {
@@ -1243,10 +1306,11 @@ router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
                 if (typeof pd === 'string' && pd.startsWith('{')) pd = JSON.parse(pd);
                 
                 pdfUrl = pd.pdfUrl || pd.linkPdf1 || pd.linkPdf || pd.fileUrl || '';
+                linkPdf2 = pd.linkPdf2 || pd.pdfUrl2 || pd.gpsUrl || pd.linkGps || '';
                 
                 if (!pdfUrl) {
-                     let urlsFound = [];
-                     function deepFindUrls(obj, arr) {
+                     let urlsFound: string[] = [];
+                     function deepFindUrls(obj: any, arr: string[]) {
                          if (typeof obj === 'string') {
                              const matches = obj.match(/https?:\/\/[^\s"',]+/g);
                              if (matches) matches.forEach(m => arr.push(m));
@@ -1257,6 +1321,7 @@ router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
                      deepFindUrls(pd, urlsFound);
                      let uniqueUrls = [...new Set(urlsFound)];
                      if (uniqueUrls.length > 0) pdfUrl = uniqueUrls[0];
+                     if (uniqueUrls.length > 1 && !linkPdf2) linkPdf2 = uniqueUrls[1];
                 }
             }
         } catch(e) {
@@ -1267,11 +1332,15 @@ router.post("/api/admin/inspections/:id/regenerate-pdf", async (req, res) => {
             return res.status(500).json({ error: "GAS did not return a valid PDF URL", details: gasText });
         }
 
+        const finalStoredPdf = (pdfUrl && linkPdf2 && pdfUrl !== linkPdf2)
+            ? JSON.stringify({ tbp: pdfUrl, gps: linkPdf2 })
+            : pdfUrl;
+
         await db.update(inspections)
-            .set({ pdfUrl: pdfUrl })
+            .set({ pdfUrl: finalStoredPdf, dataF: isUniversal ? JSON.stringify(cleanDataF) : record.dataF })
             .where(eq(inspections.id, id));
 
-        res.json({ success: true, pdfUrl: pdfUrl });
+        res.json({ success: true, pdfUrl: finalStoredPdf, linkPdf2 });
 
     } catch (error: any) {
         console.error("Regenerate PDF Error:", error);

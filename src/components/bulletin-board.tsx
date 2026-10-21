@@ -195,7 +195,16 @@ export function BulletinBoard({
     } catch {}
   }, [selectedPost]);
 
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem("preplab_cached_bulletin_posts");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   // Persistent in-memory cache for virtual logbook content
   const logbookCacheRef = useRef<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -413,6 +422,11 @@ export function BulletinBoard({
           console.error("[Bulletin] Sort error:", sortErr);
         }
         setPosts(allPosts);
+        if (allPosts.length > 0) {
+          try {
+            sessionStorage.setItem("preplab_cached_bulletin_posts", JSON.stringify(allPosts));
+          } catch {}
+        }
       } else {
         console.error("[Bulletin] API error:", data.message);
       }
@@ -653,6 +667,19 @@ export function BulletinBoard({
 
     setSelectedPost(freshPost);
     setIsEditing(false);
+
+    // If freshPost has numeric ID but content is missing or placeholder, fetch full content in background
+    if (freshPost?.id && typeof freshPost.id === 'number' && (!freshPost.content || freshPost.content.length < 50)) {
+      fetch(`/api/bulletin/${freshPost.id}`)
+        .then(res => res.json())
+        .then(json => {
+          if (json.status === 'success' && json.data?.content) {
+            setSelectedPost(json.data);
+            setPosts(prev => prev.map(p => p.id === json.data.id ? json.data : p));
+          }
+        })
+        .catch(() => {});
+    }
 
     try {
       const url = new URL(window.location.href);

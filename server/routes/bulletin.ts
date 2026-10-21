@@ -19,11 +19,30 @@ import path from "path";
 
 export const router = Router();
 
+// In-memory cache for bulletin list queries to ensure instantaneous responses (<5ms)
+interface BulletinListCache {
+  data: any[];
+  timestamp: number;
+}
+const bulletinListCache = new Map<string, BulletinListCache>();
+const BULLETIN_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+export function clearBulletinCache() {
+  bulletinListCache.clear();
+}
+
 router.get("/api/bulletin", async (req, res) => {
     try {
       let { pt, nik, page, limit } = req.query as { pt?: string; nik?: string; page?: string; limit?: string };
       
       const isSuperUser = nik === '02D24000043' || nik === '02D25000055' || nik === 'M0403240177' || nik === 'preplabadmin';
+
+      // Fast in-memory cache lookup
+      const cacheKey = `${pt || 'DEFAULT'}_${nik || 'ALL'}_${page || 'ALL'}_${limit || 'ALL'}`;
+      const cached = bulletinListCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < BULLETIN_CACHE_TTL_MS)) {
+        return res.json({ status: "success", data: cached.data });
+      }
       
       const conditions: any[] = [];
       
@@ -89,6 +108,9 @@ router.get("/api/bulletin", async (req, res) => {
       }
       
       const data = await Promise.race([(baseQuery as any).orderBy(bulletinPosts.createdAt), timeoutPromise]);
+      if (Array.isArray(data) && data.length > 0) {
+        bulletinListCache.set(cacheKey, { data, timestamp: Date.now() });
+      }
       res.json({ status: "success", data });
     } catch (error: any) {
       console.warn('[Bulletin API Notice]:', error?.message);
@@ -222,6 +244,7 @@ router.post("/api/bulletin", async (req, res) => {
       
       const result = await db.insert(bulletinPosts).values(newPostData).returning();
       const post = result[0];
+      clearBulletinCache();
       
       // Sync to agenda if there is an agendaDate
       await syncBulletinToAgenda(post);
@@ -941,6 +964,7 @@ router.put("/api/bulletin/:id", async (req, res) => {
     try {
       const result = await db.update(bulletinPosts).set(req.body).where(eq(bulletinPosts.id, parseInt(req.params.id))).returning();
       const post = result[0];
+      clearBulletinCache();
       if (post) {
         await syncBulletinToAgenda(post);
         await syncBulletinToLogbook(post);
@@ -1035,6 +1059,7 @@ router.delete("/api/bulletin/:id", async (req, res) => {
       const id = parseInt(req.params.id);
       await db.delete(agendaEvents).where(eq(agendaEvents.bulletinPostId, id));
       await db.delete(bulletinPosts).where(eq(bulletinPosts.id, id));
+      clearBulletinCache();
       res.json({ status: "success" });
     } catch (error) {
       res.status(500).json({ status: "error", message: error.message });
@@ -1113,16 +1138,24 @@ router.get("/api/drive/download/:fileId", async (req, res) => {
     const fileId = req.params.fileId;
     if (!fileId || fileId.length < 5) return res.status(400).send("Invalid file ID");
 
-    let fileName = 'downloaded-file';
-    let mimeType = 'application/octet-stream';
+    const customFilename = req.query.filename ? String(req.query.filename).trim() : null;
+    let fileName = customFilename || 'laporan-inspeksi.pdf';
+    let mimeType = 'application/pdf';
+
     try {
       const meta = await drive.files.get({ fileId, fields: 'mimeType, name, size', supportsAllDrives: true });
-      if (meta?.data?.name) fileName = meta.data.name;
+      if (meta?.data?.name && !customFilename) fileName = meta.data.name;
       if (meta?.data?.mimeType) mimeType = meta.data.mimeType;
     } catch (e) {}
 
+    // Ensure filename ends with .pdf if file is PDF or generic binary
+    if (!fileName.toLowerCase().endsWith('.pdf') && (mimeType === 'application/pdf' || mimeType === 'application/octet-stream')) {
+      fileName += '.pdf';
+    }
+
+    const safeAsciiName = fileName.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
 
     try {
       const streamRes = await drive.files.get(
@@ -1131,6 +1164,7 @@ router.get("/api/drive/download/:fileId", async (req, res) => {
       );
       return streamRes.data.pipe(res);
     } catch (sdkErr) {
+      // Fallback: Direct download stream from Google Drive public endpoint
       const fetchRes = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}`);
       if (fetchRes.ok) {
         const arrayBuf = await fetchRes.arrayBuffer();

@@ -1934,6 +1934,7 @@ const app = express();
     '/api/config/env',
     '/api/health',
     '/api/drive/view',
+    '/api/drive/download',
     '/api/labbot/chat',
     '/api/p5m/flyer',
     '/api/p5m/schedules/user-assignment',
@@ -1961,7 +1962,7 @@ const app = express();
     if (isPublic) {
       return next();
     }
-    // Allow public read-only (GET) access to P5M schedules, pool, materi, bulletin posts, agenda, and APD
+    // Allow public read-only (GET) access to P5M schedules, pool, materi, bulletin posts, agenda, APD, and inspection PDFs
     if (req.method === 'GET' && (
       url.startsWith('/api/p5m/materi') || 
       url.startsWith('/api/p5m/schedules') || 
@@ -1972,7 +1973,9 @@ const app = express();
       url.startsWith('/api/logbook') ||
       url.startsWith('/api/clinic') ||
       url.startsWith('/api/employee-leaves') ||
-      url.startsWith('/api/xrf')
+      url.startsWith('/api/xrf') ||
+      url.startsWith('/api/drive/download') ||
+      (url.startsWith('/api/inspections') && url.includes('/pdf'))
     )) {
       return next();
     }

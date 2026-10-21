@@ -59,8 +59,9 @@ const MONTH_MAP: Record<string, number> = {
   mei: 4, agu: 7, ags: 7, okt: 9, des: 11
 };
 
-export function parseKeyDate(str: string | null | undefined): Date | null {
+export function parseKeyDate(str: string | null | undefined | Date): Date | null {
   if (!str || str === '-') return null;
+  if (str instanceof Date) return isNaN(str.getTime()) ? null : str;
   const s = String(str).trim();
 
   // YYYY-MM-DD
@@ -79,7 +80,7 @@ export function parseKeyDate(str: string | null | undefined): Date | null {
     return new Date(yr, month, day);
   }
 
-  // "24 Aug 26" or "1 Sep 26"
+  // "24 Aug 26", "13 Sep 2026", "2 Okt 2026"
   const parts = s.replace(/-/g, ' ').split(/\s+/);
   if (parts.length >= 3) {
     const day = parseInt(parts[0], 10);
@@ -108,6 +109,72 @@ export function formatIndonesianDate(d: Date | null, options?: { withDay?: boole
     return `${dayNames[d.getDay()]}, ${day} ${monthName} ${year}`;
   }
   return `${day} ${monthName} ${year}`;
+}
+
+/**
+ * Konversi tanggal ke format ISO YYYY-MM-DD untuk input date HTML5
+ */
+export function toIsoDate(val?: any): string {
+  if (!val || val === '-') return '';
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '';
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const day = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  const clean = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(clean)) return clean.slice(0, 10);
+
+  // Excel serial number
+  if (/^\d{5}$/.test(clean)) {
+    const num = Number(clean);
+    if (num >= 25569 && num <= 65000) {
+      const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+      if (!isNaN(d.getTime())) {
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+    }
+  }
+
+  // YYYY/MM/DD
+  const ymd = clean.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+  if (ymd) {
+    return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
+  }
+
+  // DD-MM-YYYY or DD/MM/YYYY
+  const dmy = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (dmy) {
+    return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+  }
+
+  // DD-MMM-YYYY (e.g. 13 Sep 2026 or 13-Sep-2026)
+  const dMmmY = clean.match(/^(\d{1,2})[-/\s]([A-Za-z]{3,})[-/\s](\d{4})/);
+  if (dMmmY) {
+    const monthMap: Record<string, string> = {
+      jan: '01', feb: '02', mar: '03', apr: '04', mei: '05', may: '05', jun: '06',
+      jul: '07', agu: '08', ags: '08', aug: '08', sep: '09', okt: '10', oct: '10',
+      nov: '11', des: '12', dec: '12'
+    };
+    const mStr = dMmmY[2].toLowerCase().slice(0, 3);
+    const mNum = monthMap[mStr] || '01';
+    return `${dMmmY[3]}-${mNum}-${dMmmY[1].padStart(2, '0')}`;
+  }
+
+  const parsed = parseKeyDate(clean);
+  if (parsed && !isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  return '';
 }
 
 export function parseGolonganLevel(val: any, jabatan?: string): number {
@@ -632,21 +699,31 @@ export function RosterLeaveScheduleSheet({
     return {};
   });
 
-  // Inline Direct Table Update Handler (seperti Modul Rekapan Izin Karyawan)
+  // Inline Direct Table Update Handler (seperti Modul Rekapan Izin Karyawan - Edit Langsung Sebagai Referensi)
   const handleInlineUpdateLeave = (rec: LeaveRecord, field: string, value: any) => {
-    if (!canEditLeave) {
-      toast.error('Akses ditolak: Hanya Section Administration, Manager, Developer, dan Meeting Room yang dapat mengedit jadwal cuti.');
-      return;
-    }
-
     setCustomOverrides(prev => {
       const current = prev[rec.id] || {};
       const updated: any = { ...current };
 
-      if (field === 'poh') updated.poh = String(value || '').trim();
+      if (field === 'section') updated.section = String(value || '').trim();
+      else if (field === 'jabatan') updated.jabatan = String(value || '').trim();
+      else if (field === 'poh') updated.poh = String(value || '').trim();
       else if (field === 'ket') updated.ket = String(value || '').trim();
-      else if (field === 'perubahanJadwalOnsite') updated.perubahanJadwalOnsite = String(value || '').trim() || '-';
-      else if (field === 'tanggalCuti') {
+      else if (field === 'perubahanJadwalOnsite') {
+        const valStr = String(value || '').trim();
+        if (!valStr || valStr === '-') {
+          updated.perubahanJadwalOnsite = '-';
+          updated.perubahanJadwalOnsiteRaw = null;
+        } else {
+          const d = parseKeyDate(valStr);
+          if (d) {
+            updated.perubahanJadwalOnsite = formatIndonesianDate(d, { shortMonth: true });
+            updated.perubahanJadwalOnsiteRaw = d;
+          } else {
+            updated.perubahanJadwalOnsite = valStr;
+          }
+        }
+      } else if (field === 'tanggalCuti') {
         const d = parseKeyDate(value);
         if (d) {
           updated.tanggalCuti = formatIndonesianDate(d, { shortMonth: true });
@@ -662,6 +739,9 @@ export function RosterLeaveScheduleSheet({
         } else {
           updated.tanggalOnsite = String(value || '').trim();
         }
+      } else if (field === 'totalHari') {
+        const numVal = Math.max(0, parseInt(value, 10) || 0);
+        updated.totalHari = numVal;
       } else if (['travel', 'tahunanIstimewa', 'extra', 'izinKhusus', 'izin', 'tambahanTravel'].includes(field)) {
         const numVal = Math.max(0, parseInt(value, 10) || 0);
         updated[field] = numVal;
@@ -675,7 +755,7 @@ export function RosterLeaveScheduleSheet({
         updated.totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
       }
 
-      const overrideKey = (selectedMonth !== 'ALL' && ['travel', 'tahunanIstimewa', 'extra', 'izinKhusus', 'izin', 'tambahanTravel'].includes(field))
+      const overrideKey = (selectedMonth !== 'ALL' && ['travel', 'tahunanIstimewa', 'extra', 'izinKhusus', 'izin', 'tambahanTravel', 'totalHari'].includes(field))
         ? `${rec.id}_${selectedMonth}`
         : rec.id;
 
@@ -686,11 +766,10 @@ export function RosterLeaveScheduleSheet({
       return next;
     });
 
-    toast.success(`Perubahan ${rec.nama} (${field}) tersimpan!`);
+    toast.success(`Perubahan ${rec.nama} (${field}) tersimpan sebagai referensi!`);
   };
 
   const handleResetInlineRecord = (rec: LeaveRecord) => {
-    if (!canEditLeave) return;
     setCustomOverrides(prev => {
       const next = { ...prev };
       delete next[rec.id];
@@ -703,6 +782,16 @@ export function RosterLeaveScheduleSheet({
       return next;
     });
     toast.info(`Jadwal cuti ${rec.nama} dikembalikan ke kalkulasi roster asli.`);
+  };
+
+  const handleResetAllOverrides = () => {
+    if (window.confirm('Kembalikan seluruh tabel ke kalkulasi roster asli?')) {
+      setCustomOverrides({});
+      try {
+        localStorage.removeItem('preplab_leave_custom_overrides');
+      } catch (e) {}
+      toast.info('Seluruh perubahan referensi tabel telah direset ke asal.');
+    }
   };
 
   // Extract all leave records from raw roster
@@ -721,7 +810,8 @@ export function RosterLeaveScheduleSheet({
       const izinKhusus = ov.izinKhusus !== undefined ? ov.izinKhusus : rec.izinKhusus;
       const izin = ov.izin !== undefined ? ov.izin : rec.izin;
       const tambahanTravel = ov.tambahanTravel !== undefined ? ov.tambahanTravel : rec.tambahanTravel;
-      const totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
+      const calculatedTotal = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
+      const totalHari = ov.totalHari !== undefined ? ov.totalHari : calculatedTotal;
       const perubahanJadwalOnsite = ov.perubahanJadwalOnsite !== undefined ? ov.perubahanJadwalOnsite : rec.perubahanJadwalOnsite;
       const hasChange = (perubahanJadwalOnsite && perubahanJadwalOnsite !== '-') || rec.hasChange;
 
@@ -733,6 +823,8 @@ export function RosterLeaveScheduleSheet({
 
       return {
         ...rec,
+        section: ov.section !== undefined ? ov.section : rec.section,
+        jabatan: ov.jabatan !== undefined ? ov.jabatan : rec.jabatan,
         poh: ov.poh !== undefined ? ov.poh : rec.poh,
         tanggalCuti: ov.tanggalCuti !== undefined ? ov.tanggalCuti : rec.tanggalCuti,
         tanggalCutiRaw: finalTanggalCutiRaw,
@@ -946,10 +1038,21 @@ export function RosterLeaveScheduleSheet({
         const izinKhusus = ov?.izinKhusus !== undefined ? ov.izinKhusus : currentMonthDurations.izinKhusus;
         const izin = ov?.izin !== undefined ? ov.izin : currentMonthDurations.izin;
         const tambahanTravel = ov?.tambahanTravel !== undefined ? ov.tambahanTravel : currentMonthDurations.tambahanTravel;
-        const totalHari = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
+        const calculatedTotal = travel + tahunanIstimewa + extra + izinKhusus + izin + tambahanTravel;
+        const totalHari = ov?.totalHari !== undefined ? ov.totalHari : calculatedTotal;
 
         list.push({
           ...rec,
+          section: ov?.section !== undefined ? ov.section : rec.section,
+          jabatan: ov?.jabatan !== undefined ? ov.jabatan : rec.jabatan,
+          poh: ov?.poh !== undefined ? ov.poh : rec.poh,
+          tanggalCuti: ov?.tanggalCuti !== undefined ? ov.tanggalCuti : rec.tanggalCuti,
+          tanggalCutiRaw: ov?.tanggalCutiRaw || rec.tanggalCutiRaw,
+          tanggalOnsite: ov?.tanggalOnsite !== undefined ? ov.tanggalOnsite : rec.tanggalOnsite,
+          tanggalOnsiteRaw: ov?.tanggalOnsiteRaw || rec.tanggalOnsiteRaw,
+          perubahanJadwalOnsite: ov?.perubahanJadwalOnsite !== undefined ? ov.perubahanJadwalOnsite : rec.perubahanJadwalOnsite,
+          perubahanJadwalOnsiteRaw: ov?.perubahanJadwalOnsiteRaw || rec.perubahanJadwalOnsiteRaw,
+          ket: ov?.ket !== undefined ? ov.ket : rec.ket,
           travel,
           tahunanIstimewa,
           extra,
@@ -1461,12 +1564,31 @@ export function RosterLeaveScheduleSheet({
           </button>
         </div>
 
-        {/* Active Sheet Badge Indicator */}
-        <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-500 font-medium">
-          <Info className="w-3.5 h-3.5 text-slate-400" />
-          <span>
-            Menampilkan tabel resmi: <strong className="text-slate-700 dark:text-slate-200">{activeTab === 'staff' ? 'PREP & LAB - STAFF LAB' : 'PREP & LAB - CREW LAB'}</strong>
-          </span>
+        {/* Active Sheet Badge Indicator & Reference Mode Status */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 text-xs text-slate-500 font-medium">
+          <div className="flex items-center gap-2">
+            <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span>
+              Menampilkan tabel resmi: <strong className="text-slate-700 dark:text-slate-200">{activeTab === 'staff' ? 'PREP & LAB - STAFF LAB' : 'PREP & LAB - CREW LAB'}</strong>
+              <span className="text-teal-600 dark:text-teal-400 font-semibold text-[11px] ml-1.5 hidden sm:inline">(Dapat diedit langsung di tabel sebagai referensi)</span>
+            </span>
+          </div>
+          {Object.keys(customOverrides).length > 0 && (
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                {Object.keys(customOverrides).length} Perubahan Disimpan
+              </span>
+              <button
+                type="button"
+                onClick={handleResetAllOverrides}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 transition-colors cursor-pointer shadow-2xs"
+                title="Kembalikan semua baris ke kalkulasi roster asli"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset Semua Referensi</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1840,14 +1962,28 @@ export function RosterLeaveScheduleSheet({
                         </td>
                       )}
 
-                      {/* SECTION */}
+                      {/* SECTION - Inline Editable */}
                       {visibleColumns.section && (
-                        <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
-                          <div className="font-bold text-teal-700 dark:text-teal-300 text-xs">
-                            {rec.section}
-                          </div>
+                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            defaultValue={rec.section}
+                            key={`${rec.id}-sec-${rec.section}`}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val && val !== rec.section) {
+                                handleInlineUpdateLeave(rec, 'section', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            placeholder="Section..."
+                            className="w-full max-w-[130px] px-1.5 py-0.5 text-xs font-bold text-teal-700 dark:text-teal-300 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-teal-500 outline-none transition-all"
+                            title="Edit Section langsung di tabel sebagai referensi"
+                          />
                           {rec.subSection && rec.subSection !== rec.section && (
-                            <div className="text-[10px] text-slate-400">
+                            <div className="text-[10px] text-slate-400 pl-1.5">
                               {rec.subSection}
                             </div>
                           )}
@@ -1858,38 +1994,48 @@ export function RosterLeaveScheduleSheet({
                       {visibleColumns.poh && (
                         <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                            {canEditLeave ? (
-                              <input
-                                type="text"
-                                defaultValue={rec.poh}
-                                key={`${rec.id}-poh-${rec.poh}`}
-                                onBlur={(e) => {
-                                  const val = e.target.value.trim();
-                                  if (val !== rec.poh) {
-                                    handleInlineUpdateLeave(rec, 'poh', val);
-                                  }
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                                }}
-                                placeholder="POH..."
-                                className="w-full max-w-[110px] px-1.5 py-0.5 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-teal-500 text-slate-800 dark:text-slate-200 outline-none transition-all"
-                                title="Edit POH langsung di tabel"
-                              />
-                            ) : (
-                              <span className="truncate">{rec.poh}</span>
-                            )}
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <input
+                              type="text"
+                              defaultValue={rec.poh}
+                              key={`${rec.id}-poh-${rec.poh}`}
+                              onBlur={(e) => {
+                                const val = e.target.value.trim();
+                                if (val !== rec.poh) {
+                                  handleInlineUpdateLeave(rec, 'poh', val);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                              placeholder="POH..."
+                              className="w-full max-w-[110px] px-1.5 py-0.5 text-xs font-semibold rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-teal-500 text-slate-800 dark:text-slate-200 outline-none transition-all"
+                              title="Edit POH langsung di tabel sebagai referensi"
+                            />
                           </div>
                         </td>
                       )}
 
-                      {/* JABATAN */}
+                      {/* JABATAN - Inline Editable */}
                       {visibleColumns.jabatan && (
-                        <td className="py-2.5 px-3 border-r border-slate-100 dark:border-slate-800">
-                          <div className="text-slate-800 dark:text-slate-200 font-semibold leading-tight">
-                            {rec.jabatan}
-                          </div>
+                        <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            defaultValue={rec.jabatan}
+                            key={`${rec.id}-jab-${rec.jabatan}`}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val && val !== rec.jabatan) {
+                                handleInlineUpdateLeave(rec, 'jabatan', val);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            placeholder="Jabatan..."
+                            className="w-full max-w-[170px] px-1.5 py-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200 rounded bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-700 focus:border-indigo-500 outline-none transition-all"
+                            title="Edit Jabatan langsung di tabel sebagai referensi"
+                          />
                         </td>
                       )}
 
@@ -1897,25 +2043,23 @@ export function RosterLeaveScheduleSheet({
                       {visibleColumns.tanggalCuti && (
                         <td className="py-2 px-2 text-center font-bold text-emerald-700 dark:text-emerald-400 border-r border-slate-100 dark:border-slate-800 bg-emerald-500/5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <div className="relative inline-flex items-center group">
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/60 dark:hover:bg-emerald-950/40 transition-colors">
-                              <Calendar className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 transition-all cursor-pointer shadow-2xs">
+                              <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" />
                               <span>{rec.tanggalCuti}</span>
                             </div>
-                            {canEditLeave && (
-                              <input
-                                type="date"
-                                defaultValue={rec.tanggalCutiRaw instanceof Date && !isNaN(rec.tanggalCutiRaw.getTime()) ? rec.tanggalCutiRaw.toISOString().split('T')[0] : ''}
-                                key={`${rec.id}-tc-${rec.tanggalCuti}`}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (val) {
-                                    handleInlineUpdateLeave(rec, 'tanggalCuti', val);
-                                  }
-                                }}
-                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                title="Klik untuk mengubah Tanggal Cuti langsung"
-                              />
-                            )}
+                            <input
+                              type="date"
+                              value={toIsoDate(rec.tanggalCutiRaw || rec.tanggalCuti)}
+                              key={`${rec.id}-tc-${rec.tanggalCuti}`}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val) {
+                                  handleInlineUpdateLeave(rec, 'tanggalCuti', val);
+                                }
+                              }}
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                              title="Klik untuk memilih / mengubah Tanggal Cuti langsung"
+                            />
                           </div>
                         </td>
                       )}
@@ -1924,25 +2068,23 @@ export function RosterLeaveScheduleSheet({
                       {visibleColumns.tanggalOnsite && (
                         <td className="py-2 px-2 text-center font-bold text-teal-700 dark:text-teal-400 border-r border-slate-100 dark:border-slate-800 bg-teal-500/5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <div className="relative inline-flex items-center group">
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold text-teal-800 dark:text-teal-300 hover:bg-teal-100/60 dark:hover:bg-teal-950/40 transition-colors">
-                              <Calendar className="w-3 h-3 text-teal-600 dark:text-teal-400 shrink-0" />
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold font-mono bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 hover:bg-teal-100/80 dark:hover:bg-teal-900/60 border border-teal-200/80 dark:border-teal-800/60 transition-all cursor-pointer shadow-2xs">
+                              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0 group-hover:scale-110 transition-transform" />
                               <span>{rec.tanggalOnsite}</span>
                             </div>
-                            {canEditLeave && (
-                              <input
-                                type="date"
-                                defaultValue={rec.tanggalOnsiteRaw instanceof Date && !isNaN(rec.tanggalOnsiteRaw.getTime()) ? rec.tanggalOnsiteRaw.toISOString().split('T')[0] : ''}
-                                key={`${rec.id}-to-${rec.tanggalOnsite}`}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (val) {
-                                    handleInlineUpdateLeave(rec, 'tanggalOnsite', val);
-                                  }
-                                }}
-                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                title="Klik untuk mengubah Tanggal Onsite langsung"
-                              />
-                            )}
+                            <input
+                              type="date"
+                              value={toIsoDate(rec.tanggalOnsiteRaw || rec.tanggalOnsite)}
+                              key={`${rec.id}-to-${rec.tanggalOnsite}`}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val) {
+                                  handleInlineUpdateLeave(rec, 'tanggalOnsite', val);
+                                }
+                              }}
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                              title="Klik untuk memilih / mengubah Tanggal Onsite langsung"
+                            />
                           </div>
                         </td>
                       )}
@@ -1950,267 +2092,219 @@ export function RosterLeaveScheduleSheet({
                       {/* KETERANGAN - Manual Dropdown Selector */}
                       {visibleColumns.ket && (
                         <td className="py-2 px-2.5 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
-                          {canEditLeave ? (
-                            <select
-                              value={rec.ket || 'Sesuai Roster'}
-                              onChange={(e) => handleInlineUpdateLeave(rec, 'ket', e.target.value)}
-                              className={`px-2 py-1 rounded-full text-[10px] font-bold border cursor-pointer outline-none transition-all shadow-2xs ${
-                                rec.ket === 'Cuti Selesai'
-                                  ? 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'
-                                  : rec.ket === 'Sesuai Roster'
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700'
-                                  : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700'
-                              }`}
-                              title="Pilih keterangan cuti langsung di tabel"
-                            >
-                              <option value="Sesuai Roster">Sesuai Roster</option>
-                              <option value="Cuti Selesai">Cuti Selesai</option>
-                              <option value="Perubahan Jadwal">Perubahan Jadwal</option>
-                              <option value="TT (Travel Delay)">TT (Travel Delay)</option>
-                              <option value="Speedboat (XP)">Speedboat (XP)</option>
-                              <option value="Izin (I)">Izin (I)</option>
-                              <option value="Izin Khusus (IK)">Izin Khusus (IK)</option>
-                              <option value="Sakit (SL)">Sakit (SL)</option>
-                            </select>
-                          ) : (
-                            rec.isCutiSelesai ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                Cuti Selesai
-                              </span>
-                            ) : rec.hasChange ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
-                                <AlertCircle className="w-2.5 h-2.5" />
-                                {rec.ket}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                <Check className="w-2.5 h-2.5 text-emerald-500" />
-                                {rec.ket}
-                              </span>
-                            )
-                          )}
+                          <select
+                            value={rec.ket || 'Sesuai Roster'}
+                            onChange={(e) => handleInlineUpdateLeave(rec, 'ket', e.target.value)}
+                            className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold border cursor-pointer outline-none transition-all shadow-2xs ${
+                              rec.ket === 'Cuti Selesai'
+                                ? 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'
+                                : rec.ket === 'Sesuai Roster'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700'
+                                : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700'
+                            }`}
+                            title="Pilih keterangan cuti langsung di tabel"
+                          >
+                            <option value="Sesuai Roster">Sesuai Roster</option>
+                            <option value="Cuti Selesai">Cuti Selesai</option>
+                            <option value="Perubahan Jadwal">Perubahan Jadwal</option>
+                            <option value="TT (Travel Delay)">TT (Travel Delay)</option>
+                            <option value="Speedboat (XP)">Speedboat (XP)</option>
+                            <option value="Izin (I)">Izin (I)</option>
+                            <option value="Izin Khusus (IK)">Izin Khusus (IK)</option>
+                            <option value="Sakit (SL)">Sakit (SL)</option>
+                          </select>
                         </td>
                       )}
 
                       {/* PERUBAHAN JADWAL ONSITE - Inline Editable */}
                       {visibleColumns.perubahanJadwalOnsite && (
                         <td className="py-2 px-2 text-center font-bold border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
-                          {canEditLeave ? (
-                            <div className="relative inline-flex items-center group">
-                              <span className={`px-2 py-0.5 rounded font-black text-xs ${
-                                rec.hasChange && rec.perubahanJadwalOnsite !== '-'
-                                  ? 'text-rose-600 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30'
-                                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
-                              }`}>
-                                {rec.perubahanJadwalOnsite || '-'}
-                              </span>
-                              <input
-                                type="date"
-                                defaultValue={rec.perubahanJadwalOnsiteRaw instanceof Date && !isNaN(rec.perubahanJadwalOnsiteRaw.getTime()) ? rec.perubahanJadwalOnsiteRaw.toISOString().split('T')[0] : ''}
-                                key={`${rec.id}-pjo-${rec.perubahanJadwalOnsite}`}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (val) {
-                                    handleInlineUpdateLeave(rec, 'perubahanJadwalOnsite', formatIndonesianDate(new Date(val), { shortMonth: true }));
-                                  }
-                                }}
-                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                title="Klik untuk menentukan Perubahan Jadwal Onsite"
-                              />
+                          <div className="relative inline-flex items-center group">
+                            <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all cursor-pointer border ${
+                              rec.hasChange && rec.perubahanJadwalOnsite !== '-'
+                                ? 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 shadow-2xs'
+                                : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border-transparent hover:border-slate-300 dark:hover:border-slate-700'
+                            }`}>
+                              <span>{rec.perubahanJadwalOnsite || '-'}</span>
                             </div>
-                          ) : (
-                            rec.hasChange ? (
-                              <span className="px-2 py-1 rounded-lg font-black text-rose-600 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30">
-                                {rec.perubahanJadwalOnsite}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 font-normal">-</span>
-                            )
-                          )}
+                            <input
+                              type="date"
+                              value={rec.perubahanJadwalOnsite && rec.perubahanJadwalOnsite !== '-' ? toIsoDate(rec.perubahanJadwalOnsiteRaw || rec.perubahanJadwalOnsite) : ''}
+                              key={`${rec.id}-pjo-${rec.perubahanJadwalOnsite}`}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val) {
+                                  handleInlineUpdateLeave(rec, 'perubahanJadwalOnsite', val);
+                                }
+                              }}
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                              title="Klik untuk memilih Tanggal Perubahan Jadwal Onsite"
+                            />
+                            {rec.perubahanJadwalOnsite && rec.perubahanJadwalOnsite !== '-' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleInlineUpdateLeave(rec, 'perubahanJadwalOnsite', '-');
+                                }}
+                                className="ml-1 p-0.5 rounded-full hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-500 transition-colors"
+                                title="Hapus perubahan jadwal onsite (kembalikan ke -)"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
 
                       {/* Travel (TRV) - Inline Editable */}
                       {visibleColumns.travel && (
                         <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
-                          {canEditLeave ? (
-                            <input
-                              type="number"
-                              min={0}
-                              defaultValue={rec.travel}
-                              key={`${rec.id}-${selectedMonth}-trv-${rec.travel}`}
-                              onBlur={(e) => {
-                                const val = parseInt(e.target.value, 10) || 0;
-                                if (val !== rec.travel) handleInlineUpdateLeave(rec, 'travel', val);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                              }}
-                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-amber-700 dark:text-amber-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 focus:border-amber-500 outline-none transition-all shadow-2xs"
-                              title="Travel: Jumlah 'TRV' yang muncul pada Cuti berjalan"
-                            />
-                          ) : (
-                            rec.travel > 0 ? (
-                              <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold">
-                                {rec.travel}
-                              </span>
-                            ) : '-'
-                          )}
+                          <input
+                            type="number"
+                            min={0}
+                            defaultValue={rec.travel}
+                            key={`${rec.id}-${selectedMonth}-trv-${rec.travel}`}
+                            onBlur={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              if (val !== rec.travel) handleInlineUpdateLeave(rec, 'travel', val);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-amber-700 dark:text-amber-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-400 focus:border-amber-500 outline-none transition-all shadow-2xs"
+                            title="Travel: Jumlah 'TRV' yang muncul pada Cuti berjalan"
+                          />
                         </td>
                       )}
 
                       {/* Tahunan / Istimewa (CT/CI) - Inline Editable */}
                       {visibleColumns.tahunanIstimewa && (
                         <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
-                          {canEditLeave ? (
-                            <input
-                              type="number"
-                              min={0}
-                              defaultValue={rec.tahunanIstimewa}
-                              key={`${rec.id}-${selectedMonth}-ct-${rec.tahunanIstimewa}`}
-                              onBlur={(e) => {
-                                const val = parseInt(e.target.value, 10) || 0;
-                                if (val !== rec.tahunanIstimewa) handleInlineUpdateLeave(rec, 'tahunanIstimewa', val);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                              }}
-                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-purple-700 dark:text-purple-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-purple-400 focus:border-purple-500 outline-none transition-all shadow-2xs"
-                              title="Tahunan/Istimewa: Jumlah 'CT' atau 'CI' yang muncul pada Cuti berjalan"
-                            />
-                          ) : (
-                            rec.tahunanIstimewa > 0 ? (
-                              <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold">
-                                {rec.tahunanIstimewa}
-                              </span>
-                            ) : '-'
-                          )}
+                          <input
+                            type="number"
+                            min={0}
+                            defaultValue={rec.tahunanIstimewa}
+                            key={`${rec.id}-${selectedMonth}-ct-${rec.tahunanIstimewa}`}
+                            onBlur={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              if (val !== rec.tahunanIstimewa) handleInlineUpdateLeave(rec, 'tahunanIstimewa', val);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-purple-700 dark:text-purple-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-purple-400 focus:border-purple-500 outline-none transition-all shadow-2xs"
+                            title="Tahunan/Istimewa: Jumlah 'CT' atau 'CI' yang muncul pada Cuti berjalan"
+                          />
                         </td>
                       )}
 
                       {/* Extra (CE) - Inline Editable */}
                       {visibleColumns.extra && (
                         <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
-                          {canEditLeave ? (
-                            <input
-                              type="number"
-                              min={0}
-                              defaultValue={rec.extra}
-                              key={`${rec.id}-${selectedMonth}-ce-${rec.extra}`}
-                              onBlur={(e) => {
-                                const val = parseInt(e.target.value, 10) || 0;
-                                if (val !== rec.extra) handleInlineUpdateLeave(rec, 'extra', val);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                              }}
-                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-blue-700 dark:text-blue-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-400 focus:border-blue-500 outline-none transition-all shadow-2xs"
-                              title="Extra: Jumlah 'CE' yang muncul pada Cuti berjalan"
-                            />
-                          ) : (
-                            rec.extra > 0 ? (
-                              <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold">
-                                {rec.extra}
-                              </span>
-                            ) : '-'
-                          )}
+                          <input
+                            type="number"
+                            min={0}
+                            defaultValue={rec.extra}
+                            key={`${rec.id}-${selectedMonth}-ce-${rec.extra}`}
+                            onBlur={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              if (val !== rec.extra) handleInlineUpdateLeave(rec, 'extra', val);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-blue-700 dark:text-blue-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-400 focus:border-blue-500 outline-none transition-all shadow-2xs"
+                            title="Extra: Jumlah 'CE' yang muncul pada Cuti berjalan"
+                          />
                         </td>
                       )}
 
                       {/* Izin Khusus (IK) - Inline Editable */}
                       {visibleColumns.izinKhusus && (
                         <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
-                          {canEditLeave ? (
-                            <input
-                              type="number"
-                              min={0}
-                              defaultValue={rec.izinKhusus}
-                              key={`${rec.id}-${selectedMonth}-ik-${rec.izinKhusus}`}
-                              onBlur={(e) => {
-                                const val = parseInt(e.target.value, 10) || 0;
-                                if (val !== rec.izinKhusus) handleInlineUpdateLeave(rec, 'izinKhusus', val);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                              }}
-                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-indigo-700 dark:text-indigo-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 focus:border-indigo-500 outline-none transition-all shadow-2xs"
-                              title="Izin Khusus: Jumlah 'IK' yang muncul pada Cuti berjalan"
-                            />
-                          ) : (
-                            rec.izinKhusus > 0 ? (
-                              <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold">
-                                {rec.izinKhusus}
-                              </span>
-                            ) : '-'
-                          )}
+                          <input
+                            type="number"
+                            min={0}
+                            defaultValue={rec.izinKhusus}
+                            key={`${rec.id}-${selectedMonth}-ik-${rec.izinKhusus}`}
+                            onBlur={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              if (val !== rec.izinKhusus) handleInlineUpdateLeave(rec, 'izinKhusus', val);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-indigo-700 dark:text-indigo-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 focus:border-indigo-500 outline-none transition-all shadow-2xs"
+                            title="Izin Khusus: Jumlah 'IK' yang muncul pada Cuti berjalan"
+                          />
                         </td>
                       )}
 
                       {/* Izin / Sakit (I/SL) - Inline Editable */}
                       {visibleColumns.izin && (
                         <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
-                          {canEditLeave ? (
-                            <input
-                              type="number"
-                              min={0}
-                              defaultValue={rec.izin}
-                              key={`${rec.id}-${selectedMonth}-i-${rec.izin}`}
-                              onBlur={(e) => {
-                                const val = parseInt(e.target.value, 10) || 0;
-                                if (val !== rec.izin) handleInlineUpdateLeave(rec, 'izin', val);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                              }}
-                              className="w-11 px-1 py-0.5 text-xs font-bold text-center text-yellow-800 dark:text-yellow-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-yellow-400 focus:border-yellow-500 outline-none transition-all shadow-2xs"
-                              title="Izin: Jumlah 'I' atau 'SL' yang muncul pada Cuti berjalan"
-                            />
-                          ) : (
-                            rec.izin > 0 ? (
-                              <span className="px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-800 dark:text-yellow-300 font-bold">
-                                {rec.izin}
-                              </span>
-                            ) : '-'
-                          )}
+                          <input
+                            type="number"
+                            min={0}
+                            defaultValue={rec.izin}
+                            key={`${rec.id}-${selectedMonth}-i-${rec.izin}`}
+                            onBlur={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              if (val !== rec.izin) handleInlineUpdateLeave(rec, 'izin', val);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            className="w-11 px-1 py-0.5 text-xs font-bold text-center text-yellow-800 dark:text-yellow-300 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-yellow-400 focus:border-yellow-500 outline-none transition-all shadow-2xs"
+                            title="Izin: Jumlah 'I' atau 'SL' yang muncul pada Cuti berjalan"
+                          />
                         </td>
                       )}
 
                       {/* Tambahan Travel (TT) - Inline Editable */}
                       {visibleColumns.tambahanTravel && (
                         <td className="py-2 px-1 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
-                          {canEditLeave ? (
+                          <input
+                            type="number"
+                            min={0}
+                            defaultValue={rec.tambahanTravel}
+                            key={`${rec.id}-${selectedMonth}-tt-${rec.tambahanTravel}`}
+                            onBlur={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              if (val !== rec.tambahanTravel) handleInlineUpdateLeave(rec, 'tambahanTravel', val);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            className="w-11 px-1 py-0.5 text-xs font-black text-center text-rose-700 dark:text-rose-400 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-rose-400 focus:border-rose-500 outline-none transition-all shadow-2xs"
+                            title="TAMBAHAN TRAVEL (TT): Jumlah 'TT' yang Muncul"
+                          />
+                        </td>
+                      )}
+
+                      {/* TOTAL HARI - Inline Editable */}
+                      {visibleColumns.totalHari && (
+                        <td className="py-2 px-2 text-center font-black text-slate-900 dark:text-white bg-slate-100/80 dark:bg-slate-800/80 border-r border-slate-200 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1.5">
                             <input
                               type="number"
                               min={0}
-                              defaultValue={rec.tambahanTravel}
-                              key={`${rec.id}-${selectedMonth}-tt-${rec.tambahanTravel}`}
+                              defaultValue={rec.totalHari}
+                              key={`${rec.id}-${selectedMonth}-th-${rec.totalHari}`}
                               onBlur={(e) => {
-                                const val = parseInt(e.target.value, 10) || 0;
-                                if (val !== rec.tambahanTravel) handleInlineUpdateLeave(rec, 'tambahanTravel', val);
+                                const val = parseInt(e.target.value, 10);
+                                if (!isNaN(val) && val !== rec.totalHari) {
+                                  handleInlineUpdateLeave(rec, 'totalHari', val);
+                                }
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                               }}
-                              className="w-11 px-1 py-0.5 text-xs font-black text-center text-rose-700 dark:text-rose-400 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-rose-400 focus:border-rose-500 outline-none transition-all shadow-2xs"
-                              title="TAMBAHAN TRAVEL (TT): Jumlah 'TT' yang Muncul"
+                              className="w-12 px-1 py-0.5 text-xs font-black text-center text-slate-900 dark:text-white rounded bg-transparent hover:bg-slate-200/60 dark:hover:bg-slate-700/60 focus:bg-white dark:focus:bg-slate-800 border border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-indigo-500 outline-none transition-all"
+                              title="Edit Total Hari langsung di tabel sebagai referensi"
                             />
-                          ) : (
-                            rec.tambahanTravel > 0 ? (
-                              <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-400 font-black">
-                                {rec.tambahanTravel}
-                              </span>
-                            ) : '-'
-                          )}
-                        </td>
-                      )}
-
-                      {/* TOTAL HARI */}
-                      {visibleColumns.totalHari && (
-                        <td className="py-2.5 px-3 text-center font-black text-slate-900 dark:text-white bg-slate-100/80 dark:bg-slate-800/80 border-r border-slate-200 dark:border-slate-800">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <span>{rec.totalHari}</span>
-                            {rec.isCustomEdited && canEditLeave && (
+                            {rec.isCustomEdited && (
                               <button
                                 type="button"
                                 onClick={() => handleResetInlineRecord(rec)}
