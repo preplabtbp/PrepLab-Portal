@@ -74,7 +74,7 @@ window.fetch = async (...args) => {
      } catch(e){}
   }
   
-  if (typeof resource === 'string' && resource.startsWith('/api/')) {
+  if (typeof resource === 'string' && resource.startsWith('/api/') && !resource.startsWith('/api/auth/')) {
      const urlObj = new URL(resource, window.location.origin);
      if (!urlObj.searchParams.has('pt') && !urlObj.pathname.includes('/maintenance-summary') && !urlObj.pathname.startsWith('/api/clinic')) {
         urlObj.searchParams.set('pt', pt);
