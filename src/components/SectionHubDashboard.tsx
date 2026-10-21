@@ -317,10 +317,7 @@ export function SectionHubDashboard({
       window.open(item.linkUrl, '_blank');
       return;
     }
-    if (posts.length === 0) {
-      toast.info('Sedang memuat data dokumen, mohon tunggu sebentar...');
-      return;
-    }
+    // If posts are still loading in background, findPost will return null and seamlessly open fallbackPost
     if (item.isLogbook || item.title.toLowerCase().includes('logbook')) {
       const logbookTitle = item.title;
       const logbookId = `logbook-${sectionTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;

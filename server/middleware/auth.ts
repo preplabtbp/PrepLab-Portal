@@ -36,13 +36,17 @@ export function toPublicEmployee(emp: any): any {
 
   // Foto resmi database karyawan murni dari kolom photo
   const photo = safeEmp.photo || null;
+  const rawPt = (safeEmp.pt || '').toUpperCase();
+  const nikUpper = (safeEmp.nik || '').toUpperCase();
+  const resolvedPt = rawPt || (nikUpper.startsWith('04D') ? 'GTS' : 'TBP');
 
   return {
     ...safeEmp,
     name: resolvedName,
     nama: resolvedName,
     avatar,
-    photo
+    photo,
+    pt: resolvedPt
   };
 }
 
@@ -92,10 +96,12 @@ export async function checkIsAdminOrDeveloper(nik?: string, section?: string, ja
     return { isAdmin: true, isDeveloper: false };
   }
 
-  // Check Developer Users table
+  // Check Developer Users table with timeout protection to prevent login delays
   try {
-    const dev = await db.select().from(developerUsers).where(eq(developerUsers.nik, cleanNik)).limit(1);
-    if (dev.length > 0) return { isAdmin: true, isDeveloper: true };
+    const devPromise = db.select().from(developerUsers).where(eq(developerUsers.nik, cleanNik)).limit(1);
+    const timeout = new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 1500));
+    const dev: any = await Promise.race([devPromise, timeout]);
+    if (dev && dev.length > 0) return { isAdmin: true, isDeveloper: true };
   } catch (e) {}
 
   // Check section / department / jabatan for admin roles

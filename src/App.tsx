@@ -953,11 +953,17 @@ export default function App() {
                developerList.some(d => d.nik?.toUpperCase() === cleanUpper || (d.username && d.username.toUpperCase() === inputUpper))
              );
              setIsDevLogin(isDev);
+             const detectedPt = ((data.pt || data.employee?.pt || '') as string).toUpperCase();
+             const isGtsEmployee = detectedPt === 'GTS' || detectedPt.includes('GTS') || cleanUpper.startsWith('04D') || inputUpper.startsWith('04D');
+             const autoUniverse: 'TBP' | 'GTS' = isGtsEmployee ? 'GTS' : 'TBP';
+
              if (isDev) {
-               const initialUniv: 'TBP' | 'GTS' = (data.pt === 'GTS' || data.employee?.pt === 'GTS') 
+               const initialUniv: 'TBP' | 'GTS' = isGtsEmployee 
                  ? 'GTS' 
                  : ((localStorage.getItem('portal_active_universe') === 'GTS') ? 'GTS' : 'TBP');
                setLoginUniverse(initialUniv);
+             } else {
+               setLoginUniverse(autoUniverse);
              }
              
              if (isCrew) {
@@ -1057,9 +1063,12 @@ export default function App() {
                   localStorage.setItem('p2h_inspector_jabatan', data.employee.jabatan || 'Crew');
                   localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
                   if (validUsername) localStorage.setItem('p2h_inspector_username', validUsername);
+                  const userPt = ((data.employee?.pt || '') as string).toUpperCase();
+                  const empNik = ((data.employee?.nik || validNik || '') as string).toUpperCase();
+                  const isGts = userPt === 'GTS' || userPt.includes('GTS') || empNik.startsWith('04D');
                   const targetUniverse: 'TBP' | 'GTS' = isDevLogin
                       ? loginUniverse
-                      : (data.employee?.pt === 'GTS' ? 'GTS' : 'TBP');
+                      : (isGts ? 'GTS' : 'TBP');
                   localStorage.setItem('portal_active_universe', targetUniverse);
                   localStorage.setItem('bulletin_active_universe', targetUniverse);
                   setActiveUniverse(targetUniverse);

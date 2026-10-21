@@ -14,6 +14,10 @@ const getSocketServerUrl = (): string => {
 
 export function getGlobalSocket(): Socket {
   if (!globalSocket) {
+    const hasAuthToken = typeof window !== 'undefined' 
+      ? Boolean(localStorage.getItem('p2h_token') || localStorage.getItem('token'))
+      : false;
+
     globalSocket = io(getSocketServerUrl(), {
       reconnection: true,
       reconnectionAttempts: 15,
@@ -22,7 +26,7 @@ export function getGlobalSocket(): Socket {
       randomizationFactor: 0.5,
       timeout: 15000,
       transports: ['polling', 'websocket'],
-      autoConnect: true,
+      autoConnect: hasAuthToken,
       auth: (cb) => {
         const token = typeof window !== 'undefined' 
           ? (localStorage.getItem('p2h_token') || localStorage.getItem('token') || '') 
@@ -87,7 +91,8 @@ export function getGlobalSocket(): Socket {
       if (
         err.message?.includes('Authentication required') ||
         err.message?.includes('Invalid token') ||
-        err.message?.includes('websocket error')
+        err.message?.includes('websocket error') ||
+        err.message?.includes('xhr poll error')
       ) {
         console.info('[SocketClient] Menunggu autentikasi pengguna untuk koneksi real-time.');
         globalSocket?.disconnect();

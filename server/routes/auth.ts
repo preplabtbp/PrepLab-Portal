@@ -297,6 +297,9 @@ authRouter.post("/check-nik", async (req, res) => {
     
     const adminInfo = await checkIsAdminOrDeveloper(employee.nik, employee.section || '', employee.jabatan || '');
 
+    const rawPt = (employee.pt || '').toUpperCase();
+    const derivedPt = rawPt || (normalized.startsWith('04D') ? 'GTS' : 'TBP');
+
     // Return only safe minimal fields necessary for frontend greeting & login flow
     return res.json({ 
       status: "success", 
@@ -305,7 +308,7 @@ authRouter.post("/check-nik", async (req, res) => {
       name: employee.name,
       avatar: employee.avatar || null,
       username: employee.username || null,
-      pt: employee.pt || 'TBP',
+      pt: derivedPt,
       isDeveloper: Boolean(adminInfo.isDeveloper)
     });
   } catch(e: any) {

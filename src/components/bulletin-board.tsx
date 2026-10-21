@@ -430,7 +430,9 @@ export function BulletinBoard({
 
   // Real-time synchronization: poll active post every 6 seconds so updates from mobile (HP) reflect on PC
   useEffect(() => {
-    if (!selectedPost?.id || isEditing) return;
+    // Only poll real database posts with numeric IDs (never virtual IDs like section-* or doc-*)
+    const isNumericId = selectedPost?.id && !isNaN(Number(selectedPost.id));
+    if (!isNumericId || isEditing) return;
 
     let isMounted = true;
     const interval = setInterval(async () => {
@@ -504,6 +506,7 @@ export function BulletinBoard({
   // Determine if a post is a Section Hub (e.g. ADMINISTRASI, LABORATORIUM, PREPARASI, etc.)
   const isSectionHubPost = useCallback((post: any): boolean => {
     if (!post) return false;
+    if (typeof post.id === "string" && post.id.startsWith("section-")) return true;
     const titleUpper = (post.title || "").toUpperCase().trim();
     const sectionHubTitles = [
       "ADMINISTRASI",
@@ -567,6 +570,28 @@ export function BulletinBoard({
           return p;
         }
       }
+
+      // 3. Fallback: Synthesize Section Hub for known sections (Maintenance, Laboratorium, Preparasi, etc.)
+      const secName = getSectionFromPost(currentPost);
+      if (secName && secName !== 'General') {
+        const normalizedSec = secName.trim();
+        const existingHub = samePtPosts.find((p) => {
+          if (!isSectionHubPost(p)) return false;
+          const pTitle = getPostTitle(p).toLowerCase().trim();
+          return pTitle === normalizedSec.toLowerCase();
+        });
+        if (existingHub) return existingHub;
+
+        return {
+          id: `section-${normalizedSec.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+          title: normalizedSec.toUpperCase(),
+          department: 'Prep & Lab',
+          category: normalizedSec.toUpperCase(),
+          content: `# ${normalizedSec}\n\n$INFO$\n\n$RULES$`,
+          pt: currentUniverse
+        };
+      }
+
       return null;
     },
     [posts, isSectionHubPost, isFolderPost]
@@ -581,6 +606,12 @@ export function BulletinBoard({
       const trail = [...navHistory];
       if (trail[trail.length - 1]?.id !== selectedPost.id) {
         trail.push(selectedPost);
+      }
+      if (trail.length === 1 && !isSectionHubPost(trail[0])) {
+        const parent = findParentPost(trail[0]);
+        if (parent && parent.id !== trail[0].id) {
+          trail.unshift(parent);
+        }
       }
       return trail;
     }
@@ -766,7 +797,19 @@ export function BulletinBoard({
       // Always prioritize urlPostId even if another post was previously active
       if (urlPostId) {
         if (!selectedPost || String(selectedPost.id) !== String(urlPostId)) {
-          const target = posts.find((p) => String(p.id) === String(urlPostId));
+          let target = posts.find((p) => String(p.id) === String(urlPostId));
+          if (!target && String(urlPostId).startsWith('section-')) {
+            const cleanSec = String(urlPostId).replace(/^section-/, '').replace(/-/g, ' ').trim();
+            const secUpper = cleanSec.toUpperCase();
+            target = {
+              id: String(urlPostId),
+              title: secUpper,
+              department: 'Prep & Lab',
+              category: secUpper,
+              content: `# ${secUpper}\n\n$INFO$\n\n$RULES$`,
+              pt: (selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP'))
+            };
+          }
           if (target) {
             if (!canAccessAllSections && isLogbookPost(target)) {
               const sec = getSectionFromPost(target);
@@ -842,11 +885,22 @@ export function BulletinBoard({
 
         // If targetId is a section-* (e.g. section-laboratorium)
         if (!target && String(targetId).startsWith('section-')) {
-          const cleanSec = String(targetId).replace(/^section-/, '').toLowerCase();
+          const cleanSec = String(targetId).replace(/^section-/, '').replace(/-/g, ' ').trim();
           target = posts.find((p) => {
             const pTitle = (p.title || '').trim().toLowerCase();
-            return pTitle === cleanSec || (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-') === cleanSec;
+            return pTitle === cleanSec.toLowerCase() || (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-') === cleanSec.toLowerCase();
           });
+          if (!target) {
+            const secUpper = cleanSec.toUpperCase();
+            target = {
+              id: String(targetId),
+              title: secUpper,
+              department: 'Prep & Lab',
+              category: secUpper,
+              content: `# ${secUpper}\n\n$INFO$\n\n$RULES$`,
+              pt: (selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP'))
+            };
+          }
         }
         if (target) {
           if (!canAccessAllSections && isLogbookPost(target)) {
@@ -906,35 +960,40 @@ export function BulletinBoard({
       return;
     }
 
+    setDeepLinkTopic(undefined);
+
+    // 1. If we have a multi-step navigation history, pop to previous post
     if (navHistory.length > 1) {
       const newHistory = navHistory.slice(0, -1);
       const previousPost = newHistory[newHistory.length - 1];
       setNavHistory(newHistory);
       setSelectedPost(previousPost);
-      setDeepLinkTopic(undefined);
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("topic");
-        if (previousPost?.id) {
-          url.searchParams.set("page", String(previousPost.id));
-          localStorage.setItem("preplab_active_bulletin_page", String(previousPost.id));
-        }
-        window.history.replaceState({}, "", url.toString());
-      } catch {}
-    } else {
-      // Go directly back to dashboard
-      setNavHistory([]);
-      setSelectedPost(null);
       setIsEditing(false);
-      setIsLibraryActive(false);
-      setDeepLinkTopic(undefined);
       try {
-        localStorage.removeItem("preplab_active_bulletin_page");
-        sessionStorage.removeItem("preplab_cached_selected_post");
-        const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP');
-        navigate(`/bulletin/${targetPt}`, { replace: true });
+        const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (previousPost?.pt || pt || userUniverse || 'TBP');
+        if (previousPost?.id) {
+          localStorage.setItem("preplab_active_bulletin_page", String(previousPost.id));
+          navigate(`/bulletin/${targetPt}?page=${encodeURIComponent(String(previousPost.id))}`, { replace: true });
+        } else {
+          localStorage.removeItem("preplab_active_bulletin_page");
+          navigate(`/bulletin/${targetPt}`, { replace: true });
+        }
       } catch {}
+      return;
     }
+
+    // 2. If navHistory is 1 or empty (e.g. user refreshed or arrived via direct URL),
+    // find the dynamic parent post so we don't jump directly to home!
+    if (selectedPost) {
+      const parent = findParentPost(selectedPost);
+      if (parent && String(parent.id) !== String(selectedPost.id)) {
+        navigateToPost(parent);
+        return;
+      }
+    }
+
+    // 3. Otherwise (already at Section Hub or root), go directly back to dashboard
+    navigateToPost(null);
   };
 
   // Keyboard shortcut: Escape cancels active editing (NEVER navigates back to homepage)
