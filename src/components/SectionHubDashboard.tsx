@@ -21,7 +21,13 @@ import {
   ArrowUpDown,
   RotateCcw,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Pencil,
+  Plus,
+  Trash2,
+  Edit3,
+  Settings2,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PortalImagePickerModal } from './PortalImagePickerModal';
@@ -54,25 +60,35 @@ interface HubItem {
   linkUrl?: string;
 }
 
-// Helper to load and save custom menu item order per section hub
+// Helper to load and save custom menu items (order + customized title/icon/linkUrl) per section hub
 function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultItems: HubItem[]): HubItem[] {
   try {
     const cleanSec = (section || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    const key = `preplab_hub_order_${cleanSec}_${type}`;
+    const key = `preplab_hub_custom_items_${cleanSec}_${type}`;
     const raw = localStorage.getItem(key);
-    if (!raw) return defaultItems;
-    const titlesOrder: string[] = JSON.parse(raw);
-    const itemMap = new Map(defaultItems.map(i => [i.title, i]));
-    const ordered: HubItem[] = [];
-    titlesOrder.forEach(t => {
-      if (itemMap.has(t)) {
-        ordered.push(itemMap.get(t)!);
-        itemMap.delete(t);
+    if (raw) {
+      const parsed: HubItem[] = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
       }
-    });
-    // Append any items that were not in saved order (new items)
-    itemMap.forEach(i => ordered.push(i));
-    return ordered;
+    }
+    // Backward compatibility: check if order-only was saved
+    const legacyKey = `preplab_hub_order_${cleanSec}_${type}`;
+    const legacyRaw = localStorage.getItem(legacyKey);
+    if (legacyRaw) {
+      const titlesOrder: string[] = JSON.parse(legacyRaw);
+      const itemMap = new Map(defaultItems.map(i => [i.title, i]));
+      const ordered: HubItem[] = [];
+      titlesOrder.forEach(t => {
+        if (itemMap.has(t)) {
+          ordered.push(itemMap.get(t)!);
+          itemMap.delete(t);
+        }
+      });
+      itemMap.forEach(i => ordered.push(i));
+      return ordered;
+    }
+    return defaultItems;
   } catch {
     return defaultItems;
   }
@@ -81,8 +97,11 @@ function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultIte
 function saveOrderedHubItems(section: string, type: 'info' | 'rules', items: HubItem[]): void {
   try {
     const cleanSec = (section || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    const key = `preplab_hub_order_${cleanSec}_${type}`;
-    localStorage.setItem(key, JSON.stringify(items.map(i => i.title)));
+    const key = `preplab_hub_custom_items_${cleanSec}_${type}`;
+    localStorage.setItem(key, JSON.stringify(items));
+    // Also save legacy key for compatibility
+    const legacyKey = `preplab_hub_order_${cleanSec}_${type}`;
+    localStorage.setItem(legacyKey, JSON.stringify(items.map(i => i.title)));
   } catch {}
 }
 
@@ -136,6 +155,77 @@ export function SectionHubDashboard({
       toast.error('Gagal memperbarui cover gambar');
     } finally {
       setIsSavingCover(false);
+    }
+  };
+
+  // State for Double-Click Inline Editing of Section Title
+  const [displayedTitle, setDisplayedTitle] = useState<string>(post?.title || '');
+  const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
+  const [titleInput, setTitleInput] = useState<string>(post?.title || '');
+  const [isSavingTitle, setIsSavingTitle] = useState<boolean>(false);
+
+  // Sync title when post changes
+  React.useEffect(() => {
+    setDisplayedTitle(post?.title || '');
+    setTitleInput(post?.title || '');
+  }, [post?.title]);
+
+  const handleStartEditTitle = () => {
+    setTitleInput(displayedTitle || post?.title || '');
+    setIsEditingTitle(true);
+  };
+
+  const handleSaveTitle = async () => {
+    const trimmed = titleInput.trim();
+    if (!trimmed) {
+      toast.error('Judul seksi tidak boleh kosong');
+      return;
+    }
+    if (trimmed === displayedTitle) {
+      setIsEditingTitle(false);
+      return;
+    }
+    if (!post?.id) {
+      // Local fallback if post id is missing
+      setDisplayedTitle(trimmed);
+      setIsEditingTitle(false);
+      return;
+    }
+
+    setIsSavingTitle(true);
+    try {
+      const res = await fetch(`/api/bulletin/${post.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...post,
+          title: trimmed
+        })
+      });
+      const json = await res.json();
+      if (json.status === 'success') {
+        setDisplayedTitle(trimmed);
+        if (post) post.title = trimmed;
+        setIsEditingTitle(false);
+        toast.success(`Judul berhasil diubah menjadi "${trimmed}"`);
+      } else {
+        toast.error(json.message || 'Gagal menyimpan perubahan judul');
+      }
+    } catch {
+      toast.error('Terjadi kesalahan saat menyimpan judul');
+    } finally {
+      setIsSavingTitle(false);
+    }
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveTitle();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsEditingTitle(false);
+      setTitleInput(displayedTitle);
     }
   };
 
@@ -592,6 +682,247 @@ export function SectionHubDashboard({
   const config = getSectionConfig();
   const hasRules = Boolean(config.rulesItems && config.rulesItems.length > 0);
 
+  // Reordering states for drag and drop
+  const [isReorderingInfo, setIsReorderingInfo] = useState(false);
+  const [isReorderingRules, setIsReorderingRules] = useState(false);
+  const [draggedInfoIdx, setDraggedInfoIdx] = useState<number | null>(null);
+  const [dragOverInfoIdx, setDragOverInfoIdx] = useState<number | null>(null);
+  const [draggedRulesIdx, setDraggedRulesIdx] = useState<number | null>(null);
+  const [dragOverRulesIdx, setDragOverRulesIdx] = useState<number | null>(null);
+
+  // Active items initialized from saved localStorage order
+  const [infoItems, setInfoItems] = useState<HubItem[]>(() => {
+    return loadOrderedHubItems(sectionTitle, 'info', config.infoItems);
+  });
+
+  const [rulesItems, setRulesItems] = useState<HubItem[]>(() => {
+    return loadOrderedHubItems(sectionTitle, 'rules', config.rulesItems || []);
+  });
+
+  // Sync items when sectionTitle or post changes
+  React.useEffect(() => {
+    setInfoItems(loadOrderedHubItems(sectionTitle, 'info', config.infoItems));
+    setRulesItems(loadOrderedHubItems(sectionTitle, 'rules', config.rulesItems || []));
+    setIsReorderingInfo(false);
+    setIsReorderingRules(false);
+  }, [sectionTitle]);
+
+  const handleDragStartInfo = (idx: number, e: React.DragEvent) => {
+    setDraggedInfoIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(idx));
+  };
+
+  const handleDragOverInfo = (idx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverInfoIdx !== idx) {
+      setDragOverInfoIdx(idx);
+    }
+  };
+
+  const handleDropInfo = (dropIdx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedInfoIdx === null || draggedInfoIdx === dropIdx) {
+      setDraggedInfoIdx(null);
+      setDragOverInfoIdx(null);
+      return;
+    }
+    const newItems = [...infoItems];
+    const [moved] = newItems.splice(draggedInfoIdx, 1);
+    newItems.splice(dropIdx, 0, moved);
+    setInfoItems(newItems);
+    saveOrderedHubItems(sectionTitle, 'info', newItems);
+    setDraggedInfoIdx(null);
+    setDragOverInfoIdx(null);
+    toast.success('Urutan menu berhasil diubah');
+  };
+
+  const handleDragEndInfo = () => {
+    setDraggedInfoIdx(null);
+    setDragOverInfoIdx(null);
+  };
+
+  const moveInfoItem = (idx: number, dir: 'up' | 'down') => {
+    const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= infoItems.length) return;
+    const newItems = [...infoItems];
+    const temp = newItems[idx];
+    newItems[idx] = newItems[targetIdx];
+    newItems[targetIdx] = temp;
+    setInfoItems(newItems);
+    saveOrderedHubItems(sectionTitle, 'info', newItems);
+  };
+
+  // State for Editing / Adding Menu Item Modal
+  const [editingModal, setEditingModal] = useState<{
+    isOpen: boolean;
+    type: 'info' | 'rules';
+    index: number | null; // null means adding a new item
+    title: string;
+    icon: string;
+    linkUrl: string;
+    isLogbook: boolean;
+  }>({
+    isOpen: false,
+    type: 'info',
+    index: null,
+    title: '',
+    icon: '📘',
+    linkUrl: '',
+    isLogbook: false
+  });
+
+  const openAddItemModal = (type: 'info' | 'rules') => {
+    setEditingModal({
+      isOpen: true,
+      type,
+      index: null,
+      title: '',
+      icon: type === 'info' ? '📘' : '📋',
+      linkUrl: '',
+      isLogbook: false
+    });
+  };
+
+  const openEditItemModal = (type: 'info' | 'rules', index: number) => {
+    const item = type === 'info' ? infoItems[index] : rulesItems[index];
+    if (!item) return;
+    setEditingModal({
+      isOpen: true,
+      type,
+      index,
+      title: item.title,
+      icon: item.icon || '📘',
+      linkUrl: item.linkUrl || '',
+      isLogbook: Boolean(item.isLogbook)
+    });
+  };
+
+  const handleSaveItemModal = () => {
+    if (!editingModal.title.trim()) {
+      toast.error('Judul menu tidak boleh kosong');
+      return;
+    }
+    const currentList = editingModal.type === 'info' ? [...infoItems] : [...rulesItems];
+    const newItem: HubItem = {
+      title: editingModal.title.trim(),
+      icon: editingModal.icon.trim() || '📘',
+      linkUrl: editingModal.linkUrl.trim() || undefined,
+      isLogbook: editingModal.isLogbook || undefined,
+      searchKeywords: [editingModal.title.trim()]
+    };
+
+    if (editingModal.index === null) {
+      // Add new
+      currentList.push(newItem);
+      toast.success(`Menu "${newItem.title}" berhasil ditambahkan`);
+    } else {
+      // Edit existing
+      currentList[editingModal.index] = {
+        ...currentList[editingModal.index],
+        ...newItem
+      };
+      toast.success(`Menu "${newItem.title}" berhasil diperbarui`);
+    }
+
+    if (editingModal.type === 'info') {
+      setInfoItems(currentList);
+      saveOrderedHubItems(sectionTitle, 'info', currentList);
+    } else {
+      setRulesItems(currentList);
+      saveOrderedHubItems(sectionTitle, 'rules', currentList);
+    }
+
+    setEditingModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleDeleteItem = (type: 'info' | 'rules', index: number) => {
+    const list = type === 'info' ? infoItems : rulesItems;
+    const itemToDelete = list[index];
+    if (!itemToDelete) return;
+    if (confirm(`Yakin ingin menghapus menu "${itemToDelete.title}"?`)) {
+      const updated = list.filter((_, idx) => idx !== index);
+      if (type === 'info') {
+        setInfoItems(updated);
+        saveOrderedHubItems(sectionTitle, 'info', updated);
+      } else {
+        setRulesItems(updated);
+        saveOrderedHubItems(sectionTitle, 'rules', updated);
+      }
+      toast.success(`Menu "${itemToDelete.title}" telah dihapus`);
+    }
+  };
+
+  const resetInfoOrder = () => {
+    setInfoItems(config.infoItems);
+    try {
+      const cleanSec = (sectionTitle || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      localStorage.removeItem(`preplab_hub_custom_items_${cleanSec}_info`);
+      localStorage.removeItem(`preplab_hub_order_${cleanSec}_info`);
+    } catch {}
+    toast.success('Menu INFO dikembalikan ke default');
+  };
+
+  const resetRulesOrder = () => {
+    setRulesItems(config.rulesItems || []);
+    try {
+      const cleanSec = (sectionTitle || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      localStorage.removeItem(`preplab_hub_custom_items_${cleanSec}_rules`);
+      localStorage.removeItem(`preplab_hub_order_${cleanSec}_rules`);
+    } catch {}
+    toast.success('Menu RULES dikembalikan ke default');
+  };
+
+  // Same for Rules
+  const handleDragStartRules = (idx: number, e: React.DragEvent) => {
+    setDraggedRulesIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(idx));
+  };
+
+  const handleDragOverRules = (idx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverRulesIdx !== idx) {
+      setDragOverRulesIdx(idx);
+    }
+  };
+
+  const handleDropRules = (dropIdx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedRulesIdx === null || draggedRulesIdx === dropIdx) {
+      setDraggedRulesIdx(null);
+      setDragOverRulesIdx(null);
+      return;
+    }
+    const newItems = [...rulesItems];
+    const [moved] = newItems.splice(draggedRulesIdx, 1);
+    newItems.splice(dropIdx, 0, moved);
+    setRulesItems(newItems);
+    saveOrderedHubItems(sectionTitle, 'rules', newItems);
+    setDraggedRulesIdx(null);
+    setDragOverRulesIdx(null);
+    toast.success('Urutan menu RULES berhasil diubah');
+  };
+
+  const handleDragEndRules = () => {
+    setDraggedRulesIdx(null);
+    setDragOverRulesIdx(null);
+  };
+
+  const moveRulesItem = (idx: number, dir: 'up' | 'down') => {
+    const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= rulesItems.length) return;
+    const newItems = [...rulesItems];
+    const temp = newItems[idx];
+    newItems[idx] = newItems[targetIdx];
+    newItems[targetIdx] = temp;
+    setRulesItems(newItems);
+    saveOrderedHubItems(sectionTitle, 'rules', newItems);
+  };
+
+
   // Month navigation helpers for Section Calendar
   const prevCalMonth = () => {
     setCurrentCalDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -745,10 +1076,69 @@ export function SectionHubDashboard({
           </span>
         </div>
 
-        {/* Section Title */}
-        <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight pt-1">
-          {translateDisplayText(sectionTitle)}
-        </h1>
+        {/* Section Title (Double Click to Edit) */}
+        <div className="pt-1 group/title relative max-w-fit">
+          {isEditingTitle ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                value={titleInput}
+                onChange={(e) => setTitleInput(e.target.value)}
+                onKeyDown={handleTitleKeyDown}
+                onBlur={handleSaveTitle}
+                disabled={isSavingTitle}
+                autoFocus
+                placeholder="Masukkan judul seksi..."
+                className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight px-3 py-1 bg-white border-2 border-blue-500 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-100 shadow-md min-w-[280px] md:min-w-[420px]"
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault(); // prevent input blur before save
+                  handleSaveTitle();
+                }}
+                disabled={isSavingTitle}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                title="Simpan Perubahan (Enter)"
+              >
+                {isSavingTitle ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                <span>Simpan</span>
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsEditingTitle(false);
+                  setTitleInput(displayedTitle);
+                }}
+                disabled={isSavingTitle}
+                className="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                title="Batal (Esc)"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Batal</span>
+              </button>
+            </div>
+          ) : (
+            <div
+              onDoubleClick={handleStartEditTitle}
+              className="flex items-center gap-2.5 cursor-pointer rounded-xl px-1.5 py-0.5 -mx-1.5 hover:bg-slate-100/70 transition-all select-none"
+              title="Double klik untuk mengedit judul ini"
+            >
+              <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
+                {displayedTitle ? translateDisplayText(displayedTitle.toUpperCase().trim()) : translateDisplayText(sectionTitle)}
+              </h1>
+              <span className="opacity-0 group-hover/title:opacity-100 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all text-xs font-semibold flex items-center gap-1 shrink-0 border border-transparent hover:border-blue-200 shadow-2xs">
+                <Pencil className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline text-[11px] text-slate-500 font-normal">Double klik untuk edit</span>
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Home Navigation Pill: HOME TBP & GPS + Logbook Seksi */}
         <div className="pt-2 flex items-center gap-2 flex-wrap">
@@ -793,19 +1183,149 @@ export function SectionHubDashboard({
             {/* Column 1: INFO (Soft Pastel Sky Blue) */}
             <div className="space-y-3">
               {/* INFO Title Banner Bar */}
-              <div className="bg-[#eef5fc] border border-[#dcecfb] rounded-lg px-4 py-2 flex items-center justify-between">
-                <span className="font-serif italic font-normal text-2xl md:text-3xl text-[#1e3a5f] tracking-wide">
-                  {config.infoTitle || 'INFO'}
-                </span>
-                <span className="text-[11px] font-mono font-medium text-sky-800 bg-sky-100/70 border border-sky-200/60 px-2 py-0.5 rounded-md">
-                  {config.infoItems.length} Items
-                </span>
+              <div className="bg-[#eef5fc] border border-[#dcecfb] rounded-lg px-4 py-2.5 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-3">
+                  <span className="font-serif italic font-normal text-2xl md:text-3xl text-[#1e3a5f] tracking-wide">
+                    {config.infoTitle || 'INFO'}
+                  </span>
+                  <span className="text-[11px] font-mono font-medium text-sky-800 bg-sky-100/70 border border-sky-200/60 px-2 py-0.5 rounded-md">
+                    {infoItems.length} Items
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsReorderingInfo(prev => !prev)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                      isReorderingInfo
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-white hover:bg-sky-50 text-sky-800 border border-sky-200/80 shadow-2xs'
+                    }`}
+                    title={isReorderingInfo ? 'Selesai Mengatur' : 'Atur Urutan & Edit Menu'}
+                  >
+                    <ArrowUpDown className="w-3.5 h-3.5" />
+                    <span>{isReorderingInfo ? 'Selesai' : 'Atur Menu'}</span>
+                  </button>
+                  {isReorderingInfo && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openAddItemModal('info')}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-pointer shadow-2xs transition-all"
+                        title="Tambah Menu Baru"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tambah</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetInfoOrder}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 cursor-pointer shadow-2xs transition-all"
+                        title="Reset ke Urutan & Menu Default"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
-              {/* Items List (Soft Sky Blue Rounded Pill Rows) */}
+              {/* Items List (Normal Pill Rows or Reordering Mode) */}
               <div className="space-y-1.5">
-                {config.infoItems.map((item, idx) => (
-                  item.isLogbook ? (
+                {infoItems.map((item, idx) => {
+                  if (isReorderingInfo) {
+                    return (
+                      <div
+                        key={idx}
+                        draggable
+                        onDragStart={(e) => handleDragStartInfo(idx, e)}
+                        onDragOver={(e) => handleDragOverInfo(idx, e)}
+                        onDrop={(e) => handleDropInfo(idx, e)}
+                        onDragEnd={handleDragEndInfo}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all select-none ${
+                          draggedInfoIdx === idx
+                            ? 'opacity-40 border-dashed border-blue-400 bg-blue-50/50'
+                            : dragOverInfoIdx === idx
+                            ? 'border-blue-500 bg-blue-100/60 ring-2 ring-blue-400 shadow-md scale-[1.01]'
+                            : 'bg-white hover:bg-sky-50/70 border-sky-200/80 shadow-2xs'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 truncate flex-1">
+                          <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-blue-600 rounded transition-colors">
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                          <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-800 text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="text-base shrink-0">{item.icon || '📘'}</span>
+                          <span className="text-sm font-medium text-slate-800 truncate">
+                            {translateDisplayText(item.title)}
+                          </span>
+                          {item.isLogbook && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              LOGBOOK
+                            </span>
+                          )}
+                          {item.linkUrl && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-0.5">
+                              <ExternalLink className="w-2.5 h-2.5" /> Link
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Action buttons: Edit, Delete, Up, Down */}
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditItemModal('info', idx)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 cursor-pointer transition-all"
+                            title="Edit Menu Ini"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteItem('info', idx)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 cursor-pointer transition-all"
+                            title="Hapus Menu Ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <div className="h-4 w-px bg-slate-200 mx-0.5" />
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => moveInfoItem(idx, 'up')}
+                            className={`p-1.5 rounded-lg border text-slate-600 transition-all ${
+                              idx === 0
+                                ? 'opacity-30 cursor-not-allowed border-transparent'
+                                : 'hover:bg-sky-100 hover:text-sky-800 border-slate-200 cursor-pointer'
+                            }`}
+                            title="Geser ke Atas"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === infoItems.length - 1}
+                            onClick={() => moveInfoItem(idx, 'down')}
+                            className={`p-1.5 rounded-lg border text-slate-600 transition-all ${
+                              idx === infoItems.length - 1
+                                ? 'opacity-30 cursor-not-allowed border-transparent'
+                                : 'hover:bg-sky-100 hover:text-sky-800 border-slate-200 cursor-pointer'
+                            }`}
+                            title="Geser ke Bawah"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Normal Clickable Button
+                  return item.isLogbook ? (
                     <button
                       key={idx}
                       onClick={() => handleItemClick(item)}
@@ -813,99 +1333,353 @@ export function SectionHubDashboard({
                     >
                       <div className="flex items-center gap-3 truncate">
                         <div className="w-7 h-7 rounded-lg bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-700 text-sm shrink-0 group-hover:scale-105 transition-transform">
-                          📔
+                          <span className="text-base">{item.icon}</span>
                         </div>
-                        <div className="flex flex-col min-w-0">
+                        <div className="truncate">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm text-teal-950 group-hover:text-teal-700 truncate">
+                            <span className="truncate group-hover:text-teal-900 transition-colors">
                               {translateDisplayText(item.title)}
                             </span>
-                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-600 text-white tracking-wider uppercase shrink-0">
-                              AKTIF
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-600 text-white shadow-2xs shrink-0">
+                              Aktif
                             </span>
                           </div>
-                          <span className="text-[11px] text-teal-700 font-medium truncate mt-0.5">
+                          <p className="text-[11px] font-normal text-teal-700/80 truncate">
                             Semua kegiatan Routine & Non-Routine aktif
-                          </span>
+                          </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 text-teal-600 font-bold text-xs shrink-0">
-                        <span className="hidden sm:inline">Buka</span>
-                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                      </div>
+                      <span className="text-xs font-semibold text-teal-700 group-hover:text-teal-900 group-hover:translate-x-0.5 transition-all flex items-center gap-1 shrink-0">
+                        Buka <ChevronRight className="w-4 h-4 text-teal-600" />
+                      </span>
                     </button>
                   ) : (
                     <button
                       key={idx}
                       onClick={() => handleItemClick(item)}
-                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-[#f0f6fd] hover:bg-[#e4effb] text-slate-800 border border-[#e2edfa] text-sm font-medium transition-all group shadow-2xs text-left cursor-pointer"
+                      className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#f0f6fc] hover:bg-[#e4effa] border border-[#dcecfb] hover:border-sky-300 text-slate-800 text-sm font-medium transition-all group shadow-2xs hover:shadow-xs text-left cursor-pointer"
                     >
-                      <div className="flex items-center gap-2.5 truncate">
-                        <span className="text-sky-600 font-bold text-xs select-none">
-                          {item.icon === '▌' ? '▌' : item.icon}
-                        </span>
-                        <span className="truncate group-hover:text-sky-950">
+                      <div className="flex items-center gap-3 truncate">
+                        <span className="w-1.5 h-4 bg-sky-600 rounded-full shrink-0 group-hover:scale-y-110 transition-transform" />
+                        <span className="truncate group-hover:text-sky-950 transition-colors">
                           {translateDisplayText(item.title)}
                         </span>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
+                      <ChevronRight className="w-4 h-4 text-sky-400 group-hover:text-sky-700 group-hover:translate-x-0.5 transition-all shrink-0" />
                     </button>
-                  )
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* Column 2: RULES (Soft Pastel Warm Cream / Pale Amber) */}
+            {/* Column 2: RULES (Soft Warm Cream / Vanilla Latte) */}
             <div className="space-y-3">
               {/* RULES Title Banner Bar */}
-              <div className="bg-[#faf5e8] border border-[#f5eed6] rounded-lg px-4 py-2 flex items-center justify-between">
-                <span className="font-serif italic font-normal text-2xl md:text-3xl text-[#5c4314] tracking-wide">
-                  {config.rulesTitle || 'RULES'}
-                </span>
-                <span className="text-[11px] font-mono font-medium text-amber-800 bg-amber-100/70 border border-amber-200/60 px-2 py-0.5 rounded-md">
-                  {config.rulesItems.length} SOP & Rules
-                </span>
+              <div className="bg-[#fcf8ee] border border-[#f5ecd5] rounded-lg px-4 py-2.5 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-3">
+                  <span className="font-serif italic font-normal text-2xl md:text-3xl text-[#5c4018] tracking-wide">
+                    {config.rulesTitle || 'RULES'}
+                  </span>
+                  <span className="text-[11px] font-mono font-medium text-amber-900 bg-amber-100/70 border border-amber-200/60 px-2 py-0.5 rounded-md">
+                    {rulesItems.length} Items
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsReorderingRules(prev => !prev)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                      isReorderingRules
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-white hover:bg-amber-50 text-amber-900 border border-amber-200/80 shadow-2xs'
+                    }`}
+                    title={isReorderingRules ? 'Selesai Mengatur' : 'Atur Urutan & Edit Menu'}
+                  >
+                    <ArrowUpDown className="w-3.5 h-3.5" />
+                    <span>{isReorderingRules ? 'Selesai' : 'Atur Menu'}</span>
+                  </button>
+                  {isReorderingRules && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openAddItemModal('rules')}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-pointer shadow-2xs transition-all"
+                        title="Tambah Menu Baru"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tambah</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetRulesOrder}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 cursor-pointer shadow-2xs transition-all"
+                        title="Reset ke Urutan & Menu Default"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Items List (Soft Warm Cream Rounded Pill Rows) */}
               <div className="space-y-1.5">
-                {config.rulesItems.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleItemClick(item)}
-                    className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-[#fcf8ef] hover:bg-[#f6efe0] text-slate-800 border border-[#f5ebd8] text-sm font-medium transition-all group shadow-2xs text-left cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5 truncate">
-                      <span className="text-amber-700 text-xs flex-shrink-0">
-                        {item.icon}
-                      </span>
-                      <span className="truncate group-hover:text-amber-950">
-                        {item.title}
-                      </span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-amber-500/50 group-hover:text-amber-700 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
-                  </button>
-                ))}
+                {rulesItems.map((item, idx) => {
+                  if (isReorderingRules) {
+                    return (
+                      <div
+                        key={idx}
+                        draggable
+                        onDragStart={(e) => handleDragStartRules(idx, e)}
+                        onDragOver={(e) => handleDragOverRules(idx, e)}
+                        onDrop={(e) => handleDropRules(idx, e)}
+                        onDragEnd={handleDragEndRules}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all select-none ${
+                          draggedRulesIdx === idx
+                            ? 'opacity-40 border-dashed border-amber-400 bg-amber-50/50'
+                            : dragOverRulesIdx === idx
+                            ? 'border-amber-500 bg-amber-100/60 ring-2 ring-amber-400 shadow-md scale-[1.01]'
+                            : 'bg-white hover:bg-amber-50/70 border-amber-200/80 shadow-2xs'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 truncate flex-1">
+                          <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-amber-600 rounded transition-colors">
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                          <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="text-base shrink-0">{item.icon || '📋'}</span>
+                          <span className="text-sm font-medium text-slate-800 truncate">
+                            {translateDisplayText(item.title)}
+                          </span>
+                          {item.linkUrl && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-0.5">
+                              <ExternalLink className="w-2.5 h-2.5" /> Link
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Action buttons: Edit, Delete, Up, Down */}
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditItemModal('rules', idx)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-200 cursor-pointer transition-all"
+                            title="Edit Menu Ini"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteItem('rules', idx)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 cursor-pointer transition-all"
+                            title="Hapus Menu Ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <div className="h-4 w-px bg-slate-200 mx-0.5" />
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => moveRulesItem(idx, 'up')}
+                            className={`p-1.5 rounded-lg border text-slate-600 transition-all ${
+                              idx === 0
+                                ? 'opacity-30 cursor-not-allowed border-transparent'
+                                : 'hover:bg-amber-100 hover:text-amber-900 border-slate-200 cursor-pointer'
+                            }`}
+                            title="Geser ke Atas"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === rulesItems.length - 1}
+                            onClick={() => moveRulesItem(idx, 'down')}
+                            className={`p-1.5 rounded-lg border text-slate-600 transition-all ${
+                              idx === rulesItems.length - 1
+                                ? 'opacity-30 cursor-not-allowed border-transparent'
+                                : 'hover:bg-amber-100 hover:text-amber-900 border-slate-200 cursor-pointer'
+                            }`}
+                            title="Geser ke Bawah"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => handleItemClick(item)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#fdfbf6] hover:bg-[#f6f0df] border border-[#f5ecd5] hover:border-amber-300 text-slate-800 text-sm font-medium transition-all group shadow-2xs hover:shadow-xs text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 truncate">
+                        <span className="w-1.5 h-4 bg-amber-600 rounded-full shrink-0 group-hover:scale-y-110 transition-transform" />
+                        <span className="truncate group-hover:text-amber-950 transition-colors">
+                          {translateDisplayText(item.title)}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-amber-400 group-hover:text-amber-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
         ) : (
-          /* Single Column Layout (PROSEDUR & INFORMATION) - FULL FLUID WIDTH */
+          /* Single Column Layout (PROSEDUR, INFORMATION, MAINTENANCE, etc.) - FULL FLUID WIDTH */
           <div className="w-full space-y-3">
             {/* INFO Title Banner Bar */}
-            <div className="bg-[#eef5fc] border border-[#dcecfb] rounded-lg px-4 py-2 flex items-center justify-between">
-              <span className="font-serif italic font-normal text-2xl md:text-3xl text-[#1e3a5f] tracking-wide">
-                {config.infoTitle || 'INFO'}
-              </span>
-              <span className="text-[11px] font-mono font-medium text-sky-800 bg-sky-100/70 border border-sky-200/60 px-2 py-0.5 rounded-md">
-                {config.infoItems.length} Dokumen & Modul
-              </span>
+            <div className="bg-[#eef5fc] border border-[#dcecfb] rounded-lg px-4 py-2.5 flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-3">
+                <span className="font-serif italic font-normal text-2xl md:text-3xl text-[#1e3a5f] tracking-wide">
+                  {config.infoTitle || 'INFO'}
+                </span>
+                <span className="text-[11px] font-mono font-medium text-sky-800 bg-sky-100/70 border border-sky-200/60 px-2.5 py-0.5 rounded-md">
+                  {infoItems.length} Dokumen & Modul
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setIsReorderingInfo(prev => !prev)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                    isReorderingInfo
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white hover:bg-sky-50 text-sky-800 border border-sky-200/80 shadow-2xs'
+                  }`}
+                  title={isReorderingInfo ? 'Selesai Mengatur' : 'Atur Urutan & Edit Menu'}
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                  <span>{isReorderingInfo ? 'Selesai' : 'Atur Menu'}</span>
+                </button>
+                {isReorderingInfo && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => openAddItemModal('info')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-pointer shadow-2xs transition-all"
+                      title="Tambah Menu Baru"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tambah Menu</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetInfoOrder}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 cursor-pointer shadow-2xs transition-all"
+                      title="Reset ke Urutan & Menu Default"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset</span>
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Vertical List of Soft Sky Blue Pills */}
             <div className="space-y-1.5">
-              {config.infoItems.map((item, idx) => (
-                item.isLogbook ? (
+              {infoItems.map((item, idx) => {
+                if (isReorderingInfo) {
+                  return (
+                    <div
+                      key={idx}
+                      draggable
+                      onDragStart={(e) => handleDragStartInfo(idx, e)}
+                      onDragOver={(e) => handleDragOverInfo(idx, e)}
+                      onDrop={(e) => handleDropInfo(idx, e)}
+                      onDragEnd={handleDragEndInfo}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all select-none ${
+                        draggedInfoIdx === idx
+                          ? 'opacity-40 border-dashed border-blue-400 bg-blue-50/50'
+                          : dragOverInfoIdx === idx
+                          ? 'border-blue-500 bg-blue-100/60 ring-2 ring-blue-400 shadow-md scale-[1.01]'
+                          : 'bg-white hover:bg-sky-50/70 border-sky-200/80 shadow-2xs'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 truncate flex-1">
+                        <div className="cursor-grab active:cursor-grabbing p-1.5 text-slate-400 hover:text-blue-600 rounded transition-colors">
+                          <GripVertical className="w-5 h-5" />
+                        </div>
+                        <span className="w-6 h-6 rounded-full bg-sky-100 text-sky-800 text-xs font-mono font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="text-lg shrink-0">{item.icon || '📘'}</span>
+                        <div className="truncate flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-slate-800 truncate">
+                              {translateDisplayText(item.title)}
+                            </span>
+                            {item.isLogbook && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                LOGBOOK
+                              </span>
+                            )}
+                            {item.linkUrl && (
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                                <ExternalLink className="w-3 h-3" /> External Link
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action buttons: Edit, Delete, Up, Down */}
+                      <div className="flex items-center gap-1.5 shrink-0 ml-3">
+                        <button
+                          type="button"
+                          onClick={() => openEditItemModal('info', idx)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 cursor-pointer transition-all"
+                          title="Edit Judul/Icon/Link"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteItem('info', idx)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 cursor-pointer transition-all"
+                          title="Hapus Menu Ini"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <div className="h-5 w-px bg-slate-200 mx-1" />
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => moveInfoItem(idx, 'up')}
+                          className={`p-1.5 rounded-lg border text-slate-600 transition-all ${
+                            idx === 0
+                              ? 'opacity-30 cursor-not-allowed border-transparent'
+                              : 'hover:bg-sky-100 hover:text-sky-800 border-slate-200 cursor-pointer'
+                          }`}
+                          title="Geser ke Atas"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === infoItems.length - 1}
+                          onClick={() => moveInfoItem(idx, 'down')}
+                          className={`p-1.5 rounded-lg border text-slate-600 transition-all ${
+                            idx === infoItems.length - 1
+                              ? 'opacity-30 cursor-not-allowed border-transparent'
+                              : 'hover:bg-sky-100 hover:text-sky-800 border-slate-200 cursor-pointer'
+                          }`}
+                          title="Geser ke Bawah"
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return item.isLogbook ? (
                   <button
                     key={idx}
                     onClick={() => handleItemClick(item)}
@@ -913,45 +1687,42 @@ export function SectionHubDashboard({
                   >
                     <div className="flex items-center gap-3 truncate">
                       <div className="w-7 h-7 rounded-lg bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-700 text-sm shrink-0 group-hover:scale-105 transition-transform">
-                        📔
+                        <span className="text-base">{item.icon}</span>
                       </div>
-                      <div className="flex flex-col min-w-0">
+                      <div className="truncate">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-teal-950 group-hover:text-teal-700 truncate">
+                          <span className="truncate group-hover:text-teal-900 transition-colors">
                             {translateDisplayText(item.title)}
                           </span>
-                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-600 text-white tracking-wider uppercase shrink-0">
-                            AKTIF
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-600 text-white shadow-2xs shrink-0">
+                            Aktif
                           </span>
                         </div>
-                        <span className="text-[11px] text-teal-700 font-medium truncate mt-0.5">
+                        <p className="text-[11px] font-normal text-teal-700/80 truncate">
                           Semua kegiatan Routine & Non-Routine aktif
-                        </span>
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 text-teal-600 font-bold text-xs shrink-0">
-                      <span className="hidden sm:inline">Buka</span>
-                      <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </div>
+                    <span className="text-xs font-semibold text-teal-700 group-hover:text-teal-900 group-hover:translate-x-0.5 transition-all flex items-center gap-1 shrink-0">
+                      Buka <ChevronRight className="w-4 h-4 text-teal-600" />
+                    </span>
                   </button>
                 ) : (
                   <button
                     key={idx}
                     onClick={() => handleItemClick(item)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-[#f0f6fd] hover:bg-[#e4effb] text-slate-800 border border-[#e2edfa] text-sm font-medium transition-all group shadow-2xs text-left cursor-pointer"
+                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#f0f6fc] hover:bg-[#e4effa] border border-[#dcecfb] hover:border-sky-300 text-slate-800 text-sm font-medium transition-all group shadow-2xs hover:shadow-xs text-left cursor-pointer"
                   >
                     <div className="flex items-center gap-3 truncate">
-                      <span className="text-base flex-shrink-0">
-                        {item.icon}
-                      </span>
-                      <span className="truncate group-hover:text-sky-950 font-medium">
+                      <span className="w-1.5 h-4 bg-sky-600 rounded-full shrink-0 group-hover:scale-y-110 transition-transform" />
+                      <span className="truncate group-hover:text-sky-950 transition-colors">
                         {translateDisplayText(item.title)}
                       </span>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-sky-400/60 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-sky-400 group-hover:text-sky-700 group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
-                )
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -1197,6 +1968,132 @@ export function SectionHubDashboard({
         allowClear={true}
         onClearImage={() => handleSaveCover(config.bannerUrl)}
       />
+
+      {/* Modal Dialog: Tambah / Edit Menu Item */}
+      {editingModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-sky-50/50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-100 text-blue-700">
+                  {editingModal.index === null ? <Plus className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {editingModal.index === null ? 'Tambah Menu Baru' : 'Edit Menu'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Kategori: <span className="font-semibold uppercase text-sky-800">{editingModal.type}</span> di {sectionTitle}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingModal(prev => ({ ...prev, isOpen: false }))}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Judul Menu <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingModal.title}
+                  onChange={(e) => setEditingModal(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Contoh: Quarterly Maintenance, SOP XRF, dll."
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-2xs"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Icon / Emoji
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editingModal.icon}
+                    onChange={(e) => setEditingModal(prev => ({ ...prev, icon: e.target.value }))}
+                    placeholder="📘"
+                    className="w-20 px-3.5 py-2 text-center text-lg rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-2xs"
+                  />
+                  <div className="flex gap-1.5 flex-wrap flex-1">
+                    {['📘', '📋', '⚙️', '🔬', '📊', '⚡', '📝', '🔒', '💡', '🏷️'].map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setEditingModal(prev => ({ ...prev, icon: emoji }))}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm border hover:bg-sky-50 transition-colors cursor-pointer ${
+                          editingModal.icon === emoji ? 'border-blue-500 bg-blue-50' : 'border-slate-200'
+                        }`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Link URL Eksternal (Opsional)
+                </label>
+                <input
+                  type="url"
+                  value={editingModal.linkUrl}
+                  onChange={(e) => setEditingModal(prev => ({ ...prev, linkUrl: e.target.value }))}
+                  placeholder="https://... (Kosongkan jika dokumen internal)"
+                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-2xs"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Jika diisi, klik menu ini akan langsung membuka URL di tab baru.
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-slate-700 block">Jadikan Tipe Logbook</span>
+                  <span className="text-[11px] text-slate-400">Tampilan card hijau emerald khusus logbook</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={editingModal.isLogbook}
+                  onChange={(e) => setEditingModal(prev => ({ ...prev, isLogbook: e.target.checked }))}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setEditingModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveItemModal}
+                className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-98 rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Simpan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -492,11 +492,11 @@ export default function App() {
     return 'TBP';
   });
 
-  // Effective universe: if not dev or manager, strictly locked to defaultUserUniverse
-  const effectiveUniverse: 'TBP' | 'GTS' = isDevOrManager ? activeUniverse : defaultUserUniverse;
+  // Effective universe: strictly locked to defaultUserUniverse unless user is developer
+  const effectiveUniverse: 'TBP' | 'GTS' = isDeveloper ? activeUniverse : defaultUserUniverse;
 
   const handleSwitchUniverse = (targetUniv: 'TBP' | 'GTS') => {
-    if (!isDevOrManager) return;
+    if (!isDeveloper) return;
     setActiveUniverse(targetUniv);
     localStorage.setItem('portal_active_universe', targetUniv);
     localStorage.setItem('bulletin_active_universe', targetUniv);
@@ -1673,8 +1673,8 @@ export default function App() {
             <div className="w-6 h-0.5 bg-gradient-to-r from-teal-300 to-cyan-300 rounded-full mt-1.5 opacity-75" />
           </div>
 
-          {/* Universe Switcher (Dev & Manager Only) or Assigned Entity Badge */}
-          {isDevOrManager ? (
+          {/* Universe Switcher (Developer Only) or Assigned Entity Badge */}
+          {isDeveloper ? (
             <div className="w-full px-2 py-1 my-0.5 flex flex-col items-center">
               <div className="w-full bg-black/25 p-1 rounded-xl border border-white/15 flex flex-col items-center gap-1 shadow-xs">
                 <span className="text-[7px] font-black uppercase tracking-wider text-teal-100/80">

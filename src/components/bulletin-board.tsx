@@ -606,13 +606,12 @@ export function BulletinBoard({
       setNavHistory([]);
       setSelectedPost(null);
       setIsEditing(false);
+      setIsLibraryActive(false);
       try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("page");
-        url.searchParams.delete("postId");
         localStorage.removeItem("preplab_active_bulletin_page");
         sessionStorage.removeItem("preplab_cached_selected_post");
-        window.history.replaceState({}, "", url.toString());
+        const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP');
+        navigate(`/bulletin/${targetPt}`, { replace: true });
       } catch {}
       return;
     }
@@ -655,12 +654,11 @@ export function BulletinBoard({
     setIsEditing(false);
 
     try {
-      const url = new URL(window.location.href);
       if (freshPost?.id) {
-        url.searchParams.set("page", String(freshPost.id));
         localStorage.setItem("preplab_active_bulletin_page", String(freshPost.id));
+        const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (freshPost.pt || pt || userUniverse || 'TBP');
+        navigate(`/bulletin/${targetPt}?page=${encodeURIComponent(String(freshPost.id))}`, { replace: true });
       }
-      window.history.replaceState({}, "", url.toString());
     } catch {}
   };
 
@@ -928,15 +926,13 @@ export function BulletinBoard({
       setNavHistory([]);
       setSelectedPost(null);
       setIsEditing(false);
+      setIsLibraryActive(false);
       setDeepLinkTopic(undefined);
       try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("page");
-        url.searchParams.delete("postId");
-        url.searchParams.delete("topic");
         localStorage.removeItem("preplab_active_bulletin_page");
         sessionStorage.removeItem("preplab_cached_selected_post");
-        window.history.replaceState({}, "", url.toString());
+        const targetPt = selectedPtFilter !== 'ALL' ? selectedPtFilter : (pt || userUniverse || 'TBP');
+        navigate(`/bulletin/${targetPt}`, { replace: true });
       } catch {}
     }
   };

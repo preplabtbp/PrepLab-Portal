@@ -53,7 +53,14 @@ import {
   Eye,
   EyeOff,
   ZoomIn,
-  Maximize2
+  Maximize2,
+  GripVertical,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Pencil,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
@@ -87,6 +94,157 @@ interface DashboardMediaSettings {
   gallery_3_label?: string;
   gallery_4_label?: string;
   hide_gallery_labels?: boolean;
+}
+
+// Custom Section Item Type for Workstation Sections
+interface WorkstationSectionItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  iconName?: string;
+  colorClass?: string;
+  bgClass?: string;
+  borderClass?: string;
+  badgeBg?: string;
+}
+
+const DEFAULT_WORKSTATION_ITEMS: WorkstationSectionItem[] = [
+  {
+    id: 'info',
+    title: 'Information',
+    subtitle: 'Pengumuman resmi, memo internal & update site',
+    badge: 'INFO',
+    iconName: 'Info',
+    colorClass: 'text-sky-500 dark:text-sky-400',
+    bgClass: 'bg-sky-500/10 dark:bg-sky-500/20',
+    borderClass: 'border-sky-500/20 group-hover:border-sky-500/40',
+    badgeBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
+  },
+  {
+    id: 'admin',
+    title: 'Administration',
+    subtitle: 'Tata kelola kantor, surat menyurat & kepegawaian',
+    badge: 'OFFICE',
+    iconName: 'FileText',
+    colorClass: 'text-indigo-500 dark:text-indigo-400',
+    bgClass: 'bg-indigo-500/10 dark:bg-indigo-500/20',
+    borderClass: 'border-indigo-500/20 group-hover:border-indigo-500/40',
+    badgeBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
+  },
+  {
+    id: 'lab',
+    title: 'Laboratory',
+    subtitle: 'Analisa AAS, XRF, titrasi basah & instrumen analitik',
+    badge: 'LAB',
+    iconName: 'FlaskConical',
+    colorClass: 'text-emerald-500 dark:text-emerald-400',
+    bgClass: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+    borderClass: 'border-emerald-500/20 group-hover:border-emerald-500/40',
+    badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+  },
+  {
+    id: 'prep',
+    title: 'Preparation',
+    subtitle: 'Crushing bijih nikel, drying, pulverizing & sampling',
+    badge: 'PLANT',
+    iconName: 'Hammer',
+    colorClass: 'text-amber-500 dark:text-amber-400',
+    bgClass: 'bg-amber-500/10 dark:bg-amber-500/20',
+    borderClass: 'border-amber-500/20 group-hover:border-amber-500/40',
+    badgeBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+  },
+  {
+    id: 'maint',
+    title: 'Maintenance',
+    subtitle: 'Perawatan mesin, kalibrasi sensor & perbaikan teknis',
+    badge: 'TEKNIK',
+    iconName: 'Wrench',
+    colorClass: 'text-orange-500 dark:text-orange-400',
+    bgClass: 'bg-orange-500/10 dark:bg-orange-500/20',
+    borderClass: 'border-orange-500/20 group-hover:border-orange-500/40',
+    badgeBg: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20'
+  },
+  {
+    id: 'inventory',
+    title: 'Inventory',
+    subtitle: 'Stok reagen kimia, consumables & suku cadang mesin',
+    badge: 'LOGISTIK',
+    iconName: 'Package',
+    colorClass: 'text-cyan-500 dark:text-cyan-400',
+    bgClass: 'bg-cyan-500/10 dark:bg-cyan-500/20',
+    borderClass: 'border-cyan-500/20 group-hover:border-cyan-500/40',
+    badgeBg: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
+  },
+  {
+    id: 'qa',
+    title: 'Quality Assurance',
+    subtitle: 'Standar akreditasi ISO 17025, QA/QC & compliance',
+    badge: 'ISO 17025',
+    iconName: 'Award',
+    colorClass: 'text-purple-500 dark:text-purple-400',
+    bgClass: 'bg-purple-500/10 dark:bg-purple-500/20',
+    borderClass: 'border-purple-500/20 group-hover:border-purple-500/40',
+    badgeBg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
+  },
+  {
+    id: 'issue',
+    title: 'General Issue',
+    subtitle: 'Pusat troubleshooting, kendala shift & tindak lanjut',
+    badge: 'ISSUES',
+    iconName: 'AlertTriangle',
+    colorClass: 'text-rose-500 dark:text-rose-400',
+    bgClass: 'bg-rose-500/10 dark:bg-rose-500/20',
+    borderClass: 'border-rose-500/20 group-hover:border-rose-500/40',
+    badgeBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+  },
+  {
+    id: 'procedure',
+    title: 'Procedure',
+    subtitle: 'Instruksi Kerja (IK), SOP & panduan teknis operasional',
+    badge: 'SOP',
+    iconName: 'BookOpen',
+    colorClass: 'text-teal-500 dark:text-teal-400',
+    bgClass: 'bg-teal-500/10 dark:bg-teal-500/20',
+    borderClass: 'border-teal-500/20 group-hover:border-teal-500/40',
+    badgeBg: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20'
+  }
+];
+
+function getWorkstationIcon(name?: string) {
+  switch (name) {
+    case 'Info': return Info;
+    case 'FileText': return FileText;
+    case 'FlaskConical': return FlaskConical;
+    case 'Hammer': return Hammer;
+    case 'Wrench': return Wrench;
+    case 'Package': return Package;
+    case 'Award': return Award;
+    case 'AlertTriangle': return AlertTriangle;
+    case 'BookOpen': return BookOpen;
+    case 'Shield': return Shield;
+    case 'Activity': return Activity;
+    case 'Clock': return Clock;
+    case 'Compass': return Compass;
+    default: return Layers;
+  }
+}
+
+function loadWorkstationSections(): WorkstationSectionItem[] {
+  try {
+    const raw = localStorage.getItem('preplab_workstation_sections');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEFAULT_WORKSTATION_ITEMS;
+}
+
+function saveWorkstationSections(items: WorkstationSectionItem[]): void {
+  try {
+    localStorage.setItem('preplab_workstation_sections', JSON.stringify(items));
+  } catch {}
 }
 
 const DEFAULT_MEDIA: DashboardMediaSettings = {
@@ -876,98 +1034,152 @@ export function TbpDashboard({
     }
   };
 
-  const sectionItems = [
-    {
-      title: 'Information',
-      subtitle: 'Pengumuman resmi, memo internal & update site',
-      badge: 'INFO',
-      icon: Info,
-      colorClass: 'text-sky-500 dark:text-sky-400',
-      bgClass: 'bg-sky-500/10 dark:bg-sky-500/20',
-      borderClass: 'border-sky-500/20 group-hover:border-sky-500/40',
-      badgeBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
-    },
-    {
-      title: 'Administrasi',
-      subtitle: 'Tata kelola kantor, surat menyurat & kepegawaian',
-      badge: 'OFFICE',
-      icon: FileText,
-      colorClass: 'text-indigo-500 dark:text-indigo-400',
-      bgClass: 'bg-indigo-500/10 dark:bg-indigo-500/20',
-      borderClass: 'border-indigo-500/20 group-hover:border-indigo-500/40',
-      badgeBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
-    },
-    {
-      title: 'Laboratorium',
-      subtitle: 'Analisa AAS, XRF, titrasi basah & instrumen analitik',
-      badge: 'LAB',
-      icon: FlaskConical,
-      colorClass: 'text-emerald-500 dark:text-emerald-400',
-      bgClass: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-      borderClass: 'border-emerald-500/20 group-hover:border-emerald-500/40',
-      badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-    },
-    {
-      title: 'Preparasi',
-      subtitle: 'Crushing bijih nikel, drying, pulverizing & sampling',
-      badge: 'PLANT',
-      icon: Hammer,
-      colorClass: 'text-amber-500 dark:text-amber-400',
-      bgClass: 'bg-amber-500/10 dark:bg-amber-500/20',
-      borderClass: 'border-amber-500/20 group-hover:border-amber-500/40',
-      badgeBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-    },
-    {
-      title: 'Maintenance',
-      subtitle: 'Perawatan mesin, kalibrasi sensor & perbaikan teknis',
-      badge: 'TEKNIK',
-      icon: Wrench,
-      colorClass: 'text-orange-500 dark:text-orange-400',
-      bgClass: 'bg-orange-500/10 dark:bg-orange-500/20',
-      borderClass: 'border-orange-500/20 group-hover:border-orange-500/40',
-      badgeBg: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20'
-    },
-    {
-      title: 'Inventory',
-      subtitle: 'Stok reagen kimia, consumables & suku cadang mesin',
-      badge: 'LOGISTIK',
-      icon: Package,
-      colorClass: 'text-cyan-500 dark:text-cyan-400',
-      bgClass: 'bg-cyan-500/10 dark:bg-cyan-500/20',
-      borderClass: 'border-cyan-500/20 group-hover:border-cyan-500/40',
-      badgeBg: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
-    },
-    {
-      title: 'Manajemen Mutu',
-      subtitle: 'Standar akreditasi ISO 17025, QA/QC & compliance',
-      badge: 'ISO 17025',
-      icon: Award,
-      colorClass: 'text-purple-500 dark:text-purple-400',
-      bgClass: 'bg-purple-500/10 dark:bg-purple-500/20',
-      borderClass: 'border-purple-500/20 group-hover:border-purple-500/40',
-      badgeBg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
-    },
-    {
-      title: 'General Issue',
-      subtitle: 'Pusat troubleshooting, kendala shift & tindak lanjut',
-      badge: 'ISSUES',
-      icon: AlertTriangle,
-      colorClass: 'text-rose-500 dark:text-rose-400',
-      bgClass: 'bg-rose-500/10 dark:bg-rose-500/20',
-      borderClass: 'border-rose-500/20 group-hover:border-rose-500/40',
-      badgeBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
-    },
-    {
-      title: 'Prosedur',
-      subtitle: 'Instruksi Kerja (IK), SOP & panduan teknis operasional',
-      badge: 'SOP',
-      icon: BookOpen,
+  // Workstation Sections Interactive State
+  const [sectionsList, setSectionsList] = useState<WorkstationSectionItem[]>(() => loadWorkstationSections());
+  const [isReorderingSections, setIsReorderingSections] = useState(false);
+  const [draggedSectionIdx, setDraggedSectionIdx] = useState<number | null>(null);
+  const [dragOverSectionIdx, setDragOverSectionIdx] = useState<number | null>(null);
+
+  // Edit / Add Modal State for Workstation Sections
+  const [editingSectionModal, setEditingSectionModal] = useState<{
+    isOpen: boolean;
+    index: number | null;
+    title: string;
+    subtitle: string;
+    badge: string;
+    iconName: string;
+  }>({
+    isOpen: false,
+    index: null,
+    title: '',
+    subtitle: '',
+    badge: '',
+    iconName: 'Info'
+  });
+
+  const handleDragStartSection = (idx: number, e: React.DragEvent) => {
+    setDraggedSectionIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(idx));
+  };
+
+  const handleDragOverSection = (idx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverSectionIdx !== idx) {
+      setDragOverSectionIdx(idx);
+    }
+  };
+
+  const handleDropSection = (dropIdx: number, e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedSectionIdx === null || draggedSectionIdx === dropIdx) {
+      setDraggedSectionIdx(null);
+      setDragOverSectionIdx(null);
+      return;
+    }
+    const updated = [...sectionsList];
+    const [moved] = updated.splice(draggedSectionIdx, 1);
+    updated.splice(dropIdx, 0, moved);
+    setSectionsList(updated);
+    saveWorkstationSections(updated);
+    setDraggedSectionIdx(null);
+    setDragOverSectionIdx(null);
+    toast.success('Urutan Workstation Section berhasil diubah');
+  };
+
+  const handleDragEndSection = () => {
+    setDraggedSectionIdx(null);
+    setDragOverSectionIdx(null);
+  };
+
+  const moveSectionItem = (idx: number, dir: 'up' | 'down') => {
+    const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= sectionsList.length) return;
+    const updated = [...sectionsList];
+    const temp = updated[idx];
+    updated[idx] = updated[targetIdx];
+    updated[targetIdx] = temp;
+    setSectionsList(updated);
+    saveWorkstationSections(updated);
+  };
+
+  const openAddSectionModal = () => {
+    setEditingSectionModal({
+      isOpen: true,
+      index: null,
+      title: '',
+      subtitle: '',
+      badge: 'MODUL',
+      iconName: 'Layers'
+    });
+  };
+
+  const openEditSectionModal = (idx: number) => {
+    const sec = sectionsList[idx];
+    if (!sec) return;
+    setEditingSectionModal({
+      isOpen: true,
+      index: idx,
+      title: sec.title,
+      subtitle: sec.subtitle || '',
+      badge: sec.badge || 'MODUL',
+      iconName: sec.iconName || 'Layers'
+    });
+  };
+
+  const handleSaveSectionModal = () => {
+    if (!editingSectionModal.title.trim()) {
+      toast.error('Nama seksi tidak boleh kosong');
+      return;
+    }
+    const updated = [...sectionsList];
+    const newItem: WorkstationSectionItem = {
+      id: editingSectionModal.index !== null ? updated[editingSectionModal.index].id : `sec-${Date.now()}`,
+      title: editingSectionModal.title.trim(),
+      subtitle: editingSectionModal.subtitle.trim() || undefined,
+      badge: editingSectionModal.badge.trim() || undefined,
+      iconName: editingSectionModal.iconName || 'Layers',
       colorClass: 'text-teal-500 dark:text-teal-400',
       bgClass: 'bg-teal-500/10 dark:bg-teal-500/20',
       borderClass: 'border-teal-500/20 group-hover:border-teal-500/40',
       badgeBg: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20'
+    };
+
+    if (editingSectionModal.index === null) {
+      updated.push(newItem);
+      toast.success(`Seksi "${newItem.title}" berhasil ditambahkan`);
+    } else {
+      updated[editingSectionModal.index] = {
+        ...updated[editingSectionModal.index],
+        ...newItem
+      };
+      toast.success(`Seksi "${newItem.title}" berhasil diperbarui`);
     }
-  ];
+
+    setSectionsList(updated);
+    saveWorkstationSections(updated);
+    setEditingSectionModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleDeleteSection = (idx: number) => {
+    const item = sectionsList[idx];
+    if (!item) return;
+    if (confirm(`Yakin ingin menghapus seksi "${item.title}"?`)) {
+      const updated = sectionsList.filter((_, i) => i !== idx);
+      setSectionsList(updated);
+      saveWorkstationSections(updated);
+      toast.success(`Seksi "${item.title}" telah dihapus`);
+    }
+  };
+
+  const resetWorkstationSections = () => {
+    setSectionsList(DEFAULT_WORKSTATION_ITEMS);
+    try {
+      localStorage.removeItem('preplab_workstation_sections');
+    } catch {}
+    toast.success('Workstation Sections dikembalikan ke setelan awal');
+  };
 
   const ruleItems = [
     {
@@ -1240,21 +1452,21 @@ export function TbpDashboard({
             >
               {/* Header */}
               <div 
-                className="px-5 py-3.5 flex items-center justify-between border-b"
+                className="px-5 py-3.5 flex items-center justify-between border-b transition-colors"
                 style={{
                   borderColor: 'var(--border-main, rgba(148, 163, 184, 0.15))',
-                  background: 'linear-gradient(to right, rgba(42, 157, 143, 0.08), transparent)'
+                  background: 'linear-gradient(to right, rgba(42, 157, 143, 0.08), rgba(0,0,0,0))'
                 }}
               >
                 <div className="flex items-center gap-3">
                   <div 
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shadow-xs text-white shrink-0"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shadow-xs text-white"
                     style={{ backgroundColor: 'var(--primary, #2A9D8F)' }}
                   >
                     <Layers className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="font-display font-bold text-sm sm:text-base tracking-wide uppercase" style={{ color: 'var(--text-main, #0f172a)' }}>
+                    <h2 className="font-display font-bold text-sm sm:text-base tracking-wide uppercase">
                       Workstation Sections
                     </h2>
                     <p className="text-xs text-[var(--text-muted)]" style={{ color: 'var(--text-muted, #64748b)' }}>
@@ -1262,30 +1474,161 @@ export function TbpDashboard({
                     </p>
                   </div>
                 </div>
-                <span 
-                  className="px-2.5 py-1 rounded-full text-xs font-bold tracking-wider uppercase border"
-                  style={{
-                    backgroundColor: 'var(--input-bg, rgba(0,0,0,0.04))',
-                    borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))',
-                    color: 'var(--text-muted, #64748b)'
-                  }}
-                >
-                  9 Modul
-                </span>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsReorderingSections(prev => !prev)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                      isReorderingSections
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'bg-white/80 hover:bg-teal-50 text-teal-800 border border-teal-200/80 dark:bg-slate-800/80 dark:text-teal-300 dark:border-teal-700/60'
+                    }`}
+                    title={isReorderingSections ? 'Selesai Mengatur' : 'Atur Urutan & Edit Menu'}
+                  >
+                    <ArrowUpDown className="w-3.5 h-3.5" />
+                    <span>{isReorderingSections ? 'Selesai' : 'Atur Menu'}</span>
+                  </button>
+
+                  {isReorderingSections ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={openAddSectionModal}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 cursor-pointer transition-all"
+                        title="Tambah Seksi Baru"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tambah</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetWorkstationSections}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white/60 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 cursor-pointer transition-all"
+                        title="Reset ke Default"
+                      >
+                        <ResetIcon className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    </>
+                  ) : (
+                    <span 
+                      className="px-2.5 py-1 rounded-full text-xs font-bold tracking-wider uppercase border"
+                      style={{
+                        backgroundColor: 'var(--input-bg, rgba(0,0,0,0.04))',
+                        borderColor: 'var(--border-main, rgba(148, 163, 184, 0.2))',
+                        color: 'var(--text-muted, #64748b)'
+                      }}
+                    >
+                      {sectionsList.length} Modul
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Items List */}
+              {/* Items List (Normal View or Interactive Drag/Edit Mode) */}
               <div className="p-2 space-y-1">
-                {sectionItems.map((item, idx) => {
-                  const Icon = item.icon;
+                {sectionsList.map((item, idx) => {
+                  const Icon = getWorkstationIcon(item.iconName);
+
+                  if (isReorderingSections) {
+                    return (
+                      <div
+                        key={item.id || idx}
+                        draggable
+                        onDragStart={(e) => handleDragStartSection(idx, e)}
+                        onDragOver={(e) => handleDragOverSection(idx, e)}
+                        onDrop={(e) => handleDropSection(idx, e)}
+                        onDragEnd={handleDragEndSection}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-all select-none ${
+                          draggedSectionIdx === idx
+                            ? 'opacity-40 border-dashed border-teal-500 bg-teal-50/50'
+                            : dragOverSectionIdx === idx
+                            ? 'border-teal-500 bg-teal-100/60 ring-2 ring-teal-400 shadow-md scale-[1.01]'
+                            : 'bg-white/80 dark:bg-slate-800/80 hover:bg-teal-50/50 border-slate-200 dark:border-slate-700 shadow-2xs'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-teal-600 rounded transition-colors">
+                            <GripVertical className="w-5 h-5" />
+                          </div>
+                          <span className="w-5 h-5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 text-[11px] font-mono font-bold flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className={`w-9 h-9 rounded-xl ${item.bgClass || 'bg-teal-500/10'} ${item.colorClass || 'text-teal-500'} flex items-center justify-center shrink-0`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="truncate flex-1">
+                            <span className="font-bold text-sm sm:text-base tracking-wide block truncate">
+                              {translateDisplayText(item.title)}
+                            </span>
+                            {item.subtitle && (
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-normal">
+                                {item.subtitle}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action Buttons: Edit, Delete, Panah Naik, Panah Turun */}
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditSectionModal(idx)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/40 border border-transparent hover:border-teal-200 cursor-pointer transition-all"
+                            title="Edit Nama / Icon / Keterangan"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSection(idx)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/40 border border-transparent hover:border-rose-200 cursor-pointer transition-all"
+                            title="Hapus Seksi"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5" />
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => moveSectionItem(idx, 'up')}
+                            className={`p-1.5 rounded-lg border text-slate-600 dark:text-slate-300 transition-all ${
+                              idx === 0
+                                ? 'opacity-30 cursor-not-allowed border-transparent'
+                                : 'hover:bg-teal-50 hover:text-teal-800 border-slate-200 dark:border-slate-700 cursor-pointer'
+                            }`}
+                            title="Geser ke Atas"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === sectionsList.length - 1}
+                            onClick={() => moveSectionItem(idx, 'down')}
+                            className={`p-1.5 rounded-lg border text-slate-600 dark:text-slate-300 transition-all ${
+                              idx === sectionsList.length - 1
+                                ? 'opacity-30 cursor-not-allowed border-transparent'
+                                : 'hover:bg-teal-50 hover:text-teal-800 border-slate-200 dark:border-slate-700 cursor-pointer'
+                            }`}
+                            title="Geser ke Bawah"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Normal Clickable Section Button
                   return (
                     <button
-                      key={idx}
+                      key={item.id || idx}
                       onClick={() => handleNav(item.title)}
-                      className="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-xl transition-all duration-200 group text-left cursor-pointer border border-transparent hover:scale-[1.008] active:scale-[0.995]"
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl border border-transparent transition-all group cursor-pointer"
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--input-bg, rgba(0, 0, 0, 0.03))';
-                        e.currentTarget.style.borderColor = 'var(--border-main, rgba(148, 163, 184, 0.3))';
+                        e.currentTarget.style.backgroundColor = 'var(--input-bg, rgba(0,0,0,0.03))';
+                        e.currentTarget.style.borderColor = 'var(--border-main, rgba(148, 163, 184, 0.2))';
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = 'transparent';
@@ -1293,14 +1636,14 @@ export function TbpDashboard({
                       }}
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl ${item.bgClass} ${item.colorClass} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 shadow-xs border ${item.borderClass}`}>
+                        <div className={`w-10 h-10 rounded-xl ${item.bgClass || 'bg-teal-500/10'} ${item.colorClass || 'text-teal-500'} flex items-center justify-center shrink-0 border ${item.borderClass || 'border-teal-500/20'} transition-transform group-hover:scale-105`}>
                           <Icon className="w-5 h-5" />
                         </div>
-                        <span className="font-bold text-sm sm:text-base tracking-tight truncate group-hover:text-[var(--primary)] transition-colors" style={{ color: 'var(--text-main, #0f172a)' }}>
+                        <span className="font-bold text-sm sm:text-base tracking-wide truncate">
                           {translateDisplayText(item.title)}
                         </span>
                       </div>
-                      <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" style={{ color: 'var(--text-muted, #64748b)' }} />
+                      <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                     </button>
                   );
                 })}
@@ -2239,6 +2582,127 @@ export function TbpDashboard({
         isOpen={Boolean(previewImage)}
         onClose={() => setPreviewImage(null)}
       />
-    </div>
+    
+      {/* Modal Dialog: Tambah / Edit Workstation Section */}
+      {editingSectionModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-slate-50 to-teal-50/50 dark:from-slate-800 dark:to-teal-950/30 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-200">
+                  {editingSectionModal.index === null ? <Plus className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    {editingSectionModal.index === null ? 'Tambah Workstation Section' : 'Edit Workstation Section'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Kustomisasi menu seksi langsung di portal
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingSectionModal(prev => ({ ...prev, isOpen: false }))}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  Nama Seksi <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingSectionModal.title}
+                  onChange={(e) => setEditingSectionModal(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Contoh: Laboratory, Maintenance, Sampling, dll."
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  Deskripsi / Subtitle (Opsional)
+                </label>
+                <input
+                  type="text"
+                  value={editingSectionModal.subtitle}
+                  onChange={(e) => setEditingSectionModal(prev => ({ ...prev, subtitle: e.target.value }))}
+                  placeholder="Contoh: Pengujian kimia & instrumen analitik"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  Pilih Icon
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { name: 'Info', label: 'Info' },
+                    { name: 'FileText', label: 'Office' },
+                    { name: 'FlaskConical', label: 'Lab' },
+                    { name: 'Hammer', label: 'Prep' },
+                    { name: 'Wrench', label: 'Teknik' },
+                    { name: 'Package', label: 'Stok' },
+                    { name: 'Award', label: 'Mutu' },
+                    { name: 'AlertTriangle', label: 'Issue' },
+                    { name: 'BookOpen', label: 'SOP' },
+                    { name: 'Shield', label: 'K3' },
+                    { name: 'Activity', label: 'Operasi' },
+                    { name: 'Layers', label: 'Modul' }
+                  ].map((ic) => {
+                    const IcComponent = getWorkstationIcon(ic.name);
+                    const isSelected = editingSectionModal.iconName === ic.name;
+                    return (
+                      <button
+                        key={ic.name}
+                        type="button"
+                        onClick={() => setEditingSectionModal(prev => ({ ...prev, iconName: ic.name }))}
+                        className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-200 ring-2 ring-teal-400'
+                            : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <IcComponent className="w-5 h-5" />
+                        <span className="text-[10px] font-semibold">{ic.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setEditingSectionModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSectionModal}
+                className="px-5 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 active:scale-98 rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Simpan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+</div>
   );
 }
