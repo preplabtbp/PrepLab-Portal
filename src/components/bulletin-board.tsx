@@ -456,7 +456,6 @@ export function BulletinBoard({
         return prev;
       });
     }
-    }
     setLoading(false);
   };
 
