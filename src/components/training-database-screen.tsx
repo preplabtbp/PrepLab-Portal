@@ -35,6 +35,9 @@ import {
   Info,
   Pencil,
   FileText,
+  Activity,
+  Grid3X3,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -1071,21 +1074,21 @@ function PersonAchievementModal({ record, onClose, scope }: { record: TrainingRe
 }
 
 
-// ===== KOMPONEN STATISTIK & ANALITIK INTUITIF =====
+// ===== KOMPONEN STATISTIK & ANALITIK INTUITIF (TERPISAH INTERNAL & EXTERNAL) =====
 interface TrainingStatisticsViewProps {
   records: TrainingRecord[];
   stats: any;
   dashboard: any;
   summaryPieRows: Array<{ label: string; value: number; color: string }>;
   summaryPieTotal: number;
-  combinedTrainingCertData: { grandTotal: number; rows: Array<{ label: string; value: number; color: string }> };
-  initialScope?: 'internal' | 'external' | string;
-  certRows?: any[];
-  pomStats?: any;
-  onOpenDatabaseWithFilter: (tab: any, filterModule?: string) => void;
+  combinedTrainingCertData: { grandTotal: number; rows: Array<{ label: string; value: number; color: string; category?: string }> };
+  onOpenDatabaseWithFilter: (tab: 'sap' | 'k3', filterModule?: string) => void;
+  initialScope?: 'internal' | 'external';
+  certRows?: TrainingCertification[];
+  pomStats?: { total: number; passed: number; belum: number; pctPassed: number };
 }
 
-type StatsSubTab = 'all' | 'barchart' | 'sap_modules' | 'dept_analysis' | 'cert_ranks';
+type StatsSubTab = 'all' | 'barchart' | 'sap_modules' | 'dept_analysis' | 'ext_all' | 'ext_ranks' | 'ext_dist';
 type BarChartMode = 'compliance' | 'status_stacked' | 'target_vs_done';
 type ModuleViewMode = 'grid' | 'chart' | 'table';
 
@@ -1097,12 +1100,21 @@ function TrainingStatisticsView({
   summaryPieTotal,
   combinedTrainingCertData,
   onOpenDatabaseWithFilter,
+  initialScope = 'internal',
+  certRows = [],
+  pomStats,
 }: TrainingStatisticsViewProps) {
-  const [statsSubTab, setStatsSubTab] = useState<StatsSubTab>('all');
+  const [statsScope, setStatsScope] = useState<'internal' | 'external'>(initialScope);
+  const [statsSubTab, setStatsSubTab] = useState<StatsSubTab>(initialScope === 'external' ? 'ext_all' : 'all');
   const [barChartMode, setBarChartMode] = useState<BarChartMode>('compliance');
   const [moduleViewMode, setModuleViewMode] = useState<ModuleViewMode>('grid');
 
-  // Breakdown status data dari summaryPieRows
+  const todayYmdStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  // --- Data Training Internal ---
   const berlakuItem = summaryPieRows.find(r => r.label.toLowerCase().includes('berlaku')) || { value: 506, color: '#10b981' };
   const warningItem = summaryPieRows.find(r => r.label.toLowerCase().includes('warning')) || { value: 18, color: '#f59e0b' };
   const expiredItem = summaryPieRows.find(r => r.label.toLowerCase().includes('expired')) || { value: 38, color: '#ef4444' };
@@ -1112,12 +1124,7 @@ function TrainingStatisticsView({
   const warningPct = Math.round((warningItem.value / totalStatus) * 100);
   const expiredPct = Math.max(0, 100 - berlakuPct - warningPct);
 
-  // Leaderboard kualifikasi sorted descending
-  const sortedCertRows = useMemo(() => {
-    return [...combinedTrainingCertData.rows].sort((a, b) => b.value - a.value);
-  }, [combinedTrainingCertData]);
-
-  // Modul coverage data
+  // Modul coverage data (Internal)
   const coverageData = useMemo(() => {
     return (stats.coverage || []).map((c: any) => {
       const target = c.target || 0;
@@ -1165,62 +1172,32 @@ function TrainingStatisticsView({
     return {
       labels,
       datasets: [
-        {
-          label: 'Berlaku / Aman',
-          data: coverageData.map(c => c.berlakuMurni),
-          backgroundColor: '#10b981',
-          borderRadius: 4,
-          barThickness: 22,
-        },
-        {
-          label: 'Warning (1-3 Bln)',
-          data: coverageData.map(c => c.warning),
-          backgroundColor: '#f59e0b',
-          borderRadius: 4,
-          barThickness: 22,
-        },
-        {
-          label: 'Expired / Lewat',
-          data: coverageData.map(c => c.expired),
-          backgroundColor: '#ef4444',
-          borderRadius: 4,
-          barThickness: 22,
-        },
+        { label: 'Berlaku (PASS)', data: coverageData.map(c => c.berlakuMurni), backgroundColor: '#10b981', borderRadius: 4, stack: 'Stack 0' },
+        { label: 'Warning (≤ 3 Bln)', data: coverageData.map(c => c.warning), backgroundColor: '#f59e0b', borderRadius: 4, stack: 'Stack 0' },
+        { label: 'Expired / Perlu Refresh', data: coverageData.map(c => c.expired), backgroundColor: '#ef4444', borderRadius: 4, stack: 'Stack 0' },
       ],
     };
   }, [coverageData]);
 
-  // Bar Chart 3: Target Peserta Wajib vs Realisasi Lulus
+  // Bar Chart 3: Target Peserta vs Realisasi (Orang)
   const moduleTargetVsDoneChartData = useMemo(() => {
     const labels = coverageData.map(c => c.label);
     return {
       labels,
       datasets: [
-        {
-          label: 'Target Wajib',
-          data: coverageData.map(c => c.target),
-          backgroundColor: '#94a3b8',
-          borderRadius: 6,
-          barThickness: 18,
-        },
-        {
-          label: 'Realisasi Lulus',
-          data: coverageData.map(c => c.done),
-          backgroundColor: '#0d9488',
-          borderRadius: 6,
-          barThickness: 18,
-        },
+        { label: 'Peserta Selesai (PASS)', data: coverageData.map(c => c.done), backgroundColor: '#0d9488', borderRadius: 6, barThickness: 18 },
+        { label: 'Target Wajib', data: coverageData.map(c => c.target), backgroundColor: '#cbd5e1', borderRadius: 6, barThickness: 18 },
       ],
     };
   }, [coverageData]);
 
-  // Statistik per Bagian / Departemen
+  // Analisis Departemen / Bagian (Internal)
   const bagianStats = useMemo(() => {
     const map = new Map<string, { total: number; complete: number; inSap: number }>();
     records.forEach(r => {
-      const bagian = (r.bagian || 'Tanpa Bagian').trim();
-      if (!map.has(bagian)) map.set(bagian, { total: 0, complete: 0, inSap: 0 });
-      const item = map.get(bagian)!;
+      const b = r.bagian || 'Tanpa Bagian';
+      if (!map.has(b)) map.set(b, { total: 0, complete: 0, inSap: 0 });
+      const item = map.get(b)!;
       item.total++;
       if (r.inSap) {
         item.inSap++;
@@ -1236,65 +1213,62 @@ function TrainingStatisticsView({
         complete: data.complete,
         pct: data.inSap > 0 ? Math.round((data.complete / data.inSap) * 100) : 0,
       }))
-      .filter(b => b.total > 0)
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => b.pct - a.pct || b.total - a.total);
   }, [records]);
 
-  // Bar Chart per Bagian
   const bagianChartData = useMemo(() => {
     const labels = bagianStats.map(b => b.name);
     const data = bagianStats.map(b => b.pct);
     const bgColors = bagianStats.map(b => (b.pct >= 90 ? '#10b981' : b.pct >= 70 ? '#f59e0b' : '#0d9488'));
+
     return {
       labels,
       datasets: [
         {
-          label: '% Kepatuhan Training SAP',
+          label: '% Kepatuhan Bagian',
           data,
           backgroundColor: bgColors,
           borderRadius: 8,
-          barThickness: 20,
+          barThickness: 22,
         },
       ],
     };
   }, [bagianStats]);
 
-  // Statistik per Golongan (GOL)
+  // Analisis Golongan (Internal)
   const golStats = useMemo(() => {
     const map = new Map<string, { total: number; complete: number; inSap: number }>();
-    GOL_OPTIONS.forEach(g => map.set(g, { total: 0, complete: 0, inSap: 0 }));
     records.forEach(r => {
-      const gol = (r.gol || '').trim();
-      if (map.has(gol)) {
-        const item = map.get(gol)!;
-        item.total++;
-        if (r.inSap) {
-          item.inSap++;
-          if (isSapComplete(r)) item.complete++;
-        }
+      const g = r.gol ? `GOL ${r.gol}` : 'Non-Golongan';
+      if (!map.has(g)) map.set(g, { total: 0, complete: 0, inSap: 0 });
+      const item = map.get(g)!;
+      item.total++;
+      if (r.inSap) {
+        item.inSap++;
+        if (isSapComplete(r)) item.complete++;
       }
     });
 
-    return GOL_OPTIONS.map(g => {
-      const data = map.get(g) || { total: 0, complete: 0, inSap: 0 };
-      return {
-        gol: `GOL ${g}`,
+    const order = ['GOL I', 'GOL II', 'GOL III', 'GOL IV', 'GOL V', 'Non-Golongan'];
+    return Array.from(map.entries())
+      .map(([name, data]) => ({
+        name,
         total: data.total,
-        complete: data.complete,
         inSap: data.inSap,
+        complete: data.complete,
         pct: data.inSap > 0 ? Math.round((data.complete / data.inSap) * 100) : 0,
-      };
-    });
+      }))
+      .sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
   }, [records]);
 
   const golChartData = useMemo(() => {
     return {
-      labels: golStats.map(g => g.gol),
+      labels: golStats.map(g => g.name),
       datasets: [
         {
-          label: '% Kepatuhan',
+          label: '% Kepatuhan Golongan',
           data: golStats.map(g => g.pct),
-          backgroundColor: '#0d9488',
+          backgroundColor: '#3b82f6',
           borderRadius: 8,
           barThickness: 28,
         },
@@ -1302,25 +1276,41 @@ function TrainingStatisticsView({
     };
   }, [golStats]);
 
-  // Bar Chart Sertifikasi
-  const certChartData = useMemo(() => {
+  // --- Data Training External & Sertifikasi ---
+  const sortedCertRows = useMemo(() => {
+    return [...combinedTrainingCertData.rows].sort((a, b) => b.value - a.value);
+  }, [combinedTrainingCertData]);
+
+  const extActiveCount = useMemo(() => {
+    return certRows.filter(c => certStatus(c.expired, todayYmdStr).status === 'active').length;
+  }, [certRows, todayYmdStr]);
+  const extSoonCount = useMemo(() => {
+    return certRows.filter(c => certStatus(c.expired, todayYmdStr).status === 'soon').length;
+  }, [certRows, todayYmdStr]);
+  const extExpiredCount = useMemo(() => {
+    return certRows.filter(c => certStatus(c.expired, todayYmdStr).status === 'expired').length;
+  }, [certRows, todayYmdStr]);
+
+  const totalExtCertStatus = extActiveCount + extSoonCount + extExpiredCount || 1;
+  const extActivePct = Math.round((extActiveCount / totalExtCertStatus) * 100);
+  const extSoonPct = Math.round((extSoonCount / totalExtCertStatus) * 100);
+  const extExpiredPct = Math.max(0, 100 - extActivePct - extSoonPct);
+
+  // Sebaran Sertifikasi per PT (PT TBP vs PT GPS)
+  const extPtChartData = useMemo(() => {
+    const tbpCount = certRows.filter(c => (c.pt || 'TBP').toUpperCase().includes('TBP')).length;
+    const gpsCount = certRows.filter(c => (c.pt || '').toUpperCase().includes('GPS')).length;
     return {
-      labels: sortedCertRows.map(c => c.label),
+      labels: ['PT TBP', 'PT GPS'],
       datasets: [
-        {
-          label: 'Jumlah Personel',
-          data: sortedCertRows.map(c => c.value),
-          backgroundColor: sortedCertRows.map(c => c.color || '#0d9488'),
-          borderRadius: 8,
-          barThickness: 22,
-        },
+        { label: 'Jumlah Sertifikat', data: [tbpCount, gpsCount], backgroundColor: ['#0d9488', '#f59e0b'], borderRadius: 8, barThickness: 32 },
       ],
     };
-  }, [sortedCertRows]);
+  }, [certRows]);
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-200">
-      {/* ===== Header Statistik & Sub-Menu Tabs ===== */}
+    <div className="space-y-4">
+      {/* Header Utama Statistik & Scope Switcher (Internal vs External) */}
       <div className="rounded-[24px] bg-white dark:bg-slate-900 p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 shrink-0">
@@ -1329,26 +1319,65 @@ function TrainingStatisticsView({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100">
-                Dashboard Statistik &amp; Kepatuhan Training
+                {statsScope === 'internal'
+                  ? 'Statistik & Analisis Training Internal'
+                  : 'Statistik & Analisis Training External'}
               </h3>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
-                Pusat Analitik
+                {statsScope === 'internal' ? 'SAP & K3 Operasional' : 'POP, POM & Sertifikasi Eksternal'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Pilih opsi statistik di bawah untuk melihat grafik batang, matriks modul, dan analisis kepatuhan per departemen.
+              {statsScope === 'internal'
+                ? 'Analisis kepatuhan, matriks modul, dan sebaran peserta training wajib internal (SAP & K3).'
+                : 'Analisis kualifikasi pengawas operasional (POP/POM) serta peringkat sertifikasi kompetensi eksternal.'}
             </p>
           </div>
         </div>
 
-        {/* Sub-menu Tabs di dalam Statistik */}
-        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 overflow-x-auto">
-          {[
-            { id: 'all' as const, label: '🎯 Ringkasan' },
-            { id: 'barchart' as const, label: '📊 Bar Chart' },
-            { id: 'sap_modules' as const, label: '📋 Matriks Modul' },
+        {/* Pemisah Pilihan: Training Internal vs Training External */}
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => {
+                setStatsScope('internal');
+                setStatsSubTab('all');
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                statsScope === 'internal'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              Training Internal
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStatsScope('external');
+                setStatsSubTab('ext_all');
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                statsScope === 'external'
+                  ? 'bg-teal-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              Training External
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Sub-menu Tabs sesuai Scope yang Dipilih */}
+      <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 overflow-x-auto">
+        {statsScope === 'internal' ? (
+          [
+            { id: 'all' as const, label: '🎯 Ringkasan Internal' },
+            { id: 'barchart' as const, label: '📊 Bar Chart Modul' },
+            { id: 'sap_modules' as const, label: '📋 Matriks Modul SAP' },
             { id: 'dept_analysis' as const, label: '🏢 Bagian & GOL' },
-            { id: 'cert_ranks' as const, label: '🏆 Sertifikasi' },
           ].map(t => (
             <button
               key={t.id}
@@ -1362,272 +1391,953 @@ function TrainingStatisticsView({
             >
               {t.label}
             </button>
-          ))}
-        </div>
+          ))
+        ) : (
+          [
+            { id: 'ext_all' as const, label: '🎯 Ringkasan External' },
+            { id: 'ext_ranks' as const, label: '🏆 Peringkat Sertifikasi' },
+            { id: 'ext_dist' as const, label: '🏢 Sebaran PT & Bagian' },
+          ].map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setStatsSubTab(t.id)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                statsSubTab === t.id
+                  ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))
+        )}
       </div>
 
-      {/* ===== KONTEN TAB 1: RINGKASAN & KEPATUHAN ===== */}
-      {(statsSubTab === 'all') && (
+      {/* ============================================================ */}
+      {/* ==================== STATISTIK INTERNAL ==================== */}
+      {/* ============================================================ */}
+      {statsScope === 'internal' && (
         <div className="space-y-4">
-          {/* Baris 1: 3 Program Utama Ringkas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-            {/* Card Program SAP */}
-            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black uppercase tracking-wider text-teal-600 flex items-center gap-1.5">
-                    <ClipboardCheck className="w-4 h-4" />
-                    TRAINING SAP (WAJIB)
-                  </span>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
-                    6 Modul
-                  </span>
+          {/* Baris 1: 3 Program Utama Ringkas (SAP, K3 Operasional, Persiapan Pra POP) */}
+          {(statsSubTab === 'all') && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+              {/* Card Program SAP */}
+              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-teal-600 flex items-center gap-1.5">
+                      <ClipboardCheck className="w-4 h-4" />
+                      TRAINING SAP (WAJIB)
+                    </span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                      6 Modul
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                      {dashboard.sap?.pct ?? 0}%
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">Kepatuhan Keseluruhan</span>
+                  </div>
+                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="h-full rounded-full bg-teal-600 transition-all duration-500" style={{ width: `${dashboard.sap?.pct ?? 0}%` }} />
+                  </div>
                 </div>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                    {dashboard.sap?.pct ?? 0}%
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Status Personel:</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    <span className="text-emerald-600">{dashboard.sap?.complete ?? 0} Lengkap</span> • <span className="text-rose-600">{dashboard.sap?.expired ?? 0} Expired</span>
                   </span>
-                  <span className="text-xs font-semibold text-slate-500">Kepatuhan Keseluruhan</span>
-                </div>
-                <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div className="h-full rounded-full bg-teal-600 transition-all duration-500" style={{ width: `${dashboard.sap.pct}%` }} />
                 </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Status Personel:</span>
-                <span className="font-bold text-slate-900 dark:text-slate-100">
-                  <span className="text-emerald-600">{dashboard.sap?.complete ?? 0} Lengkap</span> • <span className="text-rose-600">{dashboard.sap?.expired ?? 0} Expired</span>
+
+              {/* Card Program K3 */}
+              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
+                      <HardHat className="w-4 h-4" />
+                      TRAINING K3 OPERASIONAL
+                    </span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                      WAH, LOTO, CS
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                      {dashboard.k3?.pct ?? 0}%
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">Tingkat Pemenuhan</span>
+                  </div>
+                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${dashboard.k3?.pct ?? 0}%` }} />
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Kelengkapan:</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    {dashboard.k3?.complete ?? 0} Lengkap dari {dashboard.k3?.total ?? 0} Personel
+                  </span>
+                </div>
+              </div>
+
+              {/* Card Program Pra POP */}
+              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
+                      <Award className="w-4 h-4" />
+                      PERSIAPAN PRA POP
+                    </span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                      Pengawas
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                      {dashboard.pop?.pct ?? 0}%
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">Realisasi Kandidat</span>
+                  </div>
+                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${dashboard.pop?.pct ?? 0}%` }} />
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Total Kandidat:</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    {dashboard.pop?.stages?.[0]?.count ?? 0} dari {dashboard.pop?.total ?? 0} Terlaksana
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Baris 2: Linear Stacked Health Bar (Distribusi Masa Aktif Training Wajib Internal) */}
+          {(statsSubTab === 'all') && (
+            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-teal-600" />
+                    Distribusi Masa Aktif Training Wajib Internal ({totalStatus} Status Tercatat)
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Visualisasi proporsi masa berlaku seluruh training wajib dihitung dari batas waktu kadaluarsa.
+                  </p>
+                </div>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  Toleransi: Warning 3 Bln
                 </span>
               </div>
-            </div>
 
-            {/* Card Program K3 */}
-            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
-                    <HardHat className="w-4 h-4" />
-                    TRAINING K3 OPERASIONAL
-                  </span>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                    WAH, LOTO, CS
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                    {dashboard.k3?.pct ?? 0}%
-                  </span>
-                  <span className="text-xs font-semibold text-slate-500">Tingkat Pemenuhan</span>
-                </div>
-                <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div className="h-full rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${dashboard.k3.pct}%` }} />
+              {/* Single Linear Progress Bar */}
+              <div className="space-y-2">
+                <div className="h-7 w-full rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner p-1 gap-1">
+                  {berlakuPct > 0 && (
+                    <div
+                      style={{ width: `${berlakuPct}%` }}
+                      className="h-full rounded-xl bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      title={`Berlaku: ${berlakuItem.value} (${berlakuPct}%)`}
+                    >
+                      {berlakuPct >= 8 ? `${berlakuPct}%` : ''}
+                    </div>
+                  )}
+                  {warningPct > 0 && (
+                    <div
+                      style={{ width: `${warningPct}%` }}
+                      className="h-full rounded-xl bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      title={`Warning: ${warningItem.value} (${warningPct}%)`}
+                    >
+                      {warningPct >= 5 ? `${warningPct}%` : ''}
+                    </div>
+                  )}
+                  {expiredPct > 0 && (
+                    <div
+                      style={{ width: `${expiredPct}%` }}
+                      className="h-full rounded-xl bg-rose-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      title={`Expired: ${expiredItem.value} (${expiredPct}%)`}
+                    >
+                      {expiredPct >= 5 ? `${expiredPct}%` : ''}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Kelengkapan:</span>
-                <span className="font-bold text-slate-900 dark:text-slate-100">
-                  {dashboard.k3?.complete ?? 0} Lengkap dari {dashboard.k3?.total ?? 0} Personel
-                </span>
-              </div>
-            </div>
 
-            {/* Card Program POP */}
-            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
-                    <Award className="w-4 h-4" />
-                    PERSIAPAN PRA POP
-                  </span>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                    Pengawas
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
-                    {dashboard.pop?.pct ?? 0}%
-                  </span>
-                  <span className="text-xs font-semibold text-slate-500">Realisasi Kandidat</span>
-                </div>
-                <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${dashboard.pop.pct}%` }} />
-                </div>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Total Kandidat:</span>
-                <span className="font-bold text-slate-900 dark:text-slate-100">
-                  {dashboard.pop?.stages?.[0]?.count ?? 0} dari {dashboard.pop?.total ?? 0} Terlaksana
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Baris 2: Linear Stacked Health Bar */}
-          <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-teal-600" />
-                  Distribusi Masa Aktif Sertifikasi &amp; Training ({totalStatus} Status Tercatat)
-                </h4>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Visualisasi proporsi masa berlaku seluruh training wajib dihitung dari batas waktu kadaluarsa.
-                </p>
-              </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                Toleransi: Warning 3 Bln
-              </span>
-            </div>
-
-            {/* Single Linear Progress Bar */}
-            <div className="space-y-2">
-              <div className="h-7 w-full rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner p-1 gap-1">
-                {berlakuPct > 0 && (
-                  <div
-                    style={{ width: `${berlakuPct}%` }}
-                    className="h-full rounded-xl bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
-                    title={`Berlaku: ${berlakuItem.value} (${berlakuPct}%)`}
-                  >
-                    {berlakuPct >= 8 ? `${berlakuPct}%` : ''}
+              {/* 3 Kotak Detail Status Interaktif */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div className="p-3.5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      Status Berlaku / Aktif
+                    </span>
+                    <span className="text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{berlakuItem.value}</span>
                   </div>
-                )}
-                {warningPct > 0 && (
-                  <div
-                    style={{ width: `${warningPct}%` }}
-                    className="h-full rounded-xl bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
-                    title={`Warning: ${warningItem.value} (${warningPct}%)`}
-                  >
-                    {warningPct >= 5 ? `${warningPct}%` : ''}
+                  <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-1">Masa aktif aman &gt; 1 tahun</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                      Warning (Segera Expired)
+                    </span>
+                    <span className="text-sm font-black text-amber-700 dark:text-amber-300 tabular-nums">{warningItem.value}</span>
                   </div>
-                )}
-                {expiredPct > 0 && (
-                  <div
-                    style={{ width: `${expiredPct}%` }}
-                    className="h-full rounded-xl bg-rose-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
-                    title={`Expired: ${expiredItem.value} (${expiredPct}%)`}
-                  >
-                    {expiredPct >= 5 ? `${expiredPct}%` : ''}
+                  <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 mt-1">Habis dalam 1–3 bulan lagi</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl border border-rose-200/80 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                      Expired / Perlu Diperpanjang
+                    </span>
+                    <span className="text-sm font-black text-rose-700 dark:text-rose-300 tabular-nums">{expiredItem.value}</span>
                   </div>
-                )}
+                  <p className="text-[11px] text-rose-600/80 dark:text-rose-400/80 mt-1">Sudah lewat batas waktu</p>
+                </div>
               </div>
             </div>
+          )}
 
-            {/* 3 Kotak Detail Status Interaktif */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              <div className="p-3.5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    Status Berlaku / Aktif
-                  </span>
-                  <span className="text-sm font-black text-emerald-700 dark:text-emerald-400">{berlakuItem.value}</span>
+          {/* Bar Chart Modul (Tab 'barchart') */}
+          {(statsSubTab === 'barchart') && (
+            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-teal-600" />
+                    Grafik Batang Analisis Modul Training Internal
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Analisis mendalam per modul training wajib: persentase kepatuhan, perbandingan status, dan target peserta.
+                  </p>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-2">Masa aktif aman &gt; 1 tahun</p>
+
+                {/* Mode Selector */}
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
+                  {[
+                    { id: 'compliance' as const, label: '% Kepatuhan' },
+                    { id: 'status_stacked' as const, label: 'Komposisi Status' },
+                    { id: 'target_vs_done' as const, label: 'Target vs Realisasi' },
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setBarChartMode(m.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        barChartMode === m.id
+                          ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    Warning (Segera Expired)
-                  </span>
-                  <span className="text-sm font-black text-amber-700 dark:text-amber-400">{warningItem.value}</span>
+              {/* Visualisasi Bar Chart Sesuai Mode */}
+              {barChartMode === 'compliance' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Persentase Kepatuhan Personel per Modul Wajib
+                    </span>
+                    <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> ≥ 90% (Sangat Baik)</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> 70–89% (Cukup)</span>
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> &lt; 70% (Perlu Tindakan)</span>
+                    </div>
+                  </div>
+                  <div className="h-[340px] w-full p-2">
+                    <Bar
+                      data={moduleComplianceChartData}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: {
+                          x: {
+                            min: 0,
+                            max: 100,
+                            ticks: { callback: v => `${v}%`, font: { size: 11, weight: 'bold' } },
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                          },
+                          y: {
+                            ticks: { font: { size: 12, weight: 'bold' } },
+                            grid: { display: false },
+                          },
+                        },
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              label: ctx => {
+                                const c = coverageData[ctx.dataIndex];
+                                return ` Kepatuhan: ${c.pct}% (${c.done} dari ${c.target} peserta wajib)`;
+                              },
+                            },
+                          },
+                        },
+                      }}
+                    />
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-2">Habis dalam 1–3 bulan lagi</p>
+              )}
+
+              {barChartMode === 'status_stacked' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Komposisi Status Masa Berlaku per Modul (Jumlah Orang)
+                    </span>
+                  </div>
+                  <div className="h-[340px] w-full p-2">
+                    <Bar
+                      data={moduleStackedStatusChartData}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        scales: {
+                          x: { stacked: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                          y: { stacked: true, grid: { display: false } },
+                        },
+                        plugins: {
+                          legend: { position: 'top', labels: { boxWidth: 12, font: { weight: 'bold', size: 11 } } },
+                        },
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {barChartMode === 'target_vs_done' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Target Wajib vs Realisasi Personel Selesai Training
+                    </span>
+                  </div>
+                  <div className="h-[340px] w-full p-2">
+                    <Bar
+                      data={moduleTargetVsDoneChartData}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                          x: { grid: { display: false }, ticks: { font: { size: 11, weight: 'bold' } } },
+                          y: { grid: { color: 'rgba(0,0,0,0.05)' } },
+                        },
+                        plugins: {
+                          legend: { position: 'top', labels: { boxWidth: 12, font: { weight: 'bold', size: 11 } } },
+                        },
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Matriks Kepatuhan per Modul Training SAP (Tab 'sap_modules' atau 'all') */}
+          {(statsSubTab === 'all' || statsSubTab === 'sap_modules') && (
+            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Grid3X3 className="w-4 h-4 text-teal-600" />
+                    Matriks Kepatuhan per Modul Training SAP
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Kartu status modul terpadu. Memisahkan modul yang 100% tuntas vs modul yang membutuhkan tindakan perpanjangan.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
+                    {[
+                      { id: 'grid' as const, label: 'Kartu' },
+                      { id: 'chart' as const, label: 'Bar Chart' },
+                      { id: 'table' as const, label: 'Tabel' },
+                    ].map(v => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setModuleViewMode(v.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          moduleViewMode === v.id
+                            ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenDatabaseWithFilter('sap')}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 text-xs font-bold hover:bg-teal-50 dark:hover:bg-teal-950/60 cursor-pointer transition-colors"
+                  >
+                    Buka Database SAP →
+                  </button>
+                </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl border border-rose-200/80 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                    Expired / Perlu Diperpanjang
-                  </span>
-                  <span className="text-sm font-black text-rose-700 dark:text-rose-400">{expiredItem.value}</span>
+              {moduleViewMode === 'grid' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {coverageData.map((c: any) => {
+                    const isPerfect = c.pct === 100;
+                    return (
+                      <div
+                        key={c.key}
+                        className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                          isPerfect
+                            ? 'border-emerald-200/80 bg-emerald-50/20 dark:bg-emerald-950/10 hover:border-emerald-300'
+                            : c.pct >= 70
+                            ? 'border-amber-200/80 bg-amber-50/20 dark:bg-amber-950/10 hover:border-amber-300'
+                            : 'border-rose-200/80 bg-rose-50/20 dark:bg-rose-950/10 hover:border-rose-300'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                                {c.key.toUpperCase()}
+                              </span>
+                              <h5 className="text-xs font-semibold text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-1">
+                                {c.desc || c.label}
+                              </h5>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                isPerfect
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : c.pct >= 70
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                              }`}
+                            >
+                              {isPerfect ? '✓ 100% Lengkap' : `⚠️ ${c.pct}% Perlu Tindakan`}
+                            </span>
+                          </div>
+
+                          <div className="mt-3">
+                            <div className="flex items-center justify-between text-xs font-bold mb-1">
+                              <span className="text-slate-500">Cakupan Peserta:</span>
+                              <span className="text-slate-800 dark:text-slate-100">
+                                {c.done} / {c.target} Orang ({c.pct}%)
+                              </span>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  isPerfect ? 'bg-emerald-500' : c.pct >= 70 ? 'bg-amber-500' : 'bg-rose-500'
+                                }`}
+                                style={{ width: `${c.pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
+                          {isPerfect ? (
+                            <span className="text-emerald-700 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Seluruh personel patuh
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-600 dark:text-slate-400">
+                              {c.warning > 0 && <span className="text-amber-700">⚠️ {c.warning} warning</span>}
+                              {c.expired > 0 && <span className="text-rose-700">❌ {c.expired} expired</span>}
+                              {c.target - c.done > 0 && <span>{c.target - c.done} belum ikut</span>}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onOpenDatabaseWithFilter('sap', c.key)}
+                            className="text-teal-600 font-bold hover:underline text-xs cursor-pointer"
+                          >
+                            Filter Modul →
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-2">Sudah lewat batas waktu</p>
+              )}
+
+              {moduleViewMode === 'chart' && (
+                <div className="h-[280px] w-full p-2">
+                  <Bar
+                    data={moduleComplianceChartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        x: { grid: { display: false } },
+                        y: { min: 0, max: 100, ticks: { callback: v => `${v}%` } },
+                      },
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          callbacks: {
+                            label: ctx => {
+                              const c = coverageData[ctx.dataIndex];
+                              return ` Kepatuhan: ${c.pct}% (${c.done} / ${c.target} Orang)`;
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              )}
+
+              {moduleViewMode === 'table' && (
+                <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 dark:bg-slate-800 text-slate-700 font-bold uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-2.5">Modul</th>
+                        <th className="px-4 py-2.5 text-center">Wajib</th>
+                        <th className="px-4 py-2.5 text-center">Selesai</th>
+                        <th className="px-4 py-2.5 text-center">Warning</th>
+                        <th className="px-4 py-2.5 text-center">Expired</th>
+                        <th className="px-4 py-2.5 text-center">Kepatuhan</th>
+                        <th className="px-4 py-2.5 text-center">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {coverageData.map((c: any) => (
+                        <tr key={c.key} className="hover:bg-slate-50/50">
+                          <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-slate-100">{c.label} ({c.key.toUpperCase()})</td>
+                          <td className="px-4 py-2.5 text-center font-semibold">{c.target}</td>
+                          <td className="px-4 py-2.5 text-center font-bold text-emerald-600">{c.done}</td>
+                          <td className="px-4 py-2.5 text-center font-bold text-amber-600">{c.warning}</td>
+                          <td className="px-4 py-2.5 text-center font-bold text-rose-600">{c.expired}</td>
+                          <td className="px-4 py-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                              c.pct >= 90 ? 'bg-emerald-100 text-emerald-800' : c.pct >= 70 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                            }`}>
+                              {c.pct}%
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => onOpenDatabaseWithFilter('sap', c.key)}
+                              className="text-teal-600 hover:underline font-bold"
+                            >
+                              Lihat
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Analisis Bagian & GOL (Tab 'dept_analysis') */}
+          {(statsSubTab === 'dept_analysis') && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Box 1: Kepatuhan Bagian Kerja */}
+              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-teal-600" />
+                    Kepatuhan Training SAP per Bagian Kerja
+                  </h4>
+                  <p className="text-[11px] text-slate-500">Persentase kelengkapan seluruh modul SAP wajib berdasarkan departemen/bagian.</p>
+                </div>
+                <div className="h-[280px] w-full p-1">
+                  <Bar
+                    data={bagianChartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        x: { ticks: { font: { size: 11, weight: 'bold' } }, grid: { display: false } },
+                        y: { min: 0, max: 100, ticks: { callback: v => `${v}%` }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                      },
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          callbacks: {
+                            label: ctx => {
+                              const b = bagianStats[ctx.dataIndex];
+                              return ` Kepatuhan: ${b.pct}% (${b.complete} lengkap dari ${b.inSap} personel SAP, total tim: ${b.total})`;
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Box 2: Kepatuhan Golongan (GOL) */}
+              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-600" />
+                    Kepatuhan Training SAP per Golongan (GOL)
+                  </h4>
+                  <p className="text-[11px] text-slate-500">Persentase kelengkapan training wajib berdasarkan level Golongan karyawan.</p>
+                </div>
+                <div className="h-[280px] w-full p-1">
+                  <Bar
+                    data={golChartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        x: { ticks: { font: { size: 11, weight: 'bold' } }, grid: { display: false } },
+                        y: { min: 0, max: 100, ticks: { callback: v => `${v}%` }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                      },
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          callbacks: {
+                            label: ctx => {
+                              const g = golStats[ctx.dataIndex];
+                              return ` Kepatuhan: ${g.pct}% (${g.complete} dari ${g.inSap} personel SAP, total: ${g.total})`;
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* ===== KONTEN TAB 2: OPSI BAR CHART ANALITIK ===== */}
-      {(statsSubTab === 'barchart') && (
-        <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-5">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
-            <div>
-              <h4 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-teal-600" />
-                Pilihan Diagram Batang (Bar Chart Suite)
-              </h4>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Visualisasi komparatif per modul training. Pilih mode grafik yang ingin ditampilkan di bawah.
-              </p>
-            </div>
-
-            {/* Selector Mode Bar Chart */}
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 self-start md:self-auto">
-              {[
-                { id: 'compliance' as const, label: '% Kepatuhan' },
-                { id: 'status_stacked' as const, label: 'Status Bertumpuk (Stacked)' },
-                { id: 'target_vs_done' as const, label: 'Target vs Realisasi' },
-              ].map(m => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setBarChartMode(m.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    barChartMode === m.id
-                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Visualisasi Bar Chart Sesuai Mode */}
-          {barChartMode === 'compliance' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Persentase Kepatuhan Personel per Modul Wajib
-                </span>
-                <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> ≥ 90% (Sangat Baik)</span>
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> 70–89% (Cukup)</span>
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> &lt; 70% (Perlu Tindakan)</span>
+      {/* ============================================================ */}
+      {/* ==================== STATISTIK EXTERNAL ==================== */}
+      {/* ============================================================ */}
+      {statsScope === 'external' && (
+        <div className="space-y-4">
+          {/* Baris 1: 3 Kartu Ringkasan Training External */}
+          {(statsSubTab === 'ext_all') && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+              {/* Card 1: POP */}
+              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-teal-600 flex items-center gap-1.5">
+                      <Award className="w-4 h-4" />
+                      SERTIFIKASI POP (PENGAWAS OPERASIONAL PERTAMA)
+                    </span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                      Operasional
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                      {dashboard.pop?.pct ?? 0}%
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">Realisasi Kandidat</span>
+                  </div>
+                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="h-full rounded-full bg-teal-600 transition-all duration-500" style={{ width: `${dashboard.pop?.pct ?? 0}%` }} />
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Status POP:</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    {dashboard.pop?.stages?.[0]?.count ?? 0} dari {dashboard.pop?.total ?? 0} Kandidat Terlaksana
+                  </span>
                 </div>
               </div>
-              <div className="h-[340px] w-full p-2">
+
+              {/* Card 2: POM */}
+              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-emerald-600 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      SERTIFIKASI POM (PENGAWAS OPERASIONAL MADYA)
+                    </span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                      Madya
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                      {pomStats?.pctPassed ?? 0}%
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">Kelulusan POM</span>
+                  </div>
+                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="h-full rounded-full bg-emerald-600 transition-all duration-500" style={{ width: `${pomStats?.pctPassed ?? 0}%` }} />
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Realisasi POM:</span>
+                  <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                    {pomStats?.passed ?? 0} Lulus dari {pomStats?.total ?? 0} Terdaftar
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 3: Sertifikasi Eksternal / K3 Lainnya */}
+              <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-amber-600 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4" />
+                      SERTIFIKASI PROFESI & K3 EKSTERNAL
+                    </span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                      Eksternal
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-4xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                      {combinedTrainingCertData.grandTotal}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">Sertifikat Terdata</span>
+                  </div>
+                  <div className="mt-3 h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${extActivePct}%` }} />
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">Masa Berlaku:</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    <span className="text-emerald-600">{extActiveCount} Aktif</span> • <span className="text-amber-600">{extSoonCount} Warning</span> • <span className="text-rose-600">{extExpiredCount} Expired</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Baris 2: Linear Health Bar Status Masa Berlaku Sertifikasi Eksternal */}
+          {(statsSubTab === 'ext_all') && (
+            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-teal-600" />
+                    Distribusi Masa Aktif Sertifikasi Eksternal ({certRows.length} Sertifikat Tercatat)
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Visualisasi proporsi masa aktif sertifikat K3 Kimia, K3 Listrik, ISO 17025, Proteksi Radiasi, dll.
+                  </p>
+                </div>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  Toleransi: Warning 1 Tahun
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="space-y-2">
+                <div className="h-7 w-full rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex shadow-inner p-1 gap-1">
+                  {extActivePct > 0 && (
+                    <div
+                      style={{ width: `${extActivePct}%` }}
+                      className="h-full rounded-xl bg-emerald-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      title={`Aktif: ${extActiveCount} (${extActivePct}%)`}
+                    >
+                      {extActivePct >= 8 ? `${extActivePct}%` : ''}
+                    </div>
+                  )}
+                  {extSoonPct > 0 && (
+                    <div
+                      style={{ width: `${extSoonPct}%` }}
+                      className="h-full rounded-xl bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      title={`Warning: ${extSoonCount} (${extSoonPct}%)`}
+                    >
+                      {extSoonPct >= 5 ? `${extSoonPct}%` : ''}
+                    </div>
+                  )}
+                  {extExpiredPct > 0 && (
+                    <div
+                      style={{ width: `${extExpiredPct}%` }}
+                      className="h-full rounded-xl bg-rose-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      title={`Expired: ${extExpiredCount} (${extExpiredPct}%)`}
+                    >
+                      {extExpiredPct >= 5 ? `${extExpiredPct}%` : ''}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 3 Detail Boxes */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div className="p-3.5 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      Status Aktif
+                    </span>
+                    <span className="text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{extActiveCount}</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-1">Masa aktif aman &gt; 1 tahun</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                      Segera Expired (Warning)
+                    </span>
+                    <span className="text-sm font-black text-amber-700 dark:text-amber-300 tabular-nums">{extSoonCount}</span>
+                  </div>
+                  <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 mt-1">Sisa masa aktif ≤ 1 tahun</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl border border-rose-200/80 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                      Expired
+                    </span>
+                    <span className="text-sm font-black text-rose-700 dark:text-rose-300 tabular-nums">{extExpiredCount}</span>
+                  </div>
+                  <p className="text-[11px] text-rose-600/80 dark:text-rose-400/80 mt-1">Telah melewati batas tanggal berlaku</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Baris 3: Peringkat Kepemilikan Sertifikasi & Kualifikasi Personel (Tab 'ext_ranks' atau 'ext_all') */}
+          {(statsSubTab === 'ext_all' || statsSubTab === 'ext_ranks') && (
+            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Award className="w-4 h-4 text-teal-600" />
+                    Peringkat Kepemilikan Sertifikasi &amp; Kualifikasi Personel Eksternal
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Urutan sebaran sertifikasi kompetensi profesi dan pengawas operasional (Total `${combinedTrainingCertData.grandTotal}` Sertifikat Terdata).
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
+                {/* Kolom 1: Leaderboard Bar Horizontal */}
+                <div className="lg:col-span-7 space-y-3">
+                  {sortedCertRows.map((r, idx) => {
+                    const pct = combinedTrainingCertData.grandTotal ? Math.round((r.value / combinedTrainingCertData.grandTotal) * 100) : 0;
+                    return (
+                      <div key={r.label} className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60">
+                        <div className="flex items-center justify-between text-xs mb-1.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                              idx === 0 ? 'bg-amber-100 text-amber-800' : idx === 1 ? 'bg-slate-200 text-slate-700' : idx === 2 ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {idx + 1}
+                            </span>
+                            <span className="font-bold text-slate-800 dark:text-slate-100 truncate">{r.label}</span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200/60 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                              {(r as any).category || 'Sertifikasi'}
+                            </span>
+                          </div>
+                          <span className="font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                            {r.value} Personel <span className="text-slate-400 font-normal">({pct}%)</span>
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-slate-200/70 dark:bg-slate-700 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%`, backgroundColor: r.color }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Kolom 2: Diagram Donat Proporsi Sertifikasi */}
+                <div className="lg:col-span-5 flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50/50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800">
+                  <div className="w-56 h-56 relative flex items-center justify-center">
+                    <Doughnut
+                      data={{
+                        labels: sortedCertRows.map(r => r.label),
+                        datasets: [
+                          {
+                            data: sortedCertRows.map(r => r.value),
+                            backgroundColor: sortedCertRows.map(r => r.color),
+                            borderWidth: 2,
+                            borderColor: '#ffffff',
+                          },
+                        ],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '70%',
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              label: ctx => ` ${ctx.label}: ${ctx.parsed} orang (${Math.round((ctx.parsed / combinedTrainingCertData.grandTotal) * 100)}%)`,
+                            },
+                          },
+                        },
+                      }}
+                    />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-3xl font-black text-slate-900 dark:text-slate-100 tabular-nums">
+                        {combinedTrainingCertData.grandTotal}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        Total Pemegang
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    {sortedCertRows.slice(0, 5).map(r => (
+                      <span key={r.label} className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-600 dark:text-slate-400">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: r.color }} />
+                        {r.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Baris 4: Sebaran Sertifikasi per PT & Bagian (Tab 'ext_dist') */}
+          {(statsSubTab === 'ext_dist') && (
+            <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-3">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-teal-600" />
+                  Sebaran Sertifikasi Eksternal per Perusahaan (PT TBP vs PT GPS)
+                </h4>
+                <p className="text-[11px] text-slate-500">Jumlah pemegang sertifikasi eksternal terdaftar berdasarkan entitas perusahaan.</p>
+              </div>
+              <div className="h-[280px] w-full p-2">
                 <Bar
-                  data={moduleComplianceChartData}
+                  data={extPtChartData}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
-                    indexAxis: 'y',
                     scales: {
-                      x: {
-                        min: 0,
-                        max: 100,
-                        ticks: { callback: v => `${v}%`, font: { size: 11, weight: 'bold' } },
-                        grid: { color: 'rgba(0,0,0,0.05)' },
-                      },
-                      y: {
-                        ticks: { font: { size: 12, weight: 'bold' } },
-                        grid: { display: false },
-                      },
+                      x: { grid: { display: false }, ticks: { font: { size: 12, weight: 'bold' } } },
+                      y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { precision: 0 } },
                     },
                     plugins: {
                       legend: { display: false },
                       tooltip: {
                         callbacks: {
-                          label: ctx => {
-                            const c = coverageData[ctx.dataIndex];
-                            return ` Kepatuhan: ${c.pct}% (${c.done} dari ${c.target} peserta wajib)`;
-                          },
+                          label: ctx => ` Jumlah Sertifikat: ${ctx.parsed.y} Orang`,
                         },
                       },
                     },
@@ -1636,473 +2346,6 @@ function TrainingStatisticsView({
               </div>
             </div>
           )}
-
-          {barChartMode === 'status_stacked' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Komposisi Status Masa Berlaku (Stacked Bar per Modul)
-                </span>
-                <span className="text-xs text-slate-500">
-                  Memperlihatkan jumlah modul yang aman vs mendekati batas waktu vs kadaluarsa
-                </span>
-              </div>
-              <div className="h-[340px] w-full p-2">
-                <Bar
-                  data={moduleStackedStatusChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    scales: {
-                      x: {
-                        stacked: true,
-                        ticks: { font: { size: 11 } },
-                        grid: { color: 'rgba(0,0,0,0.05)' },
-                      },
-                      y: {
-                        stacked: true,
-                        ticks: { font: { size: 12, weight: 'bold' } },
-                        grid: { display: false },
-                      },
-                    },
-                    plugins: {
-                      legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } },
-                      tooltip: {
-                        callbacks: {
-                          afterBody: ctx => {
-                            const c = coverageData[ctx[0].dataIndex];
-                            return `Total Target Wajib: ${c.target} orang`;
-                          },
-                        },
-                      },
-                    },
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {barChartMode === 'target_vs_done' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Perbandingan Target Peserta Wajib vs Realisasi Personel Lulus
-                </span>
-                <span className="text-xs text-slate-500">
-                  Batang berdampingan untuk melihat gap selisih personel yang belum mengikuti training
-                </span>
-              </div>
-              <div className="h-[340px] w-full p-2">
-                <Bar
-                  data={moduleTargetVsDoneChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: {
-                        ticks: { font: { size: 11, weight: 'bold' } },
-                        grid: { display: false },
-                      },
-                      y: {
-                        ticks: { font: { size: 11 } },
-                        grid: { color: 'rgba(0,0,0,0.05)' },
-                      },
-                    },
-                    plugins: {
-                      legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } },
-                      tooltip: {
-                        callbacks: {
-                          afterBody: ctx => {
-                            const c = coverageData[ctx[0].dataIndex];
-                            const gap = c.target - c.done;
-                            return gap > 0 ? `Kekurangan (Gap): ${gap} orang belum ikut` : 'Target telah terpenuhi 100%';
-                          },
-                        },
-                      },
-                    },
-                  }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ===== KONTEN TAB 3: MATRIKS MODUL TRAINING SAP ===== */}
-      {(statsSubTab === 'all' || statsSubTab === 'sap_modules') && (
-        <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div>
-              <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <ClipboardCheck className="w-4 h-4 text-teal-600" />
-                Matriks Kepatuhan per Modul Training SAP
-              </h4>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Kartu status modul terpadu. Memisahkan modul yang 100% tuntas vs modul yang membutuhkan tindakan perpanjangan.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Mode switch untuk matriks modul */}
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700">
-                <button
-                  type="button"
-                  onClick={() => setModuleViewMode('grid')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    moduleViewMode === 'grid' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Kartu
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModuleViewMode('chart')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    moduleViewMode === 'chart' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Bar Chart
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModuleViewMode('table')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    moduleViewMode === 'table' ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Tabel
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onOpenDatabaseWithFilter('sap')}
-                className="text-xs font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-1 cursor-pointer ml-1"
-              >
-                Buka Database SAP →
-              </button>
-            </div>
-          </div>
-
-          {/* Mode 1: Grid Kartu */}
-          {moduleViewMode === 'grid' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {coverageData.map(c => {
-                const isPerfect = c.pct === 100;
-                const hasIssues = c.warning > 0 || c.expired > 0 || (c.target - c.done > 0);
-
-                return (
-                  <div
-                    key={c.key}
-                    className={`rounded-2xl border p-4 transition-all flex flex-col justify-between ${
-                      isPerfect
-                        ? 'border-emerald-200/80 dark:border-emerald-800/40 bg-emerald-50/30 dark:bg-emerald-950/10'
-                        : 'border-amber-300 dark:border-amber-800/60 bg-amber-50/30 dark:bg-amber-950/10 shadow-xs'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h5 className="text-xs font-black text-slate-900 dark:text-slate-100">{c.label}</h5>
-                          <p className="text-[11px] text-slate-500 line-clamp-1">{c.desc || 'Modul training wajib'}</p>
-                        </div>
-                        <span
-                          className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${
-                            isPerfect
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300'
-                              : 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300'
-                          }`}
-                        >
-                          {isPerfect ? '✓ 100% Lengkap' : `⚠ ${c.pct}% Perlu Tindakan`}
-                        </span>
-                      </div>
-
-                      {/* Progress Bar & Statistik Angka */}
-                      <div className="mt-3">
-                        <div className="flex items-center justify-between text-xs font-bold mb-1">
-                          <span className="text-slate-600 dark:text-slate-300">Cakupan Peserta:</span>
-                          <span className="text-slate-900 dark:text-slate-100">
-                            {c.done} / {c.target} Orang ({c.pct}%)
-                          </span>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              isPerfect ? 'bg-emerald-500' : 'bg-amber-500'
-                            }`}
-                            style={{ width: `${c.pct}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Rincian Masalah Jika Ada */}
-                      {hasIssues && (
-                        <div className="mt-2.5 pt-2 border-t border-amber-200/60 dark:border-amber-900/30 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold">
-                          {c.warning > 0 && <span className="text-amber-700">⚠️ {c.warning} warning</span>}
-                          {c.expired > 0 && <span className="text-rose-600">❌ {c.expired} expired</span>}
-                          {c.target - c.done > 0 && (
-                            <span className="text-slate-600">⚪ {c.target - c.done} belum ikut</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Tombol Tindakan Langsung ke Database */}
-                    <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500 font-medium">
-                        {isPerfect ? 'Seluruh personel patuh' : `${c.target - c.done + c.expired} perlu ditindak`}
-                      </span>
-                      {!isPerfect && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenDatabaseWithFilter('sap', c.key)}
-                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer shadow-2xs"
-                        >
-                          Filter di Database →
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Mode 2: Bar Chart Inline */}
-          {moduleViewMode === 'chart' && (
-            <div className="h-[320px] w-full p-2">
-              <Bar
-                data={moduleComplianceChartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  indexAxis: 'y',
-                  scales: {
-                    x: { min: 0, max: 100, ticks: { callback: v => `${v}%` }, grid: { color: 'rgba(0,0,0,0.05)' } },
-                    y: { ticks: { font: { size: 12, weight: 'bold' } }, grid: { display: false } },
-                  },
-                  plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: ctx => {
-                          const c = coverageData[ctx.dataIndex];
-                          return ` Kepatuhan: ${c.pct}% (${c.done} / ${c.target} Orang)`;
-                        },
-                      },
-                    },
-                  },
-                }}
-              />
-            </div>
-          )}
-
-          {/* Mode 3: Tabel Matriks Rinci */}
-          {moduleViewMode === 'table' && (
-            <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-slate-50 dark:bg-slate-800/80 text-[11px] font-bold uppercase tracking-wider text-slate-600 border-b border-slate-100 dark:border-slate-800">
-                  <tr>
-                    <th className="px-4 py-3">Modul Training</th>
-                    <th className="px-4 py-3 text-center">Target Wajib</th>
-                    <th className="px-4 py-3 text-center">Lulus / Berlaku</th>
-                    <th className="px-4 py-3 text-center">Warning</th>
-                    <th className="px-4 py-3 text-center">Expired</th>
-                    <th className="px-4 py-3 text-center">Kepatuhan (%)</th>
-                    <th className="px-4 py-3 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {coverageData.map(c => (
-                    <tr key={c.key} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                      <td className="px-4 py-3 font-bold text-slate-900 dark:text-slate-100">
-                        {c.label}
-                        <p className="text-[10px] text-slate-500 font-normal line-clamp-1">{c.desc}</p>
-                      </td>
-                      <td className="px-4 py-3 text-center font-bold text-slate-700 dark:text-slate-300">{c.target}</td>
-                      <td className="px-4 py-3 text-center font-bold text-emerald-600">{c.done}</td>
-                      <td className="px-4 py-3 text-center font-bold text-amber-600">{c.warning}</td>
-                      <td className="px-4 py-3 text-center font-bold text-rose-600">{c.expired}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                          c.pct >= 90 ? 'bg-emerald-100 text-emerald-800' : c.pct >= 70 ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
-                        }`}>
-                          {c.pct}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => onOpenDatabaseWithFilter('sap', c.key)}
-                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950 dark:text-teal-300 cursor-pointer"
-                        >
-                          Buka di DB
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ===== KONTEN TAB 4: ANALISIS PER BAGIAN & GOLONGAN ===== */}
-      {(statsSubTab === 'dept_analysis') && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Card Bar Chart per Bagian */}
-          <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-teal-600" />
-                  Kepatuhan Training per Bagian / Departemen
-                </h4>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Tingkat kepatuhan training SAP dikelompokkan berdasarkan divisi/seksi kerja.
-                </p>
-              </div>
-            </div>
-            <div className="h-[320px] w-full p-2">
-              <Bar
-                data={bagianChartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  indexAxis: 'y',
-                  scales: {
-                    x: { min: 0, max: 100, ticks: { callback: v => `${v}%` }, grid: { color: 'rgba(0,0,0,0.05)' } },
-                    y: { ticks: { font: { size: 11, weight: 'bold' } }, grid: { display: false } },
-                  },
-                  plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: ctx => {
-                          const b = bagianStats[ctx.dataIndex];
-                          return ` Kepatuhan: ${b.pct}% (${b.complete} lengkap dari ${b.inSap} personel SAP, total tim: ${b.total})`;
-                        },
-                      },
-                    },
-                  },
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Card Bar Chart per Golongan */}
-          <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Award className="w-4 h-4 text-teal-600" />
-                  Kepatuhan Training per Golongan (GOL)
-                </h4>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Perbandingan tingkat kepatuhan antar tingkatan golongan karyawan.
-                </p>
-              </div>
-            </div>
-            <div className="h-[320px] w-full p-2">
-              <Bar
-                data={golChartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    x: { ticks: { font: { size: 11, weight: 'bold' } }, grid: { display: false } },
-                    y: { min: 0, max: 100, ticks: { callback: v => `${v}%` }, grid: { color: 'rgba(0,0,0,0.05)' } },
-                  },
-                  plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: ctx => {
-                          const g = golStats[ctx.dataIndex];
-                          return ` Kepatuhan: ${g.pct}% (${g.complete} dari ${g.inSap} personel SAP, total: ${g.total})`;
-                        },
-                      },
-                    },
-                  },
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===== KONTEN TAB 5: PERINGKAT SERTIFIKASI ===== */}
-      {(statsSubTab === 'all' || statsSubTab === 'cert_ranks') && (
-        <div className="rounded-[24px] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div>
-              <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Award className="w-4 h-4 text-teal-600" />
-                Peringkat Kepemilikan Sertifikasi &amp; Kualifikasi Personel
-              </h4>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Urutan sebaran sertifikasi kompetensi internal &amp; eksternal (Total {combinedTrainingCertData.grandTotal} Sertifikat Terdata).
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
-            {/* Kolom 1: Leaderboard Bar Horizontal */}
-            <div className="lg:col-span-7 space-y-3">
-              {sortedCertRows.map((r, idx) => {
-                const pct = combinedTrainingCertData.grandTotal ? Math.round((r.value / combinedTrainingCertData.grandTotal) * 100) : 0;
-                return (
-                  <div key={r.label} className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60">
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
-                          idx === 0 ? 'bg-amber-100 text-amber-800' : idx === 1 ? 'bg-slate-200 text-slate-700' : idx === 2 ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-500'
-                        }`}>
-                          {idx + 1}
-                        </span>
-                        <span className="font-bold text-slate-900 dark:text-slate-100 truncate">{r.label}</span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100 tabular-nums">{r.value} Personel</span>
-                        <span className="text-[11px] font-semibold text-slate-400">({pct}%)</span>
-                      </div>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%`, backgroundColor: r.color || '#2A9D8F' }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Kolom 2: ChartJS Bar Visualisasi Sebaran */}
-            <div className="lg:col-span-5 h-[280px] p-2 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-100 dark:border-slate-800">
-              <Bar
-                data={certChartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    x: { ticks: { font: { size: 10, weight: 'bold' } }, grid: { display: false } },
-                    y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
-                  },
-                  plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: ctx => ` ${ctx.parsed.y} Orang bersertifikat`,
-                      },
-                    },
-                  },
-                }}
-              />
-            </div>
-          </div>
         </div>
       )}
     </div>

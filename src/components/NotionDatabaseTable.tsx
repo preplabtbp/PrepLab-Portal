@@ -4021,6 +4021,31 @@ export function NotionDatabaseTable({
           }
         }
 
+        const isClosedStatus = stUpper.includes('CLOSE') || stUpper.includes('SELESAI') || stUpper.includes('DONE');
+        
+        // Sync checklist indicator for subtask title
+        const currentTitle = targetRow['Jenis kegiatan'] || targetRow['Activity Name'] || '';
+        if (currentTitle.startsWith('↳')) {
+          const nextTitle = isClosedStatus 
+            ? currentTitle.replace(/↳\s*\[\s*\]/, '↳ [x]')
+            : currentTitle.replace(/↳\s*\[x\]/i, '↳ [ ]');
+          targetRow['Jenis kegiatan'] = nextTitle;
+          if (targetRow['Activity Name'] !== undefined) targetRow['Activity Name'] = nextTitle;
+        }
+
+        // Sync status to linked inspection ticket
+        const linkedTicketId = extractLinkedTicketId(targetRow);
+        if (linkedTicketId) {
+          fetch(`/api/tickets/${encodeURIComponent(linkedTicketId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              status: isClosedStatus ? 'Closed' : newValue,
+              completionDate: isClosedStatus ? (targetRow[compKey] || getTodayDDMMYYYY()) : null
+            })
+          }).catch(err => console.warn('[Status Sync] Failed to update ticket status:', err));
+        }
+
         if (stUpper.includes('CLOSE') || stUpper.includes('SELESAI') || stUpper.includes('DONE')) {
           const curVal = targetRow[compKey];
           if (!curVal || curVal === '-') {
@@ -9704,15 +9729,6 @@ export function NotionDatabaseTable({
 
                                 // 6. Priority Column (Interactive Dropdown)
                                 if (colLower.includes('priority') || colLower.includes('prioritas')) {
-                                  if (isSubItem) {
-                                    return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
-                                        <span className="text-slate-400 font-mono">-</span>
-                                      </td>
-                                    );
-                                  }
 
                                   return (
                                     <td 
@@ -9751,23 +9767,6 @@ export function NotionDatabaseTable({
 
                                 // 7. Status Column (Interactive Dropdown & Progress Bar / Duration when Closed)
                                 if (colLower.includes('status')) {
-                                  // Jika baris adalah sub-kegiatan: status disatukan dengan kegiatan utama (tidak memunculkan dropdown status sendiri)
-                                  if (isSubItem) {
-                                    return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-4 py-2 text-[13px]'}`}>
-                                        {isSubCompleted ? (
-                                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
-                                            <CheckCircle2 className="w-3.5 h-3.5" />
-                                            <span>Selesai</span>
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-400 font-mono text-xs">-</span>
-                                        )}
-                                      </td>
-                                    );
-                                  }
 
                                   const ketVal = getRowVal(row, 'Keterangan');
                                   const taskProgress = parseTasklist(ketVal);
@@ -9979,15 +9978,6 @@ export function NotionDatabaseTable({
 
                                 // 10. Activity Column (Interactive Dropdown for Routine / Non-Routine)
                                 if (!cleanCol.includes('activity name') && !colLower.includes('name') && !cleanCol.includes('judul') && (colLower.includes('activity') || colLower.includes('aktivitas'))) {
-                                  if (isSubItem) {
-                                    return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
-                                        <span className="text-slate-400 font-mono">-</span>
-                                      </td>
-                                    );
-                                  }
 
                                   return (
                                     <td 
@@ -10029,15 +10019,6 @@ export function NotionDatabaseTable({
 
                                 // 11. Period Column (Interactive Dropdown)
                                 if (colLower.includes('period') || colLower.includes('periode')) {
-                                  if (isSubItem) {
-                                    return (
-                                      <td key={colName} style={getColStyle(colName)} className={`text-center font-mono border-r ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                      } ${fitPageMode ? 'px-1.5 py-2 text-xs' : 'px-3.5 py-2 text-[13px]'}`}>
-                                        <span className="text-slate-400 font-mono">-</span>
-                                      </td>
-                                    );
-                                  }
 
                                   return (
                                     <td 
