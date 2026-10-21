@@ -350,7 +350,7 @@ export function initials(name: string) {
 // Untuk ekspor PNG: foto Google Drive diambil lewat proxy same-origin agar kanvas tidak terblokir CORS
 export function photoForCapture(url?: string): string {
   if (!url) return '';
-  const s = url.trim();
+  const s = String(url).trim();
   if (s.startsWith('data:') || s.startsWith('/api/')) return s;
   const m = s.match(/\/d\/([a-zA-Z0-9_-]+)/) || s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   if (m && (s.includes('drive.google.com') || s.includes('googleusercontent.com'))) return `/api/employees/photo/${m[1]}`;
@@ -465,9 +465,10 @@ const RekapReportSheet = React.forwardRef<HTMLDivElement, {
         </thead>
         <tbody>
           {rows.map((r, i) => {
-            const photo = photoForCapture(photoMap.get(r.nik.trim().toUpperCase()));
+            const rawNik = (r.nik || '').toString().trim().toUpperCase();
+            const photo = photoForCapture(photoMap.get(rawNik));
             return (
-              <tr key={r.nik} className={i % 2 ? 'bg-sky-50/70' : 'bg-white'}>
+              <tr key={r.nik || `${r.name}-${i}`} className={i % 2 ? 'bg-sky-50/70' : 'bg-white'}>
                 <td className={`${td} text-center`}>{i + 1}</td>
                 <td className={td}>
                   <div className="flex items-center gap-2">
@@ -641,9 +642,9 @@ function EditRowDialog({ row, week, year, editorNik, editorName, onClose, onSave
           tglTta1: diffDate(tglTta1, a.tglTta1),
           tglTta2: diffDate(tglTta2, a.tglTta2),
           inspeksiDone: diffBool(inspeksiDone, a.inspeksiDone),
-          keteranganInspeksi: keterangan.trim() === a.keteranganInspeksi.trim() ? null : keterangan.trim(),
+          keteranganInspeksi: (keterangan || '').trim() === (a.keteranganInspeksi || '').trim() ? null : (keterangan || '').trim(),
           tglInspeksi: diffDate(tglInspeksi, a.tglInspeksi),
-          catatan: catatan.trim() || null,
+          catatan: (catatan || '').trim() || null,
           editorNik, editorName
         })
       });
@@ -1298,7 +1299,9 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
       let entry = map.get(key);
       if (!entry) {
         entry = {
-          nik: emp.nik, name: emp.name || '-', jabatan: emp.jabatan || '-',
+          nik: (emp.nik || '').toString().trim(),
+          name: emp.name || '-',
+          jabatan: emp.jabatan || '-',
           auto: {
             absence, isCuti: absence !== null, ktaDone: false, tglKta: '', tglTta1: '', tglTta2: null,
             inspeksiDone: false, keteranganInspeksi: '', tglInspeksi: ''
@@ -1440,9 +1443,12 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
   }, [inspeksiData, ktaData, leaveList, activeInspectionSchedule, edits, weekRange, canEdit, inspectorNik]);
 
   const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = (search || '').trim().toLowerCase();
     return allRows.filter(r => {
-      if (q && !r.name.toLowerCase().includes(q) && !(r.nik || '').toLowerCase().includes(q) && !r.jabatan.toLowerCase().includes(q)) return false;
+      const name = (r.name || '').toLowerCase();
+      const nik = (r.nik || '').toLowerCase();
+      const jabatan = (r.jabatan || '').toLowerCase();
+      if (q && !name.includes(q) && !nik.includes(q) && !jabatan.includes(q)) return false;
       if (statusFilter === 'WAJIB') return !r.isCuti;
       if (statusFilter === 'CUTI') return r.isCuti;
       if (statusFilter === 'TERLAMBAT') return !r.isCuti && (r.ktaLate || r.inspeksiLate);
@@ -1489,7 +1495,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         cacheBust: true,
         imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
       });
-      const filterSuffix = statusFilter !== 'ALL' ? `_${statusFilter}` : (search.trim() ? '_Pencarian' : '');
+      const filterSuffix = statusFilter !== 'ALL' ? `_${statusFilter}` : ((search || '').trim() ? '_Pencarian' : '');
       const link = document.createElement('a');
       link.download = `Rekap_KTA_TTA_Inspeksi_${selectedWeek}${filterSuffix}_${currentYear}.png`;
       link.href = dataUrl;
@@ -1814,11 +1820,11 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                       <td colSpan={colCount} className="px-3 py-16 text-center text-sm text-[var(--text-muted)]">Tidak ada data yang cocok untuk {selectedWeek}.</td>
                     </tr>
                   ) : rows.map((r, i) => (
-                    <tr key={r.nik} className="group hover:bg-[var(--input-bg)]/70 transition-colors">
+                    <tr key={r.nik || `${r.name}-${i}`} className="group hover:bg-[var(--input-bg)]/70 transition-colors">
                       <td className={`${td} text-center text-[var(--text-muted)] tabular-nums`}>{i + 1}</td>
                       <td className={td}>
                         <div className="flex items-center gap-2.5 min-w-[200px]">
-                          <EmployeeAvatar name={r.name} photo={photoMap.get(r.nik.trim().toUpperCase())} className="w-9 h-9 text-[11px]" />
+                          <EmployeeAvatar name={r.name} photo={photoMap.get((r.nik || '').toString().trim().toUpperCase())} className="w-9 h-9 text-[11px]" />
                           <div className="min-w-0">
                             <p className="font-semibold leading-tight flex items-center gap-1.5">
                               {r.name}
@@ -1971,7 +1977,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
                 filterLabel={
                   statusFilter !== 'ALL'
                     ? filterChips.find(f => f.id === statusFilter)?.label
-                    : (search.trim() ? `Pencarian "${search.trim()}"` : undefined)
+                    : ((search || '').trim() ? `Pencarian "${(search || '').trim()}"` : undefined)
                 }
               />
             </div>
