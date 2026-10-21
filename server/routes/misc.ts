@@ -857,19 +857,20 @@ export async function getRekapPersonnelClassification(
   });
 
   // Fetch official inspection schedule sheet to synchronize KTA/TTA with Inspeksi
+  // Minggu berjalan operasional selalu menggunakan master schedule 'CurrentWeek'
   let targetSheet = 'CurrentWeek';
   if (selectedWeek && selectedWeek !== 'ALL') {
     if (selectedWeek.toLowerCase().includes('37')) targetSheet = 'Week 37';
     else if (selectedWeek.toLowerCase().includes('38')) targetSheet = 'CurrentWeek';
-    else if (/^w?\d+$/i.test(selectedWeek)) {
-      const num = selectedWeek.replace(/\D/g, '');
-      targetSheet = `Week ${num}`;
+    else {
+      targetSheet = 'CurrentWeek';
     }
   }
 
   const sheetActiveNames = new Set<string>();
   const sheetActiveNiks = new Set<string>();
   const sheetCutiNames = new Set<string>();
+  const sheetCutiNiks = new Set<string>();
 
   try {
     const targetWeekTag = selectedWeek.startsWith('W') || selectedWeek.startsWith('w')
@@ -887,6 +888,7 @@ export async function getRekapPersonnelClassification(
         const cleanName = item.name.trim().toLowerCase();
         if (item.isCuti || item.inspeksi?.toLowerCase() === 'cuti' || item.shift?.toLowerCase() === 'cuti') {
           sheetCutiNames.add(cleanName);
+          if (item.nik) sheetCutiNiks.add(item.nik.trim().toLowerCase());
         } else {
           sheetActiveNames.add(cleanName);
           if (item.nik) sheetActiveNiks.add(item.nik.trim().toLowerCase());
@@ -942,7 +944,17 @@ export async function getRekapPersonnelClassification(
       return;
     }
 
-    // ATURAN RESMI: Jika karyawan masuk dalam jadwal inspeksi berjalan maka WAJIB melakukan KTA/TTA!
+    // ATURAN RESMI: 19 Karyawan Cuti pada Jadwal Inspeksi HARUS SELALU CUTI
+    const isCutiInInspectionSchedule = 
+      (cleanNik && sheetCutiNiks.has(cleanNik.toLowerCase())) ||
+      matchesSheet(empName, sheetCutiNames);
+
+    if (isCutiInInspectionSchedule) {
+      onCutiSet.add(cleanNik);
+      return;
+    }
+
+    // ATURAN RESMI: 44 Petugas Aktif pada Jadwal Inspeksi MUTLAK WAJIB KTA/TTA & Inspeksi
     const isActiveInInspectionSchedule = 
       (cleanNik && sheetActiveNiks.has(cleanNik.toLowerCase())) ||
       matchesSheet(empName, sheetActiveNames);
