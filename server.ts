@@ -26,7 +26,7 @@ try {
   process.exit(1);
 }
 import jwt from 'jsonwebtoken';
-import { requireAuth, JWT_SECRET } from "./server/middleware/auth.js";
+import { requireAuth, optionalAuth, JWT_SECRET } from "./server/middleware/auth.js";
 import { router as miscRouter, syncMasterQuestionsFromSheet } from "./server/routes/misc.js";
 import { router as bulletinRouter } from "./server/routes/bulletin.js";
 import { router as quizRouter } from "./server/routes/quiz.js";
@@ -1955,13 +1955,16 @@ const app = express();
     '/api/inspections/p2h-lab'
   ];
 
+  // Populate req.user if token valid on all /api routes
+  app.use('/api', optionalAuth);
+
   app.use('/api', (req, res, next) => {
     const url = req.originalUrl.split('?')[0];
     const isPublic = PUBLIC_API_PREFIXES.some(prefix => url === prefix || url.startsWith(prefix + '/'));
     if (isPublic) {
       return next();
     }
-    // Allow public read-only (GET) access to P5M schedules, pool, materi, bulletin posts, agenda, and APD
+    // Allow public read-only (GET) access to P5M schedules, pool, materi, bulletin posts, agenda, APD, and training database
     if (req.method === 'GET' && (
       url.startsWith('/api/p5m/materi') || 
       url.startsWith('/api/p5m/schedules') || 
@@ -1972,7 +1975,10 @@ const app = express();
       url.startsWith('/api/logbook') ||
       url.startsWith('/api/clinic') ||
       url.startsWith('/api/employee-leaves') ||
-      url.startsWith('/api/xrf')
+      url.startsWith('/api/xrf') ||
+      url.startsWith('/api/training-records') ||
+      url.startsWith('/api/training-certifications') ||
+      url.startsWith('/api/employees')
     )) {
       return next();
     }

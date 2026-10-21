@@ -1327,6 +1327,11 @@ export function BulletinBoard({
       if (!cleanLine) return false;
       const normalizedLine = translateDisplayText(cleanLine).trim().toLowerCase();
 
+      // Strip stray Notion link_to_page artifacts
+      if (cleanLine.includes('link_to_page') || cleanLine.includes('notion.so/')) {
+        return false;
+      }
+
       // If line duplicates document/table title (either exact or through English/Indonesian normalization)
       const isDuplicate = 
         cleanLine === rawPostTitle ||
@@ -1337,6 +1342,26 @@ export function BulletinBoard({
       if (isDuplicate) {
         return false;
       }
+
+      // If this post is a periodic task document (daily, weekly, monthly, quarterly, biannual, yearly),
+      // strip stray sibling cadence headings that originated from Notion child_page blocks
+      const cadences = ['daily', 'weekly', 'monthly', 'quarterly', 'biannual', 'yearly'];
+      const currentCadence = cadences.find(c => rawPostTitle.includes(c));
+      if (currentCadence) {
+        const isSiblingCadenceHeading = cadences.some(
+          c => c !== currentCadence && cleanLine.includes(c) && (
+            cleanLine.includes('maintenance') || 
+            cleanLine.includes('lab') || 
+            cleanLine.includes('admin') || 
+            cleanLine.includes('prep') ||
+            cleanLine.includes('kegiatan')
+          )
+        );
+        if (isSiblingCadenceHeading) {
+          return false;
+        }
+      }
+
       return true;
     });
     return filteredLines.join('\n').trim();

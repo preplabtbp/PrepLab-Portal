@@ -3,7 +3,7 @@ import React, { useState, useEffect, Suspense, lazy, useRef, useMemo, useCallbac
 import { AnimatePresence, motion } from 'motion/react';
 import { registerPresence, pingPresence, unregisterPresence } from './lib/socketClient';
 
-import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, EyeOff, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy, Maximize2, Minimize2 } from 'lucide-react';
+import { Cloud, Activity, Settings, ShieldCheck, CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Check, Wrench, ChevronRight, Image as ImageIcon, Camera, X, Code2, ChevronLeft, UploadCloud, Layers, Home, ClipboardList, CheckSquare, PlusCircle, ListTodo, ThermometerSun, LineChart, ClipboardCheck, User, Menu, Calendar, Utensils, FileText, Eye, EyeOff, BriefcaseMedical, Building2, LayoutDashboard, LayoutGrid, MessageCircle, Sparkles, Lock, KeyRound, FlaskConical, Shield, ArrowRight, Receipt, ShieldAlert, Users, BarChart2, MessageSquare, Trophy, Maximize2, Minimize2, Database } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { appendRowsToSheet, getDowntimeRecords,updateDowntimeRepair, getEmployees, loginEmployee, getEquipments, ToolRecord, updateToolPhotoUrl, uploadPhotoToDrive } from './sheets-api';
@@ -909,6 +909,8 @@ export default function App() {
   
   
   const [loginStep, setLoginStep] = useState<'nik' | 'password' | 'setup' | 'forgot'>('nik');
+  const [isDevLogin, setIsDevLogin] = useState(false);
+  const [loginUniverse, setLoginUniverse] = useState<'TBP' | 'GTS'>('TBP');
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [requireSetup, setRequireSetup] = useState(false);
@@ -940,17 +942,32 @@ export default function App() {
          const data = await res.json();
          if (data.status === 'success') {
              const isCrew = data.employee?.jabatan?.toLowerCase().includes('crew');
-             const validNik = data.employee?.nik || inputNik;
-             const validUsername = data.employee?.username || '';
+             const validNik = data.employee?.nik || data.nik || inputNik;
+             const validUsername = data.employee?.username || data.username || '';
+             const cleanUpper = validNik.toUpperCase();
+             const inputUpper = inputNik.toUpperCase();
+             const isDev = Boolean(
+               data.isDeveloper ||
+               ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN'].includes(cleanUpper) ||
+               ['02D25000055', '02D24000043', '04D21001047', '04D24000042', 'M0403240177', 'PREPLABADMIN', 'ALVIN'].includes(inputUpper) ||
+               developerList.some(d => d.nik?.toUpperCase() === cleanUpper || (d.username && d.username.toUpperCase() === inputUpper))
+             );
+             setIsDevLogin(isDev);
+             if (isDev) {
+               const initialUniv: 'TBP' | 'GTS' = (data.pt === 'GTS' || data.employee?.pt === 'GTS') 
+                 ? 'GTS' 
+                 : ((localStorage.getItem('portal_active_universe') === 'GTS') ? 'GTS' : 'TBP');
+               setLoginUniverse(initialUniv);
+             }
              
              if (isCrew) {
                  toast.success("Login otomatis sebagai Crew!");
                  setInspectorNik(validNik);
-                 setInspectorName(data.employee.name);
+                 setInspectorName(data.employee?.name || data.name);
                  localStorage.setItem('p2h_inspector_nik', validNik);
-                 localStorage.setItem('p2h_inspector_name', data.employee.name);
-                 localStorage.setItem('p2h_inspector_jabatan', data.employee.jabatan || 'Crew');
-                 localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
+                 localStorage.setItem('p2h_inspector_name', data.employee?.name || data.name);
+                 localStorage.setItem('p2h_inspector_jabatan', data.employee?.jabatan || 'Crew');
+                 if (data.employee) localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
                  if (validUsername) localStorage.setItem('p2h_inspector_username', validUsername);
                  setLoginStep('nik');
                  handleNav('quiz');
@@ -1040,17 +1057,16 @@ export default function App() {
                   localStorage.setItem('p2h_inspector_jabatan', data.employee.jabatan || 'Crew');
                   localStorage.setItem('p2h_inspector_profile', JSON.stringify(data.employee));
                   if (validUsername) localStorage.setItem('p2h_inspector_username', validUsername);
-                  if (data.employee?.pt === 'GTS') {
-                      localStorage.setItem('portal_active_universe', 'GTS');
-                      localStorage.setItem('bulletin_active_universe', 'GTS');
-                      setActiveUniverse('GTS');
-                  } else {
-                      localStorage.setItem('portal_active_universe', 'TBP');
-                      localStorage.setItem('bulletin_active_universe', 'TBP');
-                      setActiveUniverse('TBP');
-                  }
-                  toast.success("Login berhasil");
+                  const targetUniverse: 'TBP' | 'GTS' = isDevLogin
+                      ? loginUniverse
+                      : (data.employee?.pt === 'GTS' ? 'GTS' : 'TBP');
+                  localStorage.setItem('portal_active_universe', targetUniverse);
+                  localStorage.setItem('bulletin_active_universe', targetUniverse);
+                  setActiveUniverse(targetUniverse);
+                  window.dispatchEvent(new CustomEvent('portal-universe-changed', { detail: { universe: targetUniverse } }));
+                  toast.success(`Login berhasil (${targetUniverse === 'GTS' ? 'PT. GTS' : 'PT. TBP - GPS'})`);
                   setLoginStep('nik');
+                  setIsDevLogin(false);
                   setPasswordInput('');
                   setShowPassword(false);
 
@@ -1094,6 +1110,9 @@ export default function App() {
     localStorage.removeItem('p2h_inspector_profile');
     sessionStorage.removeItem('username_prompted');
     setMeetingRoomDevUnlocked(false);
+    setIsDevLogin(false);
+    setLoginStep('nik');
+    setPasswordInput('');
     toast.success('Sesi berhasil diakhiri.');
     handleNav('home');
   };
@@ -1229,12 +1248,63 @@ export default function App() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setLoginStep('nik')}
+                    onClick={() => {
+                      setLoginStep('nik');
+                      setIsDevLogin(false);
+                      setPasswordInput('');
+                    }}
                     className="text-xs font-bold text-[#22a7b8] hover:text-[#1b8f9e] underline cursor-pointer"
                   >
                     Ganti Akun
                   </button>
                 </div>
+
+                {/* Developer Universe Database Switcher */}
+                {isDevLogin && (
+                  <div className="p-3.5 rounded-2xl bg-white border border-teal-200/90 shadow-2xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 font-mono flex items-center gap-1.5">
+                        <Database className="w-3.5 h-3.5 text-[#22a7b8]" />
+                        Database Operasional
+                      </span>
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200 font-mono">
+                        Developer Mode
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setLoginUniverse('TBP')}
+                        className={`py-2 px-3 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          loginUniverse === 'TBP'
+                            ? 'bg-[#22a7b8] text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                        }`}
+                      >
+                        <Building2 className="w-3.5 h-3.5" />
+                        <span>TBP - GPS</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setLoginUniverse('GTS')}
+                        className={`py-2 px-3 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          loginUniverse === 'GTS'
+                            ? 'bg-[#22a7b8] text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                        }`}
+                      >
+                        <Building2 className="w-3.5 h-3.5" />
+                        <span>GTS</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      * Sesi login akan langsung tersambung ke database <strong>{loginUniverse === 'TBP' ? 'PT. TBP & GPS' : 'PT. GTS'}</strong>.
+                    </p>
+                  </div>
+                )}
 
                 {/* Password Input Bar */}
                 <div className="relative group">

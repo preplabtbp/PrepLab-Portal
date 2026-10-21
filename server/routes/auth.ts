@@ -257,7 +257,9 @@ authRouter.post("/check-nik", async (req, res) => {
         firstLoginComplete: Boolean(devFallback.firstLoginComplete),
         name: devFallback.name,
         avatar: devFallback.avatar || null,
-        username: devFallback.username || null
+        username: devFallback.username || null,
+        pt: devFallback.pt || 'TBP',
+        isDeveloper: true
       });
     }
 
@@ -293,6 +295,8 @@ authRouter.post("/check-nik", async (req, res) => {
       return res.status(404).json({ status: "error", message: `NIK / Username "${inputVal}" tidak ditemukan dalam database.` });
     }
     
+    const adminInfo = await checkIsAdminOrDeveloper(employee.nik, employee.section || '', employee.jabatan || '');
+
     // Return only safe minimal fields necessary for frontend greeting & login flow
     return res.json({ 
       status: "success", 
@@ -300,7 +304,9 @@ authRouter.post("/check-nik", async (req, res) => {
       firstLoginComplete: Boolean(employee.firstLoginComplete),
       name: employee.name,
       avatar: employee.avatar || null,
-      username: employee.username || null
+      username: employee.username || null,
+      pt: employee.pt || 'TBP',
+      isDeveloper: Boolean(adminInfo.isDeveloper)
     });
   } catch(e: any) {
     console.error("Check NIK error:", e);

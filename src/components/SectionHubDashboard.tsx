@@ -16,7 +16,12 @@ import {
   Image as ImageIcon,
   Sparkles,
   X,
-  Check
+  Check,
+  GripVertical,
+  ArrowUpDown,
+  RotateCcw,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PortalImagePickerModal } from './PortalImagePickerModal';
@@ -48,6 +53,39 @@ interface HubItem {
   searchKeywords?: string[];
   linkUrl?: string;
 }
+
+// Helper to load and save custom menu item order per section hub
+function loadOrderedHubItems(section: string, type: 'info' | 'rules', defaultItems: HubItem[]): HubItem[] {
+  try {
+    const cleanSec = (section || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const key = `preplab_hub_order_${cleanSec}_${type}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return defaultItems;
+    const titlesOrder: string[] = JSON.parse(raw);
+    const itemMap = new Map(defaultItems.map(i => [i.title, i]));
+    const ordered: HubItem[] = [];
+    titlesOrder.forEach(t => {
+      if (itemMap.has(t)) {
+        ordered.push(itemMap.get(t)!);
+        itemMap.delete(t);
+      }
+    });
+    // Append any items that were not in saved order (new items)
+    itemMap.forEach(i => ordered.push(i));
+    return ordered;
+  } catch {
+    return defaultItems;
+  }
+}
+
+function saveOrderedHubItems(section: string, type: 'info' | 'rules', items: HubItem[]): void {
+  try {
+    const cleanSec = (section || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const key = `preplab_hub_order_${cleanSec}_${type}`;
+    localStorage.setItem(key, JSON.stringify(items.map(i => i.title)));
+  } catch {}
+}
+
 
 export function SectionHubDashboard({
   post,

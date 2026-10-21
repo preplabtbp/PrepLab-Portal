@@ -437,13 +437,42 @@ interface TrainingAccess { viewAll: boolean; canManage: boolean; nik: string }
 interface TrainingPayload { records: TrainingRecord[]; access: TrainingAccess }
 const EMPTY_RECORDS: TrainingRecord[] = [];
 
+// Helper aman untuk parse JSON respons fetch (mencegah Unexpected end of JSON input saat server reload / response kosong)
+async function safeFetchJson<T = any>(res: Response): Promise<{ ok: boolean; status: number; data: T | null; message?: string }> {
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    text = '';
+  }
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  return {
+    ok: res.ok,
+    status: res.status,
+    data: json,
+    message: json?.message || (res.ok ? undefined : `Gagal memuat data (${res.status} ${res.statusText || ''})`.trim()),
+  };
+}
+
 async function fetchTrainingRecords(): Promise<TrainingPayload> {
   const res = await fetch('/api/training-records');
-  const json = await res.json();
-  if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memuat Database Training');
+  const parsed = await safeFetchJson<{ status: string; data: TrainingRecord[]; access: TrainingAccess; message?: string }>(res);
+  if (!parsed.ok || parsed.data?.status !== 'success') {
+    throw new Error(parsed.data?.message || parsed.message || 'Gagal memuat Database Training');
+  }
+  const payload = parsed.data;
   return {
-    records: json.data || [],
-    access: { viewAll: !!json.access?.viewAll, canManage: !!json.access?.canManage, nik: json.access?.nik || '' },
+    records: Array.isArray(payload?.data) ? payload.data : [],
+    access: {
+      viewAll: !!payload?.access?.viewAll,
+      canManage: !!payload?.access?.canManage,
+      nik: payload?.access?.nik || '',
+    },
   };
 }
 
@@ -1669,8 +1698,9 @@ function TrainingStatisticsView({
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     {berlakuPct}% Status Valid & Patuh
                   </span>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
-                    Warning: ≤ 3 Bulan
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Warning: {warningPct}% (&le; 3 Bulan)
                   </span>
                 </div>
               </div>
@@ -1690,10 +1720,10 @@ function TrainingStatisticsView({
                   {warningPct > 0 && (
                     <div
                       style={{ width: `${warningPct}%` }}
-                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs whitespace-nowrap overflow-hidden px-1"
                       title={`Warning: ${warningItem.value} (${warningPct}%)`}
                     >
-                      {warningPct >= 4 ? `Warning ${warningPct}%` : ''}
+                      {warningPct >= 6 ? `Warning ${warningPct}%` : warningPct >= 2 ? `${warningPct}%` : ''}
                     </div>
                   )}
                   {expiredPct > 0 && (
@@ -2493,9 +2523,16 @@ function TrainingStatisticsView({
                     Visualisasi proporsi masa aktif sertifikat K3 Kimia, K3 Listrik, ISO 17025, Proteksi Radiasi, dll.
                   </p>
                 </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                  Toleransi: Warning 1 Tahun
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    {extActivePct}% Aktif
+                  </span>
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Warning: {extSoonPct}% (&le; 1 Thn)
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -2512,10 +2549,10 @@ function TrainingStatisticsView({
                   {extSoonPct > 0 && (
                     <div
                       style={{ width: `${extSoonPct}%` }}
-                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs"
+                      className="h-full rounded-lg bg-amber-500 transition-all duration-500 flex items-center justify-center text-white text-[11px] font-black shadow-xs whitespace-nowrap overflow-hidden px-1"
                       title={`Warning: ${extSoonCount} (${extSoonPct}%)`}
                     >
-                      {extSoonPct >= 5 ? `${extSoonPct}%` : ''}
+                      {extSoonPct >= 6 ? `Warning ${extSoonPct}%` : extSoonPct >= 2 ? `${extSoonPct}%` : ''}
                     </div>
                   )}
                   {extExpiredPct > 0 && (
@@ -2711,7 +2748,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const navigate = useNavigate();
   // Data di-cache TanStack Query: kunjungan ulang tampil instan, lalu diperbarui di background
   // Cache per akun (NIK) agar data akses penuh tidak pernah tampil ke akun lain di perangkat yang sama
-  const { data: payload, isLoading, isFetching, error: loadError } = useQuery({
+  const { data: payload, isLoading, isFetching, error: loadError, refetch } = useQuery({
     queryKey: [...TRAINING_QUERY_KEY, inspectorNik.trim().toUpperCase()],
     queryFn: fetchTrainingRecords,
     staleTime: 60 * 1000,
@@ -2722,10 +2759,16 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const { data: certPayload } = useQuery({
     queryKey: ['training-certifications'],
     queryFn: async (): Promise<{ data: TrainingCertification[]; access: { viewAll: boolean; canManage: boolean } }> => {
-      const res = await fetch('/api/training-certifications');
-      const json = await res.json();
-      if (!res.ok || json.status !== 'success') throw new Error(json.message || 'Gagal memuat data sertifikasi');
-      return json;
+      try {
+        const res = await fetch('/api/training-certifications');
+        const parsed = await safeFetchJson<{ status: string; data: TrainingCertification[]; access: { viewAll: boolean; canManage: boolean } }>(res);
+        if (!parsed.ok || parsed.data?.status !== 'success') {
+          return { data: [], access: { viewAll: false, canManage: false } };
+        }
+        return parsed.data;
+      } catch {
+        return { data: [], access: { viewAll: false, canManage: false } };
+      }
     },
     staleTime: 60 * 1000,
   });
@@ -3077,9 +3120,13 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const { data: employees = [] } = useQuery({
     queryKey: ['employees-master-lite'],
     queryFn: async (): Promise<EmployeeMaster[]> => {
-      const res = await fetch('/api/employees');
-      const data = await res.json();
-      return Array.isArray(data) ? data : [];
+      try {
+        const res = await fetch('/api/employees');
+        const parsed = await safeFetchJson<EmployeeMaster[]>(res);
+        return Array.isArray(parsed.data) ? parsed.data : [];
+      } catch {
+        return [];
+      }
     },
     enabled: true,
     staleTime: 10 * 60 * 1000,
@@ -5787,7 +5834,22 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             </div>
 
         {/* Data */}
-        {isLoading ? (
+        {loadError && !payload ? (
+          <div className="p-8 text-center rounded-2xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/70 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200">
+            <AlertTriangle className="w-8 h-8 mx-auto text-rose-500 mb-2" />
+            <p className="text-sm font-bold mb-1">Gagal memuat Database Training</p>
+            <p className="text-xs text-rose-700 dark:text-rose-300 mb-4 max-w-md mx-auto">
+              {(loadError as Error)?.message || 'Terjadi gangguan saat memuat data dari server.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-sm transition active:scale-95"
+            >
+              Coba Muat Ulang
+            </button>
+          </div>
+        ) : isLoading ? (
           <div className="space-y-2" aria-busy="true" aria-label="Memuat Database Training">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-9 rounded-lg bg-slate-100 animate-pulse" style={{ opacity: 1 - i * 0.09 }} />
