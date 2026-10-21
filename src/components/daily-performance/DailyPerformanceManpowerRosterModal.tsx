@@ -4,11 +4,14 @@ import {
   RefreshCw, Filter, Shield, User, Briefcase, Calendar
 } from 'lucide-react';
 import { getRosterData } from '../../sheets-api';
+import { compareEmployeesByJabatan } from '../../lib/jabatanHierarchy';
+import { isStaffRole } from './DailyPerformanceStructuredPresentation';
 
 interface DailyPerformanceManpowerRosterModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedDate: string; // e.g. "01/10/2026" or "2026-10-01"
+  userPt?: string;
 }
 
 interface RosterEmployeeItem {
@@ -23,12 +26,14 @@ interface RosterEmployeeItem {
   pt?: string;
   statusShift?: string;
   statusCategory?: 'hadir' | 'cuti' | 'izin_sakit' | 'off' | 'lainnya';
+  roleCategory?: 'staff' | 'crew';
 }
 
 export const DailyPerformanceManpowerRosterModal: React.FC<DailyPerformanceManpowerRosterModalProps> = ({
   isOpen,
   onClose,
-  selectedDate
+  selectedDate,
+  userPt = 'TBP'
 }) => {
   if (!isOpen) return null;
 
@@ -36,6 +41,7 @@ export const DailyPerformanceManpowerRosterModal: React.FC<DailyPerformanceManpo
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'hadir' | 'cuti' | 'izin_sakit' | 'off'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'staff' | 'crew'>('all');
   const [sectionFilter, setSectionFilter] = useState<string>('all');
 
   // Load roster data from /api/roster (cached or fresh)
@@ -96,31 +102,49 @@ export const DailyPerformanceManpowerRosterModal: React.FC<DailyPerformanceManpo
   }, [selectedDate]);
 
 const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
-  { nik: 'LAB-001', name: 'Alvin Pratama', jabatan: 'Supervisor Laboratory', section: 'Staff Management', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-002', name: 'Aldy Setyawan', jabatan: 'Senior Chemist & QA/QC', section: 'QA/QC & Reporting', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-003', name: 'Rian Hidayat', jabatan: 'Foreman Preparation', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-004', name: 'Bambang Kusuma', jabatan: 'Operator Press Powder', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-005', name: 'Dedi Saputra', jabatan: 'Operator Weighing & Fluxing', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-006', name: 'Eko Wahyudi', jabatan: 'Operator Fusion Furnace', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-007', name: 'Fajar Nugroho', jabatan: 'Operator LOI', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-008', name: 'Gunawan Prasetyo', jabatan: 'Operator EDXRF Epsilon', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-009', name: 'Hadi Wijaya', jabatan: 'Operator WDXRF Zetium', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-010', name: 'Ilham Ramadhan', jabatan: 'Data Processor & Reporting', section: 'QA/QC & Reporting', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-011', name: 'Joko Susanto', jabatan: 'Operator Prep Night Shift', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu B', pt: 'TBP', statusShift: 'N', statusCategory: 'hadir' },
-  { nik: 'LAB-012', name: 'Kurnia Sandy', jabatan: 'Operator Analisa Night Shift', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu B', pt: 'TBP', statusShift: 'N', statusCategory: 'hadir' },
-  { nik: 'LAB-013', name: 'Lukman Hakim', jabatan: 'Staff Administrasi Lab', section: 'Administration', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir' },
-  { nik: 'LAB-014', name: 'Muhammad Ridwan', jabatan: 'Operator Prep (Cuti Tahunan)', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu C', pt: 'TBP', statusShift: 'CT', statusCategory: 'cuti' },
-  { nik: 'LAB-015', name: 'Nurul Huda', jabatan: 'Operator Analisa (Cuti Roster)', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu C', pt: 'TBP', statusShift: 'CR', statusCategory: 'cuti' },
-  { nik: 'LAB-016', name: 'Oki Setiawan', jabatan: 'Operator Prep (Izin Sakit)', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu D', pt: 'TBP', statusShift: 'SL', statusCategory: 'izin_sakit' },
+  { nik: 'LAB-001', name: 'Alvin Pratama', jabatan: 'Supervisor Laboratory', section: 'Staff Management', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
+  { nik: 'LAB-002', name: 'Aldy Setyawan', jabatan: 'Senior Chemist & QA/QC', section: 'QA/QC & Reporting', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
+  { nik: 'LAB-003', name: 'Rian Hidayat', jabatan: 'Foreman Preparation', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
+  { nik: 'LAB-004', name: 'Bambang Kusuma', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-005', name: 'Dedi Saputra', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-006', name: 'Eko Wahyudi', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-007', name: 'Fajar Nugroho', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-008', name: 'Gunawan Prasetyo', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-009', name: 'Hadi Wijaya', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu A', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-010', name: 'Ilham Ramadhan', jabatan: 'Quality Assurance Officer', section: 'QA/QC & Reporting', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
+  { nik: 'LAB-011', name: 'Joko Susanto', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu B', pt: 'TBP', statusShift: 'N', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-012', name: 'Kurnia Sandy', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu B', pt: 'TBP', statusShift: 'N', statusCategory: 'hadir', roleCategory: 'crew' },
+  { nik: 'LAB-013', name: 'Lukman Hakim', jabatan: 'Admin, Preparation & Laboratory', section: 'Administration', department: 'QA/QC & Lab', regu: 'Non-Shift', pt: 'TBP', statusShift: 'D', statusCategory: 'hadir', roleCategory: 'staff' },
+  { nik: 'LAB-014', name: 'Muhammad Ridwan', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu C', pt: 'TBP', statusShift: 'CT', statusCategory: 'cuti', roleCategory: 'crew' },
+  { nik: 'LAB-015', name: 'Nurul Huda', jabatan: 'Crew, Preparation & Laboratory', section: 'Instrument Analysis', department: 'QA/QC & Lab', regu: 'Regu C', pt: 'TBP', statusShift: 'CR', statusCategory: 'cuti', roleCategory: 'crew' },
+  { nik: 'LAB-016', name: 'Oki Setiawan', jabatan: 'Crew, Preparation & Laboratory', section: 'Sample Preparation', department: 'QA/QC & Lab', regu: 'Regu D', pt: 'TBP', statusShift: 'SL', statusCategory: 'izin_sakit', roleCategory: 'crew' },
 ];
 
   // Map employees with their shift status on selectedDate
   const parsedEmployees = useMemo<RosterEmployeeItem[]>(() => {
+    const isGtsUniverse = (userPt || '').toUpperCase().trim() === 'GTS';
+
     if (!rosterList || rosterList.length === 0) {
       return FALLBACK_ROSTER_EMPLOYEES;
     }
 
-    return rosterList.map(emp => {
+    // STRICT UNIVERSE FILTERING: TBP and GTS MUST NEVER MIX!
+    const filteredRoster = rosterList.filter(emp => {
+      const empPt = String(emp.pt || '').toUpperCase().trim();
+      const nikUpper = String(emp.nik || '').toUpperCase().trim();
+      const isEmpGts = empPt === 'GTS' || nikUpper.startsWith('03D') || nikUpper.startsWith('M03');
+
+      if (isGtsUniverse) {
+        return isEmpGts;
+      } else {
+        // TBP Universe: GTS personnel MUST NEVER APPEAR under any circumstances!
+        if (isEmpGts) return false;
+        return empPt === 'TBP' || empPt === 'GPS' || empPt === 'PT. TBP' || empPt === 'PT TBP' || 
+               nikUpper.startsWith('04D') || nikUpper.startsWith('02D') || nikUpper.startsWith('M04') || nikUpper.startsWith('M02') || !empPt;
+      }
+    });
+
+    return filteredRoster.map(emp => {
       let shiftCode = '';
 
       // Check fullSchedule object
@@ -161,19 +185,27 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
         shiftCode = 'D';
       }
 
+      const isStaff = isStaffRole({
+        jabatan: emp.jabatan || emp.position,
+        gol: emp.gol || emp.golongan,
+        roleCategory: emp.roleCategory
+      });
+      const roleCategory: 'staff' | 'crew' = isStaff ? 'staff' : 'crew';
+
       return {
         nik: emp.nik || '-',
         name: emp.name || emp.nama || 'Tanpa Nama',
-        jabatan: emp.jabatan || emp.position || 'Staff / Crew',
+        jabatan: emp.jabatan || emp.position || (isStaff ? 'Staff Laboratory' : 'Crew Laboratory'),
         section: emp.section || emp.department || 'Laboratory',
         department: emp.department || 'QA/QC & Lab',
         regu: emp.regu || emp.group || '-',
-        pt: emp.pt || 'TBP',
+        pt: emp.pt || (isGtsUniverse ? 'GTS' : 'TBP'),
         statusShift: shiftCode || 'D',
-        statusCategory
+        statusCategory,
+        roleCategory
       };
     });
-  }, [rosterList, dateKeys]);
+  }, [rosterList, dateKeys, userPt]);
 
   // Distinct sections for filtering
   const availableSections = useMemo(() => {
@@ -184,9 +216,9 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
     return Array.from(s).sort();
   }, [parsedEmployees]);
 
-  // Filtered List
+  // Filtered List - Diurutkan berdasarkan hirarki jabatan resmi!
   const filteredList = useMemo(() => {
-    return parsedEmployees.filter(emp => {
+    const list = parsedEmployees.filter(emp => {
       if (search) {
         const q = search.toLowerCase();
         const mNik = emp.nik.toLowerCase().includes(q);
@@ -196,9 +228,12 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
       }
       if (statusFilter !== 'all' && emp.statusCategory !== statusFilter) return false;
       if (sectionFilter !== 'all' && emp.section !== sectionFilter) return false;
+      if (roleFilter !== 'all' && emp.roleCategory !== roleFilter) return false;
       return true;
     });
-  }, [parsedEmployees, search, statusFilter, sectionFilter]);
+
+    return [...list].sort(compareEmployeesByJabatan);
+  }, [parsedEmployees, search, statusFilter, sectionFilter, roleFilter]);
 
   // Quick Counts
   const counts = useMemo(() => {
@@ -206,13 +241,17 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
     let cuti = 0;
     let izinSakit = 0;
     let off = 0;
+    let staff = 0;
+    let crew = 0;
     parsedEmployees.forEach(e => {
       if (e.statusCategory === 'hadir') hadir++;
       else if (e.statusCategory === 'cuti') cuti++;
       else if (e.statusCategory === 'izin_sakit') izinSakit++;
       else if (e.statusCategory === 'off') off++;
+      if (e.roleCategory === 'staff') staff++;
+      else crew++;
     });
-    return { hadir, cuti, izinSakit, off, total: parsedEmployees.length };
+    return { hadir, cuti, izinSakit, off, staff, crew, total: parsedEmployees.length };
   }, [parsedEmployees]);
 
   // Shift badge styling helper
@@ -243,6 +282,9 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
                 </h3>
                 <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 font-bold border border-teal-300 dark:border-teal-700">
                   {selectedDate}
+                </span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                  Universe {userPt || 'TBP'}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -324,8 +366,47 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
                 placeholder="Cari NIK / Nama karyawan..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs w-56 sm:w-64 focus:outline-none focus:border-teal-500"
+                className="pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs w-48 sm:w-56 focus:outline-none focus:border-teal-500"
               />
+            </div>
+
+            {/* Role Filter Tabs (Staff vs Crew) */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setRoleFilter('all')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  roleFilter === 'all'
+                    ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                }`}
+              >
+                Semua ({counts.total})
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoleFilter('staff')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  roleFilter === 'staff'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                }`}
+              >
+                <Briefcase className="w-3 h-3 text-indigo-600" />
+                <span>Staff ({counts.staff})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoleFilter('crew')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  roleFilter === 'crew'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                }`}
+              >
+                <Users className="w-3 h-3 text-emerald-600" />
+                <span>Crew ({counts.crew})</span>
+              </button>
             </div>
 
             {/* Section Filter */}
@@ -373,8 +454,17 @@ const FALLBACK_ROSTER_EMPLOYEES: RosterEmployeeItem[] = [
                       {emp.name.slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <div className="font-bold text-slate-800 dark:text-white text-xs truncate">
-                        {emp.name}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-800 dark:text-white text-xs truncate">
+                          {emp.name}
+                        </span>
+                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider shrink-0 border ${
+                          emp.roleCategory === 'staff'
+                            ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                            : 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                        }`}>
+                          {emp.roleCategory === 'staff' ? 'Staff' : 'Crew'}
+                        </span>
                       </div>
                       <div className="text-[11px] text-slate-400 flex items-center gap-1.5 truncate">
                         <span className="font-mono text-[10px] bg-slate-200/60 dark:bg-slate-700 px-1.5 py-0.2 rounded">

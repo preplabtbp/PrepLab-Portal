@@ -38,10 +38,13 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
   const [crewShift, setCrewShift] = useState(10);
   const [crewBantn, setCrewBantn] = useState(2);
   const [crewCuti, setCrewCuti] = useState(2);
+  const [manpowerNotes, setManpowerNotes] = useState('');
 
   // Sample Intake
   const [gcShift, setGcShift] = useState(450);
   const [prodShift, setProdShift] = useState(25);
+  const [prodRc, setProdRc] = useState(0);
+  const [prodRa, setProdRa] = useState(0);
   const [expShift, setExpShift] = useState(120);
   const [smelterShift, setSmelterShift] = useState(0);
 
@@ -123,7 +126,7 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
       },
       sampleReceived: {
         gc: { shift: gcShift, day: gcShift, wkly: gcShift },
-        prod: { shift: prodShift, rc: 0, day: prodShift, wkly: prodShift },
+        prod: { shift: prodShift, rc: prodRc, ra: prodRa, day: prodShift, wkly: prodShift },
         exp: { shift: expShift, day: expShift, wkly: expShift },
         smelter: { shift: smelterShift, day: smelterShift, wkly: smelterShift }
       },
@@ -166,6 +169,7 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
       report: {
         osReport: reportOs, received: expShift, finishReportDay: reportDone, finishReportWkly: reportDone, bal: reportBal
       },
+      manpowerNotes: manpowerNotes || undefined,
       updatedAt: new Date().toISOString()
     };
 
@@ -313,6 +317,17 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                     />
                   </div>
                 </div>
+
+                <div className="mt-3">
+                  <label className="text-[10px] text-slate-500 font-semibold block">Catatan Manpower & Perbantuan (misal: Perbantuan dari Prep)</label>
+                  <input
+                    type="text"
+                    value={manpowerNotes}
+                    onChange={e => setManpowerNotes(e.target.value)}
+                    placeholder="Contoh: 2 operator diperbantukan dari Preparation untuk stasiun Fusion & Weighing"
+                    className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -357,6 +372,33 @@ export const DailyPerformanceInputModal: React.FC<DailyPerformanceInputModalProp
                     onChange={e => setSmelterShift(Number(e.target.value))}
                     className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono"
                   />
+                </div>
+              </div>
+
+              {/* Rincian Produksi: RC & RA */}
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 space-y-2">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Rincian Tipe Sampel Produksi (RC & RA)</span>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] text-slate-500">Reverse Circulation (RC)</label>
+                    <input 
+                      type="number" 
+                      value={prodRc} 
+                      onChange={e => setProdRc(Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500">Resource / Re-Assay (RA)</label>
+                    <input 
+                      type="number" 
+                      value={prodRa} 
+                      onChange={e => setProdRa(Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full mt-0.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 

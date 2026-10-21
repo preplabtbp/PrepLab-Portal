@@ -38,31 +38,37 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
     });
   }, [records, search, selectedWeek, selectedRegu, selectedShift]);
 
-  // Quick export CSV
+  // Quick export CSV - PEMISAHAN KETAT TBP/GPS DAN GTS
   const handleExportCsv = () => {
     const headers = [
       'No', 'Date', 'Week', 'Regu', 'Shift',
       'Staff_Shift', 'Crew_Shift',
-      'GC_Shift', 'Prod_Shift', 'Exp_Shift', 'Smelter_Shift',
+      'GC_Shift', 'Prod_Shift', 'Prod_RC', 'Prod_RA', 'Exp_Shift', 'Smelter_Shift', 'GTS_Received_Shift',
       'Press_Fin_Shift',
       'EDXRF_Total', 'FuseBead_Fin', 'FuseBead_Bal',
       'LOI_Fin', 'LOI_Bal',
-      'ZTM_A_Total', 'ZTM_B_Total', 'WDXRF_Bal',
+      'ZTM_A_TBP_Internal', 'ZTM_B_TBP_Internal', 'WDXRF_TBP_Total', 'GTS_WDXRF_Runs_Terpisah', 'WDXRF_Bal',
       'QC_Fin', 'QC_Bal',
       'Report_Done', 'Report_Bal'
     ];
 
-    const rows = filteredRecords.map(r => [
-      r.no, r.date, r.week, r.regu, r.shiftType,
-      r.manpower.staff.shift, r.manpower.crew.shift,
-      r.sampleReceived.gc.shift, r.sampleReceived.prod.shift, r.sampleReceived.exp.shift, r.sampleReceived.smelter.shift,
-      r.pressPowder.finish.shift,
-      r.edxrf.shift, r.fuseBead.finishShift, r.fuseBead.balExp,
-      r.loi.finLoiShift, r.loi.bal,
-      r.wdxrf.zetiumA.total, r.wdxrf.zetiumB.total, r.wdxrf.bal,
-      r.qc.finishShift, r.qc.bal,
-      r.report.finishReportDay, r.report.bal
-    ]);
+    const rows = filteredRecords.map(r => {
+      const ztmATbp = r.wdxrf.zetiumA.prod + r.wdxrf.zetiumA.exp + r.wdxrf.zetiumA.smelt + r.wdxrf.zetiumA.rarr + r.wdxrf.zetiumA.ver + r.wdxrf.zetiumA.std + r.wdxrf.zetiumA.blank;
+      const ztmBTbp = r.wdxrf.zetiumB.prod + r.wdxrf.zetiumB.exp + r.wdxrf.zetiumB.smelt + r.wdxrf.zetiumB.rarr + r.wdxrf.zetiumB.ver + r.wdxrf.zetiumB.std + r.wdxrf.zetiumB.blank;
+      const gtsRuns = (r.wdxrf.zetiumA.gts || 0) + (r.wdxrf.zetiumB.gts || 0);
+
+      return [
+        r.no, r.date, r.week, r.regu, r.shiftType,
+        r.manpower.staff.shift, r.manpower.crew.shift,
+        r.sampleReceived.gc.shift, r.sampleReceived.prod.shift, r.sampleReceived.prod.rc || 0, r.sampleReceived.prod.ra || 0, r.sampleReceived.exp.shift, r.sampleReceived.smelter.shift, r.sampleReceived.gts?.shift || 0,
+        r.pressPowder.finish.shift,
+        r.edxrf.shift, r.fuseBead.finishShift, r.fuseBead.balExp,
+        r.loi.finLoiShift, r.loi.bal,
+        ztmATbp, ztmBTbp, ztmATbp + ztmBTbp, gtsRuns, r.wdxrf.bal,
+        r.qc.finishShift, r.qc.bal,
+        r.report.finishReportDay, r.report.bal
+      ];
+    });
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -179,8 +185,8 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
                 <th colSpan={2} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-teal-500/10 text-teal-800 dark:text-teal-300">
                   MANPOWER
                 </th>
-                <th colSpan={4} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-blue-500/10 text-blue-800 dark:text-blue-300">
-                  SAMPLE RECEIVED (SHIFT)
+                <th colSpan={5} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-blue-500/10 text-blue-800 dark:text-blue-300">
+                  SAMPLE RECEIVED (TBP/GPS + GTS Terpisah)
                 </th>
                 <th colSpan={showEdxrfDetails ? 8 : 1} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-sky-500/10 text-sky-800 dark:text-sky-300">
                   EDXRF RUNS
@@ -191,8 +197,8 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
                 <th colSpan={2} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-orange-500/10 text-orange-800 dark:text-orange-300">
                   LOI EXP
                 </th>
-                <th colSpan={3} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-indigo-500/10 text-indigo-800 dark:text-indigo-300">
-                  WDXRF ZETIUM
+                <th colSpan={4} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-indigo-500/10 text-indigo-800 dark:text-indigo-300">
+                  WDXRF ZETIUM (TBP/GPS vs GTS Terpisah)
                 </th>
                 <th colSpan={2} className="p-2 border-b border-r border-slate-200 dark:border-slate-700 text-center bg-purple-500/10 text-purple-800 dark:text-purple-300">
                   QC EXP
@@ -218,6 +224,7 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
                 <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Prod</th>
                 <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Exp</th>
                 <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">Smelt</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right text-purple-600 dark:text-purple-400 font-bold" title="PT GTS Sister Site (Terpisah)">GTS</th>
 
                 {/* EDXRF */}
                 {showEdxrfDetails ? (
@@ -244,8 +251,9 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
                 <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right font-semibold text-orange-600">Bal</th>
 
                 {/* WDXRF */}
-                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">ZTM A</th>
-                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right">ZTM B</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right" title="Zetium A internal TBP/GPS">ZTM A</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right" title="Zetium B internal TBP/GPS">ZTM B</th>
+                <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right text-purple-600 dark:text-purple-400 font-bold" title="Total run GTS Sister Site (Terpisah)">GTS Run</th>
                 <th className="p-2 border-r border-slate-200 dark:border-slate-700 text-right font-semibold text-rose-600">Bal</th>
 
                 {/* QC */}
@@ -296,9 +304,20 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
 
                   {/* Sample Received */}
                   <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.sampleReceived.gc.shift)}</td>
-                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.sampleReceived.prod.shift)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">
+                    <div>{formatNumber(r.sampleReceived.prod.shift)}</div>
+                    {((r.sampleReceived.prod.rc || 0) > 0 || (r.sampleReceived.prod.ra || 0) > 0) && (
+                      <div className="text-[9px] text-slate-500 font-normal">
+                        {(r.sampleReceived.prod.rc || 0) > 0 && `RC:${r.sampleReceived.prod.rc} `}
+                        {(r.sampleReceived.prod.ra || 0) > 0 && `RA:${r.sampleReceived.prod.ra}`}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.sampleReceived.exp.shift)}</td>
                   <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.sampleReceived.smelter.shift)}</td>
+                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-purple-600 dark:text-purple-400">
+                    {(r.sampleReceived.gts?.shift || 0) > 0 ? formatNumber(r.sampleReceived.gts!.shift) : '-'}
+                  </td>
 
                   {/* EDXRF */}
                   {showEdxrfDetails ? (
@@ -332,12 +351,29 @@ export const DailyPerformanceTable: React.FC<DailyPerformanceTableProps> = ({ re
                     {r.loi.bal > 0 ? formatNumber(r.loi.bal) : '-'}
                   </td>
 
-                  {/* WDXRF */}
-                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.wdxrf.zetiumA.total)}</td>
-                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.wdxrf.zetiumB.total)}</td>
-                  <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-rose-600 dark:text-rose-400">
-                    {r.wdxrf.bal > 0 ? formatNumber(r.wdxrf.bal) : '-'}
-                  </td>
+                  {/* WDXRF - PEMISAHAN KETAT TBP/GPS & GTS */}
+                  {(() => {
+                    const ztmATbp = r.wdxrf.zetiumA.prod + r.wdxrf.zetiumA.exp + r.wdxrf.zetiumA.smelt + r.wdxrf.zetiumA.rarr + r.wdxrf.zetiumA.ver + r.wdxrf.zetiumA.std + r.wdxrf.zetiumA.blank;
+                    const ztmBTbp = r.wdxrf.zetiumB.prod + r.wdxrf.zetiumB.exp + r.wdxrf.zetiumB.smelt + r.wdxrf.zetiumB.rarr + r.wdxrf.zetiumB.ver + r.wdxrf.zetiumB.std + r.wdxrf.zetiumB.blank;
+                    const gtsRuns = (r.wdxrf.zetiumA.gts || 0) + (r.wdxrf.zetiumB.gts || 0);
+
+                    return (
+                      <>
+                        <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono" title={`Zetium A TBP/GPS: ${ztmATbp}`}>
+                          {formatNumber(ztmATbp)}
+                        </td>
+                        <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono" title={`Zetium B TBP/GPS: ${ztmBTbp}`}>
+                          {formatNumber(ztmBTbp)}
+                        </td>
+                        <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-purple-600 dark:text-purple-400" title={`Run GTS Sister Site (A:${r.wdxrf.zetiumA.gts || 0}, B:${r.wdxrf.zetiumB.gts || 0})`}>
+                          {gtsRuns > 0 ? formatNumber(gtsRuns) : '-'}
+                        </td>
+                        <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono font-bold text-rose-600 dark:text-rose-400">
+                          {r.wdxrf.bal > 0 ? formatNumber(r.wdxrf.bal) : '-'}
+                        </td>
+                      </>
+                    );
+                  })()}
 
                   {/* QC */}
                   <td className="p-2 text-right border-r border-slate-100 dark:border-slate-800 font-mono">{formatNumber(r.qc.finishShift)}</td>

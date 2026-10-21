@@ -280,6 +280,8 @@ export const DailyPerformanceScreen: React.FC<DailyPerformanceScreenProps> = ({
             records={records}
             selectedDate={selectedDate}
             isPresentationMode={isPresentationMode}
+            onSaveRecord={handleSaveRecord}
+            userPt={userPt}
           />
         )}
 

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Users, Layers, Flame, Cpu, FileCheck, ArrowRight, ArrowLeft, 
-  CheckCircle2, AlertTriangle, TrendingUp, Sparkles, BarChart2,
-  ChevronRight, Calendar, ShieldCheck, Clock, Gauge, Sun, Moon,
+  CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Minus, Sparkles, BarChart2,
+  ChevronRight, Calendar, ShieldCheck, Clock, Gauge, Sun, Moon, Building2, Split,
   Search, Edit3, Save, FileText, Check, Plus, MessageSquare, Info,
   UserCheck, Coffee, Briefcase, Award, Table as TableIcon, LayoutGrid, ArrowUpDown, Filter
 } from 'lucide-react';
@@ -25,6 +25,7 @@ interface DailyPerformanceStructuredPresentationProps {
   selectedDate: string;
   isPresentationMode?: boolean;
   onSaveRecord?: (newRec: DailyPerformanceRecord) => void;
+  userPt?: string;
 }
 
 export interface LabPersonnelItem {
@@ -43,26 +44,39 @@ export interface LabPersonnelItem {
 export function isStaffRole(item: { jabatan?: string; gol?: string; roleCategory?: string }): boolean {
   if (item.roleCategory === 'staff') return true;
   if (item.roleCategory === 'crew') return false;
-  const jab = String(item.jabatan || '').toLowerCase();
-  const gol = String(item.gol || '').trim().toUpperCase();
-  if (gol.startsWith('III') || gol.startsWith('IV') || gol.startsWith('V')) return true;
-  if (gol.startsWith('I') || gol.startsWith('II')) return false;
 
+  const jab = String(item.jabatan || '').toLowerCase().trim();
+
+  // ATURAN RESMI (User Requirement):
+  // 1. Foreman, Admin, Supervisor, Superintendent, Manager, Specialist, QA/QC, Officer adalah STAF
   if (
+    jab.includes('foreman') ||
+    jab.includes('admin') ||
     jab.includes('manager') ||
     jab.includes('superintendent') ||
     jab.includes('supervisor') ||
     jab.includes('specialist') ||
     jab.includes('officer') ||
-    jab.includes('foreman') ||
-    jab.includes('admin') ||
     jab.includes('chemist') ||
     jab.includes('qa') ||
     jab.includes('qc') ||
-    jab.includes('staff')
+    jab.includes('staff') ||
+    jab.includes('head')
   ) {
     return true;
   }
+
+  // 2. "Crew itu yang jabatannya memang crew"
+  if (jab.includes('crew')) {
+    return false;
+  }
+
+  // 3. Fallback jika ada jabatan non-crew berkategori golongan III ke atas
+  const gol = String(item.gol || '').trim().toUpperCase();
+  if (gol.startsWith('III') || gol.startsWith('IV') || gol.startsWith('V')) {
+    return true;
+  }
+
   return false;
 }
 
@@ -117,68 +131,93 @@ export function getJabatanBadgeStyle(jabatan?: string): { bg: string; text: stri
   return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-300 dark:border-slate-700', label: 'Staff' };
 }
 
-const FALLBACK_LAB_PERSONNEL: LabPersonnelItem[] = [
-  // Shift A
-  { nik: 'LAB-A01', name: 'Muhammad Reza Satria', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'LAB-A02', name: 'Rafi Fadlurrahman', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'LAB-A03', name: 'Rahmad Azizul Khakim', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'LAB-A04', name: 'Naslim Muksin', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'LAB-A05', name: 'Ramadhan W. Anwar', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'LAB-A06', name: 'Randi Zakaria', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'LAB-A07', name: 'Riko Saputra Day', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'LAB-A08', name: 'Suryadi La Samusu', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
-  { nik: 'LAB-A09', name: 'Wahyu Jabir', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+const FALLBACK_TBP_LAB_PERSONNEL: LabPersonnelItem[] = [
+  // Shift A (Pagi - Pure TBP & GPS)
+  { nik: '02D22000023', name: 'Muhammad Reza Satria', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '04D24000068', name: 'Muhammad Fandy Septiawan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '04D26000070', name: 'Rahmad Azizul Khakim', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '04D26000015', name: 'Gusti Nur Firdaus', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0406220796', name: 'Naslim Muksin', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0203220102', name: 'Ramadhan W. Anwar', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0405240290', name: 'Randi Zakaria', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0212210097', name: 'Riko Saputra Day', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0412221652', name: 'Suryadi La Samusu', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: 'M0402230134', name: 'Wahyu Jabir', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'crew', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
 
-  // Non-Shift (Merged into Shift Pagi)
-  { nik: 'LAB-N01', name: 'Tigwa Anggawikara', jabatan: 'Laboratory Superintendent', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'LAB-N02', name: 'Agus Kusman', jabatan: 'Preparation & Laboratory Superintendent', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'LAB-N03', name: 'Muhamad Alvin Febriansyah', jabatan: 'Laboratory Foreman & QA', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'LAB-N04', name: 'Asrar Kurniawan', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'LAB-N05', name: 'Difri Candra A.N', jabatan: 'Quality Assurance Officer', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'LAB-N06', name: 'Sugiyanto', jabatan: 'Quality Assurance Officer', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'LAB-N07', name: 'Febrian Mauklesi Salatutin', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'LAB-N08', name: 'Irsal Ridwan Johan', jabatan: 'Admin, Preparation & Laboratory', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'LAB-N09', name: 'Mursalin Iskandar', jabatan: 'Admin, Inventory Control', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
-  { nik: 'LAB-N10', name: 'Murti Tamisari Harun', jabatan: 'Preparation Foreman, Wet', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  // Non-Shift (Merged into Shift Pagi - Pure TBP & GPS Staff)
+  { nik: '04D23000004', name: 'Tigwa Anggawikara', jabatan: 'Laboratory Superintendent', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: '02D21001045', name: 'Arthur Paul Marnix Souisa', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: '02D24000043', name: 'Muhamad Alvin Febriansyah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: '04D22000094', name: 'Kemal Maulana', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: '04D21001046', name: 'Moch. Siswanto', jabatan: 'Laboratory Maintenance Supervisor', section: 'Maintenance', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: '02D21001017', name: 'Christian Anggawijaya', jabatan: 'Laboratory Maintenance Supervisor', section: 'Maintenance', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: 'M0403240177', name: 'Aldy Aldersun Puluh', jabatan: 'Admin, Preparation & Laboratory', section: 'Administration', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: 'M0411251243', name: 'Agung Adi Putra Prasetyo', jabatan: 'Admin, Preparation & Laboratory', section: 'Administration', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: 'M0206250732', name: 'Muhammad Iqbal', jabatan: 'Admin, Preparation & Laboratory', section: 'Administration', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: 'M0403190701', name: 'Murti Tamisari Harun', jabatan: 'Preparation Foreman, Wet', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
 
-  // Shift B
-  { nik: 'LAB-B01', name: 'Khaufi Wirawan Aligora', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B02', name: 'Muhammad Amran Selang', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B03', name: 'Andika Dafa Rusdiarta', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B04', name: 'Fachmi Amarullah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B05', name: 'Herwin Predianto', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B06', name: 'Muhammad Furqan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B07', name: 'Rizal Zaelani', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B08', name: 'Agusman Suaib', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B09', name: 'Hasbi Nuh', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B10', name: 'Imran Sebualamo', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B11', name: 'Iran Rumbia', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B12', name: 'Irman Welhemus', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B13', name: 'Jarfin Saharudin', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B14', name: 'Jasri', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B15', name: 'La Dai', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B16', name: 'La Wisnu', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B17', name: 'Muh. Alif Multazam NH', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B18', name: 'Rahmat Purnomo', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B19', name: 'Risdiyanto Ladedi', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B20', name: 'Sukri Koco', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
-  { nik: 'LAB-B21', name: 'Zhiran Arrazy Barmawi Putra', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  // Shift B (Malam - Pure TBP & GPS)
+  { nik: '02D18000192', name: 'Khaufi Wirawan Aligora', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D21001049', name: 'Muhammad Amran Selang', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D25000067', name: 'Andika Dafa Rusdiarta', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '02D23000024', name: 'Fachmi Amarullah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D24000057', name: 'Herwin Predianto', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D26000067', name: 'Muhammad Furqan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: '04D24000056', name: 'Rizal Zaelani', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0407221011', name: 'Agusman Suaib', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0411221527', name: 'Hasbi Nuh', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0201250032', name: 'Imran Sebualamo', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0412221625', name: 'Iran Rumbia', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0406220795', name: 'Irman Welhemus', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0402230188', name: 'Jarfin Saharudin', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0403240155', name: 'Jasri', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0406210029', name: 'La Dai', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0209240583', name: 'La Wisnu', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0402240078', name: 'Muh. Alif Multazam NH', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0202220051', name: 'Rahmat Purnomo', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0203220144', name: 'Risdiyanto Ladedi', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0402230199', name: 'Sukri Koco', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+  { nik: 'M0409251014', name: 'Zhiran Arrazy Barmawi Putra', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'crew', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
 
-  // Tidak Bertugas (Izin, Sakit, Off, Cuti)
-  { nik: 'LAB-T01', name: 'Anresansia Winesha Pandit', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'CT', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Cuti Tahunan (CT)', badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300' },
-  { nik: 'LAB-T02', name: 'Ayup Riyan Redondo', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'CR', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Cuti Roster (CR)', badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300' },
-  { nik: 'LAB-T03', name: 'M. Afdal Al Fatihah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
-  { nik: 'LAB-T04', name: 'Muhammad Faris Nur Fauzan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'SL', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Sakit Surat Dokter (SL)', badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300' },
-  { nik: 'LAB-T05', name: 'Riyan Panji Putra', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'I', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Izin Resmi (I)', badgeColor: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border-yellow-300' },
-  { nik: 'LAB-T06', name: 'Secwin Sello Manukrante', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
-  { nik: 'LAB-T07', name: 'Sahrul Sanusi', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'crew', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' }
+  // Tidak Bertugas (Izin, Sakit, Off, Cuti - Pure TBP & GPS)
+  { nik: '04D25000059', name: 'Anresansia Winesha Pandit', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'CT', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Cuti Tahunan (CT)', badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300' },
+  { nik: '02D25000050', name: 'Ayup Riyan Redondo', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'CR', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Cuti Roster (CR)', badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300' },
+  { nik: '04D23000025', name: 'M. Harits Asyardy', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
+  { nik: '04D23000035', name: 'Ahmad Jusma Azhari Annur', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'SL', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Sakit Surat Dokter (SL)', badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300' },
+  { nik: '04D26000016', name: 'Riyan Panji Putra', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'I', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Izin Resmi (I)', badgeColor: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border-yellow-300' },
+  { nik: '04D25000045', name: 'Kevin Murheza', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
+  { nik: 'M0203250155', name: 'Sahrul Sanusi', jabatan: 'Crew, Preparation & Laboratory', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'crew', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' }
 ];
+
+const FALLBACK_GTS_LAB_PERSONNEL: LabPersonnelItem[] = [
+  // Shift A (Pagi - Dedicated GTS)
+  { nik: '03D24000058', name: 'Rafi Fadlurrahman', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  { nik: '03D24000060', name: 'Febrian Mauklesi Salatutin', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu A', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Shift Pagi', badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300' },
+  
+  // Non-Shift (Dedicated GTS)
+  { nik: '03D22000021', name: 'Agus Kusman', jabatan: 'Preparation & Laboratory Superintendent', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: '03D23000041', name: 'Asrar Kurniawan', jabatan: 'Laboratory Supervisor', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: '03D23000052', name: 'Difri Candra A.N', jabatan: 'Quality Assurance Officer', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: '03D23000053', name: 'Sugiyanto', jabatan: 'Quality Assurance Officer', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: 'M0303240091', name: 'Irsal Ridwan Johan', jabatan: 'Admin, Preparation & Laboratory', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+  { nik: 'M0303240092', name: 'Mursalin Iskandar', jabatan: 'Admin, Inventory Control', section: 'Laboratory', regu: 'Non-Shift', shiftSchedule: 'D', category: 'pagi', roleCategory: 'staff', keterangan: 'Hadir Non-Shift Pagi', badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300' },
+
+  // Shift B (Malam - Dedicated GTS)
+  { nik: '03D24000061', name: 'Secwin Sello Manukrante', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'N', category: 'malam', roleCategory: 'staff', keterangan: 'Hadir Shift Malam', badgeColor: 'bg-indigo-900 text-white border-indigo-700' },
+
+  // Tidak Bertugas (Dedicated GTS)
+  { nik: '03D24000062', name: 'M. Afdal Al Fatihah', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'OFF', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Off Roster (Libur)', badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300' },
+  { nik: '03D24000063', name: 'Muhammad Faris Nur Fauzan', jabatan: 'Laboratory Foreman', section: 'Laboratory', regu: 'Regu B', shiftSchedule: 'SL', category: 'tidak_bertugas', roleCategory: 'staff', keterangan: 'Sakit Surat Dokter (SL)', badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300' }
+];
+
+const FALLBACK_LAB_PERSONNEL = FALLBACK_TBP_LAB_PERSONNEL;
 
 export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceStructuredPresentationProps> = ({
   records,
   selectedDate,
   isPresentationMode = false,
-  onSaveRecord
+  onSaveRecord,
+  userPt = 'TBP'
 }) => {
   // 5 sequential steps: 1=Manpower, 2=Sample Received, 3=Productivity Prep, 4=Instruments, 5=QC & Report
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -300,11 +339,29 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
 
   // Parse Section Lab Personnel
   const parsedLabPersonnel = useMemo<LabPersonnelItem[]>(() => {
+    const isGtsUniverse = (userPt || '').toUpperCase().trim() === 'GTS';
+
     if (!rosterList || rosterList.length === 0) {
-      return FALLBACK_LAB_PERSONNEL;
+      return isGtsUniverse ? FALLBACK_GTS_LAB_PERSONNEL : FALLBACK_TBP_LAB_PERSONNEL;
     }
 
     const labEmps = rosterList.filter((emp: any) => {
+      const empPt = String(emp.pt || '').toUpperCase().trim();
+      const nikUpper = String(emp.nik || '').toUpperCase().trim();
+      const isEmpGts = empPt === 'GTS' || nikUpper.startsWith('03D') || nikUpper.startsWith('M03');
+
+      // STRICT UNIVERSE ISOLATION:
+      if (isGtsUniverse) {
+        if (!isEmpGts) return false;
+      } else {
+        // TBP Universe: GTS personnel MUST NEVER APPEAR under any circumstances!
+        if (isEmpGts) return false;
+        // Verify valid TBP/GPS
+        const isTbpOrGps = empPt === 'TBP' || empPt === 'GPS' || empPt === 'PT. TBP' || empPt === 'PT TBP' || 
+                           nikUpper.startsWith('04D') || nikUpper.startsWith('02D') || nikUpper.startsWith('M04') || nikUpper.startsWith('M02') || !empPt;
+        if (!isTbpOrGps) return false;
+      }
+
       const sec = (emp.section || '').toLowerCase();
       const dep = (emp.department || '').toLowerCase();
       const jab = (emp.jabatan || emp.position || '').toLowerCase();
@@ -321,7 +378,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
     });
 
     if (labEmps.length === 0) {
-      return FALLBACK_LAB_PERSONNEL;
+      return isGtsUniverse ? FALLBACK_GTS_LAB_PERSONNEL : FALLBACK_TBP_LAB_PERSONNEL;
     }
 
     return labEmps.map((emp: any) => {
@@ -422,7 +479,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
         badgeColor
       };
     });
-  }, [rosterList, dateKeys]);
+  }, [rosterList, dateKeys, userPt]);
 
   // Lists by Category & Role
   const staffList = useMemo(() => parsedLabPersonnel.filter(p => p.roleCategory === 'staff'), [parsedLabPersonnel]);
@@ -600,16 +657,273 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
     blank: dayRecords.reduce((acc, r) => acc + r.wdxrf.zetiumB.blank, 0),
   };
 
+  // PEMISAHAN MUTLAK GTS DAN TBP/GPS (ENTITAS TERPISAH)
+  const ztmAGts = ztmABreakdown.gts;
+  const ztmBGts = ztmBBreakdown.gts;
+  const totalGtsRuns = ztmAGts + ztmBGts;
+
+  const ztmATbpGps = ztmABreakdown.prod + ztmABreakdown.exp + ztmABreakdown.smelt + ztmABreakdown.rarr + ztmABreakdown.ver + ztmABreakdown.std + ztmABreakdown.blank;
+  const ztmBTbpGps = ztmBBreakdown.prod + ztmBBreakdown.exp + ztmBBreakdown.smelt + ztmBBreakdown.rarr + ztmBBreakdown.ver + ztmBBreakdown.std + ztmBBreakdown.blank;
+  const totalTbpGpsWdxrf = ztmATbpGps + ztmBTbpGps;
+
+  // GTS Runs Per Shift
+  const gtsDayRuns = (dayShift?.wdxrf.zetiumA.gts || 0) + (dayShift?.wdxrf.zetiumB.gts || 0);
+  const gtsNightRuns = (nightShift?.wdxrf.zetiumA.gts || 0) + (nightShift?.wdxrf.zetiumB.gts || 0);
+
+  // TBP/GPS WDXRF Per Shift
+  const tbpGpsDayWdxrf = dayShift ? (
+    (dayShift.wdxrf.zetiumA.prod || 0) + (dayShift.wdxrf.zetiumA.exp || 0) + (dayShift.wdxrf.zetiumA.smelt || 0) + (dayShift.wdxrf.zetiumA.rarr || 0) + (dayShift.wdxrf.zetiumA.ver || 0) + (dayShift.wdxrf.zetiumA.std || 0) + (dayShift.wdxrf.zetiumA.blank || 0) +
+    (dayShift.wdxrf.zetiumB.prod || 0) + (dayShift.wdxrf.zetiumB.exp || 0) + (dayShift.wdxrf.zetiumB.smelt || 0) + (dayShift.wdxrf.zetiumB.rarr || 0) + (dayShift.wdxrf.zetiumB.ver || 0) + (dayShift.wdxrf.zetiumB.std || 0) + (dayShift.wdxrf.zetiumB.blank || 0)
+  ) : 0;
+  const tbpGpsNightWdxrf = nightShift ? (
+    (nightShift.wdxrf.zetiumA.prod || 0) + (nightShift.wdxrf.zetiumA.exp || 0) + (nightShift.wdxrf.zetiumA.smelt || 0) + (nightShift.wdxrf.zetiumA.rarr || 0) + (nightShift.wdxrf.zetiumA.ver || 0) + (nightShift.wdxrf.zetiumA.std || 0) + (nightShift.wdxrf.zetiumA.blank || 0) +
+    (nightShift.wdxrf.zetiumB.prod || 0) + (nightShift.wdxrf.zetiumB.exp || 0) + (nightShift.wdxrf.zetiumB.smelt || 0) + (nightShift.wdxrf.zetiumB.rarr || 0) + (nightShift.wdxrf.zetiumB.ver || 0) + (nightShift.wdxrf.zetiumB.std || 0) + (nightShift.wdxrf.zetiumB.blank || 0)
+  ) : 0;
+
+  // GTS Sample Received (jika tercatat mandiri)
+  const totalGtsReceived = dayRecords.reduce((acc, r) => acc + (r.sampleReceived.gts?.shift || 0), 0);
+  const totalTbpGpsReceived = gcShift + prodShift + expShift + smelterShift;
+
+  // Preparasi Per-Shift
+  const pressDayShift = dayShift?.pressPowder.finish.shift || 0;
+  const pressNightShift = nightShift?.pressPowder.finish.shift || 0;
+  const weighDayShift = dayShift?.fuseBead.finishShift || 0;
+  const weighNightShift = nightShift?.fuseBead.finishShift || 0;
+  const fusionDayShift = weighDayShift;
+  const fusionNightShift = weighNightShift;
+  const loiDayShift = dayShift?.loi.finLoiShift || 0;
+  const loiNightShift = nightShift?.loi.finLoiShift || 0;
+
+  const totalPrepFin = pressFin + weighFin + fusionFin + loiFin;
+  const totalPrepFinDay = pressDayShift + weighDayShift + fusionDayShift + loiDayShift;
+  const totalPrepFinNight = pressNightShift + weighNightShift + fusionNightShift + loiNightShift;
+  const totalPrepBal = pressBal + weighBal + fusionBalAkhir + loiBal;
+
+  // EDXRF Per-Shift
+  const edxrfDayShift = dayShift?.edxrf.shift || 0;
+  const edxrfNightShift = nightShift?.edxrf.shift || 0;
+
   // STEP 5: QC DATA & REPORTING
   const qcBalAwal = dayRecords[0]?.qc.os || 0;
   const qcRecv = wdxrfTotalFin;
   const qcFin = dayRecords.reduce((acc, r) => acc + r.qc.finishShift, 0);
   const qcBalAkhir = dayRecords[dayRecords.length - 1]?.qc.bal || 0;
+  const qcDayShift = dayShift?.qc.finishShift || 0;
+  const qcNightShift = nightShift?.qc.finishShift || 0;
 
   const reportBalAwal = dayRecords[0]?.report.osReport || 0;
   const reportRecv = dayRecords.reduce((acc, r) => acc + r.report.received, 0);
   const reportFin = dayRecords.reduce((acc, r) => acc + r.report.finishReportDay, 0);
   const reportBalAkhir = dayRecords[dayRecords.length - 1]?.report.bal || 0;
+  const reportDayShift = dayShift?.report.finishReportDay || 0;
+  const reportNightShift = nightShift?.report.finishReportDay || 0;
+
+  // =========================================================================
+  // D-1 (PREVIOUS DAY) & HISTORICAL CHRONOLOGICAL DATA ENGINE
+  // =========================================================================
+  const sortedDateList = useMemo(() => {
+    const dates = Array.from(new Set(records.map(r => r.isoDate || r.date))).filter(Boolean);
+    return dates.sort((a, b) => {
+      if (a.includes('-') && b.includes('-')) return a.localeCompare(b);
+      const [d1, m1, y1] = a.split('/').map(Number);
+      const [d2, m2, y2] = b.split('/').map(Number);
+      if (y1 && y2 && d1 && d2) {
+        return new Date(y1, m1 - 1, d1).getTime() - new Date(y2, m2 - 1, d2).getTime();
+      }
+      return a.localeCompare(b);
+    });
+  }, [records]);
+
+  const activeIsoDate = dayRecords[0]?.isoDate || selectedDate;
+  const activeDate = dayRecords[0]?.date || selectedDate;
+  const currentChronologicalIndex = sortedDateList.findIndex(d => d === activeIsoDate || d === activeDate);
+  const prevDateKey = currentChronologicalIndex > 0 ? sortedDateList[currentChronologicalIndex - 1] : null;
+
+  const prevDayRecords = useMemo(() => {
+    if (!prevDateKey) return [];
+    return records.filter(r => r.isoDate === prevDateKey || r.date === prevDateKey);
+  }, [records, prevDateKey]);
+
+  // Trailing records up to selected date for 7-day average
+  const trailingRecords = useMemo(() => {
+    if (currentChronologicalIndex <= 0) return dayRecords;
+    const startIndex = Math.max(0, currentChronologicalIndex - 6);
+    const dateRange = new Set(sortedDateList.slice(startIndex, currentChronologicalIndex + 1));
+    return records.filter(r => dateRange.has(r.isoDate || r.date));
+  }, [records, sortedDateList, currentChronologicalIndex, dayRecords]);
+
+  const trailingDaysCount = useMemo(() => {
+    return new Set(trailingRecords.map(r => r.isoDate || r.date)).size || 1;
+  }, [trailingRecords]);
+
+  // Step 1 D-1 Manpower
+  const prevStaffPresent = prevDayRecords.reduce((acc, r) => acc + r.manpower.staff.shift, 0);
+  const prevCrewPresent = prevDayRecords.reduce((acc, r) => acc + r.manpower.crew.shift, 0);
+  const prevTotalHadir = prevStaffPresent + prevCrewPresent;
+  const totalHadirToday = staffHadirTotal + crewHadirTotal;
+
+  // Step 2 D-1 Sample Received
+  const prevGcShift = prevDayRecords.reduce((acc, r) => acc + r.sampleReceived.gc.shift, 0);
+  const prevProdShift = prevDayRecords.reduce((acc, r) => acc + r.sampleReceived.prod.shift, 0);
+  const prevExpShift = prevDayRecords.reduce((acc, r) => acc + r.sampleReceived.exp.shift, 0);
+  const prevSmelterShift = prevDayRecords.reduce((acc, r) => acc + r.sampleReceived.smelter.shift, 0);
+  const prevTotalReceived = prevGcShift + prevProdShift + prevExpShift + prevSmelterShift;
+  const prevTotalGtsReceived = prevDayRecords.reduce((acc, r) => acc + (r.sampleReceived.gts?.shift || 0), 0);
+
+  // 7-day average TBP/GPS Received
+  const avg7TbpGpsRecv = Math.round(
+    trailingRecords.reduce((acc, r) => acc + r.sampleReceived.gc.shift + r.sampleReceived.prod.shift + r.sampleReceived.exp.shift + r.sampleReceived.smelter.shift, 0) / trailingDaysCount
+  );
+
+  // Step 3 D-1 Preparasi Throughput & Backlog
+  const prevPressFin = prevDayRecords.reduce((acc, r) => acc + r.pressPowder.finish.shift, 0);
+  const prevWeighFin = prevDayRecords.reduce((acc, r) => acc + r.fuseBead.finishShift, 0);
+  const prevFusionFin = prevWeighFin;
+  const prevLoiFin = prevDayRecords.reduce((acc, r) => acc + r.loi.finLoiShift, 0);
+  const prevTotalPrepFin = prevPressFin + prevWeighFin + prevFusionFin + prevLoiFin;
+  const prevTotalPrepBal = (prevDayRecords[prevDayRecords.length - 1]?.fuseBead.balExp || 0) + (prevDayRecords[prevDayRecords.length - 1]?.loi.bal || 0);
+
+  // Step 4 D-1 EDXRF & WDXRF
+  const prevEdxrfTotalFin = prevDayRecords.reduce((acc, r) => acc + r.edxrf.shift, 0);
+
+  const prevZtmAGts = prevDayRecords.reduce((acc, r) => acc + (r.wdxrf.zetiumA.gts || 0), 0);
+  const prevZtmBGts = prevDayRecords.reduce((acc, r) => acc + (r.wdxrf.zetiumB.gts || 0), 0);
+  const prevTotalGtsRuns = prevZtmAGts + prevZtmBGts;
+
+  const prevTotalTbpGpsWdxrf = prevDayRecords.reduce((acc, r) => {
+    const za = r.wdxrf.zetiumA;
+    const zb = r.wdxrf.zetiumB;
+    const zaT = (za.prod || 0) + (za.exp || 0) + (za.smelt || 0) + (za.rarr || 0) + (za.ver || 0) + (za.std || 0) + (za.blank || 0);
+    const zbT = (zb.prod || 0) + (zb.exp || 0) + (zb.smelt || 0) + (zb.rarr || 0) + (zb.ver || 0) + (zb.std || 0) + (zb.blank || 0);
+    return acc + zaT + zbT;
+  }, 0);
+
+  // Step 5 D-1 QC & Reporting
+  const prevQcFin = prevDayRecords.reduce((acc, r) => acc + r.qc.finishShift, 0);
+  const prevReportFin = prevDayRecords.reduce((acc, r) => acc + r.report.finishReportDay, 0);
+  const prevReportBal = prevDayRecords[prevDayRecords.length - 1]?.report.bal || 0;
+
+  // =========================================================================
+  // HELPER COMPONENTS FOR AT-A-GLANCE MANAGEMENT INTELLIGENCE
+  // =========================================================================
+
+  // 1. Trend & D-1 Delta Badge
+  const TrendDeltaBadge = ({
+    current,
+    prev,
+    isInverse = false,
+    unit = ''
+  }: {
+    current: number;
+    prev?: number;
+    isInverse?: boolean;
+    unit?: string;
+  }) => {
+    if (prev === undefined || prev === null || prevDayRecords.length === 0) {
+      return (
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 font-medium font-mono">
+          Baseline D-1
+        </span>
+      );
+    }
+    const diff = current - prev;
+    if (diff === 0) {
+      return (
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-semibold font-mono flex items-center gap-0.5">
+          <Minus className="w-2.5 h-2.5" /> 0% vs D-1
+        </span>
+      );
+    }
+
+    const pct = prev > 0 ? Math.round((Math.abs(diff) / prev) * 100) : 100;
+    const isPositive = diff > 0;
+    const isGood = isInverse ? !isPositive : isPositive;
+
+    const colorClass = isGood
+      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+      : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800';
+
+    return (
+      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold font-mono flex items-center gap-1 ${colorClass}`}>
+        {isPositive ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
+        <span>{isPositive ? `+${formatNumber(diff)}` : formatNumber(diff)}{unit ? ` ${unit}` : ''} ({isPositive ? '+' : '-'}{pct}%) vs D-1</span>
+      </span>
+    );
+  };
+
+  // 2. Shift Load Distribution Ratio Bar
+  const ShiftDistributionBar = ({
+    dayVal,
+    nightVal,
+    dayLabel = 'Pagi',
+    nightLabel = 'Malam'
+  }: {
+    dayVal: number;
+    nightVal: number;
+    dayLabel?: string;
+    nightLabel?: string;
+  }) => {
+    const total = dayVal + nightVal;
+    const dayPct = total > 0 ? Math.round((dayVal / total) * 100) : 50;
+    const nightPct = total > 0 ? 100 - dayPct : 50;
+
+    return (
+      <div className="space-y-1 w-full pt-1">
+        <div className="flex items-center justify-between text-[10px] font-semibold">
+          <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-mono">
+            <Sun className="w-3 h-3 text-amber-500" /> {dayLabel}: {formatNumber(dayVal)} ({dayPct}%)
+          </span>
+          <span className="text-indigo-600 dark:text-indigo-400 flex items-center gap-1 font-mono">
+            <Moon className="w-3 h-3 text-indigo-500" /> {nightLabel}: {formatNumber(nightVal)} ({nightPct}%)
+          </span>
+        </div>
+        <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex">
+          <div 
+            className="bg-amber-500 h-full transition-all duration-500" 
+            style={{ width: `${dayPct}%` }}
+            title={`Shift Pagi: ${dayPct}%`}
+          />
+          <div 
+            className="bg-indigo-500 h-full transition-all duration-500" 
+            style={{ width: `${nightPct}%` }}
+            title={`Shift Malam: ${nightPct}%`}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // 3. Executive At-a-Glance Container Banner
+  const ExecutiveAtAGlanceBanner = ({
+    title,
+    badgeText,
+    children
+  }: {
+    title: string;
+    badgeText?: string;
+    children: React.ReactNode;
+  }) => {
+    return (
+      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 text-white border border-slate-800 shadow-md space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-teal-400" /> Executive At-A-Glance
+            </span>
+            <h4 className="text-xs sm:text-sm font-bold text-slate-100 tracking-tight">{title}</h4>
+          </div>
+          {badgeText && (
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-200 border border-white/20">
+              {badgeText}
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {children}
+        </div>
+      </div>
+    );
+  };
 
   // Component Helper for Standardized 4-Pillar Card
   const StandardProductivityCard = ({
@@ -828,7 +1142,10 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
             <div>
               <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 <span className="w-6 h-6 rounded-lg bg-teal-500 text-white flex items-center justify-center text-xs font-bold">1</span>
-                Kesiapan Manpower (Kategori Utama: Staff & Crew Laboratorium)
+                <span>Kesiapan Manpower (Kategori Utama: Staff & Crew Laboratorium)</span>
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 uppercase tracking-wider">
+                  Universe {userPt || 'TBP'}
+                </span>
               </h3>
               <span className="text-xs text-slate-500">
                 Total Personil: <strong>{parsedLabPersonnel.length} Terdaftar</strong> • 
@@ -861,6 +1178,89 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           </div>
 
           {showChart1 && <ManpowerTrendChart records={records} />}
+
+          {/* ========================================================================= */}
+          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 1 MANPOWER */}
+          {/* ========================================================================= */}
+          <ExecutiveAtAGlanceBanner 
+            title="Kesiapan Personil Harian, Distribusi Shift & Tren Kehadiran"
+            badgeText={`${Math.round(((staffHadirTotal + crewHadirTotal) / (parsedLabPersonnel.length || 1)) * 100)}% Attendance Rate`}
+          >
+            {/* 1. Daily Total Hadir */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Total Hadir Hari Ini
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono text-teal-300">
+                  {staffHadirTotal + crewHadirTotal}
+                </span>
+                <span className="text-xs text-slate-400">/ {parsedLabPersonnel.length} personil</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={totalHadirToday} prev={prevTotalHadir} unit="org" />
+                <span className="text-[9px] text-slate-400 font-mono">Dinas Lab</span>
+              </div>
+            </div>
+
+            {/* 2. Distribusi Beban Shift (Pagi vs Malam) */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Komposisi Shift (Pagi vs Malam)
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-black font-mono text-amber-300">
+                  {staffPagi.length + crewPagi.length}
+                </span>
+                <span className="text-xs text-slate-400">Pagi</span>
+                <span className="text-slate-500 font-mono">vs</span>
+                <span className="text-xl font-black font-mono text-indigo-300">
+                  {staffMalam.length + crewMalam.length}
+                </span>
+                <span className="text-xs text-slate-400">Malam</span>
+              </div>
+              <ShiftDistributionBar 
+                dayVal={staffPagi.length + crewPagi.length} 
+                nightVal={staffMalam.length + crewMalam.length} 
+                dayLabel="Pagi"
+                nightLabel="Malam"
+              />
+            </div>
+
+            {/* 3. Kategori Utama (Staff vs Crew) */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Kategori Utama SDM
+              </span>
+              <div className="grid grid-cols-2 gap-2 text-xs pt-0.5">
+                <div className="p-1.5 rounded-xl bg-indigo-950/60 border border-indigo-800/60 text-center">
+                  <span className="text-[10px] text-indigo-300 block font-semibold">👔 Staff</span>
+                  <span className="font-mono font-bold text-sm text-white">{staffHadirTotal}</span>
+                  <span className="text-[9px] text-slate-400 block font-mono">/{staffList.length} org</span>
+                </div>
+                <div className="p-1.5 rounded-xl bg-emerald-950/60 border border-emerald-800/60 text-center">
+                  <span className="text-[10px] text-emerald-300 block font-semibold">👷 Crew</span>
+                  <span className="font-mono font-bold text-sm text-white">{crewHadirTotal}</span>
+                  <span className="text-[9px] text-slate-400 block font-mono">/{crewList.length} org</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Status Kesiapan & Tidak Bertugas */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Status Kesiapan Operasi
+              </span>
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-bold text-emerald-300">Kapasitas Penuh</span>
+              </div>
+              <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800 flex justify-between">
+                <span>Tidak Bertugas: <strong>{tidakBertugasList.length} org</strong></span>
+                <span>Cuti: <strong>{staffCuti + crewCuti}</strong></span>
+              </div>
+            </div>
+          </ExecutiveAtAGlanceBanner>
 
           {/* ========================================================================= */}
           {/* CARD UTAMA: STAFF & CREW (SHIFT BUKAN KATEGORI UTAMA) */}
@@ -1030,7 +1430,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                         Kategori Utama
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500">Operator Analis, Kru Preparasi & Laboratorium</p>
+                    <p className="text-xs text-slate-500">Crew Preparasi & Laboratorium, Crew Maintenance</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -1600,6 +2000,111 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
 
           {showChart2 && <SampleReceivedTrendChart records={records} />}
 
+          {/* ========================================================================= */}
+          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 2 SAMPLE RECEIVED */}
+          {/* ========================================================================= */}
+          <ExecutiveAtAGlanceBanner 
+            title="Penerimaan Sampel Harian: TBP/GPS Internal vs PT GTS (Terpisah)"
+            badgeText="Dual Entity Separation"
+          >
+            {/* 1. Daily Total Intake TBP/GPS */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-sky-400 font-bold uppercase tracking-wider block">
+                  Total TBP & GPS (Internal)
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-300 border border-sky-800">
+                  TBP / GPS
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono text-sky-300">
+                  {formatNumber(totalTbpGpsReceived)}
+                </span>
+                <span className="text-xs text-slate-400">sampel</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={totalTbpGpsReceived} prev={prevTotalReceived} unit="spl" />
+                <span className="text-[9px] text-slate-400 font-mono">7H: {formatNumber(avg7TbpGpsRecv)}/hr</span>
+              </div>
+            </div>
+
+            {/* 2. Distribusi Beban Shift (Pagi vs Malam) */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Distribusi Shift Penerimaan
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-black font-mono text-amber-300">
+                  {formatNumber(totalDayShift)}
+                </span>
+                <span className="text-xs text-slate-400">Pagi</span>
+                <span className="text-slate-500 font-mono">vs</span>
+                <span className="text-xl font-black font-mono text-indigo-300">
+                  {formatNumber(totalNightShift)}
+                </span>
+                <span className="text-xs text-slate-400">Malam</span>
+              </div>
+              <ShiftDistributionBar 
+                dayVal={totalDayShift} 
+                nightVal={totalNightShift} 
+                dayLabel="Pagi"
+                nightLabel="Malam"
+              />
+            </div>
+
+            {/* 3. Breakdown 4 Pilar Seksi TBP/GPS */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Pilar Seksi TBP/GPS
+              </span>
+              <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono pt-0.5">
+                <div className="flex justify-between">
+                  <span className="text-teal-400">GC:</span>
+                  <strong className="text-white">{formatNumber(gcShift)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-400">Prod:</span>
+                  <strong className="text-white">{formatNumber(prodShift)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-purple-400">Exp:</span>
+                  <strong className="text-white">{formatNumber(expShift)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-orange-400">Smelt:</span>
+                  <strong className="text-white">{formatNumber(smelterShift)}</strong>
+                </div>
+              </div>
+              {(prodRc > 0 || prodRaTotal > 0) && (
+                <div className="text-[9px] text-slate-400 font-mono border-t border-slate-800 pt-0.5">
+                  Prod Split: {prodRc > 0 && `RC:${prodRc} `}{prodRaTotal > 0 && `RA:${prodRaTotal}`}
+                </div>
+              )}
+            </div>
+
+            {/* 4. PT GTS (Sister Site - Entitas Mandiri) */}
+            <div className="p-3.5 rounded-2xl bg-purple-950/40 border border-purple-800/60 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-purple-300 font-bold uppercase tracking-wider block">
+                  PT GTS (Sister Site)
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-900/80 text-purple-200 border border-purple-700">
+                  Terpisah
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono text-purple-200">
+                  {formatNumber(totalGtsReceived)}
+                </span>
+                <span className="text-xs text-purple-400">sampel</span>
+              </div>
+              <p className="text-[10px] text-purple-300/80 leading-tight pt-1">
+                Sampel GTS dicatat mandiri, <strong>tidak digabung</strong> dengan kuota TBP/GPS.
+              </p>
+            </div>
+          </ExecutiveAtAGlanceBanner>
+
           {/* PER-SHIFT MANAGEMENT BREAKDOWN (Pagi vs Malam) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Shift Pagi Card */}
@@ -1829,6 +2334,108 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
 
           {showChart3 && <ProductivityPrepTrendChart records={records} />}
 
+          {/* ========================================================================= */}
+          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 3 PRODUCTIVITY PREPARASI */}
+          {/* ========================================================================= */}
+          <ExecutiveAtAGlanceBanner 
+            title="Throughput Harian 4 Stasiun Preparasi, Shift Load & Backlog Monitor"
+            badgeText={`${totalPrepBal > 400 ? 'Waspada Backlog' : 'Throughput Normal'}`}
+          >
+            {/* 1. Daily Total Throughput */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+                Total Output Preparasi
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono text-amber-300">
+                  {formatNumber(totalPrepFin)}
+                </span>
+                <span className="text-xs text-slate-400">unit diproses</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={totalPrepFin} prev={prevTotalPrepFin} unit="unit" />
+                <span className="text-[9px] text-slate-400 font-mono">4 Stasiun</span>
+              </div>
+            </div>
+
+            {/* 2. Distribusi Beban Shift (Pagi vs Malam) */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Realisasi Shift Throughput
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-black font-mono text-amber-300">
+                  {formatNumber(totalPrepFinDay)}
+                </span>
+                <span className="text-xs text-slate-400">Pagi</span>
+                <span className="text-slate-500 font-mono">vs</span>
+                <span className="text-xl font-black font-mono text-indigo-300">
+                  {formatNumber(totalPrepFinNight)}
+                </span>
+                <span className="text-xs text-slate-400">Malam</span>
+              </div>
+              <ShiftDistributionBar 
+                dayVal={totalPrepFinDay} 
+                nightVal={totalPrepFinNight} 
+                dayLabel="Pagi"
+                nightLabel="Malam"
+              />
+            </div>
+
+            {/* 3. 4 Stasiun Utama Preparasi */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Output Per-Stasiun
+              </span>
+              <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono pt-0.5">
+                <div className="flex justify-between">
+                  <span className="text-sky-400">Press:</span>
+                  <strong className="text-white">{formatNumber(pressFin)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-amber-400">Weigh:</span>
+                  <strong className="text-white">{formatNumber(weighFin)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-orange-400">Fusion:</span>
+                  <strong className="text-white">{formatNumber(fusionFin)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-purple-400">LOI:</span>
+                  <strong className="text-white">{formatNumber(loiFin)}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Monitoring Backlog Sisa Antrean */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                  Total Sisa Antrean (O/S)
+                </span>
+                {totalPrepBal > 400 ? (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 border border-rose-800 font-bold">
+                    Backlog
+                  </span>
+                ) : (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
+                    Normal
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-2xl font-black font-mono ${totalPrepBal > 400 ? 'text-rose-400' : 'text-teal-300'}`}>
+                  {formatNumber(totalPrepBal)}
+                </span>
+                <span className="text-xs text-slate-400">sampel sisa</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={totalPrepBal} prev={prevTotalPrepBal} isInverse={true} unit="spl" />
+                <span className="text-[9px] text-slate-400 font-mono">Backlog</span>
+              </div>
+            </div>
+          </ExecutiveAtAGlanceBanner>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 3a. Press Powder */}
             <StandardProductivityCard
@@ -1929,6 +2536,85 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
 
           {showChart4 && <XrfInstrumentsTrendChart records={records} />}
 
+          {/* ========================================================================= */}
+          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 4 INSTRUMEN EDXRF & WDXRF */}
+          {/* ========================================================================= */}
+          <ExecutiveAtAGlanceBanner 
+            title="Kinerja Spektrometri XRF: TBP/GPS Internal vs PT GTS (Terpisah)"
+            badgeText="Dual Entity Segregated Analysis"
+          >
+            {/* 1. EDXRF Group (TBP/GPS) */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-teal-400 font-bold uppercase tracking-wider block">
+                EDXRF 6-Mesin (TBP/GPS)
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono text-teal-300">
+                  {formatNumber(edxrfTotalFin)}
+                </span>
+                <span className="text-xs text-slate-400">run analisis</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={edxrfTotalFin} prev={prevEdxrfTotalFin} unit="run" />
+                <span className="text-[9px] text-slate-400 font-mono">Pagi:{edxrfDayShift} | Mlm:{edxrfNightShift}</span>
+              </div>
+            </div>
+
+            {/* 2. WDXRF Zetium (TBP/GPS Internal) */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">
+                WDXRF Zetium (TBP/GPS)
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono text-indigo-300">
+                  {formatNumber(totalTbpGpsWdxrf)}
+                </span>
+                <span className="text-xs text-slate-400">run internal</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={totalTbpGpsWdxrf} prev={prevTotalTbpGpsWdxrf} unit="run" />
+                <span className="text-[9px] text-slate-400 font-mono">Pagi:{tbpGpsDayWdxrf} | Mlm:{tbpGpsNightWdxrf}</span>
+              </div>
+            </div>
+
+            {/* 3. WDXRF Zetium (PT GTS - Dedicated Sister Site) */}
+            <div className="p-3.5 rounded-2xl bg-purple-950/40 border border-purple-800/60 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-purple-300 font-bold uppercase tracking-wider block">
+                  PT GTS (Sister Site)
+                </span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-900 text-purple-200 border border-purple-700 font-bold">
+                  Terpisah Mutlak
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono text-purple-200">
+                  {formatNumber(totalGtsRuns)}
+                </span>
+                <span className="text-xs text-purple-400">run GTS</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={totalGtsRuns} prev={prevTotalGtsRuns} unit="run" />
+                <span className="text-[9px] text-purple-300 font-mono">Ztm A:{ztmAGts} | B:{ztmBGts}</span>
+              </div>
+            </div>
+
+            {/* 4. Chamber Load & Utilisasi 8 Mesin */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Utilisasi Instrumen
+              </span>
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-bold text-emerald-300">8/8 Mesin Siap & Aktif</span>
+              </div>
+              <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800 flex justify-between font-mono">
+                <span>Zetium A: <strong>{ztmATotal}</strong></span>
+                <span>Zetium B: <strong>{ztmBTotal}</strong></span>
+              </div>
+            </div>
+          </ExecutiveAtAGlanceBanner>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             {/* 4a. EDXRF (6 Alat Epsilon C-H + S2 Puma) */}
@@ -2012,6 +2698,10 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                     <div className="flex justify-between"><span>RA/RR:</span><strong className="font-mono text-amber-600">{ztmABreakdown.rarr}</strong></div>
                     <div className="flex justify-between"><span>Ver:</span><strong className="font-mono text-emerald-600">{ztmABreakdown.ver}</strong></div>
                     <div className="flex justify-between"><span>Std/Blk:</span><strong className="font-mono">{ztmABreakdown.std + ztmABreakdown.blank}</strong></div>
+                    <div className="flex justify-between col-span-2 pt-1 border-t border-purple-100 dark:border-purple-900/40 text-purple-700 dark:text-purple-300">
+                      <span className="font-semibold flex items-center gap-1"><Building2 className="w-3 h-3 text-purple-500" /> GTS Sister Site:</span>
+                      <strong className="font-mono font-bold">{ztmABreakdown.gts} run</strong>
+                    </div>
                   </div>
                 </div>
 
@@ -2028,11 +2718,84 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
                     <div className="flex justify-between"><span>RA/RR:</span><strong className="font-mono text-amber-600">{ztmBBreakdown.rarr}</strong></div>
                     <div className="flex justify-between"><span>Ver:</span><strong className="font-mono text-emerald-600">{ztmBBreakdown.ver}</strong></div>
                     <div className="flex justify-between"><span>Std/Blk:</span><strong className="font-mono">{ztmBBreakdown.std + ztmBBreakdown.blank}</strong></div>
+                    <div className="flex justify-between col-span-2 pt-1 border-t border-purple-100 dark:border-purple-900/40 text-purple-700 dark:text-purple-300">
+                      <span className="font-semibold flex items-center gap-1"><Building2 className="w-3 h-3 text-purple-500" /> GTS Sister Site:</span>
+                      <strong className="font-mono font-bold">{ztmBBreakdown.gts} run</strong>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
+          </div>
+
+          {/* ========================================================================= */}
+          {/* DEDICATED SEPARATE CARD: PT GANE TAMBANG SENTOSA (GTS) WDXRF */}
+          {/* ========================================================================= */}
+          <div className="p-5 rounded-3xl bg-gradient-to-r from-purple-50 via-white to-purple-50/50 dark:from-purple-950/30 dark:via-slate-900 dark:to-purple-950/20 border-2 border-purple-300 dark:border-purple-800 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-purple-200/60 dark:border-purple-800/60">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-purple-600 text-white shadow-xs">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                      PT Gane Tambang Sentosa (GTS) — Dedicated WDXRF Analysis
+                    </h4>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-700">
+                      Entitas Mandiri / Terpisah
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Analisis spektrometri sampel titipan sister site GTS pada Zetium A & B (TIDAK DIGABUNGKAN ke TBP/GPS)
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black font-mono text-purple-700 dark:text-purple-300">
+                  {formatNumber(totalGtsRuns)}
+                </span>
+                <span className="text-[10px] text-slate-400 block font-semibold">Total Run GTS Hari Ini</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              {/* Zetium A GTS */}
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-900/60 shadow-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Zetium A (GTS)</span>
+                <span className="text-xl font-black font-mono text-purple-700 dark:text-purple-300 block mt-0.5">
+                  {formatNumber(ztmAGts)} <span className="text-xs font-normal text-slate-400">run</span>
+                </span>
+                <span className="text-[10px] text-slate-500">Throughput WDXRF Unit 1</span>
+              </div>
+
+              {/* Zetium B GTS */}
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-900/60 shadow-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Zetium B (GTS)</span>
+                <span className="text-xl font-black font-mono text-purple-700 dark:text-purple-300 block mt-0.5">
+                  {formatNumber(ztmBGts)} <span className="text-xs font-normal text-slate-400">run</span>
+                </span>
+                <span className="text-[10px] text-slate-500">Throughput WDXRF Unit 2</span>
+              </div>
+
+              {/* Shift Split GTS */}
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-900/60 shadow-xs space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Beban Shift GTS</span>
+                <div className="flex justify-between items-center text-[11px] font-mono">
+                  <span className="text-amber-600 flex items-center gap-1"><Sun className="w-3 h-3" /> Pagi: <strong>{gtsDayRuns}</strong></span>
+                  <span className="text-indigo-600 flex items-center gap-1"><Moon className="w-3 h-3" /> Malam: <strong>{gtsNightRuns}</strong></span>
+                </div>
+                <ShiftDistributionBar dayVal={gtsDayRuns} nightVal={gtsNightRuns} dayLabel="Pagi" nightLabel="Malam" />
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-purple-100/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/40 text-[11px] text-purple-900 dark:text-purple-200 flex items-center gap-2">
+              <Info className="w-4 h-4 text-purple-600 shrink-0" />
+              <span>
+                <strong>Aturan Validasi Data:</strong> Seluruh output pembacaan spektrometer untuk PT Gane Tambang Sentosa (GTS) memiliki kalibrasi kurva dan sertifikasi CoA mandiri. Data ini tidak digabung ke dalam perhitungan KPI throughput internal PT TBP dan PT GPS.
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -2067,6 +2830,100 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
           </div>
 
           {showChart5 && <QcReportingTrendChart records={records} />}
+
+          {/* ========================================================================= */}
+          {/* AT-A-GLANCE EXECUTIVE INSIGHT: BABAK 5 QC DATA & REPORTING */}
+          {/* ========================================================================= */}
+          <ExecutiveAtAGlanceBanner 
+            title="Validasi Kontrol Mutu (QC) & Pelepasan Sertifikat Analisis (CoA)"
+            badgeText={`${reportBalAkhir > 50 ? 'Akselerasi Approval' : 'Pelepasan On-Time'}`}
+          >
+            {/* 1. QC Validasi Selesai */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-teal-400 font-bold uppercase tracking-wider block">
+                Validasi Kontrol Mutu (QC)
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono text-teal-300">
+                  {formatNumber(qcFin)}
+                </span>
+                <span className="text-xs text-slate-400">sampel diverifikasi</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={qcFin} prev={prevQcFin} unit="spl" />
+                <span className="text-[9px] text-slate-400 font-mono">Pagi:{qcDayShift} | Mlm:{qcNightShift}</span>
+              </div>
+            </div>
+
+            {/* 2. Rilis Sertifikat CoA */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
+                Laporan CoA Dirilis
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black font-mono text-emerald-300">
+                  {formatNumber(reportFin)}
+                </span>
+                <span className="text-xs text-slate-400">laporan sah</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={reportFin} prev={prevReportFin} unit="lpr" />
+                <span className="text-[9px] text-slate-400 font-mono">Pagi:{reportDayShift} | Mlm:{reportNightShift}</span>
+              </div>
+            </div>
+
+            {/* 3. Distribusi Shift Rilis */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Distribusi Shift Rilis
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-black font-mono text-amber-300">
+                  {formatNumber(reportDayShift)}
+                </span>
+                <span className="text-xs text-slate-400">Pagi</span>
+                <span className="text-slate-500 font-mono">vs</span>
+                <span className="text-xl font-black font-mono text-indigo-300">
+                  {formatNumber(reportNightShift)}
+                </span>
+                <span className="text-xs text-slate-400">Malam</span>
+              </div>
+              <ShiftDistributionBar 
+                dayVal={reportDayShift} 
+                nightVal={reportNightShift} 
+                dayLabel="Pagi"
+                nightLabel="Malam"
+              />
+            </div>
+
+            {/* 4. Sisa Antrean Laporan Pending (Outstanding CoA) */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                  Pending Laporan (O/S)
+                </span>
+                {reportBalAkhir > 50 ? (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold">
+                    Perlu Approval
+                  </span>
+                ) : (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
+                    Terkendali
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-2xl font-black font-mono ${reportBalAkhir > 50 ? 'text-amber-400' : 'text-teal-300'}`}>
+                  {formatNumber(reportBalAkhir)}
+                </span>
+                <span className="text-xs text-slate-400">laporan pending</span>
+              </div>
+              <div className="pt-1 flex items-center justify-between">
+                <TrendDeltaBadge current={reportBalAkhir} prev={prevReportBal} isInverse={true} unit="lpr" />
+                <span className="text-[9px] text-slate-400 font-mono">Sisa Antrean</span>
+              </div>
+            </div>
+          </ExecutiveAtAGlanceBanner>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 5a. QC Data */}
@@ -2137,6 +2994,7 @@ export const DailyPerformanceStructuredPresentation: React.FC<DailyPerformanceSt
         isOpen={showRosterModal}
         onClose={() => setShowRosterModal(false)}
         selectedDate={selectedDate}
+        userPt={userPt}
       />
     </div>
   );

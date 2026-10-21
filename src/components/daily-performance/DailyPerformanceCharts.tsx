@@ -244,6 +244,8 @@ export function useTimeRangeFilteredRecords(records: DailyPerformanceRecord[]) {
           // WDXRF
           ztmA: 0,
           ztmB: 0,
+          wdxrfTbp: 0,
+          wdxrfGts: 0,
           wdxrfTotal: 0,
           wdxrfBal: 0,
           // QC & Report
@@ -283,9 +285,17 @@ export function useTimeRangeFilteredRecords(records: DailyPerformanceRecord[]) {
       item.s2Puma += r.edxrf.s2Puma;
       item.edxrfTotal += r.edxrf.shift;
 
+      const ztmAGts = r.wdxrf.zetiumA.gts || 0;
+      const ztmBGts = r.wdxrf.zetiumB.gts || 0;
+      const dayGts = ztmAGts + ztmBGts;
+      const dayTotalRuns = r.wdxrf.zetiumA.total + r.wdxrf.zetiumB.total;
+      const dayTbp = Math.max(0, dayTotalRuns - dayGts);
+
       item.ztmA += r.wdxrf.zetiumA.total;
       item.ztmB += r.wdxrf.zetiumB.total;
-      item.wdxrfTotal += (r.wdxrf.zetiumA.total + r.wdxrf.zetiumB.total);
+      item.wdxrfTbp += dayTbp;
+      item.wdxrfGts += dayGts;
+      item.wdxrfTotal += dayTotalRuns;
       item.wdxrfBal = r.wdxrf.bal;
 
       item.qcFin += r.qc.finishShift;
@@ -534,10 +544,9 @@ export const XrfInstrumentsTrendChart: React.FC<{ records: DailyPerformanceRecor
               <XAxis dataKey="date" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip content={<CustomChartTooltip />} />
-              <Legend wrapperStyle={{ fontSize: '11px' }} />
-              <Bar dataKey="ztmA" name="Zetium A" fill="#0284c7" />
-              <Bar dataKey="ztmB" name="Zetium B" fill="#6366f1" />
-              <Line type="monotone" dataKey="wdxrfTotal" name="Total Run WDXRF" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Bar dataKey="wdxrfTbp" name="WDXRF TBP/GPS" fill="#0284c7" stackId="wdx" />
+              <Bar dataKey="wdxrfGts" name="WDXRF PT GTS (Terpisah)" fill="#9333ea" stackId="wdx" />
+              <Line type="monotone" dataKey="wdxrfTotal" name="Total Chamber Run" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} />
               <Line type="monotone" dataKey="wdxrfBal" name="Outstanding Sisa" stroke="#e11d48" strokeWidth={2} strokeDasharray="3 3" dot={{ r: 3 }} />
             </ComposedChart>
           )}

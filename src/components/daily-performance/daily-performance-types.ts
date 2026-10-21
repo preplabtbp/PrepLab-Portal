@@ -23,9 +23,10 @@ export interface DailyManpowerCrew {
 
 export interface DailySampleReceived {
   gc: { shift: number; day: number; wkly: number };
-  prod: { shift: number; rc: number; day: number; wkly: number };
+  prod: { shift: number; rc: number; ra?: number; day: number; wkly: number };
   exp: { shift: number; day: number; wkly: number };
   smelter: { shift: number; day: number; wkly: number };
+  gts?: { shift: number; day: number; wkly: number };
 }
 
 export interface DailyPressPowder {
@@ -123,6 +124,7 @@ export interface DailyPerformanceRecord {
   qc: DailyQCData;
   report: DailyReport;
   notes?: string;
+  manpowerNotes?: string;
   updatedAt?: string;
 }
 

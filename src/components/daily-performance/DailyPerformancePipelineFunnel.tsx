@@ -22,24 +22,27 @@ export const DailyPerformancePipelineFunnel: React.FC<DailyPerformancePipelineFu
   const dayShift = dayRecords.find(r => r.shiftType === 'DAY' || r.shiftType === 'LS');
   const nightShift = dayRecords.find(r => r.shiftType === 'NIGHT');
 
-  // Aggregated totals for this date
+  // Aggregated totals for this date (TBP/GPS Internal)
   const totalReceived = dayRecords.reduce((acc, r) => 
     acc + r.sampleReceived.gc.shift + r.sampleReceived.prod.shift + r.sampleReceived.exp.shift + r.sampleReceived.smelter.shift, 0
   );
   const gcReceived = dayRecords.reduce((acc, r) => acc + r.sampleReceived.gc.shift, 0);
   const prodReceived = dayRecords.reduce((acc, r) => acc + r.sampleReceived.prod.shift, 0);
   const expReceived = dayRecords.reduce((acc, r) => acc + r.sampleReceived.exp.shift, 0);
+  const smeltReceived = dayRecords.reduce((acc, r) => acc + r.sampleReceived.smelter.shift, 0);
+  const gtsReceived = dayRecords.reduce((acc, r) => acc + (r.sampleReceived.gts?.shift || 0), 0);
 
   // Prep Stage
   const pressFinish = dayRecords.reduce((acc, r) => acc + r.pressPowder.finish.shift, 0);
   const fuseBeadFinish = dayRecords.reduce((acc, r) => acc + r.fuseBead.finishShift, 0);
   const fuseBeadBal = dayRecords[dayRecords.length - 1]?.fuseBead.balExp || 0;
 
-  // Analysis Stage
+  // Analysis Stage - PEMISAHAN KETAT TBP/GPS & GTS
   const edxrfRuns = dayRecords.reduce((acc, r) => acc + r.edxrf.shift, 0);
-  const ztmARuns = dayRecords.reduce((acc, r) => acc + r.wdxrf.zetiumA.total, 0);
-  const ztmBRuns = dayRecords.reduce((acc, r) => acc + r.wdxrf.zetiumB.total, 0);
-  const totalWdxrf = ztmARuns + ztmBRuns;
+  const ztmATbpRuns = dayRecords.reduce((acc, r) => acc + (r.wdxrf.zetiumA.prod + r.wdxrf.zetiumA.exp + r.wdxrf.zetiumA.smelt + r.wdxrf.zetiumA.rarr + r.wdxrf.zetiumA.ver + r.wdxrf.zetiumA.std + r.wdxrf.zetiumA.blank), 0);
+  const ztmBTbpRuns = dayRecords.reduce((acc, r) => acc + (r.wdxrf.zetiumB.prod + r.wdxrf.zetiumB.exp + r.wdxrf.zetiumB.smelt + r.wdxrf.zetiumB.rarr + r.wdxrf.zetiumB.ver + r.wdxrf.zetiumB.std + r.wdxrf.zetiumB.blank), 0);
+  const totalTbpWdxrf = ztmATbpRuns + ztmBTbpRuns;
+  const totalGtsRuns = dayRecords.reduce((acc, r) => acc + (r.wdxrf.zetiumA.gts || 0) + (r.wdxrf.zetiumB.gts || 0), 0);
   const wdxrfBal = dayRecords[dayRecords.length - 1]?.wdxrf.bal || 0;
   const loiRuns = dayRecords.reduce((acc, r) => acc + r.loi.finLoiShift, 0);
   const loiBal = dayRecords[dayRecords.length - 1]?.loi.bal || 0;
@@ -146,6 +149,20 @@ export const DailyPerformancePipelineFunnel: React.FC<DailyPerformancePipelineFu
                 </span>
                 <span className="font-mono font-semibold">{formatNumber(expReceived)}</span>
               </div>
+              <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" /> Smelter (SMELT)
+                </span>
+                <span className="font-mono font-semibold">{formatNumber(smeltReceived)}</span>
+              </div>
+              {gtsReceived > 0 && (
+                <div className="flex justify-between items-center text-purple-700 dark:text-purple-300 pt-1 border-t border-dashed border-purple-200 dark:border-purple-800/50 font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-purple-500" /> PT GTS (Sister Site)
+                  </span>
+                  <span className="font-mono font-bold">{formatNumber(gtsReceived)} <span className="text-[10px] text-purple-500 font-normal">(Terpisah)</span></span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -222,10 +239,10 @@ export const DailyPerformancePipelineFunnel: React.FC<DailyPerformancePipelineFu
 
             <div className="my-2">
               <div className="text-3xl font-black text-slate-800 dark:text-white font-mono tracking-tight">
-                {formatNumber(edxrfRuns + totalWdxrf + loiRuns)}
+                {formatNumber(edxrfRuns + totalTbpWdxrf + loiRuns)}
               </div>
               <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Total pembacaan run instrumen
+                Total run internal TBP/GPS {totalGtsRuns > 0 && <span className="text-purple-600 dark:text-purple-400 font-semibold">(+{totalGtsRuns} GTS Terpisah)</span>}
               </div>
             </div>
 
@@ -238,10 +255,18 @@ export const DailyPerformancePipelineFunnel: React.FC<DailyPerformancePipelineFu
               </div>
               <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500" /> WDXRF (Zetium A+B)
+                  <span className="w-2 h-2 rounded-full bg-indigo-500" /> WDXRF TBP/GPS (Zetium)
                 </span>
-                <span className="font-mono font-semibold">{formatNumber(totalWdxrf)} run</span>
+                <span className="font-mono font-semibold">{formatNumber(totalTbpWdxrf)} run</span>
               </div>
+              {totalGtsRuns > 0 && (
+                <div className="flex justify-between items-center text-purple-700 dark:text-purple-300">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-purple-500" /> WDXRF PT GTS (Sister Site)
+                  </span>
+                  <span className="font-mono font-bold">{formatNumber(totalGtsRuns)} run <span className="text-[10px] text-purple-500 font-normal">(Terpisah)</span></span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-orange-500" /> LOI (W2, W4, W5)
