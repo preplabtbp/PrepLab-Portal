@@ -643,7 +643,17 @@ export function TbpDashboard({
             const parsed = JSON.parse(found.settingValue);
             setMediaSettings(prev => {
               const merged = { ...prev, ...parsed };
-              localStorage.setItem('preplab_bulletin_media', JSON.stringify(merged));
+              try {
+                // Strip large base64 strings before caching to localStorage to prevent QuotaExceededError
+                const lean: any = {};
+                for (const [k, v] of Object.entries(merged)) {
+                  if (typeof v === 'string' && (v.startsWith('data:') || v.length > 2048)) continue;
+                  lean[k] = v;
+                }
+                localStorage.setItem('preplab_bulletin_media', JSON.stringify(lean));
+              } catch (storageErr) {
+                console.warn('[TbpDashboard] localStorage quota exceeded, skipping local cache for media');
+              }
               return merged;
             });
           }
@@ -842,7 +852,16 @@ export function TbpDashboard({
     try {
       const updated = { ...mediaSettings, ...newPartial };
       setMediaSettings(updated);
-      localStorage.setItem('preplab_bulletin_media', JSON.stringify(updated));
+      try {
+        const lean: any = {};
+        for (const [k, v] of Object.entries(updated)) {
+          if (typeof v === 'string' && (v.startsWith('data:') || v.length > 2048)) continue;
+          lean[k] = v;
+        }
+        localStorage.setItem('preplab_bulletin_media', JSON.stringify(lean));
+      } catch (storageErr) {
+        console.warn('[TbpDashboard] localStorage quota exceeded, skipping local cache for media');
+      }
 
       // Save to backend settings
       await fetch('/api/settings', {

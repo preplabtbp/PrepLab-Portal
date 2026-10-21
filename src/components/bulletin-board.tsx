@@ -438,9 +438,16 @@ export function BulletinBoard({
         if (allPosts.length > 0) {
           setPosts(allPosts);
           try {
+            // Remove duplicate key to save localStorage quota
+            localStorage.removeItem('preplab_cached_bulletin_posts');
             localStorage.setItem(`preplab_cached_bulletin_posts_${targetPt}`, JSON.stringify(allPosts));
-            localStorage.setItem('preplab_cached_bulletin_posts', JSON.stringify(allPosts));
-          } catch {}
+          } catch (storageErr) {
+            console.warn('[Bulletin] localStorage quota exceeded for posts cache, gracefully skipping');
+            try {
+              localStorage.removeItem('preplab_cached_bulletin_posts');
+              localStorage.removeItem('preplab_bulletin_media');
+            } catch {}
+          }
         }
       } else if (data.status !== "success" || !data.data || data.data.length === 0) {
         // If server returned error or empty due to DB connection saturation, retain cached posts!
