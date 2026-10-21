@@ -49,6 +49,8 @@ export function VerifiedSignaturePad({
   const [showPin, setShowPin] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
 
+  const [hasStroke, setHasStroke] = useState(false);
+
   // Check if this signer has registered signature + PIN in database
   useEffect(() => {
     let isMounted = true;
@@ -129,14 +131,24 @@ export function VerifiedSignaturePad({
 
   const handleClear = () => {
     sigPadRef.current?.clear();
+    setHasStroke(false);
     onChange('');
   };
 
   const handleCanvasEnd = () => {
-    if (sigPadRef.current) {
-      const trimmed = getSafeSignatureDataUrl(sigPadRef.current);
-      onChange(trimmed);
+    if (sigPadRef.current && !sigPadRef.current.isEmpty()) {
+      setHasStroke(true);
     }
+  };
+
+  const handleConfirmManualSignature = () => {
+    if (!sigPadRef.current || sigPadRef.current.isEmpty()) {
+      toast.error('Silakan buat tanda tangan terlebih dahulu pada canvas');
+      return;
+    }
+    const trimmed = getSafeSignatureDataUrl(sigPadRef.current);
+    onChange(trimmed);
+    toast.success('Tanda tangan manual berhasil disimpan!');
   };
 
   // Color theme mapping
@@ -224,6 +236,7 @@ export function VerifiedSignaturePad({
               type="button"
               onClick={() => {
                 onChange('');
+                setHasStroke(false);
                 setManualMode(true);
               }}
               className="text-xs text-slate-600 dark:text-slate-300 hover:text-rose-600 font-semibold px-3 py-1.5 rounded-lg border border-[var(--border-main)] hover:bg-[var(--card-bg)] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
@@ -350,6 +363,21 @@ export function VerifiedSignaturePad({
               className="absolute top-2 right-2 text-[11px] px-2.5 py-1 bg-white/90 dark:bg-slate-800/90 hover:bg-rose-50 text-slate-600 hover:text-rose-600 rounded-lg font-semibold transition-colors flex items-center gap-1 shadow-xs border border-slate-200 dark:border-slate-700 cursor-pointer"
             >
               <Trash2 className="w-3 h-3 text-rose-500" /> Bersihkan
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              * Silakan gambar tanda tangan Anda secara lengkap (bisa banyak garis), lalu klik <strong>Gunakan Tanda Tangan</strong>.
+            </span>
+            <button
+              type="button"
+              disabled={!hasStroke}
+              onClick={handleConfirmManualSignature}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${colorStyles.btnBg}`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Gunakan Tanda Tangan</span>
             </button>
           </div>
         </div>
