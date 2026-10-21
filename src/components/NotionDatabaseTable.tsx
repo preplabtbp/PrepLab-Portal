@@ -9308,87 +9308,54 @@ export function NotionDatabaseTable({
                                   );
                                 }
 
-                                // 4. Tanggal Selesai Column
-                                if (colLower.includes('completed') || colLower.includes('aktual selesai') || colLower === 'selesai' || colLower.includes('waktu selesai') || colLower.includes('tanggal selesai')) {
-                                  // (isEditingThis already declared above)
-
-                                  let displayDate = val && val !== '-' ? val : '';
-                                  if (!displayDate) {
+                                // 4. Tanggal Selesai / Completion Date Column (Interactive Date Picker Calendar)
+                                if (
+                                  colLower.includes('completion') || 
+                                  colLower.includes('completed') || 
+                                  colLower.includes('aktual selesai') || 
+                                  colLower === 'selesai' || 
+                                  colLower.includes('waktu selesai') || 
+                                  colLower.includes('tanggal selesai')
+                                ) {
+                                  let effectiveCompDate = val && val !== '-' ? val : '';
+                                  if (!effectiveCompDate) {
                                     const linkedId = extractLinkedTicketId(row);
                                     if (linkedId && ticketMetadataMap[linkedId.toUpperCase()]?.completionDate) {
-                                      displayDate = formatToDDMMYYYY(ticketMetadataMap[linkedId.toUpperCase()].completionDate);
+                                      effectiveCompDate = formatToDDMMYYYY(ticketMetadataMap[linkedId.toUpperCase()].completionDate);
                                     }
                                   }
-                                  if (!displayDate) {
+                                  if (!effectiveCompDate) {
                                     const statusStr = (getRowVal(row, 'Status') || '').toUpperCase();
                                     if (statusStr.includes('CLOSE') || statusStr.includes('SELESAI') || statusStr.includes('DONE')) {
                                       const ketVal = getRowVal(row, 'Keterangan');
                                       const taskProg = parseTasklist(ketVal);
                                       if (taskProg.items.length > 0) {
-                                        const dates = taskProg.items.map(i => i.checkedDate).filter((d): d is string => Boolean(d)).sort();
+                                        const dates = taskProg.items.map(i => i.checkedDate).filter((d) => Boolean(d)).sort();
                                         if (dates.length > 0) {
-                                          displayDate = formatToDDMMYYYY(dates[dates.length - 1]);
+                                          effectiveCompDate = formatToDDMMYYYY(dates[dates.length - 1]);
                                         }
                                       }
-                                    }
-
-                                    if (displayDate) {
-                                      displayDate = formatToDDMMYYYY(displayDate);
                                     }
                                   }
 
                                   return (
                                     <td 
                                       key={colName} 
-                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#475569' : 'var(--text-muted, #94a3b8)' }} 
+                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#047857' : '#34d399' }} 
                                       className={`font-sans border-r cursor-pointer ${
                                         isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
                                       } ${
                                         fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
                                       }`}
-                                      onDoubleClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveInlineEditor({
-                                          rowIndex: actualRowIndex,
-                                          colName,
-                                          initialValue: displayDate || '',
-                                          multiline: false
-                                        });
-                                      }}
+                                      title="Klik atau klik 2x (double-click) untuk memilih tanggal selesai"
                                     >
-                                      {isEditingThis ? (
-                                        <NotionInlineEditor
-                                          initialValue={val}
-                                          fieldLabel="Tanggal Selesai"
-                                          multiline={false}
-                                          isNotionLight={isNotionLight}
-                                          onSave={(newVal) => {
-                                            handleUpdateCellDirect(actualRowIndex, colName, newVal);
-                                            setActiveInlineEditor(null);
-                                          }}
-                                          onCancel={() => setActiveInlineEditor(null)}
-                                        />
-                                      ) : displayDate ? (
-                                        <span 
-                                          onClick={() => setActiveInlineEditor({ rowIndex: actualRowIndex, colName, initialValue: displayDate, multiline: false })}
-                                          className="inline-flex items-center gap-1.5 cursor-pointer hover:underline font-sans font-medium text-slate-700 dark:text-slate-300"
-                                          title="Klik untuk mengubah Tanggal Selesai (atau klik 2x)"
-                                        >
-                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                                          <span>{displayDate}</span>
-                                        </span>
-                                      ) : (
-                                        <span 
-                                          onClick={() => {
-                                            const todayStr = getTodayDDMMYYYY();
-                                            handleUpdateCellDirect(actualRowIndex, colName, todayStr);
-                                          }}
-                                          className="font-mono text-slate-400 hover:text-emerald-500 cursor-pointer text-xs transition-colors"
-                                          title="Klik untuk isi tanggal selesai hari ini"
-                                        >
-                                          -
-                                        </span>
-                                      )}
+                                      <NotionCompletionDateCell
+                                        value={effectiveCompDate || val}
+                                        isNotionLight={isNotionLight}
+                                        onChange={(newDate) => {
+                                          handleUpdateCellDirect(actualRowIndex, colName, newDate);
+                                        }}
+                                      />
                                     </td>
                                   );
                                 }
@@ -9584,6 +9551,14 @@ export function NotionDatabaseTable({
                                           return;
                                         }
                                         setActiveInlinePicCell(isEditingPic ? null : { rowIndex: actualRowIndex, colName });
+                                        setInlinePicSearch('');
+                                      }}
+                                      onDoubleClick={(e) => {
+                                        e.stopPropagation();
+                                        if ((e.target as HTMLElement).closest('.notion-pic-popover')) {
+                                          return;
+                                        }
+                                        setActiveInlinePicCell({ rowIndex: actualRowIndex, colName });
                                         setInlinePicSearch('');
                                       }}
                                       title={picTooltip}
@@ -10118,47 +10093,6 @@ export function NotionDatabaseTable({
                                       fitPageMode ? 'px-2 py-2 text-xs' : 'px-3.5 py-2.5 text-[13px]'
                                     }`}>
                                       {val && val !== '-' ? val : <span className="font-mono text-slate-400">-</span>}
-                                    </td>
-                                  );
-                                }
-
-                                // Tanggal Selesai Column (Format DD-MM-YYYY seragam, interaktif kalender & double-click edit)
-                                if (colLower.includes('selesai') || colLower.includes('completed')) {
-                                  const rawCompVal = (val && val !== '-') ? formatToDDMMYYYY(val) : '';
-                                  return (
-                                    <td 
-                                      key={colName} 
-                                      style={{ ...getColStyle(colName), color: isNotionLight ? '#047857' : '#34d399' }} 
-                                      className={`font-sans border-r cursor-pointer ${
-                                        isNotionLight ? 'border-[#e9e9e8]' : 'border-[#2d2d2d]'
-                                      } ${
-                                        fitPageMode ? 'px-2 py-2 text-xs truncate' : 'px-3.5 py-2.5 whitespace-nowrap text-[13px]'
-                                      }`}
-                                      onDoubleClick={startInlineEdit}
-                                      title="Klik untuk buka kalender, atau klik 2x (double-click) untuk edit langsung"
-                                    >
-                                      {isEditingThis ? (
-                                        <NotionInlineEditor
-                                          initialValue={rawCompVal}
-                                          fieldLabel="Tanggal Selesai (Completion Date)"
-                                          multiline={false}
-                                          isNotionLight={isNotionLight}
-                                          onSave={(newVal) => {
-                                            handleUpdateCellDirect(actualRowIndex, colName, newVal);
-                                            setActiveInlineEditor(null);
-                                          }}
-                                          onCancel={() => setActiveInlineEditor(null)}
-                                        />
-                                      ) : (
-                                        <NotionCompletionDateCell
-                                          value={val}
-                                          isNotionLight={isNotionLight}
-                                          onDoubleClick={startInlineEdit}
-                                          onChange={(newDate) => {
-                                            handleUpdateCellDirect(actualRowIndex, colName, newDate);
-                                          }}
-                                        />
-                                      )}
                                     </td>
                                   );
                                 }

@@ -510,7 +510,13 @@ export const NotionDueDateCell: React.FC<NotionDueDateCellProps> = ({
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(false);
+    if (!isOpen) {
+      updatePosition();
+      const current = parseDateToMidnight(value) || new Date();
+      setViewYear(current.getFullYear());
+      setViewMonth(current.getMonth());
+      setIsOpen(true);
+    }
     if (onDoubleClick) {
       onDoubleClick(e);
     }
@@ -846,7 +852,13 @@ export const NotionCompletionDateCell: React.FC<NotionCompletionDateCellProps> =
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(false);
+    if (!isOpen) {
+      updatePosition();
+      const current = parseDateToMidnight(value) || new Date();
+      setViewYear(current.getFullYear());
+      setViewMonth(current.getMonth());
+      setIsOpen(true);
+    }
     if (onDoubleClick) {
       onDoubleClick(e);
     }

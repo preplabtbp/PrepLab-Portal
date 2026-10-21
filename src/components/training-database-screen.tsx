@@ -347,6 +347,17 @@ const k3BadgeOf = (s: K3State) =>
 
 // ===== Sertifikasi Pengawas Operasional (Pra POP / POP / POM) =====
 // Tidak ada masa berlaku — dihitung jumlah karyawan yang telah mengikuti tiap tahap
+export const personHasPom = (r?: TrainingRecord | null, certs?: TrainingCertification[]) => {
+  if (!r) return false;
+  if (popPassedPom(r.popData) || !!r.popData?.pom || (r.popData?.pomKeterangan || '').trim().toUpperCase() === 'PASS') {
+    return true;
+  }
+  if (certs && certs.some(c => (c.nik === r.nik || (c.nama && r.nama && c.nama.toLowerCase().trim() === r.nama.toLowerCase().trim())) && (c.certType?.toLowerCase().includes('pom') || (c.keterangan || '').toLowerCase().includes('pom')))) {
+    return true;
+  }
+  return false;
+};
+
 const POP_STAGES = [
   { key: 'pop', label: 'POP', desc: 'Pengawas Operasional Pertama', attended: (p?: PopData | null) => popAttendedPop(p) },
 ] as const;
@@ -1068,7 +1079,10 @@ interface TrainingStatisticsViewProps {
   summaryPieRows: Array<{ label: string; value: number; color: string }>;
   summaryPieTotal: number;
   combinedTrainingCertData: { grandTotal: number; rows: Array<{ label: string; value: number; color: string }> };
-  onOpenDatabaseWithFilter: (tab: 'sap' | 'k3', filterModule?: string) => void;
+  initialScope?: 'internal' | 'external' | string;
+  certRows?: any[];
+  pomStats?: any;
+  onOpenDatabaseWithFilter: (tab: any, filterModule?: string) => void;
 }
 
 type StatsSubTab = 'all' | 'barchart' | 'sap_modules' | 'dept_analysis' | 'cert_ranks';
@@ -2196,7 +2210,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const isExternal = scope === 'external';
 
   // Sheet Pemisah di Training External: POP, POM, K3 Kimia, K3 Listrik, ISO 17025, Proteksi Radiasi, Juru Las, Semua
-  const [externalSheet, setExternalSheet] = useState<'pop' | 'pom' | 'k3_kimia' | 'k3_listrik' | 'iso_17025' | 'proteksi_radiasi' | 'juru_las_3' | 'all'>('pop');
+  const [externalSheet, setExternalSheet] = useState<'pop' | 'pom' | 'k3_kimia' | 'k3_listrik' | 'iso_17025' | 'proteksi_radiasi' | 'juru_las_3' | 'all' | 'statistik'>('pop');
 
   // Filter Sertifikasi K3 & POP di Training External
   const [certTypeFilter, setCertTypeFilter] = useState<string>('ALL');
@@ -2225,14 +2239,14 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const [certDeleteTarget, setCertDeleteTarget] = useState<TrainingCertification | null>(null);
 
   // Perhitungan kuantitas untuk tab sheet & diagram
-  const popTotalCount = useMemo(() => records.filter(r => r.inPop).length, [records]);
+  const popTotalCount = useMemo(() => records.filter(r => r.inPop && !personHasPom(r, certRows)).length, [records, certRows]);
   const pomPassedCount = useMemo(() => records.filter(r => r.inPop && popPassedPom(r.popData)).length, [records]);
   const k3KimiaCount = useMemo(() => certRows.filter(c => c.certType === 'ahli_k3_kimia' || c.certType === 'petugas_k3_kimia').length, [certRows]);
   const k3ListrikCount = useMemo(() => certRows.filter(c => c.certType === 'teknisi_k3_listrik').length, [certRows]);
   const iso17025Count = useMemo(() => certRows.filter(c => c.certType === 'iso_17025').length, [certRows]);
   const radiasiCount = useMemo(() => certRows.filter(c => c.certType === 'proteksi_radiasi').length, [certRows]);
   const juruLasCount = useMemo(() => certRows.filter(c => c.certType === 'juru_las_3').length, [certRows]);
-  const totalExternalCerts = useMemo(() => certRows.length + popTotalCount, [certRows, popTotalCount]);
+  const totalExternalCerts = useMemo(() => certRows.length + popTotalCount + pomPassedCount, [certRows, popTotalCount, pomPassedCount]);
 
   const todayYmdStr = useMemo(() => {
     const now = new Date();
@@ -2526,19 +2540,25 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
 
   const programRecords = useMemo(
     () => records.filter(r => {
-      if (isExternal) return r.inPop || getPersonCerts(r).length > 0;
+      if (isExternal) {
+        if (externalSheet === 'pop') {
+          return r.inPop && !personHasPom(r, certRows);
+        }
+        return r.inPop || getPersonCerts(r).length > 0;
+      }
       if (program === 'k3') return !!r.inK3 || !!r.popData?.praPop || (!!r.inPop && popAttendedPra(r.popData));
-        if (program === 'pra_pop') return r.popData?.praPop || (r.inPop && popAttendedPra(r.popData));
+      if (program === 'pra_pop') return r.popData?.praPop || (r.inPop && popAttendedPra(r.popData));
+      if (program === 'pop') return !!r.inPop && !personHasPom(r, certRows);
       return !!r[PROGRAM_FLAG_KEY[program]];
     }),
-    [records, program, isExternal, getPersonCerts]
+    [records, program, isExternal, externalSheet, certRows, getPersonCerts]
   );
 
   const programCounts = useMemo(() => ({
     sap: records.filter(r => r.inSap).length,
     k3: records.filter(r => r.inK3).length,
     pra_pop: records.filter(r => r.popData?.praPop || (r.inPop && popAttendedPra(r.popData))).length,
-    pop: records.filter(r => r.inPop).length,
+    pop: records.filter(r => r.inPop && !personHasPom(r, certRows)).length,
   }), [records]);
 
   const bagianOptions = useMemo(
@@ -2673,7 +2693,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   const dashboard = useMemo(() => {
     const sapPeople = records.filter(r => r.inSap);
     const k3People = records.filter(r => r.inK3 || r.popData?.praPop || (r.inPop && popAttendedPra(r.popData)));
-    const popPeople = records.filter(r => r.inPop);
+    const popPeople = records.filter(r => r.inPop && !personHasPom(r, certRows));
 
     // Komposisi status seluruh training SAP yang WAJIB (per item training)
     const pie = { done: 0, warning: 0, expired: 0, none: 0 };
@@ -2736,11 +2756,11 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         spark: s.key === 'pop' ? spark(popDates) : null, latest: s.key === 'pop' ? latestOf(popDates) : '',
       })),
     };
-  }, [records, isExternal]);
+  }, [records, isExternal, certRows]);
 
   // ===== Diagram gabungan Training & Sertifikasi =====
   const combinedTrainingCertData = useMemo(() => {
-    const popPeople = records.filter(r => r.inPop);
+    const popPeople = records.filter(r => r.inPop && !personHasPom(r, certRows));
     const praPopCount = popPeople.filter(r => popAttendedPra(r.popData)).length;
     const popCount = popPeople.filter(r => popAttendedPop(r.popData)).length;
     const pomCount = popPeople.filter(r => popPassedPom(r.popData)).length;
@@ -2772,7 +2792,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
   // ===== Jumlah karyawan yang telah mengikuti (Training K3 & Sertifikasi POP — tanpa target/masa berlaku) =====
   const participation = useMemo(() => {
     const k3People = records.filter(r => r.inK3);
-    const popPeople = records.filter(r => r.inPop);
+    const popPeople = records.filter(r => r.inPop && !personHasPom(r, certRows));
     const rows = isExternal
       ? POP_STAGES.map(s => ({ label: s.label, group: 'Sertifikasi POP', count: popPeople.filter(r => s.attended(r.popData)).length, pending: 0 }))
       : K3_TRAININGS.map(t => ({
@@ -2881,6 +2901,10 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
       if (shiftFilter !== 'ALL' && (r.shift || '').toLowerCase() !== shiftFilter.toLowerCase()) return false;
       if (bagianFilter !== 'ALL' && (r.bagian || '') !== bagianFilter) return false;
       if (ptFilter !== 'ALL' && (r.pt || '') !== ptFilter) return false;
+
+      if ((program === 'pop' || (isExternal && externalSheet === 'pop')) && personHasPom(r, certRows)) {
+        return false;
+      }
 
       if (isExternal && certTypeFilter !== 'ALL') {
         const pCerts = getPersonCerts(r);
@@ -3774,7 +3798,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                     Training External
                   </button>
                 </div>
-                <h1 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">{SCOPE_META[scope].title}</h1>
+                
                 {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" aria-label="Memperbarui data" />}
               </div>
               <p className="text-[11px] sm:text-xs font-semibold text-slate-500 truncate">Halo, {inspectorName || 'Admin'} · {SCOPE_META[scope].sub}</p>
@@ -3913,6 +3937,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
                 >
                   <option value="pop">POP (Pengawas Operasional Pertama)</option>
                   <option value="pom">POM (Pengawas Operasional Madya)</option>
+                  <option value="statistik">📊 Statistik &amp; Analisis External</option>
                   <option value="all">Semua Sertifikasi Eksternal ({totalExternalCerts} Sertifikat)</option>
                   <option value="iso_17025">ISO 17025 : 2017 ({iso17025Count} Peserta)</option>
                   <option value="k3_kimia">K3 Kimia - Ahli &amp; Petugas ({k3KimiaCount} Peserta)</option>
@@ -3945,7 +3970,7 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
         {/* ===== Routing Sub Menu: Form Permintaan & Statistik Dedicated View ===== */}
         {!isExternal && activeInternalTab === 'form_permintaan' ? (
           <TrainingRequestFormSheet employees={allMasterEmployees} canManage={canManage} />
-        ) : !isExternal && activeInternalTab === 'statistik' ? (
+        ) : (!isExternal && activeInternalTab === 'statistik') || (isExternal && externalSheet === 'statistik') ? (
           <TrainingStatisticsView
             records={records}
             stats={stats}
@@ -3953,9 +3978,16 @@ export function TrainingDatabaseScreen({ inspectorNik = '', inspectorName = '', 
             summaryPieRows={summaryPieRows}
             summaryPieTotal={summaryPieTotal}
             combinedTrainingCertData={combinedTrainingCertData}
+            initialScope={isExternal ? 'external' : 'internal'}
+            certRows={certRows}
+            pomStats={pomStats}
             onOpenDatabaseWithFilter={(tab, filterModule) => {
-              setActiveInternalTab(tab);
-              switchProgram(tab);
+              if (isExternal) {
+                setExternalSheet(tab as any);
+              } else {
+                setActiveInternalTab(tab as any);
+                switchProgram(tab as any);
+              }
               if (filterModule) setMissingFilter(filterModule);
             }}
           />

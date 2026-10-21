@@ -271,7 +271,10 @@ export const NotionDropdownCell: React.FC<NotionDropdownCellProps> = ({
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(false);
+    if (!isOpen) {
+      updatePosition();
+      setIsOpen(true);
+    }
     if (onDoubleClick) {
       onDoubleClick(e);
     }
