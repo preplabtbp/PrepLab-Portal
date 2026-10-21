@@ -110,10 +110,25 @@ function formatShortDate(v: DateVal): string {
 }
 
 function isValidEmployee(emp: any): boolean {
-  const rawNik = (emp.nik || '').toString().trim();
+  const rawNik = (emp.nik || '').toString().trim().toUpperCase();
   const rawName = (emp.name || '').toString().trim();
   const rawSection = (emp.section || '').toString().trim();
   const rawStatus = (emp.statusKaryawan || '').toString().trim().toUpperCase();
+  const rawJabatan = (emp.jabatan || '').toString().trim().toLowerCase();
+  const rawGol = (emp.gol || '').toString().trim().toUpperCase();
+  const rawJobGrade = (emp.jobGrade || '').toString().trim().toUpperCase();
+
+  // Eksklusi Mutlak Golongan I (Crew / Operator / Non-Staff)
+  if (rawNik === 'M0201250032') return false; // Imran Sebualamo (Crew Gol I)
+  if (rawJabatan.includes('crew') || rawJabatan.includes('operator')) return false;
+  if (
+    rawGol === 'I' || rawGol === '1' || rawGol.startsWith('I.') || rawGol.startsWith('1.') ||
+    rawGol.startsWith('I-') || rawGol.startsWith('1-') || rawGol === 'IA' || rawGol === 'IB' ||
+    rawJobGrade.startsWith('S1') || rawJobGrade.startsWith('1.')
+  ) {
+    return false;
+  }
+
   if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
   if (rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A') return false;
   if (rawStatus.includes('RESIGN') || rawStatus.includes('PHK') || rawStatus.includes('KELUAR') || rawStatus.includes('INACTIVE')) return false;
@@ -1398,7 +1413,13 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     const editMap = new Map(edits.map(e => [String(e.nik).trim().toUpperCase(), e]));
     const ownKey = (inspectorNik || '').trim().toUpperCase();
     return Array.from(map.entries())
-      .filter(([key]) => canEdit || key === ownKey)
+      .filter(([key, e]) => {
+        const j = (e.jabatan || '').toLowerCase();
+        const n = (e.nik || key || '').toUpperCase();
+        // Eksklusi mutlak Golongan I (Crew / Operator / Non-Staff) dari rekap KTA/TTA & Inspeksi
+        if (n === 'M0201250032' || j.includes('crew') || j.includes('operator')) return false;
+        return canEdit || key === ownKey;
+      })
       .map(([key, e]) => {
         const edit = editMap.get(key);
         const v = applyEdit(e.auto, edit, weekRange);
