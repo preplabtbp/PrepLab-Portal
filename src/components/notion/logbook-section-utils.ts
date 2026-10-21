@@ -143,23 +143,44 @@ export function isSubItemRow(row: TableRowData): boolean {
 }
 
 /**
- * Formats any date string or Date object into DD-MM-YYYY format.
- * Examples: '2026-10-10' -> '10-10-2026', '2026-10-10 08:30' -> '10-10-2026 08:30'
+ * Formats any date string or Date object into clean DD-MM-YYYY format.
+ * Examples: '2026-10-10' -> '10-10-2026', '2026-10-15T06:07:46.283Z' -> '15-10-2026'
  */
 export function formatToDDMMYYYY(val: string | number | Date | null | undefined): string {
   if (!val) return '';
   const str = String(val).trim();
   if (str === '-' || str === '') return str;
-  // If already DD-MM-YYYY or DD-MM-YYYY HH:mm
-  if (/^\d{2}-\d{2}-\d{4}/.test(str)) {
-    return str;
+
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '';
+    const d = String(val.getDate()).padStart(2, '0');
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const y = val.getFullYear();
+    return `${d}-${m}-${y}`;
   }
-  // If YYYY-MM-DD or YYYY-MM-DD HH:mm...
-  const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(.*)/);
+
+  // If already starts with DD-MM-YYYY (strip any trailing ISO T... or raw milliseconds)
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{2}))?/);
+  if (dmyMatch) {
+    const [, d, m, y, hh, mm] = dmyMatch;
+    const base = `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
+    if (hh !== undefined && mm !== undefined && !str.includes('Z') && !str.includes('T')) {
+      return `${base} ${hh.padStart(2, '0')}:${mm.padStart(2, '0')}`;
+    }
+    return base;
+  }
+
+  // If YYYY-MM-DD or ISO timestamp YYYY-MM-DDTHH:mm:ss.sssZ
+  const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{2}))?/);
   if (isoMatch) {
-    const [, y, m, d, rest] = isoMatch;
-    return `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}${rest || ''}`;
+    const [, y, m, d, hh, mm] = isoMatch;
+    const base = `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
+    if (hh !== undefined && mm !== undefined && !str.includes('Z') && !str.includes('T')) {
+      return `${base} ${hh.padStart(2, '0')}:${mm.padStart(2, '0')}`;
+    }
+    return base;
   }
+
   // Try Date parse
   const dt = new Date(str);
   if (!isNaN(dt.getTime())) {
@@ -864,11 +885,15 @@ export async function syncLogbookRowsGroupToOrigin(
       const titleKey = findColKey(targetSub, 'Activity Name', 'Activity', 'Jenis kegiatan', 'Jenis Kegiatan', 'Name', 'Judul');
       const statusKey = findColKey(targetSub, 'Status');
       const dateKey = findColKey(targetSub, 'Tanggal Selesai', 'Tanggal selesai', 'Completed');
+      const picKey = findColKey(targetSub, 'PIC');
+      const priorityKey = findColKey(targetSub, 'Priority', 'Prioritas');
       const dueKey = findColKey(targetSub, 'Due Date', 'due date', 'Deadline');
 
       targetSub[titleKey] = subTitleWithPrefix;
       targetSub[statusKey] = isSubCompleted ? 'Closed' : 'Open';
       targetSub.isCompleted = isSubCompleted ? 'true' : 'false';
+      if (sub.PIC !== undefined && sub.PIC !== '') targetSub[picKey] = sub.PIC;
+      if (sub.Priority !== undefined && sub.Priority !== '') targetSub[priorityKey] = sub.Priority;
       if (sub['Tanggal Selesai'] && sub['Tanggal Selesai'] !== '-') {
         targetSub[dateKey] = formatToDDMMYYYY(sub['Tanggal Selesai']);
       } else if (isSubCompleted) {

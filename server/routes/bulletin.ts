@@ -7,7 +7,7 @@ import {
   pemantauan, questions, agendaEvents, privateNotes, userThemes, bulletinPosts, 
   notifications, bulletinComments, uploadedFiles, appSettings, pelanggaran, 
   mealReports, pushSubscriptions, quizQuestions, preplabCloudLogs, quizScores, induksi,
-  logbookTasks
+  logbookTasks, bulletinRecycleBin
 } from "../../src/db/schema.js";
 import { generatePdfFromTemplate, drive } from '../../google-services.js';
 import { 
@@ -1141,6 +1141,181 @@ router.get("/api/drive/download/:fileId", async (req, res) => {
   } catch (err: any) {
     console.error(`[Drive Proxy Download] Error streaming file ${req.params.fileId}:`, err.message);
     res.status(404).send("File not found or inaccessible");
+  }
+});
+
+// ----------------------------------------------------
+// Recycle Bin & Activity Deletion Audit Trail Endpoints
+// ----------------------------------------------------
+
+async function initRecycleBinTable() {
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS bulletin_recycle_bin (
+        id SERIAL PRIMARY KEY,
+        post_id INTEGER,
+        post_title TEXT,
+        section TEXT,
+        task_title TEXT NOT NULL,
+        row_data TEXT NOT NULL,
+        subtasks_data TEXT,
+        subtask_count INTEGER DEFAULT 0,
+        deleted_by_nik TEXT NOT NULL,
+        deleted_by_name TEXT NOT NULL,
+        deleted_by_jabatan TEXT,
+        deleted_at TIMESTAMP DEFAULT NOW(),
+        restore_status TEXT DEFAULT 'DELETED',
+        restored_at TIMESTAMP,
+        restored_by_nik TEXT,
+        restored_by_name TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_bulletin_recycle_post_id ON bulletin_recycle_bin(post_id);
+      CREATE INDEX IF NOT EXISTS idx_bulletin_recycle_deleted_at ON bulletin_recycle_bin(deleted_at);
+      CREATE INDEX IF NOT EXISTS idx_bulletin_recycle_status ON bulletin_recycle_bin(restore_status);
+    `);
+  } catch (err: any) {
+    console.warn('[RecycleBin] Error initializing table:', err.message);
+  }
+}
+initRecycleBinTable();
+
+// 1. POST /api/bulletin/recycle-bin - Log deleted activities
+router.post("/api/bulletin/recycle-bin", async (req, res) => {
+  try {
+    const { items, deletedByNik, deletedByName, deletedByJabatan } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ status: "error", message: "No items provided" });
+    }
+
+    const inserted = [];
+    for (const item of items) {
+      const { postId, postTitle, section, taskTitle, rowData, subtasksData, subtaskCount } = item;
+      const resItem = await db.insert(bulletinRecycleBin).values({
+        postId: postId ? parseInt(String(postId)) : null,
+        postTitle: postTitle || null,
+        section: section || null,
+        taskTitle: String(taskTitle || "Kegiatan Tanpa Judul"),
+        rowData: typeof rowData === "string" ? rowData : JSON.stringify(rowData || {}),
+        subtasksData: subtasksData ? (typeof subtasksData === "string" ? subtasksData : JSON.stringify(subtasksData)) : null,
+        subtaskCount: typeof subtaskCount === "number" ? subtaskCount : (Array.isArray(subtasksData) ? subtasksData.length : 0),
+        deletedByNik: String(deletedByNik || "UNKNOWN"),
+        deletedByName: String(deletedByName || "Unknown User"),
+        deletedByJabatan: deletedByJabatan || null,
+        deletedAt: new Date(),
+        restoreStatus: "DELETED",
+      }).returning();
+      if (resItem[0]) inserted.push(resItem[0]);
+    }
+
+    res.json({ status: "success", count: inserted.length, data: inserted });
+  } catch (err: any) {
+    console.error("[RecycleBin] Error logging deleted items:", err);
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+// 2. GET /api/bulletin/recycle-bin - List deleted activities for Developer
+router.get("/api/bulletin/recycle-bin", async (req, res) => {
+  try {
+    const { postId, status } = req.query;
+    const conditions = [];
+    if (postId) {
+      conditions.push(eq(bulletinRecycleBin.postId, parseInt(String(postId))));
+    }
+    if (status) {
+      conditions.push(eq(bulletinRecycleBin.restoreStatus, String(status)));
+    }
+
+    const query = db.select().from(bulletinRecycleBin);
+    const records = conditions.length > 0 
+      ? await query.where(and(...conditions)).orderBy(desc(bulletinRecycleBin.deletedAt)).limit(100)
+      : await query.orderBy(desc(bulletinRecycleBin.deletedAt)).limit(100);
+
+    res.json({ status: "success", data: records });
+  } catch (err: any) {
+    console.error("[RecycleBin] Error fetching recycle bin:", err);
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+// 3. POST /api/bulletin/recycle-bin/:id/restore - Restore an activity back to its post
+router.post("/api/bulletin/recycle-bin/:id/restore", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { restoredByNik, restoredByName } = req.body;
+
+    const binItemArr = await db.select().from(bulletinRecycleBin).where(eq(bulletinRecycleBin.id, id)).limit(1);
+    if (!binItemArr || binItemArr.length === 0) {
+      return res.status(404).json({ status: "error", message: "Item not found in recycle bin" });
+    }
+    const binItem = binItemArr[0];
+    if (binItem.restoreStatus === "RESTORED") {
+      return res.status(400).json({ status: "error", message: "Item already restored" });
+    }
+
+    if (!binItem.postId) {
+      return res.status(400).json({ status: "error", message: "Cannot restore item without postId" });
+    }
+
+    const postArr = await db.select().from(bulletinPosts).where(eq(bulletinPosts.id, binItem.postId)).limit(1);
+    if (!postArr || postArr.length === 0) {
+      return res.status(404).json({ status: "error", message: "Target bulletin post no longer exists" });
+    }
+    const post = postArr[0];
+
+    const { parseMarkdownTableRows, serializeMarkdownTable } = await import("./logbook.js");
+    const parsed = parseMarkdownTableRows(post.content || "");
+    if (!parsed) {
+      return res.status(400).json({ status: "error", message: "Target post does not contain a valid markdown table" });
+    }
+
+    let parsedRow: Record<string, string> = {};
+    try {
+      parsedRow = JSON.parse(binItem.rowData);
+    } catch {}
+
+    let parsedSubtasks: Record<string, string>[] = [];
+    if (binItem.subtasksData) {
+      try {
+        parsedSubtasks = JSON.parse(binItem.subtasksData);
+      } catch {}
+    }
+
+    // Append parsedRow and parsedSubtasks to the table
+    const targetHeaders = parsed.headers;
+    const newRows = [...parsed.rows, parsedRow, ...parsedSubtasks];
+
+    // Re-index number column
+    const reindexed = newRows.map((r, idx) => ({
+      ...r,
+      Number: String(idx + 1),
+      number: String(idx + 1),
+      No: String(idx + 1),
+      no: String(idx + 1)
+    }));
+
+    const newMarkdown = serializeMarkdownTable(targetHeaders, reindexed, parsed.beforeText, parsed.afterText);
+
+    // Update post content
+    await db.update(bulletinPosts).set({ content: newMarkdown }).where(eq(bulletinPosts.id, post.id));
+
+    // Update recycle bin record status
+    await db.update(bulletinRecycleBin).set({
+      restoreStatus: "RESTORED",
+      restoredAt: new Date(),
+      restoredByNik: restoredByNik || null,
+      restoredByName: restoredByName || null
+    }).where(eq(bulletinRecycleBin.id, id));
+
+    res.json({
+      status: "success",
+      message: `Activity "${binItem.taskTitle}" successfully restored!`,
+      restoredPostId: post.id,
+      newContent: newMarkdown
+    });
+  } catch (err: any) {
+    console.error("[RecycleBin] Error restoring item:", err);
+    res.status(500).json({ status: "error", message: err.message });
   }
 });
 
