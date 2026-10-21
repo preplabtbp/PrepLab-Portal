@@ -1259,52 +1259,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Developer Universe Database Switcher */}
-                {isDevLogin && (
-                  <div className="p-3.5 rounded-2xl bg-white border border-teal-200/90 shadow-2xs space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 font-mono flex items-center gap-1.5">
-                        <Database className="w-3.5 h-3.5 text-[#22a7b8]" />
-                        Database Operasional
-                      </span>
-                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200 font-mono">
-                        Developer Mode
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => setLoginUniverse('TBP')}
-                        className={`py-2 px-3 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                          loginUniverse === 'TBP'
-                            ? 'bg-[#22a7b8] text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                        }`}
-                      >
-                        <Building2 className="w-3.5 h-3.5" />
-                        <span>TBP - GPS</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setLoginUniverse('GTS')}
-                        className={`py-2 px-3 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                          loginUniverse === 'GTS'
-                            ? 'bg-[#22a7b8] text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                        }`}
-                      >
-                        <Building2 className="w-3.5 h-3.5" />
-                        <span>GTS</span>
-                      </button>
-                    </div>
-
-                    <p className="text-[10px] text-slate-400 font-medium">
-                      * Sesi login akan langsung tersambung ke database <strong>{loginUniverse === 'TBP' ? 'PT. TBP & GPS' : 'PT. GTS'}</strong>.
-                    </p>
-                  </div>
-                )}
 
                 {/* Password Input Bar */}
                 <div className="relative group">
@@ -1510,33 +1464,125 @@ export default function App() {
           </form>
 
           {/* 3 Operating Entities Cards Row (TBP, GPS, GTS) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 w-full max-w-xl mt-10">
-            {/* Card 1: TBP */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-teal-300 p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group">
-              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                <img src="/tbp-header-logo.png" alt="TBP" className="w-full h-full object-contain" />
+          <div className="w-full max-w-xl mt-8">
+            {isDevLogin && loginStep === 'password' && (
+              <div className="flex items-center justify-between mb-3 px-1 animate-in fade-in duration-200">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                  <Database className="w-3.5 h-3.5 text-[#22a7b8]" />
+                  <span>Pilih Database Operasional:</span>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200">
+                  Target: <strong>{loginUniverse === 'TBP' ? 'PT TBP & GPS' : 'PT GTS'}</strong>
+                </span>
               </div>
-              <span className="text-xs font-bold text-slate-800">PT TBP</span>
-              <span className="text-[10px] text-slate-400 font-mono mt-0.5">Trimegah Bangun Persada</span>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              {/* Card 1: TBP */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDevLogin && loginStep === 'password') setLoginUniverse('TBP');
+                }}
+                disabled={!isDevLogin || loginStep !== 'password'}
+                className={`relative rounded-2xl p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group text-left ${
+                  isDevLogin && loginStep === 'password'
+                    ? loginUniverse === 'TBP'
+                      ? 'bg-teal-50/50 border-2 border-[#22a7b8] ring-2 ring-[#22a7b8]/30 shadow-md cursor-pointer'
+                      : 'bg-white border border-slate-200/90 hover:border-teal-300 opacity-60 hover:opacity-100 cursor-pointer hover:shadow-sm'
+                    : 'bg-white border border-slate-200/80 shadow-xs hover:shadow-md hover:border-teal-300 cursor-default'
+                }`}
+              >
+                {isDevLogin && loginStep === 'password' && loginUniverse === 'TBP' && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#22a7b8] text-white shadow-xs">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
+                    Aktif
+                  </span>
+                )}
+                <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <img src="/tbp-header-logo.png" alt="TBP" className="w-full h-full object-contain" />
+                </div>
+                <span className={`text-xs font-bold ${isDevLogin && loginStep === 'password' && loginUniverse === 'TBP' ? 'text-teal-900 font-extrabold' : 'text-slate-800'}`}>
+                  PT TBP
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono mt-0.5">Trimegah Bangun Persada</span>
+                {isDevLogin && loginStep === 'password' && (
+                  <span className="text-[9px] text-[#1b8f9e] font-semibold mt-1">Database TBP-GPS</span>
+                )}
+              </button>
+
+              {/* Card 2: GPS */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDevLogin && loginStep === 'password') setLoginUniverse('TBP');
+                }}
+                disabled={!isDevLogin || loginStep !== 'password'}
+                className={`relative rounded-2xl p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group text-left ${
+                  isDevLogin && loginStep === 'password'
+                    ? loginUniverse === 'TBP'
+                      ? 'bg-teal-50/50 border-2 border-[#22a7b8] ring-2 ring-[#22a7b8]/30 shadow-md cursor-pointer'
+                      : 'bg-white border border-slate-200/90 hover:border-teal-300 opacity-60 hover:opacity-100 cursor-pointer hover:shadow-sm'
+                    : 'bg-white border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 cursor-default'
+                }`}
+              >
+                {isDevLogin && loginStep === 'password' && loginUniverse === 'TBP' && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#22a7b8] text-white shadow-xs">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
+                    Aktif
+                  </span>
+                )}
+                <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <img src="/gps-logo.png" alt="GPS" className="w-full h-full object-contain" />
+                </div>
+                <span className={`text-xs font-bold ${isDevLogin && loginStep === 'password' && loginUniverse === 'TBP' ? 'text-teal-900 font-extrabold' : 'text-blue-700'}`}>
+                  PT GPS
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Permai Sentosa</span>
+                {isDevLogin && loginStep === 'password' && (
+                  <span className="text-[9px] text-[#1b8f9e] font-semibold mt-1">Database TBP-GPS</span>
+                )}
+              </button>
+
+              {/* Card 3: GTS */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDevLogin && loginStep === 'password') setLoginUniverse('GTS');
+                }}
+                disabled={!isDevLogin || loginStep !== 'password'}
+                className={`relative rounded-2xl p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group text-left ${
+                  isDevLogin && loginStep === 'password'
+                    ? loginUniverse === 'GTS'
+                      ? 'bg-teal-50/50 border-2 border-[#22a7b8] ring-2 ring-[#22a7b8]/30 shadow-md cursor-pointer'
+                      : 'bg-white border border-slate-200/90 hover:border-teal-300 opacity-60 hover:opacity-100 cursor-pointer hover:shadow-sm'
+                    : 'bg-white border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 cursor-default'
+                }`}
+              >
+                {isDevLogin && loginStep === 'password' && loginUniverse === 'GTS' && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#22a7b8] text-white shadow-xs">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
+                    Aktif
+                  </span>
+                )}
+                <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                  <img src="/gts-logo.png" alt="GTS" className="w-full h-full object-contain" />
+                </div>
+                <span className={`text-xs font-bold ${isDevLogin && loginStep === 'password' && loginUniverse === 'GTS' ? 'text-teal-900 font-extrabold' : 'text-blue-700'}`}>
+                  PT GTS
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Tambang Sentosa</span>
+                {isDevLogin && loginStep === 'password' && (
+                  <span className="text-[9px] text-[#1b8f9e] font-semibold mt-1">Database GTS</span>
+                )}
+              </button>
             </div>
 
-            {/* Card 2: GPS */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group">
-              <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                <img src="/gps-logo.png" alt="GPS" className="w-full h-full object-contain" />
-              </div>
-              <span className="text-xs font-bold text-blue-700">PT GPS</span>
-              <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Permai Sentosa</span>
-            </div>
-
-            {/* Card 3: GTS */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-300 p-3.5 flex flex-col items-center justify-center text-center transition-all duration-200 group">
-              <div className="w-10 h-10 rounded-xl bg-blue-50/60 border border-blue-100/80 p-1.5 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
-                <img src="/gts-logo.png" alt="GTS" className="w-full h-full object-contain" />
-              </div>
-              <span className="text-xs font-bold text-blue-700">PT GTS</span>
-              <span className="text-[10px] text-slate-400 font-mono mt-0.5">Gane Tambang Sentosa</span>
-            </div>
+            {isDevLogin && loginStep === 'password' && (
+              <p className="text-[11px] text-slate-500 font-medium text-center mt-3 animate-in fade-in">
+                * Sesi login akan tersambung ke database <strong>{loginUniverse === 'TBP' ? 'PT. TBP & GPS' : 'PT. GTS'}</strong>. Klik logo perusahaan di atas untuk beralih.
+              </p>
+            )}
           </div>
 
           {/* Bottom Trust & Motto */}
