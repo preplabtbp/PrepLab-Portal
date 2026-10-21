@@ -8909,6 +8909,17 @@ export function NotionDatabaseTable({
                                           window.location.href = `/roster-admin?view=off_schedule&returnTo=${returnUrl}`;
                                           return;
                                         }
+                                        if (
+                                          tLower.includes('kta/tta') ||
+                                          tLower.includes('kta-tta') ||
+                                          (tLower.includes('keterlambatan') && tLower.includes('kta')) ||
+                                          tLower.includes('rekap kta')
+                                        ) {
+                                          e.stopPropagation();
+                                          const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                          window.location.href = `/safety-rekap?returnTo=${returnUrl}`;
+                                          return;
+                                        }
                                         if (!isEditingThis && onToggleExpand) {
                                           onToggleExpand(e);
                                         }
@@ -9115,7 +9126,13 @@ export function NotionDatabaseTable({
                                                 taskText.includes('jadwal inspeksi staff preparasi') ||
                                                 (taskText.includes('jadwal inspeksi') && taskText.includes('staff') && taskText.includes('minggu'))
                                               );
-                                              const hasModuleShortcut = isLeaveShortcut || isOffShortcut || isPermissionShortcut || isTrainingShortcut || isInspectionScheduleShortcut;
+                                              const isSafetyRekapShortcut = (
+                                                taskText.includes('kta/tta') ||
+                                                taskText.includes('kta-tta') ||
+                                                (taskText.includes('keterlambatan') && taskText.includes('kta')) ||
+                                                taskText.includes('rekap kta')
+                                              );
+                                              const hasModuleShortcut = isLeaveShortcut || isOffShortcut || isPermissionShortcut || isTrainingShortcut || isInspectionScheduleShortcut || isSafetyRekapShortcut;
 
                                               return (
                                                 <>
@@ -9203,6 +9220,23 @@ export function NotionDatabaseTable({
                                                       <span>Buka Jadwal Inspeksi</span>
                                                     </button>
                                                   )}
+
+                                                    {/* Quick Open Rekap KTA/TTA & Inspeksi button */}
+                                                    {isSafetyRekapShortcut && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                          window.location.href = `/safety-rekap?returnTo=${returnUrl}`;
+                                                        }}
+                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-200 border border-amber-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                        title="Klik untuk membuka Modul Rekap KTA/TTA & Inspeksi"
+                                                      >
+                                                        <ClipboardList className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                                        <span>Buka Rekap KTA/TTA</span>
+                                                      </button>
+                                                    )}
 
                                                   {/* Open Badge / Button (Only displayed when NO shortcut exists) */}
                                                   {!hasModuleShortcut && (
@@ -12195,6 +12229,44 @@ export function NotionDatabaseTable({
                           className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
                         >
                           <span>Buka Jadwal Inspeksi</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Integrated Rekap KTA/TTA Banner */}
+                    {selectedRow && (() => {
+                      const t = String(baseTopicTitle || '').toLowerCase();
+                      return (
+                        t.includes('kta/tta') ||
+                        t.includes('kta-tta') ||
+                        (t.includes('keterlambatan') && t.includes('kta')) ||
+                        t.includes('rekap kta')
+                      );
+                    })() && (
+                      <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs mb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 rounded-lg bg-amber-600 text-white shrink-0">
+                            <ClipboardList className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                              Modul Terhubung: Rekap KTA/TTA & Inspeksi
+                            </div>
+                            <div className="text-[11px] text-amber-700 dark:text-amber-300">
+                              Akses langsung rekapitulasi data kepatuhan KTA/TTA, jadwal inspeksi, dan diagram capaian SAP personil.
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                            window.location.href = `/safety-rekap?returnTo=${returnUrl}`;
+                          }}
+                          className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+                        >
+                          <span>Buka Rekap KTA/TTA</span>
                           <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                       </div>
