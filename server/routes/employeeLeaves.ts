@@ -190,19 +190,25 @@ export async function fetchGoogleSheetLeaves(force = false): Promise<SheetLeaveI
       return sheetCache.data;
     }
 
-    // Header baris ke-0:
-    // [0] Timestamp
-    // [1] Nama Karyawan
-    // [2] Tanggal izin Karyawan
-    // [3] Lamanya Izin Karyawan
-    // [4] Shift Karyawan
-    // [5] Alasan Izin Karyawan
-    // [6] Nama dari pengawas yang mengetahui Izin Karyawan
-    // [7] NIK ID Card Karyawan
-    // [8] Jabatan
-    // [9] Jam / Shift Masuk Bekerja
-    // [10] Penempatan pekerjaan
-    // [11] Foto Lampiran Izin
+    // Header dinamis
+    const headerRow: string[] = (rawRows[0] || []).map((h: any) => String(h || '').trim().toLowerCase());
+    const findCol = (...keywords: string[]): number => {
+      return headerRow.findIndex(h => keywords.some(k => h.includes(k)));
+    };
+
+    const colTimestamp = findCol('timestamp') !== -1 ? findCol('timestamp') : 0;
+    const colNama = findCol('nama karyawan', 'nama') !== -1 ? findCol('nama karyawan', 'nama') : 1;
+    const colTglIzin = findCol('tanggal izin', 'tgl izin') !== -1 ? findCol('tanggal izin', 'tgl izin') : 2;
+    const colDurasi = findCol('lamanya izin', 'lama izin', 'durasi') !== -1 ? findCol('lamanya izin', 'lama izin', 'durasi') : 3;
+    const colShift = findCol('shift karyawan', 'shift') !== -1 ? findCol('shift karyawan', 'shift') : 4;
+    const colAlasan = findCol('alasan izin', 'alasan') !== -1 ? findCol('alasan izin', 'alasan') : 5;
+    const colPengawas = findCol('nama dari pengawas', 'pengawas') !== -1 ? findCol('nama dari pengawas', 'pengawas') : 6;
+    const colNik = findCol('nik id card', 'nik') !== -1 ? findCol('nik id card', 'nik') : 7;
+    const colJabatan = findCol('jabatan') !== -1 ? findCol('jabatan') : 8;
+    const colJamShift = findCol('jam / shift masuk', 'jam shift', 'masuk bekerja') !== -1 ? findCol('jam / shift masuk', 'jam shift', 'masuk bekerja') : 9;
+    const colPenempatan = findCol('penempatan') !== -1 ? findCol('penempatan') : 10;
+    const colLampiran = findCol('foto lampiran', 'lampiran', 'bukti') !== -1 ? findCol('foto lampiran', 'lampiran', 'bukti') : 11;
+    const colTempatTinggal = findCol('tempat tinggal', 'mess') !== -1 ? findCol('tempat tinggal', 'mess') : 12;
 
     const parsedItems: SheetLeaveItem[] = [];
 
@@ -211,22 +217,23 @@ export async function fetchGoogleSheetLeaves(force = false): Promise<SheetLeaveI
       const row = rawRows[i];
       if (!row || row.length === 0) continue;
 
-      const rawNama = row[1];
-      const rawNik = row[7] || row[0]; // fallback
+      const rawNama = row[colNama];
+      const rawNik = row[colNik] || row[colTimestamp]; // fallback
       if (!rawNama && !rawNik) continue;
 
       const name = String(rawNama || '').trim();
       const nik = String(rawNik || '').trim().toUpperCase();
-      const rawTimestamp = row[0];
-      const rawTglIzin = row[2];
-      const rawDurasi = row[3];
-      const rawShift = row[4];
-      const rawAlasan = row[5];
-      const rawPengawas = row[6];
-      const rawJabatan = row[8];
-      const rawJamShift = row[9];
-      const rawPenempatan = row[10];
-      const rawLampiran = row[11];
+      const rawTimestamp = row[colTimestamp];
+      const rawTglIzin = row[colTglIzin];
+      const rawDurasi = row[colDurasi];
+      const rawShift = row[colShift];
+      const rawAlasan = row[colAlasan];
+      const rawPengawas = row[colPengawas];
+      const rawJabatan = row[colJabatan];
+      const rawJamShift = row[colJamShift];
+      const rawPenempatan = row[colPenempatan];
+      const rawLampiran = row[colLampiran];
+      const rawTempatTinggal = colTempatTinggal !== -1 ? row[colTempatTinggal] : '-';
 
       const tglAwal = formatExcelDate(rawTglIzin) || (rawTimestamp ? formatExcelDate(rawTimestamp) : '');
       const jumlahHari = parseDurationDays(rawDurasi);
@@ -251,13 +258,21 @@ export async function fetchGoogleSheetLeaves(force = false): Promise<SheetLeaveI
       else if (penempatanStr.includes('prep')) section = 'Preparation';
       else if (rawPenempatan) section = String(rawPenempatan).trim();
 
-      // Normalisasi shift
+      // Normalisasi shift akurat dari Google Sheet
       let shift = 'Nonshift';
       const shiftStr = String(rawShift || '').trim().toUpperCase();
-      if (shiftStr === 'A' || shiftStr.includes('SHIFT A')) shift = 'Shift A';
-      else if (shiftStr === 'B' || shiftStr.includes('SHIFT B')) shift = 'Shift B';
+      if (shiftStr === 'A' || shiftStr === 'SHIFT A' || shiftStr.startsWith('A ') || shiftStr.endsWith(' A')) shift = 'Shift A';
+      else if (shiftStr === 'B' || shiftStr === 'SHIFT B' || shiftStr.startsWith('B ') || shiftStr.endsWith(' B')) shift = 'Shift B';
       else if (shiftStr.includes('NON')) shift = 'Nonshift';
-      else if (shiftStr) shift = shiftStr;
+      else if (shiftStr === '1' || shiftStr === 'SHIFT 1') shift = 'Shift A';
+      else if (shiftStr === '2' || shiftStr === 'SHIFT 2') shift = 'Shift B';
+      else if (shiftStr && shiftStr !== '-' && shiftStr !== 'NULL') shift = shiftStr;
+
+      // Normalisasi nama pengawas dari Google Sheet
+      let pengawas = '-';
+      if (rawPengawas && String(rawPengawas).trim() && String(rawPengawas).trim() !== '-' && String(rawPengawas).trim().toLowerCase() !== 'null') {
+        pengawas = String(rawPengawas).trim();
+      }
 
       // Timestamp created
       let createdAtIso = new Date().toISOString();
@@ -279,7 +294,7 @@ export async function fetchGoogleSheetLeaves(force = false): Promise<SheetLeaveI
         jabatan: rawJabatan ? String(rawJabatan).trim() : 'Crew, Preparation & Laboratory',
         section,
         penempatan: rawPenempatan ? String(rawPenempatan).trim() : section,
-        tempatTinggal: '-',
+        tempatTinggal: rawTempatTinggal ? String(rawTempatTinggal).trim() : '-',
         shift,
         jamShift: rawJamShift ? String(rawJamShift).trim() : '',
         awalAbsensi: tglAwal,
@@ -287,10 +302,10 @@ export async function fetchGoogleSheetLeaves(force = false): Promise<SheetLeaveI
         lamanyaIzin: rawDurasi ? String(rawDurasi).trim() : `${jumlahHari} Hari`,
         jumlah: jumlahHari,
         alasanAbsensi: rawAlasan ? String(rawAlasan).trim() : 'Izin Ketidakhadiran',
-        pengawasMengetahui: rawPengawas ? String(rawPengawas).trim() : '-',
+        pengawasMengetahui: pengawas,
         lampiran: rawLampiran ? String(rawLampiran).trim() : '',
-        acc: 'Disetujui', // Data Google Form yang sudah masuk pengawas umumnya terverifikasi
-        accBy: rawPengawas ? String(rawPengawas).trim() : 'Pengawas Terkait',
+        acc: 'Disetujui',
+        accBy: pengawas !== '-' ? pengawas : 'Pengawas Terkait',
         accAt: tglAwal,
         createdAt: createdAtIso,
         updatedAt: createdAtIso
@@ -348,7 +363,7 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
 
     // 2. Ambil data dari Database Postgres & Master Employees untuk penentuan Golongan
     let dbLeaves: any[] = [];
-    let empGolMap = new Map<string, { gol?: string; section?: string; jabatan?: string }>();
+    let empGolMap = new Map<string, { gol?: string; section?: string; jabatan?: string; shift?: string }>();
     try {
       const [leavesRes, empsRes] = await Promise.all([
         db.select().from(employeeLeaveRequests).orderBy(desc(employeeLeaveRequests.id)),
@@ -357,7 +372,8 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
           gol: employees.gol,
           jobGrade: employees.jobGrade,
           section: employees.section,
-          jabatan: employees.jabatan
+          jabatan: employees.jabatan,
+          shift: employees.shift
         }).from(employees)
       ]);
       dbLeaves = leavesRes;
@@ -366,7 +382,8 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
           empGolMap.set(String(e.nik).trim().toUpperCase(), {
             gol: e.gol || e.jobGrade || undefined,
             section: e.section || undefined,
-            jabatan: e.jabatan || undefined
+            jabatan: e.jabatan || undefined,
+            shift: e.shift || undefined
           });
         }
       });
@@ -374,7 +391,7 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
       console.warn('[Employee Leaves] DB select notice:', e.message);
     }
 
-    // Format dbLeaves agar selaras dengan interface
+    // Format dbLeaves agar selaras dengan interface (jangan beri default yang merusak override)
     const formattedDbLeaves: SheetLeaveItem[] = dbLeaves.map(d => ({
       id: d.id,
       sheetRowId: d.sheetRowId,
@@ -385,14 +402,14 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
       section: d.section || 'Preparation',
       penempatan: d.penempatan || d.section || 'Preparation',
       tempatTinggal: d.tempatTinggal || '-',
-      shift: d.shift || 'Nonshift',
+      shift: d.shift || '',
       jamShift: d.jamShift || '',
       awalAbsensi: d.awalAbsensi,
       akhirAbsensi: d.akhirAbsensi,
       lamanyaIzin: d.lamanyaIzin || `${d.jumlah || 1} Hari`,
       jumlah: d.jumlah || 1,
       alasanAbsensi: d.alasanAbsensi,
-      pengawasMengetahui: d.pengawasMengetahui || '-',
+      pengawasMengetahui: d.pengawasMengetahui || '',
       lampiran: d.lampiran || '',
       acc: d.acc || 'Pending',
       accBy: d.accBy || '',
@@ -416,24 +433,40 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
 
     // Terapkan override dari DB ke data Google Sheet jika diedit oleh Administrasi
     const mergedSheetData: SheetLeaveItem[] = sheetData.map(s => {
+      const cleanNik = String(s.nik || '').trim().toUpperCase();
+      const empMeta = empGolMap.get(cleanNik);
+
+      // Sinkronkan Shift: Jika di sheet kosong atau Nonshift, cek apakah karyawan terdaftar Shift A atau Shift B di master employee
+      let finalShift = s.shift;
+      if (!finalShift || finalShift === 'Nonshift') {
+        const masterShift = String(empMeta?.shift || '').trim().toUpperCase();
+        if (masterShift === 'A' || masterShift === 'SHIFT A') finalShift = 'Shift A';
+        else if (masterShift === 'B' || masterShift === 'SHIFT B') finalShift = 'Shift B';
+      }
+
       const override = sheetOverrides.get(String(s.id));
       if (override) {
+        // Hanya timpa shift jika override memiliki shift valid (bukan sekadar default Nonshift/kosong)
+        const validOverrideShift = (override.shift && override.shift !== 'Nonshift' && override.shift !== '-') ? override.shift : '';
+        // Hanya timpa pengawas jika override memiliki nama pengawas valid (bukan '-' atau kosong)
+        const validOverridePengawas = (override.pengawasMengetahui && override.pengawasMengetahui !== '-' && override.pengawasMengetahui.trim() !== '') ? override.pengawasMengetahui : '';
+
         return {
           ...s,
-          nik: override.nik || s.nik,
-          name: override.name || s.name,
-          jabatan: override.jabatan || s.jabatan,
-          section: override.section || s.section,
-          penempatan: override.penempatan || s.penempatan,
-          tempatTinggal: override.tempatTinggal || s.tempatTinggal || '-',
-          shift: override.shift || s.shift,
+          nik: (override.nik && override.nik.trim()) ? override.nik : s.nik,
+          name: (override.name && override.name.trim()) ? override.name : s.name,
+          jabatan: (override.jabatan && override.jabatan.trim()) ? override.jabatan : s.jabatan,
+          section: (override.section && override.section.trim()) ? override.section : s.section,
+          penempatan: (override.penempatan && override.penempatan.trim()) ? override.penempatan : s.penempatan,
+          tempatTinggal: (override.tempatTinggal && override.tempatTinggal !== '-') ? override.tempatTinggal : (s.tempatTinggal || '-'),
+          shift: validOverrideShift || finalShift,
           jamShift: override.jamShift || s.jamShift,
           awalAbsensi: override.awalAbsensi || s.awalAbsensi,
           akhirAbsensi: override.akhirAbsensi || s.akhirAbsensi,
           lamanyaIzin: override.lamanyaIzin || s.lamanyaIzin,
           jumlah: override.jumlah || s.jumlah,
-          alasanAbsensi: override.alasanAbsensi || s.alasanAbsensi,
-          pengawasMengetahui: override.pengawasMengetahui || s.pengawasMengetahui,
+          alasanAbsensi: (override.alasanAbsensi && override.alasanAbsensi.trim()) ? override.alasanAbsensi : s.alasanAbsensi,
+          pengawasMengetahui: validOverridePengawas || s.pengawasMengetahui,
           acc: override.acc || s.acc,
           accBy: override.accBy || s.accBy,
           accAt: override.accAt || s.accAt,
@@ -442,7 +475,10 @@ employeeLeavesRouter.get("/api/employee-leaves", async (req, res) => {
           isEdited: true
         } as any;
       }
-      return s;
+      return {
+        ...s,
+        shift: finalShift
+      };
     });
 
     // Gabungkan: Catatan lokal web berada paling atas, diikuti catatan Google Sheet

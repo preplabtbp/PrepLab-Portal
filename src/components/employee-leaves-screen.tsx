@@ -34,7 +34,8 @@ import {
   Pencil,
   BarChart3,
   AlertTriangle,
-  FileImage
+  FileImage,
+  ArrowUpDown
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -42,6 +43,8 @@ import { toast } from 'sonner';
 import { EmployeeLeavesAnalyticsChart } from './employee-leaves-analytics-chart';
 
 export type DownloadScopeType = 'filtered' | 'today' | 'last_4_days' | 'last_7_days' | 'this_month' | 'all';
+export type PeriodShortcut = 'ALL' | 'WEEK' | 'MONTH' | 'YEAR';
+export type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc' | 'duration-desc';
 
 
 // Helper: Normalisasi Golongan ke angka 1 - 5
@@ -492,6 +495,117 @@ export function EmployeeLeavesScreen({
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
 
+  // Shortcuts: Per Minggu, Per Bulan, Per Tahun & Pengurutan
+  const [filterPeriod, setFilterPeriod] = useState<PeriodShortcut>('ALL');
+  const [sortBy, setSortBy] = useState<SortOption>('date-desc');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    return getTodayWitDate().slice(0, 7);
+  });
+  const [selectedYear, setSelectedYear] = useState<string>(() => {
+    return getTodayWitDate().slice(0, 4);
+  });
+
+  // List of available years & months from leaves
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    const currentYear = getTodayWitDate().slice(0, 4);
+    years.add(currentYear);
+    leaves.forEach(l => {
+      const d = toIsoDate(l.awalAbsensi) || (l.createdAt ? l.createdAt.slice(0, 4) : '');
+      if (d && d.length >= 4) {
+        years.add(d.slice(0, 4));
+      }
+    });
+    return Array.from(years).sort().reverse();
+  }, [leaves]);
+
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    const currentMonth = getTodayWitDate().slice(0, 7);
+    months.add(currentMonth);
+    leaves.forEach(l => {
+      const d = toIsoDate(l.awalAbsensi) || (l.createdAt ? l.createdAt.slice(0, 7) : '');
+      if (d && d.length >= 7) {
+        months.add(d.slice(0, 7));
+      }
+    });
+    return Array.from(months).sort().reverse();
+  }, [leaves]);
+
+  // Processed Leaves: Periode Filter (Per Minggu, Per Bulan, Per Tahun) & Sorting
+  const processedLeaves = useMemo(() => {
+    let result = [...leaves];
+
+    // Filter Periode
+    if (filterPeriod !== 'ALL') {
+      const todayWit = getTodayWitDate();
+      const nowWit = new Date(todayWit + 'T00:00:00');
+
+      if (filterPeriod === 'WEEK') {
+        const dayOfWeek = nowWit.getDay(); // 0 is Sunday
+        const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
+        const monday = new Date(nowWit);
+        monday.setDate(nowWit.getDate() + diffToMonday);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+
+        const mondayStr = monday.toISOString().slice(0, 10);
+        const sundayStr = sunday.toISOString().slice(0, 10);
+
+        const d7 = new Date(nowWit);
+        d7.setDate(nowWit.getDate() - 7);
+        const d7Str = d7.toISOString().slice(0, 10);
+
+        result = result.filter(item => {
+          const itemDate = toIsoDate(item.awalAbsensi) || (item.createdAt ? item.createdAt.slice(0, 10) : '');
+          if (!itemDate) return false;
+          return (itemDate >= mondayStr && itemDate <= sundayStr) || (itemDate >= d7Str && itemDate <= todayWit);
+        });
+      } else if (filterPeriod === 'MONTH') {
+        const targetMonth = selectedMonth || todayWit.slice(0, 7);
+        result = result.filter(item => {
+          const itemDate = toIsoDate(item.awalAbsensi) || (item.createdAt ? item.createdAt.slice(0, 10) : '');
+          return Boolean(itemDate && itemDate.startsWith(targetMonth));
+        });
+      } else if (filterPeriod === 'YEAR') {
+        const targetYear = selectedYear || todayWit.slice(0, 4);
+        result = result.filter(item => {
+          const itemDate = toIsoDate(item.awalAbsensi) || (item.createdAt ? item.createdAt.slice(0, 10) : '');
+          return Boolean(itemDate && itemDate.startsWith(targetYear));
+        });
+      }
+    }
+
+    // Sortir / Pengurutan
+    result.sort((a, b) => {
+      const dateA = toIsoDate(a.awalAbsensi) || (a.createdAt ? a.createdAt.slice(0, 10) : '');
+      const dateB = toIsoDate(b.awalAbsensi) || (b.createdAt ? b.createdAt.slice(0, 10) : '');
+
+      if (sortBy === 'date-desc') {
+        const cmp = dateB.localeCompare(dateA);
+        if (cmp !== 0) return cmp;
+        return String(b.id).localeCompare(String(a.id));
+      }
+      if (sortBy === 'date-asc') {
+        const cmp = dateA.localeCompare(dateB);
+        if (cmp !== 0) return cmp;
+        return String(a.id).localeCompare(String(b.id));
+      }
+      if (sortBy === 'name-asc') {
+        return (a.name || '').localeCompare(b.name || '');
+      }
+      if (sortBy === 'name-desc') {
+        return (b.name || '').localeCompare(a.name || '');
+      }
+      if (sortBy === 'duration-desc') {
+        return (b.jumlah || 1) - (a.jumlah || 1);
+      }
+      return 0;
+    });
+
+    return result;
+  }, [leaves, filterPeriod, sortBy, selectedMonth, selectedYear]);
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
@@ -707,7 +821,7 @@ export function EmployeeLeavesScreen({
   // DAFTAR UNDUH & EKSPOR LAPORAN LENGKAP
   // ==========================================
   const getLeavesForScope = async (scope: DownloadScopeType): Promise<EmployeeLeaveItem[]> => {
-    if (scope === 'filtered') return leaves;
+    if (scope === 'filtered') return processedLeaves;
 
     let allData = leaves;
     if (scope === 'all' || filterSection !== 'ALL' || filterShift !== 'ALL' || filterSource !== 'ALL' || searchQuery.trim() || filterStartDate || filterEndDate) {
@@ -1373,11 +1487,11 @@ export function EmployeeLeavesScreen({
   };
 
   // Pagination calculation
-  const totalPages = Math.ceil(leaves.length / itemsPerPage) || 1;
+  const totalPages = Math.ceil(processedLeaves.length / itemsPerPage) || 1;
   const paginatedLeaves = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return leaves.slice(start, start + itemsPerPage);
-  }, [leaves, currentPage]);
+    return processedLeaves.slice(start, start + itemsPerPage);
+  }, [processedLeaves, currentPage]);
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -1387,6 +1501,8 @@ export function EmployeeLeavesScreen({
     setFilterSource('ALL');
     setFilterStartDate('');
     setFilterEndDate('');
+    setFilterPeriod('ALL');
+    setSortBy('date-desc');
     setCurrentPage(1);
     toast.info('Filter pencarian telah direset.');
   };
@@ -1883,6 +1999,137 @@ export function EmployeeLeavesScreen({
       {/* FILTER & SEARCH PANEL                               */}
       {/* ==================================================== */}
       <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-3">
+        {/* Shortcut & Filter Periode: Per Minggu, Per Bulan, Per Tahun & Pengurutan */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
+              <Calendar className="w-3.5 h-3.5 text-[#2298A7]" />
+              Periode Izin:
+            </span>
+            <div className="inline-flex items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 gap-1 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterPeriod('ALL');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  filterPeriod === 'ALL'
+                    ? 'bg-[#2298A7] text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Semua Data
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterPeriod('WEEK');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  filterPeriod === 'WEEK'
+                    ? 'bg-[#2298A7] text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Per Minggu
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterPeriod('MONTH');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  filterPeriod === 'MONTH'
+                    ? 'bg-[#2298A7] text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Per Bulan
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterPeriod('YEAR');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  filterPeriod === 'YEAR'
+                    ? 'bg-[#2298A7] text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Per Tahun
+              </button>
+            </div>
+
+            {/* Sub-selector for Month */}
+            {filterPeriod === 'MONTH' && (
+              <select
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 outline-none cursor-pointer"
+              >
+                {availableMonths.map(m => {
+                  const [y, mon] = m.split('-');
+                  const monIdx = parseInt(mon, 10) - 1;
+                  const monthName = INDO_MONTHS_SHORT[monIdx] || mon;
+                  return (
+                    <option key={m} value={m}>
+                      {monthName} {y}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+
+            {/* Sub-selector for Year */}
+            {filterPeriod === 'YEAR' && (
+              <select
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 outline-none cursor-pointer"
+              >
+                {availableYears.map(yr => (
+                  <option key={yr} value={yr}>
+                    Tahun {yr}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Quick Sort Dropdown */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+              <ArrowUpDown className="w-3.5 h-3.5 text-indigo-500" />
+              Short / Urutkan:
+            </span>
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value as SortOption);
+                setCurrentPage(1);
+              }}
+              className="px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+            >
+              <option value="date-desc">📅 Tanggal Terbaru</option>
+              <option value="date-asc">📅 Tanggal Terlama</option>
+              <option value="name-asc">👤 Nama Karyawan (A - Z)</option>
+              <option value="name-desc">👤 Nama Karyawan (Z - A)</option>
+              <option value="duration-desc">⏱️ Durasi Terlama</option>
+            </select>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Search Box */}
           <div className="lg:col-span-2 relative">
@@ -1959,7 +2206,7 @@ export function EmployeeLeavesScreen({
         <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-800/40">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md bg-[#2298A7]/15 text-[#2298A7] font-bold text-xs">
-              {leaves.length} Data
+              {processedLeaves.length} Data
             </span>
             <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
               Daftar Izin Karyawan
@@ -2044,7 +2291,7 @@ export function EmployeeLeavesScreen({
                 <th className="py-3 px-3.5 whitespace-nowrap">Tanggal Izin</th>
                 <th className="py-3 px-3.5 text-center whitespace-nowrap">Jumlah Izin</th>
                 <th className="py-3 px-3.5">Alasan Izin</th>
-                <th className="py-3 px-3.5">Pengawas Mengetahui</th>
+                <th className="py-3 px-3.5 whitespace-nowrap min-w-[200px]">Pengawas Mengetahui</th>
                 <th className="py-3 px-3.5 text-center">Bukti / Lampiran</th>
                 <th className="py-3 px-3.5 text-center">Keterangan</th>
                 <th className="py-3 px-3.5 text-center">Warning</th>
@@ -2223,9 +2470,9 @@ export function EmployeeLeavesScreen({
                         />
                       </td>
 
-                      {/* Pengawas Mengetahui - Inline Editable */}
-                      <td className="py-3 px-3.5" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1.5">
+                      {/* Pengawas Mengetahui - Kolom Otomatis Melebar & Inline Editable */}
+                      <td className="py-3 px-3.5 whitespace-nowrap min-w-[200px]" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1.5 w-auto">
                           <ShieldCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
                           <input
                             type="text"
@@ -2243,12 +2490,13 @@ export function EmployeeLeavesScreen({
                               }
                             }}
                             placeholder="Pengawas..."
-                            className="w-full max-w-[130px] px-2 py-1 text-xs font-semibold rounded bg-slate-50/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-teal-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs"
+                            style={{ width: `${Math.max(16, (item.pengawasMengetahui || 'Pengawas...').length + 2)}ch` }}
+                            className="max-w-[340px] px-2.5 py-1 text-xs font-semibold rounded bg-slate-50/70 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-800 border border-slate-200/80 dark:border-slate-700 focus:border-teal-500 text-slate-800 dark:text-slate-200 outline-none transition-all shadow-2xs"
                             title="Edit pengawas mengetahui langsung di tabel (Excel-style)"
                           />
                         </div>
                         {isSheetSource && (
-                          <span className="text-[9px] text-slate-400 font-medium block mt-0.5">
+                          <span className="text-[9px] text-slate-400 font-medium block mt-0.5 whitespace-nowrap">
                             Google Sheet Verified
                           </span>
                         )}
@@ -2349,7 +2597,7 @@ export function EmployeeLeavesScreen({
         {/* ==================================================== */}
         <div className="p-3 sm:p-4 bg-slate-50/70 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <div>
-            Menampilkan <span className="font-bold text-slate-800 dark:text-slate-200">{paginatedLeaves.length}</span> dari <span className="font-bold text-slate-800 dark:text-slate-200">{leaves.length}</span> total rekapan izin
+            Menampilkan <span className="font-bold text-slate-800 dark:text-slate-200">{paginatedLeaves.length}</span> dari <span className="font-bold text-slate-800 dark:text-slate-200">{processedLeaves.length}</span> total rekapan izin
           </div>
 
           <div className="flex items-center gap-1.5">
