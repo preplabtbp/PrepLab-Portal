@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Splash Screen Video - PrepLab Portal</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #ffffff;
+      overflow-x: hidden;
+    }
+
+    /* ========================================================
+       1. SPLASH SCREEN CONTAINER
+       ======================================================== */
+    .splash-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 999999;
+      overflow: hidden;
+      cursor: pointer;
+      transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), 
+                  visibility 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .splash-container.fade-out {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    /* ========================================================
+       2. ELEMEN VIDEO (Masking & Efek Bersih)
+       ======================================================== */
+    .splash-video {
+      max-width: 720px;
+      max-height: 85vh;
+      width: 90vw;
+      height: auto;
+      object-fit: contain;
+      display: block;
+      pointer-events: none;
+
+      /* Blend & feathering mask agar tidak ada garis pembatas */
+      filter: brightness(1.025) contrast(1.015);
+      mix-blend-mode: multiply;
+
+      -webkit-mask-image: 
+        linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 12%, rgba(0,0,0,1) 88%, rgba(0,0,0,0) 100%),
+        linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 12%, rgba(0,0,0,1) 88%, rgba(0,0,0,0) 100%);
+      -webkit-mask-composite: destination-in;
+      mask-image: 
+        linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 12%, rgba(0,0,0,1) 88%, rgba(0,0,0,0) 100%),
+        linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 12%, rgba(0,0,0,1) 88%, rgba(0,0,0,0) 100%);
+      mask-composite: intersect;
+    }
+
+    /* ========================================================
+       3. DASHBOARD UTAMA
+       ======================================================== */
+    .main-dashboard {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      background-color: #f8fafc;
+      animation: dashboardFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes dashboardFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .demo-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 24px;
+      padding: 40px 32px;
+      max-width: 480px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+    }
+
+    .btn-replay {
+      margin-top: 24px;
+      background-color: #f97316;
+      color: #ffffff;
+      border: none;
+      padding: 12px 26px;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);
+      transition: all 0.2s;
+    }
+
+    .btn-replay:hover {
+      background-color: #ea580c;
+      transform: translateY(-1px);
+    }
+
+    .skip-hint {
+      position: absolute;
+      bottom: 24px;
+      font-size: 12px;
+      color: #94a3b8;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SPLASH SCREEN VIDEO -->
+  <div id="splash-screen" class="splash-container" title="Klik untuk lewati">
+    <video 
+      id="splash-video"
+      class="splash-video"
+      autoplay
+      muted
+      playsinline
+    >
+      <source src="/Animasi_Splash_Screen_PrepLab.mp4" type="video/mp4" />
+      Browser Anda tidak mendukung pemutaran video.
+    </video>
+    <div class="skip-hint">Klik di mana saja untuk lewati</div>
+  </div>
+
+  <!-- DASHBOARD UTAMA -->
+  <main id="main-dashboard" class="main-dashboard" style="display: none;">
+    <div class="demo-card">
+      <div style="width: 56px; height: 56px; border-radius: 16px; background: #ecfdf5; color: #10b981; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 26px; font-weight: bold;">
+        ✓
+      </div>
+      <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">
+        Selamat Datang di Portal PrepLab
+      </h2>
+      <p style="font-size: 13px; color: #64748b; line-height: 1.6;">
+        Animasi gerakan logo dan teks dipercepat (1.45x) agar lebih gesit dan dinamis, sementara efek kilau di akhir tetap terlihat jelas dan waktu tayang total tetap terjaga nyaman.
+      </p>
+      <button class="btn-replay" onclick="replaySplash()">
+        Putar Ulang Video Splash
+      </button>
+    </div>
+  </main>
+
+  <script>
+    const splashScreen = document.getElementById('splash-screen');
+    const splashVideo = document.getElementById('splash-video');
+    const mainDashboard = document.getElementById('main-dashboard');
+
+    let isTransitioning = false;
+
+    // ========================================================
+    // KONFIGURASI KURVA KECEPATAN ANIMASI (DYNAMIC PLAYBACK)
+    // ========================================================
+    // 1. ANIMATION_SPEED: 1.45x (Gerakan animasi logo & teks dirancang lebih cepat dan lincah)
+    // 2. SHINE_SPEED: 1.05x (Saat kilau menyapu logo, kecepatan dinormalkan agar kilau terlihat berkilau jelas)
+    // 3. SHINE_START_TIME: detik 5.2 (awal sapuan kilau)
+    const ANIMATION_SPEED = 1.45; 
+    const SHINE_SPEED = 1.05;
+    const SHINE_START_TIME = 5.2;
+
+    function applyDynamicPlayback() {
+      if (splashVideo.currentTime < SHINE_START_TIME) {
+        if (splashVideo.playbackRate !== ANIMATION_SPEED) {
+          splashVideo.playbackRate = ANIMATION_SPEED;
+        }
+      } else {
+        if (splashVideo.playbackRate !== SHINE_SPEED) {
+          splashVideo.playbackRate = SHINE_SPEED;
+        }
+      }
+    }
+
+    function endSplashScreen() {
+      if (isTransitioning) return;
+      isTransitioning = true;
+
+      splashScreen.classList.add('fade-out');
+      mainDashboard.style.display = 'flex';
+
+      setTimeout(() => {
+        splashScreen.style.display = 'none';
+      }, 350);
+    }
+
+    // Terapkan kurva kecepatan dinamis saat video memutar
+    splashVideo.addEventListener('timeupdate', applyDynamicPlayback);
+
+    // Saat seluruh video dan kilau tuntas, transisi ke dashboard
+    splashVideo.addEventListener('ended', endSplashScreen);
+
+    // Opsi klik untuk skip langsung jika diinginkan
+    splashScreen.addEventListener('click', endSplashScreen);
+
+    // Penanganan fallback error
+    splashVideo.addEventListener('error', () => {
+      console.warn('Video tidak dapat diputar, mengalihkan ke dashboard...');
+      endSplashScreen();
+    });
+
+    // Inisialisasi putar otomatis
+    window.addEventListener('DOMContentLoaded', () => {
+      splashVideo.playbackRate = ANIMATION_SPEED;
+      const playPromise = splashVideo.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          console.warn('Autoplay ditahan oleh browser:', error);
+          setTimeout(endSplashScreen, 4000);
+        });
+      }
+    });
+
+    // Fungsi putar ulang
+    function replaySplash() {
+      isTransitioning = false;
+      mainDashboard.style.display = 'none';
+      splashScreen.style.display = 'flex';
+      splashScreen.classList.remove('fade-out');
+      splashVideo.currentTime = 0;
+      splashVideo.playbackRate = ANIMATION_SPEED;
+      splashVideo.play().catch(() => {});
+    }
+  </script>
+</body>
+</html>

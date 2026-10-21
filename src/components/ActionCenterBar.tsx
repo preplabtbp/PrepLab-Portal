@@ -413,7 +413,9 @@ export function ActionCenterBar({
       totalClusteredCount: totalGroups
     };
   }, [openFindings]);
+
   const [lvDamageTickets, setLvDamageTickets] = useState<any[]>([]);
+  const [overdueLeaves, setOverdueLeaves] = useState<any[]>([]);
   const [maintenanceWorkOrders, setMaintenanceWorkOrders] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('p2h_cached_maintenance_wos');
@@ -573,7 +575,10 @@ export function ActionCenterBar({
       // 7. Fetch Work Orders IF user is Maintenance or Supervisor
       const woPromise = (isMaintSection || isSupervisorOrLead) ? safeFetch('/api/work-orders') : Promise.resolve([]);
 
-      const [schedData, p5mData, dailyData, ktaData, ticketsData, proofsData, woData, trainingData] = await Promise.all([
+      // 8. Fetch Employee Leaves to check for supervisor warnings (> 2 days overdue)
+      const leavesPromise = safeFetch('/api/employee-leaves');
+
+      const [schedData, p5mData, dailyData, ktaData, ticketsData, proofsData, woData, trainingData, leavesData] = await Promise.all([
         schedPromise,
         p5mPromise,
         dailyPromise,
@@ -581,7 +586,8 @@ export function ActionCenterBar({
         ticketsPromise,
         proofsPromise,
         woPromise,
-        trainingPromise
+        trainingPromise,
+        leavesPromise
       ]);
 
       // Process Training Alerts (null = gagal memuat → pertahankan cache)
@@ -589,6 +595,42 @@ export function ActionCenterBar({
         const alerts: TrainingAlert[] = trainingData?.data?.alerts || [];
         setTrainingAlerts(alerts);
         try { localStorage.setItem('p2h_cached_training_alerts', JSON.stringify(alerts)); } catch {}
+      }
+
+      // Process Overdue Leaves Warning for Supervisor (> 2 hari belum Izin Selesai)
+      if (leavesData && Array.isArray(leavesData.data)) {
+        const todayWit = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jayapura' }).format(new Date());
+        const myOverdue = leavesData.data.filter((l: any) => {
+          const status = (l.acc || '').trim().toLowerCase();
+          if (status === 'izin selesai' || status.includes('selesai')) return false;
+
+          const pName = (l.pengawasMengetahui || '').trim().toLowerCase();
+          const uName = (effectiveName || '').trim().toLowerCase();
+          const uNik = (effectiveNik || '').trim().toUpperCase();
+
+          const isMySubordinate = 
+            (uName && pName && (pName.includes(uName) || uName.includes(pName))) ||
+            (uNik && l.pengawasMengetahui && l.pengawasMengetahui.toUpperCase().includes(uNik));
+
+          if (!isMySubordinate) return false;
+
+          const dateStr = l.awalAbsensi || (l.createdAt ? String(l.createdAt).slice(0, 10) : '');
+          if (!dateStr) return false;
+          try {
+            const dStart = new Date(dateStr);
+            const dToday = new Date(todayWit);
+            if (isNaN(dStart.getTime()) || isNaN(dToday.getTime())) return false;
+            dStart.setHours(0, 0, 0, 0);
+            dToday.setHours(0, 0, 0, 0);
+            const diffDays = Math.floor((dToday.getTime() - dStart.getTime()) / (1000 * 60 * 60 * 24));
+            return diffDays >= 2;
+          } catch {
+            return false;
+          }
+        });
+        setOverdueLeaves(myOverdue);
+      } else {
+        setOverdueLeaves([]);
       }
 
       // Process Weekly Inspection Schedule
@@ -989,7 +1031,24 @@ export function ActionCenterBar({
     }
 
     // ==========================================
-    // 8. GENERAL FALLBACK (Crew Non-Prep/Lab/Maint):
+    // 8. PERINGATAN IZIN KARYAWAN LEWAT 2 HARI (Pengawas Mengetahui)
+    // ==========================================
+    if (overdueLeaves.length > 0) {
+      list.push({
+        id: 'leave_warning',
+        title: 'Peringatan Izin Karyawan Lewat 2 Hari',
+        subtitle: `${overdueLeaves.length} izin bawahan belum berstatus 'Izin Selesai' (> 2 hari)`,
+        count: overdueLeaves.length,
+        isPending: true,
+        icon: <AlertTriangle className="w-4 h-4" />,
+        iconColor: 'text-rose-600 dark:text-rose-400',
+        bgColor: 'bg-rose-500/10 border-rose-500/25',
+        navKey: 'leave_warning'
+      });
+    }
+
+    // ==========================================
+    // 9. GENERAL FALLBACK (Crew Non-Prep/Lab/Maint):
     //    - P2H Standar
     // ==========================================
     if (!isPrepSection && !isLabSection && !isMaintSection && isOnsite && !isCutiToday) {
@@ -1029,6 +1088,7 @@ export function ActionCenterBar({
     lvDamageTickets, 
     isSupervisorOrLead,
     openFindings,
+    overdueLeaves,
     trainingAlerts,
     trainingOnly
   ]);
@@ -1080,6 +1140,9 @@ export function ActionCenterBar({
         return;
       }
       window.dispatchEvent(new CustomEvent('open-simplified-inspection', { detail: { tab: 'kta_tta' } }));
+    } else if (destination === 'leave_warning') {
+      if (onNav) onNav('employee-leaves');
+      else navigate('/employee-leaves');
     }
   };
 
@@ -1378,6 +1441,26 @@ export function ActionCenterBar({
                           >
                             <span>{isFindingsExpanded ? 'Tutup' : 'Lihat Rincian'}</span>
                             <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isFindingsExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                        </div>
+                      ) : cat.id === 'leave_warning' ? (
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <span className="px-2 py-0.5 rounded-full text-[10.5px] font-black bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-1 animate-pulse">
+                            <span>{cat.count}</span>
+                            <span className="hidden sm:inline font-bold text-[9.5px]">Lewat 2 Hari</span>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onNav) onNav('employee-leaves');
+                              else navigate('/employee-leaves');
+                            }}
+                            className="py-1 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title="Tinjau izin bawahan di modul Rekapan Izin"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Tinjau Izin</span>
                           </button>
                         </div>
                       ) : cat.isPending ? (

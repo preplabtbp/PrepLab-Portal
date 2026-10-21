@@ -730,12 +730,19 @@ export const getWorkdayDatesBeforeFriday = (weekTag: string, year: number = 2026
 };
 
 export const isGolonganI = (emp: any): boolean => {
+  const rawNik = (emp.nik || '').toString().trim().toUpperCase();
+  if (rawNik === 'M0201250032') return true; // Imran Sebualamo (Crew Gol I)
   const golStr = String(emp.gol || '').trim().toUpperCase();
   const jgStr = String(emp.jobGrade || '').trim().toUpperCase();
   const posStr = String(emp.jabatan || emp.position || '').trim().toLowerCase();
 
   // Broken / error spreadsheet rows (#N/A) are treated as Gol I / excluded
   if (golStr === '#N/A' || jgStr === '#N/A' || posStr.includes('#n/a')) {
+    return true;
+  }
+
+  // Posisi Crew atau Operator otomatis Golongan I
+  if (posStr.includes('crew') || posStr.includes('operator')) {
     return true;
   }
 
@@ -850,19 +857,20 @@ export async function getRekapPersonnelClassification(
   });
 
   // Fetch official inspection schedule sheet to synchronize KTA/TTA with Inspeksi
+  // Minggu berjalan operasional selalu menggunakan master schedule 'CurrentWeek'
   let targetSheet = 'CurrentWeek';
   if (selectedWeek && selectedWeek !== 'ALL') {
     if (selectedWeek.toLowerCase().includes('37')) targetSheet = 'Week 37';
     else if (selectedWeek.toLowerCase().includes('38')) targetSheet = 'CurrentWeek';
-    else if (/^w?\d+$/i.test(selectedWeek)) {
-      const num = selectedWeek.replace(/\D/g, '');
-      targetSheet = `Week ${num}`;
+    else {
+      targetSheet = 'CurrentWeek';
     }
   }
 
   const sheetActiveNames = new Set<string>();
   const sheetActiveNiks = new Set<string>();
   const sheetCutiNames = new Set<string>();
+  const sheetCutiNiks = new Set<string>();
 
   try {
     const targetWeekTag = selectedWeek.startsWith('W') || selectedWeek.startsWith('w')
@@ -880,6 +888,7 @@ export async function getRekapPersonnelClassification(
         const cleanName = item.name.trim().toLowerCase();
         if (item.isCuti || item.inspeksi?.toLowerCase() === 'cuti' || item.shift?.toLowerCase() === 'cuti') {
           sheetCutiNames.add(cleanName);
+          if (item.nik) sheetCutiNiks.add(item.nik.trim().toLowerCase());
         } else {
           sheetActiveNames.add(cleanName);
           if (item.nik) sheetActiveNiks.add(item.nik.trim().toLowerCase());
@@ -895,11 +904,15 @@ export async function getRekapPersonnelClassification(
     const lower = empName.trim().toLowerCase();
     if (nameSet.has(lower)) return true;
     for (const sName of nameSet) {
-      if (sName === lower || lower.includes(sName) || sName.includes(lower)) return true;
+      if (sName === lower) return true;
+      // Jangan cocokkan substring sembarang jika kata terakhir adalah inisial (mis. "imran s" vs "imran sebualamo")
+      if (lower.startsWith(sName + ' ') || sName.startsWith(lower + ' ')) return true;
       const parts = lower.split(/\s+/).filter(Boolean);
-      if (parts.length >= 2 && parts.every(p => sName.includes(p))) return true;
       const sParts = sName.split(/\s+/).filter(Boolean);
-      if (sParts.length >= 2 && sParts.every(p => lower.includes(p))) return true;
+      if (parts.length >= 2 && sParts.length >= 2) {
+        if (parts.every(p => sParts.includes(p))) return true;
+        if (sParts.every(p => parts.includes(p))) return true;
+      }
     }
     return false;
   };
@@ -931,7 +944,17 @@ export async function getRekapPersonnelClassification(
       return;
     }
 
-    // ATURAN RESMI: Jika karyawan masuk dalam jadwal inspeksi berjalan maka WAJIB melakukan KTA/TTA!
+    // ATURAN RESMI: 19 Karyawan Cuti pada Jadwal Inspeksi HARUS SELALU CUTI
+    const isCutiInInspectionSchedule = 
+      (cleanNik && sheetCutiNiks.has(cleanNik.toLowerCase())) ||
+      matchesSheet(empName, sheetCutiNames);
+
+    if (isCutiInInspectionSchedule) {
+      onCutiSet.add(cleanNik);
+      return;
+    }
+
+    // ATURAN RESMI: 44 Petugas Aktif pada Jadwal Inspeksi MUTLAK WAJIB KTA/TTA & Inspeksi
     const isActiveInInspectionSchedule = 
       (cleanNik && sheetActiveNiks.has(cleanNik.toLowerCase())) ||
       matchesSheet(empName, sheetActiveNames);
@@ -996,9 +1019,10 @@ export async function getRekapPersonnelClassification(
     if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) {
       return false;
     }
-    // Karyawan di jadwal inspeksi aktif selalu eligible dan wajib KTA/TTA
-    if (sheetActiveNiks.has(rawNik.toLowerCase()) || matchesSheet(rawName, sheetActiveNames)) {
-      return true;
+
+    // 1. Golongan I (Crew / Operator / Non-Staff) MUTLAK DI-EXCLUDE dari Rekap KTA/TTA & Inspeksi
+    if (isGolonganI(emp)) {
+      return false;
     }
 
     if (isResignedOrInactive(emp)) {
@@ -1024,8 +1048,9 @@ export async function getRekapPersonnelClassification(
       return false;
     }
 
-    if (isGolonganI(emp)) {
-      return false;
+    // Karyawan di jadwal inspeksi aktif yang bukan Golongan I selalu eligible dan wajib KTA/TTA
+    if (sheetActiveNiks.has(rawNik.toLowerCase()) || matchesSheet(rawName, sheetActiveNames)) {
+      return true;
     }
 
     return true;

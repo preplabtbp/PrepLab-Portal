@@ -1114,6 +1114,16 @@ export function NotionDatabaseTable({
     return t.startsWith('logbook') || t.startsWith('log book') || s.includes('logbook');
   }, [title, section]);
 
+  // Exclude quick shortcuts strictly from Weekly Maintenance
+  const isWeeklyMaintenanceTable = useMemo(() => {
+    const t = (title || '').toLowerCase().trim();
+    const s = (section || '').toLowerCase().trim();
+    return (
+      (t.includes('maintenance') && t.includes('weekly')) ||
+      (s.includes('maintenance') && t.includes('weekly'))
+    );
+  }, [title, section]);
+
   // Logbook Dynamic Meta & Date View Filter State
   const [logbookActiveTab, setLogbookActiveTab] = useState<'changelog' | 'planning'>('planning');
   const [logbookDateFilter, setLogbookDateFilter] = useState<'today' | 'yesterday' | 'all'>('today');
@@ -9065,125 +9075,157 @@ export function NotionDatabaseTable({
                                               </button>
                                             )}
                                             
-                                            {/* Quick Open Jadwal Cuti Sheet button */}
-                                            {String(displayTitle || val || '').toLowerCase().includes('jadwal cuti') && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-                                                  window.location.href = `/roster-admin?view=leave_schedule&returnTo=${returnUrl}`;
-                                                }}
-                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-teal-500/15 hover:bg-teal-500/25 text-teal-700 dark:text-teal-300 border border-teal-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
-                                                title="Klik untuk membuka Modul Jadwal Cuti di Roster"
-                                              >
-                                                <PlaneTakeoff className="w-2.5 h-2.5 text-teal-600 dark:text-teal-400" />
-                                                <span>Buka Jadwal Cuti</span>
-                                              </button>
-                                            )}
+                                            {/* Quick Module Shortcut Buttons (Enabled everywhere except Weekly Maintenance) */}
+                                            {(() => {
+                                              if (isWeeklyMaintenanceTable) {
+                                                return (
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setSelectedRow(row);
+                                                      setModalTab('details');
+                                                    }}
+                                                    className={`ml-1 opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
+                                                      isNotionLight
+                                                        ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                                                        : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
+                                                    }`}
+                                                    title="Buka dokumen / detail halaman"
+                                                  >
+                                                    OPEN
+                                                  </button>
+                                                );
+                                              }
 
-                                            {/* Quick Open Jadwal Off Sheet button */}
-                                            {String(displayTitle || val || '').toLowerCase().includes('jadwal off') && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-                                                  window.location.href = `/roster-admin?view=off_schedule&returnTo=${returnUrl}`;
-                                                }}
-                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
-                                                title="Klik untuk membuka Modul Jadwal Off Karyawan di Roster"
-                                              >
-                                                <Coffee className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
-                                                <span>Buka Jadwal Off</span>
-                                              </button>
-                                            )}
+                                              const taskText = String(displayTitle || val || '').toLowerCase();
+                                              const isLeaveShortcut = taskText.includes('jadwal cuti');
+                                              const isOffShortcut = taskText.includes('jadwal off');
+                                              const isPermissionShortcut = (
+                                                taskText.includes('tidak masuk') ||
+                                                taskText.includes('izin karyawan') ||
+                                                taskText.includes('rekap izin')
+                                              );
+                                              const isTrainingShortcut = (
+                                                /\bsap\b/i.test(taskText) ||
+                                                taskText.includes('training') ||
+                                                taskText.includes('permintaan training')
+                                              );
+                                              const isInspectionScheduleShortcut = (
+                                                taskText.includes('jadwal inspeksi staff preparasi') ||
+                                                (taskText.includes('jadwal inspeksi') && taskText.includes('staff') && taskText.includes('minggu'))
+                                              );
+                                              const hasModuleShortcut = isLeaveShortcut || isOffShortcut || isPermissionShortcut || isTrainingShortcut || isInspectionScheduleShortcut;
 
-                                            {/* Quick Open Rekapan Izin Karyawan button */}
-                                            {(String(displayTitle || val || '').toLowerCase().includes('tidak masuk') ||
-                                              String(displayTitle || val || '').toLowerCase().includes('izin karyawan') ||
-                                              String(displayTitle || val || '').toLowerCase().includes('rekap izin')) && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-                                                  window.location.href = `/employee-leaves?returnTo=${returnUrl}`;
-                                                }}
-                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
-                                                title="Klik untuk membuka Modul Rekapan Izin Karyawan"
-                                              >
-                                                <FileSpreadsheet className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
-                                                <span>Buka Rekapan Izin</span>
-                                              </button>
-                                            )}
+                                              return (
+                                                <>
+                                                  {/* Quick Open Jadwal Cuti Sheet button */}
+                                                  {isLeaveShortcut && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                        window.location.href = `/roster-admin?view=leave_schedule&returnTo=${returnUrl}`;
+                                                      }}
+                                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-teal-500/15 hover:bg-teal-500/25 text-teal-700 dark:text-teal-300 border border-teal-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                      title="Klik untuk membuka Modul Jadwal Cuti di Roster"
+                                                    >
+                                                      <PlaneTakeoff className="w-2.5 h-2.5 text-teal-600 dark:text-teal-400" />
+                                                      <span>Buka Jadwal Cuti</span>
+                                                    </button>
+                                                  )}
 
-                                            {/* Quick Open Form Permintaan Training button */}
-                                            {(String(displayTitle || val || '').toLowerCase().includes('sap') ||
-                                              String(displayTitle || val || '').toLowerCase().includes('training') ||
-                                              String(displayTitle || val || '').toLowerCase().includes('permintaan training')) && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-                                                  window.location.href = '/training-database?tab=form_permintaan&returnTo=' + returnUrl;
-                                                }}
-                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
-                                                title="Klik untuk membuka Form Permintaan Training"
-                                              >
-                                                <FileSpreadsheet className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
-                                                <span>Buka Form Training</span>
-                                              </button>
-                                            )}
+                                                  {/* Quick Open Jadwal Off Sheet button */}
+                                                  {isOffShortcut && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                        window.location.href = `/roster-admin?view=off_schedule&returnTo=${returnUrl}`;
+                                                      }}
+                                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                      title="Klik untuk membuka Modul Jadwal Off Karyawan di Roster"
+                                                    >
+                                                      <Coffee className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                                      <span>Buka Jadwal Off</span>
+                                                    </button>
+                                                  )}
 
-                                            {/* Open Badge / Button */}
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                const taskTitle = String(displayTitle || val || '').toLowerCase();
-                                                if (
-                                                  taskTitle.includes('sap') ||
-                                                  taskTitle.includes('training') ||
-                                                  taskTitle.includes('permintaan training')
-                                                ) {
-                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-                                                  window.location.href = '/training-database?tab=form_permintaan&returnTo=' + returnUrl;
-                                                  return;
-                                                }
-                                                if (taskTitle.includes('jadwal cuti')) {
-                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-                                                  window.location.href = `/roster-admin?view=leave_schedule&returnTo=${returnUrl}`;
-                                                  return;
-                                                }
-                                                if (taskTitle.includes('jadwal off')) {
-                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-                                                  window.location.href = `/roster-admin?view=off_schedule&returnTo=${returnUrl}`;
-                                                  return;
-                                                }
-                                                if (
-                                                  taskTitle.includes('tidak masuk') ||
-                                                  taskTitle.includes('izin karyawan') ||
-                                                  taskTitle.includes('karyawan tidak masuk') ||
-                                                  taskTitle.includes('rekap izin')
-                                                ) {
-                                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-                                                  window.location.href = `/employee-leaves?returnTo=${returnUrl}`;
-                                                  return;
-                                                }
-                                                setSelectedRow(row);
-                                                setModalTab('details');
-                                              }}
-                                              className={`ml-1 opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
-                                                isNotionLight
-                                                  ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
-                                                  : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
-                                              }`}
-                                              title="Buka dokumen / detail halaman"
-                                            >
-                                              OPEN
-                                            </button>
+                                                  {/* Quick Open Rekapan Izin Karyawan button */}
+                                                  {isPermissionShortcut && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                        window.location.href = `/employee-leaves?returnTo=${returnUrl}`;
+                                                      }}
+                                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                      title="Klik untuk membuka Modul Rekapan Izin Karyawan"
+                                                    >
+                                                      <FileSpreadsheet className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
+                                                      <span>Buka Rekapan Izin</span>
+                                                    </button>
+                                                  )}
+
+                                                  {/* Quick Open Form Permintaan Training button (Strict word match to prevent false matches like 'hisapan') */}
+                                                  {isTrainingShortcut && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                        window.location.href = '/training-database?tab=form_permintaan&returnTo=' + returnUrl;
+                                                      }}
+                                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                      title="Klik untuk membuka Form Permintaan Training"
+                                                    >
+                                                      <FileSpreadsheet className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                                                      <span>Buka Form Training</span>
+                                                    </button>
+                                                  )}
+
+                                                  {/* Quick Open Jadwal Inspeksi button (Khusus task: Jadwal Inspeksi Staff Preparasi & Lab Setiap Minggu) */}
+                                                  {isInspectionScheduleShortcut && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                                        window.location.href = `/inspection-schedule?returnTo=${returnUrl}`;
+                                                      }}
+                                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-200 border border-amber-500/30 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                      title="Klik untuk membuka Modul Jadwal Inspeksi"
+                                                    >
+                                                      <CalendarDays className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                                      <span>Buka Jadwal Inspeksi</span>
+                                                    </button>
+                                                  )}
+
+                                                  {/* Open Badge / Button (Only displayed when NO shortcut exists) */}
+                                                  {!hasModuleShortcut && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedRow(row);
+                                                        setModalTab('details');
+                                                      }}
+                                                      className={`ml-1 opacity-0 group-hover/cell:opacity-100 px-1.5 py-0.5 rounded text-[9.5px] font-bold border transition-all uppercase tracking-wider cursor-pointer shadow-2xs shrink-0 ${
+                                                        isNotionLight
+                                                          ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                                                          : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
+                                                      }`}
+                                                      title="Buka dokumen / detail halaman"
+                                                    >
+                                                      OPEN
+                                                    </button>
+                                                  )}
+                                                </>
+                                              );
+                                            })()}
 
                                             {cCount > 0 && (
                                               <button
@@ -12117,6 +12159,42 @@ export function NotionDatabaseTable({
                           className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
                         >
                           <span>Buka Jadwal Cuti</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Integrated Jadwal Inspeksi Banner (Khusus task: Jadwal Inspeksi Staff Preparasi & Lab Setiap Minggu) */}
+                    {selectedRow && (() => {
+                      const t = String(baseTopicTitle || '').toLowerCase();
+                      return (
+                        t.includes('jadwal inspeksi staff preparasi') ||
+                        (t.includes('jadwal inspeksi') && t.includes('staff') && t.includes('minggu'))
+                      );
+                    })() && (
+                      <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs mb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 rounded-lg bg-amber-600 text-white shrink-0">
+                            <CalendarDays className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                              Modul Terhubung: Jadwal Inspeksi Mingguan (Prep & Lab)
+                            </div>
+                            <div className="text-[11px] text-amber-700 dark:text-amber-300">
+                              Akses langsung 29 agenda jadwal inspeksi terencana mingguan Preparasi & Laboratorium.
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                            window.location.href = `/inspection-schedule?returnTo=${returnUrl}`;
+                          }}
+                          className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+                        >
+                          <span>Buka Jadwal Inspeksi</span>
                           <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                       </div>

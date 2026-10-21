@@ -661,10 +661,10 @@ export function ClinicMonthlyDiagramSheet({
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-2xl sm:text-3xl font-black font-mono text-teal-950">
-                {summaryKpi.uniqueVisitorsAll}
+                {summaryKpi.totalVisitsCount}x
               </span>
               <span className="text-xs font-bold text-teal-800">
-                Orang ({summaryKpi.totalVisitsCount}x)
+                ({summaryKpi.uniqueVisitorsAll} Orang)
               </span>
             </div>
             <p className="text-[10px] text-teal-700 font-semibold mt-1">

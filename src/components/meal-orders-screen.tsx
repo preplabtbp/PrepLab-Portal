@@ -149,7 +149,7 @@ function FloatingScrollbar({ targetRef }: { targetRef: React.RefObject<HTMLDivEl
 
 export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const queryClient = useQueryClient();
-  const [date, setDate] = useState(() => todayWit());
+  const [date, setDate] = useState(() => shiftDate(todayWit(), 1));
   // orders = Orderan Makanan · recipients = Daftar Penerima Bungkusan · recap = List Pengiriman Ke GA · stats = Rekapan Bungkusan
   const [view, setView] = useState<'orders' | 'recipients' | 'recap' | 'stats'>('orders');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -255,16 +255,24 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
   const rawRows = data?.data ?? [];
   const isRowBelumLapor = (r: { keteranganLapor?: string | null }) => {
     const v = String(r.keteranganLapor || '').trim();
-    return v === 'Belum Lapor' || /belum\s*lapor/i.test(v);
+    return v !== '' && v !== '-' && /belum\s*lapor|wajib\s*lapor/i.test(v);
   };
 
-  // Selama status "Belum Lapor" aktif dan belum dimatikan, seluruh orderan makanan, batch, dan catatan dijamin tetap kosong
+  // Selama status "Belum Lapor" / "Wajib Lapor" aktif dan belum dimatikan, seluruh orderan makanan, batch, dan catatan dijamin 100% tetap kosong
+  // Kebijakan: Jika cuti masih berjalan, tidak perlu diberikan Wajib Lapor (tetap kosong/null)
   const rows = useMemo(() => {
     return rawRows.map(r => {
+      const isCuti = String(r.status || '').toUpperCase() === 'CUTI' || String(r.shiftKerja || '').toUpperCase() === 'CUTI';
+      if (isCuti) {
+        return {
+          ...r,
+          keteranganLapor: null,
+        };
+      }
       if (isRowBelumLapor(r)) {
         return {
           ...r,
-          keteranganLapor: 'Belum Lapor',
+          keteranganLapor: r.keteranganLapor && /wajib/i.test(r.keteranganLapor) ? 'Wajib Lapor' : (r.keteranganLapor || 'Wajib Lapor'),
           pagiKantin: null,
           pagiLapangan: null,
           sahurKantin: null,
@@ -420,13 +428,13 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
     setSaving(true);
     try {
       // Hanya kolom form
-      const isBL = form.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(form.keteranganLapor || ''));
+      const isBL = form.keteranganLapor === 'Wajib Lapor' || form.keteranganLapor === 'Belum Lapor' || /belum\s*lapor|wajib\s*lapor/i.test(String(form.keteranganLapor || ''));
       const keys = ['nik', 'nama', 'shiftKerja', 'batchPagi', 'batchSore', ...PROFILE_FIELDS.map(f => f.key as string), ...MEAL_CELLS.map(c => c.key as string)];
       const body: Record<string, unknown> = { ...Object.fromEntries(keys.map(k => [k, form[k] ?? ''])), orderDate: date };
 
-      // Jika Belum Lapor dipilih aktif, seluruh porsi makan, batch, dan catatan wajib dikosongkan
+      // Jika Wajib Lapor / Belum Lapor dipilih aktif, seluruh porsi makan, batch, dan catatan wajib dikosongkan
       if (isBL) {
-        body.keteranganLapor = 'Belum Lapor';
+        body.keteranganLapor = 'Wajib Lapor';
         body.pagiKantin = null;
         body.pagiLapangan = null;
         body.sahurKantin = null;
@@ -919,11 +927,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   // Ganti Shift manual: mengkalkulasi ulang meal order sesuai aturan CSV tabel acuan operasional
   const changeShiftKerja = (r: MealOrder, shiftKerja: string | null) => {
-    // Jika status "Belum Lapor" masih aktif: shift tetap diperbarui namun seluruh orderan makanan WAJIB TETAP KOSONG
+    // Jika status "Wajib Lapor" / "Belum Lapor" masih aktif: shift tetap diperbarui namun seluruh orderan makanan WAJIB TETAP KOSONG
     if (isRowBelumLapor(r)) {
       const patch: Partial<MealOrder> = {
         shiftKerja: shiftKerja || null,
-        keteranganLapor: 'Belum Lapor',
+        keteranganLapor: 'Wajib Lapor',
         pagiKantin: null,
         pagiLapangan: null,
         sahurKantin: null,
@@ -939,7 +947,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         catatan: null,
       };
       saveCell(r, patch);
-      toast.info(`${r.nama}: Shift diubah ke "${shiftKerja || '-'}", namun orderan makanan tetap kosong karena status "Belum Lapor" masih aktif.`);
+      toast.info(`${r.nama}: Shift diubah ke "${shiftKerja || '-'}", namun orderan makanan tetap kosong karena status "Wajib Lapor" masih aktif.`);
       return;
     }
 
@@ -1095,12 +1103,12 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const handleToggleBelumLapor = (r: MealOrder, rawVal: string) => {
     if (!canManage) return;
-    const isBelumLapor = rawVal === 'Belum Lapor';
+    const isLapor = rawVal === 'Wajib Lapor' || rawVal === 'Belum Lapor';
 
-    if (isBelumLapor) {
-      // Jika Belum Lapor aktif: seluruh orderan makanan KOSONG sampai status Belum Lapor dimatikan
+    if (isLapor) {
+      // Jika Wajib Lapor / Belum Lapor aktif: seluruh orderan makanan KOSONG sampai status dimatikan
       const patch: Partial<MealOrder> = {
-        keteranganLapor: 'Belum Lapor',
+        keteranganLapor: 'Wajib Lapor',
         pagiKantin: null,
         pagiLapangan: null,
         sahurKantin: null,
@@ -1116,10 +1124,9 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
         catatan: null,
       };
       saveCell(r, patch);
-      toast.info(`${r.nama}: Status "Belum Lapor" aktif — seluruh orderan makanan dikosongkan.`);
+      toast.info(`${r.nama}: Status "Wajib Lapor" aktif — seluruh orderan makanan dikosongkan.`);
     } else {
-      // Belum Lapor dimatikan: kembali ke roster kerja tanggal tsb (mis. roster N → Malam) — dihitung di server dari
-      // sheet "Database Rooster Prep & Lab" agar memakai kode roster asli, bukan tebakan dari kolom Shift
+      // Wajib Lapor dimatikan: kembali ke roster kerja tanggal tsb
       clearBelumLapor(r);
     }
   };
@@ -1143,7 +1150,7 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
 
   const renderCatatanCell = (r: MealOrder) => {
     const isKawasi = isKawasiRow(r);
-    const isBelumLapor = r.keteranganLapor === 'Belum Lapor';
+    const isBelumLapor = isRowBelumLapor(r);
     const isDisabled = isCatatanDisabledForEmployee(r) || isBelumLapor || !canManage;
 
     const currentVal = getRowCatatanValue(r);
@@ -1392,8 +1399,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                 </div>
                 <button type="button" onClick={() => setDate(d => shiftDate(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-r-xl text-slate-500 hover:bg-slate-50 hover:text-slate-800 cursor-pointer" title="Hari berikutnya"><ChevronRight className="w-4 h-4" /></button>
               </div>
+              {date !== shiftDate(todayWit(), 1) && (
+                <button type="button" onClick={() => setDate(shiftDate(todayWit(), 1))} className={UI.btn} title="Lihat orderan besok">Besok (H+1)</button>
+              )}
               {date !== todayWit() && (
-                <button type="button" onClick={() => setDate(todayWit())} className={UI.btn}>Hari ini</button>
+                <button type="button" onClick={() => setDate(todayWit())} className={UI.btn} title="Lihat orderan hari ini">Hari ini</button>
               )}
             </div>
           </div>
@@ -2028,18 +2038,19 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             <td className={`${tdBase} text-center p-1`}>
                               {canManage ? (
                                 <select
-                                  value={r.keteranganLapor && r.keteranganLapor !== '-' ? 'Belum Lapor' : '-'}
+                                  value={r.keteranganLapor && r.keteranganLapor !== '-' ? (r.keteranganLapor.toLowerCase().includes('wajib') ? 'Wajib Lapor' : r.keteranganLapor) : '-'}
                                   onChange={e => handleToggleBelumLapor(r, e.target.value)}
                                   className={`rounded-md text-xs font-semibold px-2 py-1 cursor-pointer focus:outline-none transition-all ${
                                     r.keteranganLapor && r.keteranganLapor !== '-'
                                       ? 'bg-rose-100 text-rose-700 font-bold border border-rose-300 hover:bg-rose-200'
                                       : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200'
                                   }`}
-                                  title="Pilih Keterangan Belum Lapor (jika Belum Lapor aktif, orderan makan otomatis kosong)"
+                                  title="Pilih Keterangan (Belum Lapor / Wajib Lapor) — jika aktif, orderan makan otomatis kosong"
                                 >
                                   <option value="-">-</option>
+                                  <option value="Wajib Lapor">Wajib Lapor</option>
                                   <option value="Belum Lapor">Belum Lapor</option>
-                                  {r.keteranganLapor && r.keteranganLapor !== '-' && r.keteranganLapor !== 'Belum Lapor' && (
+                                  {r.keteranganLapor && r.keteranganLapor !== '-' && r.keteranganLapor !== 'Belum Lapor' && r.keteranganLapor !== 'Wajib Lapor' && (
                                     <option value={r.keteranganLapor}>{r.keteranganLapor}</option>
                                   )}
                                 </select>
@@ -2137,13 +2148,14 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                             <span className="text-slate-500">Lapor:</span>
                             {canManage ? (
                               <select
-                                value={r.keteranganLapor && r.keteranganLapor !== '-' ? 'Belum Lapor' : '-'}
+                                value={r.keteranganLapor && r.keteranganLapor !== '-' ? (r.keteranganLapor.toLowerCase().includes('wajib') ? 'Wajib Lapor' : r.keteranganLapor) : '-'}
                                 onChange={e => handleToggleBelumLapor(r, e.target.value)}
                                 className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
                                   r.keteranganLapor && r.keteranganLapor !== '-' ? 'bg-rose-100 text-rose-700 font-bold' : 'bg-slate-100 text-slate-500'
                                 }`}
                               >
                                 <option value="-">-</option>
+                                <option value="Wajib Lapor">Wajib Lapor</option>
                                 <option value="Belum Lapor">Belum Lapor</option>
                               </select>
                             ) : (
@@ -2190,10 +2202,11 @@ export function MealOrdersScreen({ inspectorNik = '', onBack }: Props) {
                   <Select
                     key={f.key}
                     label={f.label}
-                    value={form.keteranganLapor && form.keteranganLapor !== '-' ? 'Belum Lapor' : ''}
+                    value={form.keteranganLapor && form.keteranganLapor !== '-' ? (form.keteranganLapor.toLowerCase().includes('wajib') ? 'Wajib Lapor' : form.keteranganLapor) : ''}
                     onChange={e => updateForm('keteranganLapor', e.target.value)}
                   >
                     <option value="">-</option>
+                    <option value="Wajib Lapor">Wajib Lapor</option>
                     <option value="Belum Lapor">Belum Lapor</option>
                   </Select>
                 ) : f.key === 'catatan' ? (

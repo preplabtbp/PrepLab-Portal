@@ -75,8 +75,8 @@ export function getPreviousDateString(ymdDate: string): string {
 export function isLeaveOrPermissionRosterStatus(val: string | null | undefined): boolean {
   if (!val) return false;
   const s = val.trim().toUpperCase();
-  if (['C', 'CE', 'CT', 'CS', 'TRV', 'I', 'CI', 'TV', 'XP', 'CUTI', 'IZIN', 'TRAVEL', 'BELUM LAPOR'].includes(s)) return true;
-  if (s.startsWith('CUTI') || s.startsWith('IZIN') || s.startsWith('BELUM LAPOR') || s.includes('BELUM LAPOR')) return true;
+  if (['C', 'CE', 'CT', 'CS', 'TRV', 'I', 'CI', 'TV', 'XP', 'CUTI', 'IZIN', 'TRAVEL', 'BELUM LAPOR', 'WAJIB LAPOR'].includes(s)) return true;
+  if (s.startsWith('CUTI') || s.startsWith('IZIN') || s.startsWith('BELUM LAPOR') || s.includes('BELUM LAPOR') || s.startsWith('WAJIB LAPOR') || s.includes('WAJIB LAPOR')) return true;
   // Kode roster cuti di sheet bisa diikuti angka: CT1, CT2, CT5, CE1, CI2, TRV1 … (juga "CT 2", "CT-2", "CT(2)", "CT/2")
   if (/^(CE|CT|CS|TRV|CI|TV|XP|C|I)\s*[-/(]?\s*\d*\)?$/.test(s)) return true;
   const prefixes = ['CE', 'CT', 'CS', 'TRV', 'CI', 'TV', 'XP', 'C', 'I'];
@@ -163,7 +163,7 @@ export function isCatatanDisabledForEmployee(emp: {
   status?: string | null;
   keteranganLapor?: string | null;
 }): boolean {
-  if (emp.keteranganLapor === 'Belum Lapor') return true;
+  if (emp.keteranganLapor && /belum\s*lapor|wajib\s*lapor/i.test(String(emp.keteranganLapor))) return true;
   const tt = `${emp.tempatTinggal || ''} ${emp.alamatDomisili || ''}`.toLowerCase();
   if (tt.includes('kawasi')) return true;
   const sk = String(emp.shiftKerja || emp.statusKerja || emp.status || '').trim().toUpperCase();
@@ -516,28 +516,33 @@ export function computeMealOrderByRoster(
     }
   }
 
-  // Aturan status Belum Lapor:
-  // 1. Jika kode roster hari ini secara eksplisit bertuliskan Belum Lapor / BL:
-  const isExplicitRosterBL = /belum\s*lapor|\bBL\b/i.test(rawCode) || /belum\s*lapor/i.test(String(emp.status || ''));
-  // 2. Cek apakah di baris yang sudah ada, Belum Lapor sudah dimatikan / diedit oleh admin (bukan 'Belum Lapor')
-  const isAlreadyClearedByAdmin = emp.keteranganLapor !== undefined && (emp.keteranganLapor === null || !/belum\s*lapor/i.test(String(emp.keteranganLapor || '')));
+  // Aturan status Belum Lapor / Wajib Lapor:
+  // 1. Cek apakah status hari ini adalah Cuti (Cuti masih berjalan)
+  const isTodayCuti = isCutiRosterStatus(code) || isCutiRosterStatus(res.shiftKerja) || isCutiRosterStatus(res.statusKerja) || isCutiRosterStatus(res.status) || res.status === 'CUTI' || res.shiftKerja === 'CUTI';
+  // 2. Jika kode roster hari ini secara eksplisit bertuliskan Belum Lapor / Wajib Lapor / BL:
+  const isExplicitRosterBL = /belum\s*lapor|wajib\s*lapor|\bBL\b|\bWL\b/i.test(rawCode) || /belum\s*lapor|wajib\s*lapor/i.test(String(emp.status || ''));
+  // 3. Cek apakah di baris yang sudah ada, Belum Lapor / Wajib Lapor sudah dimatikan / diedit oleh admin (bukan 'Belum Lapor' / bukan 'Wajib Lapor')
+  const isAlreadyClearedByAdmin = emp.keteranganLapor !== undefined && (emp.keteranganLapor === null || emp.keteranganLapor === '-' || !/belum\s*lapor|wajib\s*lapor/i.test(String(emp.keteranganLapor || '')));
 
-  if (isExplicitRosterBL) {
-    res.keteranganLapor = 'Belum Lapor';
-  } else if (isAlreadyClearedByAdmin) {
-    // Admin sudah mematikan/mengedit Belum Lapor sebelumnya -> JANGAN aktifkan kembali saat sinkronisasi!
+  if (isTodayCuti) {
+    // Kebijakan: Jika cuti masih berjalan TIDAK PERLU diberikan Wajib Lapor
     res.keteranganLapor = null;
-  } else if (emp.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(emp.keteranganLapor || ''))) {
-    res.keteranganLapor = 'Belum Lapor';
-  } else if (emp.keteranganLapor === undefined && isLeaveOrPermissionRosterStatus(prevRosterStatus) && isWorkOrOffRosterStatus(code)) {
-    // Hanya aktifkan otomatis untuk baris baru yang belum ada di database sebelumnya
-    res.keteranganLapor = 'Belum Lapor';
+  } else if (isExplicitRosterBL) {
+    res.keteranganLapor = 'Wajib Lapor';
+  } else if (isAlreadyClearedByAdmin) {
+    // Admin sudah mematikan/mengedit status sebelumnya -> JANGAN aktifkan kembali saat sinkronisasi!
+    res.keteranganLapor = null;
+  } else if (isLeaveOrPermissionRosterStatus(prevRosterStatus) && (isWorkOrOffRosterStatus(code) || isWorkOrOffRosterStatus(res.shiftKerja))) {
+    // Saat berganti ke Masuk seperti D/Off/N/LS barulah otomatis Wajib Lapor
+    res.keteranganLapor = 'Wajib Lapor';
+  } else if (emp.keteranganLapor && /wajib\s*lapor|belum\s*lapor/i.test(String(emp.keteranganLapor || ''))) {
+    // Status Wajib Lapor sebelumnya bertahan selama masih berstatus kerja/off sampai diubah oleh admin
+    res.keteranganLapor = emp.keteranganLapor;
   }
 
-  // JIKA STATUS BELUM LAPOR AKTIF:
-  // Selama "Belum Lapor" belum dimatikan, seluruh porsi orderan makanan AKAN TETAP KOSONG
-  if (res.keteranganLapor === 'Belum Lapor' || /belum\s*lapor/i.test(String(res.keteranganLapor || ''))) {
-    res.keteranganLapor = 'Belum Lapor';
+  // JIKA STATUS WAJIB LAPOR / BELUM LAPOR AKTIF:
+  // Selama "Wajib Lapor" belum dimatikan, seluruh porsi orderan makanan AKAN TETAP KOSONG
+  if (res.keteranganLapor && /wajib\s*lapor|belum\s*lapor/i.test(String(res.keteranganLapor || ''))) {
     res.pagiKantin = null;
     res.pagiLapangan = null;
     res.sahurKantin = null;

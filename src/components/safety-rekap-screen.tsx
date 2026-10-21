@@ -110,10 +110,25 @@ function formatShortDate(v: DateVal): string {
 }
 
 function isValidEmployee(emp: any): boolean {
-  const rawNik = (emp.nik || '').toString().trim();
+  const rawNik = (emp.nik || '').toString().trim().toUpperCase();
   const rawName = (emp.name || '').toString().trim();
   const rawSection = (emp.section || '').toString().trim();
   const rawStatus = (emp.statusKaryawan || '').toString().trim().toUpperCase();
+  const rawJabatan = (emp.jabatan || '').toString().trim().toLowerCase();
+  const rawGol = (emp.gol || '').toString().trim().toUpperCase();
+  const rawJobGrade = (emp.jobGrade || '').toString().trim().toUpperCase();
+
+  // Eksklusi Mutlak Golongan I (Crew / Operator / Non-Staff)
+  if (rawNik === 'M0201250032') return false; // Imran Sebualamo (Crew Gol I)
+  if (rawJabatan.includes('crew') || rawJabatan.includes('operator')) return false;
+  if (
+    rawGol === 'I' || rawGol === '1' || rawGol.startsWith('I.') || rawGol.startsWith('1.') ||
+    rawGol.startsWith('I-') || rawGol.startsWith('1-') || rawGol === 'IA' || rawGol === 'IB' ||
+    rawJobGrade.startsWith('S1') || rawJobGrade.startsWith('1.')
+  ) {
+    return false;
+  }
+
   if (!rawNik || rawNik.includes('#N/A') || rawNik.toUpperCase() === 'N/A' || rawName.includes('#N/A')) return false;
   if (rawSection.includes('#N/A') || rawSection.toUpperCase() === 'N/A') return false;
   if (rawStatus.includes('RESIGN') || rawStatus.includes('PHK') || rawStatus.includes('KELUAR') || rawStatus.includes('INACTIVE')) return false;
@@ -1311,91 +1326,84 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         }
       }
     });
-    // Himpun personil yang terdaftar aktif dalam Jadwal Inspeksi Berjalan
-    const activeInspectionKeys = new Set<string>();
-    const activeInspectionNames = new Set<string>();
+    // SINKRONISASI MUTLAK DENGAN JADWAL INSPEKSI BERJALAN:
+    // 1. 44 Petugas Aktif pada Jadwal Inspeksi HARUS masuk target wajib KTA/TTA & Inspeksi (isCuti = false)
+    // 2. 19 Karyawan Cuti pada Jadwal Inspeksi HARUS berstatus Cuti (isCuti = true)
+    const schedActiveKeys = new Set<string>();
+    const schedActiveNames = new Set<string>();
+    const schedCutiKeys = new Set<string>();
+    const schedCutiNames = new Set<string>();
 
-    inspeksiData.rekapList.filter(isValidEmployee).forEach(emp => {
-      if (emp.nik) activeInspectionKeys.add(emp.nik.toString().trim().toUpperCase());
-      if (emp.name) activeInspectionNames.add(emp.name.toString().trim().toLowerCase());
-    });
-
-    if (activeInspectionSchedule && Array.isArray(activeInspectionSchedule)) {
-      activeInspectionSchedule.filter((item: any) => !item.isCuti).forEach((item: any) => {
-        if (item.nik) activeInspectionKeys.add(item.nik.toString().trim().toUpperCase());
-        if (item.name) activeInspectionNames.add(item.name.toString().trim().toLowerCase());
+    if (activeInspectionSchedule && Array.isArray(activeInspectionSchedule) && activeInspectionSchedule.length > 0) {
+      activeInspectionSchedule.forEach((item: any) => {
+        const k = (item.nik || '').toString().trim().toUpperCase();
+        const n = (item.name || '').toString().trim().toLowerCase();
+        if (item.isCuti) {
+          if (k) schedCutiKeys.add(k);
+          if (n) schedCutiNames.add(n);
+          ensure(item, 'CUTI', true);
+        } else {
+          if (k) schedActiveKeys.add(k);
+          if (n) schedActiveNames.add(n);
+          ensure(item, null, false);
+        }
+      });
+    } else {
+      // Fallback jika inspection-schedule belum termuat: gunakan rekapList & cutiList
+      inspeksiData.rekapList.filter(isValidEmployee).forEach(emp => {
+        if (emp.nik) schedActiveKeys.add(emp.nik.toString().trim().toUpperCase());
+        if (emp.name) schedActiveNames.add(emp.name.toString().trim().toLowerCase());
+        ensure(emp, null);
+      });
+      [...inspeksiData.cutiList, ...ktaData.cutiList].filter(isValidEmployee).forEach(emp => {
+        if (emp.nik) schedCutiKeys.add(emp.nik.toString().trim().toUpperCase());
+        if (emp.name) schedCutiNames.add(emp.name.toString().trim().toLowerCase());
+        ensure(emp, 'CUTI', true);
       });
     }
 
-    const isInActiveInspection = (nik?: string, name?: string) => {
+    const isSchedActive = (nik?: string, name?: string) => {
       const k = (nik || '').toString().trim().toUpperCase();
       const n = (name || '').toString().trim().toLowerCase();
-      if (k && activeInspectionKeys.has(k)) return true;
-      if (n && activeInspectionNames.has(n)) return true;
-      for (const sName of activeInspectionNames) {
+      if (k && schedActiveKeys.has(k)) return true;
+      if (n && schedActiveNames.has(n)) return true;
+      for (const sName of schedActiveNames) {
         if (n && (sName === n || n.includes(sName) || sName.includes(n))) return true;
       }
       return false;
     };
 
-    // Tambahkan personil aktif dari jadwal inspeksi berjalan jika belum ada di map
-    if (activeInspectionSchedule && Array.isArray(activeInspectionSchedule)) {
-      activeInspectionSchedule.filter((item: any) => !item.isCuti && isValidEmployee(item)).forEach((item: any) => {
-        ensure(item, null);
-      });
-    }
+    const isSchedCuti = (nik?: string, name?: string) => {
+      const k = (nik || '').toString().trim().toUpperCase();
+      const n = (name || '').toString().trim().toLowerCase();
+      if (k && schedCutiKeys.has(k)) return true;
+      if (n && schedCutiNames.has(n)) return true;
+      for (const sName of schedCutiNames) {
+        if (n && (sName === n || n.includes(sName) || sName.includes(n))) return true;
+      }
+      return false;
+    };
 
+    // Gabungkan riwayat laporan KTA/TTA yang sudah masuk
     ktaData.rekapList.filter(isValidEmployee).forEach(emp => {
-      Object.assign(ensure(emp, null).auto, buildKtaCells(emp, weekRange));
+      const entry = ensure(emp, null);
+      Object.assign(entry.auto, buildKtaCells(emp, weekRange));
     });
 
-    // ATURAN RESMI:
-    // 1. Karyawan yang masuk dalam jadwal inspeksi berjalan MUTLAK WAJIB KTA/TTA (tidak cuti)
-    // 2. Karyawan yang tidak masuk jadwal inspeksi berjalan mengikuti tabel "Kontrol Cuti Karyawan"
-    if (leaveList && leaveList.length > 0) {
-      const leaveMap = new Map<string, any>();
-      leaveList.filter(isValidEmployee).forEach(emp => {
-        if (emp.nik) leaveMap.set(emp.nik.toString().trim().toUpperCase(), emp);
-        if (emp.name) leaveMap.set(emp.name.toString().trim().toLowerCase(), emp);
-      });
-
-      // Update status seluruh personil yang ada di map:
-      for (const [key, entry] of map.entries()) {
-        if (isInActiveInspection(entry.nik, entry.name)) {
-          // JIKA KARYAWAN TERSEBUT MASUK DALAM JADWAL INSPEKSI BERJALAN MAKA WAJIB MELAKUKAN KTA/TTA
-          entry.auto.isCuti = false;
-          entry.auto.absence = null;
-        } else {
-          const matched = leaveMap.get(key) || leaveMap.get((entry.name || '').trim().toLowerCase());
-          if (matched) {
-            entry.auto.isCuti = true;
-            entry.auto.absence = matched.category === 'IZIN' ? 'IZIN' : matched.category === 'DINAS' ? 'DINAS' : 'CUTI';
-          } else {
-            entry.auto.isCuti = false;
-            entry.auto.absence = null;
-          }
-        }
+    // Terapkan status cuti resmi: selalu ikuti Jadwal Inspeksi
+    for (const [key, entry] of map.entries()) {
+      if (isSchedCuti(entry.nik, entry.name)) {
+        // 19 ORANG CUTI PADA JADWAL INSPEKSI: SELALU CUTI
+        entry.auto.isCuti = true;
+        entry.auto.absence = 'CUTI';
+      } else if (isSchedActive(entry.nik, entry.name)) {
+        // 44 PETUGAS AKTIF PADA JADWAL INSPEKSI: WAJIB KTA/TTA & INSPEKSI
+        entry.auto.isCuti = false;
+        entry.auto.absence = null;
       }
-
-      // Pastikan personil di Kontrol Cuti yang belum ada di map juga masuk ke daftar
-      leaveList.filter(isValidEmployee).forEach(emp => {
-        if (!isInActiveInspection(emp.nik, emp.name)) {
-          ensure(emp, emp.category === 'IZIN' ? 'IZIN' : emp.category === 'DINAS' ? 'DINAS' : 'CUTI', true);
-        } else {
-          ensure(emp, null);
-        }
-      });
-    } else {
-      [...inspeksiData.cutiList, ...ktaData.cutiList].filter(isValidEmployee).forEach(emp => {
-        if (!isInActiveInspection(emp.nik, emp.name)) {
-          ensure(emp, 'CUTI');
-        } else {
-          ensure(emp, null);
-        }
-      });
     }
 
-    // Pastikan seluruh personil wajib KTA/TTA memiliki kalkulasi sel KTA/TTA
+    // Pastikan seluruh 44 personil wajib memiliki perhitungan sel KTA/TTA
     for (const [, entry] of map.entries()) {
       if (!entry.auto.isCuti && !entry.auto.tglKta && !entry.auto.tglTta1) {
         Object.assign(entry.auto, buildKtaCells(entry, weekRange));
@@ -1405,7 +1413,13 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     const editMap = new Map(edits.map(e => [String(e.nik).trim().toUpperCase(), e]));
     const ownKey = (inspectorNik || '').trim().toUpperCase();
     return Array.from(map.entries())
-      .filter(([key]) => canEdit || key === ownKey)
+      .filter(([key, e]) => {
+        const j = (e.jabatan || '').toLowerCase();
+        const n = (e.nik || key || '').toUpperCase();
+        // Eksklusi mutlak Golongan I (Crew / Operator / Non-Staff) dari rekap KTA/TTA & Inspeksi
+        if (n === 'M0201250032' || j.includes('crew') || j.includes('operator')) return false;
+        return canEdit || key === ownKey;
+      })
       .map(([key, e]) => {
         const edit = editMap.get(key);
         const v = applyEdit(e.auto, edit, weekRange);
