@@ -125,6 +125,108 @@ export function isResignedOrNonActiveStatus(empOrStatus: any): boolean {
   return false;
 }
 
+export interface StructuredSanctionEntry {
+  kategori: string;
+  tanggal: string;
+  alasan: string;
+}
+
+export function parseStructuredSanctionReasons(
+  str?: string | null,
+  fallbackDates: string[] = [],
+  defaultCategory = 'Konseling'
+): StructuredSanctionEntry[] {
+  if (!str || !str.trim()) return [];
+  const trimmed = str.trim();
+
+  // 1. Bracket matches: [Level - Date] Reason or [Date] Reason or [Level] Reason
+  const bracketRegex = /\[([^\]]+)\]([\s\S]*?)(?=(?:\[[^\]]+\]|$))/g;
+  const bracketMatches = [...trimmed.matchAll(bracketRegex)];
+
+  if (bracketMatches.length > 0) {
+    const results: StructuredSanctionEntry[] = [];
+
+    // Check if there was leading text before first bracket
+    const firstBracketIdx = trimmed.indexOf('[');
+    if (firstBracketIdx > 0) {
+      const leadingText = trimmed.slice(0, firstBracketIdx).trim();
+      const isDuplicate = bracketMatches.some(
+        m => m[2].trim().length > 15 && leadingText.includes(m[2].trim().slice(0, 40))
+      );
+      if (leadingText && !isDuplicate) {
+        results.push({
+          kategori: 'Catatan Awal / Kronologi',
+          tanggal: fallbackDates[0] || '-',
+          alasan: leadingText,
+        });
+      }
+    }
+
+    bracketMatches.forEach((m, idx) => {
+      const header = m[1].trim();
+      const content = m[2].trim();
+      let kategori = defaultCategory;
+      let tanggal = '-';
+
+      if (header.includes('-')) {
+        const hyphenIdx = header.indexOf('-');
+        kategori = header.slice(0, hyphenIdx).trim();
+        tanggal = header.slice(hyphenIdx + 1).trim();
+      } else if (/\d{1,2}[-\s/][a-zA-Z0-9]+[-\s/]\d{2,4}/.test(header)) {
+        tanggal = header;
+      } else {
+        kategori = header;
+        tanggal = fallbackDates[idx] || '-';
+      }
+
+      results.push({
+        kategori: kategori || defaultCategory,
+        tanggal: tanggal || fallbackDates[idx] || '-',
+        alasan: content,
+      });
+    });
+
+    return results;
+  }
+
+  // 2. Fallback: split by newlines if multi-line
+  const lines = trimmed.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
+  if (lines.length > 1) {
+    return lines.map((line, idx) => {
+      const dateMatch = line.match(/^(\d{1,2}[-\s/][a-zA-Z0-9]+[-\s/]\d{2,4})[:\s-]+([\s\S]*)$/);
+      if (dateMatch) {
+        return {
+          kategori: defaultCategory,
+          tanggal: dateMatch[1],
+          alasan: dateMatch[2].trim() || line,
+        };
+      }
+      return {
+        kategori: `${defaultCategory} ${idx + 1}`,
+        tanggal: fallbackDates[idx] || '-',
+        alasan: line,
+      };
+    });
+  }
+
+  // 3. Fallback: Check if numbered like "1. ... 2. ... 3. ..."
+  const numberedMatches = [...trimmed.matchAll(/(?:^|\s)(\d+)\.\s+([\s\S]*?)(?=(?:\s\d+\.\s+)|$)/g)];
+  if (numberedMatches.length > 1) {
+    return numberedMatches.map((m, idx) => ({
+      kategori: `${defaultCategory} ${m[1]}`,
+      tanggal: fallbackDates[idx] || '-',
+      alasan: m[2].trim(),
+    }));
+  }
+
+  // 4. Single block
+  return [{
+    kategori: defaultCategory,
+    tanggal: fallbackDates[0] || '-',
+    alasan: trimmed,
+  }];
+}
+
 const INDO_MONTHS_FULL = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
@@ -455,7 +557,9 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
     color: string;
     badgeBg: string;
     dotBg: string;
-    entries: Array<{ tanggal: string; alasan: string }>;
+    subtitle?: string;
+    dateLabel?: string;
+    entries: Array<{ tanggal: string; alasan: string; kategori?: string }>;
   } | null>(null);
 
   // SO Vacant Dynamic Assignments State (Persisted in localStorage)
@@ -7194,55 +7298,171 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     {/* GRID ALASAN KONSELING & SP & SPDK */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       {/* Kolom Kiri: Alasan Konseling & Surat Peringatan */}
-                      <div className="space-y-4">
-                        <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-3">
-                          <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
-                            <Gavel className="w-4 h-4 text-[#22a7b8]" />
-                            Alasan Surat Peringatan &amp; Pembinaan
-                          </h4>
+                      {(() => {
+                        const counselingFallbackDates = [k1, k2, k3, bulanKonseling].filter(isDateLike);
+                        const counselingEntries = parseStructuredSanctionReasons(alasanKonseling, counselingFallbackDates, 'Konseling');
 
-                          <div className="space-y-3">
-                            {/* Alasan Konseling / Pembinaan */}
-                            <div>
-                              <p className="text-[11px] font-bold text-teal-800 uppercase mb-1 flex items-center gap-1">
-                                <HeartHandshake className="w-3.5 h-3.5 text-teal-600" />
-                                Alasan Konseling / Pembinaan:
-                              </p>
-                              <p className="text-xs text-teal-950 bg-teal-50/70 p-3 rounded-xl border border-teal-200/80 leading-relaxed font-medium">
-                                {alasanKonseling || 'Tidak ada catatan alasan konseling/pembinaan.'}
-                              </p>
-                            </div>
+                        const spFallbackDates = [sppt, sp3, sp2, sp1, st, tanggalSp].filter(isDateLike);
+                        const spEntries = parseStructuredSanctionReasons(effectiveAlasanSp, spFallbackDates, 'Surat Peringatan');
 
-                            {/* Alasan Surat Peringatan */}
-                            <div>
-                              <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Alasan Surat Peringatan:</p>
-                              <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed font-medium">
-                                {effectiveAlasanSp || 'Tidak ada catatan alasan surat peringatan.'}
-                              </p>
-                            </div>
+                        return (
+                          <div className="space-y-4">
+                            <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-3">
+                              <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center justify-between border-b border-slate-100 pb-2">
+                                <span className="flex items-center gap-1.5">
+                                  <Gavel className="w-4 h-4 text-[#22a7b8]" />
+                                  Alasan Surat Peringatan &amp; Pembinaan
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-semibold">
+                                  {counselingEntries.length + spEntries.length} Total Catatan
+                                </span>
+                              </h4>
 
-                            {keterangan && keterangan !== '-' && (
-                              <div>
-                                <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Keterangan Tambahan:</p>
-                                <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 leading-relaxed">
-                                  {keterangan}
-                                </p>
+                              <div className="space-y-3">
+                                {/* 1. Alasan Konseling / Pembinaan Card */}
+                                <div 
+                                  onClick={() => {
+                                    if (counselingEntries.length > 0) {
+                                      setActiveReasonModal({
+                                        categoryKey: 'counseling',
+                                        title: 'Alasan Konseling / Pembinaan',
+                                        color: 'text-teal-900',
+                                        badgeBg: 'bg-teal-50 border border-teal-200',
+                                        dotBg: 'bg-teal-600',
+                                        dateLabel: 'Tanggal Konseling',
+                                        subtitle: `${selectedEmployee?.name} (${selectedEmployee?.nik}) • Riwayat Konseling & Pembinaan`,
+                                        entries: counselingEntries,
+                                      });
+                                    }
+                                  }}
+                                  className="p-3.5 rounded-xl border border-teal-200/80 bg-teal-50/40 hover:bg-teal-50/80 hover:border-teal-300 transition-all cursor-pointer group space-y-2 select-none"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-[11px] font-bold text-teal-800 uppercase flex items-center gap-1.5 group-hover:underline">
+                                      <HeartHandshake className="w-3.5 h-3.5 text-teal-600" />
+                                      Alasan Konseling / Pembinaan:
+                                    </p>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-teal-100 text-teal-800 border border-teal-200">
+                                        {counselingEntries.length} Catatan
+                                      </span>
+                                      <div className="flex items-center gap-1 text-[10px] font-bold text-[#135e69] bg-white px-2 py-0.5 rounded-md border border-teal-200 shadow-2xs group-hover:bg-teal-100/60">
+                                        <span>Lihat Jendela</span>
+                                        <ExternalLink className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Kotak preview ringkas dibagi per tanggal */}
+                                  <div className="space-y-1.5 pt-0.5">
+                                    {counselingEntries.length > 0 ? (
+                                      counselingEntries.slice(0, 2).map((item, idx) => (
+                                        <div key={idx} className="bg-white/95 p-2 rounded-lg border border-teal-100 text-xs flex items-start gap-2 shadow-2xs">
+                                          <span className="shrink-0 px-2 py-0.5 bg-teal-100 text-teal-900 rounded font-bold text-[10px] flex items-center gap-1 border border-teal-200">
+                                            <Calendar className="w-2.5 h-2.5 text-teal-700" />
+                                            {item.tanggal}
+                                          </span>
+                                          <p className="text-slate-700 truncate text-[11px] font-medium leading-relaxed flex-1">
+                                            {item.kategori && item.kategori !== 'Konseling' ? `[${item.kategori}] ` : ''}{item.alasan}
+                                          </p>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan konseling/pembinaan.</p>
+                                    )}
+                                    {counselingEntries.length > 2 && (
+                                      <p className="text-[10px] text-teal-700 font-bold pl-1 flex items-center gap-1">
+                                        <span>+{counselingEntries.length - 2} catatan lainnya</span>
+                                        <span className="text-teal-500 font-normal">(Klik untuk melihat Full per kotak)</span>
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* 2. Alasan Surat Peringatan Card */}
+                                <div 
+                                  onClick={() => {
+                                    if (spEntries.length > 0) {
+                                      setActiveReasonModal({
+                                        categoryKey: 'sp',
+                                        title: 'Alasan Surat Peringatan & Sanksi',
+                                        color: 'text-rose-900',
+                                        badgeBg: 'bg-rose-50 border border-rose-200',
+                                        dotBg: 'bg-rose-600',
+                                        dateLabel: 'Tanggal Sanksi/SP',
+                                        subtitle: `${selectedEmployee?.name} (${selectedEmployee?.nik}) • Riwayat Surat Peringatan & Sanksi Disiplin`,
+                                        entries: spEntries,
+                                      });
+                                    }
+                                  }}
+                                  className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 hover:border-slate-300 transition-all cursor-pointer group space-y-2 select-none"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-[11px] font-bold text-slate-600 uppercase flex items-center gap-1.5 group-hover:underline">
+                                      <Gavel className="w-3.5 h-3.5 text-slate-500" />
+                                      Alasan Surat Peringatan:
+                                    </p>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-200 text-slate-700 border border-slate-300">
+                                        {spEntries.length} Catatan
+                                      </span>
+                                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs group-hover:bg-slate-100">
+                                        <span>Lihat Jendela</span>
+                                        <ExternalLink className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Kotak preview ringkas dibagi per tanggal */}
+                                  <div className="space-y-1.5 pt-0.5">
+                                    {spEntries.length > 0 ? (
+                                      spEntries.slice(0, 2).map((item, idx) => (
+                                        <div key={idx} className="bg-white/95 p-2 rounded-lg border border-slate-200 text-xs flex items-start gap-2 shadow-2xs">
+                                          <span className="shrink-0 px-2 py-0.5 bg-rose-50 text-rose-800 rounded font-bold text-[10px] flex items-center gap-1 border border-rose-200">
+                                            <Calendar className="w-2.5 h-2.5 text-rose-600" />
+                                            {item.tanggal}
+                                          </span>
+                                          <p className="text-slate-700 truncate text-[11px] font-medium leading-relaxed flex-1">
+                                            {item.kategori && item.kategori !== 'Surat Peringatan' ? `[${item.kategori}] ` : ''}{item.alasan}
+                                          </p>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <p className="text-xs text-slate-400 italic">Tidak ada catatan alasan surat peringatan.</p>
+                                    )}
+                                    {spEntries.length > 2 && (
+                                      <p className="text-[10px] text-slate-500 font-bold pl-1 flex items-center gap-1">
+                                        <span>+{spEntries.length - 2} catatan lainnya</span>
+                                        <span className="text-slate-400 font-normal">(Klik untuk melihat Full per kotak)</span>
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {keterangan && keterangan !== '-' && (
+                                  <div>
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">Keterangan Tambahan:</p>
+                                    <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 leading-relaxed">
+                                      {keterangan}
+                                    </p>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between text-xs pt-1 text-slate-500">
+                                  <span>Pernah SP/ST Sebelumnya:</span>
+                                  <span className={`font-bold px-2 py-0.5 rounded-md ${
+                                    String(pernahSpSebelumnya || '').toLowerCase().includes('ya') || hasAnySp
+                                      ? 'bg-rose-50 text-rose-700 border border-rose-200' 
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}>
+                                    {pernahSpSebelumnya && pernahSpSebelumnya !== 'Tidak' ? pernahSpSebelumnya : (hasAnySp ? 'Ya' : 'Tidak')}
+                                  </span>
+                                </div>
                               </div>
-                            )}
-
-                            <div className="flex items-center justify-between text-xs pt-1 text-slate-500">
-                              <span>Pernah SP/ST Sebelumnya:</span>
-                              <span className={`font-bold px-2 py-0.5 rounded-md ${
-                                String(pernahSpSebelumnya || '').toLowerCase().includes('ya') || hasAnySp
-                                  ? 'bg-rose-50 text-rose-700 border border-rose-200' 
-                                  : 'bg-slate-100 text-slate-700'
-                              }`}>
-                                {pernahSpSebelumnya && pernahSpSebelumnya !== 'Tidak' ? pernahSpSebelumnya : (hasAnySp ? 'Ya' : 'Tidak')}
-                              </span>
                             </div>
                           </div>
-                        </div>
-                      </div>
+                        );
+                      })()}
 
                       {/* Kolom Kanan: Detail SPDK & Kronologi Kejadian */}
                       <div className="space-y-4">
@@ -7535,7 +7755,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     </span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {selectedEmployee?.name} ({selectedEmployee?.nik}) &bull; Periode Absensi 2026
+                    {activeReasonModal.subtitle || `${selectedEmployee?.name} (${selectedEmployee?.nik}) • Periode Absensi & Pelanggaran 2026`}
                   </p>
                 </div>
               </div>
@@ -7549,30 +7769,35 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
               </button>
             </div>
 
-            {/* Isi Jendela Mengambang: Daftar Tanggal Izin & Alasan */}
-            <div className="p-5 overflow-y-auto space-y-3 flex-1 bg-slate-50/40">
+            {/* Isi Jendela Mengambang: Daftar Catatan Alasan Full Per Kotak */}
+            <div className="p-5 overflow-y-auto space-y-3.5 flex-1 bg-slate-50/40">
               {activeReasonModal.entries.length > 0 ? (
                 activeReasonModal.entries.map((item, idx) => (
                   <div 
                     key={idx}
-                    className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2 hover:border-teal-300 transition-all group"
+                    className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5 hover:border-teal-300 transition-all group"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <span className="w-5 h-5 rounded-full bg-[#135e69] text-white text-[10px] font-bold flex items-center justify-center">
                           {idx + 1}
                         </span>
                         <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-[#22a7b8]" />
-                          Tanggal Izin: <span className="text-[#135e69]">{item.tanggal || '-'}</span>
+                          {activeReasonModal.dateLabel || 'Tanggal'}: <span className="text-[#135e69] font-extrabold">{item.tanggal || '-'}</span>
                         </span>
                       </div>
+                      {item.kategori && (
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                          {item.kategori}
+                        </span>
+                      )}
                     </div>
-                    <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    <div className="bg-slate-50/90 p-3 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                         Keterangan Alasan:
                       </span>
-                      <p className="text-xs text-slate-800 font-medium leading-relaxed mt-1">
+                      <p className="text-xs text-slate-800 font-medium leading-relaxed whitespace-pre-line">
                         {item.alasan || '-'}
                       </p>
                     </div>
@@ -7587,7 +7812,7 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                     Tidak ada catatan {activeReasonModal.title.toLowerCase()}
                   </p>
                   <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                    Karyawan ini belum memiliki catatan tanggal izin atau keterangan alasan pada kategori ini.
+                    Karyawan ini belum memiliki catatan tanggal atau keterangan alasan pada kategori ini.
                   </p>
                 </div>
               )}
@@ -7601,13 +7826,18 @@ export function EmployeeDatabaseScreen({ inspectorNik, onBack }: { inspectorNik:
                   onClick={() => {
                     const cat = activeReasonModal.categoryKey;
                     setActiveReasonModal(null);
-                    setSelectedAddCategory(cat);
-                    setIsAddAttendanceModalOpen(true);
+                    if (cat === 'counseling' || cat === 'sp') {
+                      setEditModalTab('counseling');
+                      setIsEditModalOpen(true);
+                    } else {
+                      setSelectedAddCategory(cat);
+                      setIsAddAttendanceModalOpen(true);
+                    }
                   }}
                   className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs active:scale-95"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+ Tambah Catatan Baru</span>
+                  <span>{activeReasonModal.categoryKey === 'counseling' || activeReasonModal.categoryKey === 'sp' ? 'Edit / Tambah Catatan Sanksi' : '+ Tambah Catatan Baru'}</span>
                 </button>
               )}
               <button
