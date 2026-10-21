@@ -93,7 +93,7 @@ interface RekapRow extends RekapValues {
   inspeksiLate: boolean; // tanggal inspeksi jatuh di Kamis/Jumat
 }
 
-type StatusFilter = 'ALL' | 'BELUM' | 'LENGKAP' | 'TERLAMBAT' | 'CUTI';
+type StatusFilter = 'ALL' | 'WAJIB' | 'BELUM' | 'LENGKAP' | 'TERLAMBAT' | 'CUTI';
 
 function toIsoDate(ts: any): string {
   if (!ts) return '';
@@ -412,8 +412,8 @@ function SummaryRows({ summary, variant }: { summary: RekapSummary; variant: 'sc
 // Lembar laporan untuk ekspor PNG (warna tetap terang, tidak terpengaruh tema)
 const RekapReportSheet = React.forwardRef<HTMLDivElement, {
   rows: RekapRow[]; photoMap: Map<string, string>; summary: RekapSummary;
-  reportMonth: string; rangeLabel: string; week: string;
-}>(({ rows, photoMap, summary, reportMonth, rangeLabel, week }, ref) => {
+  reportMonth: string; rangeLabel: string; week: string; filterLabel?: string;
+}>(({ rows, photoMap, summary, reportMonth, rangeLabel, week, filterLabel }, ref) => {
   const th = 'border border-slate-400 bg-slate-200 px-2 py-2 text-[11px] font-bold uppercase text-slate-800';
   const td = 'border border-slate-300 px-2 py-1.5 text-[12px] text-slate-900';
   const dateTd = (v: DateVal) => v === null
@@ -434,6 +434,13 @@ const RekapReportSheet = React.forwardRef<HTMLDivElement, {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Prep & Lab · Safety Accountability Program</p>
           <h1 className="text-3xl font-black text-slate-900">Rekap KTA/TTA & Inspeksi Terencana</h1>
+          {filterLabel && (
+            <div className="mt-1.5">
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-teal-100 text-teal-900 border border-teal-300">
+                Filter: {filterLabel} ({rows.length} Karyawan)
+              </span>
+            </div>
+          )}
         </div>
         <div className="text-right">
           <p className="text-2xl font-black text-slate-900">{reportMonth}</p>
@@ -1436,6 +1443,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
     const q = search.trim().toLowerCase();
     return allRows.filter(r => {
       if (q && !r.name.toLowerCase().includes(q) && !(r.nik || '').toLowerCase().includes(q) && !r.jabatan.toLowerCase().includes(q)) return false;
+      if (statusFilter === 'WAJIB') return !r.isCuti;
       if (statusFilter === 'CUTI') return r.isCuti;
       if (statusFilter === 'TERLAMBAT') return !r.isCuti && (r.ktaLate || r.inspeksiLate);
       if (statusFilter === 'LENGKAP') return !r.isCuti && r.ktaDone && r.inspeksiDone;
@@ -1481,8 +1489,9 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
         cacheBust: true,
         imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
       });
+      const filterSuffix = statusFilter !== 'ALL' ? `_${statusFilter}` : (search.trim() ? '_Pencarian' : '');
       const link = document.createElement('a');
-      link.download = `Rekap_KTA_TTA_Inspeksi_${selectedWeek}_${currentYear}.png`;
+      link.download = `Rekap_KTA_TTA_Inspeksi_${selectedWeek}${filterSuffix}_${currentYear}.png`;
       link.href = dataUrl;
       link.click();
       toast.success('Gambar rekap berhasil diunduh (PNG)', { id: toastId });
@@ -1596,6 +1605,7 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
 
   const filterChips: { id: StatusFilter; label: string; count: number }[] = [
     { id: 'ALL', label: 'Semua', count: allRows.length },
+    { id: 'WAJIB', label: 'Wajib KTA/TTA & Inspeksi', count: summary.total },
     { id: 'BELUM', label: 'Belum Lengkap', count: summary.belum },
     { id: 'LENGKAP', label: 'Lengkap', count: summary.lengkap },
     { id: 'TERLAMBAT', label: 'Terlambat (Kamis/Jumat)', count: allRows.filter(r => !r.isCuti && (r.ktaLate || r.inspeksiLate)).length },
@@ -1952,12 +1962,17 @@ export function SafetyRekapScreen({ inspectorNik, inspectorName, inspectorRole, 
             <div aria-hidden style={{ position: 'fixed', left: -20000, top: 0, pointerEvents: 'none' }}>
               <RekapReportSheet
                 ref={captureRef}
-                rows={allRows}
+                rows={rows}
                 photoMap={photoMap}
                 summary={summary}
                 reportMonth={reportMonth}
                 rangeLabel={rangeLabel}
                 week={selectedWeek}
+                filterLabel={
+                  statusFilter !== 'ALL'
+                    ? filterChips.find(f => f.id === statusFilter)?.label
+                    : (search.trim() ? `Pencarian "${search.trim()}"` : undefined)
+                }
               />
             </div>
           )}
