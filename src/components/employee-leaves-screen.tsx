@@ -1474,97 +1474,83 @@ export function EmployeeLeavesScreen({
             </button>
           )}
 
-          {/* Sync Google Sheet Button */}
-          <button
-            type="button"
-            onClick={handleForceSync}
-            disabled={isSyncing}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/25 font-bold text-xs shadow-2xs transition-all cursor-pointer disabled:opacity-60"
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Sheet'}</span>
-          </button>
-
-          {/* Open Google Sheet link */}
-          <a
-            href="https://docs.google.com/spreadsheets/d/1yeRjyHjsWlEmy37xj4qnysMWUuzDIBUP0gg3nVR1Rys/edit"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs border border-slate-200 dark:border-slate-700 transition-all"
-            title="Buka file Google Sheet di Google Drive PrepLab Cloud"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Buka di Drive</span>
-          </a>
-
           {/* ==================================================== */}
-          {/* TOMBOL CEPAT UNDUH PNG 4 HARI KE BELAKANG            */}
-          {/* ==================================================== */}
-          <button
-            type="button"
-            disabled={isGeneratingPng}
-            onClick={() => handleExportPng('last_4_days')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-60"
-            title="Unduh rekapan infografis gambar PNG daftar izin 4 hari ke belakang siap dibagikan ke WhatsApp"
-          >
-            <FileImage className={`w-4 h-4 ${isGeneratingPng ? 'animate-pulse' : ''}`} />
-            <span>{isGeneratingPng ? 'Menyusun PNG...' : 'Unduh PNG (4 Hari)'}</span>
-            <span className="hidden sm:inline-block px-1.5 py-0.5 text-[9px] bg-white/20 rounded-md font-black uppercase">
-              PNG
-            </span>
-          </button>
-
-          {/* ==================================================== */}
-          {/* PUSAT UNDUHAN DAFTAR IZIN (DROPDOWN MENU LENGKAP)    */}
+          {/* SATU TOMBOL TERPADU: PUSAT UNDUHAN & KELOLA REKAPAN  */}
           {/* ==================================================== */}
           <div className="relative" ref={downloadMenuRef}>
             <button
               type="button"
               onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#2298A7] hover:bg-[#1a8290] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#2298A7] hover:bg-[#1a8290] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+              title="Pusat unduhan berkas rekapan izin dan integrasi Google Sheet"
             >
-              <Download className="w-4 h-4" />
-              <span>Unduh Daftar Izin</span>
+              {isSyncing ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-teal-200" />
+              ) : isGeneratingPng ? (
+                <FileImage className="w-4 h-4 animate-pulse text-emerald-200" />
+              ) : isGeneratingPdf ? (
+                <Printer className="w-4 h-4 animate-pulse text-rose-200" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>
+                {isSyncing
+                  ? 'Menyinkronkan...'
+                  : isGeneratingPng
+                  ? 'Menyusun PNG...'
+                  : isGeneratingPdf
+                  ? 'Menyusun PDF...'
+                  : 'Unduh & Kelola Rekapan'}
+              </span>
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isDownloadMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isDownloadMenuOpen && (
-              <div className="absolute right-0 mt-2 w-76 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 mb-1 flex items-center justify-between">
+              <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-2.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100">
+                {/* GRUP 1: FORMAT UNDUHAN LAPORAN */}
+                <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 mb-1.5 flex items-center justify-between">
                   <span className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">
-                    Pilih Format Unduhan Daftar Izin
+                    Format Unduhan Rekapan
                   </span>
+                  <span className="text-[9.5px] font-bold text-[#2298A7]">Siap Pakai</span>
                 </div>
 
-                {/* 1. Unduh PNG 4 Hari ke Belakang (Utama) */}
+                {/* 1. Unduh PNG 4 Hari ke Belakang (Fitur Utama WA Ready) */}
                 <button
                   type="button"
                   disabled={isGeneratingPng}
-                  onClick={() => handleExportPng('last_4_days')}
-                  className="w-full p-2.5 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group disabled:opacity-60 bg-teal-50/50 dark:bg-teal-950/20 mb-1 border border-teal-200/50 dark:border-teal-800/40"
+                  onClick={() => {
+                    setIsDownloadMenuOpen(false);
+                    handleExportPng('last_4_days');
+                  }}
+                  className="w-full p-2.5 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group disabled:opacity-60 bg-teal-50/60 dark:bg-teal-950/30 mb-1 border border-teal-200/70 dark:border-teal-800/50"
                 >
                   <div className="w-7 h-7 rounded-lg bg-teal-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
                     <FileImage className="w-4 h-4" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-bold text-teal-800 dark:text-teal-300 group-hover:text-teal-900 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-teal-900 dark:text-teal-200 group-hover:text-teal-950 transition-colors">
                         Unduh PNG (4 Hari Terakhir)
                       </p>
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-teal-200 text-teal-800 dark:bg-teal-800 dark:text-teal-200">
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-teal-200 text-teal-900 dark:bg-teal-800 dark:text-teal-200">
                         WA Ready
                       </span>
                     </div>
-                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                      Infografis gambar tajam H-3 s/d Hari ini + statistik
+                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Infografis tajam H-3 s/d Hari ini lengkap statistik & tanda tangan
                     </p>
                   </div>
                 </button>
 
-                {/* 2. Unduh Excel */}
+                {/* 2. Unduh Excel (.xlsx) */}
                 <button
                   type="button"
-                  onClick={() => handleExportExcel('filtered')}
+                  disabled={isDownloading}
+                  onClick={() => {
+                    setIsDownloadMenuOpen(false);
+                    handleExportExcel('filtered');
+                  }}
                   className="w-full p-2.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group"
                 >
                   <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -1584,7 +1570,10 @@ export function EmployeeLeavesScreen({
                 <button
                   type="button"
                   disabled={isGeneratingPdf}
-                  onClick={() => handleExportPdf('filtered')}
+                  onClick={() => {
+                    setIsDownloadMenuOpen(false);
+                    handleExportPdf('filtered');
+                  }}
                   className="w-full p-2.5 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group disabled:opacity-60"
                 >
                   <div className="w-7 h-7 rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
@@ -1604,7 +1593,10 @@ export function EmployeeLeavesScreen({
                 <button
                   type="button"
                   disabled={isGeneratingPng}
-                  onClick={() => handleExportPng('filtered')}
+                  onClick={() => {
+                    setIsDownloadMenuOpen(false);
+                    handleExportPng('filtered');
+                  }}
                   className="w-full p-2.5 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group disabled:opacity-60"
                 >
                   <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
@@ -1623,7 +1615,11 @@ export function EmployeeLeavesScreen({
                 {/* 5. Unduh CSV */}
                 <button
                   type="button"
-                  onClick={() => handleExportCsv('filtered')}
+                  disabled={isDownloading}
+                  onClick={() => {
+                    setIsDownloadMenuOpen(false);
+                    handleExportCsv('filtered');
+                  }}
                   className="w-full p-2.5 rounded-xl hover:bg-sky-50 dark:hover:bg-sky-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group"
                 >
                   <div className="w-7 h-7 rounded-lg bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
@@ -1639,7 +1635,7 @@ export function EmployeeLeavesScreen({
                   </div>
                 </button>
 
-                {/* 4. Kustomisasi & Opsi Lanjutan */}
+                {/* 6. Opsi Unduh Lanjutan */}
                 <div className="border-t border-slate-100 dark:border-slate-800 pt-1 mt-1">
                   <button
                     type="button"
@@ -1652,6 +1648,61 @@ export function EmployeeLeavesScreen({
                     Opsi Unduh Lanjutan (Pilih Periode)...
                   </button>
                 </div>
+
+                {/* GRUP 2: SINKRONISASI & GOOGLE DRIVE */}
+                <div className="px-3 py-1.5 border-t border-b border-slate-100 dark:border-slate-800 my-1 bg-slate-50/70 dark:bg-slate-800/50 -mx-2.5 px-5 flex items-center justify-between">
+                  <span className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">
+                    Google Sheet & Cloud Drive
+                  </span>
+                  <span className="text-[9.5px] font-bold text-slate-400">PrepLab Cloud</span>
+                </div>
+
+                {/* 7. Sinkronkan Sheet */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDownloadMenuOpen(false);
+                    handleForceSync();
+                  }}
+                  disabled={isSyncing}
+                  className="w-full p-2.5 rounded-xl hover:bg-teal-50 dark:hover:bg-teal-950/40 text-left flex items-start gap-2.5 transition-colors cursor-pointer group disabled:opacity-60"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-teal-100 dark:bg-teal-950 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white group-hover:text-teal-600 transition-colors">
+                      {isSyncing ? 'Menyinkronkan Sheet...' : 'Sinkronkan Google Sheet'}
+                    </p>
+                    <p className="text-[10.5px] text-slate-500">
+                      Ambil data perizinan terbaru dari Google Drive
+                    </p>
+                  </div>
+                </button>
+
+                {/* 8. Buka di Google Drive */}
+                <a
+                  href="https://docs.google.com/spreadsheets/d/1yeRjyHjsWlEmy37xj4qnysMWUuzDIBUP0gg3nVR1Rys/edit"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsDownloadMenuOpen(false)}
+                  className="w-full p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left flex items-start gap-2.5 transition-colors cursor-pointer group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0">
+                    <ExternalLink className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <p className="font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors">
+                        Buka di Google Drive
+                      </p>
+                      <ExternalLink className="w-3 h-3 text-slate-400" />
+                    </div>
+                    <p className="text-[10.5px] text-slate-500">
+                      Buka spreadsheet master di tab browser baru
+                    </p>
+                  </div>
+                </a>
               </div>
             )}
           </div>
